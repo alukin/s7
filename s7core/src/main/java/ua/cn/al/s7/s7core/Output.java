@@ -32,5 +32,10 @@ public class Output extends Pin{
     public Value value() {
         return value;
     }
+
+    @Override
+    public ValueType getValueType() {
+       return value.vt;
+    }
     
 }

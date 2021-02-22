@@ -30,4 +30,5 @@ public abstract class Pin {
     }
     
     public abstract Value value();
+    public abstract ValueType getValueType();
 }

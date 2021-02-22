@@ -26,41 +26,38 @@ import java.math.BigInteger;
  */
 public class Value{
     ValueType vt;
-    Double d;
-    Long l;
-    BigInteger bi;
-    BigDecimal bd;
+    Object v;
     
     public Value(double d) {
-        this.d = d;
+        v = d;
         vt=ValueType.DOUBLE;
     }
     
     public Value(long l) {
-        this.l = l;
+        v = l;
         vt=ValueType.LONG;
     }
 
     public Value(BigInteger bi) {
-        this.bi = bi;
+        v = bi;
         vt=ValueType.BIGINT;
     }
 
     public Value(BigDecimal bd) {
-        this.bd = bd;
+        v = bd;
         vt=ValueType.BIGDEC;
     }
     
     public double getDouble() {
         double res = 0D;
         switch(vt){
-            case BIGDEC: res = bd.doubleValue();
+            case BIGDEC: res = ((BigDecimal)v).doubleValue();
             break;
-            case BIGINT: res = bi.doubleValue();
+            case BIGINT: res = ((BigInteger)v).doubleValue();
             break;
-            case DOUBLE: res = d;
+            case DOUBLE: res = ((Double)v);
             break;
-            case LONG: res = l.doubleValue();
+            case LONG: res = ((Long)v).doubleValue();
         }
         return res;
     }
@@ -68,13 +65,13 @@ public class Value{
     public long getLong(){
         long res = 0L;
         switch(vt){
-            case BIGDEC: res = bd.longValue();
+            case BIGDEC: res = ((BigDecimal)v).longValue();
             break;
-            case BIGINT: res = bi.longValue();
+            case BIGINT: res = ((BigInteger)v).longValue();
             break;
-            case DOUBLE: res = d.longValue();
+            case DOUBLE: res = ((Double)v).longValue();
             break;
-            case LONG: res = l;
+            case LONG: res = ((Long)v);
         }
         return res;
     }
