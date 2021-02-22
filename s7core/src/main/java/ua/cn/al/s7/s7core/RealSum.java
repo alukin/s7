@@ -27,6 +27,7 @@ public class RealSum extends Element{
     public RealSum(Double[] weights) {
         super(weights.length,1);
         this.weights = weights;
+        outputs.get(0).value = new Value(0.0D);
     }
     
     @Override
@@ -35,7 +36,7 @@ public class RealSum extends Element{
         for(int idx=0;idx<weights.length;idx++){
            sum+=weights[idx]*inputs.get(idx).value().getDouble(); 
         }
-        outputs.get(0).setValue( new Value(sum));
+        outputs.get(0).value.set(sum);
     }
     
 }

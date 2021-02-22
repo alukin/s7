@@ -24,11 +24,15 @@ package ua.cn.al.s7.s7core;
 public abstract class Pin {
     
     private Element ownerElement;
+    private ValueType vt;
     
     public Pin(Element ownerElement) {
         this.ownerElement = ownerElement;
     }
     
     public abstract Value value();
-    public abstract ValueType getValueType();
+    
+    public ValueType getValueType(){
+        return vt;
+    }
 }

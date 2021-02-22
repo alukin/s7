@@ -19,6 +19,7 @@ package ua.cn.al.s7.s7core;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.MathContext;
 
 /**
  *
@@ -27,6 +28,10 @@ import java.math.BigInteger;
 public class Value{
     ValueType vt;
     Object v;
+    
+    public Value(ValueType vt){
+        this.vt=vt;
+    }
     
     public Value(double d) {
         v = d;
@@ -76,6 +81,30 @@ public class Value{
         return res;
     }
     
+    public void set(Double d){
+          switch(vt){
+            case BIGDEC: v = new BigDecimal(d, MathContext.DECIMAL64); ///.longValue();
+            break;
+            case BIGINT: v = BigInteger.valueOf(d.longValue());
+            break;
+            case DOUBLE: v = d;
+            break;
+            case LONG: v = d.longValue();
+        }      
+    }
+    
+    public void set(Long l){
+          switch(vt){
+            case BIGDEC: v = new BigDecimal(l, MathContext.DECIMAL64); ///.longValue();
+            break;
+            case BIGINT: v = BigInteger.valueOf(l);
+            break;
+            case DOUBLE: v = l.doubleValue();
+            break;
+            case LONG: v = l;
+        }        
+        
+    }
 //TODO: getters, setters
     
     @Override

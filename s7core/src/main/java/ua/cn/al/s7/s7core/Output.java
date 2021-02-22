@@ -19,10 +19,6 @@ package ua.cn.al.s7.s7core;
 public class Output extends Pin{
 
     Value value;
-
-    public void setValue(Value value) {
-        this.value = value;
-    }
     
     public Output(Element ownerElement) {
         super(ownerElement);
@@ -33,9 +29,5 @@ public class Output extends Pin{
         return value;
     }
 
-    @Override
-    public ValueType getValueType() {
-       return value.vt;
-    }
     
 }

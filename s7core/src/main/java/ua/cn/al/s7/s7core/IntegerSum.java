@@ -27,6 +27,7 @@ public class IntegerSum extends Element{
     public IntegerSum(Long[] weights) {
         super(weights.length,1);
         this.weights = weights;
+        outputs.get(0).value = new Value(0L);
     }
     
     @Override
@@ -35,7 +36,7 @@ public class IntegerSum extends Element{
         for(int idx=0;idx<weights.length;idx++){
            sum+=weights[idx]*inputs.get(idx).value().getLong(); 
         }
-        outputs.get(0).setValue( new Value(sum));
+        outputs.get(0).value.set(sum);
     }
     
 }
