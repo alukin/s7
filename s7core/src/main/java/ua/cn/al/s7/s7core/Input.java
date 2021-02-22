@@ -15,6 +15,7 @@ package ua.cn.al.s7.s7core;
 /**
  *
  *  @author Oleksiy Lukin alukin@mail.com
+ * @param <T>
  */
 public class Input extends Pin{
     Output conected = null;
@@ -28,7 +29,7 @@ public class Input extends Pin{
     }
     
     @Override
-    public Double value() {
+    public Value value() {
         return conected.value();
     }
     

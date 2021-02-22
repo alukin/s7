@@ -17,10 +17,73 @@
  */
 package ua.cn.al.s7.s7core;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Value {
+public class Value{
+    ValueType vt;
+    Double d;
+    Long l;
+    BigInteger bi;
+    BigDecimal bd;
+    
+    public Value(double d) {
+        this.d = d;
+        vt=ValueType.DOUBLE;
+    }
+    
+    public Value(long l) {
+        this.l = l;
+        vt=ValueType.LONG;
+    }
+
+    public Value(BigInteger bi) {
+        this.bi = bi;
+        vt=ValueType.BIGINT;
+    }
+
+    public Value(BigDecimal bd) {
+        this.bd = bd;
+        vt=ValueType.BIGDEC;
+    }
+    
+    public double getDouble() {
+        double res = 0D;
+        switch(vt){
+            case BIGDEC: res = bd.doubleValue();
+            break;
+            case BIGINT: res = bi.doubleValue();
+            break;
+            case DOUBLE: res = d;
+            break;
+            case LONG: res = l.doubleValue();
+        }
+        return res;
+    }
+    
+    public long getLong(){
+        long res = 0L;
+        switch(vt){
+            case BIGDEC: res = bd.longValue();
+            break;
+            case BIGINT: res = bi.longValue();
+            break;
+            case DOUBLE: res = d.longValue();
+            break;
+            case LONG: res = l;
+        }
+        return res;
+    }
+    
+//TODO: getters, setters
+    
+    @Override
+    public String toString() {
+        return "" + getDouble();
+    }
     
 }

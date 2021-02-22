@@ -12,35 +12,38 @@
  */
 package ua.cn.al.s7.s7core;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
+
  */
 public abstract class Element {
-    Input[] inputs;
-    Output[] outputs;
-    Double[] state;
+    List<Input> inputs = new ArrayList<>();
+    List<Output> outputs = new ArrayList<>();
+    Value[] state;
 
     public Element() {
     }
     
     public Element(int nInputs, int nOutputs) {
-        inputs = new Input[nInputs];
         for(int i = 0; i<nInputs; i++ ){
-            inputs[i] = new Input(this);
+            inputs.add(new Input(this));
         }
-        outputs = new Output[nOutputs];
         for(int i = 0; i<nOutputs; i++ ){
-            outputs[i] = new Output(this);
+            outputs.add(new Output(this));
         }        
     }    
     
     public abstract void tick();
     
     public Input getIn(int idx){
-        return inputs[idx];
+        return inputs.get(idx);
     }
+    
     public Output getOut(int idx){
-        return outputs[idx];
+        return outputs.get(idx);
     }
 }

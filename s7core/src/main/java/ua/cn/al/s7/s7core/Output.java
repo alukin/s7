@@ -18,9 +18,9 @@ package ua.cn.al.s7.s7core;
  */
 public class Output extends Pin{
 
-    Double value;
+    Value value;
 
-    public void setValue(Double value) {
+    public void setValue(Value value) {
         this.value = value;
     }
     
@@ -29,7 +29,7 @@ public class Output extends Pin{
     }
 
     @Override
-    public Double value() {
+    public Value value() {
         return value;
     }
     

@@ -25,7 +25,7 @@ public class Constant extends Element{
 
     public Constant(Double value) {
        super(0,1); 
-       outputs[0].setValue(value);
+       outputs.get(0).setValue(new Value(value));
     }
 
     @Override

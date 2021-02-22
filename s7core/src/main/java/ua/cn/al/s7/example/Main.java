@@ -20,7 +20,7 @@ package ua.cn.al.s7.example;
 import ua.cn.al.s7.s7core.Constant;
 import ua.cn.al.s7.s7core.Element;
 import ua.cn.al.s7.s7core.Schema;
-import ua.cn.al.s7.s7core.Sum;
+import ua.cn.al.s7.s7core.RealSum;
 
 /**
  *
@@ -34,7 +34,7 @@ public class Main {
     public static void main(String[] args) {
        Schema s = new Schema();
        Double[] weights = {1.0,1.0};
-       Element sum = new Sum(weights);
+       Element sum = new RealSum(weights);
        Constant cons1 = new Constant(1.0);
        Constant cons2 = new Constant(1.0);       
  

@@ -29,5 +29,5 @@ public abstract class Pin {
         this.ownerElement = ownerElement;
     }
     
-    public abstract Double value();
+    public abstract Value value();
 }

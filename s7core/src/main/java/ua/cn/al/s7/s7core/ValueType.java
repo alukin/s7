@@ -1,5 +1,5 @@
 /*
- * Copyrigh (c) 2021 Oleksiy Lukin
+ * Copyright (C) 2021 al
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,23 +19,11 @@ package ua.cn.al.s7.s7core;
 
 /**
  *
- * @author Oleksiy Lukin alukin@mail.com
+ * @author al
  */
-public class Sum extends Element{
-    private final Double[] weights;
-
-    public Sum(Double[] weights) {
-        super(weights.length,1);
-        this.weights = weights;
-    }
-    
-    @Override
-    public void tick() {
-        Double sum = 0.0;
-        for(int idx=0;idx<weights.length;idx++){
-           sum+=weights[idx]*inputs[idx].value(); 
-        }
-        outputs[0].setValue(sum);
-    }
-    
+public enum ValueType {
+    DOUBLE,
+    LONG,
+    BIGINT,
+    BIGDEC
 }
