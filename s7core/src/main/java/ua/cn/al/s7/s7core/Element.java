@@ -18,7 +18,6 @@ import java.util.List;
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
-
  */
 public abstract class Element {
     List<Input> inputs = new ArrayList<>();

@@ -17,6 +17,9 @@
  */
 package ua.cn.al.s7.s7core;
 
+import com.google.common.graph.ElementOrder;
+import com.google.common.graph.MutableNetwork;
+import com.google.common.graph.NetworkBuilder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -26,34 +29,40 @@ import java.util.List;
  */
 public class Schema extends Element {
 
-    List<Element> elements = new ArrayList<>();
-
+    MutableNetwork<Element,Connection> elementGraph = NetworkBuilder.directed()
+            .allowsParallelEdges(true)
+            //.nodeOrder(ElementOrder???)
+            .build();
+    
     public boolean verify() {
         boolean res = true;
         //TODO: all unconnected inputs should be "grounded"
         // graph should be consistent
+        // input type sshould be able to handle conneced output
         return res;
     }
 
     @Override
     public void tick() {
-        //TODO
+        for (Element e: elementGraph.nodes()){
+            e.tick();
+        }
     }
 
     public void insert(Element e) {
-        elements.add(e);
+        elementGraph.addNode(e);
     }
 
     public void connect(Output out, Input in) {
         in.connect(out);
+        Connection con = new Connection(out, in);
+        elementGraph.addEdge(out.getOwnerElement(), in.getOwnerElement(), con);
     }
 
     public void runTicks(int nTicks) {
         //run ticks in graph iterator order
         for (int i = 0; i < nTicks; i++) {
-            for (Element e : elements) {
-                e.tick();
-            }
+            tick();
         }
     }
 }

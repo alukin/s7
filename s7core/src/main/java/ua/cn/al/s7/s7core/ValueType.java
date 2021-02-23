@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 al
+ * Copyright (C) 2021 Oleksiy Lukin alukin@mail.com
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,7 +19,7 @@ package ua.cn.al.s7.s7core;
 
 /**
  *
- * @author al
+ * @author Oleksiy Lukin alukin@mail.com
  */
 public enum ValueType {
     DOUBLE,
