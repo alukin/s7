@@ -109,7 +109,17 @@ public class Value{
     
     @Override
     public String toString() {
-        return "" + getDouble();
+        String s="";
+          switch(vt){
+            case BIGDEC: s=((BigDecimal)v).toString();
+            break;
+            case BIGINT: s = ((BigInteger) v).toString();
+            break;
+            case DOUBLE: s = ((Double)v).toString();
+            break;
+            case LONG: s = ((Long)v).toString();
+        }
+        return s;  
     }
     
 }

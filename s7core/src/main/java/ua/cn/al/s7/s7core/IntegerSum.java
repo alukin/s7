@@ -34,7 +34,9 @@ public class IntegerSum extends Element{
     public void tick() {
         Long sum = 0L;
         for(int idx=0;idx<weights.length;idx++){
-           sum+=weights[idx]*inputs.get(idx).value().getLong(); 
+           Value v =  inputs.get(idx).value();
+           long in =  v.getLong();
+           sum += weights[idx]*in; 
         }
         outputs.get(0).value.set(sum);
     }
