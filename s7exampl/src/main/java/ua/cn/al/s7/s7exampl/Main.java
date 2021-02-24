@@ -19,6 +19,7 @@ package ua.cn.al.s7.s7exampl;
 
 import ua.cn.al.s7.s7core.Constant;
 import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.IntegerSum;
 import ua.cn.al.s7.s7core.Schema;
 import ua.cn.al.s7.s7core.RealSum;
 
@@ -36,19 +37,28 @@ public class Main {
        Double[] weights = {1.0,1.0};
        Element sum = new RealSum(weights);
        Constant cons1 = new Constant(1.0);
-       Constant cons2 = new Constant(1.0);       
- 
+       Constant cons2 = new Constant(1.0); 
+       Constant cons3 = new Constant(1.0);
+       
+       Long[] w = {1L,1L};
+       Element isum = new IntegerSum(w);
+       
        s.insert(sum);
        s.insert(cons1);
        s.insert(cons2);
+       s.insert(isum);
        
        s.connect( cons1.getOut(0), sum.getIn(0));
        s.connect( cons2.getOut(0), sum.getIn(1));
        
+       s.connect(cons3.getOut(0), isum.getIn(0));
+       s.connect(sum.getOut(0), isum.getIn(1));
+       
        if(s.verify()){
           s.runTicks(2);
        }
-       System.out.println("Sum="+sum.getOut(0).value());
+       System.out.println("Sum R = "+sum.getOut(0).value());
+       System.out.println("Sum I = "+isum.getOut(0).value());
     }
     
 }
