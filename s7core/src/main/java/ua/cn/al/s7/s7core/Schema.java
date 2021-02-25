@@ -18,11 +18,16 @@
 package ua.cn.al.s7.s7core;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.DirectedMultigraph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
+import org.jgrapht.traverse.DegeneracyOrderingIterator;
+import org.jgrapht.traverse.DepthFirstIterator;
+import org.jgrapht.traverse.TopologicalOrderIterator;
 
 /**
  *
@@ -41,7 +46,7 @@ Element root;
             .allowingSelfLoops(false)
             .buildGraph();
     
-     root = new Element() {
+     root = new Element(0,1) {
         @Override
         public void tick() {
         }
@@ -68,9 +73,13 @@ Element root;
         }
     }
     
-    private Set<Element> inCalcOrder(){
-        
-        return elementGraph.vertexSet();
+    private List<Element> inCalcOrder(){
+        List<Element> res = new ArrayList<>();
+        Iterator<Element> it = new TopologicalOrderIterator<>(elementGraph);//(elementGraph,root);
+        while(it.hasNext()){
+            res.add(it.next());
+        }
+        return res;
     }
     
     public void insert(Element e) {

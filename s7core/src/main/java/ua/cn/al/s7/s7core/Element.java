@@ -16,11 +16,13 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
+@Slf4j
 public abstract class Element {
     @Getter
     @Setter
@@ -29,6 +31,7 @@ public abstract class Element {
     List<Output> outputs = new ArrayList<>();
     Input dummyIn = new Input(this);
     Output dummyOut = new Output(this);
+    
     Value[] state;
 
     public Element() {
@@ -46,14 +49,20 @@ public abstract class Element {
     public abstract void tick();
     
     public Input getIn(int idx){
-        if(idx+1>inputs.size()){
+        int idx1=idx+1;
+        int sz = inputs.size();
+        if(idx1>sz || idx1<1){
+            log.warn("Idex of input is out of the range");
             return dummyIn;
         }
         return inputs.get(idx);
     }
     
     public Output getOut(int idx){
-        if(idx+1>outputs.size()){
+        int idx1=idx+1;
+        int sz = outputs.size();
+        if(idx1>sz || idx1<1){
+            log.warn("Idex of output is out of the range");
             return dummyOut;
         }
         return outputs.get(idx);
