@@ -14,12 +14,17 @@ package ua.cn.al.s7.s7core;
 
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
 public abstract class Element {
+    @Getter
+    @Setter
+    protected String name;    
     List<Input> inputs = new ArrayList<>();
     List<Output> outputs = new ArrayList<>();
     Value[] state;

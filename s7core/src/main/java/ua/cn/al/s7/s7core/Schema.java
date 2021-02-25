@@ -22,6 +22,7 @@ import com.google.common.graph.MutableNetwork;
 import com.google.common.graph.NetworkBuilder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  *
@@ -31,7 +32,7 @@ public class Schema extends Element {
 
     MutableNetwork<Element,Connection> elementGraph = NetworkBuilder.directed()
             .allowsParallelEdges(true)
-            //.nodeOrder(ElementOrder???)
+            .nodeOrder(ElementOrder.stable())
             .build();
     
     public boolean verify() {
@@ -44,11 +45,16 @@ public class Schema extends Element {
 
     @Override
     public void tick() {
-        for (Element e: elementGraph.nodes()){
+        for (Element e: inCalcOrder()){
             e.tick();
         }
     }
+    
+    private Set<Element> inCalcOrder(){
 
+        return elementGraph.nodes();
+    }
+    
     public void insert(Element e) {
         elementGraph.addNode(e);
     }
@@ -64,5 +70,16 @@ public class Schema extends Element {
         for (int i = 0; i < nTicks; i++) {
             tick();
         }
+    }
+
+    public String printOrder() {
+        StringBuilder res=new StringBuilder();
+        res.append("||->");
+        for (Element e: inCalcOrder()){
+            res=res.append(e.name).append("|->");
+            
+        }
+        res.append("||");
+        return res.toString();
     }
 }

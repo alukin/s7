@@ -28,6 +28,7 @@ public class IntegerSum extends Element{
         super(weights.length,1);
         this.weights = weights;
         outputs.get(0).value = new Value(0L);
+        name="Sum of ints";
     }
     
     @Override

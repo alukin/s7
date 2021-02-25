@@ -18,6 +18,7 @@
 package ua.cn.al.s7.s7core;
 
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  *
@@ -26,6 +27,9 @@ import lombok.Getter;
 public abstract class Pin {
     @Getter
     private Element ownerElement;
+    @Getter
+    @Setter
+    private String name;
     private ValueType vt;
     
     public Pin(Element ownerElement) {

@@ -26,6 +26,7 @@ public class Constant extends Element{
     public Constant(Double value) {
        super(0,1); 
        outputs.get(0).value = new Value(value);
+       name="Const="+value.toString();
     }
 
     @Override

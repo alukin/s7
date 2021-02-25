@@ -22,8 +22,8 @@ package ua.cn.al.s7.s7core;
  * @author Oleksiy Lukin alukin@mail.com
  */
 public enum ValueType {
+    LONG ,
     DOUBLE,
-    LONG,
     BIGINT,
     BIGDEC
 }

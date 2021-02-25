@@ -28,6 +28,7 @@ public class RealSum extends Element{
         super(weights.length,1);
         this.weights = weights;
         outputs.get(0).value = new Value(0.0D);
+        name = "Sum of reals";
     }
     
     @Override

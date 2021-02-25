@@ -25,7 +25,7 @@ import java.math.MathContext;
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Value{
+public class Value implements Comparable{
     ValueType vt;
     Object v;
     
@@ -53,7 +53,7 @@ public class Value{
         vt=ValueType.BIGDEC;
     }
     
-    public double getDouble() {
+    public Double getDouble() {
         double res = 0D;
         switch(vt){
             case BIGDEC: res = ((BigDecimal)v).doubleValue();
@@ -67,7 +67,7 @@ public class Value{
         return res;
     }
     
-    public long getLong(){
+    public Long getLong(){
         long res = 0L;
         switch(vt){
             case BIGDEC: res = ((BigDecimal)v).longValue();
@@ -120,6 +120,17 @@ public class Value{
             case LONG: s = ((Long)v).toString();
         }
         return s;  
+    }
+
+    @Override
+    public int compareTo(Object o) {
+        int res=-1;
+        if(o instanceof Value){
+            //TODO: better impl
+            Value v1 = (Value)o;
+            res = this.getDouble().compareTo(v1.getDouble());
+        }
+        return res;
     }
     
 }
