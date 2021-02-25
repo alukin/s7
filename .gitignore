@@ -23,3 +23,4 @@
 hs_err_pid*
 /s7core/target/
 /s7exampl/target/
+/s7edit/target/
