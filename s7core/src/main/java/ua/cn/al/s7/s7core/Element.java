@@ -27,6 +27,8 @@ public abstract class Element {
     protected String name;    
     List<Input> inputs = new ArrayList<>();
     List<Output> outputs = new ArrayList<>();
+    Input dummyIn = new Input(this);
+    Output dummyOut = new Output(this);
     Value[] state;
 
     public Element() {
@@ -44,10 +46,21 @@ public abstract class Element {
     public abstract void tick();
     
     public Input getIn(int idx){
+        if(idx+1>inputs.size()){
+            return dummyIn;
+        }
         return inputs.get(idx);
     }
     
     public Output getOut(int idx){
+        if(idx+1>outputs.size()){
+            return dummyOut;
+        }
         return outputs.get(idx);
+    }
+    
+    public boolean isGenerator(){
+        boolean res = inputs.isEmpty();
+        return res;
     }
 }

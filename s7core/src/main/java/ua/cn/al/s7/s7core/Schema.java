@@ -17,23 +17,41 @@
  */
 package ua.cn.al.s7.s7core;
 
-import com.google.common.graph.ElementOrder;
-import com.google.common.graph.MutableNetwork;
-import com.google.common.graph.NetworkBuilder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.jgrapht.Graph;
+import org.jgrapht.graph.DirectedMultigraph;
+import org.jgrapht.graph.builder.GraphTypeBuilder;
 
 /**
  *
  * @author Oleksiy Lukin alukin@gmail.com
  */
 public class Schema extends Element {
+ Graph<Element,Connection> elementGraph;
+Element root;
+ public Schema() {
+    elementGraph = GraphTypeBuilder
+            .directed()
+            .vertexClass(Element.class)
+            .edgeClass(Connection.class)
+            .allowingMultipleEdges(true)
+            .weighted(false)
+            .allowingSelfLoops(false)
+            .buildGraph();
+    
+     root = new Element() {
+        @Override
+        public void tick() {
+        }
+     };
+     root.name="Root";
+     //we need root to connect all "generators", e.g. constants
+     elementGraph.addVertex(root);
+    }
+    
 
-    MutableNetwork<Element,Connection> elementGraph = NetworkBuilder.directed()
-            .allowsParallelEdges(true)
-            .nodeOrder(ElementOrder.stable())
-            .build();
     
     public boolean verify() {
         boolean res = true;
@@ -51,17 +69,26 @@ public class Schema extends Element {
     }
     
     private Set<Element> inCalcOrder(){
-
-        return elementGraph.nodes();
+        
+        return elementGraph.vertexSet();
     }
     
     public void insert(Element e) {
-        elementGraph.addNode(e);
+       if(!elementGraph.containsVertex(e)){ 
+        elementGraph.addVertex(e);
+       }
+       //we have to add generators as root's childs
+       if(e.isGenerator()){
+           Connection con = new Connection(root.getOut(0), e.getIn(0));
+           elementGraph.addEdge(root, e, con);
+       }
     }
 
     public void connect(Output out, Input in) {
         in.connect(out);
-        Connection con = new Connection(out, in);
+        insert(out.getOwnerElement());
+        insert(in.getOwnerElement());
+        Connection con = new Connection(out, in);        
         elementGraph.addEdge(out.getOwnerElement(), in.getOwnerElement(), con);
     }
 
@@ -76,8 +103,7 @@ public class Schema extends Element {
         StringBuilder res=new StringBuilder();
         res.append("||->");
         for (Element e: inCalcOrder()){
-            res=res.append(e.name).append("|->");
-            
+            res=res.append("[").append(e.name).append("]->");           
         }
         res.append("||");
         return res.toString();
