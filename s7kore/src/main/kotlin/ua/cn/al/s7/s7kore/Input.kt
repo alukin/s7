@@ -1,12 +1,12 @@
 package ua.cn.al.s7.s7kore
 
-class Input(val owner: Element): Pin(owner) {
+class Input(owner:Element): Pin(owner) {
     private lateinit var out: Output;
 
     fun connect(out: Output){
         this.out=out
     }
-    override fun value() {
+    override fun value():Double {
        return out.value();
     }
 }

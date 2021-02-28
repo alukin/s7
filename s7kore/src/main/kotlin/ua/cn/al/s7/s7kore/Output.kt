@@ -1,10 +1,9 @@
 package ua.cn.al.s7.s7kore
 
-abstract class Output(val owner: Element) : Pin(owner){
-    var value: double = 0.0
-    set(value) {}
+class Output(owner: Element) : Pin(owner){
+    var value: Double = 0.0
 
-    override fun value(): double {
-        return this.value
+    override fun value(): Double {
+        return value
     }
 }
