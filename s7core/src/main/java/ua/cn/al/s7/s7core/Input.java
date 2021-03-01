@@ -37,5 +37,6 @@ public class Input extends Pin{
 //        //TODO: do we have dynamic value types?
 //        return ValueType.DOUBLE;
 //    }
+
     
 }

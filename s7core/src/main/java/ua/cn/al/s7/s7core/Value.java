@@ -146,5 +146,10 @@ public class Value implements Comparable{
         }                 
        return res;
     }
+
+    public boolean lessThan(Value value) {
+        //TODO: better impl
+        return  this.getDouble() < value.getDouble();
+    }
     
 }
