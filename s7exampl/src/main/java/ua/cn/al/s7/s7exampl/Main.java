@@ -22,7 +22,7 @@ import ua.cn.al.s7.s7core.Element;
 import ua.cn.al.s7.s7core.IntegerSum;
 import ua.cn.al.s7.s7core.Schema;
 import ua.cn.al.s7.s7core.RealSum;
-
+import ua.cn.al.s7.s7core.Integrator;
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
@@ -45,25 +45,21 @@ public class Main {
         
        Long[] w = {1L,1L};
        Element isum = new IntegerSum(w);
-
-//       s.insert(const1);
-//       s.insert(const2);       
-//       s.insert(const3);       
-//       s.insert(sum);
-//       s.insert(isum);
+       Element integrator = new Integrator();
        
        s.connect(const1.getOut(0), sum.getIn(0));
        s.connect(const2.getOut(0), sum.getIn(1));
        
        s.connect(const3.getOut(0), isum.getIn(0));
        s.connect(sum.getOut(0), isum.getIn(1));
-       
+       s.connect(sum.getOut(0), integrator.getIn(0));
        if(s.verify()){
           System.out.println(s.printOrder()); 
-          s.runTicks(2);
+          s.runTicks(1000);
        }
        System.out.println("Sum R = "+sum.getOut(0).value());
        System.out.println("Sum I = "+isum.getOut(0).value());
+       System.out.println("Integrator = "+integrator.getOut(0).value());
     }
     
 }

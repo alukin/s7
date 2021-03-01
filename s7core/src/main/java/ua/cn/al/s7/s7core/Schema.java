@@ -18,15 +18,12 @@
 package ua.cn.al.s7.s7core;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
+import lombok.Getter;
+import lombok.Setter;
 import org.jgrapht.Graph;
-import org.jgrapht.graph.DirectedMultigraph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
-import org.jgrapht.traverse.DegeneracyOrderingIterator;
-import org.jgrapht.traverse.DepthFirstIterator;
 import org.jgrapht.traverse.TopologicalOrderIterator;
 
 /**
@@ -34,30 +31,36 @@ import org.jgrapht.traverse.TopologicalOrderIterator;
  * @author Oleksiy Lukin alukin@gmail.com
  */
 public class Schema extends Element {
- Graph<Element,Connection> elementGraph;
-Element root;
- public Schema() {
-    elementGraph = GraphTypeBuilder
-            .directed()
-            .vertexClass(Element.class)
-            .edgeClass(Connection.class)
-            .allowingMultipleEdges(true)
-            .weighted(false)
-            .allowingSelfLoops(false)
-            .buildGraph();
-    
-     root = new Element(0,1) {
-        @Override
-        public void tick() {
-        }
-     };
-     root.name="Root";
-     //we need root to connect all "generators", e.g. constants
-     elementGraph.addVertex(root);
-    }
-    
 
-    
+    Graph<Element, Connection> elementGraph;
+    Element root;
+    @Getter
+    @Setter        
+    Double shemaTime = 0.0;
+    @Getter
+    @Setter      
+    Double timeStep = 1E-9;
+            
+    public Schema() {
+        elementGraph = GraphTypeBuilder
+                .directed()
+                .vertexClass(Element.class)
+                .edgeClass(Connection.class)
+                .allowingMultipleEdges(true)
+                .weighted(false)
+                .allowingSelfLoops(false)
+                .buildGraph();
+
+        root = new Element(0, 1) {
+            @Override
+            public void tick() {
+            }
+        };
+        root.name = "Root";
+        //we need root to connect all "generators", e.g. constants
+        elementGraph.addVertex(root);
+    }
+
     public boolean verify() {
         boolean res = true;
         //TODO: all unconnected inputs should be "grounded"
@@ -68,36 +71,37 @@ Element root;
 
     @Override
     public void tick() {
-        for (Element e: inCalcOrder()){
+        for (Element e : inCalcOrder()) {
             e.tick();
         }
     }
-    
-    private List<Element> inCalcOrder(){
+
+    private List<Element> inCalcOrder() {
         List<Element> res = new ArrayList<>();
         Iterator<Element> it = new TopologicalOrderIterator<>(elementGraph);//(elementGraph,root);
-        while(it.hasNext()){
+        while (it.hasNext()) {
             res.add(it.next());
         }
         return res;
     }
-    
+
     public void insert(Element e) {
-       if(!elementGraph.containsVertex(e)){ 
-        elementGraph.addVertex(e);
-       }
-       //we have to add generators as root's childs
-       if(e.isGenerator()){
-           Connection con = new Connection(root.getOut(0), e.getIn(0));
-           elementGraph.addEdge(root, e, con);
-       }
+        if (!elementGraph.containsVertex(e)) {
+            elementGraph.addVertex(e);
+        }
+        //we have to add generators as root's childs
+        if (e.isGenerator()) {
+            Connection con = new Connection(root.getOut(0), e.getIn(0));
+            elementGraph.addEdge(root, e, con);
+        }
+        e.setOwnerSchema(this);
     }
 
     public void connect(Output out, Input in) {
         in.connect(out);
         insert(out.getOwnerElement());
         insert(in.getOwnerElement());
-        Connection con = new Connection(out, in);        
+        Connection con = new Connection(out, in);
         elementGraph.addEdge(out.getOwnerElement(), in.getOwnerElement(), con);
     }
 
@@ -109,10 +113,10 @@ Element root;
     }
 
     public String printOrder() {
-        StringBuilder res=new StringBuilder();
+        StringBuilder res = new StringBuilder();
         res.append("||->");
-        for (Element e: inCalcOrder()){
-            res=res.append("[").append(e.name).append("]->");           
+        for (Element e : inCalcOrder()) {
+            res = res.append("[").append(e.name).append("]->");
         }
         res.append("||");
         return res.toString();

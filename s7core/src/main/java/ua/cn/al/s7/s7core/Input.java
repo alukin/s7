@@ -32,10 +32,10 @@ public class Input extends Pin{
         return conected.value();
     }
 
-    @Override
-    public ValueType getValueType() {
-        //TODO: do we have dynamic value types?
-        return ValueType.DOUBLE;
-    }
+//    @Override
+//    public ValueType getValueType() {
+//        //TODO: do we have dynamic value types?
+//        return ValueType.DOUBLE;
+//    }
     
 }

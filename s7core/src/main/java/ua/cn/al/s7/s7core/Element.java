@@ -31,7 +31,10 @@ public abstract class Element {
     List<Output> outputs = new ArrayList<>();
     Input dummyIn = new Input(this);
     Output dummyOut = new Output(this);
-
+    @Getter
+    @Setter        
+    Schema ownerSchema;
+    
     public Element() {
     }
     
