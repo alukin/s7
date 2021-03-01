@@ -1,5 +1,5 @@
 /*
- * Copyrigh (c) 2021 Oleksiy Lukin
+ * Copyright (C) 2021 Oleksiy Lukin alukin@mail.com
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,29 +15,25 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core;
+package ua.cn.al.s7.s7core.elements;
+
+import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.Value;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class RealSum extends Element{
-    private final Double[] weights;
+public class Constant extends Element{
 
-    public RealSum(Double[] weights) {
-        super(weights.length,1);
-        this.weights = weights;
-        outputs.get(0).value = new Value(0.0D);
-        name = "Sum of reals";
+    public Constant(Double value) {
+       super(0,1); 
+       outputs.get(0).value = new Value(value);
+       name="Const="+value.toString();
     }
-    
+
     @Override
     public void tick() {
-        Double sum = 0.0;
-        for(int idx=0;idx<weights.length;idx++){
-           sum+=weights[idx]*inputs.get(idx).value().getDouble(); 
-        }
-        outputs.get(0).value.set(sum);
     }
     
 }

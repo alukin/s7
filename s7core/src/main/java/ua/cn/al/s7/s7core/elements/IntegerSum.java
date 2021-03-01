@@ -15,7 +15,10 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core;
+package ua.cn.al.s7.s7core.elements;
+
+import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.Value;
 
 /**
  *
@@ -28,7 +31,6 @@ public class IntegerSum extends Element{
         super(weights.length,1);
         this.weights = weights;
         outputs.get(0).value = new Value(0L);
-        name="Sum of ints";
     }
     
     @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Oleksiy Lukin alukin@mail.com
+ * Copyrigh (c) 2021 Oleksiy Lukin
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,22 +15,31 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core;
+package ua.cn.al.s7.s7core.elements;
+
+import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.Value;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public abstract  class StatefullElement extends Element {
-    Value[] state;
+public class RealSum extends Element{
+    private final Double[] weights;
 
-    public StatefullElement() {
+    public RealSum(Double[] weights) {
+        super(weights.length,1);
+        this.weights = weights;
+        outputs.get(0).value = new Value(0.0D);
     }
     
-    public StatefullElement(int NInputs, int nOutputs, int stateDimension) {
-        state = new Value[stateDimension];
-    } 
+    @Override
+    public void tick() {
+        Double sum = 0.0;
+        for(int idx=0;idx<weights.length;idx++){
+           sum+=weights[idx]*inputs.get(idx).value().getDouble(); 
+        }
+        outputs.get(0).value.set(sum);
+    }
     
-    public abstract void changeState();
-
 }

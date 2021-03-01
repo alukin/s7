@@ -32,7 +32,7 @@ public class Value implements Comparable{
     public Value(ValueType vt){
         this.vt=vt;
     }
-    
+
     public Value(double d) {
         v = d;
         vt=ValueType.DOUBLE;
@@ -131,6 +131,20 @@ public class Value implements Comparable{
             res = this.getDouble().compareTo(v1.getDouble());
         }
         return res;
+    }
+
+    public Value copy() {
+        Value res=null; 
+          switch(vt){
+            case BIGDEC: res = new Value((BigDecimal)v);
+            break;
+            case BIGINT: res = new Value((BigInteger)v);
+            break;
+            case DOUBLE: res = new Value((Double)v);                                       
+            break;
+            case LONG: res = new Value((Long)v);
+        }                 
+       return res;
     }
     
 }

@@ -18,7 +18,7 @@ package ua.cn.al.s7.s7core;
  */
 public class Output extends Pin{
 
-    Value value;
+    public Value value;
     
     public Output(Element ownerElement) {
         super(ownerElement);

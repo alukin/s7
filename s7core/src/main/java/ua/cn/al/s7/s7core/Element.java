@@ -26,9 +26,9 @@ import lombok.extern.slf4j.Slf4j;
 public abstract class Element {
     @Getter
     @Setter
-    protected String name;    
-    List<Input> inputs = new ArrayList<>();
-    List<Output> outputs = new ArrayList<>();
+    protected String name = this.getClass().getSimpleName();    
+    public List<Input> inputs = new ArrayList<>();
+    public List<Output> outputs = new ArrayList<>();
     Input dummyIn = new Input(this);
     Output dummyOut = new Output(this);
     @Getter
@@ -72,5 +72,11 @@ public abstract class Element {
     public boolean isGenerator(){
         boolean res = inputs.isEmpty();
         return res;
+    }
+    public Double getTime(){
+        return ownerSchema.shemaTime;        
+    }
+    public Double getTimeStep(){
+        return ownerSchema.timeStep;
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Oleksiy Lukin alukin@mail.com
+ * Copyright (C) 2021 al
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,22 +15,27 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core;
+package ua.cn.al.s7.s7core.elements;
+
+import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.Value;
 
 /**
  *
- * @author Oleksiy Lukin alukin@mail.com
+ * @author al
  */
-public class Constant extends Element{
+public class Integrator extends Element{
 
-    public Constant(Double value) {
-       super(0,1); 
-       outputs.get(0).value = new Value(value);
-       name="Const="+value.toString();
+    public Integrator() {
+        super(1,1);
+        outputs.get(0).value = new Value(0.0);
     }
-
+     
     @Override
     public void tick() {
+       Double res  = inputs.get(0).value().getDouble()*getTimeStep()
+               +outputs.get(0).value().getDouble();
+       outputs.get(0).value.set(res);       
     }
     
 }

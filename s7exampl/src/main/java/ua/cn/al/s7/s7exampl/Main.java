@@ -17,12 +17,12 @@
  */
 package ua.cn.al.s7.s7exampl;
 
-import ua.cn.al.s7.s7core.Constant;
+import ua.cn.al.s7.s7core.elements.Constant;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.IntegerSum;
+import ua.cn.al.s7.s7core.elements.IntegerSum;
 import ua.cn.al.s7.s7core.Schema;
-import ua.cn.al.s7.s7core.RealSum;
-import ua.cn.al.s7.s7core.Integrator;
+import ua.cn.al.s7.s7core.elements.RealSum;
+import ua.cn.al.s7.s7core.elements.Integrator;
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
