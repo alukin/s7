@@ -17,10 +17,16 @@
  */
 package ua.cn.al.s7.s7edit.shapes;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Shape {
+public abstract class Shape extends Point{
+    List<Point> points = new ArrayList<>();
+    
+    abstract void draw();
     
 }
