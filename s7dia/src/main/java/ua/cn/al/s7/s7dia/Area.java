@@ -15,32 +15,21 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7edit.shapes;
+package ua.cn.al.s7.s7dia;
+
+import javax.vecmath.Point2d;
+
 
 /**
- *
- * @author Oleksiy Lukin alukin@mail.com
+ * Rectangular area
+ * @author 2021 Oleksiy Lukin alukin@mail.com
  */
-public class Point {
-    public double x;
-    public double y;
-    int delta = 2;
-    
-    public Point(double x, double y) {
-        this.x = x;
-        this.y = y;
+public class Area {
+    Point2d a;
+    Point2d b;
+
+    public Area(Point2d origin) {
+        this.a = a;
     }
     
-    void move(double x, double y){
-        this.x=x;
-        this.y=y;
-    }
-    
-    public Point add(Point p){
-        return new Point(this.x+p.x, this.x+p.y);
-    }
-    
-    public Point sun(Point p){
-        return new Point(this.x-p.x, this.x-p.y);
-    }   
 }

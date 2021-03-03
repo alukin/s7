@@ -14,5 +14,6 @@
         <module>s7core</module>
         <module>s7exampl</module>
      <!--   <module>s7edit</module> -->
+        <module>s7dia</module>
     </modules>
 </project>

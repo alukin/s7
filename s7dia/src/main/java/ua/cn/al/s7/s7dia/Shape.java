@@ -15,17 +15,23 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7edit.shapes;
+package ua.cn.al.s7.s7dia;
 
 import java.util.ArrayList;
 import java.util.List;
+import javax.vecmath.Point2d;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public abstract class Shape extends Point{
-    List<Point> points = new ArrayList<>();
+public abstract class Shape extends Area{
+
+    public Shape(Point2d origin) {
+        super(origin);
+    }
+    
+    List<Point2d> points = new ArrayList<>();
     
     abstract void draw();
     
