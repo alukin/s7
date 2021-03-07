@@ -17,49 +17,65 @@
  */
 package ua.cn.al.s7.s7exampl;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import ua.cn.al.s7.s7core.elements.Constant;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.elements.IntegerSum;
 import ua.cn.al.s7.s7core.Schema;
 import ua.cn.al.s7.s7core.elements.RealSum;
 import ua.cn.al.s7.s7core.elements.Integrator;
+import ua.cn.al.s7.s7core.registrator.TextFileReg;
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Main {
+
+public class Main2IntSinus {
 
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-       Schema s = new Schema();
-       Double[] weights = {1.0,1.0};
+       Schema s = new Schema( 0.01D );
+       Double runTime = 10.0; //10s
+       long nTicks = s.getTicks(runTime);
+       
+       Double[] weights = {1.0,-1.0};
        Element sum = new RealSum(weights);
-       Constant const1 = new Constant(1.0);
+       Element const1 = new Constant(0.0);
        const1.setName("C1");
-       Constant const2 = new Constant(1.0); 
-       const2.setName("C2");
-       Constant const3 = new Constant(1.0);
-       const3.setName("C3");
-        
-       Long[] w = {1L,1L};
-       Element isum = new IntegerSum(w);
-       Element integrator = new Integrator();
+
+       Element integrator1 = new Integrator(1.0D);
+       Element integrator2 = new Integrator();
+       TextFileReg reg=null; 
+        try {
+            reg = new TextFileReg(1, Path.of("InegratorsOut.txt"));
+        } catch (IOException ex) {
+            Logger.getLogger(Main2IntSinus.class.getName()).log(Level.SEVERE, null, ex);
+            System.exit(1);
+        }
        
-       s.connect(const1.getOut(0), sum.getIn(0));
-       s.connect(const2.getOut(0), sum.getIn(1));
+       s.connect(const1.getOut(0), sum.getIn(0)); 
+       s.connect(sum.getOut(0), integrator1.getIn(0));
+       s.connect(integrator1.getOut(0), integrator2.getIn(0));
+       s.connect(integrator2.getOut(0), sum.getIn(1));
+       s.connect(integrator2.getOut(0), reg.getIn(0));
        
-       s.connect(const3.getOut(0), isum.getIn(0));
-       s.connect(sum.getOut(0), isum.getIn(1));
-       s.connect(sum.getOut(0), integrator.getIn(0));
        if(s.verify()){
           System.out.println(s.printOrder()); 
-          s.runTicks(1000);
+          s.runTicks(nTicks);
        }
+       
+        try {
+            reg.close();
+        } catch (IOException ex) {
+            Logger.getLogger(Main2IntSinus.class.getName()).log(Level.SEVERE, null, ex);
+        }
+       
        System.out.println("Sum R = "+sum.getOut(0).value());
-       System.out.println("Sum I = "+isum.getOut(0).value());
-       System.out.println("Integrator = "+integrator.getOut(0).value());
+       System.out.println("Integrator2 = "+integrator2.getOut(0).value());
     }
     
 }

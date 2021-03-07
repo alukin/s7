@@ -33,7 +33,7 @@ public abstract class Element {
     Output dummyOut = new Output(this);
     @Getter
     @Setter        
-    Schema ownerSchema;
+    protected Schema ownerSchema;
     
     public Element() {
     }
@@ -74,7 +74,7 @@ public abstract class Element {
         return res;
     }
     public Double getTime(){
-        return ownerSchema.shemaTime;        
+        return ownerSchema.schemaTime;        
     }
     public Double getTimeStep(){
         return ownerSchema.timeStep;

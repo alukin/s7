@@ -25,7 +25,12 @@ import ua.cn.al.s7.s7core.Value;
  * @author Oleksiy Lukin alukin@mail.com
  */
 public class Integrator extends Element{
-
+    
+    public Integrator(double initialValue) {
+        super(1,1);
+        outputs.get(0).value = new Value(initialValue);
+    }
+    
     public Integrator() {
         super(1,1);
         outputs.get(0).value = new Value(0.0);

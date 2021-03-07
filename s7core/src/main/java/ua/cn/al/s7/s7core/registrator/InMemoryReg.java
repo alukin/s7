@@ -36,6 +36,7 @@ public class InMemoryReg extends Element{
     private int nChannels;
     @Getter
     public ArrayList<double[]> store = new ArrayList<>();
+    
     public InMemoryReg(int nChannels, int maxRecords) {
         super(nChannels,0);
         this.maxRecords=maxRecords;

@@ -24,6 +24,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
+import org.jgrapht.traverse.ClosestFirstIterator;
 import org.jgrapht.traverse.TopologicalOrderIterator;
 
 /**
@@ -31,17 +32,26 @@ import org.jgrapht.traverse.TopologicalOrderIterator;
  * @author Oleksiy Lukin alukin@gmail.com
  */
 public class Schema extends Element {
-
+    
+    public static final Double DEFAULT_TIME_STEP = 1E-9;
+ 
     Graph<Element, Connection> elementGraph;
     Element root;
     @Getter
     @Setter        
-    Double shemaTime = 0.0;
+    Double schemaTime = 0.0;
     @Getter
     @Setter      
-    Double timeStep = 1E-9;
-            
+    Double timeStep;
+
     public Schema() {
+        this(DEFAULT_TIME_STEP);
+    }        
+    
+    public Schema(double timeStep) {
+  
+        this.timeStep=timeStep;
+        
         elementGraph = GraphTypeBuilder
                 .directed()
                 .vertexClass(Element.class)
@@ -74,11 +84,13 @@ public class Schema extends Element {
         for (Element e : inCalcOrder()) {
             e.tick();
         }
+        schemaTime+=timeStep;
     }
 
     private List<Element> inCalcOrder() {
         List<Element> res = new ArrayList<>();
-        Iterator<Element> it = new TopologicalOrderIterator<>(elementGraph);//(elementGraph,root);
+        Iterator<Element> it = new ClosestFirstIterator<>(elementGraph,root);
+        //TopologicalOrderIterator<>(elementGraph);
         while (it.hasNext()) {
             res.add(it.next());
         }
@@ -105,10 +117,10 @@ public class Schema extends Element {
         elementGraph.addEdge(out.getOwnerElement(), in.getOwnerElement(), con);
     }
 
-    public void runTicks(int nTicks) {
+    public void runTicks(long nTicks) {
         //run ticks in graph iterator order
         for (int i = 0; i < nTicks; i++) {
-            tick();
+            tick();            
         }
     }
 
@@ -120,5 +132,9 @@ public class Schema extends Element {
         }
         res.append("||");
         return res.toString();
+    }
+
+    public Long getTicks(Double runTime) {
+        return Math.round(runTime/timeStep);
     }
 }
