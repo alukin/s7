@@ -31,6 +31,15 @@ public class Value implements Comparable{
     
     public Value(ValueType vt){
         this.vt=vt;
+        switch(vt){
+            case BIGDEC: v = BigDecimal.ZERO;
+            break;
+            case BIGINT: v = BigInteger.ZERO;
+            break;
+            case DOUBLE: v = 0.0D;
+            break;
+            case LONG: v = 0L;
+        }        
     }
 
     public Value(double d) {
@@ -105,6 +114,12 @@ public class Value implements Comparable{
         }        
         
     }
+    
+    public void set(Value v){
+        this.vt=v.vt;
+        this.v=v.v; //deep copy!
+    }
+    
 //TODO: getters, setters
     
     @Override
@@ -151,5 +166,16 @@ public class Value implements Comparable{
         //TODO: better impl
         return  this.getDouble() < value.getDouble();
     }
+
+    public Value sub(Value v1) {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    public Value mul(Value sub) {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
     
+    public Value sqrt(){
+        throw new UnsupportedOperationException("Not supported yet.");
+    }
 }

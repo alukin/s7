@@ -19,6 +19,7 @@ package ua.cn.al.s7.s7core.elements;
 
 import ua.cn.al.s7.s7core.Element;
 import ua.cn.al.s7.s7core.Value;
+import ua.cn.al.s7.s7core.ValueType;
 
 /**
  *
@@ -33,7 +34,7 @@ public class Integrator extends Element{
     
     public Integrator() {
         super(1,1);
-        outputs.get(0).value = new Value(0.0);
+        outputs.get(0).value = new Value(ValueType.DOUBLE);
     }
      
     @Override

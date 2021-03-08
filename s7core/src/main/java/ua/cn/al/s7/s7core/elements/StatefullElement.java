@@ -22,15 +22,12 @@ import ua.cn.al.s7.s7core.Element;
 import ua.cn.al.s7.s7core.Value;
 
 /**
- *
+ * TODO: general statefull element
  * @author Oleksiy Lukin alukin@mail.com
  */
 public abstract  class StatefullElement extends Element {
     @Getter
     Value[] state;
-
-    public StatefullElement() {
-    }
     
     public StatefullElement(int NInputs, int nOutputs, Value[] initialState) {
         state = new Value[initialState.length];
