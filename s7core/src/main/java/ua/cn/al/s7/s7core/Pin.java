@@ -30,7 +30,6 @@ public abstract class Pin {
     @Getter
     @Setter
     private String name;
-//    private ValueType vt;
     
     public Pin(Element ownerElement) {
         this.ownerElement = ownerElement;
@@ -38,7 +37,4 @@ public abstract class Pin {
     
     public abstract Value value();
     
-//    public ValueType getValueType(){
-//        return vt;
-//    }
 }

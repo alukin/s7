@@ -27,10 +27,10 @@ public abstract class Element {
     @Getter
     @Setter
     protected String name = this.getClass().getSimpleName();    
+    @Getter
     public List<Input> inputs = new ArrayList<>();
+    @Getter
     public List<Output> outputs = new ArrayList<>();
-    Input dummyIn = new Input(this);
-    Output dummyOut = new Output(this);
     @Getter
     @Setter        
     protected Schema ownerSchema;
@@ -40,31 +40,35 @@ public abstract class Element {
     
     public Element(int nInputs, int nOutputs) {
         for(int i = 0; i<nInputs; i++ ){
-            inputs.add(new Input(this));
+            Input in = new Input(this);
+            in.setName(""+i);
+            inputs.add(in);
         }
         for(int i = 0; i<nOutputs; i++ ){
-            outputs.add(new Output(this));
+            Output out = new Output(this);
+            out.setName(""+i);
+            outputs.add(out);
         }        
     }    
     
     public abstract void tick();
     
-    public Input getIn(int idx){
+    public Input in(int idx){
         int idx1=idx+1;
         int sz = inputs.size();
         if(idx1>sz || idx1<1){
-            log.warn("Idex of input is out of the range");
-            return dummyIn;
+            log.trace("Idex of input is out of the range");
+            return null;
         }
         return inputs.get(idx);
     }
     
-    public Output getOut(int idx){
+    public Output out(int idx){
         int idx1=idx+1;
         int sz = outputs.size();
         if(idx1>sz || idx1<1){
-            log.warn("Idex of output is out of the range");
-            return dummyOut;
+            log.trace("Idex of output is out of the range");
+            return null;
         }
         return outputs.get(idx);
     }
@@ -73,9 +77,11 @@ public abstract class Element {
         boolean res = inputs.isEmpty();
         return res;
     }
+    
     public Double getTime(){
         return ownerSchema.schemaTime;        
     }
+    
     public Double getTimeStep(){
         return ownerSchema.timeStep;
     }

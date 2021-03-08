@@ -39,8 +39,11 @@ public class Integrator extends Element{
      
     @Override
     public void tick() {
-       Double res  = inputs.get(0).value().getDouble()*getTimeStep()
-               +outputs.get(0).value().getDouble();
+       double in =  inputs.get(0).value().getDouble();
+       double prev = outputs.get(0).value().getDouble();
+       
+       double res  = prev+in*getTimeStep();
+               
        outputs.get(0).value.set(res);       
     }
     

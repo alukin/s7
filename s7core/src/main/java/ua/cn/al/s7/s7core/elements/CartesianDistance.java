@@ -41,7 +41,7 @@ public class CartesianDistance extends Element{
         double d = Math.sqrt(s*s);
         
         outputs.get(0).value.set(
-               d*ownerSchema.getTimeStep()
+               d/getTimeStep()
         );
     }
     

@@ -18,7 +18,6 @@
 package ua.cn.al.s7.s7exampl;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import ua.cn.al.s7.s7core.elements.Constant;
@@ -47,21 +46,21 @@ public class IntergatorsSinus {
        Element const1 = new Constant(0.0);
        const1.setName("C1");
 
-       Element integrator1 = new Integrator(1.0D);
+       Element integrator1 = new Integrator(0.000001D);
        Element integrator2 = new Integrator();
        TextFileReg reg=null; 
         try {
-            reg = new TextFileReg(1, Path.of("InegratorsOut.txt"));
+            reg = new TextFileReg(1, System.out);
         } catch (IOException ex) {
             Logger.getLogger(IntergatorsSinus.class.getName()).log(Level.SEVERE, null, ex);
             System.exit(1);
         }
        
-       s.connect(const1.getOut(0), sum.getIn(0)); 
-       s.connect(sum.getOut(0), integrator1.getIn(0));
-       s.connect(integrator1.getOut(0), integrator2.getIn(0));
-       s.connect(integrator2.getOut(0), sum.getIn(1));
-       s.connect(integrator2.getOut(0), reg.getIn(0));
+       s.connect(const1.out(0), sum.in(0)); 
+       s.connect(sum.out(0), integrator1.in(0));
+       s.connect(integrator1.out(0), integrator2.in(0));
+       s.connect(integrator2.out(0), sum.in(1));
+       s.connect(integrator2.out(0), reg.in(0));
        
        if(s.verify()){
           System.out.println(s.printOrder()); 
@@ -74,8 +73,8 @@ public class IntergatorsSinus {
             Logger.getLogger(IntergatorsSinus.class.getName()).log(Level.SEVERE, null, ex);
         }
        
-       System.out.println("Sum R = "+sum.getOut(0).value());
-       System.out.println("Integrator2 = "+integrator2.getOut(0).value());
+       System.out.println("Sum R = "+sum.out(0).value());
+       System.out.println("Integrator2 = "+integrator2.out(0).value());
     }
     
 }

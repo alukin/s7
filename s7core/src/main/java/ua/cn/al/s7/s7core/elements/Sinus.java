@@ -38,7 +38,7 @@ public class Sinus extends Element{
     @Override
     public void tick() {
        outputs.get(0).value.set(
-           Math.sin(2*Math.PI*frequancy*ownerSchema.getSchemaTime()+ phase)
+           Math.sin(2*Math.PI*frequancy*getTime()+ phase)
        );
     }
     

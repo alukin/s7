@@ -47,19 +47,19 @@ public class Simple {
        Element isum = new IntegerSum(w);
        Element integrator = new Integrator();
        
-       s.connect(const1.getOut(0), sum.getIn(0));
-       s.connect(const2.getOut(0), sum.getIn(1));
+       s.connect(const1.out(0), sum.in(0));
+       s.connect(const2.out(0), sum.in(1));
        
-       s.connect(const3.getOut(0), isum.getIn(0));
-       s.connect(sum.getOut(0), isum.getIn(1));
-       s.connect(sum.getOut(0), integrator.getIn(0));
+       s.connect(const3.out(0), isum.in(0));
+       s.connect(sum.out(0), isum.in(1));
+       s.connect(sum.out(0), integrator.in(0));
        if(s.verify()){
           System.out.println(s.printOrder()); 
           s.runTicks(1000);
        }
-       System.out.println("Sum R = "+sum.getOut(0).value());
-       System.out.println("Sum I = "+isum.getOut(0).value());
-       System.out.println("Integrator = "+integrator.getOut(0).value());
+       System.out.println("Sum R = "+sum.out(0).value());
+       System.out.println("Sum I = "+isum.out(0).value());
+       System.out.println("Integrator = "+integrator.out(0).value());
     }
     
 }

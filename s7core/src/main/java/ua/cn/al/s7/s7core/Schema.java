@@ -25,7 +25,6 @@ import lombok.Setter;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jgrapht.traverse.ClosestFirstIterator;
-import org.jgrapht.traverse.TopologicalOrderIterator;
 
 /**
  *
@@ -103,7 +102,7 @@ public class Schema extends Element {
         }
         //we have to add generators as root's childs
         if (e.isGenerator()) {
-            Connection con = new Connection(root.getOut(0), e.getIn(0));
+            Connection con = new Connection(root.out(0), e.in(0));
             elementGraph.addEdge(root, e, con);
         }
         e.setOwnerSchema(this);

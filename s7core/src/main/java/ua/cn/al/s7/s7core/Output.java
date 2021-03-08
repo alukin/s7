@@ -13,7 +13,11 @@
 package ua.cn.al.s7.s7core;
 
 /**
- *
+ *  Output pin has state in the "value" variable.
+ *  Actually, if element has output pinsm it has states
+ *  saved from previous "tick". It could be used or ignored in the
+ *  Element's tick() method.
+ * 
  *  @author Oleksiy Lukin alukin@mail.com
  */
 public class Output extends Pin{

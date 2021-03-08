@@ -17,10 +17,6 @@
  */
 package ua.cn.al.s7.s7exampl;
 
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import ua.cn.al.s7.s7core.elements.Constant;
 import ua.cn.al.s7.s7core.Element;
 import ua.cn.al.s7.s7core.Schema;
@@ -28,7 +24,6 @@ import ua.cn.al.s7.s7core.elements.CartesianDistance;
 import ua.cn.al.s7.s7core.elements.RealSum;
 import ua.cn.al.s7.s7core.elements.Integrator;
 import ua.cn.al.s7.s7core.elements.Sinus;
-import ua.cn.al.s7.s7core.registrator.TextFileReg;
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
@@ -54,12 +49,12 @@ public class IntegratorSinusDistance {
        Element sinus = new Sinus(1.0, 0.0);
        Element distance = new CartesianDistance();
        
-       s.connect(const1.getOut(0), sum.getIn(0)); 
-       s.connect(sum.getOut(0), integrator1.getIn(0));
-       s.connect(integrator1.getOut(0), integrator2.getIn(0));
-       s.connect(integrator2.getOut(0), sum.getIn(1));
-       s.connect(sinus.getOut(0), distance.getIn(0));
-       s.connect(integrator2.getOut(0), distance.getIn(1));
+       s.connect(const1.out(0), sum.in(0)); 
+       s.connect(sum.out(0), integrator1.in(0));
+       s.connect(integrator1.out(0), integrator2.in(0));
+       s.connect(integrator2.out(0), sum.in(1));
+       s.connect(sinus.out(0), distance.in(0));
+       s.connect(integrator2.out(0), distance.in(1));
        
        if(s.verify()){
           System.out.println(s.printOrder()); 
@@ -67,9 +62,9 @@ public class IntegratorSinusDistance {
        }
        
         
-       System.out.println("Distance = "+distance.getOut(0).value());
-       System.out.println("Sinus = "+ sinus.getOut(0).value());
-       System.out.println("Integrator2 = "+integrator2.getOut(0).value());
+       System.out.println("Distance = "+distance.out(0).value());
+       System.out.println("Sinus = "+ sinus.out(0).value());
+       System.out.println("Integrator2 = "+integrator2.out(0).value());
     }
     
 }

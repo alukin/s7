@@ -28,7 +28,7 @@ public class ElementProperties {
     private String name;
     private String description;
     private String clazz;
-    private String[] inputNames;
-    private String[] ouputNames;
+    private PinProperties[] inputs;
+    private PinProperties[] ouputs;
     private String shape;
 }

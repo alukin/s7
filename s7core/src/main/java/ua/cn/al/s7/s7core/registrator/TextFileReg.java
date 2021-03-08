@@ -17,10 +17,12 @@
  */
 package ua.cn.al.s7.s7core.registrator;
 
+import java.io.BufferedWriter;
 import java.io.Closeable;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Path;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import ua.cn.al.s7.s7core.Element;
@@ -33,12 +35,12 @@ import ua.cn.al.s7.s7core.Element;
 public class TextFileReg extends Element implements Closeable{
     @Getter
     private final int nChannels;
-    private final FileWriter fileWtriter;
+    private final Writer fileWtriter;
     
-    public TextFileReg(int nChannels, Path file) throws IOException {
+    public TextFileReg(int nChannels, OutputStream ostream) throws IOException {
         super(nChannels,0);
         this.nChannels=nChannels;
-        fileWtriter = new FileWriter(file.toFile());
+        fileWtriter = new BufferedWriter(new OutputStreamWriter(ostream));
     }
 
     @Override
