@@ -19,7 +19,7 @@ package ua.cn.al.s7.s7dia;
 
 import java.util.ArrayList;
 import java.util.List;
-import javax.vecmath.Point2d;
+
 
 /**
  *
@@ -27,12 +27,10 @@ import javax.vecmath.Point2d;
  */
 public abstract class Shape extends Area{
 
-    public Shape(Point2d origin) {
+    public Shape(Point2D origin) {
         super(origin);
     }
     
-    List<Point2d> points = new ArrayList<>();
-    
-    abstract void draw();
+    List<Point2D> points = new ArrayList<>();
     
 }

@@ -17,7 +17,7 @@
  */
 package ua.cn.al.s7.s7dia;
 
-import javax.vecmath.Point2d;
+
 
 
 /**
@@ -25,11 +25,11 @@ import javax.vecmath.Point2d;
  * @author 2021 Oleksiy Lukin alukin@mail.com
  */
 public class Area {
-    Point2d a;
-    Point2d b;
+    Point2D a;
+    Point2D b;
 
-    public Area(Point2d origin) {
-        this.a = a;
+    public Area(Point2D origin) {
+        this.a = origin;
     }
     
 }
