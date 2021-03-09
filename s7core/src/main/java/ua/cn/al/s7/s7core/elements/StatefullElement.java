@@ -19,7 +19,7 @@ package ua.cn.al.s7.s7core.elements;
 
 import lombok.Getter;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.Value;
+import ua.cn.al.s7.s7core.numbers.Value;
 
 /**
  * TODO: general statefull element

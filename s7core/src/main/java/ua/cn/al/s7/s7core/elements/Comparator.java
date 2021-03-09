@@ -18,7 +18,7 @@
 package ua.cn.al.s7.s7core.elements;
 
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.Value;
+import ua.cn.al.s7.s7core.numbers.Value;
 
 /**
  *

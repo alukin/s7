@@ -15,17 +15,22 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core;
+package ua.cn.al.s7.s7core.numbers;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.MathContext;
+import org.apache.commons.math3.Field;
+import org.apache.commons.math3.FieldElement;
+import org.apache.commons.math3.exception.MathArithmeticException;
+import org.apache.commons.math3.exception.NullArgumentException;
+import org.apache.commons.math3.util.BigReal;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Value implements Comparable{
+public class Value implements Comparable, FieldElement<Value>{
     ValueType vt;
     Object v;
     
@@ -167,15 +172,55 @@ public class Value implements Comparable{
         return  this.getDouble() < value.getDouble();
     }
 
-    public Value sub(Value v1) {
+
+    @Override
+    public Value subtract(Value a) throws NullArgumentException {
+        
+       switch(vt){
+            case BIGDEC: v = BigDecimal.ZERO;
+            break;
+            case BIGINT: v = BigInteger.ZERO;
+            break;
+            case DOUBLE: v = 0.0D;
+            break;
+            case LONG: v = 0L;
+        } 
+       return null;
+    }
+
+    @Override
+    public Value negate() {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
-    public Value mul(Value sub) {
+    @Override
+    public Value multiply(int n) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
-    
-    public Value sqrt(){
-        throw new UnsupportedOperationException("Not supported yet.");
+
+    @Override
+    public Value multiply(Value a) throws NullArgumentException {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public Value divide(Value a) throws NullArgumentException, MathArithmeticException {
+        BigReal br = BigReal.ONE;
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public Value reciprocal() throws MathArithmeticException {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public Field<Value> getField() {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+    }
+
+    @Override
+    public Value add(Value a) throws NullArgumentException {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 }

@@ -12,6 +12,8 @@
  */
 package ua.cn.al.s7.s7core;
 
+import ua.cn.al.s7.s7core.numbers.Value;
+
 /**
  *
  *  @author Oleksiy Lukin alukin@mail.com

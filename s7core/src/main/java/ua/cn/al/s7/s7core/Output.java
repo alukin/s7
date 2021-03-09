@@ -12,6 +12,8 @@
  */
 package ua.cn.al.s7.s7core;
 
+import ua.cn.al.s7.s7core.numbers.Value;
+
 /**
  *  Output pin has state in the "value" variable.
  *  Actually, if element has output pinsm it has states
