@@ -22,9 +22,19 @@ package ua.cn.al.s7.s7core.numbers;
  * @author Oleksiy Lukin alukin@mail.com
  */
 public enum ValueType {
-    LONG ,
-    DOUBLE,
-    BIGINT,
-    BIGDEC,
-    BIGREAL
+    LONG(0),
+    DOUBLE(1),
+    BIGINT(2),
+    BIGDEC(3),
+    BIGREAL(4);
+
+    private int id;
+
+    ValueType(int id) {
+        this.id = id;
+    }
+
+    public int getId() {
+        return id;
+    }
 }

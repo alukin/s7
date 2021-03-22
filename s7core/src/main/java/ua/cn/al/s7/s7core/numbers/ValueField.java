@@ -28,16 +28,17 @@ public class ValueField implements Field<Value> {
 
     @Override
     public Value getZero() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return Value.ZERO;
     }
 
     @Override
     public Value getOne() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return Value.ONE;
     }
 
     @Override
     public Class<? extends FieldElement<Value>> getRuntimeClass() {
+        
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
     

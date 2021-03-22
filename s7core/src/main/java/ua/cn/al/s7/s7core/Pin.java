@@ -17,9 +17,9 @@
  */
 package ua.cn.al.s7.s7core;
 
-import ua.cn.al.s7.s7core.numbers.Value;
 import lombok.Getter;
 import lombok.Setter;
+import ua.cn.al.s7.s7core.numbers.Value;
 
 /**
  *
@@ -27,7 +27,7 @@ import lombok.Setter;
  */
 public abstract class Pin {
     @Getter
-    private Element ownerElement;
+    private final Element ownerElement;
     @Getter
     @Setter
     private String name;
