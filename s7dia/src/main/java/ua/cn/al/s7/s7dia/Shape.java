@@ -27,10 +27,10 @@ import java.util.List;
  */
 public abstract class Shape extends Area{
 
-    public Shape(Point2D origin) {
+    public Shape(Point origin) {
         super(origin);
     }
     
-    List<Point2D> points = new ArrayList<>();
+    List<Point> points = new ArrayList<>();
     
 }

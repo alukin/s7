@@ -25,10 +25,10 @@ package ua.cn.al.s7.s7dia;
  * @author 2021 Oleksiy Lukin alukin@mail.com
  */
 public class Area {
-    Point2D a;
-    Point2D b;
+    Point a;
+    Point b;
 
-    public Area(Point2D origin) {
+    public Area(Point origin) {
         this.a = origin;
     }
     

@@ -17,16 +17,18 @@
  */
 package ua.cn.al.s7.s7dia;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-@Data
-@AllArgsConstructor
-public class Point2D {
-    double x;
-    double y;
+public class Composite extends Point {
+    List<Area> shapes = new ArrayList<>();
+    
+    public Composite(double x, double y) {
+        super(x, y);
+    }
+    
 }
