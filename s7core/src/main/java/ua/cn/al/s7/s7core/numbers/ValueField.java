@@ -37,8 +37,7 @@ public class ValueField implements Field<Value> {
     }
 
     @Override
-    public Class<? extends FieldElement<Value>> getRuntimeClass() {
-        
+    public Class<? extends FieldElement<Value>> getRuntimeClass() {       
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
     
