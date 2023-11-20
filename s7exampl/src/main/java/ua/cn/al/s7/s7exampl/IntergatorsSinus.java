@@ -47,8 +47,8 @@ public class IntergatorsSinus {
        const1.setName("C1");
 
        Element integrator1 = new Integrator(0.000001D);
-       Element integrator2 = new Integrator();
-       TextFileReg reg=null; 
+       Element integrator2 = new Integrator(0.0);
+       TextFileReg reg = null; 
         try {
             reg = new TextFileReg(1, System.out);
         } catch (IOException ex) {

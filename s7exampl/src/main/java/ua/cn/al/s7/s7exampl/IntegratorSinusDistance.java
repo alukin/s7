@@ -45,7 +45,7 @@ public class IntegratorSinusDistance {
        const1.setName("C1");
 
        Element integrator1 = new Integrator(1.0D);
-       Element integrator2 = new Integrator();
+       Element integrator2 = new Integrator(0.0);
        Element sinus = new Sinus(1.0, 0.0);
        Element distance = new CartesianDistance();
        

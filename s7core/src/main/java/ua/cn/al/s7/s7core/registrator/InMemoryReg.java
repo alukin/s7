@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.RealInput;
 
 /**
  *
@@ -33,14 +34,17 @@ public class InMemoryReg extends Element{
     @Getter
     private int index=0;
     @Getter
-    private int nChannels;
+    private final int nChannels;
     @Getter
     public ArrayList<double[]> store = new ArrayList<>();
+    private final RealInput[] inputs;
     
     public InMemoryReg(int nChannels, int maxRecords) {
-        super(nChannels,0);
+        inputs = new RealInput[nChannels];
+        addInputs(inputs);
+        this.nChannels = nChannels;
         this.maxRecords=maxRecords;
-        this.nChannels=nChannels;
+
         for(int i=0;i<nChannels;i++){
             store.add(new double[maxRecords]);
         }
@@ -49,7 +53,7 @@ public class InMemoryReg extends Element{
     @Override
     public void tick() {
         for(int i=0;i<nChannels;i++){
-            store.get(i)[index]=inputs.get(i).value().getDouble();
+            store.get(i)[index]=inputs[i].value().doubleValue();
         }
         index++;
         index=index % maxRecords;

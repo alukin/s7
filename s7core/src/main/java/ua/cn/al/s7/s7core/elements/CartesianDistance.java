@@ -17,32 +17,33 @@
  */
 package ua.cn.al.s7.s7core.elements;
 
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
-import ua.cn.al.s7.s7core.numbers.ValueType;
+import ua.cn.al.s7.s7core.RealInput;
+import ua.cn.al.s7.s7core.RealOutput;
 
 /**
  * TODO: generalize for Value
  * @author Oleksiy Lukin alukin@mail.com
  */
 public class CartesianDistance extends Element{
-
+    private final RealInput i1 = new RealInput();
+    private final RealInput i2  = new RealInput();
+    private final RealOutput o  = new RealOutput();
+    
     public CartesianDistance() {
-        super(2,1);
-        outputs.get(0).value=new Value(ValueType.DOUBLE);
+        addInputs(i1,i2);
+        addOutputs(o);
     }
 
     @Override
     public void tick() {
         
-        double v0 = inputs.get(0).value().getDouble();
-        double v1 = inputs.get(1).value().getDouble();
-        double s = v0-v1;
-        double d = Math.sqrt(s*s);
-        
-        outputs.get(0).value.set(
-               d/getTimeStep()
-        );
+        double v0 = i1.value().doubleValue();
+        double v1 = i2.value().doubleValue();
+
+        double d = Math.sqrt(v0*v0 + v1*v1);
+        o.value  = new Decimal64(d);
     }
     
 }

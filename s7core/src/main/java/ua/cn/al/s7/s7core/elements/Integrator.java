@@ -17,9 +17,11 @@
  */
 package ua.cn.al.s7.s7core.elements;
 
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
-import ua.cn.al.s7.s7core.numbers.ValueType;
+import ua.cn.al.s7.s7core.RealInput;
+import ua.cn.al.s7.s7core.RealOutput;
+
 
 /**
  *
@@ -27,24 +29,20 @@ import ua.cn.al.s7.s7core.numbers.ValueType;
  */
 public class Integrator extends Element{
     
+    private final RealInput i = new RealInput();
+    private final RealOutput o = new RealOutput();
+    
     public Integrator(double initialValue) {
-        super(1,1);
-        outputs.get(0).value = new Value(initialValue);
+        addInputs(i);
+        addOutputs(o);
+        o.value = new Decimal64(initialValue);
     }
     
-    public Integrator() {
-        super(1,1);
-        outputs.get(0).value = new Value(ValueType.DOUBLE);
-    }
      
     @Override
     public void tick() {
-       double in =  inputs.get(0).value().getDouble();
-       double prev = outputs.get(0).value().getDouble();
-       
-       double res  = prev+in*getTimeStep();
-               
-       outputs.get(0).value.set(res);       
+       double in =  i.value().doubleValue();              
+       o.value.add(in*getTimeStep());
     }
     
 }

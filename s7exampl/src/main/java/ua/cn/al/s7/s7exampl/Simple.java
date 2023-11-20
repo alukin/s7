@@ -45,7 +45,7 @@ public class Simple {
         
        Long[] w = {1L,1L};
        Element isum = new IntegerSum(w);
-       Element integrator = new Integrator();
+       Element integrator = new Integrator(0.0);
        
        s.connect(const1.out(0), sum.in(0));
        s.connect(const2.out(0), sum.in(1));

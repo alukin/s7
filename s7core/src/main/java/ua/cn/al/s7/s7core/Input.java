@@ -12,33 +12,26 @@
  */
 package ua.cn.al.s7.s7core;
 
-import ua.cn.al.s7.s7core.numbers.Value;
+import org.apache.commons.math3.FieldElement;
+
 
 /**
  *
  *  @author Oleksiy Lukin alukin@mail.com
+ * @param <T>
  */
-public class Input extends Pin{
-    Output conected = null;
-    
-    public Input(Element ownerElement) {
-        super(ownerElement);
-    }
+public class Input<T extends FieldElement<T>> extends Pin{
+    Output connected = null;
     
     public void connect(Output out){
-        conected = out;
+        connected = out;
     }
     
     @Override
-    public Value value() {
-        return conected.value();
+ 
+    @SuppressWarnings("unchecked")
+    public T value() {
+        return (T) connected.value;
     }
-
-//    @Override
-//    public ValueType getValueType() {
-//        //TODO: do we have dynamic value types?
-//        return ValueType.DOUBLE;
-//    }
-
     
 }

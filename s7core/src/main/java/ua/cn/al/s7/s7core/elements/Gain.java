@@ -18,24 +18,28 @@
 package ua.cn.al.s7.s7core.elements;
 
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
+import ua.cn.al.s7.s7core.RealInput;
+import ua.cn.al.s7.s7core.RealOutput;
+
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
 public class Gain extends Element{
-    private double k;
+    private final double k;
+    private final RealInput i = new RealInput();
+    private final RealOutput o = new RealOutput();
     
-    public Gain(Value k) {
-        super(1,1);
-        this.k=k.getDouble();
-        outputs.get(0).value = new Value(0.0);
+    public Gain(double k) {
+        addInputs(i);
+        addOutputs(o);
+        this.k=k;
     }
 
     @Override
     public void tick() {
-       outputs.get(0).value.set(k*inputs.get(0).value().getDouble());
+      o.value = i.value().multiply(k);
     }
     
 }

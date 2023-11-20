@@ -17,8 +17,11 @@
  */
 package ua.cn.al.s7.s7core.elements;
 
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
+import ua.cn.al.s7.s7core.RealInput;
+import ua.cn.al.s7.s7core.RealOutput;
+
 
 /**
  *
@@ -26,22 +29,24 @@ import ua.cn.al.s7.s7core.numbers.Value;
  */
 public class IntegerSum extends Element{
     private final Long[] weights;
-
+    private final RealInput[] inputs;
+    private final RealOutput o;
     public IntegerSum(Long[] weights) {
-        super(weights.length,1);
+        this.o = new RealOutput();
+        inputs = new RealInput[weights.length];
+        addInputs(inputs);
+        addOutputs(o);
         this.weights = weights;
-        outputs.get(0).value = new Value(0L);
+        o.value = new Decimal64(0.0D);
     }
     
     @Override
     public void tick() {
-        Long sum = 0L;
+        long sum = 0;
         for(int idx=0;idx<weights.length;idx++){
-           Value v =  inputs.get(idx).value();
-           long in =  v.getLong();
-           sum += weights[idx]*in; 
+           sum+=weights[idx]*inputs[idx].value().longValue();
         }
-        outputs.get(0).value.set(sum);
+        o.value = new Decimal64(sum);
     }
     
 }

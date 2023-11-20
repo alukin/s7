@@ -26,6 +26,7 @@ import java.io.Writer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import ua.cn.al.s7.s7core.Element;
+import ua.cn.al.s7.s7core.RealInput;
 
 /**
  *
@@ -36,9 +37,11 @@ public class TextFileReg extends Element implements Closeable{
     @Getter
     private final int nChannels;
     private final Writer fileWtriter;
-    
+    private final RealInput[] inputs;
+        
     public TextFileReg(int nChannels, OutputStream ostream) throws IOException {
-        super(nChannels,0);
+        inputs = new RealInput[nChannels];
+        addInputs(inputs);
         this.nChannels=nChannels;
         fileWtriter = new BufferedWriter(new OutputStreamWriter(ostream));
     }
@@ -49,7 +52,8 @@ public class TextFileReg extends Element implements Closeable{
         sb = new StringBuffer(ownerSchema.getSchemaTime().toString());
         for(int i=0;i<nChannels;i++){
             sb.append("\t");
-            sb.append(inputs.get(i).value().getDouble().toString());            
+            Double val = inputs[i].value().doubleValue();
+            sb.append(val.toString());            
         }
         sb.append("\n");
         try {

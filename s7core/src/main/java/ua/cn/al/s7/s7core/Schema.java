@@ -25,6 +25,7 @@ import lombok.Setter;
 import org.jgrapht.Graph;
 import org.jgrapht.graph.builder.GraphTypeBuilder;
 import org.jgrapht.traverse.ClosestFirstIterator;
+import ua.cn.al.s7.s7core.elements.Constant;
 
 /**
  *
@@ -60,7 +61,7 @@ public class Schema extends Element {
                 .allowingSelfLoops(false)
                 .buildGraph();
 
-        root = new Element(0, 1) {
+        root = new Constant(0.0) {
             @Override
             public void tick() {
             }

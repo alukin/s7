@@ -19,23 +19,29 @@ package ua.cn.al.s7.s7core;
 
 import lombok.Getter;
 import lombok.Setter;
-import ua.cn.al.s7.s7core.numbers.Value;
+import org.apache.commons.math3.FieldElement;
+
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
+ * @param <T> type of the value that Pin is: e.g.Complex
  */
-public abstract class Pin {
+public abstract class Pin<T extends FieldElement<T>> {
     @Getter
-    private final Element ownerElement;
+    Element ownerElement;
     @Getter
     @Setter
     private String name;
     
-    public Pin(Element ownerElement) {
-        this.ownerElement = ownerElement;
+    
+    public abstract T value();
+    
+    /**
+     * Canonical mane of the class of field element
+     * @return 
+     */
+    public String getType(){
+        return value().getField().getRuntimeClass().getCanonicalName();
     }
-    
-    public abstract Value value();
-    
 }

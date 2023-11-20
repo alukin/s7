@@ -18,8 +18,10 @@
 package ua.cn.al.s7.s7core.elements;
 
 import lombok.Getter;
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
+import ua.cn.al.s7.s7core.RealInput;
+import ua.cn.al.s7.s7core.RealOutput;
 
 /**
  * TODO: general statefull element
@@ -27,12 +29,18 @@ import ua.cn.al.s7.s7core.numbers.Value;
  */
 public abstract  class StatefullElement extends Element {
     @Getter
-    Value[] state;
-    
-    public StatefullElement(int NInputs, int nOutputs, Value[] initialState) {
-        state = new Value[initialState.length];
+    Decimal64[] state;
+    private final RealInput[] inputs;
+    private final RealOutput[] outputs;
+    public StatefullElement(int nInputs, int nOutputs, double[] initialState) {
+        inputs = new RealInput[nInputs];
+        outputs = new RealOutput[nOutputs];
+        addInputs(inputs);
+        addOutputs(outputs);
+        
+        state = new Decimal64[initialState.length];
         for(int i=0;i<initialState.length;i++){
-            state[i]=initialState[i].copy();
+            state[i] = new Decimal64(initialState[i]);
         }
     } 
     

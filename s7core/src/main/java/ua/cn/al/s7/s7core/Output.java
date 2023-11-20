@@ -12,7 +12,8 @@
  */
 package ua.cn.al.s7.s7core;
 
-import ua.cn.al.s7.s7core.numbers.Value;
+import org.apache.commons.math3.FieldElement;
+
 
 /**
  *  Output pin has state in the "value" variable.
@@ -21,19 +22,15 @@ import ua.cn.al.s7.s7core.numbers.Value;
  *  Element's tick() method.
  * 
  *  @author Oleksiy Lukin alukin@mail.com
+ *  @param <T>
  */
-public class Output extends Pin{
+public class Output<T extends FieldElement<T>> extends Pin{
 
-    public Value value;
-    
-    public Output(Element ownerElement) {
-        super(ownerElement);
-    }
+    public T value;
 
     @Override
-    public Value value() {
+    public T value() {
         return value;
     }
 
-    
 }

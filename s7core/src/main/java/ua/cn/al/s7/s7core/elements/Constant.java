@@ -17,18 +17,21 @@
  */
 package ua.cn.al.s7.s7core.elements;
 
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
+import ua.cn.al.s7.s7core.RealOutput;
+
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
 public class Constant extends Element{
+    private final RealOutput o = new RealOutput();
 
     public Constant(Double value) {
-       super(0,1); 
-       outputs.get(0).value = new Value(value);
+       o.value = new Decimal64(value);
+       addOutputs(o);
        name="Const="+value.toString();
     }
 

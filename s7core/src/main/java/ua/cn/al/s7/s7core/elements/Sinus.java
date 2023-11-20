@@ -17,9 +17,10 @@
  */
 package ua.cn.al.s7.s7core.elements;
 
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
-import ua.cn.al.s7.s7core.numbers.ValueType;
+import ua.cn.al.s7.s7core.RealOutput;
+
 
 /**
  * sin(2*Pi*f*t+fi)
@@ -28,16 +29,19 @@ import ua.cn.al.s7.s7core.numbers.ValueType;
 public class Sinus extends Element{
     double frequancy;
     double phase;
+    private final RealOutput o = new RealOutput();
     public Sinus(double frequency, double phase) {
-        super(0,1);
+        addOutputs(o);
         this.frequancy=frequency;
         this.phase=phase;
-        outputs.get(0).value=new Value(ValueType.DOUBLE);
+        o.value = new Decimal64(
+           Math.sin(phase)
+       );
     }
 
     @Override
     public void tick() {
-       outputs.get(0).value.set(
+       o.value = new Decimal64(
            Math.sin(2*Math.PI*frequancy*getTime()+ phase)
        );
     }

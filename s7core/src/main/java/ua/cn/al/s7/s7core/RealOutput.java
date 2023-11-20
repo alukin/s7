@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Oleksiy Lukin alukin@mail.com
+ * Copyright (C) 2023 Oleksiy Lukin <alukin@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,29 +15,14 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core.numbers;
+package ua.cn.al.s7.s7core;
+
+import org.apache.commons.math3.util.Decimal64;
 
 /**
  *
- * @author Oleksiy Lukin alukin@mail.com
+ * @author Oleksiy Lukin <alukin@gmail.com>
  */
-public enum ValueType {
-    BYTE(0),
-    SHORT(1),
-    INT(2),
-    LONG(3),
-    BIGINT(4),
-    BIGDEC(5),
-    DOUBLE(6),
-    BIGREAL(7);
+public class RealOutput extends Output<Decimal64>{
 
-    private final int id;
-
-    ValueType(int id) {
-        this.id = id;
-    }
-
-    public int getId() {
-        return id;
-    }
 }

@@ -17,8 +17,11 @@
  */
 package ua.cn.al.s7.s7core.elements;
 
+import org.apache.commons.math3.util.Decimal64;
 import ua.cn.al.s7.s7core.Element;
-import ua.cn.al.s7.s7core.numbers.Value;
+import ua.cn.al.s7.s7core.RealInput;
+import ua.cn.al.s7.s7core.RealOutput;
+
 
 /**
  *
@@ -26,22 +29,29 @@ import ua.cn.al.s7.s7core.numbers.Value;
  */
 public class Comparator extends Element{
     
-    private final Value low;
-    private Value high;
-           
-    public Comparator(Value low, Value high) {
-        super(2,1);
-        this.high=high.copy();
-        this.low = low.copy();
+    private final Decimal64 low;
+    private final Decimal64 high;
+    private final RealInput i1 = new RealInput();
+    private final RealInput i2  = new RealInput();
+    private final RealOutput o = new RealOutput();
+    public Comparator(double low, double high) {
+
+        addInputs(i1,i2);
+        addOutputs(o);
+        
+        this.high = new Decimal64(high);
+        this.low = new Decimal64(low);
     }
 
     @Override
     public void tick() {
-       if(inputs.get(0).value().lessThan(inputs.get(1).value())){
-           outputs.get(0).value=high;
-       }else{
-           outputs.get(0).value=low;
-       }
+        double v1 = i1.value().doubleValue();
+        double v2 = i2.value().doubleValue();
+        if (v1 < v2){
+            o.value = low;
+        } else{
+            o.value = high;
+        }
     }
     
 }

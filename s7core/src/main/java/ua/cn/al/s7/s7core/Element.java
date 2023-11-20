@@ -13,6 +13,7 @@
 package ua.cn.al.s7.s7core;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
@@ -27,10 +28,8 @@ public abstract class Element {
     @Getter
     @Setter
     protected String name = this.getClass().getSimpleName();    
-    @Getter
-    public List<Input> inputs = new ArrayList<>();
-    @Getter
-    public List<Output> outputs = new ArrayList<>();
+    private final List<Input> inputs = new ArrayList<>();
+    private final List<Output> outputs = new ArrayList<>();
     @Getter
     @Setter        
     protected Schema ownerSchema;
@@ -38,20 +37,16 @@ public abstract class Element {
     public Element() {
     }
     
-    public Element(int nInputs, int nOutputs) {
-        for(int i = 0; i<nInputs; i++ ){
-            Input in = new Input(this);
-            in.setName(""+i);
-            inputs.add(in);
-        }
-        for(int i = 0; i<nOutputs; i++ ){
-            Output out = new Output(this);
-            out.setName(""+i);
-            outputs.add(out);
-        }        
-    }    
     
     public abstract void tick();
+    
+    public final void addInputs( Input... i){
+        inputs.addAll(Arrays.asList(i));      
+    }
+    
+    public final void addOutputs( Output... o){
+        outputs.addAll(Arrays.asList(o));
+    }
     
     public Input in(int idx){
         int idx1=idx+1;

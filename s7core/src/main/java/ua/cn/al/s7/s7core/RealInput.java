@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 al
+ * Copyright (C) 2023 Oleksiy Lukin <alukin@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -15,30 +15,14 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7core.numbers;
+package ua.cn.al.s7.s7core;
 
-import org.apache.commons.math3.Field;
-import org.apache.commons.math3.FieldElement;
+import org.apache.commons.math3.util.Decimal64;
 
 /**
  *
- * @author al
+ * @author Oleksiy Lukin <alukin@gmail.com>
  */
-public class ValueField implements Field<Value> {
-
-    @Override
-    public Value getZero() {
-        return Value.ZERO;
-    }
-
-    @Override
-    public Value getOne() {
-        return Value.ONE;
-    }
-
-    @Override
-    public Class<? extends FieldElement<Value>> getRuntimeClass() {       
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
+public class RealInput extends Input<Decimal64>{
     
 }
