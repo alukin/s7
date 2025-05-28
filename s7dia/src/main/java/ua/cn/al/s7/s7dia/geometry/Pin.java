@@ -15,22 +15,17 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7dia;
-
-import java.util.ArrayList;
-import java.util.List;
-
+package ua.cn.al.s7.s7dia.geometry;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public abstract class Shape extends Area{
-
-    public Shape(Point origin) {
-        super(origin);
-    }
+public class Pin extends Point {
+    double r;
     
-    List<Point> points = new ArrayList<>();
+    public Pin(double x, double y) {
+        super(x, y);
+    }
     
 }

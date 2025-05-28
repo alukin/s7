@@ -59,7 +59,7 @@ public class TextFileReg extends Element implements Closeable{
         try {
             fileWtriter.write(sb.toString());
         } catch (IOException ex) {
-            log.error("Can not write to file", ex);
+//            log.error("Can not write to file", ex);
         }
     }
 

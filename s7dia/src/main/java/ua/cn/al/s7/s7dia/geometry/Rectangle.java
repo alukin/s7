@@ -15,19 +15,16 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7dia;
-
-import java.util.ArrayList;
-import java.util.List;
+package ua.cn.al.s7.s7dia.geometry;
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Composite extends Point {
-    List<Area> shapes = new ArrayList<>();
+public class Rectangle extends Point {
+    double r;
     
-    public Composite(double x, double y) {
+    public Rectangle(double x, double y) {
         super(x, y);
     }
     

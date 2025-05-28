@@ -58,7 +58,7 @@ public class InMemoryReg extends Element{
         index++;
         index=index % maxRecords;
         if(index==0){
-           log.error("Max capacity {} reached, overwriting earlier values",maxRecords);
+          // log.error("Max capacity {} reached, overwriting earlier values",maxRecords);
         }
     }
     

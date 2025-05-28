@@ -75,7 +75,7 @@ public class Schema extends Element {
         boolean res = true;
         //TODO: all unconnected inputs should be "grounded"
         // graph should be consistent
-        // input type sshould be able to handle conneced output
+        // input type should be able to handle connected output
         return res;
     }
 
@@ -97,16 +97,16 @@ public class Schema extends Element {
         return res;
     }
 
-    public void insert(Element e) {
-        if (!elementGraph.containsVertex(e)) {
-            elementGraph.addVertex(e);
+    public void insert(Element el) {
+        if (!elementGraph.containsVertex(el)) {
+            elementGraph.addVertex(el);
         }
-        //we have to add generators as root's childs
-        if (e.isGenerator()) {
-            Connection con = new Connection(root.out(0), e.in(0));
-            elementGraph.addEdge(root, e, con);
+        //we have to add generators as root's children
+        if (el.isGenerator()) {
+            Connection con = new Connection(root.out(0), el.in(0));
+            elementGraph.addEdge(root, el, con);
         }
-        e.setOwnerSchema(this);
+        el.setOwnerSchema(this);
     }
 
     public void connect(Output out, Input in) {
@@ -128,7 +128,7 @@ public class Schema extends Element {
         StringBuilder res = new StringBuilder();
         res.append("||->");
         for (Element e : inCalcOrder()) {
-            res = res.append("[").append(e.name).append("]->");
+            res.append("[").append(e.name).append("]->");
         }
         res.append("||");
         return res.toString();

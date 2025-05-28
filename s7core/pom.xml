@@ -34,6 +34,7 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-math3</artifactId>
+            <version>3.6.1</version>
         </dependency>                     
     </dependencies>
     <build>
@@ -45,6 +46,13 @@
                     <compilerArgs>
                         <arg>-Xlint:unchecked</arg>
                     </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.38</version>
+                        </path>
+                    </annotationProcessorPaths>                     
                 </configuration>
             </plugin>       
         </plugins>

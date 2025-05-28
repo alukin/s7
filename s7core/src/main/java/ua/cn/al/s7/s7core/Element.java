@@ -52,7 +52,7 @@ public abstract class Element {
         int idx1=idx+1;
         int sz = inputs.size();
         if(idx1>sz || idx1<1){
-            log.trace("Idex of input is out of the range");
+          //  log.trace("Idex of input is out of the range");
             return null;
         }
         return inputs.get(idx);
@@ -62,7 +62,7 @@ public abstract class Element {
         int idx1=idx+1;
         int sz = outputs.size();
         if(idx1>sz || idx1<1){
-            log.trace("Idex of output is out of the range");
+          //  log.trace("Idex of output is out of the range");
             return null;
         }
         return outputs.get(idx);

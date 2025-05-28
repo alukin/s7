@@ -15,21 +15,18 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7dia;
+package ua.cn.al.s7.s7dia.geometry;
 
-
-
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
 /**
- * Rectangular area
- * @author 2021 Oleksiy Lukin alukin@mail.com
+ *
+ * @author Oleksiy Lukin alukin@mail.com
  */
-public class Area {
-    Point a;
-    Point b;
-
-    public Area(Point origin) {
-        this.a = origin;
-    }
-    
+@Data
+@AllArgsConstructor
+public class Point {
+    double x;
+    double y;
 }

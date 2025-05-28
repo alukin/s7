@@ -15,17 +15,23 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
-package ua.cn.al.s7.s7dia;
+package ua.cn.al.s7.s7dia.geometry;
+
+import ua.cn.al.s7.s7dia.geometry.Area;
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  *
  * @author Oleksiy Lukin alukin@mail.com
  */
-public class Ellipse extends Point {
-    double r;
-    
-    public Ellipse(double x, double y) {
-        super(x, y);
+public abstract class Shape extends Area{
+
+    public Shape(Point origin) {
+        super(origin);
     }
+    
+    List<Point> points = new ArrayList<>();
     
 }
