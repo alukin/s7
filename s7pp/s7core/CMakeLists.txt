@@ -44,7 +44,9 @@ file(GLOB s7core_SRCS
 
 # Add your library
 add_library(s7core STATIC ${s7core_SRCS}
-        include/s7value.hpp) # Or SHARED
+        include/s7value.hpp
+        src/s7lib.cpp
+        include/s7lib.hpp) # Or SHARED
 
 # Add public include directories for s7core.
 # Consumers will automatically get these when they link to s7core.

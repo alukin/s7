@@ -39,22 +39,11 @@ namespace s7 {
         std::vector<std::unique_ptr<Output>> outputs;
         virtual void tick() = 0;
     };
+    typedef std::unique_ptr<Element> ElementPtr;
 
     // no inputs
     class Source : public Element {
 
-    };
-
-    class Constant : public Source
-    {
-    public:
-        explicit Constant(const UniValue& val)
-        {
-            constant = val;
-            outputs.push_back(std::make_unique<Output>(constant));
-        }
-        void tick() override{};
-        UniValue constant;
     };
 
     //no outputs
@@ -67,8 +56,10 @@ namespace s7 {
     class Schema : public Element
     {
         public:
-        std::vector<std::unique_ptr<Element> >elements;
+        std::vector<ElementPtr> elements;
         void tick() override{};
+        void insert(ElementPtr e);
+        bool connect();
     };
 
 }
