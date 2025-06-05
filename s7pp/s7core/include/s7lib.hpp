@@ -3,24 +3,38 @@
 //
 
 #pragma once
+#include <utility>
+
 #include "s7.hpp"
 
 namespace s7 {
     
-    class Constant : public Source
+    class Constant : public Element
     {
     public:
-        explicit Constant(const UniValue& val)
+        explicit Constant( DataVariant val) :constant(std::move(val))
         {
-            constant = val;
             outputs.push_back(std::make_unique<Output>(constant));
         }
-        void tick() override{};
-        UniValue constant;
+        void tick() override
+        {
+            //empty
+        };
+        DataVariant constant;
     };
 
     class Integrator :public Element{
-
+        public:
+        explicit Integrator(DataVariant const& init_state) : state(init_state)
+        {
+            inputs.push_back(std::make_unique<Input>());
+            outputs.push_back(std::make_unique<Output>(state));
+        }
+        void tick() override
+        {
+             state = state + inputs[0]->value();
+        };
+        DataVariant state;
     };
 
     class Sum :public Element {
