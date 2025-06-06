@@ -5,13 +5,15 @@ namespace s7 {
 
 void Schema::insert(ElementPtr e)
 {
-  const auto hash = boost::lexical_cast<std::string>(e->getId());
-  elements[hash] = std::move(e);
+  elements[e->getId()] = std::move(e);
 }
 
-bool Schema::connect(uuid el1, std::string output_id, uuid el2, std::string input_id)
+bool Schema::connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_idx)
 {
-  bool res = false;
-  return res;
+  auto in = el1->getInput(input_idx);
+  auto out = el2->getOutput(output_idx);
+  in->connect(out);
+  //TODO: netlist
+  return true;
 }
 }

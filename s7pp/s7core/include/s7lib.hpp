@@ -12,7 +12,10 @@ namespace s7 {
     class Constant : public Element
     {
     public:
-        explicit Constant( DataVariant val) :constant(std::move(val))
+        ~Constant() override = default;
+        Constant() : Element() {};
+        explicit Constant(std::string& id) : Element(id) {};
+        explicit Constant( DataVariant val) :Element(), constant(std::move(val))
         {
             outputs.push_back(std::make_unique<Output>(constant));
         }
