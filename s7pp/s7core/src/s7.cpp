@@ -3,6 +3,10 @@
 
 namespace s7 {
 
+  void Schema::tick()
+  {
+  }
+
 void Schema::insert(ElementPtr e)
 {
   elements[e->getId()] = std::move(e);

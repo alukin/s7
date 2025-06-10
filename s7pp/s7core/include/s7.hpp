@@ -96,7 +96,14 @@ using namespace boost::uuids;
     class Schema : public Element
     {
         public:
-        void tick() override{};
+        /**
+         * Ticks all elements. We must build graph of connections first, and then
+         * execute tick() of each element it proper order.
+         * TODO: think of it as casual net. What is discretization time then?
+         * How we play with time? How time emerges? How time scales the process of calculations?
+         * What causes time to tick?
+         */
+        void tick() override;
         void insert(ElementPtr e);
         bool connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_idx );
         private:
