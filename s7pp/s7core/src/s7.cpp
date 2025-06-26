@@ -20,4 +20,14 @@ bool Schema::connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_i
   //TODO: netlist
   return true;
 }
+
+void Schema::run(long ticks)
+{
+    //run according to order
+}
+
+void Schema::run_s(double seconds)
+{
+    run(lround(seconds/discr_time));
+}
 }

@@ -75,7 +75,7 @@ using namespace boost::uuids;
         {
             id_ = IdGEnerator()();
         }
-        explicit Element(std::string& id) : id_(id) {};
+        explicit Element(std::string id) : id_(id) {};
         virtual ~Element() = default;
         Schema *owner = nullptr;
         std::vector<std::shared_ptr<Input>> inputs;
@@ -96,6 +96,8 @@ using namespace boost::uuids;
     class Schema : public Element
     {
         public:
+        explicit Schema(double td) : discr_time(td) {};
+        explicit Schema(double td, std::string id) : discr_time(td), Element(id){};
         /**
          * Ticks all elements. We must build graph of connections first, and then
          * execute tick() of each element it proper order.
@@ -106,9 +108,13 @@ using namespace boost::uuids;
         void tick() override;
         void insert(ElementPtr e);
         bool connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_idx );
+        void run(long ticks);
+        void run_s(double seconds);
+        double get_TD() const { return discr_time;};
         private:
         std::unordered_map<std::string,ElementPtr> elements;
-
+        /** discretization time for this schema */
+        double discr_time;
     };
 
 }

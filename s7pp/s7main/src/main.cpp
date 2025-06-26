@@ -13,12 +13,13 @@ int main(int argc, char *argv[]){
     std::cout << "Hello S7" << '\n';
     DataVariant d1(1.2);
     auto cp = std::make_shared<Constant>(d1);
-    s7::Schema s;
+    s7::Schema s(1e-9);
     s.insert(std::move(cp));
     DataVariant is1(0.0);
     auto ig = std::make_shared<Integrator>(is1);
     s.insert(ig);
-
+    s.connect(cp,0,ig,0);
+    s.run(10);
     std::cout << cp->outputs[0]->value() << '\n';
     return EXIT_SUCCESS;
 }
