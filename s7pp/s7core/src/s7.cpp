@@ -18,6 +18,9 @@ bool Schema::connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_i
   auto in = el2->getInput(input_idx);
   auto out = el1->getOutput(output_idx);
   in->connect(out);
+      el1->owner = shared_from_this();
+      el2->owner = shared_from_this();
+
   //TODO: netlist
   return true;
 }

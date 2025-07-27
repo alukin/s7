@@ -11,18 +11,18 @@ int main(int argc, char *argv[]){
 
 
     std::cout << "Hello S7" << '\n';
-    s7::Schema s(1e-9);
+    auto s =std::make_shared<Schema>(1e-9);
 
     DataVariant d1(1.2);
     auto c = std::make_shared<Constant>(d1);
-    s.insert(c);
+    s->insert(c);
 
     DataVariant is1(0.0);
     auto ig = std::make_shared<Integrator>(is1);
-    s.insert(ig);
+    s->insert(ig);
 
-    s.connect(c,0,ig,0);
-    s.run(10);
+    s->connect(c,0,ig,0);
+    s->run(10);
     std::cout << c->outputs[0]->value() << '\n';
     return EXIT_SUCCESS;
 }

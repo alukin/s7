@@ -77,7 +77,7 @@ using namespace boost::uuids;
         }
         explicit Element(std::string id) : id_(id) {};
         virtual ~Element() = default;
-        Schema *owner = nullptr;
+        std::shared_ptr<Schema> owner = nullptr;
         std::vector<std::shared_ptr<Input>> inputs;
         std::vector<std::shared_ptr<Output>> outputs;
         virtual void tick() = 0;
@@ -93,7 +93,7 @@ using namespace boost::uuids;
     typedef std::shared_ptr<Element> ElementPtr;
 
     //collection of interconnected elements
-    class Schema : public Element
+    class Schema : public std::enable_shared_from_this<Schema>, Element
     {
         public:
         explicit Schema(double td) : discr_time(td) {};
