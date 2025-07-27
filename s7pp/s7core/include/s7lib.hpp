@@ -13,9 +13,9 @@ namespace s7 {
     {
     public:
         ~Constant() override = default;
-        Constant() : Element() {};
-        explicit Constant(std::string& id) : Element(id) {};
-        explicit Constant( DataVariant val) :Element(), constant(std::move(val))
+        Constant() : Constant("",DataVariant(1.0)) {};
+        explicit Constant(const DataVariant& val) : Constant("",val) {};
+        explicit Constant( std::string const& id, DataVariant val) :Element(id), constant(std::move(val))
         {
             outputs.push_back(std::make_unique<Output>(constant));
         }

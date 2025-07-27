@@ -5,17 +5,18 @@ namespace s7 {
 
   void Schema::tick()
   {
+      //TOD: implement
   }
 
 void Schema::insert(ElementPtr e)
 {
-  elements[e->getId()] = std::move(e);
+  elements[e->getId()] = e;
 }
 
 bool Schema::connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_idx)
 {
-  auto in = el1->getInput(input_idx);
-  auto out = el2->getOutput(output_idx);
+  auto in = el2->getInput(input_idx);
+  auto out = el1->getOutput(output_idx);
   in->connect(out);
   //TODO: netlist
   return true;
