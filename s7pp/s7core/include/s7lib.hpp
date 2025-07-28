@@ -5,6 +5,7 @@
 #pragma once
 #include <utility>
 
+#include "i_s7lib.hpp"
 #include "s7.hpp"
 
 namespace s7 {
@@ -28,7 +29,7 @@ namespace s7 {
 
     class Integrator :public Element{
         public:
-        explicit Integrator(DataVariant const& init_state) : state(init_state)
+        explicit Integrator(DataVariant  init_state) : state(std::move(init_state))
         {
             inputs.push_back(std::make_unique<Input>());
             outputs.push_back(std::make_unique<Output>(state));
@@ -41,10 +42,21 @@ namespace s7 {
     };
 
     class Sum :public Element {
+    //use array of weights to set num3r of inputs
+    };
+
+//voltage controlled amplifier
+    class Vca :public Element
+    {
+    };
+
+    class HarmonicOscillator :public Element
+    {
 
     };
 
-    class s7lib {
-
+    class s7lib : public Is7lib {
+//this is the utility class to load the library dynamically
     };
+
 }

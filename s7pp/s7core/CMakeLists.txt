@@ -47,6 +47,7 @@ add_library(s7core STATIC ${s7core_SRCS}
         src/s7lib.cpp
         include/s7lib.hpp
         include/s7datavariant.hpp
+        include/i_s7lib.hpp
 ) # Or SHARED
 
 # Add public include directories for s7core.

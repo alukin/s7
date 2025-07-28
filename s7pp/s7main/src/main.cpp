@@ -11,7 +11,7 @@ int main(int argc, char *argv[]){
 
 
     std::cout << "Hello S7" << '\n';
-    auto s =std::make_shared<Schema>(1e-9);
+    auto s = std::make_shared<Schema>(1e-9);
 
     DataVariant d1(1.2);
     auto c = std::make_shared<Constant>(d1);
