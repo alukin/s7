@@ -1,0 +1,29 @@
+{
+  "id": "io_file_real_sink",
+  "dt": 0.001,
+  "elements": [
+    {
+      "id": "c1",
+      "type": "Constant",
+      "params": {
+        "value": 0.75
+      }
+    },
+    {
+      "id": "sink",
+      "type": "RealFileSink",
+      "params": {
+        "num_channels": 1,
+        "sample_rate_hz": 1000.0,
+        "encoding": 0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": { "element": "c1", "port": 0 },
+      "to": { "element": "sink", "port": 0 }
+    }
+  ]
+}
+

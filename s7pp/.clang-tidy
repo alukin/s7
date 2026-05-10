@@ -1,0 +1,12 @@
+---
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  modernize-*
+HeaderFilterRegex: '^(s7core/(include|src)|s7main/src)/'
+ExcludeHeaderFilterRegex: '^(external/|cmake-build-.*|build/)'
+WarningsAsErrors: ''
+FormatStyle: none
+...

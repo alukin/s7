@@ -1,0 +1,27 @@
+{
+  "id":  "feedback_example",
+  "dt":  1e-9,
+  "elements": [
+    {
+      "id":     "c1",
+      "type":   "Constant",
+      "params": { "value": 1.0 }
+    },
+    {
+      "id":     "sum1",
+      "type":   "Sum",
+      "params": { "w0": 1.0, "w1": 1.0 }
+    },
+    {
+      "id":     "int1",
+      "type":   "Integrator",
+      "params": { "init_state": 0.0 }
+    }
+  ],
+  "connections": [
+    { "from": { "element": "c1",   "port": 0 }, "to": { "element": "sum1", "port": 0 } },
+    { "from": { "element": "int1", "port": 0 }, "to": { "element": "sum1", "port": 1 } },
+    { "from": { "element": "sum1", "port": 0 }, "to": { "element": "int1", "port": 0 } }
+  ]
+}
+

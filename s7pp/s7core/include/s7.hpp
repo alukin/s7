@@ -1,120 +1,221 @@
 #pragma once
+
+#include <complex>
 #include <memory>
-#include <string>
-#include <vector>
+#include <optional>
 #include <sstream>
-#include <boost/uuid/random_generator.hpp>
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_io.hpp>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
-#include "s7datavariant.hpp"
+#include <utility>
+#include <vector>
 
 namespace s7 {
 
-using namespace boost::uuids;
+using Real = double;
+using Complex = std::complex<double>;
 
-    class Element;
+class Element;
 
-    class Pin {
-        public:
-        virtual ~Pin() = default;
-        explicit Pin() = default;
-        Element *owner = nullptr;
-        std::string name;
-        std::string description;
-    };
+class Pin {
+public:
+    virtual ~Pin() = default;
+    explicit Pin() = default;
+    Element* owner = nullptr;
+    std::string name;
+    std::string description;
+};
 
+class Output : public Pin {
+public:
+    ~Output() override = default;
+    [[nodiscard]] virtual auto debugValueString() const -> std::string = 0;
+};
 
-    class Output : public Pin {
-    public:
-       explicit Output(DataVariant& value_ref) : val(value_ref) {};
-       DataVariant& val;
-       [[nodiscard]] DataVariant& value() const {return val;};
-    };
+template <typename T>
+class TypedOutput final : public Output {
+public:
+    explicit TypedOutput(T& value_ref) : val_(value_ref) {}
 
-    class Input : public Pin {
-        public:
-        bool connect( std::shared_ptr<Output> o)
-        {
-            //TODO: check IO compatibility
-            connected_to = o;
-            return true;
-        }
-
-        [[nodiscard]] DataVariant& value() const
-        {
-            if (connected_to != nullptr)
-            {
-                return connected_to->value();
-            } else
-            {
-               throw std::runtime_error("Input is not connected");
-            }
-        };
-    private:
-        std::shared_ptr<Output> connected_to = nullptr;
-    };
-
-    class IdGEnerator
+    [[nodiscard]] auto debugValueString() const -> std::string override
     {
-        public:
-        std::string operator()() const
-        {
-            auto uuid = boost::uuids::random_generator()();
-            std::stringstream ss;
-            ss << uuid;
-            return ss.str();
-        }
-    };
+        std::ostringstream stream;
+        stream << val_;
+        return stream.str();
+    }
 
-    class Schema;
+    [[nodiscard]] auto value() const -> T& { return val_; }
 
-    class Element {
-    public:
-        Element()
-        {
-            id_ = IdGEnerator()();
-        }
-        explicit Element(std::string id) : id_(id) {};
-        virtual ~Element() = default;
-        std::shared_ptr<Schema> owner = nullptr;
-        std::vector<std::shared_ptr<Input>> inputs;
-        std::vector<std::shared_ptr<Output>> outputs;
-        virtual void tick() = 0;
-        [[nodiscard]] bool isSource() const { return inputs.empty(); }
-        [[nodiscard]] bool isSink() const { return outputs.empty(); }
-        [[nodiscard]] std::string getId() const { return id_; }
-        std::shared_ptr<Input> getInput(int idx){ return inputs.at(idx); }
-        std::shared_ptr<Output> getOutput(int idx){ return outputs.at(idx); }
-    private:
-        std::string id_;
-    };
+private:
+    T& val_;
+};
 
-    typedef std::shared_ptr<Element> ElementPtr;
+using RealOutput    = TypedOutput<Real>;
+using ComplexOutput = TypedOutput<Complex>;
 
-    //collection of interconnected elements
-    class Schema : public std::enable_shared_from_this<Schema>, Element
+class Input : public Pin {
+public:
+    ~Input() override = default;
+    virtual auto connect(std::shared_ptr<Output> output) -> bool = 0;
+    [[nodiscard]] virtual auto isConnected() const -> bool = 0;
+};
+
+template <typename T>
+class TypedInput final : public Input {
+public:
+    auto connect(std::shared_ptr<Output> output) -> bool override
     {
-        public:
-        explicit Schema(double td) : discr_time(td) {};
-        explicit Schema(double td, std::string id) : discr_time(td), Element(id){};
-        /**
-         * Ticks all elements. We must build graph of connections first, and then
-         * execute tick() of each element it proper order.
-         * TODO: think of it as casual net. What is discretization time then?
-         * How we play with time? How time emerges? How time scales the process of calculations?
-         * What causes time to tick?
-         */
-        void tick() override;
-        void insert(ElementPtr e);
-        bool connect(ElementPtr el1, int output_idx, ElementPtr el2, int input_idx );
-        void run(long ticks);
-        void run_s(double seconds);
-        double get_TD() const { return discr_time;};
-        private:
-        std::unordered_map<std::string,ElementPtr> elements;
-        /** discretization time for this schema */
-        double discr_time;
+        if (connected_to_) return false;
+        if (!output)
+            throw std::invalid_argument("Cannot connect to null output");
+
+        auto typed = std::dynamic_pointer_cast<TypedOutput<T>>(output);
+        if (!typed)
+            throw std::runtime_error("Signal type mismatch: incompatible pin types");
+
+        connected_to_ = std::move(typed);
+        return true;
+    }
+
+    [[nodiscard]] auto isConnected() const -> bool override { return connected_to_ != nullptr; }
+
+    [[nodiscard]] auto value() const -> T
+    {
+        if (!connected_to_)
+            throw std::runtime_error("Input is not connected");
+        return connected_to_->value();
+    }
+
+private:
+    std::shared_ptr<TypedOutput<T>> connected_to_ = nullptr;
+};
+
+using RealInput    = TypedInput<Real>;
+using ComplexInput = TypedInput<Complex>;
+
+class IdGenerator {
+public:
+    auto operator()() const -> std::string;
+};
+
+class Schema;
+
+class SchemaExecutionError : public std::runtime_error {
+public:
+    explicit SchemaExecutionError(const std::string& message,
+                                  std::vector<std::string> cycle_nodes = {},
+                                  std::vector<std::string> cycle_edges = {})
+        : std::runtime_error(message),
+          cycle_nodes_(std::move(cycle_nodes)),
+          cycle_edges_(std::move(cycle_edges))
+    {
+    }
+
+    [[nodiscard]] auto cycleNodes() const -> const std::vector<std::string>&
+    {
+        return cycle_nodes_;
+    }
+
+    [[nodiscard]] auto cycleEdges() const -> const std::vector<std::string>&
+    {
+        return cycle_edges_;
+    }
+
+private:
+    std::vector<std::string> cycle_nodes_;
+    std::vector<std::string> cycle_edges_;
+};
+
+class Element {
+public:
+    Element();
+    explicit Element(std::string id);
+    virtual ~Element() = default;
+
+    std::weak_ptr<Schema> owner{};
+
+    std::vector<std::shared_ptr<Input>>  inputs;
+    std::vector<std::shared_ptr<Output>> outputs;
+
+    virtual void tick() = 0;
+    virtual void calculateParameters() {}
+    virtual void commit() {}
+
+    [[nodiscard]] virtual auto isStateful() const -> bool;
+    [[nodiscard]] virtual auto hasDirectFeedthrough() const -> bool;
+
+    [[nodiscard]] auto isSource() const -> bool;
+    [[nodiscard]] auto isSink() const -> bool;
+
+    [[nodiscard]] auto getId() const -> std::string;
+
+    auto getInput(int idx) -> std::shared_ptr<Input>;
+    auto getOutput(int idx) -> std::shared_ptr<Output>;
+
+protected:
+    void setTraits(bool is_stateful, std::optional<bool> has_direct_feedthrough = std::nullopt);
+
+    template<typename T>
+    auto addInput() -> std::shared_ptr<TypedInput<T>>
+    {
+        auto pin = std::make_shared<TypedInput<T>>();
+        pin->owner = this;
+        inputs.push_back(pin);
+        return pin;
+    }
+
+    template<typename T>
+    auto addOutput(T& value_ref) -> std::shared_ptr<TypedOutput<T>>
+    {
+        auto pin = std::make_shared<TypedOutput<T>>(value_ref);
+        pin->owner = this;
+        outputs.push_back(pin);
+        return pin;
+    }
+
+private:
+    std::string id_;
+    bool is_stateful_ = false;
+    std::optional<bool> has_direct_feedthrough_;
+};
+
+using ElementPtr = std::shared_ptr<Element>;
+
+class Schema : public std::enable_shared_from_this<Schema>, public Element
+{
+public:
+    explicit Schema(double td);
+    explicit Schema(double td, std::string id);
+
+    void tick() override;
+    void calculateParameters() override;
+    void insert(const ElementPtr& e);
+    auto connect(const ElementPtr& el1, int output_idx,
+                 const ElementPtr& el2, int input_idx) -> bool;
+    void prepareExecution();
+    void run(long ticks);
+    void run_s(double seconds);
+
+    [[nodiscard]] auto get_TD() const -> double;
+    [[nodiscard]] auto getElementById(const std::string& id) const -> ElementPtr;
+    [[nodiscard]] auto elementIds() const -> const std::vector<std::string>&;
+
+private:
+    struct Connection {
+        std::string from_id;
+        int output_idx;
+        std::string to_id;
+        int input_idx;
     };
 
-}
+    void rebuildExecutionPlan();
+
+    std::unordered_map<std::string, ElementPtr> elements;
+    std::vector<std::string>  insertion_order;
+    std::vector<Connection>   connections;
+    std::vector<ElementPtr>   execution_order;
+    bool   execution_plan_dirty = true;
+    double discr_time;
+};
+
+} // namespace s7

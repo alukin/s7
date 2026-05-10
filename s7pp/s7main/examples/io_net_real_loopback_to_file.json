@@ -1,0 +1,51 @@
+{
+  "id": "io_net_real_loopback_to_file",
+  "dt": 0.001,
+  "elements": [
+    {
+      "id": "c1",
+      "type": "Constant",
+      "params": {
+        "value": 2.5
+      }
+    },
+    {
+      "id": "net_sink",
+      "type": "RealNetSink",
+      "params": {
+        "num_channels": 1,
+        "queue_capacity": 64,
+        "zero_on_underrun": 1
+      }
+    },
+    {
+      "id": "net_source",
+      "type": "RealNetSource",
+      "params": {
+        "num_channels": 1,
+        "queue_capacity": 64,
+        "zero_on_underrun": 1
+      }
+    },
+    {
+      "id": "file_sink",
+      "type": "RealFileSink",
+      "params": {
+        "num_channels": 1,
+        "sample_rate_hz": 1000.0,
+        "encoding": 0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": { "element": "c1", "port": 0 },
+      "to": { "element": "net_sink", "port": 0 }
+    },
+    {
+      "from": { "element": "net_source", "port": 0 },
+      "to": { "element": "file_sink", "port": 0 }
+    }
+  ]
+}
+

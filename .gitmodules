@@ -1,0 +1,6 @@
+[submodule "s7pp/external/json"]
+	path = s7pp/external/json
+	url = https://github.com/nlohmann/json.git
+[submodule "s7pp/external/rsocket"]
+	path = s7pp/external/rsocket
+	url = https://github.com/rsocket/rsocket-cpp.git

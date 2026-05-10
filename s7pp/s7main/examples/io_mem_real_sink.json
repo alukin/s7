@@ -1,0 +1,31 @@
+{
+  "id": "io_mem_real_sink",
+  "dt": 0.001,
+  "elements": [
+    {
+      "id": "c1",
+      "type": "Constant",
+      "params": {
+        "value": 1.25
+      }
+    },
+    {
+      "id": "sink",
+      "type": "RealMemSink",
+      "params": {
+        "num_channels": 1,
+        "block_size": 8,
+        "capacity_blocks": 8,
+        "sample_rate_hz": 1000.0,
+        "encoding": 0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": { "element": "c1", "port": 0 },
+      "to": { "element": "sink", "port": 0 }
+    }
+  ]
+}
+

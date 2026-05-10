@@ -1,7 +1,7 @@
 # s7/s7main/CMakeLists.txt
 # No 'project()' command here, as it's a sub-project.
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # --- s7main Executable ---
@@ -9,13 +9,19 @@ file(GLOB s7main_SRCS
     "src/*.cpp" # Assuming s7main source files are in s7main/src
 )
 
+# Start with basic sources
 add_executable(s7main ${s7main_SRCS})
 
-# Link s7main to s7core.
-# Since s7core is built as part of the same CMake run (due to add_subdirectory in top-level),
-# its target is directly available by its name 's7core'.
-# The PUBLIC dependencies of s7core (Boost, FFTW) will automatically be inherited by s7main.
-target_link_libraries(s7main PRIVATE s7core)
+# Always add include directory for headers
+target_include_directories(s7main PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+# rsocket-cpp is vendored as external/rsocket and provides ReactiveSocket.
+target_link_libraries(s7main PRIVATE ReactiveSocket)
+
+# Link s7main to s7core and s7io
+target_link_libraries(s7main PRIVATE s7core s7io)
 
 # Optional: Install the executable
 install(TARGETS s7main DESTINATION bin)

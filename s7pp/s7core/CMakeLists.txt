@@ -1,7 +1,7 @@
 # s7/s7core/CMakeLists.txt
 # No 'project()' command here, as it's a sub-project.
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON) # Important for shared libraries
 cmake_policy(SET CMP0167 OLD)
@@ -44,10 +44,18 @@ file(GLOB s7core_SRCS
 
 # Add your library
 add_library(s7core STATIC ${s7core_SRCS}
-        src/s7lib.cpp
-        include/s7lib.hpp
-        include/s7datavariant.hpp
+        src/s7stdlib.cpp
+        include/s7stdlib.hpp
         include/i_s7lib.hpp
+        include/s7factory.hpp
+        include/s7netlist.hpp
+        src/s7netlist.cpp
+        src/s7registry.cpp
+        src/s7_builtin_plugin.cpp
+        src/s7events.cpp
+        include/s7events.hpp
+        src/s7runtime.cpp
+        include/s7runtime.hpp
 ) # Or SHARED
 
 # Add public include directories for s7core.
@@ -63,6 +71,13 @@ target_link_libraries(s7core
         ${Boost_LIBRARIES}
     PUBLIC
         ${FFTW3_LIBRARIES}
+)
+
+# nlohmann/json is header-only. Add its include path directly to avoid
+# polluting the install export set with an un-installed imported target.
+target_include_directories(s7core PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/json/single_include>
+    $<INSTALL_INTERFACE:include>
 )
 
 # --- Install Rules (Optional but recommended for libraries) ---

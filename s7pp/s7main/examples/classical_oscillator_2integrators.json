@@ -1,0 +1,53 @@
+{
+  "id": "classical_oscillator_2integrators",
+  "dt": 0.001,
+  "elements": [
+    {
+      "id": "int_x",
+      "type": "Integrator",
+      "params": {
+        "init_state": 1.0
+      }
+    },
+    {
+      "id": "int_v",
+      "type": "Integrator",
+      "params": {
+        "init_state": 0.0
+      }
+    },
+    {
+      "id": "gain_v_to_xdot",
+      "type": "Sum",
+      "params": {
+        "weight": 0.001
+      }
+    },
+    {
+      "id": "gain_x_to_vdot",
+      "type": "Sum",
+      "params": {
+        "weight": -0.001
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": { "element": "int_v", "port": 0 },
+      "to": { "element": "gain_v_to_xdot", "port": 0 }
+    },
+    {
+      "from": { "element": "gain_v_to_xdot", "port": 0 },
+      "to": { "element": "int_x", "port": 0 }
+    },
+    {
+      "from": { "element": "int_x", "port": 0 },
+      "to": { "element": "gain_x_to_vdot", "port": 0 }
+    },
+    {
+      "from": { "element": "gain_x_to_vdot", "port": 0 },
+      "to": { "element": "int_v", "port": 0 }
+    }
+  ]
+}
+
