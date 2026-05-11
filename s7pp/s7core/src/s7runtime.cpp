@@ -11,20 +11,20 @@ NodeRuntimeService::LoadResult NodeRuntimeService::loadSchema(
 {
     std::lock_guard<std::mutex> lock(state_mutex_);
     try {
-        auto doc = SchemaBuilder::parseJson(schema_json);
+        auto doc = SchemaBuilder::parseJsonString(schema_json);
         auto schema = SchemaBuilder::build(doc);
         std::string handle = generateSchemaHandle();
         loaded_schemas_[handle] = schema;
         nlohmann::json event_payload;
         event_payload["schema_handle"] = handle;
         event_payload["schema_id"] = doc.schema_id;
-        event_payload["elements"] = (int)doc.elements.size();
+        event_payload["nodes"] = (int)doc.nodes.size();
         event_payload["connections"] = (int)doc.connections.size();
         event_bus_.publishEvent("schema.loaded", event_payload);
         return LoadResult{
             handle,
             doc.schema_id,
-            (int)doc.elements.size(),
+            (int)doc.nodes.size(),
             (int)doc.connections.size()
         };
     } catch (const std::exception& e) {
@@ -48,7 +48,7 @@ NodeRuntimeService::LoadResult NodeRuntimeService::loadSchemaFromFile(
         return LoadResult{
             handle,
             doc.schema_id,
-            (int)doc.elements.size(),
+            (int)doc.nodes.size(),
             (int)doc.connections.size()
         };
     } catch (const std::exception& e) {

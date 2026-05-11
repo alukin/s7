@@ -1,22 +1,29 @@
-#include <folly/io/async/ScopedEventBaseThread.h>
-
 #include <nlohmann/json.hpp>
 
-#include <rsocket/RSocket.h>
-#include <rsocket/transports/tcp/TcpConnectionFactory.h>
+#include <boost/asio/connect.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
 
-#include <chrono>
-#include <future>
+#include <cstdlib>
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
+
+namespace asio = boost::asio;
+namespace beast = boost::beast;
+namespace websocket = beast::websocket;
+using tcp = asio::ip::tcp;
 
 struct Options {
     std::string host = "127.0.0.1";
     int port = 5577;
+    std::string path = "/";
     std::string command = "hello";
     std::string schema_path;
     std::string schema_json;
@@ -25,49 +32,84 @@ struct Options {
     long ticks = 1;
     std::string raw_method;
     std::string raw_params = "{}";
+    std::string topics_csv = "schema,run,runtime";
+    long event_count = 1;
 };
 
-void printUsage(const char* exe)
+auto printUsage(const char* exe) -> void
 {
     std::cout
-        << "s7ctl - S7 runtime control CLI\n\n"
+        << "s7ctl - S7 websocket control CLI\n\n"
         << "Usage:\n"
-        << "  " << exe << " [--host <host>] [--port <port>] hello\n"
-        << "  " << exe << " [--host <host>] [--port <port>] types\n"
-        << "  " << exe << " [--host <host>] [--port <port>] status\n"
-        << "  " << exe << " [--host <host>] [--port <port>] load-file --schema-path <path>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] load-inline --schema-json <json>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] validate --schema-handle <id>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] run --schema-handle <id> [--ticks <n>]\n"
-        << "  " << exe << " [--host <host>] [--port <port>] pause --run-id <id>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] resume --run-id <id>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] stop --run-id <id>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] reset --schema-handle <id>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] unload --schema-handle <id>\n"
-        << "  " << exe << " [--host <host>] [--port <port>] raw --method <name> [--params <json>]\n"
-        << "\n"
-        << "Examples:\n"
-        << "  " << exe << " hello\n"
-        << "  " << exe << " status\n"
-        << "  " << exe << " load-file --schema-path ./s7main/examples/io_file_real_sink.json\n"
-        << "  " << exe << " run --schema-handle schema-1 --ticks 10\n"
-        << "  " << exe << " raw --method schema.run --params '{\"schema_handle\":\"schema-1\",\"mode\":{\"ticks\":10}}'\n";
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] hello\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] types\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] status\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] load-file --schema-path <path>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] load-inline --schema-json <json>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] validate --schema-handle <id>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] run --schema-handle <id> [--ticks <n>]\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] pause --run-id <id>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] resume --run-id <id>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] stop --run-id <id>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] reset --schema-handle <id>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] unload --schema-handle <id>\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] raw --method <name> [--params <json>]\n"
+        << "  " << exe << " [--host <host>] [--port <port>] [--path <ws_path>] events [--topics <csv>] [--count <n>]\n";
 }
 
-int parsePort(const std::string& v)
+auto parsePort(const std::string& v) -> int
 {
     try {
-        const int port = std::stoi(v);
-        if (port < 1 || port > 65535) {
+        const int parsed = std::stoi(v);
+        if (parsed < 1 || parsed > 65535) {
             throw std::runtime_error("port out of range");
         }
-        return port;
+        return parsed;
     } catch (const std::exception&) {
         throw std::runtime_error("Invalid --port value: " + v);
     }
 }
 
-Options parseArgs(int argc, char* argv[])
+auto parseTicks(const std::string& v) -> long
+{
+    try {
+        const long parsed = std::stol(v);
+        if (parsed <= 0) {
+            throw std::runtime_error("--ticks must be > 0");
+        }
+        return parsed;
+    } catch (const std::exception&) {
+        throw std::runtime_error("Invalid --ticks value: " + v);
+    }
+}
+
+auto parseCount(const std::string& v) -> long
+{
+    try {
+        const long parsed = std::stol(v);
+        if (parsed <= 0) {
+            throw std::runtime_error("--count must be > 0");
+        }
+        return parsed;
+    } catch (const std::exception&) {
+        throw std::runtime_error("Invalid --count value: " + v);
+    }
+}
+
+auto splitCsv(const std::string& csv) -> std::vector<std::string>
+{
+    std::vector<std::string> out;
+    std::stringstream ss(csv);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        if (!item.empty()) {
+            out.push_back(item);
+        }
+    }
+    return out;
+}
+
+auto parseArgs(int argc, char** argv) -> Options
 {
     Options opt;
 
@@ -77,46 +119,87 @@ Options parseArgs(int argc, char* argv[])
         if (arg == "--help" || arg == "-h") {
             printUsage(argv[0]);
             std::exit(0);
-        } else if (arg == "--host") {
+        }
+        if (arg == "--host") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --host");
             opt.host = argv[++i];
-        } else if (arg == "--port") {
+            continue;
+        }
+        if (arg == "--port") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --port");
             opt.port = parsePort(argv[++i]);
-        } else if (arg == "--method") {
+            continue;
+        }
+        if (arg == "--path") {
+            if (i + 1 >= argc) throw std::runtime_error("Missing value for --path");
+            opt.path = argv[++i];
+            if (opt.path.empty() || opt.path.front() != '/') {
+                opt.path = "/" + opt.path;
+            }
+            continue;
+        }
+        if (arg == "--method") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --method");
             opt.raw_method = argv[++i];
-        } else if (arg == "--params") {
+            continue;
+        }
+        if (arg == "--params") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --params");
             opt.raw_params = argv[++i];
-        } else if (arg == "--schema-path") {
+            continue;
+        }
+        if (arg == "--schema-path") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --schema-path");
             opt.schema_path = argv[++i];
-        } else if (arg == "--schema-json") {
+            continue;
+        }
+        if (arg == "--schema-json") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --schema-json");
             opt.schema_json = argv[++i];
-        } else if (arg == "--schema-handle") {
+            continue;
+        }
+        if (arg == "--schema-handle") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --schema-handle");
             opt.schema_handle = argv[++i];
-        } else if (arg == "--run-id") {
+            continue;
+        }
+        if (arg == "--run-id") {
             if (i + 1 >= argc) throw std::runtime_error("Missing value for --run-id");
             opt.run_id = argv[++i];
-        } else if (arg == "--ticks") {
-            if (i + 1 >= argc) throw std::runtime_error("Missing value for --ticks");
-            opt.ticks = std::stol(argv[++i]);
-            if (opt.ticks <= 0) throw std::runtime_error("--ticks must be > 0");
-        } else if (arg == "hello" || arg == "types" || arg == "status" ||
-                   arg == "load-file" || arg == "load-inline" || arg == "validate" ||
-                   arg == "run" || arg == "pause" || arg == "resume" || arg == "stop" ||
-                   arg == "reset" || arg == "unload" || arg == "raw") {
-            opt.command = std::string(arg);
-        } else {
-            throw std::runtime_error("Unknown argument: " + std::string(arg));
+            continue;
         }
+        if (arg == "--ticks") {
+            if (i + 1 >= argc) throw std::runtime_error("Missing value for --ticks");
+            opt.ticks = parseTicks(argv[++i]);
+            continue;
+        }
+        if (arg == "--topics") {
+            if (i + 1 >= argc) throw std::runtime_error("Missing value for --topics");
+            opt.topics_csv = argv[++i];
+            continue;
+        }
+        if (arg == "--count") {
+            if (i + 1 >= argc) throw std::runtime_error("Missing value for --count");
+            opt.event_count = parseCount(argv[++i]);
+            continue;
+        }
+
+        if (arg == "hello" || arg == "types" || arg == "status" ||
+            arg == "load-file" || arg == "load-inline" || arg == "validate" ||
+            arg == "run" || arg == "pause" || arg == "resume" || arg == "stop" ||
+            arg == "reset" || arg == "unload" || arg == "raw" || arg == "events") {
+            opt.command = std::string(arg);
+            continue;
+        }
+
+        throw std::runtime_error("Unknown argument: " + std::string(arg));
     }
 
     if (opt.command == "raw" && opt.raw_method.empty()) {
         throw std::runtime_error("raw command requires --method <name>");
+    }
+    if (opt.command == "events" && splitCsv(opt.topics_csv).empty()) {
+        throw std::runtime_error("events command requires non-empty --topics");
     }
     if (opt.command == "load-file" && opt.schema_path.empty()) {
         throw std::runtime_error("load-file requires --schema-path <path>");
@@ -124,159 +207,163 @@ Options parseArgs(int argc, char* argv[])
     if (opt.command == "load-inline" && opt.schema_json.empty()) {
         throw std::runtime_error("load-inline requires --schema-json <json>");
     }
-    if ((opt.command == "validate" || opt.command == "run" ||
-         opt.command == "reset" || opt.command == "unload") &&
+    if ((opt.command == "validate" || opt.command == "run" || opt.command == "reset" || opt.command == "unload") &&
         opt.schema_handle.empty()) {
         throw std::runtime_error(opt.command + " requires --schema-handle <id>");
     }
-    if ((opt.command == "pause" || opt.command == "resume" || opt.command == "stop") &&
-        opt.run_id.empty()) {
+    if ((opt.command == "pause" || opt.command == "resume" || opt.command == "stop") && opt.run_id.empty()) {
         throw std::runtime_error(opt.command + " requires --run-id <id>");
     }
 
     return opt;
 }
 
-nlohmann::json makeRequest(const Options& opt)
+auto makeRequest(const Options& opt) -> nlohmann::json
 {
     static long next_id = 1;
     const long id = next_id++;
 
     if (opt.command == "hello") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "runtime.hello"},
-                              {"params", {"client_name", "s7ctl"}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.hello"}, {"params", {{"client_name", "s7ctl"}}}};
     }
     if (opt.command == "types") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "runtime.types.list"},
-                              {"params", nlohmann::json::object()}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.types.list"}, {"params", nlohmann::json::object()}};
     }
     if (opt.command == "status") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "runtime.status"},
-                              {"params", nlohmann::json::object()}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.status"}, {"params", nlohmann::json::object()}};
     }
     if (opt.command == "load-file") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.load"},
-                              {"params", {
-                                  {"source", {
-                                      {"kind", "filesystem"},
-                                      {"path", opt.schema_path}
-                                  }}
-                              }}};
+        return {{"jsonrpc", "2.0"},
+                {"id", id},
+                {"method", "schema.load"},
+                {"params", {{"source", {{"kind", "filesystem"}, {"path", opt.schema_path}}}}}};
     }
     if (opt.command == "load-inline") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.load"},
-                              {"params", {
-                                  {"source", {
-                                      {"kind", "inline"},
-                                      {"schema_json", opt.schema_json}
-                                  }}
-                              }}};
+        return {{"jsonrpc", "2.0"},
+                {"id", id},
+                {"method", "schema.load"},
+                {"params", {{"source", {{"kind", "inline"}, {"schema_json", opt.schema_json}}}}}};
     }
     if (opt.command == "validate") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.validate"},
-                              {"params", {{"schema_handle", opt.schema_handle}}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.validate"}, {"params", {{"schema_handle", opt.schema_handle}}}};
     }
     if (opt.command == "run") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.run"},
-                              {"params", {
-                                  {"schema_handle", opt.schema_handle},
-                                  {"mode", {{"ticks", opt.ticks}}}
-                              }}};
+        return {{"jsonrpc", "2.0"},
+                {"id", id},
+                {"method", "schema.run"},
+                {"params", {{"schema_handle", opt.schema_handle}, {"mode", {{"ticks", opt.ticks}}}}}};
     }
     if (opt.command == "pause") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.pause"},
-                              {"params", {{"run_id", opt.run_id}}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.pause"}, {"params", {{"run_id", opt.run_id}}}};
     }
     if (opt.command == "resume") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.resume"},
-                              {"params", {{"run_id", opt.run_id}}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.resume"}, {"params", {{"run_id", opt.run_id}}}};
     }
     if (opt.command == "stop") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.stop"},
-                              {"params", {{"run_id", opt.run_id}}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.stop"}, {"params", {{"run_id", opt.run_id}}}};
     }
     if (opt.command == "reset") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.reset"},
-                              {"params", {{"schema_handle", opt.schema_handle}}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.reset"}, {"params", {{"schema_handle", opt.schema_handle}}}};
     }
     if (opt.command == "unload") {
-        return nlohmann::json{{"jsonrpc", "2.0"},
-                              {"id", id},
-                              {"method", "schema.unload"},
-                              {"params", {{"schema_handle", opt.schema_handle}}}};
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.unload"}, {"params", {{"schema_handle", opt.schema_handle}}}};
+    }
+    if (opt.command == "raw") {
+        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", opt.raw_method}, {"params", nlohmann::json::parse(opt.raw_params)}};
+    }
+    if (opt.command == "events") {
+        return {{"jsonrpc", "2.0"},
+                {"id", id},
+                {"method", "runtime.events.subscribe"},
+                {"params", {{"topics", splitCsv(opt.topics_csv)}}}};
     }
 
-    return nlohmann::json{{"jsonrpc", "2.0"},
-                          {"id", id},
-                          {"method", opt.raw_method},
-                          {"params", nlohmann::json::parse(opt.raw_params)}};
+    throw std::runtime_error("Unsupported command");
 }
 
-std::string requestResponse(const Options& opt, const nlohmann::json& request)
+auto streamEvents(const Options& opt, const nlohmann::json& subscribe_request) -> int
 {
-    folly::SocketAddress address;
-    address.setFromHostPort(opt.host, opt.port);
+    asio::io_context ioc;
+    tcp::resolver resolver(ioc);
+    websocket::stream<tcp::socket> ws(ioc);
 
-    folly::ScopedEventBaseThread worker;
-    auto client = rsocket::RSocket::createConnectedClient(
-                      std::make_unique<rsocket::TcpConnectionFactory>(
-                          *worker.getEventBase(), std::move(address)))
-                      .get();
+    const auto results = resolver.resolve(opt.host, std::to_string(opt.port));
+    asio::connect(ws.next_layer(), results.begin(), results.end());
+    ws.handshake(opt.host + ":" + std::to_string(opt.port), opt.path);
 
-    std::promise<std::string> result_promise;
-    auto result_future = result_promise.get_future();
+    ws.text(true);
+    ws.write(asio::buffer(subscribe_request.dump()));
 
-    client->getRequester()
-        ->requestResponse(rsocket::Payload(request.dump()))
-        ->subscribe(
-            [&result_promise](rsocket::Payload p) {
-                result_promise.set_value(p.moveDataToString());
-            },
-            [&result_promise](folly::exception_wrapper ex) {
-                try {
-                    ex.throw_exception();
-                } catch (const std::exception& e) {
-                    result_promise.set_exception(std::make_exception_ptr(
-                        std::runtime_error(std::string("request failed: ") + e.what())));
-                }
-            });
+    beast::flat_buffer ack_buffer;
+    ws.read(ack_buffer);
+    const auto ack = nlohmann::json::parse(beast::buffers_to_string(ack_buffer.data()));
+    std::cout << ack.dump(2) << '\n';
 
-    if (result_future.wait_for(std::chrono::seconds(5)) != std::future_status::ready) {
-        throw std::runtime_error("request timed out");
+    uint64_t subscription_id = 0;
+    if (ack.contains("result") && ack["result"].contains("subscription_id")) {
+        subscription_id = ack["result"]["subscription_id"].get<uint64_t>();
     }
 
-    return result_future.get();
+    for (long i = 0; i < opt.event_count; ++i) {
+        beast::flat_buffer event_buffer;
+        ws.read(event_buffer);
+        const auto event_json = nlohmann::json::parse(beast::buffers_to_string(event_buffer.data()));
+        std::cout << event_json.dump(2) << '\n';
+    }
+
+    if (subscription_id != 0) {
+        static long unsubscribe_id = 100000;
+        const nlohmann::json unsubscribe_request{{"jsonrpc", "2.0"},
+                                                 {"id", ++unsubscribe_id},
+                                                 {"method", "runtime.events.unsubscribe"},
+                                                 {"params", {{"subscription_id", subscription_id}}}};
+        ws.write(asio::buffer(unsubscribe_request.dump()));
+        beast::flat_buffer unsub_buffer;
+        ws.read(unsub_buffer);
+        const auto unsub = nlohmann::json::parse(beast::buffers_to_string(unsub_buffer.data()));
+        std::cout << unsub.dump(2) << '\n';
+    }
+
+    beast::error_code ec;
+    ws.close(websocket::close_code::normal, ec);
+    return 0;
+}
+
+auto requestResponse(const Options& opt, const nlohmann::json& request) -> std::string
+{
+    asio::io_context ioc;
+    tcp::resolver resolver(ioc);
+    websocket::stream<tcp::socket> ws(ioc);
+
+    const auto results = resolver.resolve(opt.host, std::to_string(opt.port));
+    asio::connect(ws.next_layer(), results.begin(), results.end());
+    ws.handshake(opt.host + ":" + std::to_string(opt.port), opt.path);
+
+    const auto payload = request.dump();
+    ws.text(true);
+    ws.write(asio::buffer(payload));
+
+    beast::flat_buffer buffer;
+    ws.read(buffer);
+
+    beast::error_code ec;
+    ws.close(websocket::close_code::normal, ec);
+
+    return beast::buffers_to_string(buffer.data());
 }
 
 } // namespace
 
-int main(int argc, char* argv[])
+auto main(int argc, char** argv) -> int
 {
     try {
         const Options opt = parseArgs(argc, argv);
         const nlohmann::json request = makeRequest(opt);
+
+        if (opt.command == "events") {
+            return streamEvents(opt, request);
+        }
+
         const std::string response_raw = requestResponse(opt, request);
 
         const auto response = nlohmann::json::parse(response_raw);

@@ -11,7 +11,7 @@
 //  {
 //    "id":   "my_schema",          // optional, default ""
 //    "dt":   1e-9,                 // discretisation time, default 1.0
-//    "elements": [
+//    "nodes": [
 //      {
 //        "id":     "c1",
 //        "type":   "Constant",
@@ -21,18 +21,22 @@
 //        "id":     "int1",
 //        "type":   "Integrator",
 //        "params": { "init_state": 0.0 }
-//      },
-//      {
-//        "id":     "sum1",
-//        "type":   "Sum",
-//        "params": { "w0": 1.0, "w1": 1.0 }
 //      }
 //    ],
-//    "connections": [
-//      { "from": { "element": "c1",   "port": 0 },
-//        "to":   { "element": "int1", "port": 0 } }
+//    "nets": [
+//      {
+//        "name": "n0",
+//        "connections": [
+//          { "node": "c1",   "connector": "out0" },
+//          { "node": "int1", "connector": "in0" }
+//        ]
+//      }
 //    ]
 //  }
+//
+// Connector names are directional and index-based:
+//   "outN" for source connectors
+//   "inN"  for destination connectors
 //
 // ParamValue parameter values can be:
 //   number                    → Real
@@ -56,9 +60,9 @@ namespace s7 {
     // Netlist document model
     // ------------------------------------------------------------------
 
-    /// Reference to a specific port (input or output) on a named element.
+    /// Reference to a specific port (input or output) on a named node.
     struct NetlistPortRef {
-        std::string element_id;
+        std::string node_id;
         int         port_index = 0;
     };
 
@@ -68,8 +72,8 @@ namespace s7 {
         NetlistPortRef to;     ///< Destination input port
     };
 
-    /// Describes one element instance: id, library type name, and parameters.
-    struct NetlistElementSpec {
+    /// Describes one node instance: id, library type name, and parameters.
+    struct NetlistNodeSpec {
         std::string id;
         std::string type;
         ParamMap    params;
@@ -80,7 +84,7 @@ namespace s7 {
     struct NetlistDocument {
         std::string                        schema_id;
         double                             dt = 1.0;
-        std::vector<NetlistElementSpec>    elements;
+        std::vector<NetlistNodeSpec>       nodes;
         std::vector<NetlistConnectionSpec> connections;
     };
 
@@ -89,7 +93,7 @@ namespace s7 {
     // ------------------------------------------------------------------
 
     /// Convert a single JSON value to a ParamValue.
-    /// Supports: number, complex object.
+    /// Supports: string, number, complex object.
     ParamValue paramValueFromJson(const nlohmann::json& j);
 
     /// Convert a JSON object of key→value pairs to a ParamMap.

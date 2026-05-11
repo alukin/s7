@@ -17,10 +17,10 @@ void registerNetIO(ElementRegistry& registry)
         cfg.num_channels = static_cast<uint32_t>(std::round(getParamAs<Real>(params, "num_channels", 1.0)));
         cfg.queue_capacity = static_cast<uint32_t>(std::round(getParamAs<Real>(params, "queue_capacity", 4096.0)));
         cfg.zero_on_underrun = getParamAs<Real>(params, "zero_on_underrun", 1.0) != 0.0;
+        cfg.endpoint = getParamAs<std::string>(params, "endpoint", cfg.endpoint);
         if (cfg.num_channels == 0 || cfg.queue_capacity == 0) {
             throw std::runtime_error("s7netio: num_channels and queue_capacity must be > 0");
         }
-        // String factory support is not in v0, so endpoint stays default.
         return cfg;
     };
 

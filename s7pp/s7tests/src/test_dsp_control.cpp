@@ -206,7 +206,7 @@ void testNetIoRealLoopback()
     auto constant = std::make_shared<Constant<Real>>(3.25);
 
     NetIOConfig cfg;
-    cfg.endpoint = "rsocket://127.0.0.1:5577/s7/tests/real-loopback";
+    cfg.endpoint = "ws://127.0.0.1:5577/s7/tests/real-loopback";
     cfg.num_channels = 1;
     cfg.queue_capacity = 16;
 
@@ -226,7 +226,7 @@ void testNetIoRealLoopback()
 
 } // namespace s7tests
 
-int main()
+auto main() -> int
 {
     try
     {

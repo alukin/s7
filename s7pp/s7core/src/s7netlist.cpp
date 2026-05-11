@@ -4,13 +4,63 @@
 
 #include "s7netlist.hpp"
 
+#include <cctype>
 #include <fstream>
 #include <stdexcept>
 
 namespace s7 {
 
+namespace {
+
+struct ConnectorRef
+{
+    int port_index = 0;
+    bool is_output = false;
+};
+
+auto parseConnectorName(const std::string& connector_name) -> ConnectorRef
+{
+    if (connector_name.size() < 3)
+    {
+        throw std::runtime_error("Connector name must be inN or outN. Got: '" + connector_name + "'");
+    }
+
+    const bool is_input = connector_name.starts_with("in");
+    const bool is_output = connector_name.starts_with("out");
+    if (!is_input && !is_output)
+    {
+        throw std::runtime_error("Connector name must start with 'in' or 'out'. Got: '" + connector_name + "'");
+    }
+
+    const std::size_t digits_offset = is_output ? 3 : 2;
+    if (digits_offset >= connector_name.size())
+    {
+        throw std::runtime_error("Connector name is missing numeric index: '" + connector_name + "'");
+    }
+
+    for (std::size_t i = digits_offset; i < connector_name.size(); ++i)
+    {
+        if (!std::isdigit(static_cast<unsigned char>(connector_name[i])))
+        {
+            throw std::runtime_error("Connector index must be numeric in connector '" + connector_name + "'");
+        }
+    }
+
+    return ConnectorRef{
+        .port_index = std::stoi(connector_name.substr(digits_offset)),
+        .is_output = is_output
+    };
+}
+
+} // namespace
+
 auto paramValueFromJson(const nlohmann::json& j) -> ParamValue
 {
+    if (j.is_string())
+    {
+        return ParamValue{j.get<std::string>()};
+    }
+
     if (j.is_number())
     {
         return ParamValue{j.get<Real>()};
@@ -29,7 +79,7 @@ auto paramValueFromJson(const nlohmann::json& j) -> ParamValue
     if (j.is_array())
     {
         throw std::runtime_error(
-            "Cannot parse JSON array as ParamValue. Only number or {real,imag} are supported: " + j.dump());
+            "Cannot parse JSON array as ParamValue. Supported: string, number, or {real,imag}: " + j.dump());
     }
 
     throw std::runtime_error("Cannot convert JSON value to ParamValue: " + j.dump());
@@ -61,28 +111,76 @@ auto SchemaBuilder::parseJson(const nlohmann::json& j) -> NetlistDocument
     doc.schema_id = j.value("id", "");
     doc.dt        = j.value("dt", 1.0);
 
-    for (const auto& element_json : j.at("elements"))
+    for (const auto& node_json : j.at("nodes"))
     {
-        NetlistElementSpec spec;
-        spec.id   = element_json.at("id").get<std::string>();
-        spec.type = element_json.at("type").get<std::string>();
-        if (element_json.contains("params"))
+        NetlistNodeSpec node_spec;
+        node_spec.id   = node_json.at("id").get<std::string>();
+        node_spec.type = node_json.at("type").get<std::string>();
+        if (node_json.contains("params"))
         {
-            spec.params = paramMapFromJson(element_json["params"]);
+            node_spec.params = paramMapFromJson(node_json["params"]);
         }
-        doc.elements.push_back(std::move(spec));
+        doc.nodes.push_back(std::move(node_spec));
     }
 
-    if (j.contains("connections"))
+    if (j.contains("nets"))
     {
-        for (const auto& conn_json : j["connections"])
+        for (const auto& net_json : j["nets"])
         {
-            NetlistConnectionSpec conn;
-            conn.from.element_id = conn_json["from"]["element"].get<std::string>();
-            conn.from.port_index = conn_json["from"].value("port", 0);
-            conn.to.element_id   = conn_json["to"]["element"].get<std::string>();
-            conn.to.port_index   = conn_json["to"].value("port", 0);
-            doc.connections.push_back(std::move(conn));
+            if (!net_json.contains("connections") || !net_json["connections"].is_array())
+            {
+                throw std::runtime_error("Each net must contain a 'connections' array");
+            }
+
+            struct Endpoint
+            {
+                std::string node_id;
+                int port_index = 0;
+                bool is_output = false;
+            };
+
+            std::vector<Endpoint> outputs;
+            std::vector<Endpoint> inputs;
+
+            for (const auto& endpoint_json : net_json["connections"])
+            {
+                const auto node_id = endpoint_json.at("node").get<std::string>();
+                const auto connector_name = endpoint_json.at("connector").get<std::string>();
+                const auto connector_ref = parseConnectorName(connector_name);
+
+                Endpoint endpoint{
+                    .node_id = node_id,
+                    .port_index = connector_ref.port_index,
+                    .is_output = connector_ref.is_output
+                };
+                if (endpoint.is_output)
+                {
+                    outputs.push_back(std::move(endpoint));
+                }
+                else
+                {
+                    inputs.push_back(std::move(endpoint));
+                }
+            }
+
+            if (outputs.empty() && inputs.empty())
+            {
+                continue;
+            }
+            if (outputs.size() != 1)
+            {
+                throw std::runtime_error("Each net must define exactly one output connector");
+            }
+
+            for (const auto& input : inputs)
+            {
+                NetlistConnectionSpec conn;
+                conn.from.node_id = outputs.front().node_id;
+                conn.from.port_index = outputs.front().port_index;
+                conn.to.node_id = input.node_id;
+                conn.to.port_index = input.port_index;
+                doc.connections.push_back(std::move(conn));
+            }
         }
     }
 
@@ -114,31 +212,31 @@ auto SchemaBuilder::build(const NetlistDocument&  doc,
 {
     auto schema = std::make_shared<Schema>(doc.dt, doc.schema_id);
 
-    std::unordered_map<std::string, ElementPtr> id_to_element;
+    std::unordered_map<std::string, ElementPtr> id_to_node;
 
-    for (const auto& spec : doc.elements)
+    for (const auto& spec : doc.nodes)
     {
-        auto element = registry.create(spec.type, spec.id, spec.params);
-        id_to_element[spec.id] = element;
-        schema->insert(element);
+        auto node = registry.create(spec.type, spec.id, spec.params);
+        id_to_node[spec.id] = node;
+        schema->insert(node);
     }
 
     for (const auto& conn : doc.connections)
     {
-        const auto from_it = id_to_element.find(conn.from.element_id);
-        if (from_it == id_to_element.end())
+        const auto from_it = id_to_node.find(conn.from.node_id);
+        if (from_it == id_to_node.end())
         {
             throw std::runtime_error(
-                "Netlist connection references unknown source element: '" +
-                conn.from.element_id + "'");
+                "Netlist connection references unknown source node: '" +
+                conn.from.node_id + "'");
         }
 
-        const auto to_it = id_to_element.find(conn.to.element_id);
-        if (to_it == id_to_element.end())
+        const auto to_it = id_to_node.find(conn.to.node_id);
+        if (to_it == id_to_node.end())
         {
             throw std::runtime_error(
-                "Netlist connection references unknown target element: '" +
-                conn.to.element_id + "'");
+                "Netlist connection references unknown target node: '" +
+                conn.to.node_id + "'");
         }
 
         schema->connect(from_it->second, conn.from.port_index,

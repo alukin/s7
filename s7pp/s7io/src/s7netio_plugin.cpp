@@ -15,7 +15,7 @@ static const s7_element_manifest_entry_t k_netio_elements[] = {
     S7_ELEMENT(s7.io.net.real_sink,
                "Real Net Sink",
                "I/O/Network",
-               "Publish real samples into the S7 net stream transport (RSocket channel model)"),
+               "Publish real samples into the S7 net stream transport"),
 
     S7_ELEMENT(s7.io.net.real_source,
                "Real Net Source",

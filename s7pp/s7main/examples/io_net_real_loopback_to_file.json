@@ -1,7 +1,7 @@
 {
   "id": "io_net_real_loopback_to_file",
   "dt": 0.001,
-  "elements": [
+  "nodes": [
     {
       "id": "c1",
       "type": "Constant",
@@ -37,14 +37,20 @@
       }
     }
   ],
-  "connections": [
+  "nets": [
     {
-      "from": { "element": "c1", "port": 0 },
-      "to": { "element": "net_sink", "port": 0 }
+      "name": "n_const_to_net_sink",
+      "connections": [
+        { "node": "c1", "connector": "out0" },
+        { "node": "net_sink", "connector": "in0" }
+      ]
     },
     {
-      "from": { "element": "net_source", "port": 0 },
-      "to": { "element": "file_sink", "port": 0 }
+      "name": "n_net_source_to_file_sink",
+      "connections": [
+        { "node": "net_source", "connector": "out0" },
+        { "node": "file_sink", "connector": "in0" }
+      ]
     }
   ]
 }

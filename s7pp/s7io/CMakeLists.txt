@@ -28,7 +28,7 @@ target_include_directories(s7io PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(s7io PUBLIC s7core)
+target_link_libraries(s7io PUBLIC s7core Boost::system Threads::Threads)
 
 install(TARGETS s7io
     EXPORT s7ioTargets

@@ -40,11 +40,11 @@
 
 ## Network layout (`s7netio`, slice v0)
 
-- endpoint-oriented channel config (`rsocket://host:port/path` style string)
+- endpoint-oriented channel config (`ws://host:port/path` style string)
 - per-endpoint bounded queue with overflow/drop accounting
 - real + complex stream families
-- current backend is in-process routing for integration and testing
-- API is transport-stable and prepared for RSocket wire backend in Phase 2
+- current backend uses Beast websocket server/client sockets locally
+- API is transport-stable and prepared for a future remote backend
 
 ## Scalar encodings
 

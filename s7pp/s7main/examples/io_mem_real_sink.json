@@ -1,7 +1,7 @@
 {
   "id": "io_mem_real_sink",
   "dt": 0.001,
-  "elements": [
+  "nodes": [
     {
       "id": "c1",
       "type": "Constant",
@@ -21,10 +21,13 @@
       }
     }
   ],
-  "connections": [
+  "nets": [
     {
-      "from": { "element": "c1", "port": 0 },
-      "to": { "element": "sink", "port": 0 }
+      "name": "n_const_to_sink",
+      "connections": [
+        { "node": "c1", "connector": "out0" },
+        { "node": "sink", "connector": "in0" }
+      ]
     }
   ]
 }

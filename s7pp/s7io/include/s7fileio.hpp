@@ -4,7 +4,7 @@
 // This module is intentionally OOP-oriented so we can grow to:
 //  - s7fileio: binary + metadata sidecar file formats (this file)
 //  - s7memio: shared-memory transports
-//  - s7netio: network transports (RSocket, etc.)
+//  - s7netio: network transports (REST/WebSocket later)
 //
 // It separates Real and Complex pipelines via dedicated classes and supports
 // multiple scalar encodings to match SDR ecosystem data formats.

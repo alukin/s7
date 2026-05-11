@@ -18,6 +18,7 @@ S7 is a library for modeling causal discrete-time dynamical systems in a general
 - `docs/S7_MEM_IO.md` — Shared-memory I/O first slice (`RealMemSink`/`RealMemSource`, SPSC ring)
 - `s7io/README.md` — Current `s7fileio` OOP layout (real/complex classes, scalar encodings, JSON sidecar headers)
 - `s7main/README.md` — Computation node CLI usage and responsibilities
+- `s7ui/README.md` — Qt UI skeleton for schematic editing, visual sinks, and control shell layout
 
 ## Planned Documentation
 

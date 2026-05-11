@@ -1,6 +1,9 @@
 [submodule "s7pp/external/json"]
 	path = s7pp/external/json
 	url = https://github.com/nlohmann/json.git
-[submodule "s7pp/external/rsocket"]
-	path = s7pp/external/rsocket
-	url = https://github.com/rsocket/rsocket-cpp.git
+[submodule "s7pp/external/QSchematic"]
+	path = s7pp/external/QSchematic
+	url = https://github.com/simulton/QSchematic.git
+[submodule "s7pp/external/QCustomPlot"]
+	path = s7pp/external/QCustomPlot
+	url = https://gitlab.com/ecme2/QCustomPlot.git

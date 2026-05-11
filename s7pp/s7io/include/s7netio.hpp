@@ -1,8 +1,8 @@
 //
-// s7netio.hpp — Network I/O elements (RSocket-oriented sink/source API)
+// s7netio.hpp — Network I/O elements (WebSocket sink/source API)
 //
-// v0 transport backend is in-process channel routing so the same element
-// interface can be wired now and switched to socket transport later.
+// v0 uses a local Beast WebSocket server/client pair so the same element
+// interface can be wired now and later pointed at a remote backend.
 //
 
 #pragma once
@@ -17,7 +17,7 @@
 namespace s7 {
 
 struct NetIOConfig {
-    std::string endpoint = "rsocket://127.0.0.1:5577/s7/default";
+    std::string endpoint = "ws://127.0.0.1:5577/s7/default";
     uint32_t num_channels = 1;
     uint32_t queue_capacity = 4096;
     bool zero_on_underrun = true;
@@ -33,8 +33,8 @@ public:
 
     void tick() override;
 
-    uint64_t pushedSamples() const { return pushed_samples_; }
-    uint64_t droppedSamples() const { return dropped_samples_; }
+    [[nodiscard]] auto pushedSamples() const -> uint64_t { return pushed_samples_; }
+    [[nodiscard]] auto droppedSamples() const -> uint64_t { return dropped_samples_; }
 
 private:
     class Impl;
@@ -55,8 +55,8 @@ public:
 
     void tick() override;
 
-    uint64_t pulledSamples() const { return pulled_samples_; }
-    uint64_t underruns() const { return underruns_; }
+    [[nodiscard]] auto pulledSamples() const -> uint64_t { return pulled_samples_; }
+    [[nodiscard]] auto underruns() const -> uint64_t { return underruns_; }
 
 private:
     class Impl;
@@ -77,8 +77,8 @@ public:
 
     void tick() override;
 
-    uint64_t pushedSamples() const { return pushed_samples_; }
-    uint64_t droppedSamples() const { return dropped_samples_; }
+    [[nodiscard]] auto pushedSamples() const -> uint64_t { return pushed_samples_; }
+    [[nodiscard]] auto droppedSamples() const -> uint64_t { return dropped_samples_; }
 
 private:
     class Impl;
@@ -99,8 +99,8 @@ public:
 
     void tick() override;
 
-    uint64_t pulledSamples() const { return pulled_samples_; }
-    uint64_t underruns() const { return underruns_; }
+    [[nodiscard]] auto pulledSamples() const -> uint64_t { return pulled_samples_; }
+    [[nodiscard]] auto underruns() const -> uint64_t { return underruns_; }
 
 private:
     class Impl;

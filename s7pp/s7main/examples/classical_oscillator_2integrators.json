@@ -1,7 +1,7 @@
 {
   "id": "classical_oscillator_2integrators",
   "dt": 0.001,
-  "elements": [
+  "nodes": [
     {
       "id": "int_x",
       "type": "Integrator",
@@ -31,22 +31,34 @@
       }
     }
   ],
-  "connections": [
+  "nets": [
     {
-      "from": { "element": "int_v", "port": 0 },
-      "to": { "element": "gain_v_to_xdot", "port": 0 }
+      "name": "n_v_to_xdot",
+      "connections": [
+        { "node": "int_v", "connector": "out0" },
+        { "node": "gain_v_to_xdot", "connector": "in0" }
+      ]
     },
     {
-      "from": { "element": "gain_v_to_xdot", "port": 0 },
-      "to": { "element": "int_x", "port": 0 }
+      "name": "n_xdot_to_x",
+      "connections": [
+        { "node": "gain_v_to_xdot", "connector": "out0" },
+        { "node": "int_x", "connector": "in0" }
+      ]
     },
     {
-      "from": { "element": "int_x", "port": 0 },
-      "to": { "element": "gain_x_to_vdot", "port": 0 }
+      "name": "n_x_to_vdot",
+      "connections": [
+        { "node": "int_x", "connector": "out0" },
+        { "node": "gain_x_to_vdot", "connector": "in0" }
+      ]
     },
     {
-      "from": { "element": "gain_x_to_vdot", "port": 0 },
-      "to": { "element": "int_v", "port": 0 }
+      "name": "n_vdot_to_v",
+      "connections": [
+        { "node": "gain_x_to_vdot", "connector": "out0" },
+        { "node": "int_v", "connector": "in0" }
+      ]
     }
   ]
 }

@@ -24,7 +24,7 @@ namespace s7 {
     // It is NOT used on signal pins — pins are typed via TypedInput<T>/TypedOutput<T>.
     using Number     = std::variant<Real, Complex>;
     using NumberList = std::vector<Number>;
-    using ParamValue = Number;
+    using ParamValue = std::variant<Real, Complex, std::string>;
     using ParamMap   = std::unordered_map<std::string, ParamValue>;
 
     using ElementFactoryFn = std::function<ElementPtr(const std::string& id, const ParamMap& params)>;

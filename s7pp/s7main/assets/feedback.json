@@ -1,7 +1,7 @@
 {
   "id":  "feedback_example",
   "dt":  1e-9,
-  "elements": [
+  "nodes": [
     {
       "id":     "c1",
       "type":   "Constant",
@@ -18,10 +18,28 @@
       "params": { "init_state": 0.0 }
     }
   ],
-  "connections": [
-    { "from": { "element": "c1",   "port": 0 }, "to": { "element": "sum1", "port": 0 } },
-    { "from": { "element": "int1", "port": 0 }, "to": { "element": "sum1", "port": 1 } },
-    { "from": { "element": "sum1", "port": 0 }, "to": { "element": "int1", "port": 0 } }
+  "nets": [
+    {
+      "name": "n_c1_to_sum1",
+      "connections": [
+        { "node": "c1", "connector": "out0" },
+        { "node": "sum1", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_int1_feedback",
+      "connections": [
+        { "node": "int1", "connector": "out0" },
+        { "node": "sum1", "connector": "in1" }
+      ]
+    },
+    {
+      "name": "n_sum1_to_int1",
+      "connections": [
+        { "node": "sum1", "connector": "out0" },
+        { "node": "int1", "connector": "in0" }
+      ]
+    }
   ]
 }
 

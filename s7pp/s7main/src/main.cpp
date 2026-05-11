@@ -1,13 +1,13 @@
 #include "s7factory.hpp"
-#include "s7netlist.hpp"
 #include "s7control_server.hpp"
-#include "s7json_rpc.hpp"
+#include "s7netlist.hpp"
 
 #include <chrono>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -21,7 +21,6 @@ struct CliOptions {
     std::optional<double> seconds;
     bool validate_only = false;
     bool list_types = false;
-    bool control_stdio = false;
     bool server = false;
     int server_port = 5577;
     bool help = false;
@@ -34,7 +33,6 @@ auto printUsage(const char* exe) -> void
         << "Usage:\n"
         << "  " << exe << " --schema <path> [--ticks <n> | --seconds <s>] [--validate-only]\n"
         << "  " << exe << " --list-types\n"
-        << "  " << exe << " --control-stdio\n"
         << "  " << exe << " --server [--port <n>]\n"
         << "  " << exe << " --help\n\n"
         << "Options:\n"
@@ -43,23 +41,9 @@ auto printUsage(const char* exe) -> void
         << "  --seconds <s>        Run schema for s seconds (uses dt from netlist)\n"
         << "  --validate-only      Load and validate only (no execution)\n"
         << "  --list-types         List registered element types and exit\n"
-        << "  --control-stdio      Start JSON control dispatcher on stdin/stdout (one JSON request per line)\n"
-        << "  --server             Start RSocket control server\n"
+        << "  --server             Start websocket control server\n"
         << "  --port <n>           Control server port (default: 5577)\n"
         << "  --help, -h           Show this help\n";
-}
-
-auto parsePort(const std::string& v) -> int
-{
-    try {
-        const long port = std::stol(v);
-        if (port < 1 || port > 65535) {
-            throw std::runtime_error("--port must be in 1..65535");
-        }
-        return static_cast<int>(port);
-    } catch (const std::exception&) {
-        throw std::runtime_error("Invalid value for --port: " + v);
-    }
 }
 
 auto parseLong(const std::string& v, const char* opt_name) -> long
@@ -88,11 +72,11 @@ auto parseDouble(const std::string& v, const char* opt_name) -> double
     }
 }
 
-auto parseArgs(int argc, char* argv[]) -> CliOptions
+auto parseArgs(std::span<char* const> argv) -> CliOptions
 {
     CliOptions options;
 
-    for (int i = 1; i < argc; ++i)
+    for (std::size_t i = 1; i < argv.size(); ++i)
     {
         const std::string_view arg = argv[i];
 
@@ -111,43 +95,38 @@ auto parseArgs(int argc, char* argv[]) -> CliOptions
             options.validate_only = true;
             continue;
         }
-        if (arg == "--control-stdio")
-        {
-            options.control_stdio = true;
-            continue;
-        }
         if (arg == "--server")
         {
             options.server = true;
             continue;
         }
-
         if (arg == "--schema")
         {
-            if (i + 1 >= argc) throw std::runtime_error("Missing value for --schema");
+            if (i + 1 >= argv.size()) throw std::runtime_error("Missing value for --schema");
             options.schema_path = argv[++i];
             continue;
         }
         if (arg == "--ticks")
         {
-            if (i + 1 >= argc) throw std::runtime_error("Missing value for --ticks");
+            if (i + 1 >= argv.size()) throw std::runtime_error("Missing value for --ticks");
             options.ticks = parseLong(argv[++i], "--ticks");
             continue;
         }
         if (arg == "--seconds")
         {
-            if (i + 1 >= argc) throw std::runtime_error("Missing value for --seconds");
+            if (i + 1 >= argv.size()) throw std::runtime_error("Missing value for --seconds");
             options.seconds = parseDouble(argv[++i], "--seconds");
             continue;
         }
         if (arg == "--port")
         {
-            if (i + 1 >= argc) throw std::runtime_error("Missing value for --port");
-            options.server_port = parsePort(argv[++i]);
+            if (i + 1 >= argv.size()) throw std::runtime_error("Missing value for --port");
+            options.server_port = static_cast<int>(parseLong(argv[++i], "--port"));
             continue;
         }
-
-        throw std::runtime_error("Unknown argument: " + std::string(arg));
+        auto message = std::string{"Unknown argument: "};
+        message += arg;
+        throw std::runtime_error(message);
     }
 
     if (options.ticks.has_value() && options.seconds.has_value())
@@ -193,7 +172,7 @@ auto runSchemaFromFile(const CliOptions& options) -> int
     auto schema = SchemaBuilder::build(doc);
 
     std::cout << "Loaded schema: id='" << doc.schema_id << "', dt=" << doc.dt
-              << ", elements=" << doc.elements.size()
+              << ", nodes=" << doc.nodes.size()
               << ", connections=" << doc.connections.size() << '\n';
 
     if (options.validate_only)
@@ -221,25 +200,6 @@ auto runSchemaFromFile(const CliOptions& options) -> int
     return EXIT_SUCCESS;
 }
 
-auto runControlStdio() -> int
-{
-    registerNodeLibraries();
-    auto runtime = NodeRuntimeService::create();
-    JsonRpcDispatcher dispatcher(runtime);
-
-    std::cerr << "S7 control stdio mode: waiting for one JSON-RPC request per line...\n";
-    std::string line;
-    while (std::getline(std::cin, line))
-    {
-        if (line.empty()) {
-            continue;
-        }
-        const auto response = dispatcher.dispatch(line);
-        std::cout << response.dump() << '\n';
-    }
-    return EXIT_SUCCESS;
-}
-
 auto runControlServerMode(const int port) -> int
 {
     registerNodeLibraries();
@@ -249,11 +209,11 @@ auto runControlServerMode(const int port) -> int
 
 } // namespace
 
-auto main(int argc, char* argv[]) -> int
+auto main(int argc, char** argv) -> int
 {
     try
     {
-        const CliOptions options = parseArgs(argc, argv);
+        const CliOptions options = parseArgs({argv, static_cast<std::size_t>(argc)});
 
         if (options.help)
         {
@@ -267,15 +227,11 @@ auto main(int argc, char* argv[]) -> int
             return EXIT_SUCCESS;
         }
 
-        if (options.control_stdio)
-        {
-            return runControlStdio();
-        }
-
         if (options.server)
         {
             return runControlServerMode(options.server_port);
         }
+
 
         return runSchemaFromFile(options);
     }
