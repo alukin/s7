@@ -143,6 +143,7 @@ auto registerNodeLibraries() -> void
     registerFileIO();
     registerMemIO();
     registerNetIO();
+    registerProbe();  // Probe/ComplexProbe needed for visual-sink schemas
 }
 
 auto printRegisteredTypes() -> void

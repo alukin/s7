@@ -11,7 +11,7 @@ if (POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif()
 
-find_package(Boost 1.75 REQUIRED COMPONENTS system)
+find_package(Boost 1.75 REQUIRED COMPONENTS system json)
 find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -21,10 +21,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add s7core as a subdirectory. Its CMakeLists.txt will be processed.
 # This makes the 's7core' target (library) available for linking later.
-
-# --- nlohmann/json (header-only, included via target_include_directories in s7core) ---
-# The submodule lives at external/json; no add_subdirectory needed.
-
 
 add_subdirectory(s7core)
 add_subdirectory(s7io)

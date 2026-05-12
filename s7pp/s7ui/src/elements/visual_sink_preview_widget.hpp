@@ -16,8 +16,9 @@ class VisualSinkPreviewWidget : public QWidget
 public:
     enum class SignalMode
     {
-        Flat,
-        Synthetic
+        Flat,       ///< No animation; displays static levels
+        Synthetic,  ///< Animated demo waveform (for prototyping)
+        Live        ///< Real data fed via updateChannelData()
     };
 
     explicit VisualSinkPreviewWidget(bool compact, QWidget* parent = nullptr);
@@ -29,6 +30,10 @@ public:
     void setTimeWindow(double seconds);
     void setSignalMode(SignalMode mode);
     void setStaticLevels(const QVector<double>& levels);
+
+    /// Push a new batch of samples for 'channel'.  The widget keeps the last
+    /// timeWindow / sample_dt samples and redraws.  Call from the GUI thread.
+    void updateChannelData(int channel, const QVector<double>& samples);
 
 Q_SIGNALS:
     void doubleClicked();
@@ -51,6 +56,9 @@ private:
     bool compact_ = true;
     SignalMode signalMode_ = SignalMode::Flat;
     QVector<double> staticLevels_;
+
+    // Per-channel sample cache for Y-axis auto-ranging in Live mode.
+    std::vector<std::vector<double>> liveSamples_;
 };
 
 } // namespace s7ui::elements

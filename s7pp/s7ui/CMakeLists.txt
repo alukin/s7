@@ -55,6 +55,14 @@ add_executable(s7ui
     src/main.cpp
     src/main_window.cpp
     src/main_window.hpp
+    src/visual_catalog.cpp
+    src/visual_catalog.hpp
+    src/schema_compiler.cpp
+    src/schema_compiler.hpp
+    src/schema_session.cpp
+    src/schema_session.hpp
+    src/oscilloscope_widget.cpp
+    src/oscilloscope_widget.hpp
     src/elements/basic_node_item.cpp
     src/elements/basic_node_item.hpp
     src/elements/visual_sink_preview_widget.cpp
@@ -69,7 +77,7 @@ add_executable(s7ui
 
 target_include_directories(s7ui PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/external/json/include
+    ${CMAKE_SOURCE_DIR}/s7core/include
 )
 
 target_link_libraries(s7ui PRIVATE
@@ -82,6 +90,10 @@ target_link_libraries(s7ui PRIVATE
     s7ui_qcustomplot
 )
 
+target_compile_definitions(s7ui PRIVATE
+    S7UI_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+)
+
 set_target_properties(s7ui PROPERTIES
     AUTOMOC ON
     CXX_STANDARD 23
@@ -89,5 +101,3 @@ set_target_properties(s7ui PROPERTIES
 )
 
 install(TARGETS s7ui DESTINATION bin)
-
-

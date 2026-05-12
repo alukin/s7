@@ -1,9 +1,11 @@
 #include "s7runtime.hpp"
 #include "s7netlist.hpp"
 #include <chrono>
+#include <thread>
 namespace s7 {
 NodeRuntimeService::NodeRuntimeService()
 {
+    startup_time_ = std::chrono::steady_clock::now();
 }
 NodeRuntimeService::LoadResult NodeRuntimeService::loadSchema(
     const std::string& schema_name,
@@ -15,7 +17,7 @@ NodeRuntimeService::LoadResult NodeRuntimeService::loadSchema(
         auto schema = SchemaBuilder::build(doc);
         std::string handle = generateSchemaHandle();
         loaded_schemas_[handle] = schema;
-        nlohmann::json event_payload;
+        boost::json::object event_payload;
         event_payload["schema_handle"] = handle;
         event_payload["schema_id"] = doc.schema_id;
         event_payload["nodes"] = (int)doc.nodes.size();
@@ -40,7 +42,7 @@ NodeRuntimeService::LoadResult NodeRuntimeService::loadSchemaFromFile(
         auto schema = SchemaBuilder::build(doc);
         std::string handle = generateSchemaHandle();
         loaded_schemas_[handle] = schema;
-        nlohmann::json event_payload;
+        boost::json::object event_payload;
         event_payload["schema_handle"] = handle;
         event_payload["schema_id"] = doc.schema_id;
         event_payload["path"] = path;
@@ -62,7 +64,7 @@ void NodeRuntimeService::validateSchema(const std::string& schema_handle)
     if (it == loaded_schemas_.end()) {
         throw std::runtime_error("Schema handle not found: " + schema_handle);
     }
-    nlohmann::json event_payload;
+    boost::json::object event_payload;
     event_payload["schema_handle"] = schema_handle;
     event_bus_.publishEvent("schema.validated", event_payload);
 }
@@ -70,78 +72,149 @@ NodeRuntimeService::RunResult NodeRuntimeService::runSchema(
     const std::string& schema_handle,
     long ticks)
 {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    if (hasActiveRun()) {
-        throw std::runtime_error("Run already active for schema (single-active-run policy)");
-    }
-    auto it = loaded_schemas_.find(schema_handle);
-    if (it == loaded_schemas_.end()) {
-        throw std::runtime_error("Schema handle not found: " + schema_handle);
-    }
-    std::string run_id = generateRunId();
-    RunInfo info{run_id, schema_handle, RunState::Starting, ticks, 0};
-    active_runs_[run_id] = info;
-    active_run_id_ = run_id;
-    nlohmann::json event_payload;
-    event_payload["run_id"] = run_id;
-    event_payload["schema_handle"] = schema_handle;
-    event_payload["ticks"] = ticks;
-    event_bus_.publishEvent("run.started", event_payload);
-    auto schema = it->second;
-    try {
-        schema->run(ticks);
-        info.state = RunState::Completed;
-        info.completed_ticks = ticks;
+    // Validate and prepare state while holding the mutex, then launch the async
+    // run without holding it so pause/resume/stop/status can interleave.
+    std::shared_ptr<Schema> schema;
+    std::string run_id;
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        if (hasActiveRun()) {
+            throw std::runtime_error("Run already active for schema (single-active-run policy)");
+        }
+        auto it = loaded_schemas_.find(schema_handle);
+        if (it == loaded_schemas_.end()) {
+            throw std::runtime_error("Schema handle not found: " + schema_handle);
+        }
+        schema = it->second;
+        run_id = generateRunId();
+        RunInfo info{run_id, schema_handle, RunState::Starting, ticks, 0};
         active_runs_[run_id] = info;
-        nlohmann::json event_payload2;
-        event_payload2["run_id"] = run_id;
-        event_payload2["ticks"] = ticks;
-        event_bus_.publishEvent("run.completed", event_payload2);
-    } catch (const std::exception& e) {
-        info.state = RunState::Failed;
-        active_runs_[run_id] = info;
-        nlohmann::json event_payload3;
-        event_payload3["run_id"] = run_id;
-        event_payload3["error"] = e.what();
-        event_bus_.publishEvent("run.failed", event_payload3);
-        throw;
+        active_run_id_ = run_id;
+        pause_requested_.store(false);
+        stop_requested_.store(false);
+        current_tick_count_.store(0);
     }
-    active_run_id_ = "";
+
+    {
+        boost::json::object event_payload;
+        event_payload["run_id"] = run_id;
+        event_payload["schema_handle"] = schema_handle;
+        event_payload["ticks"] = ticks;
+        event_bus_.publishEvent("run.started", event_payload);
+    }
+
+    // Capture by value so the lambda owns everything it needs.
+    run_future_ = std::async(std::launch::async,
+        [this, schema, run_id, ticks] {
+            bool        succeeded  = true;
+            std::string error_msg;
+
+            try {
+                schema->prepareExecution();
+
+                {
+                    std::lock_guard<std::mutex> lock(state_mutex_);
+                    if (active_runs_.count(run_id)) {
+                        active_runs_[run_id].state = RunState::Running;
+                    }
+                }
+
+                for (long i = 0; i < ticks; ++i) {
+                    if (stop_requested_.load()) break;
+
+                    // Spin-wait while paused.
+                    while (pause_requested_.load() && !stop_requested_.load()) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    }
+                    if (stop_requested_.load()) break;
+
+                    schema->tick();
+                    current_tick_count_.store(i + 1);
+                }
+            } catch (const std::exception& ex) {
+                succeeded = false;
+                error_msg = ex.what();
+            }
+
+            // Update final state under the mutex.
+            {
+                std::lock_guard<std::mutex> lock(state_mutex_);
+                if (active_runs_.count(run_id)) {
+                    auto& info = active_runs_[run_id];
+                    info.completed_ticks = current_tick_count_.load();
+                    if (stop_requested_.load()) {
+                        info.state = RunState::Stopped;
+                    } else if (succeeded) {
+                        info.state = RunState::Completed;
+                    } else {
+                        info.state = RunState::Failed;
+                    }
+                }
+                active_run_id_ = "";
+            }
+
+            if (succeeded && !stop_requested_.load()) {
+                boost::json::object ep;
+                ep["run_id"] = run_id;
+                ep["ticks"]  = current_tick_count_.load();
+                event_bus_.publishEvent("run.completed", ep);
+            } else if (stop_requested_.load()) {
+                boost::json::object ep;
+                ep["run_id"] = run_id;
+                event_bus_.publishEvent("run.stopped", ep);
+            } else {
+                boost::json::object ep;
+                ep["run_id"] = run_id;
+                ep["error"]  = error_msg;
+                event_bus_.publishEvent("run.failed", ep);
+            }
+        });
+
     return RunResult{run_id, true};
 }
 void NodeRuntimeService::pauseRun(const std::string& run_id)
 {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = active_runs_.find(run_id);
-    if (it == active_runs_.end()) {
-        throw std::runtime_error("Run not found: " + run_id);
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        auto it = active_runs_.find(run_id);
+        if (it == active_runs_.end()) {
+            throw std::runtime_error("Run not found: " + run_id);
+        }
+        it->second.state = RunState::Paused;
     }
-    it->second.state = RunState::Paused;
-    nlohmann::json event_payload;
+    pause_requested_.store(true);
+    boost::json::object event_payload;
     event_payload["run_id"] = run_id;
     event_bus_.publishEvent("run.paused", event_payload);
 }
 void NodeRuntimeService::resumeRun(const std::string& run_id)
 {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = active_runs_.find(run_id);
-    if (it == active_runs_.end()) {
-        throw std::runtime_error("Run not found: " + run_id);
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        auto it = active_runs_.find(run_id);
+        if (it == active_runs_.end()) {
+            throw std::runtime_error("Run not found: " + run_id);
+        }
+        it->second.state = RunState::Running;
     }
-    it->second.state = RunState::Running;
-    nlohmann::json event_payload;
+    pause_requested_.store(false);
+    boost::json::object event_payload;
     event_payload["run_id"] = run_id;
     event_bus_.publishEvent("run.resumed", event_payload);
 }
 void NodeRuntimeService::stopRun(const std::string& run_id)
 {
-    std::lock_guard<std::mutex> lock(state_mutex_);
-    auto it = active_runs_.find(run_id);
-    if (it == active_runs_.end()) {
-        throw std::runtime_error("Run not found: " + run_id);
+    {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        auto it = active_runs_.find(run_id);
+        if (it == active_runs_.end()) {
+            throw std::runtime_error("Run not found: " + run_id);
+        }
+        it->second.state = RunState::Stopped;
     }
-    it->second.state = RunState::Stopped;
-    nlohmann::json event_payload;
+    stop_requested_.store(true);
+    pause_requested_.store(false); // unblock any pause-spin
+    boost::json::object event_payload;
     event_payload["run_id"] = run_id;
     event_bus_.publishEvent("run.stopped", event_payload);
 }
@@ -152,7 +225,7 @@ void NodeRuntimeService::resetSchema(const std::string& schema_handle)
     if (it == loaded_schemas_.end()) {
         throw std::runtime_error("Schema handle not found: " + schema_handle);
     }
-    nlohmann::json event_payload;
+    boost::json::object event_payload;
     event_payload["schema_handle"] = schema_handle;
     event_bus_.publishEvent("schema.reset", event_payload);
 }
@@ -164,7 +237,7 @@ void NodeRuntimeService::unloadSchema(const std::string& schema_handle)
         throw std::runtime_error("Schema handle not found: " + schema_handle);
     }
     loaded_schemas_.erase(it);
-    nlohmann::json event_payload;
+    boost::json::object event_payload;
     event_payload["schema_handle"] = schema_handle;
     event_bus_.publishEvent("schema.unloaded", event_payload);
 }
@@ -172,7 +245,10 @@ NodeRuntimeService::RuntimeStatus NodeRuntimeService::getStatus() const
 {
     std::lock_guard<std::mutex> lock(state_mutex_);
     RuntimeStatus status;
-    status.uptime_ms = 0;
+    // Real uptime in milliseconds since construction.
+    status.uptime_ms = static_cast<long>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startup_time_).count());
     status.health_state = "ok";
     for (const auto& [handle, _] : loaded_schemas_) {
         status.active_schema_handles.push_back(handle);
@@ -193,7 +269,12 @@ RunInfo NodeRuntimeService::getRunInfo(const std::string& run_id) const
     if (it == active_runs_.end()) {
         throw std::runtime_error("Run not found: " + run_id);
     }
-    return it->second;
+    RunInfo info = it->second;
+    // Fill in live tick count for in-progress runs.
+    if (info.state == RunState::Running || info.state == RunState::Paused) {
+        info.completed_ticks = current_tick_count_.load();
+    }
+    return info;
 }
 uint64_t NodeRuntimeService::subscribeToEvents(const std::vector<std::string>& topics,
                                                EventCallback callback)

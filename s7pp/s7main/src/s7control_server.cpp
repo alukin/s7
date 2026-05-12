@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <iostream>
 #include <mutex>
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
 #include <string>
 #include <thread>
 #include <vector>
@@ -25,20 +25,25 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 namespace websocket = beast::websocket;
 using tcp = asio::ip::tcp;
-using json = nlohmann::json;
+using json = boost::json::value;
 
 auto parseTopics(const json& params) -> std::vector<std::string>
 {
-	if (!params.contains("topics")) {
+	if (!params.is_object()) {
 		return {"schema", "run", "runtime"};
 	}
-	if (!params["topics"].is_array()) {
+	const auto& obj = params.as_object();
+	const auto* topics_value = obj.if_contains("topics");
+	if (!topics_value) {
+		return {"schema", "run", "runtime"};
+	}
+	if (!topics_value->is_array()) {
 		throw std::runtime_error("runtime.events.subscribe: 'topics' must be an array");
 	}
 
 	std::vector<std::string> topics;
-	for (const auto& item : params["topics"]) {
-		topics.push_back(item.get<std::string>());
+	for (const auto& item : topics_value->as_array()) {
+		topics.push_back(boost::json::value_to<std::string>(item));
 	}
 	if (topics.empty()) {
 		topics = {"schema", "run", "runtime"};
@@ -130,12 +135,18 @@ private:
 
 				json response;
 				try {
-					const auto parsed = json::parse(request);
-					const std::string method = parsed.value("method", std::string{});
+					const auto parsed = boost::json::parse(request);
+					const auto& parsed_obj = parsed.as_object();
+					const auto* method_value = parsed_obj.if_contains("method");
+					const std::string method = (method_value && method_value->is_string())
+						? boost::json::value_to<std::string>(*method_value)
+						: std::string{};
 
 					if (method == "runtime.events.subscribe") {
-						const auto id = parsed.contains("id") ? parsed["id"] : json(nullptr);
-						const auto params = parsed.value("params", json::object());
+						const auto* id_ptr = parsed_obj.if_contains("id");
+						const auto id = id_ptr ? *id_ptr : json(nullptr);
+						const auto* params_ptr = parsed_obj.if_contains("params");
+						const auto params = params_ptr ? *params_ptr : json(boost::json::object{});
 						const auto topics = parseTopics(params);
 
 						auto subscription_id_ref = std::make_shared<std::atomic<uint64_t>>(0);
@@ -147,19 +158,20 @@ private:
 								}
 
 								const auto sid = subscription_id_ref->load(std::memory_order_acquire);
-								const json notification{
-									{"jsonrpc", "2.0"},
-									{"method", "runtime.event"},
-									{"params", {{"subscription_id", sid},
-									            {"event_name", event.event_name},
-									            {"timestamp_ms", event.timestamp_ms},
-									            {"payload", event.payload}}}
-								};
+								boost::json::object params_obj;
+								params_obj["subscription_id"] = sid;
+								params_obj["event_name"] = event.event_name;
+								params_obj["timestamp_ms"] = event.timestamp_ms;
+								params_obj["payload"] = event.payload;
+								boost::json::object notification_obj;
+								notification_obj["jsonrpc"] = "2.0";
+								notification_obj["method"] = "runtime.event";
+								notification_obj["params"] = std::move(params_obj);
 
 								std::scoped_lock lock(ws_write_mutex);
 								try {
 									ws.text(true);
-									ws.write(asio::buffer(notification.dump()));
+									ws.write(asio::buffer(boost::json::serialize(notification_obj)));
 								} catch (...) {
 									// Ignore socket errors; session loop handles cleanup.
 								}
@@ -167,18 +179,35 @@ private:
 						subscription_id_ref->store(subscription_id, std::memory_order_release);
 
 						subscriptions.push_back(subscription_id);
-						response = json{{"jsonrpc", "2.0"},
-						                {"id", id},
-						                {"result", {{"subscribed", true}, {"subscription_id", subscription_id}, {"topics", topics}}}};
+						boost::json::object result_obj;
+						result_obj["subscribed"] = true;
+						result_obj["subscription_id"] = subscription_id;
+						result_obj["topics"] = boost::json::value_from(topics);
+						boost::json::object response_obj;
+						response_obj["jsonrpc"] = "2.0";
+						response_obj["id"] = id;
+						response_obj["result"] = std::move(result_obj);
+						response = std::move(response_obj);
 					} else if (method == "runtime.events.unsubscribe") {
-						const auto id = parsed.contains("id") ? parsed["id"] : json(nullptr);
-						const auto params = parsed.value("params", json::object());
-						const auto subscription_id = params.at("subscription_id").get<uint64_t>();
+						const auto* id_ptr = parsed_obj.if_contains("id");
+						const auto id = id_ptr ? *id_ptr : json(nullptr);
+						const auto* params_ptr = parsed_obj.if_contains("params");
+						if (!params_ptr || !params_ptr->is_object()) {
+							throw std::runtime_error("runtime.events.unsubscribe: missing params");
+						}
+						const auto subscription_id = boost::json::value_to<uint64_t>(params_ptr->as_object().at("subscription_id"));
 						service_->unsubscribeFromEvents(subscription_id);
 						subscriptions.erase(
 							std::remove(subscriptions.begin(), subscriptions.end(), subscription_id),
 							subscriptions.end());
-						response = json{{"jsonrpc", "2.0"}, {"id", id}, {"result", {{"unsubscribed", true}, {"subscription_id", subscription_id}}}};
+						boost::json::object result_obj;
+						result_obj["unsubscribed"] = true;
+						result_obj["subscription_id"] = subscription_id;
+						boost::json::object response_obj;
+						response_obj["jsonrpc"] = "2.0";
+						response_obj["id"] = id;
+						response_obj["result"] = std::move(result_obj);
+						response = std::move(response_obj);
 					} else {
 						response = dispatcher_.dispatchParsed(parsed);
 					}
@@ -188,7 +217,7 @@ private:
 
 				std::scoped_lock lock(ws_write_mutex);
 				ws.text(true);
-				ws.write(asio::buffer(response.dump()));
+				ws.write(asio::buffer(boost::json::serialize(response)));
 			}
 		} catch (const boost::system::system_error& ex) {
 			cleanup_subscriptions();

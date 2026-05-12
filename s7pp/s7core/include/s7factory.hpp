@@ -29,6 +29,27 @@ namespace s7 {
 
     using ElementFactoryFn = std::function<ElementPtr(const std::string& id, const ParamMap& params)>;
 
+    // -------------------------------------------------------------------------
+    // TypeDescriptor — metadata about a registered element type.
+    // Used to populate the GUI palette and auto-create items.
+    // -------------------------------------------------------------------------
+    struct TypeDescriptor {
+        std::string type_name;
+        std::string category;            ///< e.g. "Sources", "Math", "Filters", "IO", "Sinks"
+        std::string description;
+
+        int  default_input_count  = 1;   ///< Shown to the user as the default port count
+        int  default_output_count = 1;
+        bool inputs_configurable  = false; ///< User can choose N at placement time
+        bool outputs_configurable = false;
+
+        ParamMap default_params;
+
+        /// When true, this type is not shown in the GUI palette.
+        /// (Use for engine-internal types like "Probe".)
+        bool hidden = false;
+    };
+
     class ElementRegistry {
     public:
         static ElementRegistry& instance()
@@ -37,9 +58,22 @@ namespace s7 {
             return registry;
         }
 
+        /// Register a type with full metadata.
+        void registerType(TypeDescriptor desc, ElementFactoryFn factory)
+        {
+            factories_[desc.type_name]    = std::move(factory);
+            descriptors_[desc.type_name]  = std::move(desc);
+        }
+
+        /// Register a type without metadata (backward-compatible overload).
         void registerType(const std::string& type_name, ElementFactoryFn factory)
         {
             factories_[type_name] = std::move(factory);
+            // Insert a minimal descriptor if not already present
+            if (!descriptors_.contains(type_name))
+            {
+                descriptors_[type_name] = TypeDescriptor{ .type_name = type_name };
+            }
         }
 
         [[nodiscard]] ElementPtr create(const std::string& type_name,
@@ -61,6 +95,24 @@ namespace s7 {
             return factories_.contains(type_name);
         }
 
+        [[nodiscard]] std::optional<TypeDescriptor> getDescriptor(const std::string& type_name) const
+        {
+            const auto it = descriptors_.find(type_name);
+            if (it == descriptors_.end()) return std::nullopt;
+            return it->second;
+        }
+
+        [[nodiscard]] std::vector<TypeDescriptor> allDescriptors() const
+        {
+            std::vector<TypeDescriptor> result;
+            result.reserve(descriptors_.size());
+            for (const auto& [name, desc] : descriptors_)
+            {
+                result.push_back(desc);
+            }
+            return result;
+        }
+
         [[nodiscard]] std::vector<std::string> registeredTypes() const
         {
             std::vector<std::string> names;
@@ -74,7 +126,8 @@ namespace s7 {
 
     private:
         ElementRegistry() = default;
-        std::unordered_map<std::string, ElementFactoryFn> factories_;
+        std::unordered_map<std::string, ElementFactoryFn>  factories_;
+        std::unordered_map<std::string, TypeDescriptor>    descriptors_;
     };
 
     inline ParamValue getParam(const ParamMap&     params,
@@ -112,6 +165,7 @@ namespace s7 {
     void registerFileIO(ElementRegistry& registry = ElementRegistry::instance());
     void registerMemIO(ElementRegistry& registry = ElementRegistry::instance());
     void registerNetIO(ElementRegistry& registry = ElementRegistry::instance());
+    void registerProbe(ElementRegistry& registry = ElementRegistry::instance());
 
 } // namespace s7
 

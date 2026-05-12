@@ -14,13 +14,12 @@ find_package(Boost 1.80 COMPONENTS
     graph
     system
     filesystem
+    json
     REQUIRED
 )
 
 if (Boost_FOUND)
     message(STATUS "Boost found. Version: ${Boost_VERSION_STRING}")
-    # include_directories(${Boost_INCLUDE_DIR}) # Prefer target_include_directories below
-    # link_directories(${Boost_LIBRARY_DIRS}) # Prefer target_link_libraries below
 else()
     message(FATAL_ERROR "Boost not found. Please ensure Boost is installed and discoverable by CMake.")
 endif()
@@ -46,6 +45,10 @@ file(GLOB s7core_SRCS
 add_library(s7core STATIC ${s7core_SRCS}
         src/s7stdlib.cpp
         include/s7stdlib.hpp
+        include/s7probe.hpp
+        src/s7probe.cpp
+        include/s7thread_pool.hpp
+        src/s7thread_pool.cpp
         include/i_s7lib.hpp
         include/s7factory.hpp
         include/s7netlist.hpp
@@ -68,17 +71,14 @@ target_include_directories(s7core PUBLIC
 # Link dependencies to your library
 target_link_libraries(s7core
     PUBLIC
-        ${Boost_LIBRARIES}
+        Boost::graph
+        Boost::system
+        Boost::filesystem
+        Boost::json
     PUBLIC
         ${FFTW3_LIBRARIES}
 )
 
-# nlohmann/json is header-only. Add its include path directly to avoid
-# polluting the install export set with an un-installed imported target.
-target_include_directories(s7core PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/external/json/single_include>
-    $<INSTALL_INTERFACE:include>
-)
 
 # --- Install Rules (Optional but recommended for libraries) ---
 install(TARGETS s7core

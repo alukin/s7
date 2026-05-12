@@ -1,4 +1,4 @@
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -218,70 +218,73 @@ auto parseArgs(int argc, char** argv) -> Options
     return opt;
 }
 
-auto makeRequest(const Options& opt) -> nlohmann::json
+auto makeRequest(const Options& opt) -> boost::json::value
 {
     static long next_id = 1;
     const long id = next_id++;
 
     if (opt.command == "hello") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.hello"}, {"params", {{"client_name", "s7ctl"}}}};
+        return boost::json::object{{"jsonrpc", "2.0"},
+                                   {"id", id},
+                                   {"method", "runtime.hello"},
+                                   {"params", boost::json::object{{"client_name", "s7ctl"}}}};
     }
     if (opt.command == "types") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.types.list"}, {"params", nlohmann::json::object()}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.types.list"}, {"params", boost::json::object()}};
     }
     if (opt.command == "status") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.status"}, {"params", nlohmann::json::object()}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.status"}, {"params", boost::json::object()}};
     }
     if (opt.command == "load-file") {
-        return {{"jsonrpc", "2.0"},
-                {"id", id},
-                {"method", "schema.load"},
-                {"params", {{"source", {{"kind", "filesystem"}, {"path", opt.schema_path}}}}}};
+        return boost::json::object{{"jsonrpc", "2.0"},
+                                   {"id", id},
+                                   {"method", "schema.load"},
+                                   {"params", boost::json::object{{"source", boost::json::object{{"kind", "filesystem"}, {"path", opt.schema_path}}}}}};
     }
     if (opt.command == "load-inline") {
-        return {{"jsonrpc", "2.0"},
-                {"id", id},
-                {"method", "schema.load"},
-                {"params", {{"source", {{"kind", "inline"}, {"schema_json", opt.schema_json}}}}}};
+        return boost::json::object{{"jsonrpc", "2.0"},
+                                   {"id", id},
+                                   {"method", "schema.load"},
+                                   {"params", boost::json::object{{"source", boost::json::object{{"kind", "inline"}, {"schema_json", opt.schema_json}}}}}};
     }
     if (opt.command == "validate") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.validate"}, {"params", {{"schema_handle", opt.schema_handle}}}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.validate"}, {"params", boost::json::object{{"schema_handle", opt.schema_handle}}}};
     }
     if (opt.command == "run") {
-        return {{"jsonrpc", "2.0"},
-                {"id", id},
-                {"method", "schema.run"},
-                {"params", {{"schema_handle", opt.schema_handle}, {"mode", {{"ticks", opt.ticks}}}}}};
+        return boost::json::object{{"jsonrpc", "2.0"},
+                                   {"id", id},
+                                   {"method", "schema.run"},
+                                   {"params", boost::json::object{{"schema_handle", opt.schema_handle}, {"mode", boost::json::object{{"ticks", opt.ticks}}}}}};
     }
     if (opt.command == "pause") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.pause"}, {"params", {{"run_id", opt.run_id}}}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.pause"}, {"params", boost::json::object{{"run_id", opt.run_id}}}};
     }
     if (opt.command == "resume") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.resume"}, {"params", {{"run_id", opt.run_id}}}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.resume"}, {"params", boost::json::object{{"run_id", opt.run_id}}}};
     }
     if (opt.command == "stop") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.stop"}, {"params", {{"run_id", opt.run_id}}}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.stop"}, {"params", boost::json::object{{"run_id", opt.run_id}}}};
     }
     if (opt.command == "reset") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.reset"}, {"params", {{"schema_handle", opt.schema_handle}}}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.reset"}, {"params", boost::json::object{{"schema_handle", opt.schema_handle}}}};
     }
     if (opt.command == "unload") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.unload"}, {"params", {{"schema_handle", opt.schema_handle}}}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.unload"}, {"params", boost::json::object{{"schema_handle", opt.schema_handle}}}};
     }
     if (opt.command == "raw") {
-        return {{"jsonrpc", "2.0"}, {"id", id}, {"method", opt.raw_method}, {"params", nlohmann::json::parse(opt.raw_params)}};
+        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", opt.raw_method}, {"params", boost::json::parse(opt.raw_params)}};
     }
     if (opt.command == "events") {
-        return {{"jsonrpc", "2.0"},
-                {"id", id},
-                {"method", "runtime.events.subscribe"},
-                {"params", {{"topics", splitCsv(opt.topics_csv)}}}};
+        return boost::json::object{{"jsonrpc", "2.0"},
+                                   {"id", id},
+                                   {"method", "runtime.events.subscribe"},
+                                   {"params", boost::json::object{{"topics", boost::json::value_from(splitCsv(opt.topics_csv))}}}};
     }
 
     throw std::runtime_error("Unsupported command");
 }
 
-auto streamEvents(const Options& opt, const nlohmann::json& subscribe_request) -> int
+auto streamEvents(const Options& opt, const boost::json::value& subscribe_request) -> int
 {
     asio::io_context ioc;
     tcp::resolver resolver(ioc);
@@ -292,36 +295,41 @@ auto streamEvents(const Options& opt, const nlohmann::json& subscribe_request) -
     ws.handshake(opt.host + ":" + std::to_string(opt.port), opt.path);
 
     ws.text(true);
-    ws.write(asio::buffer(subscribe_request.dump()));
+    ws.write(asio::buffer(boost::json::serialize(subscribe_request)));
 
     beast::flat_buffer ack_buffer;
     ws.read(ack_buffer);
-    const auto ack = nlohmann::json::parse(beast::buffers_to_string(ack_buffer.data()));
-    std::cout << ack.dump(2) << '\n';
+    const auto ack = boost::json::parse(beast::buffers_to_string(ack_buffer.data()));
+    std::cout << boost::json::serialize(ack) << '\n';
 
     uint64_t subscription_id = 0;
-    if (ack.contains("result") && ack["result"].contains("subscription_id")) {
-        subscription_id = ack["result"]["subscription_id"].get<uint64_t>();
+    if (ack.is_object()) {
+        const auto& ack_obj = ack.as_object();
+        if (const auto* result = ack_obj.if_contains("result"); result && result->is_object()) {
+            if (const auto* sid = result->as_object().if_contains("subscription_id")) {
+                subscription_id = boost::json::value_to<uint64_t>(*sid);
+            }
+        }
     }
 
     for (long i = 0; i < opt.event_count; ++i) {
         beast::flat_buffer event_buffer;
         ws.read(event_buffer);
-        const auto event_json = nlohmann::json::parse(beast::buffers_to_string(event_buffer.data()));
-        std::cout << event_json.dump(2) << '\n';
+        const auto event_json = boost::json::parse(beast::buffers_to_string(event_buffer.data()));
+        std::cout << boost::json::serialize(event_json) << '\n';
     }
 
     if (subscription_id != 0) {
         static long unsubscribe_id = 100000;
-        const nlohmann::json unsubscribe_request{{"jsonrpc", "2.0"},
-                                                 {"id", ++unsubscribe_id},
-                                                 {"method", "runtime.events.unsubscribe"},
-                                                 {"params", {{"subscription_id", subscription_id}}}};
-        ws.write(asio::buffer(unsubscribe_request.dump()));
+        const boost::json::value unsubscribe_request = boost::json::object{{"jsonrpc", "2.0"},
+                                                                           {"id", ++unsubscribe_id},
+                                                                           {"method", "runtime.events.unsubscribe"},
+                                                                           {"params", boost::json::object{{"subscription_id", subscription_id}}}};
+        ws.write(asio::buffer(boost::json::serialize(unsubscribe_request)));
         beast::flat_buffer unsub_buffer;
         ws.read(unsub_buffer);
-        const auto unsub = nlohmann::json::parse(beast::buffers_to_string(unsub_buffer.data()));
-        std::cout << unsub.dump(2) << '\n';
+        const auto unsub = boost::json::parse(beast::buffers_to_string(unsub_buffer.data()));
+        std::cout << boost::json::serialize(unsub) << '\n';
     }
 
     beast::error_code ec;
@@ -329,7 +337,7 @@ auto streamEvents(const Options& opt, const nlohmann::json& subscribe_request) -
     return 0;
 }
 
-auto requestResponse(const Options& opt, const nlohmann::json& request) -> std::string
+auto requestResponse(const Options& opt, const boost::json::value& request) -> std::string
 {
     asio::io_context ioc;
     tcp::resolver resolver(ioc);
@@ -339,7 +347,7 @@ auto requestResponse(const Options& opt, const nlohmann::json& request) -> std::
     asio::connect(ws.next_layer(), results.begin(), results.end());
     ws.handshake(opt.host + ":" + std::to_string(opt.port), opt.path);
 
-    const auto payload = request.dump();
+    const auto payload = boost::json::serialize(request);
     ws.text(true);
     ws.write(asio::buffer(payload));
 
@@ -358,7 +366,7 @@ auto main(int argc, char** argv) -> int
 {
     try {
         const Options opt = parseArgs(argc, argv);
-        const nlohmann::json request = makeRequest(opt);
+        const boost::json::value request = makeRequest(opt);
 
         if (opt.command == "events") {
             return streamEvents(opt, request);
@@ -366,8 +374,8 @@ auto main(int argc, char** argv) -> int
 
         const std::string response_raw = requestResponse(opt, request);
 
-        const auto response = nlohmann::json::parse(response_raw);
-        std::cout << response.dump(2) << '\n';
+        const auto response = boost::json::parse(response_raw);
+        std::cout << boost::json::serialize(response) << '\n';
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "s7ctl error: " << ex.what() << '\n';

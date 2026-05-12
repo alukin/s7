@@ -3,15 +3,105 @@
 namespace s7 {
 namespace {
 
-auto asId(const nlohmann::json& request) -> nlohmann::json
-{
-	return request.contains("id") ? request["id"] : nlohmann::json(nullptr);
-}
+using boost::json::array;
+using boost::json::object;
+using boost::json::value;
 
-auto requestParams(const nlohmann::json& request) -> nlohmann::json
+struct RpcRequest
 {
-	return request.value("params", nlohmann::json::object());
-}
+	value id = nullptr;
+	std::string method;
+	value params = object{};
+
+	static auto fromJson(const value& request) -> RpcRequest
+	{
+		if (!request.is_object()) {
+			throw std::runtime_error("Invalid Request");
+		}
+		const auto& obj = request.as_object();
+		const auto* version = obj.if_contains("jsonrpc");
+		const auto* method_val = obj.if_contains("method");
+		if (!version || !version->is_string() || boost::json::value_to<std::string>(*version) != "2.0" ||
+			!method_val || !method_val->is_string()) {
+			throw std::runtime_error("Invalid Request");
+		}
+
+		RpcRequest out;
+		if (const auto* id = obj.if_contains("id")) {
+			out.id = *id;
+		}
+		out.method = boost::json::value_to<std::string>(*method_val);
+		if (const auto* params = obj.if_contains("params")) {
+			out.params = *params;
+		}
+		return out;
+	}
+};
+
+struct RpcEnvelope
+{
+	static auto success(const value& id, const value& result) -> value
+	{
+		object response;
+		response["jsonrpc"] = "2.0";
+		response["id"] = id;
+		response["result"] = result;
+		return response;
+	}
+
+	static auto error(const value& id, int error_code, const std::string& message) -> value
+	{
+		object error;
+		error["code"] = error_code;
+		error["message"] = message;
+		object response;
+		response["jsonrpc"] = "2.0";
+		response["id"] = id;
+		response["error"] = std::move(error);
+		return response;
+	}
+};
+
+struct SchemaLoadSource
+{
+	std::string kind = "inline";
+	std::string schema_json;
+	std::string schema_name = "unnamed";
+	std::string path;
+
+	static auto fromJson(const object& params_obj) -> SchemaLoadSource
+	{
+		const auto* source_ptr = params_obj.if_contains("source");
+		if (!source_ptr || !source_ptr->is_object()) {
+			throw std::runtime_error("Missing 'source' parameter");
+		}
+
+		SchemaLoadSource source;
+		const auto& source_obj = source_ptr->as_object();
+		if (const auto* kind_ptr = source_obj.if_contains("kind"); kind_ptr && kind_ptr->is_string()) {
+			source.kind = boost::json::value_to<std::string>(*kind_ptr);
+		}
+
+		if (source.kind == "inline") {
+			if (const auto* schema_json_ptr = source_obj.if_contains("schema_json"); schema_json_ptr && schema_json_ptr->is_string()) {
+				source.schema_json = boost::json::value_to<std::string>(*schema_json_ptr);
+			}
+			if (const auto* schema_name_ptr = params_obj.if_contains("schema_name"); schema_name_ptr && schema_name_ptr->is_string()) {
+				source.schema_name = boost::json::value_to<std::string>(*schema_name_ptr);
+			}
+			return source;
+		}
+
+		if (source.kind == "filesystem") {
+			if (const auto* path_ptr = source_obj.if_contains("path"); path_ptr && path_ptr->is_string()) {
+				source.path = boost::json::value_to<std::string>(*path_ptr);
+			}
+			return source;
+		}
+
+		throw std::runtime_error("Unknown source kind: " + source.kind);
+	}
+};
 
 } // namespace
 
@@ -20,195 +110,236 @@ JsonRpcDispatcher::JsonRpcDispatcher(std::shared_ptr<NodeRuntimeService> service
 {
 }
 
-auto JsonRpcDispatcher::dispatch(const std::string& json_request_str) -> nlohmann::json
+auto JsonRpcDispatcher::dispatch(const std::string& json_request_str) -> value
 {
 	try {
-		return dispatchParsed(nlohmann::json::parse(json_request_str));
-	} catch (const nlohmann::json::parse_error&) {
+		return dispatchParsed(boost::json::parse(json_request_str));
+	} catch (const std::exception&) {
 		return error_response(-32700, "Parse error", nullptr);
 	}
 }
 
-auto JsonRpcDispatcher::dispatchParsed(const nlohmann::json& request) -> nlohmann::json
+auto JsonRpcDispatcher::dispatchParsed(const value& request) -> value
 {
-	const auto id = asId(request);
-
 	try {
-		if (!request.contains("jsonrpc") || request["jsonrpc"] != "2.0" || !request.contains("method")) {
-			return error_response(-32600, "Invalid Request", id);
-		}
-
-		const std::string method = request["method"].get<std::string>();
-		const auto params = requestParams(request);
+		const auto rpc = RpcRequest::fromJson(request);
+		const auto& method = rpc.method;
+		const auto& params = rpc.params;
 
 		if (method == "runtime.hello") {
-			return handle_runtime_hello(params, id);
+			return handle_runtime_hello(params, rpc.id);
 		}
 		if (method == "runtime.types.list") {
-			return handle_runtime_types_list(params, id);
+			return handle_runtime_types_list(params, rpc.id);
 		}
 		if (method == "runtime.status") {
-			return handle_runtime_status(params, id);
+			return handle_runtime_status(params, rpc.id);
 		}
 		if (method == "schema.load") {
-			return handle_schema_load(params, id);
+			return handle_schema_load(params, rpc.id);
 		}
 		if (method == "schema.validate") {
-			return handle_schema_validate(params, id);
+			return handle_schema_validate(params, rpc.id);
 		}
 		if (method == "schema.run") {
-			return handle_schema_run(params, id);
+			return handle_schema_run(params, rpc.id);
 		}
 		if (method == "schema.pause") {
-			return handle_schema_pause(params, id);
+			return handle_schema_pause(params, rpc.id);
 		}
 		if (method == "schema.resume") {
-			return handle_schema_resume(params, id);
+			return handle_schema_resume(params, rpc.id);
 		}
 		if (method == "schema.stop") {
-			return handle_schema_stop(params, id);
+			return handle_schema_stop(params, rpc.id);
 		}
 		if (method == "schema.reset") {
-			return handle_schema_reset(params, id);
+			return handle_schema_reset(params, rpc.id);
 		}
 		if (method == "schema.unload") {
-			return handle_schema_unload(params, id);
+			return handle_schema_unload(params, rpc.id);
 		}
 
-		return error_response(-32601, "Method not found", id);
+		return error_response(-32601, "Method not found", rpc.id);
 	} catch (const std::exception& ex) {
-		return error_response(-32000, ex.what(), id);
+		if (std::string(ex.what()) == "Invalid Request") {
+			return error_response(-32600, "Invalid Request", nullptr);
+		}
+		return error_response(-32000, ex.what(), nullptr);
 	}
 }
 
-auto JsonRpcDispatcher::handle_runtime_hello(const nlohmann::json&, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_runtime_hello(const value&, const value& id) -> value
 {
-	const nlohmann::json result{
-		{"protocol_version", 0},
-		{"node_id", "node-local-001"},
-		{"node_name", "s7main-local"},
-		{"runtime_version", "0.1.0"},
-		{"capabilities", {
-			{"methods", {"runtime.hello", "runtime.types.list", "runtime.status", "runtime.events.subscribe", "runtime.events.unsubscribe", "schema.load", "schema.validate", "schema.run", "schema.pause", "schema.resume", "schema.stop", "schema.reset", "schema.unload"}},
-			{"supports_event_stream", true},
-			{"supports_parallel_runs", false},
-			{"schema_handles_persist_on_disconnect", true},
-			{"transport", "websocket"}
-		}}
-	};
+	array methods{
+		"runtime.hello", "runtime.types.list", "runtime.status", "runtime.events.subscribe",
+		"runtime.events.unsubscribe", "schema.load", "schema.validate", "schema.run",
+		"schema.pause", "schema.resume", "schema.stop", "schema.reset", "schema.unload"};
+	object capabilities;
+	capabilities["methods"] = std::move(methods);
+	capabilities["supports_event_stream"] = true;
+	capabilities["supports_parallel_runs"] = false;
+	capabilities["schema_handles_persist_on_disconnect"] = true;
+	capabilities["transport"] = "websocket";
+
+	object result;
+	result["protocol_version"] = 0;
+	result["node_id"] = "node-local-001";
+	result["node_name"] = "s7main-local";
+	result["runtime_version"] = "0.1.0";
+	result["capabilities"] = std::move(capabilities);
 	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_runtime_types_list(const nlohmann::json&, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_runtime_types_list(const value&, const value& id) -> value
 {
 	const auto types = service_->getRegisteredTypes();
-	nlohmann::json types_array = nlohmann::json::array();
+	array types_array;
 	for (const auto& t : types) {
-		types_array.push_back({{"name", t}});
+		object entry;
+		entry["name"] = t;
+		types_array.push_back(std::move(entry));
 	}
-	return success_response({{"types", types_array}}, id);
+	object result;
+	result["types"] = std::move(types_array);
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_runtime_status(const nlohmann::json&, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_runtime_status(const value&, const value& id) -> value
 {
 	const auto status = service_->getStatus();
-	return success_response(
-		{{"uptime_ms", status.uptime_ms},
-		 {"active_schema_handles", status.active_schema_handles},
-		 {"active_runs", status.active_runs},
-		 {"health", {{"state", status.health_state}, {"degraded", false}, {"warnings", nlohmann::json::array()}}}},
-		id);
+	object health;
+	health["state"] = status.health_state;
+	health["degraded"] = false;
+	health["warnings"] = array{};
+
+	object result;
+	result["uptime_ms"] = status.uptime_ms;
+	result["active_schema_handles"] = boost::json::value_from(status.active_schema_handles);
+	result["active_runs"] = boost::json::value_from(status.active_runs);
+	result["health"] = std::move(health);
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_load(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_load(const value& params, const value& id) -> value
 {
-	if (!params.contains("source")) {
-		return error_response(-32002, "Missing 'source' parameter", id);
+	if (!params.is_object()) {
+		return error_response(-32002, "Invalid 'params' object", id);
 	}
-
-	const auto source = params["source"];
-	const std::string kind = source.value("kind", "inline");
+	const auto& params_obj = params.as_object();
 	NodeRuntimeService::LoadResult load_result{};
-
-	if (kind == "inline") {
-		const std::string schema_json = source.value("schema_json", std::string{});
-		const std::string schema_name = params.value("schema_name", "unnamed");
-		load_result = service_->loadSchema(schema_name, schema_json);
-	} else if (kind == "filesystem") {
-		const std::string path = source.value("path", std::string{});
-		load_result = service_->loadSchemaFromFile(path);
-	} else {
-		return error_response(-32002, "Unknown source kind: " + kind, id);
+	SchemaLoadSource source;
+	try {
+		source = SchemaLoadSource::fromJson(params_obj);
+	} catch (const std::exception& ex) {
+		return error_response(-32002, ex.what(), id);
 	}
 
-	return success_response(
-		{{"schema_handle", load_result.schema_handle},
-		 {"loaded", true},
-		 {"summary", {{"id", load_result.schema_id}, {"elements", load_result.num_elements}, {"connections", load_result.num_connections}}}},
-		id);
+	if (source.kind == "inline") {
+		load_result = service_->loadSchema(source.schema_name, source.schema_json);
+	} else if (source.kind == "filesystem") {
+		load_result = service_->loadSchemaFromFile(source.path);
+	} else {
+		return error_response(-32002, "Unknown source kind: " + source.kind, id);
+	}
+
+	object summary;
+	summary["id"] = load_result.schema_id;
+	summary["elements"] = load_result.num_elements;
+	summary["connections"] = load_result.num_connections;
+	object result;
+	result["schema_handle"] = load_result.schema_handle;
+	result["loaded"] = true;
+	result["summary"] = std::move(summary);
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_validate(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_validate(const value& params, const value& id) -> value
 {
-	const std::string handle = params.at("schema_handle").get<std::string>();
+	const std::string handle = boost::json::value_to<std::string>(params.as_object().at("schema_handle"));
 	service_->validateSchema(handle);
-	return success_response({{"schema_handle", handle}, {"valid", true}, {"diagnostics", nlohmann::json::array()}}, id);
+	object result;
+	result["schema_handle"] = handle;
+	result["valid"] = true;
+	result["diagnostics"] = array{};
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_run(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_run(const value& params, const value& id) -> value
 {
-	const std::string handle = params.at("schema_handle").get<std::string>();
-	const auto mode = params.at("mode");
-	const long ticks = mode.contains("ticks") ? mode["ticks"].get<long>() : 1;
+	const auto& params_obj = params.as_object();
+	const std::string handle = boost::json::value_to<std::string>(params_obj.at("schema_handle"));
+	const auto& mode = params_obj.at("mode").as_object();
+	const auto* ticks_ptr = mode.if_contains("ticks");
+	const long ticks = ticks_ptr ? boost::json::value_to<long>(*ticks_ptr) : 1;
 	const auto run_result = service_->runSchema(handle, ticks);
-	return success_response({{"run_id", run_result.run_id}, {"accepted", run_result.accepted}, {"mode", mode}}, id);
+	object result;
+	result["run_id"] = run_result.run_id;
+	result["accepted"] = run_result.accepted;
+	result["mode"] = mode;
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_pause(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_pause(const value& params, const value& id) -> value
 {
-	const std::string run_id = params.at("run_id").get<std::string>();
+	const std::string run_id = boost::json::value_to<std::string>(params.as_object().at("run_id"));
 	service_->pauseRun(run_id);
-	return success_response({{"run_id", run_id}, {"paused", true}}, id);
+	object result;
+	result["run_id"] = run_id;
+	result["paused"] = true;
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_resume(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_resume(const value& params, const value& id) -> value
 {
-	const std::string run_id = params.at("run_id").get<std::string>();
+	const std::string run_id = boost::json::value_to<std::string>(params.as_object().at("run_id"));
 	service_->resumeRun(run_id);
-	return success_response({{"run_id", run_id}, {"resumed", true}}, id);
+	object result;
+	result["run_id"] = run_id;
+	result["resumed"] = true;
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_stop(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_stop(const value& params, const value& id) -> value
 {
-	const std::string run_id = params.at("run_id").get<std::string>();
+	const std::string run_id = boost::json::value_to<std::string>(params.as_object().at("run_id"));
 	service_->stopRun(run_id);
-	return success_response({{"run_id", run_id}, {"stopped", true}}, id);
+	object result;
+	result["run_id"] = run_id;
+	result["stopped"] = true;
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_reset(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_reset(const value& params, const value& id) -> value
 {
-	const std::string handle = params.at("schema_handle").get<std::string>();
+	const std::string handle = boost::json::value_to<std::string>(params.as_object().at("schema_handle"));
 	service_->resetSchema(handle);
-	return success_response({{"schema_handle", handle}, {"reset", true}}, id);
+	object result;
+	result["schema_handle"] = handle;
+	result["reset"] = true;
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::handle_schema_unload(const nlohmann::json& params, const nlohmann::json& id) -> nlohmann::json
+auto JsonRpcDispatcher::handle_schema_unload(const value& params, const value& id) -> value
 {
-	const std::string handle = params.at("schema_handle").get<std::string>();
+	const std::string handle = boost::json::value_to<std::string>(params.as_object().at("schema_handle"));
 	service_->unloadSchema(handle);
-	return success_response({{"schema_handle", handle}, {"unloaded", true}}, id);
+	object result;
+	result["schema_handle"] = handle;
+	result["unloaded"] = true;
+	return success_response(result, id);
 }
 
-auto JsonRpcDispatcher::error_response(int error_code, const std::string& message, const nlohmann::json& id)
-	-> nlohmann::json
+auto JsonRpcDispatcher::error_response(int error_code, const std::string& message, const value& id)
+	-> value
 {
-	return nlohmann::json{{"jsonrpc", "2.0"}, {"id", id}, {"error", {{"code", error_code}, {"message", message}}}};
+	return RpcEnvelope::error(id, error_code, message);
 }
 
-auto JsonRpcDispatcher::success_response(const nlohmann::json& result, const nlohmann::json& id)
-	-> nlohmann::json
+auto JsonRpcDispatcher::success_response(const value& result, const value& id)
+	-> value
 {
-	return nlohmann::json{{"jsonrpc", "2.0"}, {"id", id}, {"result", result}};
+	return RpcEnvelope::success(id, result);
 }
 
 } // namespace s7

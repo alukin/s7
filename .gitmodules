@@ -1,6 +1,3 @@
-[submodule "s7pp/external/json"]
-	path = s7pp/external/json
-	url = https://github.com/nlohmann/json.git
 [submodule "s7pp/external/QSchematic"]
 	path = s7pp/external/QSchematic
 	url = https://github.com/simulton/QSchematic.git

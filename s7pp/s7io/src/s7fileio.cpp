@@ -9,8 +9,9 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <iterator>
 #include <limits>
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
 #include <stdexcept>
 
 namespace s7 {
@@ -154,7 +155,7 @@ void writeSidecarJson(const std::filesystem::path& base,
     std::filesystem::path sidecar = base;
     sidecar.replace_extension(extension);
 
-    nlohmann::json j;
+    boost::json::object j;
     j["format"] = "s7.io.file.v1";
     j["domain"] = signalDomainToString(header.domain);
     j["scalar_encoding"] = scalarEncodingToString(header.encoding);
@@ -164,7 +165,7 @@ void writeSidecarJson(const std::filesystem::path& base,
     j["num_samples"] = header.num_samples;
     if (!header.metadata_json.empty()) {
         try {
-            j["metadata"] = nlohmann::json::parse(header.metadata_json);
+            j["metadata"] = boost::json::parse(header.metadata_json);
         } catch (...) {
             j["metadata_raw"] = header.metadata_json;
         }
@@ -172,7 +173,7 @@ void writeSidecarJson(const std::filesystem::path& base,
 
     std::ofstream out(sidecar);
     if (!out) throw std::runtime_error("s7fileio: cannot write sidecar file: " + sidecar.string());
-    out << j.dump(2) << '\n';
+    out << boost::json::serialize(j) << '\n';
 }
 
 auto maybeReadSidecarMetadata(const std::filesystem::path& base,
@@ -184,10 +185,17 @@ auto maybeReadSidecarMetadata(const std::filesystem::path& base,
 
     std::ifstream in(sidecar);
     if (!in) return "{}";
-    nlohmann::json j;
-    in >> j;
-    if (j.contains("metadata")) return j["metadata"].dump();
-    if (j.contains("metadata_raw") && j["metadata_raw"].is_string()) return j["metadata_raw"].get<std::string>();
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (text.empty()) return "{}";
+
+    const auto j = boost::json::parse(text);
+    if (!j.is_object()) return "{}";
+
+    const auto& obj = j.as_object();
+    if (const auto* metadata = obj.if_contains("metadata")) return boost::json::serialize(*metadata);
+    if (const auto* metadata_raw = obj.if_contains("metadata_raw"); metadata_raw && metadata_raw->is_string()) {
+        return boost::json::value_to<std::string>(*metadata_raw);
+    }
     return "{}";
 }
 

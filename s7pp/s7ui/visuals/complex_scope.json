@@ -1,0 +1,11 @@
+{
+  "type": "ComplexScopeSink",
+  "display_name": "Complex Scope Sink",
+  "category": "Visual",
+  "shape": "hex",
+  "description": "Visual complex oscilloscope sink",
+  "node_style": {
+    "color": "#8f5ab3"
+  }
+}
+

@@ -4,6 +4,7 @@
 //
 
 #include "s7factory.hpp"
+#include "s7probe.hpp"
 #include "s7stdlib.hpp"
 
 #include <algorithm>
@@ -15,7 +16,15 @@ namespace s7 {
 
 void registerBuiltins(ElementRegistry& registry)
 {
-    registry.registerType("Constant",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "Constant",
+            .category             = "Sources",
+            .description          = "Emits a fixed scalar value every tick",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+            .default_params       = {{"value", Real{0.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
             const auto val = getParam(params, "value", ParamValue{Real{0.0}});
@@ -24,7 +33,15 @@ void registerBuiltins(ElementRegistry& registry)
             return std::make_shared<Constant<Complex>>(id, std::get<Complex>(val));
         });
 
-    registry.registerType("Integrator",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "Integrator",
+            .category             = "Math",
+            .description          = "Stateful accumulator: state(n+1) = state(n) + input(n)",
+            .default_input_count  = 1,
+            .default_output_count = 1,
+            .default_params       = {{"init_state", Real{0.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
             const auto init = getParam(params, "init_state", ParamValue{Real{0.0}});
@@ -33,7 +50,16 @@ void registerBuiltins(ElementRegistry& registry)
             return std::make_shared<Integrator<Complex>>(id, std::get<Complex>(init));
         });
 
-    registry.registerType("Sum",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "Sum",
+            .category             = "Math",
+            .description          = "Weighted sum of N real inputs",
+            .default_input_count  = 2,
+            .default_output_count = 1,
+            .inputs_configurable  = true,
+            .default_params       = {{"w0", Real{1.0}}, {"w1", Real{1.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
             std::vector<ParamValue> raw_weights;
@@ -100,19 +126,48 @@ void registerBuiltins(ElementRegistry& registry)
             return std::make_shared<Sum<Real>>(id, std::move(w));
         });
 
-    registry.registerType("ToComplex",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ToComplex",
+            .category             = "Math",
+            .description          = "Two real inputs (Re, Im) → one Complex output",
+            .default_input_count  = 2,
+            .default_output_count = 1,
+        },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<ToComplex>(id); });
 
-    registry.registerType("ToReals",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ToReals",
+            .category             = "Math",
+            .description          = "One Complex input → two Real outputs (Re, Im)",
+            .default_input_count  = 1,
+            .default_output_count = 2,
+        },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<ToReals>(id); });
 
-    registry.registerType("Vca",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "Vca",
+            .category             = "Math",
+            .description          = "Voltage controlled amplifier: out = signal * gain",
+            .default_input_count  = 2,
+            .default_output_count = 1,
+        },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<Vca>(id); });
 
-    registry.registerType("FIRFilter",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "FIRFilter",
+            .category             = "Filters",
+            .description          = "FIR filter: y[k] = sum_i b[i]*x[k-i]",
+            .default_input_count  = 1,
+            .default_output_count = 1,
+            .default_params       = {{"b0", Real{1.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
             std::map<std::size_t, Real> indexed_b;
@@ -122,40 +177,18 @@ void registerBuiltins(ElementRegistry& registry)
 
             for (const auto& [key, value] : params)
             {
-                if (key.size() < 2 || (key.front() != 'b' && key.front() != 'x'))
-                {
-                    continue;
-                }
+                if (key.size() < 2 || (key.front() != 'b' && key.front() != 'x')) continue;
                 bool numeric = true;
                 for (std::size_t i = 1; i < key.size(); ++i)
-                {
-                    if (!std::isdigit(static_cast<unsigned char>(key[i])))
-                    {
-                        numeric = false;
-                        break;
-                    }
-                }
-                if (!numeric)
-                {
-                    continue;
-                }
+                    if (!std::isdigit(static_cast<unsigned char>(key[i]))) { numeric = false; break; }
+                if (!numeric) continue;
 
                 const auto idx = static_cast<std::size_t>(std::stoul(key.substr(1)));
                 if (!std::holds_alternative<Real>(value))
-                {
                     throw std::runtime_error("FIRFilter parameter '" + key + "' must be Real");
-                }
 
-                if (key.front() == 'b')
-                {
-                    indexed_b[idx] = std::get<Real>(value);
-                    if (idx > max_b) max_b = idx;
-                }
-                else if (key.front() == 'x')
-                {
-                    indexed_x[idx] = std::get<Real>(value);
-                    if (idx > max_x) max_x = idx;
-                }
+                if (key.front() == 'b') { indexed_b[idx] = std::get<Real>(value); if (idx > max_b) max_b = idx; }
+                else { indexed_x[idx] = std::get<Real>(value); if (idx > max_x) max_x = idx; }
             }
 
             std::vector<Real> b;
@@ -165,17 +198,11 @@ void registerBuiltins(ElementRegistry& registry)
                 for (std::size_t i = 0; i <= max_b; ++i)
                 {
                     const auto it = indexed_b.find(i);
-                    if (it == indexed_b.end())
-                    {
-                        throw std::runtime_error("FIRFilter coefficients must be contiguous from b0");
-                    }
+                    if (it == indexed_b.end()) throw std::runtime_error("FIRFilter coefficients must be contiguous from b0");
                     b.push_back(it->second);
                 }
             }
-            else
-            {
-                b = {1.0};
-            }
+            else { b = {1.0}; }
 
             std::vector<Real> x_init;
             if (!indexed_x.empty())
@@ -184,196 +211,195 @@ void registerBuiltins(ElementRegistry& registry)
                 for (std::size_t i = 0; i <= max_x; ++i)
                 {
                     const auto it = indexed_x.find(i);
-                    if (it == indexed_x.end())
-                    {
-                        throw std::runtime_error("FIRFilter initial state must be contiguous from x0");
-                    }
+                    if (it == indexed_x.end()) throw std::runtime_error("FIRFilter initial state must be contiguous from x0");
                     x_init.push_back(it->second);
                 }
             }
-
             FIRFilter::InitState init_state;
             init_state.x = std::move(x_init);
             return std::make_shared<FIRFilter>(id, std::move(b), std::move(init_state));
         });
 
-    registry.registerType("IIRFilter",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "IIRFilter",
+            .category             = "Filters",
+            .description          = "IIR filter: y[k] = sum_i b[i]*x[k-i] - sum_j a[j]*y[k-j-1]",
+            .default_input_count  = 1,
+            .default_output_count = 1,
+            .default_params       = {{"b0", Real{1.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
-            std::map<std::size_t, Real> indexed_b;
-            std::size_t max_b = 0;
-            std::map<std::size_t, Real> indexed_a;
-            std::size_t max_a = 0;
-            std::map<std::size_t, Real> indexed_x;
-            std::size_t max_x = 0;
-            std::map<std::size_t, Real> indexed_y;
-            std::size_t max_y = 0;
+            std::map<std::size_t, Real> indexed_b, indexed_a, indexed_x, indexed_y;
+            std::size_t max_b = 0, max_a = 0, max_x = 0, max_y = 0;
 
             for (const auto& [key, value] : params)
             {
-                if (key.size() < 2)
-                {
-                    continue;
-                }
-
+                if (key.size() < 2) continue;
                 const auto prefix = key.front();
-                if (prefix != 'a' && prefix != 'b' && prefix != 'x' && prefix != 'y')
-                {
-                    continue;
-                }
-
+                if (prefix != 'a' && prefix != 'b' && prefix != 'x' && prefix != 'y') continue;
                 bool numeric = true;
                 for (std::size_t i = 1; i < key.size(); ++i)
-                {
-                    if (!std::isdigit(static_cast<unsigned char>(key[i])))
-                    {
-                        numeric = false;
-                        break;
-                    }
-                }
-                if (!numeric)
-                {
-                    continue;
-                }
-
+                    if (!std::isdigit(static_cast<unsigned char>(key[i]))) { numeric = false; break; }
+                if (!numeric) continue;
                 if (!std::holds_alternative<Real>(value))
-                {
                     throw std::runtime_error("IIRFilter coefficient '" + key + "' must be Real");
-                }
 
                 const auto idx = static_cast<std::size_t>(std::stoul(key.substr(1)));
-                if (prefix == 'b')
-                {
-                    indexed_b[idx] = std::get<Real>(value);
-                    if (idx > max_b) max_b = idx;
-                }
+                if (prefix == 'b') { indexed_b[idx] = std::get<Real>(value); if (idx > max_b) max_b = idx; }
                 else if (prefix == 'a')
                 {
-                    if (idx == 0)
-                    {
-                        throw std::runtime_error("IIRFilter uses a1,a2,... (a0 is assumed to be 1)");
-                    }
-                    indexed_a[idx] = std::get<Real>(value);
-                    if (idx > max_a) max_a = idx;
+                    if (idx == 0) throw std::runtime_error("IIRFilter uses a1,a2,... (a0 is assumed to be 1)");
+                    indexed_a[idx] = std::get<Real>(value); if (idx > max_a) max_a = idx;
                 }
-                else if (prefix == 'x')
-                {
-                    indexed_x[idx] = std::get<Real>(value);
-                    if (idx > max_x) max_x = idx;
-                }
-                else if (prefix == 'y')
-                {
-                    indexed_y[idx] = std::get<Real>(value);
-                    if (idx > max_y) max_y = idx;
-                }
+                else if (prefix == 'x') { indexed_x[idx] = std::get<Real>(value); if (idx > max_x) max_x = idx; }
+                else { indexed_y[idx] = std::get<Real>(value); if (idx > max_y) max_y = idx; }
             }
 
-            std::vector<Real> b;
-            if (!indexed_b.empty())
-            {
-                b.reserve(max_b + 1);
-                for (std::size_t i = 0; i <= max_b; ++i)
-                {
-                    const auto it = indexed_b.find(i);
-                    if (it == indexed_b.end())
-                    {
-                        throw std::runtime_error("IIRFilter coefficients must be contiguous from b0");
-                    }
-                    b.push_back(it->second);
+            auto extractVec = [](const std::map<std::size_t, Real>& m, std::size_t mx, const char* name) {
+                std::vector<Real> v;
+                if (m.empty()) { v = {1.0}; return v; }
+                v.reserve(mx + 1);
+                for (std::size_t i = 0; i <= mx; ++i) {
+                    auto it = m.find(i);
+                    if (it == m.end()) throw std::runtime_error(std::string(name) + " must be contiguous from 0");
+                    v.push_back(it->second);
                 }
-            }
-            else
-            {
-                b = {1.0};
-            }
+                return v;
+            };
+            auto extractVecFrom1 = [](const std::map<std::size_t, Real>& m, std::size_t mx) {
+                std::vector<Real> v;
+                if (m.empty()) return v;
+                v.reserve(mx);
+                for (std::size_t i = 1; i <= mx; ++i) {
+                    auto it = m.find(i);
+                    if (it == m.end()) throw std::runtime_error("IIRFilter feedback coefficients must be contiguous from a1");
+                    v.push_back(it->second);
+                }
+                return v;
+            };
 
-            std::vector<Real> a;
-            if (!indexed_a.empty())
-            {
-                a.reserve(max_a);
-                for (std::size_t i = 1; i <= max_a; ++i)
-                {
-                    const auto it = indexed_a.find(i);
-                    if (it == indexed_a.end())
-                    {
-                        throw std::runtime_error("IIRFilter feedback coefficients must be contiguous from a1");
-                    }
-                    a.push_back(it->second);
-                }
-            }
-
-            std::vector<Real> x_init;
-            if (!indexed_x.empty())
-            {
-                x_init.reserve(max_x + 1);
-                for (std::size_t i = 0; i <= max_x; ++i)
-                {
-                    const auto it = indexed_x.find(i);
-                    if (it == indexed_x.end())
-                    {
-                        throw std::runtime_error("IIRFilter x-state must be contiguous from x0");
-                    }
-                    x_init.push_back(it->second);
-                }
-            }
-
-            std::vector<Real> y_init;
-            if (!indexed_y.empty())
-            {
-                y_init.reserve(max_y + 1);
-                for (std::size_t i = 0; i <= max_y; ++i)
-                {
-                    const auto it = indexed_y.find(i);
-                    if (it == indexed_y.end())
-                    {
-                        throw std::runtime_error("IIRFilter y-state must be contiguous from y0");
-                    }
-                    y_init.push_back(it->second);
-                }
-            }
+            auto b = extractVec(indexed_b, max_b, "IIRFilter b");
+            auto a = extractVecFrom1(indexed_a, max_a);
 
             IIRFilter::InitState init_state;
-            init_state.x = std::move(x_init);
-            init_state.y = std::move(y_init);
+            if (!indexed_x.empty())
+            {
+                init_state.x.reserve(max_x + 1);
+                for (std::size_t i = 0; i <= max_x; ++i)
+                    init_state.x.push_back(indexed_x.at(i));
+            }
+            if (!indexed_y.empty())
+            {
+                init_state.y.reserve(max_y + 1);
+                for (std::size_t i = 0; i <= max_y; ++i)
+                    init_state.y.push_back(indexed_y.at(i));
+            }
             return std::make_shared<IIRFilter>(id, std::move(b), std::move(a), std::move(init_state));
         });
 
-    registry.registerType("DigitalOscillator",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "DigitalOscillator",
+            .category             = "Sources",
+            .description          = "Autonomous digital sinusoidal oscillator",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+            .default_params       = {{"frequency_hz", Real{440.0}}, {"amplitude", Real{1.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
             DigitalOscillator::Params cfg;
             cfg.frequency_hz = getParamAs<Real>(params, "frequency_hz", cfg.frequency_hz);
-            cfg.amplitude = getParamAs<Real>(params, "amplitude", cfg.amplitude);
-            cfg.phase_rad = getParamAs<Real>(params, "phase_rad", cfg.phase_rad);
-            cfg.radius = getParamAs<Real>(params, "radius", cfg.radius);
+            cfg.amplitude    = getParamAs<Real>(params, "amplitude",    cfg.amplitude);
+            cfg.phase_rad    = getParamAs<Real>(params, "phase_rad",    cfg.phase_rad);
+            cfg.radius       = getParamAs<Real>(params, "radius",       cfg.radius);
             return std::make_shared<DigitalOscillator>(id, cfg);
         });
 
-    registry.registerType("EnergyDifference",
-        [](const std::string& id, const ParamMap&) -> ElementPtr
-        { return std::make_shared<EnergyDifference>(id); });
-
-    registry.registerType("Vco",
-        [](const std::string& id, const ParamMap& params) -> ElementPtr
-        {
-            Vco::Params cfg;
-            cfg.base_hz = getParamAs<Real>(params, "base_hz", cfg.base_hz);
-            cfg.sensitivity_hz_per_v = getParamAs<Real>(params, "sensitivity_hz_per_v", cfg.sensitivity_hz_per_v);
-            cfg.amplitude = getParamAs<Real>(params, "amplitude", cfg.amplitude);
-            cfg.initial_phase_rad = getParamAs<Real>(params, "initial_phase_rad", cfg.initial_phase_rad);
-            return std::make_shared<Vco>(id, cfg);
-        });
-
-    registry.registerType("HarmonicOscillator",
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "HarmonicOscillator",
+            .category             = "Sources",
+            .description          = "Sinusoidal source: amplitude*sin(2π*f*n*dt + φ)",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+            .default_params       = {{"frequency_hz", Real{1.0}}, {"amplitude", Real{1.0}}}
+        },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
             HarmonicOscillator::Params cfg;
             cfg.frequency_hz = getParamAs<Real>(params, "frequency_hz", cfg.frequency_hz);
-            cfg.phase_rad = getParamAs<Real>(params, "phase_rad", cfg.phase_rad);
-            cfg.amplitude = getParamAs<Real>(params, "amplitude", cfg.amplitude);
+            cfg.phase_rad    = getParamAs<Real>(params, "phase_rad",    cfg.phase_rad);
+            cfg.amplitude    = getParamAs<Real>(params, "amplitude",    cfg.amplitude);
             return std::make_shared<HarmonicOscillator>(id, cfg);
+        });
+
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "EnergyDifference",
+            .category             = "Math",
+            .description          = "Accumulated energy of signal difference: E += (u1-u2)²·dt",
+            .default_input_count  = 2,
+            .default_output_count = 1,
+        },
+        [](const std::string& id, const ParamMap&) -> ElementPtr
+        { return std::make_shared<EnergyDifference>(id); });
+
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "Vco",
+            .category             = "Sources",
+            .description          = "Voltage-controlled oscillator (sine): f = base_hz + k*cv",
+            .default_input_count  = 1,
+            .default_output_count = 1,
+            .default_params       = {{"base_hz", Real{440.0}}}
+        },
+        [](const std::string& id, const ParamMap& params) -> ElementPtr
+        {
+            Vco::Params cfg;
+            cfg.base_hz               = getParamAs<Real>(params, "base_hz",               cfg.base_hz);
+            cfg.sensitivity_hz_per_v  = getParamAs<Real>(params, "sensitivity_hz_per_v",  cfg.sensitivity_hz_per_v);
+            cfg.amplitude             = getParamAs<Real>(params, "amplitude",             cfg.amplitude);
+            cfg.initial_phase_rad     = getParamAs<Real>(params, "initial_phase_rad",     cfg.initial_phase_rad);
+            return std::make_shared<Vco>(id, cfg);
+        });
+}
+
+void registerProbe(ElementRegistry& registry)
+{
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "Probe",
+            .category             = "Internal",
+            .description          = "Data-capture probe — used internally for visual sinks",
+            .default_input_count  = 2,
+            .default_output_count = 0,
+            .inputs_configurable  = true,
+            .hidden               = true,   // not shown in the GUI palette
+        },
+        [](const std::string& id, const ParamMap& params) -> ElementPtr
+        {
+            const int channels = static_cast<int>(getParamAs<Real>(params, "channels", Real{2.0}));
+            return std::make_shared<Probe>(id, std::max(1, channels));
+        });
+
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ComplexProbe",
+            .category             = "Internal",
+            .description          = "Complex data-capture probe",
+            .default_input_count  = 2,
+            .default_output_count = 0,
+            .inputs_configurable  = true,
+            .hidden               = true,
+        },
+        [](const std::string& id, const ParamMap& params) -> ElementPtr
+        {
+            const int channels = static_cast<int>(getParamAs<Real>(params, "channels", Real{2.0}));
+            return std::make_shared<ComplexProbe>(id, std::max(1, channels));
         });
 }
 
 } // namespace s7
-

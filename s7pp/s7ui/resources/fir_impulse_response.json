@@ -1,0 +1,32 @@
+{
+  "id": "fir_impulse_response",
+  "dt": 1.0,
+  "nodes": [
+    {
+      "id": "impulse",
+      "type": "ImpulseSource",
+      "params": {
+        "amplitude": 1.0
+      }
+    },
+    {
+      "id": "fir",
+      "type": "FIRFilter",
+      "params": {
+        "b0": 0.25,
+        "b1": 0.5,
+        "b2": 0.25
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "n_impulse_to_fir",
+      "connections": [
+        { "node": "impulse", "connector": "out0" },
+        { "node": "fir", "connector": "in0" }
+      ]
+    }
+  ]
+}
+

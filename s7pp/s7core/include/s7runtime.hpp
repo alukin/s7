@@ -16,13 +16,16 @@
 #include "s7.hpp"
 #include "s7events.hpp"
 
+#include <atomic>
+#include <chrono>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
-#include <nlohmann/json.hpp>
 
 namespace s7 {
 
@@ -142,6 +145,16 @@ private:
     std::string active_run_id_;  // Single active run constraint
     mutable std::mutex state_mutex_;
     EventBus event_bus_;
+
+    // Async run support
+    std::atomic<bool> pause_requested_{false};
+    std::atomic<bool> stop_requested_{false};
+    std::atomic<long> current_tick_count_{0};
+    std::future<void> run_future_;
+
+    // Uptime tracking
+    std::chrono::steady_clock::time_point startup_time_ =
+        std::chrono::steady_clock::now();
 
     // Internal helpers
     std::string generateSchemaHandle();

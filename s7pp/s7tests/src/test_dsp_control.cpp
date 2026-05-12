@@ -1,6 +1,7 @@
 #include "s7.hpp"
 #include "s7netio.hpp"
 #include "s7stdlib.hpp"
+#include "s7thread_pool.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -224,6 +225,38 @@ void testNetIoRealLoopback()
     require(nearlyEqual(sample, 3.25, 1e-12), "s7netio real loopback mismatch");
 }
 
+void testThreadPoolRunAgreement()
+{
+    auto build_test_schema = []() {
+        auto schema = std::make_shared<Schema>(1.0);
+        auto c1 = std::make_shared<Constant<Real>>(2.0);
+        auto c2 = std::make_shared<Constant<Real>>(-0.5);
+        auto sum = std::make_shared<Sum<Real>>(std::vector<Real>{1.0, 1.0});
+        auto integ = std::make_shared<Integrator<Real>>(0.0);
+
+        schema->insert(c1);
+        schema->insert(c2);
+        schema->insert(sum);
+        schema->insert(integ);
+        schema->connect(c1, 0, sum, 0);
+        schema->connect(c2, 0, sum, 1);
+        schema->connect(sum, 0, integ, 0);
+        return std::pair{schema, integ};
+    };
+
+    auto [seq_schema, seq_out] = build_test_schema();
+    auto [par_schema, par_out] = build_test_schema();
+
+    seq_schema->run(1000);
+
+    ThreadPool pool(4);
+    par_schema->runWithThreadPool(1000, pool, true);
+
+    const auto seq_y = readRealOutput(seq_out);
+    const auto par_y = readRealOutput(par_out);
+    require(nearlyEqual(seq_y, par_y, 1e-12), "ThreadPool run mismatch vs sequential run");
+}
+
 } // namespace s7tests
 
 auto main() -> int
@@ -235,6 +268,7 @@ auto main() -> int
         s7tests::testOscillatorAgreement();
         s7tests::testClassicalOscillator2Integrators();
         s7tests::testNetIoRealLoopback();
+        s7tests::testThreadPoolRunAgreement();
         std::cout << "s7tests: all DSP/control examples passed\n";
         return 0;
     }

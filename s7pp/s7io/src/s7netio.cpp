@@ -6,7 +6,8 @@
 #include <deque>
 #include <memory>
 #include <mutex>
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <unordered_map>
@@ -27,7 +28,7 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 namespace websocket = beast::websocket;
 using tcp = asio::ip::tcp;
-using json = nlohmann::json;
+using json = boost::json::value;
 
 struct EndpointUri {
     std::string scheme;
@@ -36,6 +37,95 @@ struct EndpointUri {
     std::string path;
     std::string authority;
     std::string hostport_key;
+};
+
+struct WsFrameRequest {
+    std::string op;
+    std::vector<double> sample;
+
+    static auto fromJson(const json& payload) -> WsFrameRequest
+    {
+        if (!payload.is_object()) {
+            throw std::runtime_error("request must be an object");
+        }
+        const auto& obj = payload.as_object();
+        WsFrameRequest request;
+        if (const auto* op = obj.if_contains("op"); op && op->is_string()) {
+            request.op = boost::json::value_to<std::string>(*op);
+        }
+        if (const auto* sample = obj.if_contains("sample")) {
+            if (!sample->is_array()) {
+                throw std::runtime_error("missing array field 'sample'");
+            }
+            request.sample = boost::json::value_to<std::vector<double>>(*sample);
+        }
+        return request;
+    }
+
+    auto toJson() const -> json
+    {
+        boost::json::object obj;
+        obj["op"] = op;
+        if (!sample.empty()) {
+            obj["sample"] = boost::json::value_from(sample);
+        }
+        return obj;
+    }
+};
+
+struct WsFrameResponse {
+    bool ok = true;
+    std::optional<std::string> error;
+    std::optional<bool> dropped;
+    std::optional<bool> empty;
+    std::optional<std::vector<double>> sample;
+
+    static auto errorResponse(const std::string& message) -> WsFrameResponse
+    {
+        WsFrameResponse response;
+        response.ok = false;
+        response.error = message;
+        return response;
+    }
+
+    auto toJson() const -> json
+    {
+        boost::json::object obj;
+        obj["ok"] = ok;
+        if (error.has_value()) obj["error"] = *error;
+        if (dropped.has_value()) obj["dropped"] = *dropped;
+        if (empty.has_value()) obj["empty"] = *empty;
+        if (sample.has_value()) obj["sample"] = boost::json::value_from(*sample);
+        return obj;
+    }
+
+    static auto fromJson(const json& payload, const std::string& fallbackError) -> WsFrameResponse
+    {
+        if (!payload.is_object()) {
+            return errorResponse(fallbackError);
+        }
+        const auto& obj = payload.as_object();
+        WsFrameResponse response;
+        if (const auto* okVal = obj.if_contains("ok"); okVal && okVal->is_bool()) {
+            response.ok = okVal->as_bool();
+        }
+        if (const auto* err = obj.if_contains("error"); err && err->is_string()) {
+            response.error = boost::json::value_to<std::string>(*err);
+        }
+        if (const auto* droppedVal = obj.if_contains("dropped"); droppedVal && droppedVal->is_bool()) {
+            response.dropped = droppedVal->as_bool();
+        }
+        if (const auto* emptyVal = obj.if_contains("empty"); emptyVal && emptyVal->is_bool()) {
+            response.empty = emptyVal->as_bool();
+        }
+        if (const auto* sampleVal = obj.if_contains("sample"); sampleVal && sampleVal->is_array()) {
+            response.sample = boost::json::value_to<std::vector<double>>(*sampleVal);
+        }
+        if (!response.ok && !response.error.has_value()) {
+            response.error = fallbackError;
+        }
+        return response;
+    }
 };
 
 auto normalizeScheme(std::string scheme) -> std::string
@@ -213,41 +303,53 @@ public:
     }
 
 private:
-    json makeError(const std::string& message) const
+    auto makeError(const std::string& message) const -> WsFrameResponse
     {
-        return json{{"ok", false}, {"error", message}};
+        return WsFrameResponse::errorResponse(message);
     }
 
-    json handlePush(const std::string& path, const json& request)
+    auto handlePush(const std::string& path, const WsFrameRequest& request) -> WsFrameResponse
     {
-        if (!request.contains("sample") || !request["sample"].is_array()) {
+        if (request.sample.empty()) {
             return makeError("missing array field 'sample'");
         }
-        auto sample = request["sample"].get<std::vector<double>>();
         bool dropped = false;
-        push(path, std::move(sample), dropped);
-        return json{{"ok", true}, {"dropped", dropped}};
+        push(path, request.sample, dropped);
+        WsFrameResponse response;
+        response.ok = true;
+        response.dropped = dropped;
+        return response;
     }
 
-    json handlePull(const std::string& path)
+    auto handlePull(const std::string& path) -> WsFrameResponse
     {
-        std::vector<double> sample;
-        if (!pop(path, sample)) {
-            return json{{"ok", true}, {"empty", true}};
+        std::vector<double> frame;
+        if (!pop(path, frame)) {
+            WsFrameResponse response;
+            response.ok = true;
+            response.empty = true;
+            return response;
         }
-        return json{{"ok", true}, {"sample", sample}};
+        WsFrameResponse response;
+        response.ok = true;
+        response.sample = std::move(frame);
+        return response;
     }
 
     json dispatch(const std::string& path, const json& request)
     {
-        const std::string op = request.value("op", std::string{});
-        if (op == "push") {
-            return handlePush(path, request);
+        try {
+            const auto frame = WsFrameRequest::fromJson(request);
+            if (frame.op == "push") {
+                return handlePush(path, frame).toJson();
+            }
+            if (frame.op == "pull") {
+                return handlePull(path).toJson();
+            }
+            return makeError("unknown websocket op: " + frame.op).toJson();
+        } catch (const std::exception& ex) {
+            return makeError(ex.what()).toJson();
         }
-        if (op == "pull") {
-            return handlePull(path);
-        }
-        return makeError("unknown websocket op: " + op);
     }
 
     void session(tcp::socket socket)
@@ -273,10 +375,10 @@ private:
                 beast::flat_buffer msg;
                 ws.read(msg);
                 const auto payload = beast::buffers_to_string(msg.data());
-                json request = json::parse(payload);
+                json request = boost::json::parse(payload);
                 json response = dispatch(target, request);
                 ws.text(true);
-                ws.write(asio::buffer(response.dump()));
+                ws.write(asio::buffer(boost::json::serialize(response)));
             }
         } catch (const std::exception&) {
             return;
@@ -333,11 +435,11 @@ public:
     {
         std::lock_guard<std::mutex> lock(mu_);
         ws_.text(true);
-        const auto payload = request.dump();
+        const auto payload = boost::json::serialize(request);
         ws_.write(asio::buffer(payload));
         beast::flat_buffer buffer;
         ws_.read(buffer);
-        return json::parse(beast::buffers_to_string(buffer.data()));
+        return boost::json::parse(beast::buffers_to_string(buffer.data()));
     }
 
 private:
@@ -464,14 +566,18 @@ void RealNetSink::tick()
         sample.push_back(in->value());
     }
 
-    const json request{{"op", "push"}, {"sample", sample}};
-    const auto response = impl_->handle_->client->transact(request);
-    if (!response.value("ok", false)) {
-        throw std::runtime_error(response.value("error", std::string{"s7netio websocket push failed"}));
+    WsFrameRequest request;
+    request.op = "push";
+    request.sample = std::move(sample);
+    const auto response = WsFrameResponse::fromJson(
+        impl_->handle_->client->transact(request.toJson()),
+        "s7netio websocket push failed");
+    if (!response.ok) {
+        throw std::runtime_error(response.error.value_or("s7netio websocket push failed"));
     }
 
     ++pushed_samples_;
-    if (response.value("dropped", false)) {
+    if (response.dropped.value_or(false)) {
         ++dropped_samples_;
     }
 }
@@ -489,12 +595,16 @@ RealNetSource::~RealNetSource() = default;
 
 void RealNetSource::tick()
 {
-    const auto response = impl_->handle_->client->transact(json{{"op", "pull"}});
-    if (!response.value("ok", false)) {
-        throw std::runtime_error(response.value("error", std::string{"s7netio websocket pull failed"}));
+    WsFrameRequest request;
+    request.op = "pull";
+    const auto response = WsFrameResponse::fromJson(
+        impl_->handle_->client->transact(request.toJson()),
+        "s7netio websocket pull failed");
+    if (!response.ok) {
+        throw std::runtime_error(response.error.value_or("s7netio websocket pull failed"));
     }
 
-    if (response.value("empty", false)) {
+    if (response.empty.value_or(false)) {
         ++underruns_;
         if (impl_->cfg_.zero_on_underrun) {
             std::fill(values_.begin(), values_.end(), 0.0);
@@ -502,7 +612,7 @@ void RealNetSource::tick()
         return;
     }
 
-    auto sample = response.at("sample").get<std::vector<double>>();
+    auto sample = response.sample.value_or(std::vector<double>{});
     if (sample.size() != values_.size()) {
         throw std::runtime_error("s7netio: received sample width mismatch");
     }
@@ -535,14 +645,18 @@ void ComplexNetSink::tick()
         sample.push_back(v.imag());
     }
 
-    const json request{{"op", "push"}, {"sample", sample}};
-    const auto response = impl_->handle_->client->transact(request);
-    if (!response.value("ok", false)) {
-        throw std::runtime_error(response.value("error", std::string{"s7netio websocket push failed"}));
+    WsFrameRequest request;
+    request.op = "push";
+    request.sample = std::move(sample);
+    const auto response = WsFrameResponse::fromJson(
+        impl_->handle_->client->transact(request.toJson()),
+        "s7netio websocket push failed");
+    if (!response.ok) {
+        throw std::runtime_error(response.error.value_or("s7netio websocket push failed"));
     }
 
     ++pushed_samples_;
-    if (response.value("dropped", false)) {
+    if (response.dropped.value_or(false)) {
         ++dropped_samples_;
     }
 }
@@ -560,12 +674,16 @@ ComplexNetSource::~ComplexNetSource() = default;
 
 void ComplexNetSource::tick()
 {
-    const auto response = impl_->handle_->client->transact(json{{"op", "pull"}});
-    if (!response.value("ok", false)) {
-        throw std::runtime_error(response.value("error", std::string{"s7netio websocket pull failed"}));
+    WsFrameRequest request;
+    request.op = "pull";
+    const auto response = WsFrameResponse::fromJson(
+        impl_->handle_->client->transact(request.toJson()),
+        "s7netio websocket pull failed");
+    if (!response.ok) {
+        throw std::runtime_error(response.error.value_or("s7netio websocket pull failed"));
     }
 
-    if (response.value("empty", false)) {
+    if (response.empty.value_or(false)) {
         ++underruns_;
         if (impl_->cfg_.zero_on_underrun) {
             std::fill(values_.begin(), values_.end(), Complex{0.0, 0.0});
@@ -573,7 +691,7 @@ void ComplexNetSource::tick()
         return;
     }
 
-    auto sample = response.at("sample").get<std::vector<double>>();
+    auto sample = response.sample.value_or(std::vector<double>{});
     if (sample.size() != values_.size() * 2u) {
         throw std::runtime_error("s7netio: received complex sample width mismatch");
     }

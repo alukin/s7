@@ -1,0 +1,59 @@
+{
+  "id": "thread_pool_run_agreement",
+  "dt": 1.0,
+  "nodes": [
+    {
+      "id": "c1",
+      "type": "Constant",
+      "params": {
+        "value": 2.0
+      }
+    },
+    {
+      "id": "c2",
+      "type": "Constant",
+      "params": {
+        "value": -0.5
+      }
+    },
+    {
+      "id": "sum",
+      "type": "Sum",
+      "params": {
+        "w0": 1.0,
+        "w1": 1.0
+      }
+    },
+    {
+      "id": "integ",
+      "type": "Integrator",
+      "params": {
+        "init_state": 0.0
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "n_c1_to_sum",
+      "connections": [
+        { "node": "c1", "connector": "out0" },
+        { "node": "sum", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_c2_to_sum",
+      "connections": [
+        { "node": "c2", "connector": "out0" },
+        { "node": "sum", "connector": "in1" }
+      ]
+    },
+    {
+      "name": "n_sum_to_integ",
+      "connections": [
+        { "node": "sum", "connector": "out0" },
+        { "node": "integ", "connector": "in0" }
+      ]
+    }
+  ]
+}
+

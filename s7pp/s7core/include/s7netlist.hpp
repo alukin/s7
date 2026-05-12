@@ -49,7 +49,7 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
 
 #include "s7.hpp"
 #include "s7factory.hpp"
@@ -94,10 +94,10 @@ namespace s7 {
 
     /// Convert a single JSON value to a ParamValue.
     /// Supports: string, number, complex object.
-    ParamValue paramValueFromJson(const nlohmann::json& j);
+    ParamValue paramValueFromJson(const boost::json::value& j);
 
     /// Convert a JSON object of key→value pairs to a ParamMap.
-    ParamMap paramMapFromJson(const nlohmann::json& params_obj);
+    ParamMap paramMapFromJson(const boost::json::value& params_obj);
 
     // ------------------------------------------------------------------
     // SchemaBuilder
@@ -107,8 +107,8 @@ namespace s7 {
     /// into NetlistDocuments.
     class SchemaBuilder {
     public:
-        /// Parse a nlohmann::json value into a NetlistDocument.
-        static NetlistDocument parseJson(const nlohmann::json& j);
+        /// Parse a boost::json::value into a NetlistDocument.
+        static NetlistDocument parseJson(const boost::json::value& j);
 
         /// Parse a JSON string into a NetlistDocument.
         static NetlistDocument parseJsonString(const std::string& json_str);

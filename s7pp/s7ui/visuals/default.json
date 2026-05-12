@@ -1,0 +1,11 @@
+{
+  "type": "Constant",
+  "display_name": "Constant",
+  "category": "Sources",
+  "shape": "round_rect",
+  "description": "Default constant source visual",
+  "node_style": {
+    "color": "#5d8aa8"
+  }
+}
+

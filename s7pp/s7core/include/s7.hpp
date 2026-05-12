@@ -1,6 +1,7 @@
 #pragma once
 
 #include <complex>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -16,6 +17,35 @@ using Real = double;
 using Complex = std::complex<double>;
 
 class Element;
+class ThreadPool;
+
+enum class ElementEventSeverity {
+    Info,
+    Warning,
+    Critical,
+};
+
+struct ElementEvent {
+    std::string topic;
+    ElementEventSeverity severity = ElementEventSeverity::Info;
+    std::string message;
+};
+
+// -------------------------------------------------------------------------
+// IElementObserver — observer interface for element event monitoring.
+// Implementations must be thread-safe: onEvent() is called from the compute
+// thread (which may differ from the GUI thread).
+// In GUI mode: use a ring buffer bridge to the GUI thread.
+// In headless mode: use for logging / streaming.
+// -------------------------------------------------------------------------
+class IElementObserver {
+public:
+    virtual ~IElementObserver() = default;
+
+    /// Called from the compute thread when an element emits an event.
+    /// Do not call back into the Schema from this method.
+    virtual void onEvent(const Element& element, const ElementEvent& event) {}
+};
 
 class Pin {
 public:
@@ -152,8 +182,16 @@ public:
     auto getInput(int idx) -> std::shared_ptr<Input>;
     auto getOutput(int idx) -> std::shared_ptr<Output>;
 
+    /// Attach an observer.  The observer is held as a weak_ptr so it does not
+    /// extend the element's lifetime, and vice-versa.
+    void setObserver(std::shared_ptr<IElementObserver> observer);
+    void clearObserver();
+
 protected:
     void setTraits(bool is_stateful, std::optional<bool> has_direct_feedthrough = std::nullopt);
+
+    /// Notify the observer (if any) with an explicit event payload.
+    void notifyObserver(const ElementEvent& event);
 
     template<typename T>
     auto addInput() -> std::shared_ptr<TypedInput<T>>
@@ -177,6 +215,7 @@ private:
     std::string id_;
     bool is_stateful_ = false;
     std::optional<bool> has_direct_feedthrough_;
+    std::weak_ptr<IElementObserver> observer_;
 };
 
 using ElementPtr = std::shared_ptr<Element>;
@@ -193,7 +232,9 @@ public:
     auto connect(const ElementPtr& el1, int output_idx,
                  const ElementPtr& el2, int input_idx) -> bool;
     void prepareExecution();
+    void tickWithThreadPool(ThreadPool& pool, bool parallel_stages = true);
     void run(long ticks);
+    void runWithThreadPool(long ticks, ThreadPool& pool, bool parallel_stages = true);
     void run_s(double seconds);
 
     [[nodiscard]] auto get_TD() const -> double;
@@ -214,6 +255,7 @@ private:
     std::vector<std::string>  insertion_order;
     std::vector<Connection>   connections;
     std::vector<ElementPtr>   execution_order;
+    std::vector<std::vector<ElementPtr>> execution_stages;
     bool   execution_plan_dirty = true;
     double discr_time;
 };

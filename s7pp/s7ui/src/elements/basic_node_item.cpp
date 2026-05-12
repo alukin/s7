@@ -1,6 +1,6 @@
 #include "basic_node_item.hpp"
 
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
 #include <qschematic/items/connector.hpp>
 #include <qschematic/items/label.hpp>
 
@@ -11,6 +11,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
 
@@ -21,7 +22,7 @@ namespace s7ui::elements {
 BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     : QSchematic::Items::Node(QSchematic::Items::Item::NodeType, parent), typeName_(typeName), nodeName_(typeName)
 {
-    setSize(180, 108);
+    setSize(50, 30);
     setPortLayout(1, 1);
     refreshToolTip();
 }
@@ -108,6 +109,17 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts)
     update();
 }
 
+void BasicNodeItem::setVisualStyle(const QString& shape, const QColor& baseColor)
+{
+    shape_ = shape.trimmed().isEmpty() ? QStringLiteral("rect") : shape.trimmed().toLower();
+    baseColor_ = baseColor;
+    if (!baseColor_.isValid()) {
+        baseColor_ = QColor(79, 79, 79, 120);
+    }
+    refreshToolTip();
+    update();
+}
+
 void BasicNodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
 {
     QSchematic::Items::Node::paint(painter, option, widget);
@@ -117,6 +129,34 @@ void BasicNodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
 
     const QRectF r = sizeRect();
     const QString idText = nodeId_.isEmpty() ? QStringLiteral("(no id)") : nodeId_;
+
+    // Draw a visual-shape hint behind text; unknown styles implicitly fall back to rectangle.
+    painter->setBrush(baseColor_);
+    painter->setPen(QPen(baseColor_.darker(170), 1.4));
+    if (shape_ == "round_rect") {
+        painter->drawRoundedRect(r.adjusted(6, 6, -6, -6), 10.0, 10.0);
+    } else if (shape_ == "hex") {
+        QPolygonF poly;
+        const auto midY = r.center().y();
+        poly << QPointF(r.left() + 16, r.top() + 8)
+             << QPointF(r.right() - 16, r.top() + 8)
+             << QPointF(r.right() - 4, midY)
+             << QPointF(r.right() - 16, r.bottom() - 8)
+             << QPointF(r.left() + 16, r.bottom() - 8)
+             << QPointF(r.left() + 4, midY);
+        painter->drawPolygon(poly);
+    } else if (shape_ == "diamond") {
+        QPolygonF poly;
+        poly << QPointF(r.center().x(), r.top() + 6)
+             << QPointF(r.right() - 6, r.center().y())
+             << QPointF(r.center().x(), r.bottom() - 6)
+             << QPointF(r.left() + 6, r.center().y());
+        painter->drawPolygon(poly);
+    } else {
+        painter->drawRect(r.adjusted(6, 6, -6, -6));
+    }
+
+    painter->setPen(QColor(30, 30, 30));
 
     QFont typeFont = painter->font();
     typeFont.setBold(true);
@@ -172,7 +212,7 @@ void BasicNodeItem::openPropertiesDialog()
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&dialog, paramsEdit] {
         try
         {
-            const auto parsed = nlohmann::json::parse(paramsEdit->toPlainText().toStdString());
+            const auto parsed = boost::json::parse(paramsEdit->toPlainText().toStdString());
             if (!parsed.is_object())
             {
                 throw std::runtime_error("Parameters JSON must be an object");
@@ -198,11 +238,11 @@ void BasicNodeItem::openPropertiesDialog()
 
 void BasicNodeItem::refreshToolTip()
 {
-    setToolTip(QString("%1\nname: %2\nid: %3")
+    setToolTip(QString("%1\nname: %2\nid: %3\nshape: %4")
         .arg(typeName_)
         .arg(nodeName_)
-        .arg(nodeId_.isEmpty() ? QStringLiteral("<unset>") : nodeId_));
+        .arg(nodeId_.isEmpty() ? QStringLiteral("<unset>") : nodeId_)
+        .arg(shape_));
 }
 
 } // namespace s7ui::elements
-

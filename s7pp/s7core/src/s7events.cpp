@@ -33,7 +33,7 @@ void EventBus::publish(const Event& event)
     }
 }
 void EventBus::publishEvent(const std::string& event_name,
-                           const nlohmann::json& payload)
+                           const boost::json::value& payload)
 {
     Event evt;
     evt.event_name = event_name;

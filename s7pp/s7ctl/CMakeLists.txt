@@ -8,10 +8,12 @@ add_executable(s7ctl
 )
 
 target_include_directories(s7ctl PRIVATE
-	${CMAKE_SOURCE_DIR}/external/json/single_include
+	${CMAKE_SOURCE_DIR}/s7core/include
 )
 
+
 target_link_libraries(s7ctl PRIVATE
+	Boost::json
 	Boost::system
 	Threads::Threads
 )

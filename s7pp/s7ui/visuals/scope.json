@@ -1,0 +1,11 @@
+{
+  "type": "ScopeSink",
+  "display_name": "Scope Sink",
+  "category": "Visual",
+  "shape": "diamond",
+  "description": "Visual oscilloscope sink",
+  "node_style": {
+    "color": "#7b4fa3"
+  }
+}
+

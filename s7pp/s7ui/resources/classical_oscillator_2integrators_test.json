@@ -1,0 +1,93 @@
+{
+  "id": "classical_oscillator_2integrators_test",
+  "dt": 0.001,
+  "nodes": [
+    {
+      "id": "int_x",
+      "type": "Integrator",
+      "params": {
+        "init_state": 1.0
+      }
+    },
+    {
+      "id": "int_v",
+      "type": "Integrator",
+      "params": {
+        "init_state": 0.0
+      }
+    },
+    {
+      "id": "gain_v",
+      "type": "Sum",
+      "params": {
+        "weight": 0.001
+      }
+    },
+    {
+      "id": "gain_x",
+      "type": "Sum",
+      "params": {
+        "weight": -0.001
+      }
+    },
+    {
+      "id": "harmonic",
+      "type": "HarmonicOscillator",
+      "params": {
+        "frequency_hz": 0.1591549431,
+        "phase_rad": 1.5707963268,
+        "amplitude": 1.0
+      }
+    },
+    {
+      "id": "energy",
+      "type": "EnergyDifference",
+      "params": {}
+    }
+  ],
+  "nets": [
+    {
+      "name": "n_v_to_gain_v",
+      "connections": [
+        { "node": "int_v", "connector": "out0" },
+        { "node": "gain_v", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_gain_v_to_x",
+      "connections": [
+        { "node": "gain_v", "connector": "out0" },
+        { "node": "int_x", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_x_to_gain_x",
+      "connections": [
+        { "node": "int_x", "connector": "out0" },
+        { "node": "gain_x", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_gain_x_to_v",
+      "connections": [
+        { "node": "gain_x", "connector": "out0" },
+        { "node": "int_v", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_x_to_energy",
+      "connections": [
+        { "node": "int_x", "connector": "out0" },
+        { "node": "energy", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_harmonic_to_energy",
+      "connections": [
+        { "node": "harmonic", "connector": "out0" },
+        { "node": "energy", "connector": "in1" }
+      ]
+    }
+  ]
+}
+

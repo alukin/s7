@@ -23,7 +23,7 @@ constexpr std::array<QColor, 6> kPalette = {
     QColor(150, 150, 255)
 };
 
-}
+} // namespace
 
 VisualSinkPreviewWidget::VisualSinkPreviewWidget(const bool compact, QWidget* parent)
     : QWidget(parent), compact_(compact)
@@ -77,6 +77,7 @@ void VisualSinkPreviewWidget::setInputCount(int count)
             staticLevels_[i] = 0.0;
         }
     }
+    liveSamples_.resize(inputCount_);
     rebuildGraphs();
 }
 
@@ -98,6 +99,27 @@ void VisualSinkPreviewWidget::setTimeWindow(const double seconds)
 void VisualSinkPreviewWidget::setSignalMode(const SignalMode mode)
 {
     signalMode_ = mode;
+
+    if (signalMode_ == SignalMode::Live)
+    {
+        // Stop the synthetic/flat animation timer; live data is pushed externally.
+        if (timer_) timer_->stop();
+
+        // Clear existing graph data.
+        for (auto* graph : graphs_)
+        {
+            graph->data()->clear();
+        }
+        timeSec_ = 0.0;
+        liveSamples_.assign(inputCount_, {});
+    }
+    else
+    {
+        if (timer_ && !timer_->isActive())
+        {
+            timer_->start(compact_ ? 80 : 35);
+        }
+    }
 }
 
 void VisualSinkPreviewWidget::setStaticLevels(const QVector<double>& levels)
@@ -107,6 +129,52 @@ void VisualSinkPreviewWidget::setStaticLevels(const QVector<double>& levels)
     {
         staticLevels_.resize(inputCount_);
     }
+}
+
+void VisualSinkPreviewWidget::updateChannelData(int channel, const QVector<double>& samples)
+{
+    if (signalMode_ != SignalMode::Live) return;
+    if (channel < 0 || channel >= graphs_.size()) return;
+    if (samples.isEmpty()) return;
+
+    // Replace the graph's data with the provided samples.
+    // X axis: sample index (we use relative sample numbers; no wall time here).
+    QVector<double> keys;
+    keys.reserve(samples.size());
+    const double n = static_cast<double>(samples.size());
+    for (int i = 0; i < samples.size(); ++i)
+    {
+        keys.push_back(static_cast<double>(i) / n);
+    }
+
+    graphs_[channel]->setData(keys, samples, true);
+
+    // Rescale Y axis to fit the data if needed.
+    double yMin = -1.5, yMax = 1.5;
+    for (int ch = 0; ch < graphs_.size(); ++ch)
+    {
+        if (graphs_[ch]->data()->isEmpty()) continue;
+        if (ch < static_cast<int>(liveSamples_.size()))
+        {
+            for (const auto v : liveSamples_[ch])
+            {
+                yMin = std::min(yMin, v * gain_);
+                yMax = std::max(yMax, v * gain_);
+            }
+        }
+    }
+    // Store current samples for Y-range estimation
+    if (channel < static_cast<int>(liveSamples_.size()))
+    {
+        liveSamples_[channel].clear();
+        liveSamples_[channel].reserve(samples.size());
+        for (const auto v : samples) liveSamples_[channel].push_back(v);
+    }
+
+    const double pad = std::max(0.1, (yMax - yMin) * 0.05);
+    plot_->xAxis->setRange(0.0, 1.0);
+    plot_->yAxis->setRange(yMin - pad, yMax + pad);
+    plot_->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void VisualSinkPreviewWidget::mouseDoubleClickEvent(QMouseEvent* event)
@@ -131,10 +199,13 @@ void VisualSinkPreviewWidget::rebuildGraphs()
         graph->setPen(QPen(kPalette[static_cast<std::size_t>(i) % kPalette.size()], compact_ ? 1.0 : 1.5));
         graphs_.push_back(graph);
     }
+    liveSamples_.assign(inputCount_, {});
 }
 
 void VisualSinkPreviewWidget::appendSample()
 {
+    if (signalMode_ == SignalMode::Live) return; // driven externally
+
     constexpr double kPi = 3.14159265358979323846;
     const double dt = compact_ ? 0.08 : 0.035;
     timeSec_ += dt;
@@ -150,7 +221,7 @@ void VisualSinkPreviewWidget::appendSample()
             value = gain_ * (std::sin(2.0 * kPi * f1 * timeSec_ + phase)
                 + 0.2 * std::sin(2.0 * kPi * f2 * timeSec_ + 0.5 * phase));
         }
-        else
+        else // Flat
         {
             const double base = i < staticLevels_.size() ? staticLevels_[i] : 0.0;
             value = gain_ * base;

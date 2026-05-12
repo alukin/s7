@@ -1,0 +1,31 @@
+{
+  "id": "iir_step_response",
+  "dt": 1.0,
+  "nodes": [
+    {
+      "id": "step",
+      "type": "Constant",
+      "params": {
+        "value": 1.0
+      }
+    },
+    {
+      "id": "iir",
+      "type": "IIRFilter",
+      "params": {
+        "b0": 0.2,
+        "a1": -0.8
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "n_step_to_iir",
+      "connections": [
+        { "node": "step", "connector": "out0" },
+        { "node": "iir", "connector": "in0" }
+      ]
+    }
+  ]
+}
+

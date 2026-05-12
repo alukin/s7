@@ -2,6 +2,8 @@
 
 #include <qschematic/items/node.hpp>
 
+#include <QColor>
+
 class QGraphicsSceneMouseEvent;
 class QPainter;
 
@@ -27,6 +29,7 @@ public:
     QString paramsJson() const;
 
     void setPortLayout(int inputPorts, int outputPorts);
+    void setVisualStyle(const QString& shape, const QColor& baseColor);
 
 protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
@@ -42,7 +45,8 @@ private:
     QString paramsJson_ = "{}";
     int inputPorts_ = 1;
     int outputPorts_ = 1;
+    QString shape_ = "rect";
+    QColor baseColor_ = QColor(79, 79, 79, 120);
 };
 
 } // namespace s7ui::elements
-

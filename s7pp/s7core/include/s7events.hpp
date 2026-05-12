@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include <nlohmann/json.hpp>
+#include <boost/json.hpp>
 
 namespace s7 {
 
@@ -27,7 +27,7 @@ namespace s7 {
 struct Event {
     std::string event_name;
     long timestamp_ms;
-    nlohmann::json payload;
+    boost::json::value payload;
 };
 
 /// EventBus — publish/subscribe system for control plane events.
@@ -51,7 +51,7 @@ public:
 
     /// Helper: publish with automatic timestamp
     void publishEvent(const std::string& event_name,
-                      const nlohmann::json& payload);
+                      const boost::json::value& payload);
 
 private:
     struct Subscription {

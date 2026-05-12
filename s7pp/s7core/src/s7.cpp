@@ -1,10 +1,12 @@
 #include "s7.hpp"
+#include "s7thread_pool.hpp"
 
 #include <algorithm>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <map>
+#include <future>
 #include <set>
 #include <stdexcept>
 #include <sstream>
@@ -67,6 +69,24 @@ auto Element::getOutput(int idx) -> std::shared_ptr<Output>
     return outputs.at(idx);
 }
 
+void Element::setObserver(std::shared_ptr<IElementObserver> observer)
+{
+    observer_ = observer;
+}
+
+void Element::clearObserver()
+{
+    observer_.reset();
+}
+
+void Element::notifyObserver(const ElementEvent& event)
+{
+    if (auto obs = observer_.lock())
+    {
+        obs->onEvent(*this, event);
+    }
+}
+
 Schema::Schema(double td) : discr_time(td) {}
 
 Schema::Schema(double td, std::string id)
@@ -123,6 +143,7 @@ namespace {
 void Schema::rebuildExecutionPlan()
 {
     execution_order.clear();
+    execution_stages.clear();
 
     std::unordered_map<std::string, std::size_t> indegree;
     std::unordered_map<std::string, std::set<std::string>> adjacency;
@@ -175,19 +196,37 @@ void Schema::rebuildExecutionPlan()
     std::vector<ElementPtr> ordered;
     while (!ready.empty())
     {
-        const auto current_id = *ready.begin();
-        ready.erase(ready.begin());
-        ordered.push_back(elements.at(current_id));
-
-        for (const auto& next_id : adjacency[current_id])
+        std::vector<std::string> stage_ids;
+        stage_ids.reserve(ready.size());
+        for (const auto& id : ready)
         {
-            auto& next_indegree = indegree[next_id];
-            --next_indegree;
-            if (next_indegree == 0)
+            stage_ids.push_back(id);
+        }
+        ready.clear();
+
+        std::vector<ElementPtr> stage_elements;
+        stage_elements.reserve(stage_ids.size());
+        for (const auto& current_id : stage_ids)
+        {
+            auto elem = elements.at(current_id);
+            ordered.push_back(elem);
+            stage_elements.push_back(std::move(elem));
+        }
+
+        for (const auto& current_id : stage_ids)
+        {
+            for (const auto& next_id : adjacency[current_id])
             {
-                ready.insert(next_id);
+                auto& next_indegree = indegree[next_id];
+                --next_indegree;
+                if (next_indegree == 0)
+                {
+                    ready.insert(next_id);
+                }
             }
         }
+
+        execution_stages.push_back(std::move(stage_elements));
     }
 
     if (ordered.size() != indegree.size())
@@ -252,6 +291,37 @@ void Schema::tick()
     for (const auto& element : execution_order)
     {
         element->tick();
+    }
+}
+
+void Schema::tickWithThreadPool(ThreadPool& pool, bool parallel_stages)
+{
+    if (execution_plan_dirty)
+    {
+        throw SchemaExecutionError(
+            "Schema execution plan is dirty. Call prepareExecution() or run() before tick().");
+    }
+
+    if (!parallel_stages || pool.workerCount() <= 1)
+    {
+        tick();
+        return;
+    }
+
+    for (const auto& stage : execution_stages)
+    {
+        std::vector<std::future<void>> futures;
+        futures.reserve(stage.size());
+
+        for (const auto& element : stage)
+        {
+            futures.push_back(pool.submit([element] { element->tick(); }));
+        }
+
+        for (auto& f : futures)
+        {
+            f.get();
+        }
     }
 }
 
@@ -333,6 +403,21 @@ void Schema::run(long ticks)
     for (long tick_idx = 0; tick_idx < ticks; ++tick_idx)
     {
         tick();
+    }
+}
+
+void Schema::runWithThreadPool(long ticks, ThreadPool& pool, bool parallel_stages)
+{
+    if (ticks < 0)
+    {
+        throw std::invalid_argument("Schema::runWithThreadPool expects a non-negative tick count");
+    }
+
+    prepareExecution();
+
+    for (long tick_idx = 0; tick_idx < ticks; ++tick_idx)
+    {
+        tickWithThreadPool(pool, parallel_stages);
     }
 }
 

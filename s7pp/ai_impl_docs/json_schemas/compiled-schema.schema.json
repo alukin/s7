@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://s7.example/schemas/compiled-schema.schema.json",
+  "title": "S7 Compiled Runtime Schema v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "dt", "schema_version", "nodes", "nets"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dt": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/runtimeNode" }
+    },
+    "nets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/runtimeNet" }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "build": {
+      "$ref": "#/$defs/buildMetadata"
+    }
+  },
+  "$defs": {
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "connector"],
+      "properties": {
+        "node": { "type": "string", "minLength": 1 },
+        "connector": { "type": "string", "minLength": 1 }
+      }
+    },
+    "runtimeNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "params": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "runtimeNet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "connections"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "connections": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/endpoint" }
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "buildMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compiler": { "type": "string" },
+        "compiler_version": { "type": "string" },
+        "source_diagram": { "type": "string" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "diagram_hash": { "type": "string" },
+        "schema_hash": { "type": "string" },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
+

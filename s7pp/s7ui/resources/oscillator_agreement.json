@@ -1,0 +1,47 @@
+{
+  "id": "oscillator_agreement",
+  "dt": 0.00001136363636,
+  "nodes": [
+    {
+      "id": "harmonic",
+      "type": "HarmonicOscillator",
+      "params": {
+        "frequency_hz": 440.0,
+        "phase_rad": 0.2,
+        "amplitude": 1.0
+      }
+    },
+    {
+      "id": "digital",
+      "type": "DigitalOscillator",
+      "params": {
+        "frequency_hz": 440.0,
+        "phase_rad": 0.2,
+        "amplitude": 1.0,
+        "radius": 1.0
+      }
+    },
+    {
+      "id": "energy",
+      "type": "EnergyDifference",
+      "params": {}
+    }
+  ],
+  "nets": [
+    {
+      "name": "n_harmonic_to_energy",
+      "connections": [
+        { "node": "harmonic", "connector": "out0" },
+        { "node": "energy", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_digital_to_energy",
+      "connections": [
+        { "node": "digital", "connector": "out0" },
+        { "node": "energy", "connector": "in1" }
+      ]
+    }
+  ]
+}
+
