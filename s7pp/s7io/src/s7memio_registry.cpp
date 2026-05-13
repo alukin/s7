@@ -32,31 +32,61 @@ void registerMemIO(ElementRegistry& registry)
         return cfg;
     };
 
-    registry.registerType("RealMemSink", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        auto cfg = parseConfig(params);
-        cfg.create_if_missing = true;
-        return std::make_shared<RealMemSink>(id, cfg);
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "RealMemSink",
+            .category             = "I/O",
+            .description          = "Write N-channel real stream to shared memory",
+            .default_input_count  = 1,
+            .default_output_count = 0,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            auto cfg = parseConfig(params);
+            cfg.create_if_missing = true;
+            return std::make_shared<RealMemSink>(id, cfg);
+        });
 
-    registry.registerType("RealMemSource", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        auto cfg = parseConfig(params);
-        cfg.create_if_missing = false;
-        return std::make_shared<RealMemSource>(id, cfg);
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "RealMemSource",
+            .category             = "I/O",
+            .description          = "Read N-channel real stream from shared memory",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            auto cfg = parseConfig(params);
+            cfg.create_if_missing = false;
+            return std::make_shared<RealMemSource>(id, cfg);
+        });
 
-    registry.registerType("ComplexMemSink", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        auto cfg = parseConfig(params);
-        cfg.create_if_missing = true;
-        return std::make_shared<ComplexMemSink>(id, cfg);
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ComplexMemSink",
+            .category             = "I/O",
+            .description          = "Write N-channel complex stream to shared memory",
+            .default_input_count  = 1,
+            .default_output_count = 0,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            auto cfg = parseConfig(params);
+            cfg.create_if_missing = true;
+            return std::make_shared<ComplexMemSink>(id, cfg);
+        });
 
-    registry.registerType("ComplexMemSource", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        auto cfg = parseConfig(params);
-        cfg.create_if_missing = false;
-        return std::make_shared<ComplexMemSource>(id, cfg);
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ComplexMemSource",
+            .category             = "I/O",
+            .description          = "Read N-channel complex stream from shared memory",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            auto cfg = parseConfig(params);
+            cfg.create_if_missing = false;
+            return std::make_shared<ComplexMemSource>(id, cfg);
+        });
 }
 
 } // namespace s7
-
-

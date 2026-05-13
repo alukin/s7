@@ -3,6 +3,7 @@
 //
 
 #include "s7fileio.hpp"
+#include "s7io_json_dto.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -155,25 +156,24 @@ void writeSidecarJson(const std::filesystem::path& base,
     std::filesystem::path sidecar = base;
     sidecar.replace_extension(extension);
 
-    boost::json::object j;
-    j["format"] = "s7.io.file.v1";
-    j["domain"] = signalDomainToString(header.domain);
-    j["scalar_encoding"] = scalarEncodingToString(header.encoding);
-    j["num_channels"] = header.num_channels;
-    j["sample_rate_hz"] = header.sample_rate_hz;
-    j["timestamp_unix"] = header.timestamp_unix;
-    j["num_samples"] = header.num_samples;
+    s7::io::dto::FileSidecarHeader dto;
+    dto.domain = signalDomainToString(header.domain);
+    dto.scalar_encoding = scalarEncodingToString(header.encoding);
+    dto.num_channels = header.num_channels;
+    dto.sample_rate_hz = header.sample_rate_hz;
+    dto.timestamp_unix = header.timestamp_unix;
+    dto.num_samples = header.num_samples;
     if (!header.metadata_json.empty()) {
         try {
-            j["metadata"] = boost::json::parse(header.metadata_json);
+            dto.metadata = boost::json::parse(header.metadata_json);
         } catch (...) {
-            j["metadata_raw"] = header.metadata_json;
+            dto.metadata_raw = header.metadata_json;
         }
     }
 
     std::ofstream out(sidecar);
     if (!out) throw std::runtime_error("s7fileio: cannot write sidecar file: " + sidecar.string());
-    out << boost::json::serialize(j) << '\n';
+    out << boost::json::serialize(dto.toJson()) << '\n';
 }
 
 auto maybeReadSidecarMetadata(const std::filesystem::path& base,
@@ -188,14 +188,9 @@ auto maybeReadSidecarMetadata(const std::filesystem::path& base,
     std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (text.empty()) return "{}";
 
-    const auto j = boost::json::parse(text);
-    if (!j.is_object()) return "{}";
-
-    const auto& obj = j.as_object();
-    if (const auto* metadata = obj.if_contains("metadata")) return boost::json::serialize(*metadata);
-    if (const auto* metadata_raw = obj.if_contains("metadata_raw"); metadata_raw && metadata_raw->is_string()) {
-        return boost::json::value_to<std::string>(*metadata_raw);
-    }
+    const auto dto = s7::io::dto::FileSidecarHeader::fromJson(boost::json::parse(text));
+    if (dto.metadata.has_value()) return boost::json::serialize(*dto.metadata);
+    if (dto.metadata_raw.has_value()) return *dto.metadata_raw;
     return "{}";
 }
 

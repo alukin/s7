@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `OscilloscopeWidget` is a multi-channel real-time waveform display component for visualizing Probe data from the S7 simulation engine.
+The `OscilloscopeWidget` is a multi-channel real-time waveform display component for visualizing probe data from the S7 simulation engine.
 
 ## Architecture
 
@@ -161,7 +161,7 @@ GUI nodes marked as "visual sinks" or "oscilloscopes" are converted to Probe ele
 
 ### Buffer Management
 
-- `.Pro be.readChannel(ch, maxSamples)` returns the most recent N samples
+- `Probe::readChannel(ch, maxSamples)` returns the most recent N samples
 - Widget requests up to `sampleCount_` samples per update
 - Probe ring buffer has capacity (default 8192 samples)
 - Circular overwrite: when full, oldest entries are replaced

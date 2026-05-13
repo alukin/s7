@@ -32,7 +32,11 @@ VisualSinkPreviewWidget::VisualSinkPreviewWidget(const bool compact, QWidget* pa
     layout->setContentsMargins(0, 0, 0, 0);
 
     plot_ = new QCustomPlot(this);
+    plot_->setNoAntialiasingOnDrag(true);
+    plot_->setAntialiasedElements(QCP::aeAll);
+    plot_->setBackground(QBrush(QColor(245, 245, 245)));
     plot_->legend->setVisible(false);
+    plot_->axisRect()->setupFullAxesBox(true);
     plot_->xAxis->setRange(0.0, timeWindowSec_);
     plot_->yAxis->setRange(-1.5, 1.5);
     plot_->setInteractions(compact_ ? QCP::iNone : (QCP::iRangeDrag | QCP::iRangeZoom));
@@ -41,12 +45,15 @@ VisualSinkPreviewWidget::VisualSinkPreviewWidget(const bool compact, QWidget* pa
     {
         plot_->xAxis->setVisible(false);
         plot_->yAxis->setVisible(false);
+        plot_->xAxis2->setVisible(false);
+        plot_->yAxis2->setVisible(false);
         plot_->axisRect()->setMargins(QMargins(4, 4, 4, 4));
     }
     else
     {
         plot_->xAxis->setLabel("time [s]");
         plot_->yAxis->setLabel("amplitude");
+        plot_->axisRect()->setMargins(QMargins(10, 8, 10, 8));
     }
 
     layout->addWidget(plot_);
@@ -94,6 +101,11 @@ void VisualSinkPreviewWidget::setGain(const double gain)
 void VisualSinkPreviewWidget::setTimeWindow(const double seconds)
 {
     timeWindowSec_ = std::clamp(seconds, 0.5, 12.0);
+    if (signalMode_ == SignalMode::Live)
+    {
+        plot_->xAxis->setRange(0.0, timeWindowSec_);
+        plot_->replot(QCustomPlot::rpQueuedReplot);
+    }
 }
 
 void VisualSinkPreviewWidget::setSignalMode(const SignalMode mode)
@@ -137,20 +149,28 @@ void VisualSinkPreviewWidget::updateChannelData(int channel, const QVector<doubl
     if (channel < 0 || channel >= graphs_.size()) return;
     if (samples.isEmpty()) return;
 
-    // Replace the graph's data with the provided samples.
-    // X axis: sample index (we use relative sample numbers; no wall time here).
+    // Replace the graph's data with the provided samples mapped to the active time window.
     QVector<double> keys;
     keys.reserve(samples.size());
     const double n = static_cast<double>(samples.size());
+    const double dt = (n > 1.0) ? (timeWindowSec_ / (n - 1.0)) : timeWindowSec_;
     for (int i = 0; i < samples.size(); ++i)
     {
-        keys.push_back(static_cast<double>(i) / n);
+        keys.push_back(static_cast<double>(i) * dt);
     }
 
     graphs_[channel]->setData(keys, samples, true);
 
     // Rescale Y axis to fit the data if needed.
     double yMin = -1.5, yMax = 1.5;
+    // Store current samples for Y-range estimation.
+    if (channel < static_cast<int>(liveSamples_.size()))
+    {
+        liveSamples_[channel].clear();
+        liveSamples_[channel].reserve(samples.size());
+        for (const auto v : samples) liveSamples_[channel].push_back(v);
+    }
+
     for (int ch = 0; ch < graphs_.size(); ++ch)
     {
         if (graphs_[ch]->data()->isEmpty()) continue;
@@ -163,16 +183,8 @@ void VisualSinkPreviewWidget::updateChannelData(int channel, const QVector<doubl
             }
         }
     }
-    // Store current samples for Y-range estimation
-    if (channel < static_cast<int>(liveSamples_.size()))
-    {
-        liveSamples_[channel].clear();
-        liveSamples_[channel].reserve(samples.size());
-        for (const auto v : samples) liveSamples_[channel].push_back(v);
-    }
-
     const double pad = std::max(0.1, (yMax - yMin) * 0.05);
-    plot_->xAxis->setRange(0.0, 1.0);
+    plot_->xAxis->setRange(0.0, timeWindowSec_);
     plot_->yAxis->setRange(yMin - pad, yMax + pad);
     plot_->replot(QCustomPlot::rpQueuedReplot);
 }
@@ -196,7 +208,7 @@ void VisualSinkPreviewWidget::rebuildGraphs()
     {
         plot_->addGraph();
         auto* graph = plot_->graph(i);
-        graph->setPen(QPen(kPalette[static_cast<std::size_t>(i) % kPalette.size()], compact_ ? 1.0 : 1.5));
+        graph->setPen(QPen(kPalette[static_cast<std::size_t>(i) % kPalette.size()], compact_ ? 1.1 : 1.6));
         graphs_.push_back(graph);
     }
     liveSamples_.assign(inputCount_, {});

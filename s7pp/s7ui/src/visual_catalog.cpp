@@ -1,4 +1,5 @@
 #include "visual_catalog.hpp"
+#include "s7ui_json_dto.hpp"
 
 #include <boost/json.hpp>
 
@@ -32,43 +33,7 @@ void Catalog::loadFromDir(const QString& dirPath, const std::function<void(const
         try {
             const auto data = f.readAll();
             const auto root = boost::json::parse(std::string(data.constData(), static_cast<std::size_t>(data.size())));
-            if (!root.is_object()) {
-                if (logWarning) {
-                    logWarning(QString("[visuals] %1 root must be object").arg(fileName));
-                }
-                continue;
-            }
-
-            const auto& obj = root.as_object();
-            const auto* typeVal = obj.if_contains("type");
-            if (!typeVal || !typeVal->is_string()) {
-                if (logWarning) {
-                    logWarning(QString("[visuals] %1 missing string field 'type'").arg(fileName));
-                }
-                continue;
-            }
-
-            VisualSpec spec;
-            spec.type = QString::fromStdString(boost::json::value_to<std::string>(*typeVal));
-            spec.displayName = spec.type;
-            if (const auto* v = obj.if_contains("display_name"); v && v->is_string()) {
-                spec.displayName = QString::fromStdString(boost::json::value_to<std::string>(*v));
-            }
-            if (const auto* v = obj.if_contains("category"); v && v->is_string()) {
-                spec.category = QString::fromStdString(boost::json::value_to<std::string>(*v));
-            }
-            if (const auto* v = obj.if_contains("shape"); v && v->is_string()) {
-                spec.shape = QString::fromStdString(boost::json::value_to<std::string>(*v));
-            }
-            if (const auto* v = obj.if_contains("description"); v && v->is_string()) {
-                spec.description = QString::fromStdString(boost::json::value_to<std::string>(*v));
-            }
-            if (const auto* styleVal = obj.if_contains("node_style"); styleVal && styleVal->is_object()) {
-                const auto& styleObj = styleVal->as_object();
-                if (const auto* colorVal = styleObj.if_contains("color"); colorVal && colorVal->is_string()) {
-                    spec.color = QString::fromStdString(boost::json::value_to<std::string>(*colorVal));
-                }
-            }
+            VisualSpec spec = dto::VisualSpecDto::fromJson(root);
 
             byType_[spec.type.toStdString()] = std::move(spec);
         } catch (const std::exception& ex) {

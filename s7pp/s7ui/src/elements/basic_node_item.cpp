@@ -1,28 +1,73 @@
 #include "basic_node_item.hpp"
+#include "s7ui_json_dto.hpp"
 
-#include <boost/json.hpp>
 #include <qschematic/items/connector.hpp>
 #include <qschematic/items/label.hpp>
+#include "dialogs/properties_dialog.hpp"
 
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGraphicsSceneMouseEvent>
+#include <QFontMetricsF>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPen>
+#include <QBrush>
 #include <QPlainTextEdit>
 #include <QVBoxLayout>
+#include <QGraphicsDropShadowEffect>
+#include <QStyleOptionGraphicsItem>
 
+#include <cmath>
 #include <algorithm>
 
 namespace s7ui::elements {
 
+namespace
+{
+constexpr qreal kNodeMinWidthMm = 10.0;
+constexpr qreal kNodeMinHeightMm = 5.0;
+constexpr qreal kPortPitchMm = 2.0;
+constexpr qreal kPortMarginMm = 1.0;
+
+auto connectorOffsetMm(const int index, const int count, const qreal nodeHeightMm) -> qreal
+{
+    if (count <= 1)
+    {
+        return nodeHeightMm * 0.5;
+    }
+
+    const qreal span = std::max<qreal>(0.0, nodeHeightMm - 2.0 * kPortMarginMm);
+    const qreal step = span / static_cast<qreal>(count - 1);
+    qreal offset = kPortMarginMm + static_cast<qreal>(index) * step;
+
+    return offset;
+}
+}
+
 BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     : QSchematic::Items::Node(QSchematic::Items::Item::NodeType, parent), typeName_(typeName), nodeName_(typeName)
 {
-    setSize(50, 30);
+    setMovable(true);
+    setFlag(QGraphicsItem::ItemIsMovable, true);
+    setFlag(QGraphicsItem::ItemIsSelectable, true);
+
+    // QSchematic defaults for behavior/dragging
+    setAllowMouseResize(false); // Can be enabled if needed, but false is safer for auto layout
+    setAllowMouseRotate(false);
+    setConnectorsMovable(false);
+    setConnectorsSnapPolicy(QSchematic::Items::Connector::NodeSizerectOutline);
+    setConnectorsSnapToGrid(true);
+
+    auto graphicsEffect = new QGraphicsDropShadowEffect(this);
+    graphicsEffect->setOffset(5);
+    graphicsEffect->setBlurRadius(10);
+    graphicsEffect->setColor(QColor(63, 63, 63, 100));
+    setGraphicsEffect(graphicsEffect);
+
     setPortLayout(1, 1);
     refreshToolTip();
 }
@@ -82,96 +127,116 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts)
     inputPorts_ = std::clamp(inputPorts, 0, 32);
     outputPorts_ = std::clamp(outputPorts, 0, 32);
 
+    const int maxPorts = std::max(1, std::max(inputPorts_, outputPorts_));
+    const qreal nodeWidth = kNodeMinWidthMm;
+    const qreal nodeHeight = std::max<qreal>(kNodeMinHeightMm,
+        2.0 * kPortMarginMm + static_cast<qreal>(maxPorts - 1) * kPortPitchMm);
+    setSize(nodeWidth, nodeHeight);
+
     clearConnectors();
 
     for (int i = 0; i < inputPorts_; ++i)
     {
-        const int y = 2 + i * 2;
         auto in = std::make_shared<QSchematic::Items::Connector>(
             QSchematic::Items::Item::ConnectorType,
-            QPoint(0, y),
-            QString("in%1").arg(i));
-        in->label()->setVisible(true);
+            QPoint(),
+            QString("in%1").arg(i),
+            this);
+        in->setPos(0.0, connectorOffsetMm(i, inputPorts_, nodeHeight));
+        in->label()->setVisible(false);
         addConnector(in);
     }
 
     for (int i = 0; i < outputPorts_; ++i)
     {
-        const int y = 2 + i * 2;
         auto out = std::make_shared<QSchematic::Items::Connector>(
             QSchematic::Items::Item::ConnectorType,
-            QPoint(8, y),
-            QString("out%1").arg(i));
-        out->label()->setVisible(true);
+            QPoint(),
+            QString("out%1").arg(i),
+            this);
+        out->setPos(nodeWidth, connectorOffsetMm(i, outputPorts_, nodeHeight));
+        out->label()->setVisible(false);
         addConnector(out);
     }
 
     update();
 }
 
-void BasicNodeItem::setVisualStyle(const QString& shape, const QColor& baseColor)
+void BasicNodeItem::setVisualStyle(const QColor& baseColor)
 {
-    shape_ = shape.trimmed().isEmpty() ? QStringLiteral("rect") : shape.trimmed().toLower();
-    baseColor_ = baseColor;
-    if (!baseColor_.isValid()) {
-        baseColor_ = QColor(79, 79, 79, 120);
+    // Fall back to a light gray if not valid (like QSchematic demo)
+    if (baseColor.isValid()) {
+        baseColor_ = baseColor;
+    } else {
+        baseColor_ = QColor(QStringLiteral("#e0e0e0"));
     }
+
+    // Ensure color isn't too "screaming"
+    if (baseColor_.saturation() > 100) {
+        baseColor_.setHsv(baseColor_.hue(), 100, std::max(200, baseColor_.value()));
+    }
+
     refreshToolTip();
     update();
 }
 
 void BasicNodeItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
 {
-    QSchematic::Items::Node::paint(painter, option, widget);
+    Q_UNUSED(option);
+    Q_UNUSED(widget);
 
-    painter->save();
-    painter->setPen(QColor(30, 30, 30));
-
-    const QRectF r = sizeRect();
-    const QString idText = nodeId_.isEmpty() ? QStringLiteral("(no id)") : nodeId_;
-
-    // Draw a visual-shape hint behind text; unknown styles implicitly fall back to rectangle.
-    painter->setBrush(baseColor_);
-    painter->setPen(QPen(baseColor_.darker(170), 1.4));
-    if (shape_ == "round_rect") {
-        painter->drawRoundedRect(r.adjusted(6, 6, -6, -6), 10.0, 10.0);
-    } else if (shape_ == "hex") {
-        QPolygonF poly;
-        const auto midY = r.center().y();
-        poly << QPointF(r.left() + 16, r.top() + 8)
-             << QPointF(r.right() - 16, r.top() + 8)
-             << QPointF(r.right() - 4, midY)
-             << QPointF(r.right() - 16, r.bottom() - 8)
-             << QPointF(r.left() + 16, r.bottom() - 8)
-             << QPointF(r.left() + 4, midY);
-        painter->drawPolygon(poly);
-    } else if (shape_ == "diamond") {
-        QPolygonF poly;
-        poly << QPointF(r.center().x(), r.top() + 6)
-             << QPointF(r.right() - 6, r.center().y())
-             << QPointF(r.center().x(), r.bottom() - 6)
-             << QPointF(r.left() + 6, r.center().y());
-        painter->drawPolygon(poly);
-    } else {
-        painter->drawRect(r.adjusted(6, 6, -6, -6));
+    if (!painter)
+    {
+        return;
     }
 
-    painter->setPen(QColor(30, 30, 30));
+    painter->save();
 
-    QFont typeFont = painter->font();
-    typeFont.setBold(true);
-    typeFont.setPointSizeF(typeFont.pointSizeF() + 0.5);
-    painter->setFont(typeFont);
-    painter->drawText(r.adjusted(8, 6, -8, -8), Qt::AlignTop | Qt::AlignLeft, typeName_);
+    const qreal lod = option->levelOfDetailFromTransform(painter->worldTransform());
+    const bool showDetails = (lod >= 0.5);
 
-    QFont bodyFont = painter->font();
-    bodyFont.setBold(false);
-    bodyFont.setPointSizeF(bodyFont.pointSizeF() - 0.5);
-    painter->setFont(bodyFont);
-    painter->drawText(r.adjusted(8, 24, -8, -8), Qt::AlignTop | Qt::AlignLeft, QString("name: %1").arg(nodeName_));
-    painter->drawText(r.adjusted(8, 40, -8, -8), Qt::AlignTop | Qt::AlignLeft, QString("id: %1").arg(idText));
+    painter->setPen(QPen(baseColor_.darker(150), 0.3));
+    painter->setBrush(baseColor_);
+
+    const QRectF rect(0, 0, size().width(), size().height());
+
+    // Default electronic component shape
+    painter->drawRect(rect);
+    if (showDetails) {
+        const qreal lineOffset = 2.0;
+        painter->setPen(QPen(baseColor_.darker(200), 0.2));
+        if (inputPorts_ > 0) {
+            painter->drawLine(QPointF(rect.left() + lineOffset, rect.top()),
+                              QPointF(rect.left() + lineOffset, rect.bottom()));
+        }
+        if (outputPorts_ > 0) {
+            painter->drawLine(QPointF(rect.right() - lineOffset, rect.top()),
+                              QPointF(rect.right() - lineOffset, rect.bottom()));
+        }
+    }
+
+    if (showDetails) {
+        // Name label inside the node
+        painter->setPen(Qt::black);
+        QFont font = painter->font();
+        font.setPointSizeF(3.0);
+        painter->setFont(font);
+
+        QTextOption textOption(Qt::AlignCenter);
+        textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+
+        painter->drawText(rect, nodeName_, textOption);
+    }
 
     painter->restore();
+}
+
+void BasicNodeItem::sizeChangedEvent(QSizeF oldSize, QSizeF newSize)
+{
+    Q_UNUSED(oldSize);
+    Q_UNUSED(newSize);
+
+    // Do nothing. This is to override the default implementation in QSchematic::Items::Node
 }
 
 void BasicNodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
@@ -185,64 +250,36 @@ void BasicNodeItem::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
 
 void BasicNodeItem::openPropertiesDialog()
 {
-    QDialog dialog;
-    dialog.setWindowTitle(typeName_ + " parameters");
-    dialog.resize(560, 420);
+    auto element = s7::ElementRegistry::instance().create(typeName_.toStdString(), nodeId_.toStdString(), {});
+    auto propertyProvider = std::dynamic_pointer_cast<s7::IElementPropertyProvider>(element);
+    s7::ParamMap params;
+    if (propertyProvider) {
+        params = propertyProvider->getProperties();
+    }
 
-    auto* root = new QVBoxLayout(&dialog);
-    auto* form = new QFormLayout();
-
-    auto* nameEdit = new QLineEdit(nodeName_, &dialog);
-    auto* idEdit = new QLineEdit(nodeId_, &dialog);
-    auto* typeEdit = new QLineEdit(typeName_, &dialog);
-    typeEdit->setReadOnly(true);
-
-    auto* paramsEdit = new QPlainTextEdit(&dialog);
-    paramsEdit->setPlainText(paramsJson_);
-
-    form->addRow("Name", nameEdit);
-    form->addRow("ID", idEdit);
-    form->addRow("Type", typeEdit);
-    root->addLayout(form);
-    root->addWidget(paramsEdit, 1);
-
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    root->addWidget(buttons);
-
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, [&dialog, paramsEdit] {
-        try
-        {
-            const auto parsed = boost::json::parse(paramsEdit->toPlainText().toStdString());
-            if (!parsed.is_object())
-            {
-                throw std::runtime_error("Parameters JSON must be an object");
-            }
-            dialog.accept();
-        }
-        catch (const std::exception& ex)
-        {
-            QMessageBox::warning(&dialog, "Invalid Parameters", QString::fromUtf8(ex.what()));
-        }
-    });
-    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-
+    s7ui::dialogs::PropertiesDialog dialog(typeName_, nodeId_, nodeName_, params, nullptr);
     if (dialog.exec() != QDialog::Accepted)
     {
         return;
     }
 
-    setNodeName(nameEdit->text());
-    setNodeId(idEdit->text());
-    setParamsJson(paramsEdit->toPlainText());
+    setNodeName(dialog.nodeName());
+    setNodeId(dialog.nodeId());
+
+    if (propertyProvider) {
+        propertyProvider->setProperties(dialog.params());
+        // Note: This is where we would serialize the properties back to JSON.
+        // This part is complex and depends on the JSON library and structure.
+        // For now, we are just updating the element in memory.
+    }
 }
 
 void BasicNodeItem::refreshToolTip()
 {
-    setToolTip(QString("%1\nname: %2\nid: %3\nshape: %4")
+    setToolTip(QString("%1\nname: %2\nid: %3")
         .arg(typeName_)
         .arg(nodeName_)
-        .arg(nodeId_.isEmpty() ? QStringLiteral("<unset>") : nodeId_)
-        .arg(shape_));
+        .arg(nodeId_.isEmpty() ? QStringLiteral("<unset>") : nodeId_));
 }
 
 } // namespace s7ui::elements

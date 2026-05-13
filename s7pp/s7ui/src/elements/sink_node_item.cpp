@@ -13,16 +13,22 @@
 
 namespace s7ui::elements {
 
+namespace
+{
+constexpr qreal kSinkMinWidthMm = 40.0;
+constexpr qreal kSinkMinHeightMm = 25.0;
+constexpr qreal kSinkExtraHeightPerInputMm = 5.0;
+}
+
 SinkNodeItem::SinkNodeItem(const QString& typeName, const int inputCount, QGraphicsItem* parent)
     : BasicNodeItem(typeName, parent), typeName_(typeName)
 {
-    setSize(72, 44);
-
     proxy_ = new QGraphicsProxyWidget(this);
     preview_ = new VisualSinkPreviewWidget(true);
+    preview_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    proxy_->setAcceptedMouseButtons(Qt::NoButton);
     preview_->setSignalMode(VisualSinkPreviewWidget::SignalMode::Flat);
     proxy_->setWidget(preview_);
-    connect(preview_, &VisualSinkPreviewWidget::doubleClicked, this, [this] { openPropertiesDialog(); });
 
     // Polling timer — only active when a live Probe is attached.
     pollTimer_ = new QTimer(this);
@@ -58,6 +64,8 @@ void SinkNodeItem::setInputCount(int count)
         inputCount_ = 1;
         clearConnectors();
         setPortLayout(1, 0);
+        setSize(std::max<qreal>(size().width(), kSinkMinWidthMm),
+                std::max<qreal>(size().height(), kSinkMinHeightMm));
         preview_->setInputCount(2);
         if (detailWindow_)
         {
@@ -81,6 +89,11 @@ void SinkNodeItem::setInputCount(int count)
 
     clearConnectors();
     setPortLayout(inputCount_, 0);
+    const qreal baseHeight = std::max<qreal>(size().height(), kSinkMinHeightMm);
+    const qreal targetHeight = std::max<qreal>(baseHeight,
+        kSinkMinHeightMm + static_cast<qreal>(inputCount_ - 1) * kSinkExtraHeightPerInputMm);
+    setSize(std::max<qreal>(size().width(), kSinkMinWidthMm), targetHeight);
+    updatePreviewGeometry();
 }
 
 void SinkNodeItem::setPreviewLevels(const QVector<double>& levels)
@@ -204,7 +217,12 @@ void SinkNodeItem::updatePreviewGeometry()
         return;
     }
 
-    const QRectF inner = sizeRect().adjusted(20, 14, -14, -14);
+    const QRectF r = sizeRect();
+    const qreal left = r.width() * 0.15;
+    const qreal right = r.width() * 0.05;
+    const qreal top = r.height() * 0.1;
+    const qreal bottom = r.height() * 0.1;
+    const QRectF inner = r.adjusted(left, top, -right, -bottom);
     proxy_->setGeometry(inner);
 }
 
@@ -232,4 +250,3 @@ void SinkNodeItem::openPropertiesDialog()
 }
 
 } // namespace s7ui::elements
-

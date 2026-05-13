@@ -55,12 +55,33 @@ add_executable(s7ui
     src/main.cpp
     src/main_window.cpp
     src/main_window.hpp
+    src/i_schema_runner.hpp
+    src/scene_roles.hpp
+    src/node_template.hpp
+    src/node_factory.cpp
+    src/node_factory.hpp
+    src/scene_serializer.cpp
+    src/scene_serializer.hpp
+    src/model_run_controller.cpp
+    src/model_run_controller.hpp
+    src/sheet_presenter.cpp
+    src/sheet_presenter.hpp
+    src/palette_service.cpp
+    src/palette_service.hpp
+    src/schema_document_controller.cpp
+    src/schema_document_controller.hpp
+    src/schema_file_service.cpp
+    src/schema_file_service.hpp
+    src/schema_workflow_controller.cpp
+    src/schema_workflow_controller.hpp
     src/visual_catalog.cpp
     src/visual_catalog.hpp
     src/schema_compiler.cpp
     src/schema_compiler.hpp
     src/schema_session.cpp
     src/schema_session.hpp
+    src/s7ui_json_dto.cpp
+    src/s7ui_json_dto.hpp
     src/oscilloscope_widget.cpp
     src/oscilloscope_widget.hpp
     src/elements/basic_node_item.cpp
@@ -73,6 +94,8 @@ add_executable(s7ui
     src/elements/sink_node_item.hpp
     src/remote_nodes_widget.cpp
     src/remote_nodes_widget.hpp
+    src/dialogs/properties_dialog.cpp
+    src/schema_runner.cpp
 )
 
 target_include_directories(s7ui PRIVATE
@@ -101,3 +124,44 @@ set_target_properties(s7ui PROPERTIES
 )
 
 install(TARGETS s7ui DESTINATION bin)
+
+if(BUILD_TESTING)
+    # --- ModelRunController (no Qt required) ---
+    add_executable(s7ui_model_run_controller_test
+        src/tests/model_run_controller_test.cpp
+    )
+    target_include_directories(s7ui_model_run_controller_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/s7core/include
+    )
+    target_link_libraries(s7ui_model_run_controller_test PRIVATE
+        Qt6::Core
+    )
+    set_target_properties(s7ui_model_run_controller_test PROPERTIES
+        AUTOMOC ON
+        CXX_STANDARD 23
+    )
+    add_test(NAME s7ui_model_run_controller_test COMMAND s7ui_model_run_controller_test)
+
+    # --- SheetPresenter static helpers (no Qt runtime display required) ---
+    add_executable(s7ui_sheet_presenter_test
+        src/tests/sheet_presenter_test.cpp
+        src/sheet_presenter.cpp
+        src/sheet_presenter.hpp
+        src/scene_roles.hpp
+    )
+    target_include_directories(s7ui_sheet_presenter_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/s7core/include
+    )
+    target_link_libraries(s7ui_sheet_presenter_test PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Widgets Qt6::PrintSupport
+        qschematic::qschematic-static
+    )
+    set_target_properties(s7ui_sheet_presenter_test PROPERTIES
+        AUTOMOC ON
+        CXX_STANDARD 23
+    )
+    add_test(NAME s7ui_sheet_presenter_test COMMAND s7ui_sheet_presenter_test)
+endif()
+

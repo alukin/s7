@@ -29,12 +29,14 @@ public:
     QString paramsJson() const;
 
     void setPortLayout(int inputPorts, int outputPorts);
-    void setVisualStyle(const QString& shape, const QColor& baseColor);
+    void setVisualStyle(const QColor& baseColor);
 
 protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
     virtual void openPropertiesDialog();
+
+    void sizeChangedEvent(QSizeF oldSize, QSizeF newSize) override;
 
 private:
     void refreshToolTip();
@@ -45,7 +47,6 @@ private:
     QString paramsJson_ = "{}";
     int inputPorts_ = 1;
     int outputPorts_ = 1;
-    QString shape_ = "rect";
     QColor baseColor_ = QColor(79, 79, 79, 120);
 };
 

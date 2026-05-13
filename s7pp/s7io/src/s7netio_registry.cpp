@@ -24,22 +24,53 @@ void registerNetIO(ElementRegistry& registry)
         return cfg;
     };
 
-    registry.registerType("RealNetSink", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        return std::make_shared<RealNetSink>(id, parseConfig(params));
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "RealNetSink",
+            .category             = "I/O",
+            .description          = "Write N-channel real stream to network",
+            .default_input_count  = 1,
+            .default_output_count = 0,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            return std::make_shared<RealNetSink>(id, parseConfig(params));
+        });
 
-    registry.registerType("RealNetSource", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        return std::make_shared<RealNetSource>(id, parseConfig(params));
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "RealNetSource",
+            .category             = "I/O",
+            .description          = "Read N-channel real stream from network",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            return std::make_shared<RealNetSource>(id, parseConfig(params));
+        });
 
-    registry.registerType("ComplexNetSink", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        return std::make_shared<ComplexNetSink>(id, parseConfig(params));
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ComplexNetSink",
+            .category             = "I/O",
+            .description          = "Write N-channel complex stream to network",
+            .default_input_count  = 1,
+            .default_output_count = 0,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            return std::make_shared<ComplexNetSink>(id, parseConfig(params));
+        });
 
-    registry.registerType("ComplexNetSource", [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
-        return std::make_shared<ComplexNetSource>(id, parseConfig(params));
-    });
+    registry.registerType(
+        TypeDescriptor{
+            .type_name            = "ComplexNetSource",
+            .category             = "I/O",
+            .description          = "Read N-channel complex stream from network",
+            .default_input_count  = 0,
+            .default_output_count = 1,
+        },
+        [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
+            return std::make_shared<ComplexNetSource>(id, parseConfig(params));
+        });
 }
 
 } // namespace s7
-

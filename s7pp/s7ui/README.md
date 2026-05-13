@@ -1,14 +1,13 @@
-# s7ui (skeleton)
+# s7ui
 
-`s7ui` is the initial control/compute/visualize desktop shell for S7.
+`s7ui` is the Qt-based schema editor and local run control UI for S7.
 
 ## Current architecture view
 
 - Qt6 desktop app with a dock-based main window
 - QSchematic editor canvas as the central graph view
-- Palette for primitive runtime nodes, composite schema nodes, and UI/visual-only elements
+- Palette for runtime nodes and UI/visual-only elements
 - Visual sink nodes render inline live graphs and open a dedicated detail window on double-click
-- Schema nodes are first-class elements: double-click opens a nested editor for the sub-schema
 - Every diagram element renders `type`, editable `name`, and `id` inside the node block
 - Double-click on regular nodes opens a parameter popup with editable name/id and JSON params
 - Model toolbar actions: `run`, `pause`, `resume`, `stop`, `reset` (local runtime service)
@@ -121,7 +120,7 @@ See `ai_impl_docs/json_schemas/README.md` for the short index.
 ## Build notes
 
 - Qt6 is required (target baseline: Qt 6.2+)
-- In this skeleton, vendored `external/QSchematic` and `external/QCustomPlot` are used
+- Vendored `external/QSchematic` and `external/QCustomPlot` are used
 - `s7ui` links to local `s7core` and `s7io` for in-process runtime evolution
 
 ## Quick try

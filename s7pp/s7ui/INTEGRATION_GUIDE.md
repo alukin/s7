@@ -1,32 +1,52 @@
-# Oscilloscope Widget Integration Guide
+# Oscilloscope Integration Guide
 
-## Quick Start
+This guide documents integration patterns that match the current `s7ui` codebase.
 
-### Minimal Example
+## Scope
+
+- `OscilloscopeWidget` is a reusable Qt widget for live probe visualization.
+- `SinkNodeItem` is the in-canvas visual sink node that renders a small preview and opens a detail window.
+- `SchemaSession` is the runtime bridge that provides `probe(id)` and `complexProbe(id)`.
+
+## Minimal Example
 
 ```cpp
 #include "oscilloscope_widget.hpp"
 #include <s7probe.hpp>
 
-// Create widget
-auto oscilloscope = new OscilloscopeWidget(parentWidget);
+auto* oscilloscope = new OscilloscopeWidget(parentWidget);
 
-// Attach a probe from the schema
-std::shared_ptr<s7::Probe> probe = /* from schema */;
+// For real-valued signals
+std::shared_ptr<s7::Probe> probe = /* obtain from SchemaSession */;
 oscilloscope->attachProbe(probe);
 
-// Show it
-oscilloscope->show();
+// Optional display tuning
+oscilloscope->setSampleRate(1000.0);   // Hz
+oscilloscope->setTimeWindow(5.0);      // seconds
 
-// Widget automatically polls probe at 30 Hz
-// Data is displayed in real-time
+oscilloscope->show();
 ```
 
-## Integration Patterns
+## Current MainWindow Integration
 
-### Pattern 1: Standalone Window
+`MainWindow` already wires visual sinks to runtime probes through:
 
-Simplest approach for a single oscilloscope device:
+- `MainWindow::linkSinkProbes()`
+- `MainWindow::unlinkSinkProbes()`
+
+Current behavior:
+
+1. Iterate scene nodes.
+2. Keep nodes tagged with visual-sink role.
+3. Resolve node id from item data.
+4. For `ComplexScopeSink` call `schemaSession_->complexProbe(id)` and attach via `SinkNodeItem::setComplexProbe(...)`.
+5. Otherwise call `schemaSession_->probe(id)` and attach via `SinkNodeItem::setProbe(...)`.
+
+This means the common path for the schema editor is already implemented in `s7ui/src/main_window.cpp`.
+
+## Pattern 1: Standalone Oscilloscope Window
+
+Use this when you want a detached instrument window.
 
 ```cpp
 class OscilloscopeWindow : public QMainWindow
@@ -36,430 +56,78 @@ public:
     explicit OscilloscopeWindow(std::shared_ptr<s7::Probe> probe, QWidget* parent = nullptr)
         : QMainWindow(parent)
     {
-        auto* oscilloscope = new OscilloscopeWidget(this);
-        setCentralWidget(oscilloscope);
-        oscilloscope->attachProbe(probe);
-        setWindowTitle("Oscilloscope: " + QString::fromStdString(probe->getId()));
-        resize(800, 600);
+        auto* osc = new OscilloscopeWidget(this);
+        setCentralWidget(osc);
+        osc->attachProbe(std::move(probe));
+        resize(900, 600);
     }
 };
-
-// Usage in MainWindow:
-void MainWindow::openOscilloscope(const std::string& probe_id)
-{
-    auto probe = schemaSession_->probe(probe_id);
-    if (!probe) return;
-    
-    auto* window = new OscilloscopeWindow(probe);
-    window->setAttribute(Qt::WA_DeleteOnClose);
-    window->show();
-}
 ```
 
-### Pattern 2: Dock Widget in Main UI
+For complex probes, use `attachComplexProbe(...)` instead.
 
-Multiple instruments in a dockable interface:
+## Pattern 2: Docked Instrument Panel
+
+Use this when the editor should keep one persistent oscilloscope panel.
 
 ```cpp
-class InstrumentDock : public QDockWidget
-{
-    Q_OBJECT
-public:
-    InstrumentDock(QWidget* parent = nullptr)
-        : QDockWidget("Instruments", parent)
-    {
-        auto* container = new QWidget();
-        auto* layout = new QVBoxLayout(container);
-        
-        setupInstrumentList();
-        oscilloscope_ = new OscilloscopeWidget();
-        
-        layout->addWidget(instrumentList_);
-        layout->addWidget(oscilloscope_);
-        setWidget(container);
-        
-        connect(instrumentList_, &QListWidget::itemClicked, this, &InstrumentDock::onInstrumentSelected);
-    }
-    
-    void setSchemaSession(std::shared_ptr<SchemaSession> session) {
-        session_ = session;
-        populateInstrumentList();
-    }
-
-private:
-    void populateInstrumentList() {
-        instrumentList_->clear();
-        if (!session_) return;
-        
-        for (const auto& id : session_->getSinkItemIds()) {
-            instrumentList_->addItem(QString::fromStdString(id));
-        }
-    }
-    
-    void onInstrumentSelected(QListWidgetItem* item) {
-        auto probe = session_->probe(item->text().toStdString());
-        if (!probe) {
-            probe = session_->complexProbe(item->text().toStdString());
-        }
-        
-        if (probe) oscilloscope_->attachProbe(probe);
-        else oscilloscope_->clearProbe();
-    }
-
-private:
-    QListWidget* instrumentList_;
-    OscilloscopeWidget* oscilloscope_;
-    std::shared_ptr<SchemaSession> session_;
-};
-
-// In MainWindow::setupUI():
-auto* dock = new InstrumentDock();
+auto* dock = new QDockWidget("Instrument", this);
+auto* osc = new OscilloscopeWidget(dock);
+dock->setWidget(osc);
 addDockWidget(Qt::RightDockWidgetArea, dock);
-```
 
-### Pattern 3: Tab Interface
-
-Multiple oscilloscopes in parallel:
-
-```cpp
-class OscilloscopeTabWidget : public QTabWidget
-{
-    Q_OBJECT
-public:
-    OscilloscopeTabWidget(std::shared_ptr<SchemaSession> session, QWidget* parent = nullptr)
-        : QTabWidget(parent), session_(session)
-    {
-        connect(this, &QTabWidget::tabCloseRequested, this, &OscilloscopeTabWidget::closeTab);
-        setTabsClosable(true);
-    }
-    
-    void addProbe(const std::string& probe_id) {
-        auto probe = session_->probe(probe_id);
-        if (!probe) {
-            auto cprobe = session_->complexProbe(probe_id);
-            if (!cprobe) return;
-            addComplexProbe(cprobe);
-            return;
-        }
-        
-        auto* osc = new OscilloscopeWidget();
-        osc->attachProbe(probe);
-        int index = addTab(osc, QString::fromStdString(probe_id));
-        probes_[index] = probe;
-    }
-    
-    void addComplexProbe(std::shared_ptr<s7::ComplexProbe> cprobe) {
-        auto* osc = new OscilloscopeWidget();
-        osc->attachComplexProbe(cprobe);
-        int index = addTab(osc, QString::fromStdString(cprobe->getId()));
-        complexProbes_[index] = cprobe;
-    }
-
-private:
-    void closeTab(int index) {
-        removeTab(index);
-        probes_.erase(index);
-        complexProbes_.erase(index);
-    }
-    
-    std::shared_ptr<SchemaSession> session_;
-    std::map<int, std::shared_ptr<s7::Probe>> probes_;
-    std::map<int, std::shared_ptr<s7::ComplexProbe>> complexProbes_;
-};
-```
-
-### Pattern 4: Grid Layout (Multiple Scopes at Once)
-
-Display many small oscilloscopes in a grid:
-
-```cpp
-class OscilloscopeGrid : public QWidget
-{
-    Q_OBJECT
-public:
-    OscilloscopeGrid(std::shared_ptr<SchemaSession> session, QWidget* parent = nullptr)
-        : QWidget(parent), session_(session)
-    {
-        auto* layout = new QGridLayout(this);
-        layout->setSpacing(10);
-        
-        int row = 0, col = 0;
-        const int colsPerRow = 2;
-        
-        for (const auto& probe_id : session->getSinkItemIds()) {
-            auto probe = session->probe(probe_id);
-            if (!probe) continue;
-            
-            auto* osc = new OscilloscopeWidget();
-            osc->attachProbe(probe);
-            osc->setMinimumSize(400, 300);
-            
-            layout->addWidget(osc, row, col);
-            
-            col++;
-            if (col >= colsPerRow) {
-                col = 0;
-                row++;
-            }
-        }
-    }
-
-private:
-    std::shared_ptr<SchemaSession> session_;
-};
-```
-
-## Advanced Usage
-
-### Custom Display Parameters
-
-```cpp
-// Adjust time window
-oscilloscope->setTimeWindow(10.0);  // Show 10 seconds
-
-// Or fixed sample count
-oscilloscope->setSampleCount(2048);
-
-// Force immediate redraw (normally automatic)
-oscilloscope->redraw();
-```
-
-### Handling Probe Lifecycle
-
-```cpp
-class OscilloscopeController
-{
-public:
-    void attachProbe(std::shared_ptr<s7::Probe> probe) {
-        if (!oscilloscope_) {
-            oscilloscope_ = new OscilloscopeWidget();
-            oscilloscope_->show();
-        }
-        oscilloscope_->attachProbe(probe);
-    }
-    
-    void detachProbe() {
-        if (oscilloscope_) {
-            oscilloscope_->clearProbe();
-        }
-    }
-    
-    void shutdown() {
-        if (oscilloscope_) {
-            oscilloscope_->clearProbe();
-            delete oscilloscope_;
-            oscilloscope_ = nullptr;
-        }
-    }
-
-private:
-    OscilloscopeWidget* oscilloscope_ = nullptr;
-};
-```
-
-### Multi-Probe Comparison View
-
-Display two probes side-by-side for comparison:
-
-```cpp
-class OscilloscopeComparison : public QWidget
-{
-    Q_OBJECT
-public:
-    OscilloscopeComparison(QWidget* parent = nullptr)
-        : QWidget(parent)
-    {
-        auto* layout = new QHBoxLayout(this);
-        osc1_ = new OscilloscopeWidget();
-        osc2_ = new OscilloscopeWidget();
-        layout->addWidget(osc1_);
-        layout->addWidget(osc2_);
-    }
-    
-    void setProbes(std::shared_ptr<s7::Probe> probe1,
-                   std::shared_ptr<s7::Probe> probe2) {
-        osc1_->attachProbe(probe1);
-        osc2_->attachProbe(probe2);
-        
-        // Optionally sync time windows
-        osc1_->setTimeWindow(5.0);
-        osc2_->setTimeWindow(5.0);
-    }
-
-private:
-    OscilloscopeWidget* osc1_;
-    OscilloscopeWidget* osc2_;
-};
-```
-
-## Schema Session Integration
-
-### In SchemaSession (Recommended Changes)
-
-```cpp
-// In schema_session.hpp:
-class SchemaSession
-{
-public:
-    /// Get list of all probe IDs in schema
-    [[nodiscard]] std::vector<std::string> getSinkItemIds() const {
-        return sink_item_ids_;  // Already exists
-    }
-    
-    /// Create and show oscilloscope for a probe
-    void showOscilloscope(const std::string& probe_id) {
-        auto probe = this->probe(probe_id);
-        if (!probe) probe = this->complexProbe(probe_id);
-        if (!probe) return;
-        
-        // Factory method for UI
-        Q_EMIT oscilloscopeRequested(probe_id);
-    }
-};
-```
-
-### In MainWindow
-
-```cpp
-void MainWindow::linkSinkProbes()
-{
-    if (!schemaSession_) return;
-    
-    // Populate oscilloscope list
-    for (const auto& probe_id : schemaSession_->getSinkItemIds()) {
-        auto probe = schemaSession_->probe(probe_id);
-        if (!probe) probe = schemaSession_->complexProbe(probe_id);
-        if (!probe) continue;
-        
-        // Add to instrument selector
-        instrumentList_->addItem(QString::fromStdString(probe_id));
-    }
-}
-
-void MainWindow::onInstrumentSelected(const QString& probe_id) {
-    auto probe = schemaSession_->probe(probe_id.toStdString());
-    if (!probe) {
-        auto cprobe = schemaSession_->complexProbe(probe_id.toStdString());
-        if (!cprobe) return;
-        oscilloscope_->attachComplexProbe(cprobe);
-    } else {
-        oscilloscope_->attachProbe(probe);
-    }
+// Later, when selection changes:
+if (auto probe = schemaSession_->probe(nodeId.toStdString())) {
+    osc->attachProbe(probe);
+} else if (auto cprobe = schemaSession_->complexProbe(nodeId.toStdString())) {
+    osc->attachComplexProbe(cprobe);
+} else {
+    osc->clearProbe();
 }
 ```
 
-## Performance Tuning
+## Pattern 3: Keep In-Canvas Sink Nodes Only
 
-### For Many Channels (>8)
+If you do not need a separate instrument dock/window, rely only on `SinkNodeItem`:
 
-```cpp
-// Reduce sample count for faster updates
-oscilloscope->setSampleCount(256);  // vs default 512
+- In-canvas preview updates at ~30 Hz when probe is attached.
+- Double-click opens a larger detail window.
+- `SinkNodeItem::setInputCount(...)` controls number of inputs for real sinks.
 
-// Disable legend if too crowded
-plot_->legend->setVisible(false);
-```
+This is the current default UX in `s7ui`.
 
-### For High-Frequency Display
+## Lifecycle and Threading Notes
 
-```cpp
-// Enable QCustomPlot's adaptive rendering
-plot_->setNotAntialiasedElements(QCP::aeAll);
+- `SchemaSession` runs compute work asynchronously.
+- GUI reads probe buffers from the Qt GUI thread.
+- `OscilloscopeWidget` and `SinkNodeItem` poll via `QTimer` (~30 Hz).
+- Probe reads are thread-safe through probe internals.
 
-// Reduce poll rate if 30 Hz is too much
-// (Would require extending widget API)
-```
+## Performance Notes
 
-### Memory-Efficient Reading
-
-The probe's `readChannel()` is already optimized:
-- Lock held only during memcpy
-- Circular buffer prevents unnecessary copies
-- No unbounded allocations
-
-## Error Handling
+- Lower sample cost:
 
 ```cpp
-try {
-    auto probe = schemaSession_->probe(probe_id);
-    if (!probe) {
-        qWarning() << "Probe not found:" << probe_id;
-        return false;
-    }
-    
-    oscilloscope_->attachProbe(probe);
-    return true;
-} catch (const std::exception& e) {
-    qCritical() << "Error attaching probe:" << e.what();
-    return false;
-}
+oscilloscope->setSampleCount(256);
 ```
 
-## Thread Safety Notes
+- Prefer time-window mode for user-facing UI:
 
-- **OscilloscopeWidget** itself is NOT thread-safe
-  - Create and show only from Qt GUI thread
-  - Call `attachProbe()` only from GUI thread
-
-- **s7::Probe** IS thread-safe
-  - Compute thread writes via `tick()`
-  - GUI thread reads via `readChannel()`
-  - Internal mutex guards access
-
-- **Polling loop** is internal
-  - QTimer ensures GUI thread execution
-  - No manual synchronization needed
-
-## Build Integration
-
-The widget is already included in the s7ui executable:
-
-```cmake
-# In s7ui/CMakeLists.txt (already updated)
-add_executable(s7ui
-    src/oscilloscope_widget.cpp
-    src/oscilloscope_widget.hpp
-    # ... other sources
-)
-```
-
-To use in your UI code:
 ```cpp
-#include "oscilloscope_widget.hpp"
-
-// Automatically finds the header via s7ui/src/ in target_include_directories
+oscilloscope->setSampleRate(1.0 / dt);
+oscilloscope->setTimeWindow(5.0);
 ```
 
-## Debugging Tips
+## Common Pitfalls
 
-### Check Widget Status
-```cpp
-// Verify probe attachment
-if (auto probe = oscilloscope_->probe()) {
-    qDebug() << "Probe attached:" << probe->getId();
-    qDebug() << "Channels:" << probe->channelCount();
-}
-```
+- Do not call UI methods from worker threads.
+- Attach either a real probe or a complex probe to a widget at a time.
+- For sink nodes with embedded preview widgets, keep preview widgets transparent to mouse events so node dragging remains usable.
 
-### Monitor Data Flow
-```cpp
-// In updateRealData():
-qDebug() << "Sample count:" << samples.size();
-qDebug() << "Y range:" << minY << "to" << maxY;
-qDebug() << "Graph count:" << graphs_.size();
-```
+## File References
 
-### Check Polling
-```cpp
-// Verify timer is running
-qDebug() << "Poll timer active:" << pollTimer_->isActive();
-qDebug() << "Update interval:" << pollTimer_->interval() << "ms";
-```
-
----
-
-**Version**: 1.0  
-**Last Updated**: May 12, 2026  
-
-For API details, see `oscilloscope_widget.hpp` header documentation.
-
+- Runtime session: `s7ui/src/schema_session.hpp`
+- Main editor integration: `s7ui/src/main_window.cpp`
+- Sink node item: `s7ui/src/elements/sink_node_item.cpp`
+- Widget API: `s7ui/src/oscilloscope_widget.hpp`
+- Widget implementation: `s7ui/src/oscilloscope_widget.cpp`

@@ -9,6 +9,7 @@ add_executable(s7main
     src/main.cpp
     src/s7control_server.cpp
     src/s7json_rpc.cpp
+    src/s7main_json_dto.cpp
 )
 
 # Always add include directory for headers

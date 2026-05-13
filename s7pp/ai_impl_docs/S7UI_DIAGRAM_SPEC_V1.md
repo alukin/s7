@@ -1,5 +1,11 @@
 # S7 UI Graph Authoring Specification v1
 
+**Status:** Active (Draft)  
+**Purpose:** Schema diagram format and editor authoring semantics  
+**Last Updated:** May 13, 2026
+
+---
+
 ## 1. Purpose
 
 This specification defines the authoring model for S7 graphical design in the UI.

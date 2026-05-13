@@ -15,12 +15,14 @@ add_library(s7io STATIC
     src/s7memio_registry.cpp
     src/s7memio_plugin.cpp
     src/s7netio.cpp
+    src/s7io_json_dto.cpp
     src/s7netio_registry.cpp
     src/s7netio_plugin.cpp
     include/s7fileio.hpp
     include/s7fileio_plugin.hpp
     include/s7memio.hpp
     include/s7netio.hpp
+    include/s7io_json_dto.hpp
 )
 
 target_include_directories(s7io PUBLIC

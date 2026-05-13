@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(s7ctl
 	src/main.cpp
+	src/s7ctl_json_dto.cpp
 )
 
 target_include_directories(s7ctl PRIVATE

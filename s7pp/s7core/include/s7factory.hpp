@@ -50,6 +50,16 @@ namespace s7 {
         bool hidden = false;
     };
 
+    // -------------------------------------------------------------------------
+    // IElementPropertyProvider — interface for exposing configurable properties.
+    // -------------------------------------------------------------------------
+    class IElementPropertyProvider {
+    public:
+        virtual ~IElementPropertyProvider() = default;
+        virtual ParamMap getProperties() const = 0;
+        virtual void setProperties(const ParamMap& params) = 0;
+    };
+
     class ElementRegistry {
     public:
         static ElementRegistry& instance()
@@ -168,4 +178,3 @@ namespace s7 {
     void registerProbe(ElementRegistry& registry = ElementRegistry::instance());
 
 } // namespace s7
-

@@ -1,6 +1,7 @@
 #include "s7control_server.hpp"
 
 #include "s7json_rpc.hpp"
+#include "s7main_json_dto.hpp"
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
@@ -26,30 +27,6 @@ namespace http = beast::http;
 namespace websocket = beast::websocket;
 using tcp = asio::ip::tcp;
 using json = boost::json::value;
-
-auto parseTopics(const json& params) -> std::vector<std::string>
-{
-	if (!params.is_object()) {
-		return {"schema", "run", "runtime"};
-	}
-	const auto& obj = params.as_object();
-	const auto* topics_value = obj.if_contains("topics");
-	if (!topics_value) {
-		return {"schema", "run", "runtime"};
-	}
-	if (!topics_value->is_array()) {
-		throw std::runtime_error("runtime.events.subscribe: 'topics' must be an array");
-	}
-
-	std::vector<std::string> topics;
-	for (const auto& item : topics_value->as_array()) {
-		topics.push_back(boost::json::value_to<std::string>(item));
-	}
-	if (topics.empty()) {
-		topics = {"schema", "run", "runtime"};
-	}
-	return topics;
-}
 
 class ControlServer : public std::enable_shared_from_this<ControlServer> {
 public:
@@ -136,18 +113,13 @@ private:
 				json response;
 				try {
 					const auto parsed = boost::json::parse(request);
-					const auto& parsed_obj = parsed.as_object();
-					const auto* method_value = parsed_obj.if_contains("method");
-					const std::string method = (method_value && method_value->is_string())
-						? boost::json::value_to<std::string>(*method_value)
-						: std::string{};
+					const auto rpc = dto::RpcRequest::fromJson(parsed);
+					const std::string method = rpc.method;
 
 					if (method == "runtime.events.subscribe") {
-						const auto* id_ptr = parsed_obj.if_contains("id");
-						const auto id = id_ptr ? *id_ptr : json(nullptr);
-						const auto* params_ptr = parsed_obj.if_contains("params");
-						const auto params = params_ptr ? *params_ptr : json(boost::json::object{});
-						const auto topics = parseTopics(params);
+						const auto id = rpc.id;
+						const auto params = rpc.params;
+						const auto topics = dto::RuntimeEventsSubscribeParams::fromJson(params).topics;
 
 						auto subscription_id_ref = std::make_shared<std::atomic<uint64_t>>(0);
 						const auto subscription_id = service_->subscribeToEvents(
@@ -158,15 +130,7 @@ private:
 								}
 
 								const auto sid = subscription_id_ref->load(std::memory_order_acquire);
-								boost::json::object params_obj;
-								params_obj["subscription_id"] = sid;
-								params_obj["event_name"] = event.event_name;
-								params_obj["timestamp_ms"] = event.timestamp_ms;
-								params_obj["payload"] = event.payload;
-								boost::json::object notification_obj;
-								notification_obj["jsonrpc"] = "2.0";
-								notification_obj["method"] = "runtime.event";
-								notification_obj["params"] = std::move(params_obj);
+								auto notification_obj = dto::RuntimeEventNotification{.subscription_id = sid, .event = event}.toJson();
 
 								std::scoped_lock lock(ws_write_mutex);
 								try {
@@ -179,35 +143,25 @@ private:
 						subscription_id_ref->store(subscription_id, std::memory_order_release);
 
 						subscriptions.push_back(subscription_id);
-						boost::json::object result_obj;
-						result_obj["subscribed"] = true;
-						result_obj["subscription_id"] = subscription_id;
-						result_obj["topics"] = boost::json::value_from(topics);
-						boost::json::object response_obj;
-						response_obj["jsonrpc"] = "2.0";
-						response_obj["id"] = id;
-						response_obj["result"] = std::move(result_obj);
-						response = std::move(response_obj);
+						response = dto::RpcEnvelope::success(
+							id,
+							dto::RuntimeEventsSubscribeResult{
+								.subscribed = true,
+								.subscription_id = subscription_id,
+								.topics = topics}
+								.toJson());
 					} else if (method == "runtime.events.unsubscribe") {
-						const auto* id_ptr = parsed_obj.if_contains("id");
-						const auto id = id_ptr ? *id_ptr : json(nullptr);
-						const auto* params_ptr = parsed_obj.if_contains("params");
-						if (!params_ptr || !params_ptr->is_object()) {
-							throw std::runtime_error("runtime.events.unsubscribe: missing params");
-						}
-						const auto subscription_id = boost::json::value_to<uint64_t>(params_ptr->as_object().at("subscription_id"));
+						const auto id = rpc.id;
+						const auto params = rpc.params;
+						const auto unsub = dto::RuntimeEventsUnsubscribeParams::fromJson(params);
+						const auto subscription_id = unsub.subscription_id;
 						service_->unsubscribeFromEvents(subscription_id);
 						subscriptions.erase(
 							std::remove(subscriptions.begin(), subscriptions.end(), subscription_id),
 							subscriptions.end());
-						boost::json::object result_obj;
-						result_obj["unsubscribed"] = true;
-						result_obj["subscription_id"] = subscription_id;
-						boost::json::object response_obj;
-						response_obj["jsonrpc"] = "2.0";
-						response_obj["id"] = id;
-						response_obj["result"] = std::move(result_obj);
-						response = std::move(response_obj);
+						response = dto::RpcEnvelope::success(
+							id,
+							dto::RuntimeEventsUnsubscribeResult{.unsubscribed = true, .subscription_id = subscription_id}.toJson());
 					} else {
 						response = dispatcher_.dispatchParsed(parsed);
 					}

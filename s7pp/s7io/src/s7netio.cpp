@@ -1,4 +1,5 @@
 #include "s7netio.hpp"
+#include "s7io_json_dto.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -39,94 +40,8 @@ struct EndpointUri {
     std::string hostport_key;
 };
 
-struct WsFrameRequest {
-    std::string op;
-    std::vector<double> sample;
-
-    static auto fromJson(const json& payload) -> WsFrameRequest
-    {
-        if (!payload.is_object()) {
-            throw std::runtime_error("request must be an object");
-        }
-        const auto& obj = payload.as_object();
-        WsFrameRequest request;
-        if (const auto* op = obj.if_contains("op"); op && op->is_string()) {
-            request.op = boost::json::value_to<std::string>(*op);
-        }
-        if (const auto* sample = obj.if_contains("sample")) {
-            if (!sample->is_array()) {
-                throw std::runtime_error("missing array field 'sample'");
-            }
-            request.sample = boost::json::value_to<std::vector<double>>(*sample);
-        }
-        return request;
-    }
-
-    auto toJson() const -> json
-    {
-        boost::json::object obj;
-        obj["op"] = op;
-        if (!sample.empty()) {
-            obj["sample"] = boost::json::value_from(sample);
-        }
-        return obj;
-    }
-};
-
-struct WsFrameResponse {
-    bool ok = true;
-    std::optional<std::string> error;
-    std::optional<bool> dropped;
-    std::optional<bool> empty;
-    std::optional<std::vector<double>> sample;
-
-    static auto errorResponse(const std::string& message) -> WsFrameResponse
-    {
-        WsFrameResponse response;
-        response.ok = false;
-        response.error = message;
-        return response;
-    }
-
-    auto toJson() const -> json
-    {
-        boost::json::object obj;
-        obj["ok"] = ok;
-        if (error.has_value()) obj["error"] = *error;
-        if (dropped.has_value()) obj["dropped"] = *dropped;
-        if (empty.has_value()) obj["empty"] = *empty;
-        if (sample.has_value()) obj["sample"] = boost::json::value_from(*sample);
-        return obj;
-    }
-
-    static auto fromJson(const json& payload, const std::string& fallbackError) -> WsFrameResponse
-    {
-        if (!payload.is_object()) {
-            return errorResponse(fallbackError);
-        }
-        const auto& obj = payload.as_object();
-        WsFrameResponse response;
-        if (const auto* okVal = obj.if_contains("ok"); okVal && okVal->is_bool()) {
-            response.ok = okVal->as_bool();
-        }
-        if (const auto* err = obj.if_contains("error"); err && err->is_string()) {
-            response.error = boost::json::value_to<std::string>(*err);
-        }
-        if (const auto* droppedVal = obj.if_contains("dropped"); droppedVal && droppedVal->is_bool()) {
-            response.dropped = droppedVal->as_bool();
-        }
-        if (const auto* emptyVal = obj.if_contains("empty"); emptyVal && emptyVal->is_bool()) {
-            response.empty = emptyVal->as_bool();
-        }
-        if (const auto* sampleVal = obj.if_contains("sample"); sampleVal && sampleVal->is_array()) {
-            response.sample = boost::json::value_to<std::vector<double>>(*sampleVal);
-        }
-        if (!response.ok && !response.error.has_value()) {
-            response.error = fallbackError;
-        }
-        return response;
-    }
-};
+using WsFrameRequest = s7::io::dto::WsFrameRequest;
+using WsFrameResponse = s7::io::dto::WsFrameResponse;
 
 auto normalizeScheme(std::string scheme) -> std::string
 {

@@ -1,4 +1,5 @@
 #include "s7json_rpc.hpp"
+#include "s7main_json_dto.hpp"
 
 namespace s7 {
 namespace {
@@ -6,102 +7,6 @@ namespace {
 using boost::json::array;
 using boost::json::object;
 using boost::json::value;
-
-struct RpcRequest
-{
-	value id = nullptr;
-	std::string method;
-	value params = object{};
-
-	static auto fromJson(const value& request) -> RpcRequest
-	{
-		if (!request.is_object()) {
-			throw std::runtime_error("Invalid Request");
-		}
-		const auto& obj = request.as_object();
-		const auto* version = obj.if_contains("jsonrpc");
-		const auto* method_val = obj.if_contains("method");
-		if (!version || !version->is_string() || boost::json::value_to<std::string>(*version) != "2.0" ||
-			!method_val || !method_val->is_string()) {
-			throw std::runtime_error("Invalid Request");
-		}
-
-		RpcRequest out;
-		if (const auto* id = obj.if_contains("id")) {
-			out.id = *id;
-		}
-		out.method = boost::json::value_to<std::string>(*method_val);
-		if (const auto* params = obj.if_contains("params")) {
-			out.params = *params;
-		}
-		return out;
-	}
-};
-
-struct RpcEnvelope
-{
-	static auto success(const value& id, const value& result) -> value
-	{
-		object response;
-		response["jsonrpc"] = "2.0";
-		response["id"] = id;
-		response["result"] = result;
-		return response;
-	}
-
-	static auto error(const value& id, int error_code, const std::string& message) -> value
-	{
-		object error;
-		error["code"] = error_code;
-		error["message"] = message;
-		object response;
-		response["jsonrpc"] = "2.0";
-		response["id"] = id;
-		response["error"] = std::move(error);
-		return response;
-	}
-};
-
-struct SchemaLoadSource
-{
-	std::string kind = "inline";
-	std::string schema_json;
-	std::string schema_name = "unnamed";
-	std::string path;
-
-	static auto fromJson(const object& params_obj) -> SchemaLoadSource
-	{
-		const auto* source_ptr = params_obj.if_contains("source");
-		if (!source_ptr || !source_ptr->is_object()) {
-			throw std::runtime_error("Missing 'source' parameter");
-		}
-
-		SchemaLoadSource source;
-		const auto& source_obj = source_ptr->as_object();
-		if (const auto* kind_ptr = source_obj.if_contains("kind"); kind_ptr && kind_ptr->is_string()) {
-			source.kind = boost::json::value_to<std::string>(*kind_ptr);
-		}
-
-		if (source.kind == "inline") {
-			if (const auto* schema_json_ptr = source_obj.if_contains("schema_json"); schema_json_ptr && schema_json_ptr->is_string()) {
-				source.schema_json = boost::json::value_to<std::string>(*schema_json_ptr);
-			}
-			if (const auto* schema_name_ptr = params_obj.if_contains("schema_name"); schema_name_ptr && schema_name_ptr->is_string()) {
-				source.schema_name = boost::json::value_to<std::string>(*schema_name_ptr);
-			}
-			return source;
-		}
-
-		if (source.kind == "filesystem") {
-			if (const auto* path_ptr = source_obj.if_contains("path"); path_ptr && path_ptr->is_string()) {
-				source.path = boost::json::value_to<std::string>(*path_ptr);
-			}
-			return source;
-		}
-
-		throw std::runtime_error("Unknown source kind: " + source.kind);
-	}
-};
 
 } // namespace
 
@@ -122,7 +27,7 @@ auto JsonRpcDispatcher::dispatch(const std::string& json_request_str) -> value
 auto JsonRpcDispatcher::dispatchParsed(const value& request) -> value
 {
 	try {
-		const auto rpc = RpcRequest::fromJson(request);
+		const auto rpc = dto::RpcRequest::fromJson(request);
 		const auto& method = rpc.method;
 		const auto& params = rpc.params;
 
@@ -226,11 +131,10 @@ auto JsonRpcDispatcher::handle_schema_load(const value& params, const value& id)
 	if (!params.is_object()) {
 		return error_response(-32002, "Invalid 'params' object", id);
 	}
-	const auto& params_obj = params.as_object();
 	NodeRuntimeService::LoadResult load_result{};
-	SchemaLoadSource source;
+	dto::SchemaLoadSource source;
 	try {
-		source = SchemaLoadSource::fromJson(params_obj);
+		source = dto::SchemaLoadSource::fromJson(params);
 	} catch (const std::exception& ex) {
 		return error_response(-32002, ex.what(), id);
 	}
@@ -256,7 +160,7 @@ auto JsonRpcDispatcher::handle_schema_load(const value& params, const value& id)
 
 auto JsonRpcDispatcher::handle_schema_validate(const value& params, const value& id) -> value
 {
-	const std::string handle = boost::json::value_to<std::string>(params.as_object().at("schema_handle"));
+	const auto handle = dto::SchemaHandleParam::fromJson(params).schema_handle;
 	service_->validateSchema(handle);
 	object result;
 	result["schema_handle"] = handle;
@@ -267,22 +171,18 @@ auto JsonRpcDispatcher::handle_schema_validate(const value& params, const value&
 
 auto JsonRpcDispatcher::handle_schema_run(const value& params, const value& id) -> value
 {
-	const auto& params_obj = params.as_object();
-	const std::string handle = boost::json::value_to<std::string>(params_obj.at("schema_handle"));
-	const auto& mode = params_obj.at("mode").as_object();
-	const auto* ticks_ptr = mode.if_contains("ticks");
-	const long ticks = ticks_ptr ? boost::json::value_to<long>(*ticks_ptr) : 1;
-	const auto run_result = service_->runSchema(handle, ticks);
+	const auto run_params = dto::SchemaRunParams::fromJson(params);
+	const auto run_result = service_->runSchema(run_params.schema_handle, run_params.ticks);
 	object result;
 	result["run_id"] = run_result.run_id;
 	result["accepted"] = run_result.accepted;
-	result["mode"] = mode;
+	result["mode"] = run_params.mode;
 	return success_response(result, id);
 }
 
 auto JsonRpcDispatcher::handle_schema_pause(const value& params, const value& id) -> value
 {
-	const std::string run_id = boost::json::value_to<std::string>(params.as_object().at("run_id"));
+	const auto run_id = dto::RunIdParam::fromJson(params).run_id;
 	service_->pauseRun(run_id);
 	object result;
 	result["run_id"] = run_id;
@@ -292,7 +192,7 @@ auto JsonRpcDispatcher::handle_schema_pause(const value& params, const value& id
 
 auto JsonRpcDispatcher::handle_schema_resume(const value& params, const value& id) -> value
 {
-	const std::string run_id = boost::json::value_to<std::string>(params.as_object().at("run_id"));
+	const auto run_id = dto::RunIdParam::fromJson(params).run_id;
 	service_->resumeRun(run_id);
 	object result;
 	result["run_id"] = run_id;
@@ -302,7 +202,7 @@ auto JsonRpcDispatcher::handle_schema_resume(const value& params, const value& i
 
 auto JsonRpcDispatcher::handle_schema_stop(const value& params, const value& id) -> value
 {
-	const std::string run_id = boost::json::value_to<std::string>(params.as_object().at("run_id"));
+	const auto run_id = dto::RunIdParam::fromJson(params).run_id;
 	service_->stopRun(run_id);
 	object result;
 	result["run_id"] = run_id;
@@ -312,7 +212,7 @@ auto JsonRpcDispatcher::handle_schema_stop(const value& params, const value& id)
 
 auto JsonRpcDispatcher::handle_schema_reset(const value& params, const value& id) -> value
 {
-	const std::string handle = boost::json::value_to<std::string>(params.as_object().at("schema_handle"));
+	const auto handle = dto::SchemaHandleParam::fromJson(params).schema_handle;
 	service_->resetSchema(handle);
 	object result;
 	result["schema_handle"] = handle;
@@ -322,7 +222,7 @@ auto JsonRpcDispatcher::handle_schema_reset(const value& params, const value& id
 
 auto JsonRpcDispatcher::handle_schema_unload(const value& params, const value& id) -> value
 {
-	const std::string handle = boost::json::value_to<std::string>(params.as_object().at("schema_handle"));
+	const auto handle = dto::SchemaHandleParam::fromJson(params).schema_handle;
 	service_->unloadSchema(handle);
 	object result;
 	result["schema_handle"] = handle;
@@ -333,13 +233,13 @@ auto JsonRpcDispatcher::handle_schema_unload(const value& params, const value& i
 auto JsonRpcDispatcher::error_response(int error_code, const std::string& message, const value& id)
 	-> value
 {
-	return RpcEnvelope::error(id, error_code, message);
+	return dto::RpcEnvelope::error(id, error_code, message);
 }
 
 auto JsonRpcDispatcher::success_response(const value& result, const value& id)
 	-> value
 {
-	return RpcEnvelope::success(id, result);
+	return dto::RpcEnvelope::success(id, result);
 }
 
 } // namespace s7

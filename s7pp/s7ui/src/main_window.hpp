@@ -1,13 +1,10 @@
 #pragma once
 
-#include "visual_catalog.hpp"
+#include "node_template.hpp"
+#include "sheet_presenter.hpp"
 
 #include <qschematic/scene.hpp>
 #include <qschematic/items/item.hpp>
-
-#include <s7runtime.hpp>
-
-#include <boost/json.hpp>
 
 #include <QMainWindow>
 
@@ -21,33 +18,38 @@ class QLineEdit;
 class QDoubleSpinBox;
 class QSpinBox;
 class QLabel;
-class QTimer;
 
-namespace QSchematic
-{
-class View;
-}
+namespace QSchematic { class View; }
 
 class RemoteNodesWidget;
 
-namespace s7ui {
-class SchemaSession;
+namespace s7ui { class SchemaRunner; }
+
+namespace s7ui::visual { class Catalog; }
+
+namespace s7ui::ui {
+class NodeFactory;
+class ModelRunController;
+class PaletteService;
+class SchemaDocumentController;
+class SchemaFileService;
+class SchemaWorkflowController;
+struct LoadedSchemaResult;
 }
 
+/// Application main window.
+/// Responsibility: UI layout, action wiring, and delegation to services.
+/// Does NOT contain business logic — that lives in the service layer.
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
 public:
-    enum class SheetPreset
-    {
-        A4Landscape,
-        A3Landscape,
-        A2Landscape,
-        A1Landscape,
-    };
-
     explicit MainWindow(QWidget* parent = nullptr);
+    /// Destructor is declared (not defaulted) so that unique_ptr<T> members
+    /// with forward-declared T are destroyed only where the full types are visible
+    /// (i.e. in main_window.cpp).
+    ~MainWindow() override;
 
 private slots:
     void addSelectedPaletteNode();
@@ -55,102 +57,96 @@ private slots:
     void loadSchema();
     void saveSchema();
     void saveSchemaAs();
+    void exportPdf();
+    void printSheet();
     void runSchemaModel();
     void pauseSchemaModel();
     void resumeSchemaModel();
     void stopSchemaModel();
     void resetSchemaModel();
     void schemaPropertiesEdited();
-    void onRunStatusPoll();
+    void onRunStatusPoll(long completed, long total);
     void toggleWireMode();
     void onSceneModeChanged(int mode);
+    void onRunCompleted(bool success, const QString& error);
 
 private:
-    struct NodeTemplate
-    {
-        QString category;
-        QString typeName;
-        QString defaultIdPrefix;
-        int inputPorts = 1;
-        int outputPorts = 1;
-        bool visualSink = false;
-    };
-
+    // --- UI construction (each method has one responsibility) ---
     void createActions();
+    void createSheetActions();
     void createMenus();
     void createToolbars();
     void createCentralEditor();
     void createDocks();
-    void createSheetActions();
+
+    // --- Helpers ---
     void populatePalette();
-    void seedStarterScene();
-    boost::json::value buildRuntimeJsonFromScene() const;
-    boost::json::value buildSchemaJsonFromScene() const;
-    void loadSchemaFromJson(const boost::json::value& root, const QString& sourcePath);
-    bool saveSchemaToFile(const QString& path);
-    void updateWindowTitle();
-    void ensureNodeLibrariesRegistered();
     void ensureVisualCatalogLoaded();
-    void refreshViewAfterLayoutChange();
-    void applySheetPreset(SheetPreset preset);
-    void rebuildPaperOverlay();
+    void seedStarterScene();
+    void applyLoadedSchemaResult(const s7ui::ui::LoadedSchemaResult& r);
+    [[nodiscard]] double currentDt() const;
+    bool saveSchemaToPath(const QString& path, bool setAsCurrentPath);
+
+    void applySheetPreset(s7ui::ui::SheetPresenter::Preset preset);
+    void setZoomPreset(double zoom);
     void updateModelActionStates();
     void setModelStatus(const QString& status);
-    std::shared_ptr<QSchematic::Items::Item> createItemFromTemplate(const NodeTemplate& nodeTemplate, int index) const;
-    NodeTemplate selectedTemplate() const;
-    NodeTemplate templateForType(const QString& typeName) const;
-
-    // Hook all SinkNodeItems to their probes from the current session.
+    void updateWindowTitle();
     void linkSinkProbes();
-    // Detach probes from all SinkNodeItems.
     void unlinkSinkProbes();
 
     void keyPressEvent(QKeyEvent* evt) override;
+    void showEvent(QShowEvent* event)  override;
 
-    QSchematic::Scene* scene_ = nullptr;
-    QSchematic::View* view_ = nullptr;
+    // --- Qt GUI widgets ---
+    QSchematic::Scene*  scene_      = nullptr;
+    QSchematic::View*   view_       = nullptr;
+    QTreeWidget*        paletteTree_= nullptr;
+    QTextEdit*          logView_    = nullptr;
+    RemoteNodesWidget*  remoteNodes_= nullptr;
 
-    QTreeWidget* paletteTree_ = nullptr;
-    QTextEdit* logView_ = nullptr;
-    RemoteNodesWidget* remoteNodes_ = nullptr;
-    QLineEdit* schemaNameEdit_ = nullptr;
-    QDoubleSpinBox* schemaDtSpin_ = nullptr;
-    QSpinBox* runHoursSpin_ = nullptr;
-    QSpinBox* runMinutesSpin_ = nullptr;
-    QSpinBox* runSecondsSpin_ = nullptr;
-    QLabel* modelStatusLabel_ = nullptr;
-
-    QAction* actionAddNode_ = nullptr;
-    QAction* actionOpenSchema_ = nullptr;
-    QAction* actionSaveSchema_ = nullptr;
-    QAction* actionSaveSchemaAs_ = nullptr;
-    QAction* actionFitView_ = nullptr;
-    QAction* actionSheetA4_ = nullptr;
-    QAction* actionSheetA3_ = nullptr;
-    QAction* actionSheetA2_ = nullptr;
-    QAction* actionSheetA1_ = nullptr;
+    QAction* actionOpenSchema_     = nullptr;
+    QAction* actionSaveSchema_     = nullptr;
+    QAction* actionSaveSchemaAs_   = nullptr;
+    QAction* actionFitView_        = nullptr;
+    QAction* actionFitSelection_   = nullptr;
+    QAction* actionZoom25_         = nullptr;
+    QAction* actionZoom50_         = nullptr;
+    QAction* actionZoom100_        = nullptr;
+    QAction* actionExportPdf_      = nullptr;
+    QAction* actionPrint_          = nullptr;
+    QAction* actionSheetA4_        = nullptr;
+    QAction* actionSheetA3_        = nullptr;
+    QAction* actionSheetA2_        = nullptr;
+    QAction* actionSheetA1_        = nullptr;
     QAction* actionToggleWireMode_ = nullptr;
-    QAction* actionRunModel_ = nullptr;
-    QAction* actionPauseModel_ = nullptr;
-    QAction* actionResumeModel_ = nullptr;
-    QAction* actionStopModel_ = nullptr;
-    QAction* actionResetModel_ = nullptr;
+    QAction* actionRunModel_       = nullptr;
+    QAction* actionPauseModel_     = nullptr;
+    QAction* actionResumeModel_    = nullptr;
+    QAction* actionStopModel_      = nullptr;
+    QAction* actionResetModel_     = nullptr;
+    QAction* actionAddNode_        = nullptr;
 
-    mutable int createdNodeCounter_ = 0;
-    QString schemaName_ = "s7ui_schema";
-    QString schemaHandle_;
-    QString runId_;
-    bool librariesRegistered_ = false;
-    bool visualCatalogLoaded_ = false;
-    bool modelLoaded_ = false;
-    bool runActive_ = false;
-    bool runPaused_ = false;
+    QSpinBox*       runHoursSpin_    = nullptr;
+    QSpinBox*       runMinutesSpin_  = nullptr;
+    QSpinBox*       runSecondsSpin_  = nullptr;
+    QLabel*         modelStatusLabel_= nullptr;
+    QLineEdit*      schemaNameEdit_  = nullptr;
+    QDoubleSpinBox* schemaDtSpin_    = nullptr;
+
+    // --- State ---
     QString currentSchemaPath_;
-    SheetPreset sheetPreset_ = SheetPreset::A4Landscape;
+    QString schemaName_ = "s7ui_schema";
+    int     createdNodeCounter_ = 0;
+    bool    initialSheetFitDone_= false;
 
-    s7ui::visual::Catalog visualCatalog_;
-
-    // Live session (replaces the NodeRuntimeService for local execution).
-    std::shared_ptr<s7ui::SchemaSession> schemaSession_;
-    QTimer* runStatusTimer_ = nullptr;  // polls session state at ~5 Hz
+    // --- Services (owned) ---
+    s7ui::SchemaRunner*                              schemaRunner_            = nullptr;
+    std::unique_ptr<s7ui::visual::Catalog>           visualCatalog_;
+    std::unique_ptr<s7ui::ui::NodeFactory>           nodeFactory_;
+    std::unique_ptr<s7ui::ui::SchemaFileService>     schemaFileService_;
+    std::unique_ptr<s7ui::ui::SchemaWorkflowController> schemaWorkflowController_;
+    std::unique_ptr<s7ui::ui::ModelRunController>    modelRunController_;
+    std::unique_ptr<s7ui::ui::SheetPresenter>        sheetPresenter_;
+    std::unique_ptr<s7ui::ui::SchemaDocumentController> schemaDocumentController_;
 };

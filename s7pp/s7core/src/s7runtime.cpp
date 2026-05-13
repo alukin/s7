@@ -1,4 +1,5 @@
 #include "s7runtime.hpp"
+#include "s7core_json_dto.hpp"
 #include "s7netlist.hpp"
 #include <chrono>
 #include <thread>
@@ -17,12 +18,14 @@ NodeRuntimeService::LoadResult NodeRuntimeService::loadSchema(
         auto schema = SchemaBuilder::build(doc);
         std::string handle = generateSchemaHandle();
         loaded_schemas_[handle] = schema;
-        boost::json::object event_payload;
-        event_payload["schema_handle"] = handle;
-        event_payload["schema_id"] = doc.schema_id;
-        event_payload["nodes"] = (int)doc.nodes.size();
-        event_payload["connections"] = (int)doc.connections.size();
-        event_bus_.publishEvent("schema.loaded", event_payload);
+        event_bus_.publishEvent(
+            "schema.loaded",
+            dto::SchemaLoadedEvent{
+                .schema_handle = handle,
+                .schema_id = doc.schema_id,
+                .nodes = (int)doc.nodes.size(),
+                .connections = (int)doc.connections.size()}
+                .toJson());
         return LoadResult{
             handle,
             doc.schema_id,
@@ -42,11 +45,15 @@ NodeRuntimeService::LoadResult NodeRuntimeService::loadSchemaFromFile(
         auto schema = SchemaBuilder::build(doc);
         std::string handle = generateSchemaHandle();
         loaded_schemas_[handle] = schema;
-        boost::json::object event_payload;
-        event_payload["schema_handle"] = handle;
-        event_payload["schema_id"] = doc.schema_id;
-        event_payload["path"] = path;
-        event_bus_.publishEvent("schema.loaded", event_payload);
+        event_bus_.publishEvent(
+            "schema.loaded",
+            dto::SchemaLoadedEvent{
+                .schema_handle = handle,
+                .schema_id = doc.schema_id,
+                .nodes = (int)doc.nodes.size(),
+                .connections = (int)doc.connections.size(),
+                .path = path}
+                .toJson());
         return LoadResult{
             handle,
             doc.schema_id,
@@ -64,9 +71,7 @@ void NodeRuntimeService::validateSchema(const std::string& schema_handle)
     if (it == loaded_schemas_.end()) {
         throw std::runtime_error("Schema handle not found: " + schema_handle);
     }
-    boost::json::object event_payload;
-    event_payload["schema_handle"] = schema_handle;
-    event_bus_.publishEvent("schema.validated", event_payload);
+    event_bus_.publishEvent("schema.validated", dto::SchemaHandleEvent{.schema_handle = schema_handle}.toJson());
 }
 NodeRuntimeService::RunResult NodeRuntimeService::runSchema(
     const std::string& schema_handle,
@@ -96,11 +101,9 @@ NodeRuntimeService::RunResult NodeRuntimeService::runSchema(
     }
 
     {
-        boost::json::object event_payload;
-        event_payload["run_id"] = run_id;
-        event_payload["schema_handle"] = schema_handle;
-        event_payload["ticks"] = ticks;
-        event_bus_.publishEvent("run.started", event_payload);
+        event_bus_.publishEvent(
+            "run.started",
+            dto::RunStartedEvent{.run_id = run_id, .schema_handle = schema_handle, .ticks = ticks}.toJson());
     }
 
     // Capture by value so the lambda owns everything it needs.
@@ -154,19 +157,13 @@ NodeRuntimeService::RunResult NodeRuntimeService::runSchema(
             }
 
             if (succeeded && !stop_requested_.load()) {
-                boost::json::object ep;
-                ep["run_id"] = run_id;
-                ep["ticks"]  = current_tick_count_.load();
-                event_bus_.publishEvent("run.completed", ep);
+                event_bus_.publishEvent(
+                    "run.completed",
+                    dto::RunCompletedEvent{.run_id = run_id, .ticks = current_tick_count_.load()}.toJson());
             } else if (stop_requested_.load()) {
-                boost::json::object ep;
-                ep["run_id"] = run_id;
-                event_bus_.publishEvent("run.stopped", ep);
+                event_bus_.publishEvent("run.stopped", dto::RunIdEvent{.run_id = run_id}.toJson());
             } else {
-                boost::json::object ep;
-                ep["run_id"] = run_id;
-                ep["error"]  = error_msg;
-                event_bus_.publishEvent("run.failed", ep);
+                event_bus_.publishEvent("run.failed", dto::RunFailedEvent{.run_id = run_id, .error = error_msg}.toJson());
             }
         });
 
@@ -183,9 +180,7 @@ void NodeRuntimeService::pauseRun(const std::string& run_id)
         it->second.state = RunState::Paused;
     }
     pause_requested_.store(true);
-    boost::json::object event_payload;
-    event_payload["run_id"] = run_id;
-    event_bus_.publishEvent("run.paused", event_payload);
+    event_bus_.publishEvent("run.paused", dto::RunIdEvent{.run_id = run_id}.toJson());
 }
 void NodeRuntimeService::resumeRun(const std::string& run_id)
 {
@@ -198,9 +193,7 @@ void NodeRuntimeService::resumeRun(const std::string& run_id)
         it->second.state = RunState::Running;
     }
     pause_requested_.store(false);
-    boost::json::object event_payload;
-    event_payload["run_id"] = run_id;
-    event_bus_.publishEvent("run.resumed", event_payload);
+    event_bus_.publishEvent("run.resumed", dto::RunIdEvent{.run_id = run_id}.toJson());
 }
 void NodeRuntimeService::stopRun(const std::string& run_id)
 {
@@ -214,9 +207,7 @@ void NodeRuntimeService::stopRun(const std::string& run_id)
     }
     stop_requested_.store(true);
     pause_requested_.store(false); // unblock any pause-spin
-    boost::json::object event_payload;
-    event_payload["run_id"] = run_id;
-    event_bus_.publishEvent("run.stopped", event_payload);
+    event_bus_.publishEvent("run.stopped", dto::RunIdEvent{.run_id = run_id}.toJson());
 }
 void NodeRuntimeService::resetSchema(const std::string& schema_handle)
 {
@@ -225,9 +216,7 @@ void NodeRuntimeService::resetSchema(const std::string& schema_handle)
     if (it == loaded_schemas_.end()) {
         throw std::runtime_error("Schema handle not found: " + schema_handle);
     }
-    boost::json::object event_payload;
-    event_payload["schema_handle"] = schema_handle;
-    event_bus_.publishEvent("schema.reset", event_payload);
+    event_bus_.publishEvent("schema.reset", dto::SchemaHandleEvent{.schema_handle = schema_handle}.toJson());
 }
 void NodeRuntimeService::unloadSchema(const std::string& schema_handle)
 {
@@ -237,9 +226,7 @@ void NodeRuntimeService::unloadSchema(const std::string& schema_handle)
         throw std::runtime_error("Schema handle not found: " + schema_handle);
     }
     loaded_schemas_.erase(it);
-    boost::json::object event_payload;
-    event_payload["schema_handle"] = schema_handle;
-    event_bus_.publishEvent("schema.unloaded", event_payload);
+    event_bus_.publishEvent("schema.unloaded", dto::SchemaHandleEvent{.schema_handle = schema_handle}.toJson());
 }
 NodeRuntimeService::RuntimeStatus NodeRuntimeService::getStatus() const
 {

@@ -1,4 +1,5 @@
 #include "schema_compiler.hpp"
+#include "s7ui_json_dto.hpp"
 
 #include <s7factory.hpp>
 
@@ -35,25 +36,18 @@ void appendWarning(CompileReport& report, const std::string& msg)
     report.diagnostics.push_back({Diagnostic::Severity::Warning, msg});
 }
 
-auto toIntOr(const boost::json::object& obj, const char* key, int fallback) -> int
+void synthesizePorts(const s7ui::dto::CompilerNodeDto& node, PortMap& ports)
 {
-    if (const auto* v = obj.if_contains(key); v && v->is_int64()) return static_cast<int>(v->as_int64());
-    if (const auto* v = obj.if_contains(key); v && v->is_uint64()) return static_cast<int>(v->as_uint64());
-    return fallback;
-}
-
-void synthesizePorts(const boost::json::object& node, PortMap& ports)
-{
-    const auto* idVal = node.if_contains("id");
-    if (!idVal || !idVal->is_string()) return;
-    const auto nodeId = boost::json::value_to<std::string>(*idVal);
-
-    if (node.if_contains("ports")) {
+    if (node.id.empty()) {
+        return;
+    }
+    if (!node.ports.empty()) {
         return;
     }
 
-    const int inCount = toIntOr(node, "input_ports", 0);
-    const int outCount = toIntOr(node, "output_ports", 0);
+    const auto& nodeId = node.id;
+    const int inCount = node.inputPorts;
+    const int outCount = node.outputPorts;
     for (int i = 0; i < inCount; ++i) {
         ports[portKey(nodeId, "in" + std::to_string(i))] = PortSpec{"input", "any", "stream", 1};
     }
@@ -62,30 +56,18 @@ void synthesizePorts(const boost::json::object& node, PortMap& ports)
     }
 }
 
-void loadDeclaredPorts(const boost::json::object& node, PortMap& ports)
+void loadDeclaredPorts(const s7ui::dto::CompilerNodeDto& node, PortMap& ports)
 {
-    const auto* idVal = node.if_contains("id");
-    const auto* portsVal = node.if_contains("ports");
-    if (!idVal || !idVal->is_string() || !portsVal || !portsVal->is_array()) return;
-
-    const auto nodeId = boost::json::value_to<std::string>(*idVal);
-    for (const auto& p : portsVal->as_array()) {
-        if (!p.is_object()) continue;
-        const auto& po = p.as_object();
-        const auto* name = po.if_contains("name");
-        const auto* direction = po.if_contains("direction");
-        if (!name || !name->is_string() || !direction || !direction->is_string()) continue;
-
+    if (node.id.empty()) {
+        return;
+    }
+    for (const auto& p : node.ports) {
         PortSpec spec;
-        spec.direction = boost::json::value_to<std::string>(*direction);
-        if (const auto* st = po.if_contains("signal_type"); st && st->is_string()) {
-            spec.signalType = boost::json::value_to<std::string>(*st);
-        }
-        if (const auto* dm = po.if_contains("domain"); dm && dm->is_string()) {
-            spec.domain = boost::json::value_to<std::string>(*dm);
-        }
-        spec.maxConnections = toIntOr(po, "max_connections", spec.direction == "input" ? 1 : 1024);
-        ports[portKey(nodeId, boost::json::value_to<std::string>(*name))] = std::move(spec);
+        spec.direction = p.direction;
+        spec.signalType = p.signalType;
+        spec.domain = p.domain;
+        spec.maxConnections = p.maxConnections;
+        ports[portKey(node.id, p.name)] = std::move(spec);
     }
 }
 
@@ -102,69 +84,30 @@ auto CompileReport::hasErrors() const -> bool
 auto validateRuntimeGraph(const boost::json::value& runtimeGraph) -> CompileReport
 {
     CompileReport report;
-    if (!runtimeGraph.is_object()) {
-        report.diagnostics.push_back({Diagnostic::Severity::Error, "Runtime graph root must be an object"});
-        return report;
-    }
-
-    const auto& root = runtimeGraph.as_object();
-    const auto* nodesValue = root.if_contains("nodes");
-    const auto* netsValue = root.if_contains("nets");
-    if (!nodesValue || !nodesValue->is_array()) {
-        report.diagnostics.push_back({Diagnostic::Severity::Error, "Runtime graph must contain array field 'nodes'"});
-        return report;
-    }
-    if (!netsValue || !netsValue->is_array()) {
-        report.diagnostics.push_back({Diagnostic::Severity::Error, "Runtime graph must contain array field 'nets'"});
+    s7ui::dto::CompilerRuntimeGraphDto graph;
+    try {
+        graph = s7ui::dto::CompilerRuntimeGraphDto::fromJson(runtimeGraph);
+    } catch (const std::exception& ex) {
+        report.diagnostics.push_back({Diagnostic::Severity::Error, ex.what()});
         return report;
     }
 
     std::unordered_set<std::string> nodeIds;
-    for (const auto& nodeJson : nodesValue->as_array()) {
-        if (!nodeJson.is_object()) continue;
-        const auto& nodeObj = nodeJson.as_object();
-        const auto* id = nodeObj.if_contains("id");
-        if (id && id->is_string()) {
-            nodeIds.insert(boost::json::value_to<std::string>(*id));
+    for (const auto& node : graph.nodes) {
+        if (!node.id.empty()) {
+            nodeIds.insert(node.id);
         }
     }
 
     std::unordered_map<std::string, int> inputUseCount;
     std::size_t netIndex = 0;
-    for (const auto& netJson : netsValue->as_array()) {
+    for (const auto& net : graph.nets) {
         ++netIndex;
-        if (!netJson.is_object()) {
-            report.diagnostics.push_back({Diagnostic::Severity::Error, "Net entry must be an object"});
-            continue;
-        }
-
-        const auto& netObj = netJson.as_object();
-        const auto* connections = netObj.if_contains("connections");
-        if (!connections || !connections->is_array()) {
-            report.diagnostics.push_back({Diagnostic::Severity::Error,
-                "Net #" + std::to_string(netIndex) + " must contain array field 'connections'"});
-            continue;
-        }
-
         int outputs = 0;
         int inputs = 0;
-        for (const auto& endpointJson : connections->as_array()) {
-            if (!endpointJson.is_object()) {
-                report.diagnostics.push_back({Diagnostic::Severity::Error,
-                    "Net #" + std::to_string(netIndex) + " endpoint must be an object"});
-                continue;
-            }
-            const auto& endpointObj = endpointJson.as_object();
-            const auto* node = endpointObj.if_contains("node");
-            const auto* connector = endpointObj.if_contains("connector");
-            if (!node || !node->is_string() || !connector || !connector->is_string()) {
-                report.diagnostics.push_back({Diagnostic::Severity::Error,
-                    "Net #" + std::to_string(netIndex) + " endpoint must contain string 'node' and 'connector'"});
-                continue;
-            }
-
-            const auto connectorName = boost::json::value_to<std::string>(*connector);
-            const auto nodeId = boost::json::value_to<std::string>(*node);
+        for (const auto& endpoint : net.connections) {
+            const auto& connectorName = endpoint.connector;
+            const auto& nodeId = endpoint.node;
             if (!nodeIds.contains(nodeId)) {
                 report.diagnostics.push_back({Diagnostic::Severity::Error,
                     "Net #" + std::to_string(netIndex) + " references unknown node '" + nodeId + "'"});
@@ -200,22 +143,14 @@ auto validateRuntimeGraph(const boost::json::value& runtimeGraph) -> CompileRepo
 auto validateDiagramConnections(const boost::json::value& diagramDocument) -> CompileReport
 {
     CompileReport report;
-    if (!diagramDocument.is_object()) {
-        appendError(report, "Diagram document root must be an object");
+    s7ui::dto::CompilerDiagramDto diagram;
+    try {
+        diagram = s7ui::dto::CompilerDiagramDto::fromJson(diagramDocument);
+    } catch (const std::exception& ex) {
+        appendError(report, ex.what());
         return report;
     }
-
-    const auto& doc = diagramDocument.as_object();
-    const auto* diagramVal = doc.if_contains("diagram");
-    const auto* root = (diagramVal && diagramVal->is_object()) ? &diagramVal->as_object() : &doc;
-
-    const auto* nodesVal = root->if_contains("nodes");
-    const auto* wiresVal = root->if_contains("wires");
-    if (!nodesVal || !nodesVal->is_array()) {
-        appendError(report, "Diagram must contain array field 'nodes'");
-        return report;
-    }
-    if (!wiresVal || !wiresVal->is_array()) {
+    if (diagram.wires.empty()) {
         appendWarning(report, "Diagram has no 'wires' array; skipping diagram-level type/domain validation");
         return report;
     }
@@ -223,20 +158,14 @@ auto validateDiagramConnections(const boost::json::value& diagramDocument) -> Co
     PortMap ports;
     std::unordered_set<std::string> nodeIds;
     std::unordered_set<std::string> connectedNodeIds;
-    for (const auto& nodeVal : nodesVal->as_array()) {
-        if (!nodeVal.is_object()) continue;
-        const auto& node = nodeVal.as_object();
-        if (const auto* idVal = node.if_contains("id"); idVal && idVal->is_string()) {
-            const auto id = boost::json::value_to<std::string>(*idVal);
-            if (!nodeIds.insert(id).second) {
-                appendError(report, "Duplicate node id: '" + id + "'");
-            }
+    for (const auto& node : diagram.nodes) {
+        if (!node.id.empty() && !nodeIds.insert(node.id).second) {
+            appendError(report, "Duplicate node id: '" + node.id + "'");
         }
-        if (const auto* typeVal = node.if_contains("type"); typeVal && typeVal->is_string()) {
-            const auto typeName = boost::json::value_to<std::string>(*typeVal);
-            const bool isKnownVisualBuiltin = (typeName == "ScopeSink" || typeName == "ComplexScopeSink");
-            if (!isKnownVisualBuiltin && !s7::ElementRegistry::instance().hasType(typeName)) {
-                appendWarning(report, "Unknown element type: '" + typeName + "' (fallback visual is expected)");
+        if (!node.type.empty()) {
+            const bool isKnownVisualBuiltin = (node.type == "ScopeSink" || node.type == "ComplexScopeSink");
+            if (!isKnownVisualBuiltin && !s7::ElementRegistry::instance().hasType(node.type)) {
+                appendWarning(report, "Unknown element type: '" + node.type + "' (fallback visual is expected)");
             }
         }
         synthesizePorts(node, ports);
@@ -244,32 +173,11 @@ auto validateDiagramConnections(const boost::json::value& diagramDocument) -> Co
     }
 
     std::unordered_map<std::string, int> inputUseCount;
-    for (const auto& wireVal : wiresVal->as_array()) {
-        if (!wireVal.is_object()) continue;
-        const auto& wire = wireVal.as_object();
-        const auto* from = wire.if_contains("from");
-        const auto* to = wire.if_contains("to");
-        if (!from || !from->is_object() || !to || !to->is_object()) {
-            appendError(report, "Wire must contain object fields 'from' and 'to'");
-            continue;
-        }
-
-        const auto& fromObj = from->as_object();
-        const auto& toObj = to->as_object();
-        const auto* fromNode = fromObj.if_contains("node");
-        const auto* fromConn = fromObj.if_contains("connector");
-        const auto* toNode = toObj.if_contains("node");
-        const auto* toConn = toObj.if_contains("connector");
-        if (!fromNode || !fromNode->is_string() || !fromConn || !fromConn->is_string() ||
-            !toNode || !toNode->is_string() || !toConn || !toConn->is_string()) {
-            appendError(report, "Wire endpoints must contain string 'node' and 'connector'");
-            continue;
-        }
-
-        const std::string fromNodeId = boost::json::value_to<std::string>(*fromNode);
-        const std::string fromConnector = boost::json::value_to<std::string>(*fromConn);
-        const std::string toNodeId = boost::json::value_to<std::string>(*toNode);
-        const std::string toConnector = boost::json::value_to<std::string>(*toConn);
+    for (const auto& wire : diagram.wires) {
+        const std::string fromNodeId = wire.from.node;
+        const std::string fromConnector = wire.from.connector;
+        const std::string toNodeId = wire.to.node;
+        const std::string toConnector = wire.to.connector;
 
         if (!nodeIds.contains(fromNodeId)) {
             appendError(report, "Wire source references unknown node '" + fromNodeId + "'");
@@ -321,16 +229,9 @@ auto validateDiagramConnections(const boost::json::value& diagramDocument) -> Co
         }
     }
 
-    for (const auto& nodeVal : nodesVal->as_array()) {
-        if (!nodeVal.is_object()) continue;
-        const auto& node = nodeVal.as_object();
-        const auto* idVal = node.if_contains("id");
-        if (!idVal || !idVal->is_string()) continue;
-        const auto id = boost::json::value_to<std::string>(*idVal);
-        const auto* visualVal = node.if_contains("visual");
-        const bool isVisual = visualVal && visualVal->is_bool() && visualVal->as_bool();
-        if (isVisual && !connectedNodeIds.contains(id)) {
-            appendWarning(report, "Orphan visual node: '" + id + "' has no wire connections");
+    for (const auto& node : diagram.nodes) {
+        if (node.visual && !node.id.empty() && !connectedNodeIds.contains(node.id)) {
+            appendWarning(report, "Orphan visual node: '" + node.id + "' has no wire connections");
         }
     }
 

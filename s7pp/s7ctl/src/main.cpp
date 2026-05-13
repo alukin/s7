@@ -1,3 +1,5 @@
+#include "s7ctl_json_dto.hpp"
+
 #include <boost/json.hpp>
 
 #include <boost/asio/connect.hpp>
@@ -224,61 +226,46 @@ auto makeRequest(const Options& opt) -> boost::json::value
     const long id = next_id++;
 
     if (opt.command == "hello") {
-        return boost::json::object{{"jsonrpc", "2.0"},
-                                   {"id", id},
-                                   {"method", "runtime.hello"},
-                                   {"params", boost::json::object{{"client_name", "s7ctl"}}}};
+        return s7::ctl::dto::RequestFactory::hello(id);
     }
     if (opt.command == "types") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.types.list"}, {"params", boost::json::object()}};
+        return s7::ctl::dto::RequestFactory::types(id);
     }
     if (opt.command == "status") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "runtime.status"}, {"params", boost::json::object()}};
+        return s7::ctl::dto::RequestFactory::status(id);
     }
     if (opt.command == "load-file") {
-        return boost::json::object{{"jsonrpc", "2.0"},
-                                   {"id", id},
-                                   {"method", "schema.load"},
-                                   {"params", boost::json::object{{"source", boost::json::object{{"kind", "filesystem"}, {"path", opt.schema_path}}}}}};
+        return s7::ctl::dto::RequestFactory::loadFilesystem(id, opt.schema_path);
     }
     if (opt.command == "load-inline") {
-        return boost::json::object{{"jsonrpc", "2.0"},
-                                   {"id", id},
-                                   {"method", "schema.load"},
-                                   {"params", boost::json::object{{"source", boost::json::object{{"kind", "inline"}, {"schema_json", opt.schema_json}}}}}};
+        return s7::ctl::dto::RequestFactory::loadInline(id, opt.schema_json);
     }
     if (opt.command == "validate") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.validate"}, {"params", boost::json::object{{"schema_handle", opt.schema_handle}}}};
+        return s7::ctl::dto::RequestFactory::validate(id, opt.schema_handle);
     }
     if (opt.command == "run") {
-        return boost::json::object{{"jsonrpc", "2.0"},
-                                   {"id", id},
-                                   {"method", "schema.run"},
-                                   {"params", boost::json::object{{"schema_handle", opt.schema_handle}, {"mode", boost::json::object{{"ticks", opt.ticks}}}}}};
+        return s7::ctl::dto::RequestFactory::run(id, opt.schema_handle, opt.ticks);
     }
     if (opt.command == "pause") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.pause"}, {"params", boost::json::object{{"run_id", opt.run_id}}}};
+        return s7::ctl::dto::RequestFactory::pause(id, opt.run_id);
     }
     if (opt.command == "resume") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.resume"}, {"params", boost::json::object{{"run_id", opt.run_id}}}};
+        return s7::ctl::dto::RequestFactory::resume(id, opt.run_id);
     }
     if (opt.command == "stop") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.stop"}, {"params", boost::json::object{{"run_id", opt.run_id}}}};
+        return s7::ctl::dto::RequestFactory::stop(id, opt.run_id);
     }
     if (opt.command == "reset") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.reset"}, {"params", boost::json::object{{"schema_handle", opt.schema_handle}}}};
+        return s7::ctl::dto::RequestFactory::reset(id, opt.schema_handle);
     }
     if (opt.command == "unload") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", "schema.unload"}, {"params", boost::json::object{{"schema_handle", opt.schema_handle}}}};
+        return s7::ctl::dto::RequestFactory::unload(id, opt.schema_handle);
     }
     if (opt.command == "raw") {
-        return boost::json::object{{"jsonrpc", "2.0"}, {"id", id}, {"method", opt.raw_method}, {"params", boost::json::parse(opt.raw_params)}};
+        return s7::ctl::dto::RequestFactory::raw(id, opt.raw_method, opt.raw_params);
     }
     if (opt.command == "events") {
-        return boost::json::object{{"jsonrpc", "2.0"},
-                                   {"id", id},
-                                   {"method", "runtime.events.subscribe"},
-                                   {"params", boost::json::object{{"topics", boost::json::value_from(splitCsv(opt.topics_csv))}}}};
+        return s7::ctl::dto::RequestFactory::eventsSubscribe(id, splitCsv(opt.topics_csv));
     }
 
     throw std::runtime_error("Unsupported command");
@@ -302,15 +289,8 @@ auto streamEvents(const Options& opt, const boost::json::value& subscribe_reques
     const auto ack = boost::json::parse(beast::buffers_to_string(ack_buffer.data()));
     std::cout << boost::json::serialize(ack) << '\n';
 
-    uint64_t subscription_id = 0;
-    if (ack.is_object()) {
-        const auto& ack_obj = ack.as_object();
-        if (const auto* result = ack_obj.if_contains("result"); result && result->is_object()) {
-            if (const auto* sid = result->as_object().if_contains("subscription_id")) {
-                subscription_id = boost::json::value_to<uint64_t>(*sid);
-            }
-        }
-    }
+    const auto ack_dto = s7::ctl::dto::SubscribeAck::fromJson(ack);
+    uint64_t subscription_id = ack_dto.subscriptionId;
 
     for (long i = 0; i < opt.event_count; ++i) {
         beast::flat_buffer event_buffer;
@@ -321,10 +301,8 @@ auto streamEvents(const Options& opt, const boost::json::value& subscribe_reques
 
     if (subscription_id != 0) {
         static long unsubscribe_id = 100000;
-        const boost::json::value unsubscribe_request = boost::json::object{{"jsonrpc", "2.0"},
-                                                                           {"id", ++unsubscribe_id},
-                                                                           {"method", "runtime.events.unsubscribe"},
-                                                                           {"params", boost::json::object{{"subscription_id", subscription_id}}}};
+        const boost::json::value unsubscribe_request =
+            s7::ctl::dto::RequestFactory::eventsUnsubscribe(++unsubscribe_id, subscription_id);
         ws.write(asio::buffer(boost::json::serialize(unsubscribe_request)));
         beast::flat_buffer unsub_buffer;
         ws.read(unsub_buffer);
