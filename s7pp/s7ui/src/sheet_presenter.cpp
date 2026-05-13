@@ -203,7 +203,11 @@ void SheetPresenter::rebuildOverlay()
 // -------------------------------------------------------------------------
 void SheetPresenter::fitInView(QSchematic::View* view) const
 {
-    if (view) view->fitInView();
+    if (!view || !scene_) return;
+    const QRectF rect = scene_->sceneRect();
+    if (rect.isEmpty()) return;
+    view->setSceneRect(rect);
+    static_cast<QGraphicsView*>(view)->fitInView(rect, Qt::KeepAspectRatio);
 }
 void SheetPresenter::fitSelectionInView(QSchematic::View* view) const
 {

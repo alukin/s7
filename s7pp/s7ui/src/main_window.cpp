@@ -686,10 +686,10 @@ void MainWindow::keyPressEvent(QKeyEvent* evt)
 
 void MainWindow::showEvent(QShowEvent* event)
 {
+    QMainWindow::showEvent(event);
     if (!initialSheetFitDone_) {
         sheetPresenter_->fitInView(view_);
         initialSheetFitDone_ = true;
     }
-    QMainWindow::showEvent(event);
 }
 

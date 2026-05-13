@@ -32,6 +32,7 @@ constexpr qreal kNodeMinWidthMm = 10.0;
 constexpr qreal kNodeMinHeightMm = 5.0;
 constexpr qreal kPortPitchMm = 2.0;
 constexpr qreal kPortMarginMm = 1.0;
+constexpr qreal kPinVisualScale = 0.4; // ~2.5x smaller than default QSchematic connector size.
 
 auto connectorOffsetMm(const int index, const int count, const qreal nodeHeightMm) -> qreal
 {
@@ -59,8 +60,10 @@ BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     setAllowMouseResize(false); // Can be enabled if needed, but false is safer for auto layout
     setAllowMouseRotate(false);
     setConnectorsMovable(false);
-    setConnectorsSnapPolicy(QSchematic::Items::Connector::NodeSizerectOutline);
-    setConnectorsSnapToGrid(true);
+    // Use exact coordinates for deterministic port sides (no nearest-edge snapping).
+    setConnectorsSnapPolicy(QSchematic::Items::Connector::Anywhere);
+    // Keep ports exactly on the shape edge; grid snapping can push them to corners.
+    setConnectorsSnapToGrid(false);
 
     auto graphicsEffect = new QGraphicsDropShadowEffect(this);
     graphicsEffect->setOffset(5);
@@ -128,10 +131,16 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts)
     outputPorts_ = std::clamp(outputPorts, 0, 32);
 
     const int maxPorts = std::max(1, std::max(inputPorts_, outputPorts_));
-    const qreal nodeWidth = kNodeMinWidthMm;
-    const qreal nodeHeight = std::max<qreal>(kNodeMinHeightMm,
+    const qreal requestedWidth = kNodeMinWidthMm;
+    const qreal requestedHeight = std::max<qreal>(
+        kNodeMinHeightMm,
         2.0 * kPortMarginMm + static_cast<qreal>(maxPorts - 1) * kPortPitchMm);
-    setSize(nodeWidth, nodeHeight);
+    setSize(requestedWidth, requestedHeight);
+
+    // RectItem may clamp to a larger minimum size (e.g. 40x40).
+    // Always place connectors using the effective size that will be drawn.
+    const qreal nodeWidth = size().width();
+    const qreal nodeHeight = size().height();
 
     clearConnectors();
 
@@ -142,6 +151,9 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts)
             QPoint(),
             QString("in%1").arg(i),
             this);
+        in->setHighlightEnabled(false);
+        in->setSnapToGrid(false);
+        in->setScale(kPinVisualScale);
         in->setPos(0.0, connectorOffsetMm(i, inputPorts_, nodeHeight));
         in->label()->setVisible(false);
         addConnector(in);
@@ -154,6 +166,9 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts)
             QPoint(),
             QString("out%1").arg(i),
             this);
+        out->setHighlightEnabled(false);
+        out->setSnapToGrid(false);
+        out->setScale(kPinVisualScale);
         out->setPos(nodeWidth, connectorOffsetMm(i, outputPorts_, nodeHeight));
         out->label()->setVisible(false);
         addConnector(out);
