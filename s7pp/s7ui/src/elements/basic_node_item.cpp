@@ -1,6 +1,7 @@
 #include "basic_node_item.hpp"
 #include "s7_wire_item.hpp"
 #include "s7ui_json_dto.hpp"
+#include "ui_constants.hpp"
 
 #include <s7core_json_dto.hpp>
 #include <s7factory.hpp>
@@ -30,12 +31,6 @@ namespace s7ui::elements {
 
 namespace
 {
-constexpr qreal kNodeMinWidthMm  = 60.0;
-constexpr qreal kNodeMinHeightMm = 30.0;
-constexpr qreal kPortPitchMm     = 10.0;
-constexpr qreal kPortMarginMm    = 10.0;
-constexpr qreal kNodeTitleTopPaddingMm = 2.0;
-
 struct PortAxisLayout
 {
     int count;
@@ -48,8 +43,8 @@ auto connectorOffsetMm(const int index, const PortAxisLayout& layout) -> qreal
         return layout.nodeHeightMm * 0.5;
     }
 
-    // Slot model: endpoints are forbidden; connectors occupy interior slots only.
-    // For N pins, use slot indices [1..N] out of [0..N+1].
+    // Slot model: endpoints are forbidden (style::kConnectorSlotModel_ForbiddenEndpoints on each side).
+    // For N pins, distribute across slots [1..N] out of [0..N+1] (per the constant).
     const qreal step = layout.nodeHeightMm / static_cast<qreal>(layout.count + 1);
     return step * static_cast<qreal>(index + 1);
 }
@@ -110,6 +105,9 @@ BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     , typeName_(typeName)
     , nodeName_(typeName)
 {
+    // Uniformly shrink node visuals (body, pins, labels) to ensure compact default footprint.
+    setScale(style::kNodeVisualScale);
+
     setMovable(true);
     setFlag(QGraphicsItem::ItemIsMovable,   true);
     setFlag(QGraphicsItem::ItemIsSelectable, true);
@@ -176,9 +174,9 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts,
     maxPorts = std::max(maxPorts, inputPorts_);
     maxPorts = std::max(maxPorts, outputPorts_);
     const qreal requestedHeight = std::max(
-        {kNodeMinHeightMm,
-         2.0 * kPortMarginMm + static_cast<qreal>(maxPorts - 1) * kPortPitchMm});
-    setSize(kNodeMinWidthMm, requestedHeight);
+        {style::kNodeMinHeight,
+         2.0 * style::kPortMargin + static_cast<qreal>(maxPorts - 1) * style::kPortPitch});
+    setSize(style::kNodeMinWidth, requestedHeight);
 
     const qreal nodeHeight = size().height();
 
@@ -448,12 +446,15 @@ void BasicNodeItem::paint(QPainter* painter,
     if (lod >= 0.5) {
         painter->setPen(Qt::black);
         QFont font = painter->font();
-        font.setPointSizeF(3.0);
+        font.setPointSizeF(style::kNodeTitleFontPointSize);
         painter->setFont(font);
 
         QTextOption textOption(Qt::AlignHCenter | Qt::AlignTop);
         textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-        const QRectF titleRect = rect.adjusted(0.8, kNodeTitleTopPaddingMm, -0.8, 0.0);
+        const QRectF titleRect = rect.adjusted(style::kNodeTitleHorizontalPadding,
+                                               style::kNodeTitleTopPadding,
+                                               -style::kNodeTitleHorizontalPadding,
+                                               0.0);
         painter->drawText(titleRect, nodeName_, textOption);
     }
 
@@ -467,7 +468,7 @@ void BasicNodeItem::paint(QPainter* painter,
 void BasicNodeItem::paintRectangle(QPainter* painter, const QRectF& rect)
 {
     QPen pen(borderColor_);
-    pen.setWidthF(0.3);
+    pen.setWidthF(style::kNodeBorderPenWidth);
     QBrush brush(fillColor_);
 
     painter->setPen(pen);
@@ -477,10 +478,10 @@ void BasicNodeItem::paintRectangle(QPainter* painter, const QRectF& rect)
 
 void BasicNodeItem::paintRoundedRect(QPainter* painter, const QRectF& rect)
 {
-    const qreal radius = _settings.gridSize / 2;
+    const qreal radius = _settings.gridSize * 0.25;
 
     QPen pen(borderColor_);
-    pen.setWidthF(0.3);
+    pen.setWidthF(style::kNodeBorderPenWidth);
     QBrush brush(fillColor_);
 
     painter->setPen(pen);
@@ -498,7 +499,7 @@ void BasicNodeItem::paintDiamond(QPainter* painter, const QRectF& rect)
     diamond << QPoint(0, rect.height() / 2);                  // Left
 
     QPen pen(borderColor_);
-    pen.setWidthF(0.3);
+    pen.setWidthF(style::kNodeBorderPenWidth);
     QBrush brush(fillColor_);
 
     painter->setPen(pen);
@@ -523,7 +524,7 @@ void BasicNodeItem::paintHexagon(QPainter* painter, const QRectF& rect)
     hexagon << QPoint(0, hh);              // Middle-left
 
     QPen pen(borderColor_);
-    pen.setWidthF(0.3);
+    pen.setWidthF(style::kNodeBorderPenWidth);
     QBrush brush(fillColor_);
 
     painter->setPen(pen);
@@ -534,7 +535,7 @@ void BasicNodeItem::paintHexagon(QPainter* painter, const QRectF& rect)
 void BasicNodeItem::paintCircle(QPainter* painter, const QRectF& rect)
 {
     QPen pen(borderColor_);
-    pen.setWidthF(0.3);
+    pen.setWidthF(style::kNodeBorderPenWidth);
     QBrush brush(fillColor_);
 
     painter->setPen(pen);
