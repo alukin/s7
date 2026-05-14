@@ -23,7 +23,8 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Emits a fixed scalar value every tick",
             .default_input_count  = 0,
             .default_output_count = 1,
-            .default_params       = {{"value", Real{0.0}}}
+            .default_params       = {{"value", Real{0.0}}},
+            .ports                = {{.label = "out", .direction = "output", .description = "Constant scalar output"}}
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -40,7 +41,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Stateful accumulator: state(n+1) = state(n) + input(n)",
             .default_input_count  = 1,
             .default_output_count = 1,
-            .default_params       = {{"init_state", Real{0.0}}}
+            .default_params       = {{"init_state", Real{0.0}}},
+            .ports                = {{.label = "in",  .direction = "input",  .description = "Input signal"},
+                                     {.label = "out", .direction = "output", .description = "Integrated output"}}
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -58,7 +61,22 @@ void registerBuiltins(ElementRegistry& registry)
             .default_input_count  = 2,
             .default_output_count = 1,
             .inputs_configurable  = true,
-            .default_params       = {{"w0", Real{1.0}}, {"w1", Real{1.0}}}
+            .default_params       = {{"w0", Real{1.0}}, {"w1", Real{1.0}}},
+            // Ports are auto-numbered (in0, in1, …) because inputs are identical.
+            .ports                = {{.label = "out", .direction = "output", .description = "Weighted sum"}},
+            .compute_port_layout  = [](const ParamMap& p) -> std::pair<int,int> {
+                int maxIdx = 1; // default: w0+w1 → 2 inputs
+                for (const auto& [key, val] : p) {
+                    if (key.size() < 2 || key.front() != 'w') continue;
+                    bool numeric = true;
+                    for (std::size_t i = 1; i < key.size(); ++i)
+                        if (!std::isdigit(static_cast<unsigned char>(key[i]))) { numeric = false; break; }
+                    if (!numeric) continue;
+                    const int idx = std::stoi(key.substr(1));
+                    maxIdx = std::max(maxIdx, idx);
+                }
+                return {maxIdx + 1, 1};
+            }
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -133,6 +151,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Two real inputs (Re, Im) → one Complex output",
             .default_input_count  = 2,
             .default_output_count = 1,
+            .ports                = {{.label = "re",  .direction = "input",  .description = "Real part"},
+                                     {.label = "im",  .direction = "input",  .description = "Imaginary part"},
+                                     {.label = "out", .direction = "output", .description = "Complex output"}},
         },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<ToComplex>(id); });
@@ -144,6 +165,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "One Complex input → two Real outputs (Re, Im)",
             .default_input_count  = 1,
             .default_output_count = 2,
+            .ports                = {{.label = "in", .direction = "input",  .description = "Complex input"},
+                                     {.label = "re", .direction = "output", .description = "Real part"},
+                                     {.label = "im", .direction = "output", .description = "Imaginary part"}},
         },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<ToReals>(id); });
@@ -155,6 +179,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Voltage controlled amplifier: out = signal * gain",
             .default_input_count  = 2,
             .default_output_count = 1,
+            .ports                = {{.label = "signal", .direction = "input",  .description = "Input signal"},
+                                     {.label = "gain",   .direction = "input",  .description = "Gain control voltage"},
+                                     {.label = "out",    .direction = "output", .description = "Amplified output"}},
         },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<Vca>(id); });
@@ -166,7 +193,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "FIR filter: y[k] = sum_i b[i]*x[k-i]",
             .default_input_count  = 1,
             .default_output_count = 1,
-            .default_params       = {{"b0", Real{1.0}}}
+            .default_params       = {{"b0", Real{1.0}}},
+            .ports                = {{.label = "in",  .direction = "input",  .description = "Filter input"},
+                                     {.label = "out", .direction = "output", .description = "Filter output"}},
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -227,7 +256,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "IIR filter: y[k] = sum_i b[i]*x[k-i] - sum_j a[j]*y[k-j-1]",
             .default_input_count  = 1,
             .default_output_count = 1,
-            .default_params       = {{"b0", Real{1.0}}}
+            .default_params       = {{"b0", Real{1.0}}},
+            .ports                = {{.label = "in",  .direction = "input",  .description = "Filter input"},
+                                     {.label = "out", .direction = "output", .description = "Filter output"}},
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -306,7 +337,8 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Autonomous digital sinusoidal oscillator",
             .default_input_count  = 0,
             .default_output_count = 1,
-            .default_params       = {{"frequency_hz", Real{440.0}}, {"amplitude", Real{1.0}}}
+            .default_params       = {{"frequency_hz", Real{440.0}}, {"amplitude", Real{1.0}}},
+            .ports                = {{.label = "out", .direction = "output", .description = "Sinusoidal output"}},
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -325,7 +357,8 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Sinusoidal source: amplitude*sin(2π*f*n*dt + φ)",
             .default_input_count  = 0,
             .default_output_count = 1,
-            .default_params       = {{"frequency_hz", Real{1.0}}, {"amplitude", Real{1.0}}}
+            .default_params       = {{"frequency_hz", Real{1.0}}, {"amplitude", Real{1.0}}},
+            .ports                = {{.label = "out", .direction = "output", .description = "Sinusoidal output"}},
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {
@@ -343,6 +376,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Accumulated energy of signal difference: E += (u1-u2)²·dt",
             .default_input_count  = 2,
             .default_output_count = 1,
+            .ports                = {{.label = "a",   .direction = "input",  .description = "First signal"},
+                                     {.label = "b",   .direction = "input",  .description = "Second signal"},
+                                     {.label = "out", .direction = "output", .description = "Accumulated energy"}},
         },
         [](const std::string& id, const ParamMap&) -> ElementPtr
         { return std::make_shared<EnergyDifference>(id); });
@@ -354,7 +390,9 @@ void registerBuiltins(ElementRegistry& registry)
             .description          = "Voltage-controlled oscillator (sine): f = base_hz + k*cv",
             .default_input_count  = 1,
             .default_output_count = 1,
-            .default_params       = {{"base_hz", Real{440.0}}}
+            .default_params       = {{"base_hz", Real{440.0}}},
+            .ports                = {{.label = "cv",  .direction = "input",  .description = "Control voltage"},
+                                     {.label = "out", .direction = "output", .description = "Sine wave output"}},
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
         {

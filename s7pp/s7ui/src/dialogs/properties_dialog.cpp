@@ -1,84 +1,140 @@
 #include "properties_dialog.hpp"
 
-#include <s7.hpp>
+#include <boost/json.hpp>
 
 #include <QDialogButtonBox>
+#include <QFont>
 #include <QFormLayout>
-#include <QLineEdit>
-#include <QVBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMessageBox>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QVBoxLayout>
 
 namespace s7ui::dialogs {
+
+namespace {
+
+/// Returns an empty string when the text is valid JSON object, otherwise an error message.
+auto validateParamsJson(const QString& text) -> QString
+{
+    if (text.trimmed().isEmpty()) return {};
+    try {
+        const boost::json::value parsed = boost::json::parse(text.toStdString());
+        if (!parsed.is_object()) {
+            return QStringLiteral("Parameters must be a JSON object { … }");
+        }
+    } catch (const std::exception& e) {
+        return QString::fromStdString(e.what());
+    }
+    return {};
+}
+
+} // namespace
 
 PropertiesDialog::PropertiesDialog(const QString& typeName,
                                    const QString& nodeId,
                                    const QString& nodeName,
-                                   const s7::ParamMap& params,
+                                   const QString& paramsJson,
+                                   const QString& portHint,
                                    QWidget* parent)
-    : QDialog(parent), typeName_(typeName)
+    : QDialog(parent)
 {
-    setWindowTitle(typeName_ + " Properties");
-    setMinimumWidth(400);
+    setWindowTitle(typeName + QStringLiteral(" Properties"));
+    setMinimumWidth(480);
 
     auto* layout = new QVBoxLayout(this);
-    form_ = new QFormLayout();
+    auto* form   = new QFormLayout();
+    layout->addLayout(form);
 
     nameEdit_ = new QLineEdit(nodeName, this);
-    idEdit_ = new QLineEdit(nodeId, this);
+    idEdit_   = new QLineEdit(nodeId,   this);
     auto* typeLabel = new QLabel(typeName, this);
+    typeLabel->setStyleSheet(QStringLiteral("color: grey;"));
 
-    form_->addRow("Name", nameEdit_);
-    form_->addRow("ID", idEdit_);
-    form_->addRow("Type", typeLabel);
+    form->addRow(QStringLiteral("Name"), nameEdit_);
+    form->addRow(QStringLiteral("ID"),   idEdit_);
+    form->addRow(QStringLiteral("Type"), typeLabel);
 
-    for (const auto& [key, value] : params) {
-        auto* edit = new QLineEdit(this);
-        if (std::holds_alternative<s7::Real>(value)) {
-            edit->setText(QString::number(std::get<s7::Real>(value)));
-        } else if (std::holds_alternative<s7::Complex>(value)) {
-            const auto& c = std::get<s7::Complex>(value);
-            edit->setText(QString("%1, %2").arg(c.real()).arg(c.imag()));
-        } else if (std::holds_alternative<std::string>(value)) {
-            edit->setText(QString::fromStdString(std::get<std::string>(value)));
-        }
-        form_->addRow(QString::fromStdString(key), edit);
-        paramEdits_.emplace_back(key, edit);
+    layout->addWidget(new QLabel(QStringLiteral("Parameters (JSON):"), this));
+
+    paramsEdit_ = new QPlainTextEdit(this);
+    paramsEdit_->setMinimumHeight(120);
+    {
+        QFont mono(QStringLiteral("monospace"));
+        mono.setStyleHint(QFont::TypeWriter);
+        mono.setPointSize(10);
+        paramsEdit_->setFont(mono);
+    }
+    // Show current params, or a minimal placeholder
+    const QString displayJson = paramsJson.trimmed().isEmpty()
+                                    ? QStringLiteral("{}")
+                                    : paramsJson;
+    paramsEdit_->setPlainText(displayJson);
+    layout->addWidget(paramsEdit_);
+
+    if (!portHint.isEmpty()) {
+        auto* hint = new QLabel(QStringLiteral("Port layout: ") + portHint, this);
+        hint->setStyleSheet(QStringLiteral("color: grey; font-style: italic;"));
+        layout->addWidget(hint);
     }
 
-    layout->addLayout(form_);
+    errorLabel_ = new QLabel(this);
+    errorLabel_->setStyleSheet(QStringLiteral("color: red;"));
+    errorLabel_->setWordWrap(true);
+    errorLabel_->hide();
+    layout->addWidget(errorLabel_);
 
-    auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    connect(buttonBox, &QDialogButtonBox::accepted, this, &PropertiesDialog::onAccept);
-    connect(buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
-    layout->addWidget(buttonBox);
+    buttonBox_ = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttonBox_, &QDialogButtonBox::accepted, this, &PropertiesDialog::tryAccept);
+    connect(buttonBox_, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttonBox_);
+
+    connect(paramsEdit_, &QPlainTextEdit::textChanged, this, &PropertiesDialog::onParamsTextChanged);
+    onParamsTextChanged(); // initial validation pass
 }
 
 QString PropertiesDialog::nodeId() const
 {
-    return idEdit_ ? idEdit_->text() : QString();
+    return idEdit_ ? idEdit_->text().trimmed() : QString{};
 }
 
 QString PropertiesDialog::nodeName() const
 {
-    return nameEdit_ ? nameEdit_->text() : QString();
+    return nameEdit_ ? nameEdit_->text().trimmed() : QString{};
 }
 
-s7::ParamMap PropertiesDialog::params() const
+QString PropertiesDialog::paramsJson() const
 {
-    s7::ParamMap newParams;
-    for (const auto& [key, edit] : paramEdits_) {
-        // This is a simplification. A real implementation would need to know the type
-        // of the parameter to parse it correctly. For now, we'll treat everything as a string.
-        newParams[key] = edit->text().toStdString();
+    if (!paramsEdit_) return QStringLiteral("{}");
+    const QString text = paramsEdit_->toPlainText().trimmed();
+    return text.isEmpty() ? QStringLiteral("{}") : text;
+}
+
+void PropertiesDialog::onParamsTextChanged()
+{
+    const QString error = validateParamsJson(paramsEdit_->toPlainText());
+    if (error.isEmpty()) {
+        errorLabel_->hide();
+        if (buttonBox_) buttonBox_->button(QDialogButtonBox::Ok)->setEnabled(true);
+    } else {
+        errorLabel_->setText(error);
+        errorLabel_->show();
+        if (buttonBox_) buttonBox_->button(QDialogButtonBox::Ok)->setEnabled(false);
     }
-    return newParams;
 }
 
-void PropertiesDialog::onAccept()
+void PropertiesDialog::tryAccept()
 {
-    // Validation could be added here
+    const QString error = validateParamsJson(paramsEdit_->toPlainText());
+    if (!error.isEmpty()) {
+        errorLabel_->setText(error);
+        errorLabel_->show();
+        return; // block close
+    }
     accept();
 }
 
 } // namespace s7ui::dialogs
-

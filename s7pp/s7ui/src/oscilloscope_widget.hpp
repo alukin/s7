@@ -6,6 +6,8 @@
 
 #include <s7probe.hpp>
 
+#include "render/print_render_service.hpp"
+
 class QCustomPlot;
 class QCPGraph;
 class QTimer;
@@ -38,10 +40,10 @@ public:
 	~OscilloscopeWidget() override;
 
 	/// Attach a real-valued probe with N channels
-	void attachProbe(std::shared_ptr<s7::Probe> probe);
+	void attachProbe(const std::shared_ptr<s7::Probe>& probe);
 
 	/// Attach a complex-valued probe
-	void attachComplexProbe(std::shared_ptr<s7::ComplexProbe> probe);
+	void attachComplexProbe(const std::shared_ptr<s7::ComplexProbe>& probe);
 
 	/// Clear any attached probe and reset display
 	void clearProbe();
@@ -55,6 +57,14 @@ public:
 	/// Set the sample rate in Hz (= 1/dt) so setTimeWindow() converts seconds
 	/// to the correct sample count.  Default: 1000 Hz (dt = 0.001 s).
 	void setSampleRate(double hz);
+
+										/// Export the current plot to a PDF file using the shared print/export pipeline.
+										[[nodiscard]] auto exportPdf(const QString& fileName,
+										                             const s7ui::printing::PageSpec& pageSpec = {}) const -> bool;
+
+			 /// Print the current plot using Qt's printer dialog.
+										[[nodiscard]] auto print(QWidget* parent,
+										                        const s7ui::printing::PageSpec& pageSpec = {}) const -> bool;
 
 public slots:
 	/// Force a redraw immediately (normally done automatically via timer)

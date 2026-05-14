@@ -6,6 +6,8 @@
 #include "s7ui_json_dto.hpp"
 #include "elements/basic_node_item.hpp"
 #include "elements/sink_node_item.hpp"
+#include "elements/s7_wire_item.hpp"
+#include <s7factory.hpp>
 #include <qschematic/items/connector.hpp>
 #include <qschematic/items/node.hpp>
 #include <qschematic/items/wire.hpp>
@@ -176,6 +178,11 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
             basic->setNodeId(spec.id);
             basic->setNodeName(spec.name);
             basic->setParamsJson(QString::fromStdString(boost::json::serialize(spec.params)));
+            // Re-apply port layout with descriptor labels using the persisted port counts.
+            const auto desc = s7::ElementRegistry::instance().getDescriptor(spec.typeName.toStdString());
+            const std::vector<s7::PortDescriptor> portDescs = desc ? desc->ports
+                                                                    : std::vector<s7::PortDescriptor>{};
+            basic->setPortLayout(tmpl.inputPorts, tmpl.outputPorts, portDescs);
         }
         if (auto sink = std::dynamic_pointer_cast<s7ui::elements::SinkNodeItem>(item))
             sink->setInputCount(std::max(1, tmpl.inputPorts));
@@ -205,7 +212,7 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
         const auto resolvedFrom = fromC ? fromC : fromF;
         const auto resolvedTo   = toC   ? toC   : toF;
         if (!resolvedFrom || !resolvedTo) continue;
-        auto wire = std::make_shared<QSchematic::Items::Wire>();
+        auto wire = std::make_shared<s7ui::elements::S7WireItem>();
         if (!ws.points.isEmpty()) {
             for (const auto& pt : ws.points)
                 wire->append_point(pt);

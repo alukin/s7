@@ -35,6 +35,7 @@ void registerFileIO(ElementRegistry& registry) {
             .description          = "Write N-channel real stream with selectable scalar encoding (f64/f32/s32/s16/s8/u8)",
             .default_input_count  = 1,
             .default_output_count = 0,
+            .ports                = {{.label = "in", .direction = "input", .description = "Real signal input"}},
         },
         [decodeCommon](const std::string& id, const ParamMap& params) -> ElementPtr {
             const auto p = decodeCommon(params, 1);
@@ -48,6 +49,7 @@ void registerFileIO(ElementRegistry& registry) {
             .description          = "Write N-channel complex IQ stream with selectable scalar encoding",
             .default_input_count  = 1,
             .default_output_count = 0,
+            .ports                = {{.label = "in", .direction = "input", .description = "Complex signal input"}},
         },
         [decodeCommon](const std::string& id, const ParamMap& params) -> ElementPtr {
             const auto p = decodeCommon(params, 1);
@@ -61,6 +63,7 @@ void registerFileIO(ElementRegistry& registry) {
             .description          = "Read N-channel real stream from s7io file with scalar decoding",
             .default_input_count  = 0,
             .default_output_count = 1,
+            .ports                = {{.label = "out", .direction = "output", .description = "Real signal output"}},
         },
         [](const std::string&, const ParamMap&) -> ElementPtr {
             throw std::runtime_error("RealFileSource JSON factory needs string path support. Use programmatic creation.");
@@ -73,6 +76,7 @@ void registerFileIO(ElementRegistry& registry) {
             .description          = "Read N-channel complex IQ stream from s7io file",
             .default_input_count  = 0,
             .default_output_count = 1,
+            .ports                = {{.label = "out", .direction = "output", .description = "Complex signal output"}},
         },
         [](const std::string&, const ParamMap&) -> ElementPtr {
             throw std::runtime_error("ComplexFileSource JSON factory needs string path support. Use programmatic creation.");

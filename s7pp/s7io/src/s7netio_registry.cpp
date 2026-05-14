@@ -31,6 +31,7 @@ void registerNetIO(ElementRegistry& registry)
             .description          = "Write N-channel real stream to network",
             .default_input_count  = 1,
             .default_output_count = 0,
+            .ports                = {{"in", "input", "Real signal input"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             return std::make_shared<RealNetSink>(id, parseConfig(params));
@@ -43,6 +44,7 @@ void registerNetIO(ElementRegistry& registry)
             .description          = "Read N-channel real stream from network",
             .default_input_count  = 0,
             .default_output_count = 1,
+            .ports                = {{"out", "output", "Real signal output"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             return std::make_shared<RealNetSource>(id, parseConfig(params));
@@ -55,6 +57,7 @@ void registerNetIO(ElementRegistry& registry)
             .description          = "Write N-channel complex stream to network",
             .default_input_count  = 1,
             .default_output_count = 0,
+            .ports                = {{"in", "input", "Complex signal input"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             return std::make_shared<ComplexNetSink>(id, parseConfig(params));
@@ -67,6 +70,7 @@ void registerNetIO(ElementRegistry& registry)
             .description          = "Read N-channel complex stream from network",
             .default_input_count  = 0,
             .default_output_count = 1,
+            .ports                = {{"out", "output", "Complex signal output"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             return std::make_shared<ComplexNetSource>(id, parseConfig(params));

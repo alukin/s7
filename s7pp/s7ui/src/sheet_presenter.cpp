@@ -1,9 +1,9 @@
 #include "sheet_presenter.hpp"
 #include "scene_roles.hpp"
+#include "render/print_render_service.hpp"
 #include <qschematic/scene.hpp>
 #include <qschematic/view.hpp>
 #include <QColor>
-#include <QFileDialog>
 #include <QFont>
 #include <QGraphicsLineItem>
 #include <QGraphicsRectItem>
@@ -12,7 +12,6 @@
 #include <QPageLayout>
 #include <QPageSize>
 #include <QPainter>
-#include <QPdfWriter>
 #include <QPen>
 #include <QPrintDialog>
 #include <QPrinter>
@@ -20,11 +19,29 @@
 #include <cmath>
 namespace s7ui::ui {
 namespace {
+using s7ui::printing::PageSpec;
+
 constexpr double kPaperMarginMm      = 10.0;
 constexpr double kTitleBlockWidthMm  = 90.0;
 constexpr double kTitleBlockHeightMm = 28.0;
 constexpr double kRulerTickStepMm    = 10.0;
 constexpr double kRulerMajorStepMm   = 50.0;
+
+[[nodiscard]] auto pageSpecForPreset(const SheetPresenter::Preset preset) -> PageSpec
+{
+    const auto sheet = SheetPresenter::sizeForPreset(preset);
+    const QPageSize::PageSizeId pageSizeId = [&]() {
+        switch (preset) {
+        case SheetPresenter::Preset::A1Landscape: return QPageSize::A1;
+        case SheetPresenter::Preset::A2Landscape: return QPageSize::A2;
+        case SheetPresenter::Preset::A3Landscape: return QPageSize::A3;
+        case SheetPresenter::Preset::A4Landscape:
+        default: return QPageSize::A4;
+        }
+    }();
+    Q_UNUSED(sheet);
+    return PageSpec{pageSizeId, QPageLayout::Landscape, QMarginsF(0.0, 0.0, 0.0, 0.0), 96};
+}
 } // namespace
 SheetPresenter::SheetPresenter(QSchematic::Scene* scene)
     : scene_(scene)
@@ -231,44 +248,22 @@ void SheetPresenter::fitSelectionInView(QSchematic::View* view) const
 void SheetPresenter::exportPdf(const QString& suggestedPath, QWidget* errorParent) const
 {
     if (!scene_ || suggestedPath.isEmpty()) return;
-    const auto sheet = sizeForPreset(preset_);
-    QPdfWriter writer(suggestedPath);
-    writer.setResolution(300);
-    writer.setPageSize(QPageSize(QSizeF(sheet.width, sheet.height),
-                                 QPageSize::Millimeter, "s7_sheet"));
-    writer.setPageMargins(QMarginsF(0, 0, 0, 0), QPageLayout::Millimeter);
-    QPainter painter(&writer);
-    if (!painter.isActive()) {
+    if (!s7ui::printing::renderScenePdf(*scene_, suggestedPath, pageSpecForPreset(preset_),
+                                        QStringLiteral("s7ui"), schemaName_)) {
         QMessageBox::warning(errorParent, "Export PDF Failed",
-                             "Cannot create PDF painter for output file.");
-        return;
+                             "Cannot create PDF output file.");
     }
-    scene_->render(&painter,
-                   QRectF(0, 0, writer.width(), writer.height()),
-                   scene_->sceneRect(),
-                   Qt::IgnoreAspectRatio);
-    painter.end();
 }
 void SheetPresenter::printSheet(QWidget* parent) const
 {
     if (!scene_) return;
-    const auto sheet = sizeForPreset(preset_);
     QPrinter printer(QPrinter::HighResolution);
-    printer.setPageSize(QPageSize(QSizeF(sheet.width, sheet.height),
-                                  QPageSize::Millimeter, "s7_sheet"));
-    printer.setFullPage(true);
+    s7ui::printing::configurePrinter(printer, pageSpecForPreset(preset_));
     QPrintDialog dialog(&printer, parent);
     if (dialog.exec() != QDialog::Accepted) return;
-    QPainter painter(&printer);
-    if (!painter.isActive()) {
+    if (!s7ui::printing::renderSceneToPrinter(*scene_, printer)) {
         QMessageBox::warning(parent, "Print Failed",
                              "Cannot initialize printer painter.");
-        return;
     }
-    scene_->render(&painter,
-                   QRectF(0, 0, printer.width(), printer.height()),
-                   scene_->sceneRect(),
-                   Qt::IgnoreAspectRatio);
-    painter.end();
 }
 } // namespace s7ui::ui

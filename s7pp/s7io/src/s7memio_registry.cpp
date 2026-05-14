@@ -39,6 +39,7 @@ void registerMemIO(ElementRegistry& registry)
             .description          = "Write N-channel real stream to shared memory",
             .default_input_count  = 1,
             .default_output_count = 0,
+            .ports                = {{"in", "input", "Real signal input"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             auto cfg = parseConfig(params);
@@ -53,6 +54,7 @@ void registerMemIO(ElementRegistry& registry)
             .description          = "Read N-channel real stream from shared memory",
             .default_input_count  = 0,
             .default_output_count = 1,
+            .ports                = {{"out", "output", "Real signal output"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             auto cfg = parseConfig(params);
@@ -67,6 +69,7 @@ void registerMemIO(ElementRegistry& registry)
             .description          = "Write N-channel complex stream to shared memory",
             .default_input_count  = 1,
             .default_output_count = 0,
+            .ports                = {{"in", "input", "Complex signal input"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             auto cfg = parseConfig(params);
@@ -81,6 +84,7 @@ void registerMemIO(ElementRegistry& registry)
             .description          = "Read N-channel complex stream from shared memory",
             .default_input_count  = 0,
             .default_output_count = 1,
+            .ports                = {{"out", "output", "Complex signal output"}},
         },
         [parseConfig](const std::string& id, const ParamMap& params) -> ElementPtr {
             auto cfg = parseConfig(params);

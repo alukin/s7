@@ -95,12 +95,16 @@ std::shared_ptr<QSchematic::Items::Item> NodeFactory::createItemFromTemplate(
     const QString nodeName = QString("%1 %2").arg(nodeTemplate.typeName).arg(index + 1);
     node->setNodeId(nodeId);
     node->setNodeName(nodeName);
-    node->setParamsJson("{}");
+    // paramsJson is already initialised to the descriptor defaults in BasicNodeItem constructor.
     node->setData(kRoleNodeId, nodeId);
     node->setData(kRoleNodeName, nodeName);
     node->setData(kRoleNodeType, nodeTemplate.typeName);
     node->setData(kRoleVisualSink, false);
-    node->setPortLayout(nodeTemplate.inputPorts, nodeTemplate.outputPorts);
+
+    // Apply ports from descriptor (named labels + correct counts).
+    const auto desc = s7::ElementRegistry::instance().getDescriptor(nodeTemplate.typeName.toStdString());
+    const std::vector<s7::PortDescriptor> portDescs = desc ? desc->ports : std::vector<s7::PortDescriptor>{};
+    node->setPortLayout(nodeTemplate.inputPorts, nodeTemplate.outputPorts, portDescs);
 
     if (visualCatalog_) {
         if (const auto visualSpec = visualCatalog_->specForType(nodeTemplate.typeName)) {

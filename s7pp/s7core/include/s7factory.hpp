@@ -30,6 +30,17 @@ namespace s7 {
     using ElementFactoryFn = std::function<ElementPtr(const std::string& id, const ParamMap& params)>;
 
     // -------------------------------------------------------------------------
+    // PortDescriptor — metadata about a single named port.
+    // Used for display labels and port documentation in the GUI.
+    // The internal connector name stays inN/outN; this provides semantic labels.
+    // -------------------------------------------------------------------------
+    struct PortDescriptor {
+        std::string label;       ///< Display label, e.g. "signal", "gain", "re", "im"
+        std::string direction;   ///< "input" or "output"
+        std::string description; ///< Optional tooltip/help text
+    };
+
+    // -------------------------------------------------------------------------
     // TypeDescriptor — metadata about a registered element type.
     // Used to populate the GUI palette and auto-create items.
     // -------------------------------------------------------------------------
@@ -44,6 +55,16 @@ namespace s7 {
         bool outputs_configurable = false;
 
         ParamMap default_params;
+
+        /// Named port descriptors ordered by index within each direction.
+        /// First all inputs (in their index order), then all outputs.
+        /// If a port has no entry here its connector label is left empty.
+        std::vector<PortDescriptor> ports;
+
+        /// When non-null, called with the current params to compute the
+        /// actual {input_count, output_count} for a configured instance.
+        /// Falls back to {default_input_count, default_output_count} if null.
+        std::function<std::pair<int,int>(const ParamMap&)> compute_port_layout;
 
         /// When true, this type is not shown in the GUI palette.
         /// (Use for engine-internal types like "Probe".)

@@ -1,25 +1,30 @@
 #include "oscilloscope_widget.hpp"
+#include "render/print_render_service.hpp"
 
 #include <s7probe.hpp>
 #include <qcp.h>
 
+#include <QDialog>
+#include <QPrinter>
+#include <QPrintDialog>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 // Color palette for multi-channel display
-static const QColor kChannelColors[] = {
-	QColor(40, 200, 120),   // Channel 0: teal
-	QColor(255, 100, 100),  // Channel 1: red
-	QColor(100, 150, 255),  // Channel 2: blue
-	QColor(255, 200, 50),   // Channel 3: orange
-	QColor(150, 100, 255),  // Channel 4: purple
-	QColor(255, 100, 200),  // Channel 5: pink
-	QColor(50, 220, 100),   // Channel 6: light green
-	QColor(200, 200, 50),   // Channel 7: yellow
+static constexpr std::array<QColor, 8> kChannelColors = {
+	QColor(40, 200, 120),
+	QColor(255, 100, 100),
+	QColor(100, 150, 255),
+	QColor(255, 200, 50),
+	QColor(150, 100, 255),
+	QColor(255, 100, 200),
+	QColor(50, 220, 100),
+	QColor(200, 200, 50),
 };
-static constexpr int kChannelColorCount = sizeof(kChannelColors) / sizeof(kChannelColors[0]);
+static constexpr auto kChannelColorCount = kChannelColors.size();
 
 OscilloscopeWidget::OscilloscopeWidget(QWidget* parent)
 	: QWidget(parent)
@@ -57,10 +62,9 @@ void OscilloscopeWidget::setupLayout()
 
 	// Enable anti-aliasing for nicer rendering
 	plot_->setNotAntialiasedElements(QCP::aeAll);
-	plot_->antialiasedElements();
 }
 
-void OscilloscopeWidget::attachProbe(std::shared_ptr<s7::Probe> probe)
+void OscilloscopeWidget::attachProbe(const std::shared_ptr<s7::Probe>& probe)
 {
 	complexProbe_.reset();
 	probe_ = probe;
@@ -95,7 +99,7 @@ void OscilloscopeWidget::attachProbe(std::shared_ptr<s7::Probe> probe)
 	redraw();
 }
 
-void OscilloscopeWidget::attachComplexProbe(std::shared_ptr<s7::ComplexProbe> probe)
+void OscilloscopeWidget::attachComplexProbe(const std::shared_ptr<s7::ComplexProbe>& probe)
 {
 	probe_.reset();
 	complexProbe_ = probe;
@@ -158,13 +162,13 @@ void OscilloscopeWidget::setTimeWindow(double seconds)
 	timeWindow_ = std::max(0.001, seconds);
 	useTimeWindow_ = true;
 	// Derive sample count from the current sample rate.
-	sampleCount_ = std::max(std::size_t(10),
+	sampleCount_ = std::max(static_cast<std::size_t>(10),
 	    static_cast<std::size_t>(timeWindow_ * sampleRate_));
 }
 
 void OscilloscopeWidget::setSampleCount(std::size_t count)
 {
-	sampleCount_ = std::max(std::size_t(10), count);
+	sampleCount_ = std::max(static_cast<std::size_t>(10), count);
 	useTimeWindow_ = false;
 }
 
@@ -174,9 +178,33 @@ void OscilloscopeWidget::setSampleRate(double hz)
 	// If already in time-window mode, re-derive sampleCount_ immediately.
 	if (useTimeWindow_)
 	{
-		sampleCount_ = std::max(std::size_t(10),
+		sampleCount_ = std::max(static_cast<std::size_t>(10),
 		    static_cast<std::size_t>(timeWindow_ * sampleRate_));
 	}
+}
+
+auto OscilloscopeWidget::exportPdf(const QString& fileName,
+                                   const s7ui::printing::PageSpec& pageSpec) const -> bool
+{
+	if (!plot_) return false;
+	return s7ui::printing::renderPlotPdf(*plot_, fileName, pageSpec, true,
+	                                     QStringLiteral("s7ui"), QStringLiteral("Oscilloscope"));
+}
+
+auto OscilloscopeWidget::print(QWidget* parent,
+                               const s7ui::printing::PageSpec& pageSpec) const -> bool
+{
+	if (!plot_) return false;
+
+	QPrinter printer(QPrinter::HighResolution);
+	s7ui::printing::configurePrinter(printer, pageSpec);
+	QPrintDialog dialog(&printer, parent);
+	if (dialog.exec() != QDialog::Accepted)
+	{
+		return false;
+	}
+
+	return s7ui::printing::renderPlotToPrinter(*plot_, printer, true);
 }
 
 void OscilloscopeWidget::pollAndUpdate()

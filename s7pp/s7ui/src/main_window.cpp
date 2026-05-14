@@ -12,6 +12,7 @@
 #include "visual_catalog.hpp"
 
 #include "elements/sink_node_item.hpp"
+#include "elements/s7_wire_item.hpp"
 #include "remote_nodes_widget.hpp"
 
 #include <boost/json.hpp>
@@ -69,7 +70,7 @@ MainWindow::MainWindow(QWidget* parent)
     cadSettings.routeStraightAngles    = true;
     cadSettings.preserveStraightAngles = true;
     scene_->setSettings(cadSettings);
-    scene_->setWireFactory([] { return std::make_shared<QSchematic::Items::Wire>(); });
+    scene_->setWireFactory([] { return std::make_shared<s7ui::elements::S7WireItem>(); });
     connect(scene_, &QSchematic::Scene::modeChanged,
             this,   &MainWindow::onSceneModeChanged);
 

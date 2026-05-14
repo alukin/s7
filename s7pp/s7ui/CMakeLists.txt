@@ -57,6 +57,8 @@ add_executable(s7ui
     src/main_window.hpp
     src/i_schema_runner.hpp
     src/scene_roles.hpp
+    src/render/print_render_service.cpp
+    src/render/print_render_service.hpp
     src/node_template.hpp
     src/node_factory.cpp
     src/node_factory.hpp
@@ -86,6 +88,8 @@ add_executable(s7ui
     src/oscilloscope_widget.hpp
     src/elements/basic_node_item.cpp
     src/elements/basic_node_item.hpp
+    src/elements/s7_wire_item.cpp
+    src/elements/s7_wire_item.hpp
     src/elements/visual_sink_preview_widget.cpp
     src/elements/visual_sink_preview_widget.hpp
     src/elements/visual_sink_detail_window.cpp
@@ -148,6 +152,8 @@ if(BUILD_TESTING)
         src/tests/sheet_presenter_test.cpp
         src/sheet_presenter.cpp
         src/sheet_presenter.hpp
+        src/render/print_render_service.cpp
+        src/render/print_render_service.hpp
         src/scene_roles.hpp
     )
     target_include_directories(s7ui_sheet_presenter_test PRIVATE
@@ -157,11 +163,32 @@ if(BUILD_TESTING)
     target_link_libraries(s7ui_sheet_presenter_test PRIVATE
         Qt6::Core Qt6::Gui Qt6::Widgets Qt6::PrintSupport
         qschematic::qschematic-static
+        s7ui_qcustomplot
     )
     set_target_properties(s7ui_sheet_presenter_test PROPERTIES
         AUTOMOC ON
         CXX_STANDARD 23
     )
     add_test(NAME s7ui_sheet_presenter_test COMMAND s7ui_sheet_presenter_test)
+
+    # --- Qt print/export helper helpers ---
+    add_executable(s7ui_print_render_service_test
+        src/tests/print_render_service_test.cpp
+        src/render/print_render_service.cpp
+        src/render/print_render_service.hpp
+    )
+    target_include_directories(s7ui_print_render_service_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/s7core/include
+    )
+    target_link_libraries(s7ui_print_render_service_test PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Widgets Qt6::PrintSupport
+        s7ui_qcustomplot
+    )
+    set_target_properties(s7ui_print_render_service_test PROPERTIES
+        AUTOMOC ON
+        CXX_STANDARD 23
+    )
+    add_test(NAME s7ui_print_render_service_test COMMAND s7ui_print_render_service_test)
 endif()
 
