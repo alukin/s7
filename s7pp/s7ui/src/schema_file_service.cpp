@@ -23,19 +23,18 @@ boost::json::value SchemaFileService::buildRuntimeJson(const QSchematic::Scene& 
 }
 
 boost::json::value SchemaFileService::buildSchemaJson(const QSchematic::Scene& scene,
-                                                      const QString& schemaName,
-                                                      const double dt,
-                                                      const QString& sheetStandard,
-                                                      const double sheetWidthMm,
-                                                      const double sheetHeightMm) const
+                                                      const s7ui::documents::DiagramDocument& document) const
 {
+    const auto page = document.page.normalized();
+
     SceneSerializationOptions opts;
-    opts.schemaName = schemaName;
-    opts.dt = dt;
+    opts.schemaName = document.id;
+    opts.dt = document.dt;
     opts.includeDiagram = true;
-    opts.sheetStandard = sheetStandard;
-    opts.sheetWidthMm = sheetWidthMm;
-    opts.sheetHeightMm = sheetHeightMm;
+    opts.sheetStandard = page.standardName();
+    opts.sheetOrientation = page.orientationName();
+    opts.sheetWidthMm = page.widthMm;
+    opts.sheetHeightMm = page.heightMm;
     return serializer_.serialize(scene, opts);
 }
 

@@ -3,6 +3,7 @@
 #include "model_run_controller.hpp"
 #include "node_factory.hpp"
 #include "palette_service.hpp"
+#include "documents/diagram_document.hpp"
 #include "scene_roles.hpp"
 #include "schema_document_controller.hpp"
 #include "schema_file_service.hpp"
@@ -449,13 +450,19 @@ bool MainWindow::saveSchemaToPath(const QString& path, const bool setAsCurrentPa
     try {
         const auto sheet = sheetPresenter_->currentSize();
         const double dt = currentDt();
+
+        s7ui::documents::DiagramDocument document;
+        document.id = schemaName_;
+        document.dt = dt;
+        document.page.standard = s7ui::documents::DiagramPageLayout::standardFromName(
+            sheetPresenter_->currentStandardName());
+        document.page.orientation = s7ui::documents::PageOrientation::Landscape;
+        document.page.widthMm = sheet.width;
+        document.page.heightMm = sheet.height;
+
         schemaWorkflowController_->saveToFile(
             path,
-            schemaName_,
-            dt,
-            sheetPresenter_->currentStandardName(),
-            sheet.width,
-            sheet.height);
+            document);
         if (setAsCurrentPath) {
             currentSchemaPath_ = path;
         }

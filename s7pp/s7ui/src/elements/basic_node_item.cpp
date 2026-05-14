@@ -15,7 +15,6 @@
 
 #include <QDialog>
 #include <QFontMetricsF>
-#include <QGraphicsDropShadowEffect>
 #include <QGraphicsScene>
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
@@ -31,14 +30,11 @@ namespace s7ui::elements {
 
 namespace
 {
-constexpr qreal kNodeMinWidthMm  = 10.0;
-constexpr qreal kNodeMinHeightMm = 5.0;
-constexpr qreal kPortPitchMm     = 2.0;
-constexpr qreal kPortMarginMm    = 2.0;
-constexpr qreal kPinVisualScale  = 0.4;
-constexpr qreal kQSchematicGridSize = 20.0;
-constexpr qreal kConnectorSymbolDiameter = kQSchematicGridSize * kPinVisualScale;
-constexpr qreal kConnectorSymbolRadius = kConnectorSymbolDiameter * 0.5;
+constexpr qreal kNodeMinWidthMm  = 60.0;
+constexpr qreal kNodeMinHeightMm = 30.0;
+constexpr qreal kPortPitchMm     = 10.0;
+constexpr qreal kPortMarginMm    = 10.0;
+constexpr qreal kNodeTitleTopPaddingMm = 2.0;
 
 struct PortAxisLayout
 {
@@ -48,12 +44,14 @@ struct PortAxisLayout
 
 auto connectorOffsetMm(const int index, const PortAxisLayout& layout) -> qreal
 {
-    if (layout.count <= 1) return layout.nodeHeightMm * 0.5;
-    const int intervalCount = std::max(4, layout.count + 1);
-    const qreal rawSlot = (static_cast<qreal>(index + 1) * static_cast<qreal>(intervalCount)) /
-                          static_cast<qreal>(layout.count + 1);
-    const int slot = std::clamp(static_cast<int>(std::lround(rawSlot)), 1, intervalCount - 1);
-    return static_cast<qreal>(slot) * layout.nodeHeightMm / static_cast<qreal>(intervalCount);
+    if (layout.count <= 1) {
+        return layout.nodeHeightMm * 0.5;
+    }
+
+    // Slot model: endpoints are forbidden; connectors occupy interior slots only.
+    // For N pins, use slot indices [1..N] out of [0..N+1].
+    const qreal step = layout.nodeHeightMm / static_cast<qreal>(layout.count + 1);
+    return step * static_cast<qreal>(index + 1);
 }
 
 /// Find the label for a port at the given index within one direction ("input" / "output").
@@ -73,6 +71,38 @@ auto portLabel(const std::vector<s7::PortDescriptor>& descs,
     return {};
 }
 
+void configureConnectorLabel(const std::shared_ptr<QSchematic::Items::Connector>& connector,
+                             const QString& label)
+{
+    auto lbl = connector->label();
+    if (!lbl) {
+        return;
+    }
+    lbl->setMovable(false);
+    lbl->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    lbl->setAcceptedMouseButtons(Qt::NoButton);
+    lbl->setHighlightEnabled(false);
+    lbl->setSnapToGrid(false);
+    // Keep connector->text() as stable port id (in0/out0/...) and avoid replacing it
+    // with optional human label; this preserves connector lookup and wiring semantics.
+    lbl->setVisible(false);
+    if (!label.isEmpty()) {
+        connector->setToolTip(label);
+    }
+}
+
+auto findConnectorByName(const QList<std::shared_ptr<QSchematic::Items::Connector>>& connectors,
+                         const QString& name)
+    -> std::shared_ptr<QSchematic::Items::Connector>
+{
+    for (const auto& connector : connectors) {
+        if (connector && connector->text() == name) {
+            return connector;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
@@ -86,14 +116,11 @@ BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     setAllowMouseResize(false);
     setAllowMouseRotate(false);
     setConnectorsMovable(false);
-    setConnectorsSnapPolicy(QSchematic::Items::Connector::Anywhere);
-    setConnectorsSnapToGrid(false);
-
-    auto* graphicsEffect = new QGraphicsDropShadowEffect(this);
-    graphicsEffect->setOffset(5);
-    graphicsEffect->setBlurRadius(10);
-    graphicsEffect->setColor(QColor(63, 63, 63, 100));
-    setGraphicsEffect(graphicsEffect);
+    setConnectorsSnapPolicy(QSchematic::Items::Connector::NodeSizerectOutline);
+    setConnectorsSnapToGrid(true);
+    connect(this, &QSchematic::Items::Item::settingsChanged, this, [this]() {
+        relayoutConnectors();
+    });
 
     // Initialise params from registry defaults.
     paramsJson_ = defaultParamsJsonFor(typeName.toStdString());
@@ -153,7 +180,6 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts,
          2.0 * kPortMarginMm + static_cast<qreal>(maxPorts - 1) * kPortPitchMm});
     setSize(kNodeMinWidthMm, requestedHeight);
 
-    const qreal nodeWidth  = size().width();
     const qreal nodeHeight = size().height();
 
     clearConnectors();
@@ -167,15 +193,9 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts,
         auto in = std::make_shared<QSchematic::Items::Connector>(
             QSchematic::Items::Item::ConnectorType, QPoint(), name, this);
         in->setHighlightEnabled(false);
-        in->setSnapToGrid(false);
-        in->setScale(kPinVisualScale);
-        in->setPos(kConnectorSymbolRadius, connectorOffsetMm(i, inputLayout));
-        if (!label.isEmpty()) {
-            in->label()->setText(label);
-            in->label()->setVisible(true);
-        } else {
-            in->label()->setVisible(false);
-        }
+        in->setSnapToGrid(true);
+        in->setPos(0.0, connectorOffsetMm(i, inputLayout));
+        configureConnectorLabel(in, label);
         addConnector(in);
     }
 
@@ -185,19 +205,36 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts,
         auto out = std::make_shared<QSchematic::Items::Connector>(
             QSchematic::Items::Item::ConnectorType, QPoint(), name, this);
         out->setHighlightEnabled(false);
-        out->setSnapToGrid(false);
-        out->setScale(kPinVisualScale);
-        out->setPos(nodeWidth - kConnectorSymbolRadius, connectorOffsetMm(i, outputLayout));
-        if (!label.isEmpty()) {
-            out->label()->setText(label);
-            out->label()->setVisible(true);
-        } else {
-            out->label()->setVisible(false);
-        }
+        out->setSnapToGrid(true);
+        out->setPos(size().width(), connectorOffsetMm(i, outputLayout));
+        configureConnectorLabel(out, label);
         addConnector(out);
     }
 
+    relayoutConnectors();
+
     update();
+}
+
+void BasicNodeItem::relayoutConnectors()
+{
+    const qreal nodeWidth = size().width();
+    const qreal nodeHeight = size().height();
+    const PortAxisLayout inputLayout{inputPorts_, nodeHeight};
+    const PortAxisLayout outputLayout{outputPorts_, nodeHeight};
+    const auto all = connectors();
+
+    for (int i = 0; i < inputPorts_; ++i) {
+        const auto connector = findConnectorByName(all, QString("in%1").arg(i));
+        if (!connector) continue;
+        connector->setPos(0.0, connectorOffsetMm(i, inputLayout));
+    }
+
+    for (int i = 0; i < outputPorts_; ++i) {
+        const auto connector = findConnectorByName(all, QString("out%1").arg(i));
+        if (!connector) continue;
+        connector->setPos(nodeWidth, connectorOffsetMm(i, outputLayout));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -314,21 +351,60 @@ void BasicNodeItem::markBrokenWires(const std::vector<std::string>& removedConne
 }
 
 // ---------------------------------------------------------------------------
-// setVisualStyle
+// Shape and Style Methods
 // ---------------------------------------------------------------------------
-void BasicNodeItem::setVisualStyle(const QColor& baseColor)
+void BasicNodeItem::setVisualStyle(const QColor& baseColor, Shape shape)
 {
-    if (baseColor.isValid()) {
-        baseColor_ = baseColor;
-    } else {
-        baseColor_ = QColor(QStringLiteral("#e0e0e0"));
-    }
-    if (baseColor_.saturation() > 100) {
-        baseColor_.setHsv(baseColor_.hue(), 100, std::max(200, baseColor_.value()));
-    }
+    setShape(shape);
+    setFillColor(baseColor);
     refreshToolTip();
     update();
 }
+
+void BasicNodeItem::setShape(Shape shape)
+{
+    if (shape_ != shape) {
+        shape_ = shape;
+        update();
+    }
+}
+
+BasicNodeItem::Shape BasicNodeItem::nodeShape() const
+{
+    return shape_;
+}
+
+void BasicNodeItem::setBorderColor(const QColor& color)
+{
+    if (borderColor_ != color) {
+        borderColor_ = color;
+        update();
+    }
+}
+
+void BasicNodeItem::setFillColor(const QColor& color)
+{
+    if (color.isValid()) {
+        fillColor_ = color;
+    } else {
+        fillColor_ = QColor(QStringLiteral("#e0e0e0"));
+    }
+    if (fillColor_.saturation() > 100) {
+        fillColor_.setHsv(fillColor_.hue(), 100, std::max(200, fillColor_.value()));
+    }
+    update();
+}
+
+QColor BasicNodeItem::borderColor() const
+{
+    return borderColor_;
+}
+
+QColor BasicNodeItem::fillColor() const
+{
+    return fillColor_;
+}
+
 
 // ---------------------------------------------------------------------------
 // paint
@@ -343,34 +419,136 @@ void BasicNodeItem::paint(QPainter* painter,
 
     painter->save();
 
-    const qreal lod = option->levelOfDetailFromTransform(painter->worldTransform());
-    const bool showDetails = (lod >= 0.5);
-
-    painter->setPen(QPen(baseColor_.darker(150), 0.3));
-    painter->setBrush(baseColor_);
-
     const QRectF rect(0, 0, size().width(), size().height());
-    painter->drawRect(rect);
 
-    if (showDetails) {
+    // Dispatch to shape-specific paint method
+    switch (shape_) {
+        case Shape::Rectangle:
+            paintRectangle(painter, rect);
+            break;
+        case Shape::RoundedRect:
+            paintRoundedRect(painter, rect);
+            break;
+        case Shape::Diamond:
+            paintDiamond(painter, rect);
+            break;
+        case Shape::Hexagon:
+            paintHexagon(painter, rect);
+            break;
+        case Shape::Circle:
+            paintCircle(painter, rect);
+            break;
+        case Shape::Custom:
+            paintRoundedRect(painter, rect);  // Fallback to rounded rect
+            break;
+    }
 
+    // Draw node title if visible
+    const qreal lod = option->levelOfDetailFromTransform(painter->worldTransform());
+    if (lod >= 0.5) {
         painter->setPen(Qt::black);
         QFont font = painter->font();
         font.setPointSizeF(3.0);
         painter->setFont(font);
 
-        QTextOption textOption(Qt::AlignCenter);
+        QTextOption textOption(Qt::AlignHCenter | Qt::AlignTop);
         textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-        painter->drawText(rect, nodeName_, textOption);
+        const QRectF titleRect = rect.adjusted(0.8, kNodeTitleTopPaddingMm, -0.8, 0.0);
+        painter->drawText(titleRect, nodeName_, textOption);
     }
 
     painter->restore();
 }
 
 // ---------------------------------------------------------------------------
+// Shape painting helpers (using QPainter primitives like QSchematic demo)
+// ---------------------------------------------------------------------------
+
+void BasicNodeItem::paintRectangle(QPainter* painter, const QRectF& rect)
+{
+    QPen pen(borderColor_);
+    pen.setWidthF(0.3);
+    QBrush brush(fillColor_);
+
+    painter->setPen(pen);
+    painter->setBrush(brush);
+    painter->drawRect(rect);
+}
+
+void BasicNodeItem::paintRoundedRect(QPainter* painter, const QRectF& rect)
+{
+    const qreal radius = _settings.gridSize / 2;
+
+    QPen pen(borderColor_);
+    pen.setWidthF(0.3);
+    QBrush brush(fillColor_);
+
+    painter->setPen(pen);
+    painter->setBrush(brush);
+    painter->drawRoundedRect(rect, radius, radius);
+}
+
+void BasicNodeItem::paintDiamond(QPainter* painter, const QRectF& rect)
+{
+    // Create a diamond polygon (4 points)
+    QPolygon diamond;
+    diamond << QPoint(rect.width() / 2, 0);                    // Top
+    diamond << QPoint(rect.width(), rect.height() / 2);       // Right
+    diamond << QPoint(rect.width() / 2, rect.height());       // Bottom
+    diamond << QPoint(0, rect.height() / 2);                  // Left
+
+    QPen pen(borderColor_);
+    pen.setWidthF(0.3);
+    QBrush brush(fillColor_);
+
+    painter->setPen(pen);
+    painter->setBrush(brush);
+    painter->drawPolygon(diamond);
+}
+
+void BasicNodeItem::paintHexagon(QPainter* painter, const QRectF& rect)
+{
+    // Create a hexagon polygon (6 points)
+    const qreal w = rect.width();
+    const qreal h = rect.height();
+    const qreal qw = w * 0.25;   // Quarter width
+    const qreal hh = h * 0.5;    // Half height
+
+    QPolygon hexagon;
+    hexagon << QPoint(qw, 0);              // Top-left
+    hexagon << QPoint(w - qw, 0);          // Top-right
+    hexagon << QPoint(w, hh);              // Middle-right
+    hexagon << QPoint(w - qw, h);          // Bottom-right
+    hexagon << QPoint(qw, h);              // Bottom-left
+    hexagon << QPoint(0, hh);              // Middle-left
+
+    QPen pen(borderColor_);
+    pen.setWidthF(0.3);
+    QBrush brush(fillColor_);
+
+    painter->setPen(pen);
+    painter->setBrush(brush);
+    painter->drawPolygon(hexagon);
+}
+
+void BasicNodeItem::paintCircle(QPainter* painter, const QRectF& rect)
+{
+    QPen pen(borderColor_);
+    pen.setWidthF(0.3);
+    QBrush brush(fillColor_);
+
+    painter->setPen(pen);
+    painter->setBrush(brush);
+    painter->drawEllipse(rect);
+}
+
+// ---------------------------------------------------------------------------
 // sizeChangedEvent
 // ---------------------------------------------------------------------------
-void BasicNodeItem::sizeChangedEvent(QSizeF /*oldSize*/, QSizeF /*newSize*/) {}
+void BasicNodeItem::sizeChangedEvent(QSizeF /*oldSize*/, QSizeF /*newSize*/)
+{
+    relayoutConnectors();
+}
 
 // ---------------------------------------------------------------------------
 // mouseDoubleClickEvent

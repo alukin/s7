@@ -138,6 +138,7 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
     result.wireCount  = static_cast<int>(wires.size());
     result.dt         = s7ui::dto::jsonValueOr<double>(rootObj, "dt", 0.001);
     result.sheetStandard = "A4";
+    result.sheetOrientation = "landscape";
     result.schemaName = QString::fromStdString(
         s7ui::dto::jsonValueOr<std::string>(rootObj, "id", std::string{}));
     if (result.schemaName.trimmed().isEmpty()) {
@@ -150,6 +151,8 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
         const auto& so = sv->as_object();
         result.sheetStandard = QString::fromStdString(
             s7ui::dto::jsonValueOr<std::string>(so, "standard", std::string{"A4"}));
+        result.sheetOrientation = QString::fromStdString(
+            s7ui::dto::jsonValueOr<std::string>(so, "orientation", std::string{"landscape"}));
     }
     // Apply sheet preset (rebuilds overlay)
     if (sheetPresenter_) {
@@ -178,11 +181,8 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
             basic->setNodeId(spec.id);
             basic->setNodeName(spec.name);
             basic->setParamsJson(QString::fromStdString(boost::json::serialize(spec.params)));
-            // Re-apply port layout with descriptor labels using the persisted port counts.
-            const auto desc = s7::ElementRegistry::instance().getDescriptor(spec.typeName.toStdString());
-            const std::vector<s7::PortDescriptor> portDescs = desc ? desc->ports
-                                                                    : std::vector<s7::PortDescriptor>{};
-            basic->setPortLayout(tmpl.inputPorts, tmpl.outputPorts, portDescs);
+            // Recompute ports from params to avoid stale persisted input/output counts.
+            basic->applyParamsAndUpdatePorts(basic->paramsJson());
         }
         if (auto sink = std::dynamic_pointer_cast<s7ui::elements::SinkNodeItem>(item))
             sink->setInputCount(std::max(1, tmpl.inputPorts));

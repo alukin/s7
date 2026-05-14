@@ -14,6 +14,7 @@ struct LoadedSchemaResult
     QString schemaName      = "s7ui_schema";
     double  dt              = 0.001;
     QString sheetStandard   = "A4";
+    QString sheetOrientation = "landscape";
     int     nextNodeCounter = 0;   ///< Use to reset createdNodeCounter_ in MainWindow
     int     nodeCount       = 0;
     int     wireCount       = 0;

@@ -41,7 +41,7 @@ boost::json::value SceneSerializer::serialize(const QSchematic::Scene& scene,
         root["units"] = "mm";
         root["sheet"] = boost::json::object{
             {"standard", options.sheetStandard.toStdString()},
-            {"orientation", "landscape"},
+            {"orientation", options.sheetOrientation.toStdString()},
             {"width_mm", options.sheetWidthMm},
             {"height_mm", options.sheetHeightMm}
         };

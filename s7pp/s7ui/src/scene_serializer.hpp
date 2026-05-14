@@ -16,6 +16,7 @@ struct SceneSerializationOptions
     double dt = 0.001;
     bool includeDiagram = true;
     QString sheetStandard = "A4";
+    QString sheetOrientation = "landscape";
     double sheetWidthMm = 297.0;
     double sheetHeightMm = 210.0;
 };

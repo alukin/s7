@@ -19,6 +19,27 @@ auto defaultScenePosForIndex(const int index) -> QPointF
     return {static_cast<qreal>(20.0 + (index % 6) * 70.0),
             static_cast<qreal>(20.0 + (index / 6) * 50.0)};
 }
+
+/// Convert visual spec shape string to BasicNodeItem::Shape enum
+auto shapeFromString(const QString& shapeStr) -> s7ui::elements::BasicNodeItem::Shape
+{
+    const QString normalized = shapeStr.toLower().trimmed();
+    if (normalized == "rect" || normalized == "rectangle") {
+        return s7ui::elements::BasicNodeItem::Shape::Rectangle;
+    } else if (normalized == "round_rect" || normalized == "roundedrect") {
+        return s7ui::elements::BasicNodeItem::Shape::RoundedRect;
+    } else if (normalized == "diamond") {
+        return s7ui::elements::BasicNodeItem::Shape::Diamond;
+    } else if (normalized == "hex" || normalized == "hexagon") {
+        return s7ui::elements::BasicNodeItem::Shape::Hexagon;
+    } else if (normalized == "circle" || normalized == "ellipse") {
+        return s7ui::elements::BasicNodeItem::Shape::Circle;
+    } else if (normalized == "custom") {
+        return s7ui::elements::BasicNodeItem::Shape::Custom;
+    }
+    // Default to rounded rectangle
+    return s7ui::elements::BasicNodeItem::Shape::RoundedRect;
+}
 } // namespace
 
 NodeFactory::NodeFactory(const s7ui::visual::Catalog* visualCatalog)
@@ -106,11 +127,12 @@ std::shared_ptr<QSchematic::Items::Item> NodeFactory::createItemFromTemplate(
     const std::vector<s7::PortDescriptor> portDescs = desc ? desc->ports : std::vector<s7::PortDescriptor>{};
     node->setPortLayout(nodeTemplate.inputPorts, nodeTemplate.outputPorts, portDescs);
 
-    if (visualCatalog_) {
-        if (const auto visualSpec = visualCatalog_->specForType(nodeTemplate.typeName)) {
-            node->setVisualStyle(QColor(visualSpec->color));
-        }
-    }
+     if (visualCatalog_) {
+         if (const auto visualSpec = visualCatalog_->specForType(nodeTemplate.typeName)) {
+             const auto shape = shapeFromString(visualSpec->shape);
+             node->setVisualStyle(QColor(visualSpec->color), shape);
+         }
+     }
     return node;
 }
 

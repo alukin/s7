@@ -22,18 +22,13 @@ LoadedSchemaResult SchemaWorkflowController::loadFromFile(SchemaDocumentControll
 }
 
 void SchemaWorkflowController::saveToFile(const QString& path,
-                                          const QString& schemaName,
-                                          const double dt,
-                                          const QString& sheetStandard,
-                                          const double sheetWidthMm,
-                                          const double sheetHeightMm) const
+                                          const s7ui::documents::DiagramDocument& document) const
 {
     if (!scene_ || !fileService_) {
         throw std::runtime_error("Schema workflow controller is not initialized");
     }
 
-    const auto schemaJson = fileService_->buildSchemaJson(
-        *scene_, schemaName, dt, sheetStandard, sheetWidthMm, sheetHeightMm);
+    const auto schemaJson = fileService_->buildSchemaJson(*scene_, document);
     fileService_->saveSchemaJsonToFile(path, schemaJson);
 }
 

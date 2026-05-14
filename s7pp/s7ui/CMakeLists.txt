@@ -55,6 +55,9 @@ add_executable(s7ui
     src/main.cpp
     src/main_window.cpp
     src/main_window.hpp
+    src/documents/diagram_document.cpp
+    src/documents/diagram_document.hpp
+    src/documents/plot_document.hpp
     src/i_schema_runner.hpp
     src/scene_roles.hpp
     src/render/print_render_service.cpp
@@ -190,5 +193,24 @@ if(BUILD_TESTING)
         CXX_STANDARD 23
     )
     add_test(NAME s7ui_print_render_service_test COMMAND s7ui_print_render_service_test)
+
+    # --- Document models (diagram/plot metadata) ---
+    add_executable(s7ui_document_models_test
+        src/tests/document_models_test.cpp
+        src/documents/diagram_document.cpp
+        src/documents/diagram_document.hpp
+        src/documents/plot_document.hpp
+    )
+    target_include_directories(s7ui_document_models_test PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_link_libraries(s7ui_document_models_test PRIVATE
+        Qt6::Core
+    )
+    set_target_properties(s7ui_document_models_test PROPERTIES
+        AUTOMOC ON
+        CXX_STANDARD 23
+    )
+    add_test(NAME s7ui_document_models_test COMMAND s7ui_document_models_test)
 endif()
 

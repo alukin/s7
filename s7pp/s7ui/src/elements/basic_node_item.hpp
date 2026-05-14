@@ -19,6 +19,16 @@ class BasicNodeItem : public QSchematic::Items::Node
     Q_OBJECT
 
 public:
+    /// Shape types matching S7UI spec
+    enum class Shape {
+        Rectangle,      // Plain rectangle
+        RoundedRect,    // Rectangle with rounded corners
+        Diamond,        // 4-point diamond shape
+        Hexagon,        // 6-point hexagon
+        Circle,         // Circle/ellipse
+        Custom          // Custom shape (fallback to rectangle)
+    };
+
     explicit BasicNodeItem(const QString& typeName, QGraphicsItem* parent = nullptr);
 
     void setNodeId(const QString& nodeId);
@@ -43,7 +53,19 @@ public:
     /// Detects connectors that disappeared and marks connected wires as broken.
     void applyParamsAndUpdatePorts(const QString& newParamsJson);
 
-    void setVisualStyle(const QColor& baseColor);
+    /// Set visual style including colors and shape
+    void setVisualStyle(const QColor& baseColor, Shape shape = Shape::RoundedRect);
+    void setShape(Shape shape);
+
+    /// Set border and fill colors
+    void setBorderColor(const QColor& color);
+    void setFillColor(const QColor& color);
+    [[nodiscard]] QColor borderColor() const;
+    [[nodiscard]] QColor fillColor() const;
+
+    /// Get node shape (renamed from shape() to avoid conflict with QGraphicsItem::shape())
+    [[nodiscard]] Shape nodeShape() const;
+
 
 protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
@@ -53,7 +75,15 @@ protected:
     void sizeChangedEvent(QSizeF oldSize, QSizeF newSize) override;
 
 private:
+    void relayoutConnectors();
     void refreshToolTip();
+
+    /// Paint helper methods for each shape type
+    void paintRectangle(QPainter* painter, const QRectF& rect);
+    void paintRoundedRect(QPainter* painter, const QRectF& rect);
+    void paintDiamond(QPainter* painter, const QRectF& rect);
+    void paintHexagon(QPainter* painter, const QRectF& rect);
+    void paintCircle(QPainter* painter, const QRectF& rect);
 
     /// Serialise the type descriptor's default_params to a JSON object string.
     [[nodiscard]] static QString defaultParamsJsonFor(const std::string& typeName);
@@ -67,7 +97,9 @@ private:
     QString paramsJson_ = QStringLiteral("{}");
     int inputPorts_  = 1;
     int outputPorts_ = 1;
-    QColor baseColor_ = QColor(79, 79, 79, 120);
+    Shape shape_ = Shape::RoundedRect;
+    QColor borderColor_ = QColor(Qt::black);
+    QColor fillColor_ = QColor(79, 79, 79, 120);
 };
 
 } // namespace s7ui::elements

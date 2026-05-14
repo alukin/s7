@@ -1,5 +1,6 @@
 #pragma once
 
+#include "documents/diagram_document.hpp"
 #include "schema_document_controller.hpp"
 
 #include <boost/json.hpp>
@@ -25,11 +26,7 @@ public:
                                                   const QString& path) const;
 
     void saveToFile(const QString& path,
-                    const QString& schemaName,
-                    double dt,
-                    const QString& sheetStandard,
-                    double sheetWidthMm,
-                    double sheetHeightMm) const;
+                    const s7ui::documents::DiagramDocument& document) const;
 
     [[nodiscard]] boost::json::value buildRuntimeJson(const QString& schemaName,
                                                       double dt) const;

@@ -65,17 +65,22 @@ void registerBuiltins(ElementRegistry& registry)
             // Ports are auto-numbered (in0, in1, …) because inputs are identical.
             .ports                = {{.label = "out", .direction = "output", .description = "Weighted sum"}},
             .compute_port_layout  = [](const ParamMap& p) -> std::pair<int,int> {
-                int maxIdx = 1; // default: w0+w1 → 2 inputs
+                int indexedCount = 0;
                 for (const auto& [key, val] : p) {
                     if (key.size() < 2 || key.front() != 'w') continue;
                     bool numeric = true;
                     for (std::size_t i = 1; i < key.size(); ++i)
                         if (!std::isdigit(static_cast<unsigned char>(key[i]))) { numeric = false; break; }
                     if (!numeric) continue;
-                    const int idx = std::stoi(key.substr(1));
-                    maxIdx = std::max(maxIdx, idx);
+                    ++indexedCount;
                 }
-                return {maxIdx + 1, 1};
+                if (indexedCount > 0) {
+                    return {indexedCount, 1};
+                }
+                if (p.contains("weight")) {
+                    return {1, 1};
+                }
+                return {2, 1}; // default: w0+w1
             }
         },
         [](const std::string& id, const ParamMap& params) -> ElementPtr
@@ -84,7 +89,6 @@ void registerBuiltins(ElementRegistry& registry)
             const auto scalar_it = params.find("weight");
 
             std::map<std::size_t, ParamValue> indexed;
-            std::size_t max_idx = 0;
             for (const auto& [key, value] : params)
             {
                 if (key.size() < 2 || key.front() != 'w') continue;
@@ -95,7 +99,6 @@ void registerBuiltins(ElementRegistry& registry)
 
                 const auto idx = static_cast<std::size_t>(std::stoul(key.substr(1)));
                 indexed[idx] = value;
-                if (idx > max_idx) max_idx = idx;
             }
 
             if (scalar_it != params.end() && !indexed.empty())
@@ -108,14 +111,9 @@ void registerBuiltins(ElementRegistry& registry)
             }
             else if (!indexed.empty())
             {
-                raw_weights.reserve(max_idx + 1);
-                for (std::size_t i = 0; i <= max_idx; ++i)
-                {
-                    const auto it = indexed.find(i);
-                    if (it == indexed.end())
-                        throw std::runtime_error("Sum indexed weights must be contiguous from w0");
-                    raw_weights.push_back(it->second);
-                }
+                raw_weights.reserve(indexed.size());
+                for (const auto& [idx, value] : indexed)
+                    raw_weights.push_back(value);
             }
             else
             {
