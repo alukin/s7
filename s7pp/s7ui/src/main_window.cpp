@@ -31,7 +31,6 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
@@ -71,11 +70,13 @@ MainWindow::MainWindow(QWidget* parent)
     cadSettings.routeStraightAngles    = true;
     cadSettings.preserveStraightAngles = true;
     scene_->setSettings(cadSettings);
-    scene_->setWireFactory([] { return std::make_shared<s7ui::elements::S7WireItem>(); });
+    scene_->setWireFactory([]() -> std::shared_ptr<QSchematic::Items::Wire> {
+        return std::make_shared<s7ui::elements::S7WireItem>();
+    });
     connect(scene_, &QSchematic::Scene::modeChanged,
             this,   &MainWindow::onSceneModeChanged);
 
-    sheetPresenter_  = std::make_unique<SheetPresenter>(scene_);
+    sheetPresenter_ = std::make_unique<SheetPresenter>(scene_);
     schemaFileService_ = std::make_unique<SchemaFileService>();
     schemaWorkflowController_ = std::make_unique<SchemaWorkflowController>(
         scene_, schemaFileService_.get());
@@ -109,7 +110,7 @@ MainWindow::MainWindow(QWidget* parent)
     updateWindowTitle();
     resize(1600, 950);
 
-    QTimer::singleShot(0, this, [this] { sheetPresenter_->fitInView(view_); });
+    QTimer::singleShot(0, this, [this]() -> void { sheetPresenter_->fitInView(view_); });
     appendLog("[s7ui] Ready");
 }
 
@@ -143,18 +144,18 @@ void MainWindow::createActions()
 
     actionFitView_ = new QAction("Fit View", this);
     connect(actionFitView_, &QAction::triggered, this,
-            [this] { sheetPresenter_->fitInView(view_); });
+            [this]() -> void { sheetPresenter_->fitInView(view_); });
 
     actionFitSelection_ = new QAction("Fit Selection", this);
     connect(actionFitSelection_, &QAction::triggered, this,
-            [this] { sheetPresenter_->fitSelectionInView(view_); });
+            [this]() -> void { sheetPresenter_->fitSelectionInView(view_); });
 
-    actionZoom25_  = new QAction("25%",  this);
-    actionZoom50_  = new QAction("50%",  this);
+    actionZoom25_ = new QAction("25%", this);
+    actionZoom50_ = new QAction("50%", this);
     actionZoom100_ = new QAction("100%", this);
-    connect(actionZoom25_,  &QAction::triggered, this, [this]{ setZoomPreset(0.25); });
-    connect(actionZoom50_,  &QAction::triggered, this, [this]{ setZoomPreset(0.50); });
-    connect(actionZoom100_, &QAction::triggered, this, [this]{ setZoomPreset(1.00); });
+    connect(actionZoom25_, &QAction::triggered, this, [this]() -> void { setZoomPreset(0.25); });
+    connect(actionZoom50_, &QAction::triggered, this, [this]() -> void { setZoomPreset(0.50); });
+    connect(actionZoom100_, &QAction::triggered, this, [this]() -> void { setZoomPreset(1.00); });
 
     actionToggleWireMode_ = new QAction("Wire Mode", this);
     actionToggleWireMode_->setShortcut(Qt::CTRL | Qt::Key_W);
@@ -162,13 +163,13 @@ void MainWindow::createActions()
     actionToggleWireMode_->setToolTip("Toggle wire drawing mode (Ctrl+W)");
     connect(actionToggleWireMode_, &QAction::triggered, this, &MainWindow::toggleWireMode);
 
-    actionRunModel_    = new QAction("Run",    this);
-    actionPauseModel_  = new QAction("Pause",  this);
+    actionRunModel_ = new QAction("Run", this);
+    actionPauseModel_ = new QAction("Pause", this);
     actionResumeModel_ = new QAction("Resume", this);
-    actionStopModel_   = new QAction("Stop",   this);
-    actionResetModel_  = new QAction("Reset",  this);
-    connect(actionRunModel_,    &QAction::triggered, this, &MainWindow::runSchemaModel);
-    connect(actionPauseModel_,  &QAction::triggered, this, &MainWindow::pauseSchemaModel);
+    actionStopModel_ = new QAction("Stop", this);
+    actionResetModel_ = new QAction("Reset", this);
+    connect(actionRunModel_, &QAction::triggered, this, &MainWindow::runSchemaModel);
+    connect(actionPauseModel_, &QAction::triggered, this, &MainWindow::pauseSchemaModel);
     connect(actionResumeModel_, &QAction::triggered, this, &MainWindow::resumeSchemaModel);
     connect(actionStopModel_,   &QAction::triggered, this, &MainWindow::stopSchemaModel);
     connect(actionResetModel_,  &QAction::triggered, this, &MainWindow::resetSchemaModel);
@@ -187,7 +188,7 @@ void MainWindow::createSheetActions()
         a->setCheckable(true);
         a->setChecked(checked);
         grp->addAction(a);
-        connect(a, &QAction::triggered, this, [this, p] { applySheetPreset(p); });
+        connect(a, &QAction::triggered, this, [this, p]() -> void { applySheetPreset(p); });
         return a;
     };
 
@@ -210,9 +211,9 @@ void MainWindow::createMenus()
     menuBar()->addMenu("&Edit")->addAction(actionToggleWireMode_);
     menuBar()->addMenu("&Insert")->addAction(actionAddNode_);
 
-    auto* viewMenu  = menuBar()->addMenu("&View");
+    auto* viewMenu = menuBar()->addMenu("&View");
     viewMenu->addAction(actionFitView_);
-    auto* zoomMenu  = viewMenu->addMenu("Zoom");
+    auto* zoomMenu = viewMenu->addMenu("Zoom");
     zoomMenu->addAction(actionZoom25_);
     zoomMenu->addAction(actionZoom50_);
     zoomMenu->addAction(actionZoom100_);
@@ -250,22 +251,29 @@ void MainWindow::createToolbars()
     mTb->addAction(actionStopModel_);
     mTb->addAction(actionResetModel_);
 
-    auto addSpin = [&](int lo, int hi, int def, const QString& tip) -> QSpinBox* {
+    struct SpinSpec {
+        int minimum;
+        int maximum;
+        int initial;
+        QString toolTip;
+    };
+
+    auto addSpin = [&](const SpinSpec& spec) -> QSpinBox* {
         auto* s = new QSpinBox(mTb);
-        s->setRange(lo, hi);
-        s->setValue(def);
-        s->setToolTip(tip);
+        s->setRange(spec.minimum, spec.maximum);
+        s->setValue(spec.initial);
+        s->setToolTip(spec.toolTip);
         auto* wa = new QWidgetAction(mTb);
         wa->setDefaultWidget(s);
         mTb->addAction(wa);
         return s;
     };
 
-    runHoursSpin_   = addSpin(0, 23, 0, "Run hours");
-    runMinutesSpin_ = addSpin(0, 59, 1, "Run minutes");
-    runSecondsSpin_ = addSpin(0, 59, 0, "Run seconds");
+    runHoursSpin_   = addSpin({.minimum = 0, .maximum = 23, .initial = 0, .toolTip = "Run hours"});
+    runMinutesSpin_ = addSpin({.minimum = 0, .maximum = 59, .initial = 1, .toolTip = "Run minutes"});
+    runSecondsSpin_ = addSpin({.minimum = 0, .maximum = 59, .initial = 0, .toolTip = "Run seconds"});
 
-    modelStatusLabel_ = new QLabel("model: idle", mTb);
+    modelStatusLabel_ = new QLabel(tr("model: idle"), mTb);
     modelStatusLabel_->setMinimumWidth(220);
     auto* statusWA = new QWidgetAction(mTb);
     statusWA->setDefaultWidget(modelStatusLabel_);
@@ -277,8 +285,8 @@ void MainWindow::createCentralEditor()
     view_ = new QSchematic::View(this);
     view_->setScene(scene_);
     view_->setAlignment(Qt::AlignCenter);
-    view_->setRenderHint(QPainter::Antialiasing,          true);
-    view_->setRenderHint(QPainter::TextAntialiasing,      true);
+    view_->setRenderHint(QPainter::Antialiasing, true);
+    view_->setRenderHint(QPainter::TextAntialiasing, true);
     view_->setRenderHint(QPainter::SmoothPixmapTransform, true);
     view_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setCentralWidget(view_);
@@ -287,15 +295,17 @@ void MainWindow::createCentralEditor()
 void MainWindow::createDocks()
 {
     // Palette
-    auto* paletteDock   = new QDockWidget("S7 Node Palette", this);
-    auto* paletteHost   = new QWidget(paletteDock);
+    auto* paletteDock = new QDockWidget("S7 Node Palette", this);
+    auto* paletteHost = new QWidget(paletteDock);
     auto* paletteLayout = new QVBoxLayout(paletteHost);
     paletteTree_ = new QTreeWidget(paletteHost);
     paletteTree_->setHeaderLabel("Node Types");
     paletteTree_->header()->setSectionResizeMode(QHeaderView::Stretch);
     connect(paletteTree_, &QTreeWidget::itemDoubleClicked,
-            this, [this](QTreeWidgetItem* item, int) {
-                if (item && item->childCount() == 0) addSelectedPaletteNode();
+            this, [this](QTreeWidgetItem* item, int) -> void {
+                if (item && item->childCount() == 0) {
+                    addSelectedPaletteNode();
+                }
             });
     auto* addBtn = new QPushButton("Add Selected Node", paletteHost);
     connect(addBtn, &QPushButton::clicked, this, &MainWindow::addSelectedPaletteNode);
@@ -320,10 +330,10 @@ void MainWindow::createDocks()
 
     // Schema properties
     auto* schemaDock = new QDockWidget("Schema Properties", this);
-    auto* schemaHost = new QWidget(schemaDock);
-    auto* schemaForm = new QFormLayout(schemaHost);
+    auto* schemaHost   = new QWidget(schemaDock);
+    auto* schemaForm   = new QFormLayout(schemaHost);
     schemaNameEdit_ = new QLineEdit(schemaName_, schemaHost);
-    schemaDtSpin_   = new QDoubleSpinBox(schemaHost);
+    schemaDtSpin_ = new QDoubleSpinBox(schemaHost);
     schemaDtSpin_->setDecimals(9);
     schemaDtSpin_->setRange(1e-9, 10.0);
     schemaDtSpin_->setSingleStep(0.0001);
@@ -347,11 +357,13 @@ void MainWindow::createDocks()
 
 void MainWindow::ensureVisualCatalogLoaded()
 {
-    if (visualCatalog_) return;
+    if (visualCatalog_) {
+        return;
+    }
 
     visualCatalog_ = std::make_unique<s7ui::visual::Catalog>();
     const QString dir = QStringLiteral(S7UI_SOURCE_DIR "/s7ui/visuals");
-    visualCatalog_->loadFromDir(dir, [this](const QString& msg) { appendLog(msg); });
+    visualCatalog_->loadFromDir(dir, [this](const QString& msg) -> void { appendLog(msg); });
     nodeFactory_ = std::make_unique<NodeFactory>(visualCatalog_.get());
 
     schemaDocumentController_ = std::make_unique<SchemaDocumentController>(
@@ -393,8 +405,14 @@ void MainWindow::applyLoadedSchemaResult(const LoadedSchemaResult& r)
 {
     schemaName_         = r.schemaName;
     createdNodeCounter_ = r.nextNodeCounter;
-    if (schemaNameEdit_) { const QSignalBlocker b(schemaNameEdit_); schemaNameEdit_->setText(schemaName_); }
-    if (schemaDtSpin_)   { const QSignalBlocker b(schemaDtSpin_);   schemaDtSpin_->setValue(r.dt); }
+    if (schemaNameEdit_) {
+        const QSignalBlocker block(schemaNameEdit_);
+        schemaNameEdit_->setText(schemaName_);
+    }
+    if (schemaDtSpin_) {
+        const QSignalBlocker block(schemaDtSpin_);
+        schemaDtSpin_->setValue(r.dt);
+    }
     sheetPresenter_->fitInView(view_);
     updateModelActionStates();
     updateWindowTitle();
@@ -407,8 +425,12 @@ void MainWindow::loadSchema()
         : QFileInfo(currentSchemaPath_).absolutePath();
     const QString path = QFileDialog::getOpenFileName(
         this, "Open Schema", startDir, "Schema Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
-    if (!schemaDocumentController_) ensureVisualCatalogLoaded();
+    if (path.isEmpty()) {
+        return;
+    }
+    if (!schemaDocumentController_) {
+        ensureVisualCatalogLoaded();
+    }
     try {
         const auto r = schemaWorkflowController_->loadFromFile(*schemaDocumentController_, path);
         currentSchemaPath_ = path;
@@ -421,7 +443,10 @@ void MainWindow::loadSchema()
 
 void MainWindow::saveSchema()
 {
-    if (currentSchemaPath_.isEmpty()) { saveSchemaAs(); return; }
+    if (currentSchemaPath_.isEmpty()) {
+        saveSchemaAs();
+        return;
+    }
     if (saveSchemaToPath(currentSchemaPath_, false)) {
         appendLog(QString("[schema] saved to %1").arg(currentSchemaPath_));
     }
@@ -434,18 +459,20 @@ void MainWindow::saveSchemaAs()
         : QFileInfo(currentSchemaPath_).absolutePath();
     const QString path = QFileDialog::getSaveFileName(
         this, "Save Schema As", startDir, "Schema Files (*.json);;All Files (*)");
-    if (path.isEmpty()) return;
+    if (path.isEmpty()) {
+        return;
+    }
     if (saveSchemaToPath(path, true)) {
         appendLog(QString("[schema] saved to %1").arg(path));
     }
 }
 
-double MainWindow::currentDt() const
+auto MainWindow::currentDt() const -> double
 {
     return schemaDtSpin_ ? schemaDtSpin_->value() : 0.001;
 }
 
-bool MainWindow::saveSchemaToPath(const QString& path, const bool setAsCurrentPath)
+auto MainWindow::saveSchemaToPath(const QString& path, const bool setAsCurrentPath) -> bool
 {
     try {
         const auto sheet = sheetPresenter_->currentSize();
@@ -491,7 +518,9 @@ void MainWindow::exportPdf()
         this, "Export PDF",
         QDir(startDir).filePath(stem + ".pdf"),
         "PDF Files (*.pdf)");
-    if (path.isEmpty()) return;
+    if (path.isEmpty()) {
+        return;
+    }
     sheetPresenter_->exportPdf(path, this);
     appendLog(QString("[print] exported PDF: %1").arg(path));
 }
@@ -509,7 +538,7 @@ void MainWindow::printSheet()
 void MainWindow::applySheetPreset(SheetPresenter::Preset preset)
 {
     using P = SheetPresenter::Preset;
-    sheetPresenter_->applyPreset(preset, [this](const QString& msg){ appendLog(msg); });
+    sheetPresenter_->applyPreset(preset, [this](const QString& msg) -> void { appendLog(msg); });
     if (actionSheetA4_) actionSheetA4_->setChecked(preset == P::A4Landscape);
     if (actionSheetA3_) actionSheetA3_->setChecked(preset == P::A3Landscape);
     if (actionSheetA2_) actionSheetA2_->setChecked(preset == P::A2Landscape);
@@ -571,9 +600,23 @@ void MainWindow::runSchemaModel()
     updateModelActionStates();
 }
 
-void MainWindow::pauseSchemaModel()  { modelRunController_->pause();  updateModelActionStates(); }
-void MainWindow::resumeSchemaModel() { modelRunController_->resume(); updateModelActionStates(); }
-void MainWindow::stopSchemaModel()   { modelRunController_->stop(); }
+void MainWindow::pauseSchemaModel()
+{
+    modelRunController_->pause();
+    updateModelActionStates();
+}
+
+void MainWindow::resumeSchemaModel()
+{
+    modelRunController_->resume();
+    updateModelActionStates();
+}
+
+void MainWindow::stopSchemaModel()
+{
+    modelRunController_->stop();
+}
+
 
 void MainWindow::resetSchemaModel()
 {

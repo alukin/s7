@@ -8,12 +8,6 @@ namespace s7ui::elements {
 
 const QColor S7WireItem::kColorBroken = QColor(220, 50, 50); // vivid red
 
-namespace {
-const QColor kWireColor = QColor("#000000");
-const QColor kWireColorHighlighted = QColor("#dc2479");
-const QColor kWireColorSelected = QColor("#0f16af");
-}
-
 S7WireItem::S7WireItem(QGraphicsItem* parent)
     : QSchematic::Items::Wire(QSchematic::Items::Item::WireType, parent)
 {
@@ -26,7 +20,7 @@ void S7WireItem::setBroken(bool broken)
     update();
 }
 
-bool S7WireItem::isBroken() const
+auto S7WireItem::isBroken() const -> bool
 {
     return broken_;
 }
@@ -35,18 +29,22 @@ void S7WireItem::paint(QPainter* painter,
                        const QStyleOptionGraphicsItem* option,
                        QWidget* widget)
 {
-    Q_UNUSED(option);
-    Q_UNUSED(widget);
-
     if (!broken_) {
+        Q_UNUSED(option);
+        Q_UNUSED(widget);
+
+        const QColor wireColor(0, 0, 0);
+        const QColor wireColorHighlighted(220, 36, 121);
+        const QColor wireColorSelected(15, 22, 175);
+
         painter->save();
 
         QPen penLine;
         penLine.setStyle(Qt::SolidLine);
         penLine.setCapStyle(Qt::RoundCap);
         const QColor penColor = isSelected()
-                                    ? kWireColorSelected
-                                    : (isHighlighted() ? kWireColorHighlighted : kWireColor);
+                                    ? wireColorSelected
+                                    : (isHighlighted() ? wireColorHighlighted : wireColor);
         penLine.setColor(penColor);
         penLine.setWidthF(style::kWirePenWidth);
 
@@ -54,11 +52,12 @@ void S7WireItem::paint(QPainter* painter,
         painter->setBrush(Qt::NoBrush);
 
         const auto& pts = pointsRelative();
-        painter->drawPolyline(pts.constData(), pts.count());
+        if (!pts.isEmpty()) {
+            painter->drawPolyline(pts.constData(), static_cast<int>(pts.count()));
+        }
 
-        // Draw wire junction points with reduced radius.
         painter->setPen(Qt::NoPen);
-        painter->setBrush(isHighlighted() ? kWireColorHighlighted : kWireColor);
+        painter->setBrush(isHighlighted() ? wireColorHighlighted : wireColor);
         for (const auto& wirePoint : wirePointsRelative()) {
             if (wirePoint.is_junction()) {
                 painter->drawEllipse(wirePoint.toPointF(),
@@ -67,7 +66,6 @@ void S7WireItem::paint(QPainter* painter,
             }
         }
 
-        // Keep selected handles visible but smaller.
         if (isSelected()) {
             painter->setOpacity(0.5);
             painter->setPen(QPen(Qt::black));
@@ -96,7 +94,11 @@ void S7WireItem::paint(QPainter* painter,
     painter->setBrush(Qt::NoBrush);
 
     const auto& pts = pointsRelative();
-    painter->drawPolyline(pts.constData(), pts.count());
+    if (pts.isEmpty()) {
+        painter->restore();
+        return;
+    }
+    painter->drawPolyline(pts.constData(), static_cast<int>(pts.count()));
 
     // Draw a small "broken" marker (X) at each endpoint.
     const qreal markerSize = style::kBrokenWireMarkerSize;

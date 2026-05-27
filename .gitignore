@@ -27,3 +27,19 @@ hs_err_pid*
 /s7kore/target/
 /s7core/.idea/
 /s7dia/target/
+
+# IDE metadata
+.idea/
+.vscode/
+
+# Common local build outputs
+build/
+build_*/
+build-*/
+cmake-build-*/
+out/
+tmp/
+
+# Java/Rust/other package targets in nested modules
+**/target/
+

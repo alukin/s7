@@ -15,11 +15,9 @@
 #include "dialogs/properties_dialog.hpp"
 
 #include <QDialog>
-#include <QFontMetricsF>
-#include <QGraphicsScene>
+#include <QDebug>
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
-#include <QPainterPath>
 #include <QPen>
 #include <QStyleOptionGraphicsItem>
 
@@ -39,14 +37,25 @@ struct PortAxisLayout
 
 auto connectorOffsetMm(const int index, const PortAxisLayout& layout) -> qreal
 {
-    if (layout.count <= 1) {
-        return layout.nodeHeightMm * 0.5;
+    const qreal localGrid = style::kPortPitch;
+    const auto snapLocal = [localGrid](const qreal value) -> qreal {
+        return std::round(value / localGrid) * localGrid;
+    };
+
+    if (layout.count <= 0) {
+        return std::clamp(snapLocal(layout.nodeHeightMm * 0.5), 0.0, layout.nodeHeightMm);
     }
 
-    // Slot model: endpoints are forbidden (style::kConnectorSlotModel_ForbiddenEndpoints on each side).
-    // For N pins, distribute across slots [1..N] out of [0..N+1] (per the constant).
-    const qreal step = layout.nodeHeightMm / static_cast<qreal>(layout.count + 1);
-    return step * static_cast<qreal>(index + 1);
+    // Slot model with forbidden endpoint bands on both sides.
+    const int forbiddenEachSide = std::max(0, style::kConnectorSlotModel_ForbiddenEndpoints);
+    const int slotDenominator = layout.count + 2 * forbiddenEachSide - 1;
+    if (slotDenominator <= 0) {
+        return std::clamp(snapLocal(layout.nodeHeightMm * 0.5), 0.0, layout.nodeHeightMm);
+    }
+
+    const qreal step = layout.nodeHeightMm / static_cast<qreal>(slotDenominator);
+    const qreal y = step * static_cast<qreal>(index + forbiddenEachSide);
+    return std::clamp(snapLocal(y), 0.0, layout.nodeHeightMm);
 }
 
 /// Find the label for a port at the given index within one direction ("input" / "output").
@@ -116,7 +125,7 @@ BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     setConnectorsMovable(false);
     setConnectorsSnapPolicy(QSchematic::Items::Connector::NodeSizerectOutline);
     setConnectorsSnapToGrid(true);
-    connect(this, &QSchematic::Items::Item::settingsChanged, this, [this]() {
+    connect(this, &QSchematic::Items::Item::settingsChanged, this, [this]() -> void {
         relayoutConnectors();
     });
 
@@ -133,7 +142,7 @@ void BasicNodeItem::setNodeId(const QString& nodeId)
     update();
 }
 
-QString BasicNodeItem::nodeId() const { return nodeId_; }
+auto BasicNodeItem::nodeId() const -> QString { return nodeId_; }
 
 void BasicNodeItem::setNodeName(const QString& nodeName)
 {
@@ -142,7 +151,7 @@ void BasicNodeItem::setNodeName(const QString& nodeName)
     update();
 }
 
-QString BasicNodeItem::nodeName() const { return nodeName_; }
+auto BasicNodeItem::nodeName() const -> QString { return nodeName_; }
 
 void BasicNodeItem::setTypeName(const QString& typeName)
 {
@@ -152,14 +161,14 @@ void BasicNodeItem::setTypeName(const QString& typeName)
     update();
 }
 
-QString BasicNodeItem::typeName() const { return typeName_; }
+auto BasicNodeItem::typeName() const -> QString { return typeName_; }
 
 void BasicNodeItem::setParamsJson(const QString& paramsJson)
 {
     paramsJson_ = paramsJson.trimmed().isEmpty() ? QStringLiteral("{}") : paramsJson;
 }
 
-QString BasicNodeItem::paramsJson() const { return paramsJson_; }
+auto BasicNodeItem::paramsJson() const -> QString { return paramsJson_; }
 
 // ---------------------------------------------------------------------------
 // setPortLayout
@@ -182,8 +191,8 @@ void BasicNodeItem::setPortLayout(int inputPorts, int outputPorts,
 
     clearConnectors();
 
-    const PortAxisLayout inputLayout{inputPorts_, nodeHeight};
-    const PortAxisLayout outputLayout{outputPorts_, nodeHeight};
+    const PortAxisLayout inputLayout{.count = inputPorts_, .nodeHeightMm = nodeHeight};
+    const PortAxisLayout outputLayout{.count = outputPorts_, .nodeHeightMm = nodeHeight};
 
     for (int i = 0; i < inputPorts_; ++i) {
         const QString label = portLabel(portDescs, "input", i);
@@ -218,8 +227,8 @@ void BasicNodeItem::relayoutConnectors()
 {
     const qreal nodeWidth = size().width();
     const qreal nodeHeight = size().height();
-    const PortAxisLayout inputLayout{inputPorts_, nodeHeight};
-    const PortAxisLayout outputLayout{outputPorts_, nodeHeight};
+    const PortAxisLayout inputLayout{.count = inputPorts_, .nodeHeightMm = nodeHeight};
+    const PortAxisLayout outputLayout{.count = outputPorts_, .nodeHeightMm = nodeHeight};
     const auto all = connectors();
 
     for (int i = 0; i < inputPorts_; ++i) {
@@ -260,8 +269,10 @@ void BasicNodeItem::applyParamsAndUpdatePorts(const QString& newParamsJson)
             const auto [ni, no] = descOpt->compute_port_layout(paramMap);
             newInputs  = ni;
             newOutputs = no;
+        } catch (const std::exception& ex) {
+            qWarning() << "[s7ui] Failed to parse params for" << typeName_ << ":" << ex.what();
         } catch (...) {
-            // Keep existing port counts if parsing fails.
+            qWarning() << "[s7ui] Failed to parse params for" << typeName_ << ": unknown error";
         }
     } else if (descOpt) {
         newInputs  = descOpt->default_input_count;
@@ -282,7 +293,7 @@ void BasicNodeItem::applyParamsAndUpdatePorts(const QString& newParamsJson)
     std::vector<std::string> removedNames;
     for (const auto& oldName : oldConnectorNames) {
         const bool stillPresent = std::ranges::any_of(
-            newConnectorNames, [&](const std::string& n) { return n == oldName; });
+            newConnectorNames, [&](const std::string& n) -> bool { return n == oldName; });
         if (!stillPresent) {
             removedNames.push_back(oldName);
         }
@@ -315,6 +326,10 @@ void BasicNodeItem::markBrokenWires(const std::vector<std::string>& removedConne
         }
     }
 
+    std::vector<const QSchematic::Items::Connector*> orderedLiveConnectors(
+        liveConnectors.begin(), liveConnectors.end());
+    std::sort(orderedLiveConnectors.begin(), orderedLiveConnectors.end());
+
     const auto allWires = qscene->items<QSchematic::Items::Wire>();
     for (const auto& wire : allWires) {
         if (!wire) continue;
@@ -328,7 +343,7 @@ void BasicNodeItem::markBrokenWires(const std::vector<std::string>& removedConne
         // Simpler heuristic: if the wire is no longer attached (via wireManager)
         // at both ends → it has an orphaned end.
         int attachedCount = 0;
-        for (const auto& liveConnector : liveConnectors) {
+        for (const auto* liveConnector : orderedLiveConnectors) {
             const auto rec = wireManager->attached_wire(liveConnector);
             if (rec && rec->wire == wire.get()) {
                 ++attachedCount;
@@ -367,7 +382,7 @@ void BasicNodeItem::setShape(Shape shape)
     }
 }
 
-BasicNodeItem::Shape BasicNodeItem::nodeShape() const
+auto BasicNodeItem::nodeShape() const -> BasicNodeItem::Shape
 {
     return shape_;
 }
@@ -393,12 +408,12 @@ void BasicNodeItem::setFillColor(const QColor& color)
     update();
 }
 
-QColor BasicNodeItem::borderColor() const
+auto BasicNodeItem::borderColor() const -> QColor
 {
     return borderColor_;
 }
 
-QColor BasicNodeItem::fillColor() const
+auto BasicNodeItem::fillColor() const -> QColor
 {
     return fillColor_;
 }
@@ -458,6 +473,7 @@ void BasicNodeItem::paint(QPainter* painter,
         painter->drawText(titleRect, nodeName_, textOption);
     }
 
+
     painter->restore();
 }
 
@@ -492,11 +508,11 @@ void BasicNodeItem::paintRoundedRect(QPainter* painter, const QRectF& rect)
 void BasicNodeItem::paintDiamond(QPainter* painter, const QRectF& rect)
 {
     // Create a diamond polygon (4 points)
-    QPolygon diamond;
-    diamond << QPoint(rect.width() / 2, 0);                    // Top
-    diamond << QPoint(rect.width(), rect.height() / 2);       // Right
-    diamond << QPoint(rect.width() / 2, rect.height());       // Bottom
-    diamond << QPoint(0, rect.height() / 2);                  // Left
+    QPolygonF diamond;
+    diamond << QPointF(rect.width() / 2.0, 0.0);               // Top
+    diamond << QPointF(rect.width(), rect.height() / 2.0);     // Right
+    diamond << QPointF(rect.width() / 2.0, rect.height());     // Bottom
+    diamond << QPointF(0.0, rect.height() / 2.0);              // Left
 
     QPen pen(borderColor_);
     pen.setWidthF(style::kNodeBorderPenWidth);
@@ -515,13 +531,13 @@ void BasicNodeItem::paintHexagon(QPainter* painter, const QRectF& rect)
     const qreal qw = w * 0.25;   // Quarter width
     const qreal hh = h * 0.5;    // Half height
 
-    QPolygon hexagon;
-    hexagon << QPoint(qw, 0);              // Top-left
-    hexagon << QPoint(w - qw, 0);          // Top-right
-    hexagon << QPoint(w, hh);              // Middle-right
-    hexagon << QPoint(w - qw, h);          // Bottom-right
-    hexagon << QPoint(qw, h);              // Bottom-left
-    hexagon << QPoint(0, hh);              // Middle-left
+    QPolygonF hexagon;
+    hexagon << QPointF(qw, 0.0);           // Top-left
+    hexagon << QPointF(w - qw, 0.0);       // Top-right
+    hexagon << QPointF(w, hh);             // Middle-right
+    hexagon << QPointF(w - qw, h);         // Bottom-right
+    hexagon << QPointF(qw, h);             // Bottom-left
+    hexagon << QPointF(0.0, hh);           // Middle-left
 
     QPen pen(borderColor_);
     pen.setWidthF(style::kNodeBorderPenWidth);
@@ -600,7 +616,7 @@ void BasicNodeItem::refreshToolTip()
 // ---------------------------------------------------------------------------
 // defaultParamsJsonFor  (static helper)
 // ---------------------------------------------------------------------------
-QString BasicNodeItem::defaultParamsJsonFor(const std::string& typeName)
+auto BasicNodeItem::defaultParamsJsonFor(const std::string& typeName) -> QString
 {
     const auto descOpt = s7::ElementRegistry::instance().getDescriptor(typeName);
     if (!descOpt || descOpt->default_params.empty()) return QStringLiteral("{}");

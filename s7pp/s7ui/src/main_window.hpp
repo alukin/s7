@@ -1,6 +1,5 @@
 #pragma once
 
-#include "node_template.hpp"
 #include "sheet_presenter.hpp"
 
 #include <qschematic/scene.hpp>
@@ -13,11 +12,12 @@
 class QTextEdit;
 class QTreeWidget;
 class QAction;
-class QActionGroup;
 class QLineEdit;
 class QDoubleSpinBox;
 class QSpinBox;
 class QLabel;
+class QKeyEvent;
+class QShowEvent;
 
 namespace QSchematic { class View; }
 
@@ -84,8 +84,8 @@ private:
     void ensureVisualCatalogLoaded();
     void seedStarterScene();
     void applyLoadedSchemaResult(const s7ui::ui::LoadedSchemaResult& r);
-    [[nodiscard]] double currentDt() const;
-    bool saveSchemaToPath(const QString& path, bool setAsCurrentPath);
+    [[nodiscard]] auto currentDt() const -> double;
+    auto saveSchemaToPath(const QString& path, bool setAsCurrentPath) -> bool;
 
     void applySheetPreset(s7ui::ui::SheetPresenter::Preset preset);
     void setZoomPreset(double zoom);
@@ -96,7 +96,7 @@ private:
     void unlinkSinkProbes();
 
     void keyPressEvent(QKeyEvent* evt) override;
-    void showEvent(QShowEvent* event)  override;
+    void showEvent(QShowEvent* event) override;
 
     // --- Qt GUI widgets ---
     QSchematic::Scene*  scene_      = nullptr;
