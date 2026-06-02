@@ -3,6 +3,7 @@
 
 #include <s7factory.hpp>
 
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -24,6 +25,90 @@ using PortMap = std::unordered_map<std::string, PortSpec>; // key: nodeId:connec
 auto portKey(const std::string& nodeId, const std::string& connector) -> std::string
 {
     return nodeId + ":" + connector;
+}
+
+auto tryParseIndexedConnector(const std::string& connector, std::string& direction, int& index) -> bool
+{
+    if (connector.rfind("out", 0) == 0) {
+        direction = "output";
+        const std::string suffix = connector.substr(3);
+        if (suffix.empty()) {
+            index = 0;
+            return true;
+        }
+        if (std::all_of(suffix.begin(), suffix.end(), [](const unsigned char c) -> bool { return std::isdigit(c); })) {
+            index = std::stoi(suffix);
+            return true;
+        }
+        return false;
+    }
+    if (connector.rfind("in", 0) == 0) {
+        direction = "input";
+        const std::string suffix = connector.substr(2);
+        if (suffix.empty()) {
+            index = 0;
+            return true;
+        }
+        if (std::all_of(suffix.begin(), suffix.end(), [](const unsigned char c) -> bool { return std::isdigit(c); })) {
+            index = std::stoi(suffix);
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+auto resolvePortIterator(const PortMap& ports, const std::string& nodeId, const std::string& connector) -> PortMap::const_iterator
+{
+    // 1) Exact match first.
+    auto it = ports.find(portKey(nodeId, connector));
+    if (it != ports.end()) {
+        return it;
+    }
+
+    // 2) Common alias fallback: out0 <-> out, in0 <-> in.
+    if (connector == "out0") {
+        it = ports.find(portKey(nodeId, "out"));
+        if (it != ports.end()) return it;
+    } else if (connector == "in0") {
+        it = ports.find(portKey(nodeId, "in"));
+        if (it != ports.end()) return it;
+    } else if (connector == "out") {
+        it = ports.find(portKey(nodeId, "out0"));
+        if (it != ports.end()) return it;
+    } else if (connector == "in") {
+        it = ports.find(portKey(nodeId, "in0"));
+        if (it != ports.end()) return it;
+    }
+
+    // 3) Direction/index fallback for nodes that declare custom connector names.
+    std::string wantedDirection;
+    int wantedIndex = 0;
+    if (!tryParseIndexedConnector(connector, wantedDirection, wantedIndex)) {
+        return ports.end();
+    }
+
+    std::vector<PortMap::const_iterator> candidates;
+    candidates.reserve(8);
+    const std::string nodePrefix = nodeId + ":";
+    for (auto pit = ports.begin(); pit != ports.end(); ++pit) {
+        if (pit->first.rfind(nodePrefix, 0) != 0) continue;
+        if (pit->second.direction != wantedDirection) continue;
+        candidates.push_back(pit);
+    }
+    if (candidates.empty()) {
+        return ports.end();
+    }
+
+    std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) -> bool {
+        return a->first < b->first;
+    });
+
+    if (wantedIndex >= 0 && wantedIndex < static_cast<int>(candidates.size())) {
+        return candidates[static_cast<std::size_t>(wantedIndex)];
+    }
+
+    return ports.end();
 }
 
 void appendError(CompileReport& report, const std::string& msg)
@@ -188,10 +273,10 @@ auto validateDiagramConnections(const boost::json::value& diagramDocument) -> Co
             continue;
         }
 
-        const auto fromKey = portKey(fromNodeId, fromConnector);
-        const auto toKey = portKey(toNodeId, toConnector);
-        const auto fromIt = ports.find(fromKey);
-        const auto toIt = ports.find(toKey);
+        const auto fromIt = resolvePortIterator(ports, fromNodeId, fromConnector);
+        const auto toIt = resolvePortIterator(ports, toNodeId, toConnector);
+        const std::string fromKey = (fromIt != ports.end()) ? fromIt->first : portKey(fromNodeId, fromConnector);
+        const std::string toKey = (toIt != ports.end()) ? toIt->first : portKey(toNodeId, toConnector);
 
         if (fromIt == ports.end()) {
             appendError(report, "Wire references unknown source port '" + fromKey + "'");

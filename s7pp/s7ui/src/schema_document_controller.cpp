@@ -1,4 +1,5 @@
 #include "schema_document_controller.hpp"
+#include "diagram_format.hpp"
 #include "i_schema_runner.hpp"
 #include "node_factory.hpp"
 #include "scene_roles.hpp"
@@ -76,13 +77,33 @@ LoadedSchemaResult SchemaDocumentController::loadFromFile(const QString& path)
     const QByteArray data = file.readAll();
     const auto root = boost::json::parse(
         std::string(data.constData(), static_cast<std::size_t>(data.size())));
+
+    // Load command in UI expects a diagram document, not a runtime-only schema payload.
+    if (!root.is_object()) {
+        throw std::runtime_error("Diagram file root must be a JSON object");
+    }
+    const auto& rootObj = root.as_object();
+    const bool hasDiagramObject = rootObj.if_contains("diagram") && rootObj.at("diagram").is_object();
+    const bool hasDiagramKind = rootObj.if_contains("document_kind")
+        && rootObj.at("document_kind").is_string()
+        && rootObj.at("document_kind").as_string() == s7ui::format::kDiagramDocumentKind;
+    const bool hasDiagramMagic = rootObj.if_contains("diagram_magic")
+        && rootObj.at("diagram_magic").is_string()
+        && rootObj.at("diagram_magic").as_string() == s7ui::format::kDiagramMagic;
+    if (!hasDiagramObject || !hasDiagramKind || !hasDiagramMagic) {
+        throw std::runtime_error(
+            "The selected JSON is not a Diagram document. "
+            "Use a file saved by 'Save Diagram' (expects diagram markers).\n"
+            "Runtime schema JSON is not accepted by the Diagram loader.");
+    }
+
     return loadFromJson(root, path);
 }
 LoadedSchemaResult SchemaDocumentController::loadFromJson(
     const boost::json::value& root, const QString& sourcePath)
 {
     if (!root.is_object())
-        throw std::runtime_error("Schema file root must be a JSON object");
+        throw std::runtime_error("Diagram file root must be a JSON object");
     const auto& rootObj = root.as_object();
     // Determine diagram sub-object (unified or legacy).
     const boost::json::value* diagramRoot = &root;
@@ -94,7 +115,7 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
     std::vector<LoadedNodeSpec> nodes;
     if (const auto* v = diagramRoot->as_object().if_contains("nodes")) {
         if (!v->is_array())
-            throw std::runtime_error("Schema field 'nodes' must be an array");
+            throw std::runtime_error("Diagram field 'nodes' must be an array");
         for (const auto& j : v->as_array())
             nodes.push_back(LoadedNodeSpec::fromJson(j));
     }
@@ -102,7 +123,7 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
     std::vector<LoadedWireSpec> wires;
     if (const auto* v = diagramRoot->as_object().if_contains("wires")) {
         if (!v->is_array())
-            throw std::runtime_error("Schema field 'wires' must be an array");
+            throw std::runtime_error("Diagram field 'wires' must be an array");
         for (const auto& j : v->as_array())
             wires.push_back(LoadedWireSpec::fromJson(j));
     }
@@ -220,10 +241,21 @@ LoadedSchemaResult SchemaDocumentController::loadFromJson(
             wire->append_point(resolvedFrom->scenePos());
             wire->append_point(resolvedTo->scenePos());
         }
+        // Ensure extremities are exactly on connector positions so the visual wire snaps
+        // and remains stable when attaching through the wire manager.
+        wire->move_point_to(0, wire->mapFromScene(resolvedFrom->scenePos()));
+        wire->move_point_to(wire->points_count() - 1, wire->mapFromScene(resolvedTo->scenePos()));
         wire->simplify();
         scene_->addWire(wire);
+
+        // Critical: explicitly attach loaded wire endpoints to connectors.
+        // Runtime compilation reads connectivity from wire_manager()->attached_wire(connector).
+        if (auto wm = scene_->wire_manager()) {
+            wm->attach_wire_to_connector(wire.get(), 0, resolvedFrom.get());
+            wm->attach_wire_to_connector(wire.get(), wire->points_count() - 1, resolvedTo.get());
+        }
     }
-    emit logged(QString("[schema] loaded %1 node(s), %2 wire(s)")
+    emit logged(QString("[diagram] loaded %1 node(s), %2 wire(s)")
                     .arg(result.nodeCount).arg(result.wireCount));
     return result;
 }

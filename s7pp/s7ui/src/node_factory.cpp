@@ -8,9 +8,11 @@
 #include <s7factory.hpp>
 
 #include <QColor>
+#include <qschematic/items/node.hpp>
 #include <QTreeWidget>
 
 #include <algorithm>
+#include <cmath>
 
 namespace s7ui::ui {
 namespace {
@@ -39,6 +41,24 @@ auto shapeFromString(const QString& shapeStr) -> s7ui::elements::BasicNodeItem::
     }
     // Default to rounded rectangle
     return s7ui::elements::BasicNodeItem::Shape::RoundedRect;
+}
+
+void applyVisualStyleToBasicNode(s7ui::elements::BasicNodeItem& node,
+                                 const NodeTemplate& nodeTemplate,
+                                 const s7ui::visual::Catalog* visualCatalog)
+{
+    if (!visualCatalog) {
+        return;
+    }
+
+    if (const auto visualSpec = visualCatalog->specForType(nodeTemplate.typeName)) {
+        node.setVisualStyle(QColor(visualSpec->color), shapeFromString(visualSpec->shape));
+    }
+}
+
+auto combinedItemRect(const QSchematic::Items::Item& item) -> QRectF
+{
+    return item.boundingRect().united(item.childrenBoundingRect());
 }
 } // namespace
 
@@ -93,7 +113,8 @@ std::shared_ptr<QSchematic::Items::Item> NodeFactory::createItemFromTemplate(
     const int index,
     const QPointF& position) const
 {
-    const QPointF resolvedPosition = position.isNull() ? defaultScenePosForIndex(index) : position;
+    const bool useDefaultPosition = std::isnan(position.x()) || std::isnan(position.y());
+    const QPointF resolvedPosition = useDefaultPosition ? defaultScenePosForIndex(index) : position;
 
     if (nodeTemplate.visualSink) {
         auto sink = std::make_shared<s7ui::elements::SinkNodeItem>(nodeTemplate.typeName, std::max(1, nodeTemplate.inputPorts));
@@ -106,6 +127,7 @@ std::shared_ptr<QSchematic::Items::Item> NodeFactory::createItemFromTemplate(
         sink->setData(kRoleNodeName, nodeName);
         sink->setData(kRoleNodeType, nodeTemplate.typeName);
         sink->setData(kRoleVisualSink, true);
+        applyVisualStyleToBasicNode(*sink, nodeTemplate, visualCatalog_);
         sink->setScenePos(resolvedPosition);
         return sink;
     }
@@ -127,13 +149,61 @@ std::shared_ptr<QSchematic::Items::Item> NodeFactory::createItemFromTemplate(
     const std::vector<s7::PortDescriptor> portDescs = desc ? desc->ports : std::vector<s7::PortDescriptor>{};
     node->setPortLayout(nodeTemplate.inputPorts, nodeTemplate.outputPorts, portDescs);
 
-     if (visualCatalog_) {
-         if (const auto visualSpec = visualCatalog_->specForType(nodeTemplate.typeName)) {
-             const auto shape = shapeFromString(visualSpec->shape);
-             node->setVisualStyle(QColor(visualSpec->color), shape);
-         }
-     }
+    applyVisualStyleToBasicNode(*node, nodeTemplate, visualCatalog_);
     return node;
+}
+
+std::shared_ptr<QSchematic::Items::Item> NodeFactory::createPrototypeItem(
+    const NodeTemplate& nodeTemplate) const
+{
+    auto item = createItemFromTemplate(nodeTemplate, 0, QPointF(0.0, 0.0));
+    if (!item) {
+        return item;
+    }
+
+    if (const auto basicNode = std::dynamic_pointer_cast<s7ui::elements::BasicNodeItem>(item)) {
+        basicNode->setNodeId(QString());
+        basicNode->setNodeName(nodeTemplate.typeName);
+        basicNode->setData(kRoleNodeId, QString());
+        basicNode->setData(kRoleNodeName, nodeTemplate.typeName);
+    }
+
+    return item;
+}
+
+QPointF NodeFactory::preferredAnchorInItem(const QSchematic::Items::Item& item) const
+{
+    if (const auto* node = dynamic_cast<const QSchematic::Items::Node*>(&item)) {
+        const QPointF origin = node->mapToParent(QPointF(0.0, 0.0));
+        const QPointF center = node->mapToParent(node->sizeRect().center());
+        return center - origin;
+    }
+
+    const QRectF rect = combinedItemRect(item);
+    const QPointF origin = item.mapToParent(QPointF(0.0, 0.0));
+    const QPointF center = item.mapToParent(rect.center());
+    return center - origin;
+}
+
+QPoint NodeFactory::pixmapHotSpotForItem(const QSchematic::Items::Item& item) const
+{
+    const QRectF rect = combinedItemRect(item);
+    QPointF localAnchor = rect.center();
+    if (const auto* node = dynamic_cast<const QSchematic::Items::Node*>(&item)) {
+        localAnchor = node->sizeRect().center();
+    }
+    return (localAnchor - rect.topLeft()).toPoint();
+}
+
+QRectF NodeFactory::preferredPreviewRectInItem(const QSchematic::Items::Item& item) const
+{
+    if (dynamic_cast<const s7ui::elements::SinkNodeItem*>(&item)) {
+        if (const auto* node = dynamic_cast<const QSchematic::Items::Node*>(&item)) {
+            return node->sizeRect();
+        }
+    }
+
+    return combinedItemRect(item);
 }
 
 } // namespace s7ui::ui

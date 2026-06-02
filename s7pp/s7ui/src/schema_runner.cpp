@@ -29,19 +29,25 @@ void SchemaRunner::run(const boost::json::value& schemaJson, double dt, long tic
         return;
     }
 
-    const auto diagramReport = s7ui::compiler::validateDiagramConnections(schemaJson);
-    for (const auto& d : diagramReport.diagnostics) {
-        const QString prefix = (d.severity == s7ui::compiler::Diagnostic::Severity::Error)
-            ? "[diagram:error]"
-            : "[diagram:warn]";
-        emit logMessage(QString("%1 %2").arg(prefix).arg(QString::fromStdString(d.message)));
-    }
-    if (diagramReport.hasErrors()) {
-        emit statusChanged("error: invalid diagram");
-        return;
+    // Diagram validation applies only to diagram documents (UI payload with explicit "diagram" object).
+    // Runtime execution path usually passes compiled schema JSON from scene serialization.
+    const auto& schemaObj = schemaJson.as_object();
+    const bool hasDiagramPayload = schemaObj.if_contains("diagram") && schemaObj.at("diagram").is_object();
+    if (hasDiagramPayload) {
+        const auto diagramReport = s7ui::compiler::validateDiagramConnections(schemaJson);
+        for (const auto& d : diagramReport.diagnostics) {
+            const QString prefix = (d.severity == s7ui::compiler::Diagnostic::Severity::Error)
+                ? "[diagram:error]"
+                : "[diagram:warn]";
+            emit logMessage(QString("%1 %2").arg(prefix).arg(QString::fromStdString(d.message)));
+        }
+        if (diagramReport.hasErrors()) {
+            emit statusChanged("error: invalid diagram");
+            return;
+        }
     }
 
-    const auto& runtimeObj = schemaJson.as_object();
+    const auto& runtimeObj = schemaObj;
     const auto* runtimeNodes = runtimeObj.if_contains("nodes");
     if (!runtimeNodes || !runtimeNodes->is_array() || runtimeNodes->as_array().empty()) {
         emit logMessage("[model] No runtime nodes found in scene");

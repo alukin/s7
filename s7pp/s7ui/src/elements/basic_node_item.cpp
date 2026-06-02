@@ -1,6 +1,7 @@
 #include "basic_node_item.hpp"
 #include "s7_wire_item.hpp"
 #include "s7ui_json_dto.hpp"
+#include "scene_roles.hpp"
 #include "ui_constants.hpp"
 
 #include <s7core_json_dto.hpp>
@@ -18,6 +19,7 @@
 #include <QDebug>
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPen>
 #include <QStyleOptionGraphicsItem>
 
@@ -126,6 +128,14 @@ BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     setConnectorsSnapPolicy(QSchematic::Items::Connector::NodeSizerectOutline);
     setConnectorsSnapToGrid(true);
     connect(this, &QSchematic::Items::Item::settingsChanged, this, [this]() -> void {
+        // Propagate updated settings (especially gridSize) to all connectors so
+        // that their symbol rect is recomputed with the correct grid size.
+        // QSchematic::Scene::setSettings() calls item->setSettings() on all
+        // scene items but Node::propagateSettings() is private, so we replicate
+        // that behaviour here whenever our own settings change.
+        for (const auto& c : connectors()) {
+            c->setSettings(_settings);
+        }
         relayoutConnectors();
     });
 
@@ -133,6 +143,32 @@ BasicNodeItem::BasicNodeItem(const QString& typeName, QGraphicsItem* parent)
     paramsJson_ = defaultParamsJsonFor(typeName.toStdString());
     setPortLayout(1, 1);
     refreshToolTip();
+}
+
+auto BasicNodeItem::deepCopy() const -> std::shared_ptr<QSchematic::Items::Item>
+{
+    auto clone = std::make_shared<BasicNodeItem>(typeName_, parentItem());
+    copyAttributes(*clone);
+    return clone;
+}
+
+void BasicNodeItem::copyAttributes(BasicNodeItem& dest) const
+{
+    QSchematic::Items::Node::copyAttributes(dest);
+    dest.typeName_ = typeName_;
+    dest.nodeName_ = nodeName_;
+    dest.nodeId_ = nodeId_;
+    dest.paramsJson_ = paramsJson_;
+    dest.inputPorts_ = inputPorts_;
+    dest.outputPorts_ = outputPorts_;
+    dest.shape_ = shape_;
+    dest.borderColor_ = borderColor_;
+    dest.fillColor_ = fillColor_;
+    dest.setData(s7ui::ui::kRoleNodeId, data(s7ui::ui::kRoleNodeId));
+    dest.setData(s7ui::ui::kRoleNodeName, data(s7ui::ui::kRoleNodeName));
+    dest.setData(s7ui::ui::kRoleNodeType, data(s7ui::ui::kRoleNodeType));
+    dest.setData(s7ui::ui::kRoleVisualSink, data(s7ui::ui::kRoleVisualSink));
+    dest.refreshToolTip();
 }
 
 void BasicNodeItem::setNodeId(const QString& nodeId)
@@ -328,7 +364,7 @@ void BasicNodeItem::markBrokenWires(const std::vector<std::string>& removedConne
 
     std::vector<const QSchematic::Items::Connector*> orderedLiveConnectors(
         liveConnectors.begin(), liveConnectors.end());
-    std::sort(orderedLiveConnectors.begin(), orderedLiveConnectors.end());
+    std::ranges::sort(orderedLiveConnectors);
 
     const auto allWires = qscene->items<QSchematic::Items::Wire>();
     for (const auto& wire : allWires) {
@@ -422,6 +458,51 @@ auto BasicNodeItem::fillColor() const -> QColor
 // ---------------------------------------------------------------------------
 // paint
 // ---------------------------------------------------------------------------
+auto BasicNodeItem::bodyPath(const QRectF& rect) const -> QPainterPath
+{
+    QPainterPath path;
+    switch (shape_) {
+        case Shape::Rectangle:
+            path.addRect(rect);
+            break;
+        case Shape::RoundedRect:
+        case Shape::Custom:
+            path.addRoundedRect(rect, _settings.gridSize * 0.25, _settings.gridSize * 0.25);
+            break;
+        case Shape::Diamond: {
+            QPolygonF diamond;
+            diamond << QPointF(rect.width() / 2.0, 0.0)
+                    << QPointF(rect.width(), rect.height() / 2.0)
+                    << QPointF(rect.width() / 2.0, rect.height())
+                    << QPointF(0.0, rect.height() / 2.0);
+            path.addPolygon(diamond);
+            break;
+        }
+        case Shape::Hexagon: {
+            const qreal quarterWidth = rect.width() * 0.25;
+            const qreal halfHeight = rect.height() * 0.5;
+            QPolygonF hexagon;
+            hexagon << QPointF(quarterWidth, 0.0)
+                    << QPointF(rect.width() - quarterWidth, 0.0)
+                    << QPointF(rect.width(), halfHeight)
+                    << QPointF(rect.width() - quarterWidth, rect.height())
+                    << QPointF(quarterWidth, rect.height())
+                    << QPointF(0.0, halfHeight);
+            path.addPolygon(hexagon);
+            break;
+        }
+        case Shape::Circle:
+            path.addEllipse(rect);
+            break;
+    }
+    return path;
+}
+
+auto BasicNodeItem::shape() const -> QPainterPath
+{
+    return bodyPath(sizeRect());
+}
+
 void BasicNodeItem::paint(QPainter* painter,
                           const QStyleOptionGraphicsItem* option,
                           QWidget* widget)
@@ -433,28 +514,11 @@ void BasicNodeItem::paint(QPainter* painter,
     painter->save();
 
     const QRectF rect(0, 0, size().width(), size().height());
-
-    // Dispatch to shape-specific paint method
-    switch (shape_) {
-        case Shape::Rectangle:
-            paintRectangle(painter, rect);
-            break;
-        case Shape::RoundedRect:
-            paintRoundedRect(painter, rect);
-            break;
-        case Shape::Diamond:
-            paintDiamond(painter, rect);
-            break;
-        case Shape::Hexagon:
-            paintHexagon(painter, rect);
-            break;
-        case Shape::Circle:
-            paintCircle(painter, rect);
-            break;
-        case Shape::Custom:
-            paintRoundedRect(painter, rect);  // Fallback to rounded rect
-            break;
-    }
+    QPen pen(borderColor_);
+    pen.setWidthF(style::kNodeBorderPenWidth);
+    painter->setPen(pen);
+    painter->setBrush(QBrush(fillColor_));
+    painter->drawPath(bodyPath(rect));
 
     // Draw node title if visible
     const qreal lod = option->levelOfDetailFromTransform(painter->worldTransform());
@@ -477,87 +541,6 @@ void BasicNodeItem::paint(QPainter* painter,
     painter->restore();
 }
 
-// ---------------------------------------------------------------------------
-// Shape painting helpers (using QPainter primitives like QSchematic demo)
-// ---------------------------------------------------------------------------
-
-void BasicNodeItem::paintRectangle(QPainter* painter, const QRectF& rect)
-{
-    QPen pen(borderColor_);
-    pen.setWidthF(style::kNodeBorderPenWidth);
-    QBrush brush(fillColor_);
-
-    painter->setPen(pen);
-    painter->setBrush(brush);
-    painter->drawRect(rect);
-}
-
-void BasicNodeItem::paintRoundedRect(QPainter* painter, const QRectF& rect)
-{
-    const qreal radius = _settings.gridSize * 0.25;
-
-    QPen pen(borderColor_);
-    pen.setWidthF(style::kNodeBorderPenWidth);
-    QBrush brush(fillColor_);
-
-    painter->setPen(pen);
-    painter->setBrush(brush);
-    painter->drawRoundedRect(rect, radius, radius);
-}
-
-void BasicNodeItem::paintDiamond(QPainter* painter, const QRectF& rect)
-{
-    // Create a diamond polygon (4 points)
-    QPolygonF diamond;
-    diamond << QPointF(rect.width() / 2.0, 0.0);               // Top
-    diamond << QPointF(rect.width(), rect.height() / 2.0);     // Right
-    diamond << QPointF(rect.width() / 2.0, rect.height());     // Bottom
-    diamond << QPointF(0.0, rect.height() / 2.0);              // Left
-
-    QPen pen(borderColor_);
-    pen.setWidthF(style::kNodeBorderPenWidth);
-    QBrush brush(fillColor_);
-
-    painter->setPen(pen);
-    painter->setBrush(brush);
-    painter->drawPolygon(diamond);
-}
-
-void BasicNodeItem::paintHexagon(QPainter* painter, const QRectF& rect)
-{
-    // Create a hexagon polygon (6 points)
-    const qreal w = rect.width();
-    const qreal h = rect.height();
-    const qreal qw = w * 0.25;   // Quarter width
-    const qreal hh = h * 0.5;    // Half height
-
-    QPolygonF hexagon;
-    hexagon << QPointF(qw, 0.0);           // Top-left
-    hexagon << QPointF(w - qw, 0.0);       // Top-right
-    hexagon << QPointF(w, hh);             // Middle-right
-    hexagon << QPointF(w - qw, h);         // Bottom-right
-    hexagon << QPointF(qw, h);             // Bottom-left
-    hexagon << QPointF(0.0, hh);           // Middle-left
-
-    QPen pen(borderColor_);
-    pen.setWidthF(style::kNodeBorderPenWidth);
-    QBrush brush(fillColor_);
-
-    painter->setPen(pen);
-    painter->setBrush(brush);
-    painter->drawPolygon(hexagon);
-}
-
-void BasicNodeItem::paintCircle(QPainter* painter, const QRectF& rect)
-{
-    QPen pen(borderColor_);
-    pen.setWidthF(style::kNodeBorderPenWidth);
-    QBrush brush(fillColor_);
-
-    painter->setPen(pen);
-    painter->setBrush(brush);
-    painter->drawEllipse(rect);
-}
 
 // ---------------------------------------------------------------------------
 // sizeChangedEvent

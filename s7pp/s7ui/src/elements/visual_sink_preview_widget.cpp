@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numbers>
 
 namespace s7ui::elements {
 
@@ -64,7 +65,9 @@ VisualSinkPreviewWidget::VisualSinkPreviewWidget(const bool compact, QWidget* pa
 
     timer_ = new QTimer(this);
     connect(timer_, &QTimer::timeout, this, &VisualSinkPreviewWidget::appendSample);
-    timer_->start(compact_ ? 80 : 35);
+    // Keep compact previews quiet by default; animation is only used in
+    // explicit Synthetic mode.
+    setSignalMode(signalMode_);
 }
 
 void VisualSinkPreviewWidget::setInputCount(int count)
@@ -77,18 +80,18 @@ void VisualSinkPreviewWidget::setInputCount(int count)
 
     inputCount_ = count;
     staticLevels_.resize(inputCount_);
-    for (int i = 0; i < staticLevels_.size(); ++i)
+    for (auto& level : staticLevels_)
     {
-        if (!std::isfinite(staticLevels_[i]))
+        if (!std::isfinite(level))
         {
-            staticLevels_[i] = 0.0;
+            level = 0.0;
         }
     }
     liveSamples_.resize(inputCount_);
     rebuildGraphs();
 }
 
-int VisualSinkPreviewWidget::inputCount() const
+auto VisualSinkPreviewWidget::inputCount() const -> int
 {
     return inputCount_;
 }
@@ -124,13 +127,27 @@ void VisualSinkPreviewWidget::setSignalMode(const SignalMode mode)
         }
         timeSec_ = 0.0;
         liveSamples_.assign(inputCount_, {});
+        plot_->replot(QCustomPlot::rpQueuedReplot);
     }
-    else
+    else if (signalMode_ == SignalMode::Synthetic)
     {
         if (timer_ && !timer_->isActive())
         {
             timer_->start(compact_ ? 80 : 35);
         }
+    }
+    else
+    {
+        // Flat mode intentionally shows no scrolling trace when the schema is
+        // not running.  This avoids implying live activity.
+        if (timer_) timer_->stop();
+        for (auto* graph : graphs_)
+        {
+            graph->data()->clear();
+        }
+        timeSec_ = 0.0;
+        liveSamples_.assign(inputCount_, {});
+        plot_->replot(QCustomPlot::rpQueuedReplot);
     }
 }
 
@@ -152,7 +169,7 @@ void VisualSinkPreviewWidget::updateChannelData(int channel, const QVector<doubl
     // Replace the graph's data with the provided samples mapped to the active time window.
     QVector<double> keys;
     keys.reserve(samples.size());
-    const double n = static_cast<double>(samples.size());
+    const auto n = static_cast<double>(samples.size());
     const double dt = (n > 1.0) ? (timeWindowSec_ / (n - 1.0)) : timeWindowSec_;
     for (int i = 0; i < samples.size(); ++i)
     {
@@ -164,19 +181,21 @@ void VisualSinkPreviewWidget::updateChannelData(int channel, const QVector<doubl
     // Rescale Y axis to fit the data if needed.
     double yMin = -1.5, yMax = 1.5;
     // Store current samples for Y-range estimation.
-    if (channel < static_cast<int>(liveSamples_.size()))
+    const std::size_t channelIndex = static_cast<std::size_t>(channel);
+    if (channelIndex < liveSamples_.size())
     {
-        liveSamples_[channel].clear();
-        liveSamples_[channel].reserve(samples.size());
-        for (const auto v : samples) liveSamples_[channel].push_back(v);
+        liveSamples_[channelIndex].clear();
+        liveSamples_[channelIndex].reserve(samples.size());
+        for (const auto v : samples) liveSamples_[channelIndex].push_back(v);
     }
 
     for (int ch = 0; ch < graphs_.size(); ++ch)
     {
         if (graphs_[ch]->data()->isEmpty()) continue;
-        if (ch < static_cast<int>(liveSamples_.size()))
+        const std::size_t chIndex = static_cast<std::size_t>(ch);
+        if (chIndex < liveSamples_.size())
         {
-            for (const auto v : liveSamples_[ch])
+            for (const auto v : liveSamples_[chIndex])
             {
                 yMin = std::min(yMin, v * gain_);
                 yMax = std::max(yMax, v * gain_);
@@ -217,8 +236,9 @@ void VisualSinkPreviewWidget::rebuildGraphs()
 void VisualSinkPreviewWidget::appendSample()
 {
     if (signalMode_ == SignalMode::Live) return; // driven externally
+    if (signalMode_ == SignalMode::Flat) return;
 
-    constexpr double kPi = 3.14159265358979323846;
+    constexpr double kPi = std::numbers::pi_v<double>;
     const double dt = compact_ ? 0.08 : 0.035;
     timeSec_ += dt;
 

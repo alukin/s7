@@ -1,5 +1,6 @@
 #include "scene_serializer.hpp"
 
+#include "diagram_format.hpp"
 #include "elements/basic_node_item.hpp"
 #include "s7ui_json_dto.hpp"
 #include "scene_roles.hpp"
@@ -37,6 +38,9 @@ boost::json::value SceneSerializer::serialize(const QSchematic::Scene& scene,
 
     if (options.includeDiagram)
     {
+        // Magic marker for UI diagram documents.
+        root["document_kind"] = s7ui::format::kDiagramDocumentKind;
+        root["diagram_magic"] = s7ui::format::kDiagramMagic;
         root["diagram_version"] = 1;
         root["units"] = "mm";
         root["sheet"] = boost::json::object{

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <limits>
 
 // Color palette for multi-channel display
 static constexpr std::array<QColor, 8> kChannelColors = {
@@ -34,7 +35,7 @@ OscilloscopeWidget::OscilloscopeWidget(QWidget* parent)
 	// Polling timer for live data refresh (~30 Hz)
 	pollTimer_ = new QTimer(this);
 	pollTimer_->setInterval(33);  // ~30 Hz
-	connect(pollTimer_, &QTimer::timeout, this, &OscilloscopeWidget::pollAndUpdate);
+	connect(pollTimer_, &QTimer::timeout, this, &OscilloscopeWidget::onPollTimer);
 }
 
 OscilloscopeWidget::~OscilloscopeWidget()
@@ -64,95 +65,87 @@ void OscilloscopeWidget::setupLayout()
 	plot_->setNotAntialiasedElements(QCP::aeAll);
 }
 
-void OscilloscopeWidget::attachProbe(const std::shared_ptr<s7::Probe>& probe)
+void OscilloscopeWidget::attachProbe(const std::shared_ptr<s7::Probe>& probe, const QString& label)
 {
-	complexProbe_.reset();
-	probe_ = probe;
+	if (!probe) return;
 
-	if (!probe)
+	// Check if label already exists
+	if (!label.isEmpty() && findProbeEntry(label))
 	{
-		graphs_.clear();
-		plot_->clearGraphs();
-		pollTimer_->stop();
+		// Already attached; skip
 		return;
 	}
 
-	// Clear existing graphs
-	plot_->clearGraphs();
-	graphs_.clear();
+	// Create new entry
+	ProbeEntry entry;
+	entry.label = label.isEmpty() ? QString("Probe %1").arg(probes_.size() + 1) : label;
+	entry.probe = probe;
+	entry.isComplex = false;
+	probes_.push_back(entry);
 
-	// Create one graph per probe channel
-	const int channelCount = probe->channelCount();
-	for (int ch = 0; ch < channelCount; ++ch)
+	// Rebuild all graphs
+	rebuildGraphs();
+
+	// Start polling if not already running
+	if (!pollTimer_->isActive())
 	{
-		QCPGraph* graph = plot_->addGraph();
-		const QColor color = kChannelColors[ch % kChannelColorCount];
-		graph->setPen(QPen(color, 1.5));
-		graph->setName(QString("Ch %1").arg(ch + 1));
-		graphs_.push_back(graph);
+		pollTimer_->start();
 	}
 
-	plot_->legend->setVisible(channelCount > 1);
-
-	// Start polling
-	pollTimer_->start();
 	redraw();
 }
 
-void OscilloscopeWidget::attachComplexProbe(const std::shared_ptr<s7::ComplexProbe>& probe)
+void OscilloscopeWidget::attachComplexProbe(const std::shared_ptr<s7::ComplexProbe>& probe, const QString& label)
 {
-	probe_.reset();
-	complexProbe_ = probe;
+	if (!probe) return;
 
-	if (!probe)
+	// Check if label already exists
+	if (!label.isEmpty() && findProbeEntry(label))
 	{
-		graphs_.clear();
-		plot_->clearGraphs();
-		pollTimer_->stop();
+		// Already attached; skip
 		return;
 	}
 
-	// For complex probe, we display Re/Im (or Magnitude/Phase) for each channel
-	// For now: Re/Im pairs
-	plot_->clearGraphs();
-	graphs_.clear();
+	// Create new entry
+	ProbeEntry entry;
+	entry.label = label.isEmpty() ? QString("ComplexProbe %1").arg(probes_.size() + 1) : label;
+	entry.complexProbe = probe;
+	entry.isComplex = true;
+	probes_.push_back(entry);
 
-	const int channelCount = probe->channelCount();
-	for (int ch = 0; ch < channelCount; ++ch)
+	// Rebuild all graphs
+	rebuildGraphs();
+
+	// Start polling if not already running
+	if (!pollTimer_->isActive())
 	{
-		// Real part
-		{
-			QCPGraph* graph = plot_->addGraph();
-			const QColor color = kChannelColors[ch % kChannelColorCount];
-			graph->setPen(QPen(color, 1.5));
-			graph->setName(QString("Ch %1 Real").arg(ch + 1));
-			graphs_.push_back(graph);
-		}
-
-		// Imaginary part (dashed)
-		{
-			QCPGraph* graph = plot_->addGraph();
-			const QColor color = kChannelColors[ch % kChannelColorCount];
-			QPen pen(color, 1.5);
-			pen.setStyle(Qt::DashLine);
-			graph->setPen(pen);
-			graph->setName(QString("Ch %1 Imag").arg(ch + 1));
-			graphs_.push_back(graph);
-		}
+		pollTimer_->start();
 	}
 
-	plot_->legend->setVisible(true);
-
-	// Start polling
-	pollTimer_->start();
 	redraw();
 }
 
-void OscilloscopeWidget::clearProbe()
+void OscilloscopeWidget::detachProbe(const QString& label)
 {
-	probe_.reset();
-	complexProbe_.reset();
-	graphs_.clear();
+	auto it = std::find_if(probes_.begin(), probes_.end(),
+	                        [&label](const ProbeEntry& e) { return e.label == label; });
+	if (it != probes_.end())
+	{
+		probes_.erase(it);
+		rebuildGraphs();
+
+		if (probes_.empty())
+		{
+			pollTimer_->stop();
+		}
+
+		redraw();
+	}
+}
+
+void OscilloscopeWidget::clearAllProbes()
+{
+	probes_.clear();
 	plot_->clearGraphs();
 	pollTimer_->stop();
 }
@@ -207,167 +200,226 @@ auto OscilloscopeWidget::print(QWidget* parent,
 	return s7ui::printing::renderPlotToPrinter(*plot_, printer, true);
 }
 
-void OscilloscopeWidget::pollAndUpdate()
+void OscilloscopeWidget::redraw()
 {
-	if (auto probe = probe_.lock())
+	updateAllProbes();
+}
+
+auto OscilloscopeWidget::findProbeEntry(const QString& label) -> ProbeEntry*
+{
+	auto it = std::find_if(probes_.begin(), probes_.end(),
+	                        [&label](const ProbeEntry& e) { return e.label == label; });
+	return (it != probes_.end()) ? &(*it) : nullptr;
+}
+
+void OscilloscopeWidget::rebuildGraphs()
+{
+	// Clear all existing graphs
+	plot_->clearGraphs();
+
+	// Rebuild based on current probes
+	for (auto& entry : probes_)
 	{
-		updateRealData();
+		if (entry.isComplex)
+		{
+			if (auto cprobe = entry.complexProbe.lock())
+			{
+				const int channelCount = cprobe->channelCount();
+				for (int ch = 0; ch < channelCount; ++ch)
+				{
+					// Real part
+					{
+						QCPGraph* graph = plot_->addGraph();
+						const QColor color = kChannelColors[(entry.graphs.size() / 2) % kChannelColorCount];
+						graph->setPen(QPen(color, 1.5));
+						graph->setName(QString("%1 Ch%2 Real").arg(entry.label).arg(ch + 1));
+						entry.graphs.push_back(graph);
+					}
+
+					// Imaginary part (dashed)
+					{
+						QCPGraph* graph = plot_->addGraph();
+						const QColor color = kChannelColors[(entry.graphs.size() / 2) % kChannelColorCount];
+						QPen pen(color, 1.5);
+						pen.setStyle(Qt::DashLine);
+						graph->setPen(pen);
+						graph->setName(QString("%1 Ch%2 Imag").arg(entry.label).arg(ch + 1));
+						entry.graphs.push_back(graph);
+					}
+				}
+			}
+		}
+		else
+		{
+			if (auto probe = entry.probe.lock())
+			{
+				const int channelCount = probe->channelCount();
+				for (int ch = 0; ch < channelCount; ++ch)
+				{
+					QCPGraph* graph = plot_->addGraph();
+					const QColor color = kChannelColors[entry.graphs.size() % kChannelColorCount];
+					graph->setPen(QPen(color, 1.5));
+					graph->setName(QString("%1 Ch%2").arg(entry.label).arg(ch + 1));
+					entry.graphs.push_back(graph);
+				}
+			}
+		}
 	}
-	else if (auto cprobe = complexProbe_.lock())
+
+	// Only show legend if multiple probes or multiple channels
+	int totalCharts = 0;
+	for (const auto& entry : probes_)
 	{
-		updateComplexData();
+		totalCharts += entry.graphs.size();
+	}
+	plot_->legend->setVisible(totalCharts > 1);
+}
+
+void OscilloscopeWidget::updateAllProbes()
+{
+	if (probes_.empty())
+	{
+		return;
+	}
+
+	double minY = std::numeric_limits<double>::max();
+	double maxY = std::numeric_limits<double>::lowest();
+
+	const std::size_t maxSamples = sampleCount_;
+
+	for (auto& entry : probes_)
+	{
+		if (entry.isComplex)
+		{
+			if (auto cprobe = entry.complexProbe.lock())
+			{
+				const int channelCount = cprobe->channelCount();
+				int graphIdx = 0;
+
+				for (int ch = 0; ch < channelCount; ++ch)
+				{
+					const auto samples = cprobe->readChannel(ch, maxSamples);
+					if (samples.empty())
+					{
+						continue;
+					}
+
+					QVector<double> x;
+					QVector<double> reData, imData;
+					x.reserve(static_cast<qsizetype>(samples.size()));
+					reData.reserve(static_cast<qsizetype>(samples.size()));
+					imData.reserve(static_cast<qsizetype>(samples.size()));
+
+					const double xScale = useTimeWindow_ ? (1.0 / sampleRate_) : 1.0;
+
+					for (std::size_t i = 0; i < samples.size(); ++i)
+					{
+						x.push_back(static_cast<double>(i) * xScale);
+						const double re = std::real(samples[i]);
+						const double im = std::imag(samples[i]);
+						reData.push_back(re);
+						imData.push_back(im);
+						minY = std::min(minY, re);
+						minY = std::min(minY, im);
+						maxY = std::max(maxY, re);
+						maxY = std::max(maxY, im);
+					}
+
+					// Set Real part (solid line)
+					if (graphIdx < static_cast<int>(entry.graphs.size()))
+					{
+						entry.graphs[graphIdx]->setData(x, reData, true);
+						++graphIdx;
+					}
+
+					// Set Imaginary part (dashed line)
+					if (graphIdx < static_cast<int>(entry.graphs.size()))
+					{
+						entry.graphs[graphIdx]->setData(x, imData, true);
+						++graphIdx;
+					}
+				}
+			}
+		}
+		else
+		{
+			if (auto probe = entry.probe.lock())
+			{
+				const int channelCount = std::min(static_cast<int>(entry.graphs.size()), probe->channelCount());
+
+				for (int ch = 0; ch < channelCount; ++ch)
+				{
+					const auto samples = probe->readChannel(ch, maxSamples);
+					if (samples.empty())
+					{
+						continue;
+					}
+
+					QVector<double> x, y;
+					x.reserve(static_cast<qsizetype>(samples.size()));
+					y.reserve(static_cast<qsizetype>(samples.size()));
+
+					const double xScale = useTimeWindow_ ? (1.0 / sampleRate_) : 1.0;
+
+					for (std::size_t i = 0; i < samples.size(); ++i)
+					{
+						x.push_back(static_cast<double>(i) * xScale);
+						y.push_back(static_cast<double>(samples[i]));
+						minY = std::min(minY, static_cast<double>(samples[i]));
+						maxY = std::max(maxY, static_cast<double>(samples[i]));
+					}
+
+					entry.graphs[ch]->setData(x, y, true);
+				}
+			}
+		}
+	}
+
+	// Auto-scale Y if needed
+	if (minY != std::numeric_limits<double>::max())
+	{
+		const double margin = (maxY - minY) * 0.1;
+		plot_->yAxis->setRange(minY - margin, maxY + margin);
+	}
+
+	if (useTimeWindow_)
+	{
+		plot_->xAxis->setLabel("time [s]");
+		plot_->xAxis->setRange(0.0, timeWindow_);
+	}
+	else
+	{
+		plot_->xAxis->setLabel("samples");
+		plot_->xAxis->setRange(0.0, static_cast<double>(sampleCount_));
+	}
+
+	plot_->replot(QCustomPlot::rpQueuedReplot);
+}
+
+void OscilloscopeWidget::onPollTimer()
+{
+	bool hasActiveProbe = false;
+	for (const auto& entry : probes_)
+	{
+		if (!entry.isComplex && entry.probe.lock())
+		{
+			hasActiveProbe = true;
+			break;
+		}
+		if (entry.isComplex && entry.complexProbe.lock())
+		{
+			hasActiveProbe = true;
+			break;
+		}
+	}
+
+	if (hasActiveProbe)
+	{
+		updateAllProbes();
 	}
 	else
 	{
 		pollTimer_->stop();
-	}
-}
-
-void OscilloscopeWidget::updateRealData()
-{
-	auto probe = probe_.lock();
-	if (!probe || graphs_.empty())
-	{
-		return;
-	}
-
-	const int channelCount = std::min(static_cast<int>(graphs_.size()), probe->channelCount());
-
-	// Determine sample count to read
-	const std::size_t maxSamples = sampleCount_;
-
-	double minY = std::numeric_limits<double>::max();
-	double maxY = std::numeric_limits<double>::lowest();
-
-	for (int ch = 0; ch < channelCount; ++ch)
-	{
-		const auto samples = probe->readChannel(ch, maxSamples);
-		if (samples.empty())
-		{
-			continue;
-		}
-
-		QVector<double> x, y;
-		x.reserve(static_cast<qsizetype>(samples.size()));
-		y.reserve(static_cast<qsizetype>(samples.size()));
-
-		const double xScale = useTimeWindow_
-		    ? (1.0 / sampleRate_)   // convert sample index → time in seconds
-		    : 1.0;                   // display as raw sample index
-
-		for (std::size_t i = 0; i < samples.size(); ++i)
-		{
-			x.push_back(static_cast<double>(i) * xScale);
-			y.push_back(static_cast<double>(samples[i]));
-			minY = std::min(minY, static_cast<double>(samples[i]));
-			maxY = std::max(maxY, static_cast<double>(samples[i]));
-		}
-
-		graphs_[ch]->setData(x, y, true);
-	}
-
-	// Auto-scale Y if needed
-	if (minY != std::numeric_limits<double>::max())
-	{
-		const double margin = (maxY - minY) * 0.1;
-		plot_->yAxis->setRange(minY - margin, maxY + margin);
-	}
-
-	if (useTimeWindow_)
-	{
-		plot_->xAxis->setLabel("time [s]");
-		plot_->xAxis->setRange(0.0, timeWindow_);
-	}
-	else
-	{
-		plot_->xAxis->setLabel("samples");
-		plot_->xAxis->setRange(0.0, static_cast<double>(sampleCount_));
-	}
-	plot_->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void OscilloscopeWidget::updateComplexData()
-{
-	auto cprobe = complexProbe_.lock();
-	if (!cprobe || graphs_.empty())
-	{
-		return;
-	}
-
-	const int channelCount = cprobe->channelCount();
-	const std::size_t maxSamples = sampleCount_;
-
-	double minY = std::numeric_limits<double>::max();
-	double maxY = std::numeric_limits<double>::lowest();
-
-	int graphIdx = 0;
-	for (int ch = 0; ch < channelCount && graphIdx + 1 < static_cast<int>(graphs_.size()); ++ch)
-	{
-		const auto samples = cprobe->readChannel(ch, maxSamples);
-		if (samples.empty())
-		{
-			continue;
-		}
-
-		QVector<double> x;
-		QVector<double> reData, imData;
-		x.reserve(static_cast<qsizetype>(samples.size()));
-		reData.reserve(static_cast<qsizetype>(samples.size()));
-		imData.reserve(static_cast<qsizetype>(samples.size()));
-
-		const double xScale = useTimeWindow_ ? (1.0 / sampleRate_) : 1.0;
-
-		for (std::size_t i = 0; i < samples.size(); ++i)
-		{
-			x.push_back(static_cast<double>(i) * xScale);
-			const double re = std::real(samples[i]);
-			const double im = std::imag(samples[i]);
-			reData.push_back(re);
-			imData.push_back(im);
-			minY = std::min(minY, re);
-			minY = std::min(minY, im);
-			maxY = std::max(maxY, re);
-			maxY = std::max(maxY, im);
-		}
-
-		// Set Real part (solid line)
-		graphs_[graphIdx]->setData(x, reData, true);
-		++graphIdx;
-
-		// Set Imaginary part (dashed line)
-		graphs_[graphIdx]->setData(x, imData, true);
-		++graphIdx;
-	}
-
-	// Auto-scale Y if needed
-	if (minY != std::numeric_limits<double>::max())
-	{
-		const double margin = (maxY - minY) * 0.1;
-		plot_->yAxis->setRange(minY - margin, maxY + margin);
-	}
-
-	if (useTimeWindow_)
-	{
-		plot_->xAxis->setLabel("time [s]");
-		plot_->xAxis->setRange(0.0, timeWindow_);
-	}
-	else
-	{
-		plot_->xAxis->setLabel("samples");
-		plot_->xAxis->setRange(0.0, static_cast<double>(sampleCount_));
-	}
-	plot_->replot(QCustomPlot::rpQueuedReplot);
-}
-
-void OscilloscopeWidget::redraw()
-{
-	if (auto probe = probe_.lock())
-	{
-		updateRealData();
-	}
-	else if (auto cprobe = complexProbe_.lock())
-	{
-		updateComplexData();
 	}
 }
 

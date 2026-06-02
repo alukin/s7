@@ -8,6 +8,7 @@
 #include <QVector>
 
 #include <algorithm>
+#include <cmath>
 #include <complex>
 #include <cstddef>
 
@@ -15,15 +16,18 @@ namespace s7ui::elements {
 
 namespace
 {
-constexpr qreal kSinkMinWidthMm = 40.0;
-constexpr qreal kSinkMinHeightMm = 25.0;
-constexpr qreal kSinkExtraHeightPerInputMm = 5.0;
+constexpr qreal kSinkMinWidthMm = 70.0;
+constexpr qreal kSinkMinHeightMm = 43.0;
+constexpr qreal kSinkExtraHeightPerInputMm = 8.0;
 }
 
 SinkNodeItem::SinkNodeItem(const QString& typeName, const int inputCount, QGraphicsItem* parent)
     : BasicNodeItem(typeName, parent), typeName_(typeName)
 {
     proxy_ = new QGraphicsProxyWidget(this);
+    // Clip only the embedded widget item; clipping all children at node level
+    // can clip connector visuals/hit-areas that intentionally sit on edges.
+    proxy_->setFlag(QGraphicsItem::ItemClipsToShape, true);
     preview_ = new VisualSinkPreviewWidget(true);
     preview_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     proxy_->setAcceptedMouseButtons(Qt::NoButton);
@@ -57,6 +61,14 @@ SinkNodeItem::~SinkNodeItem()
     }
 }
 
+std::shared_ptr<QSchematic::Items::Item> SinkNodeItem::deepCopy() const
+{
+    auto clone = std::make_shared<SinkNodeItem>(typeName_, inputCount_, parentItem());
+    copyAttributes(*clone);
+    clone->setInputCount(inputCount_);
+    return clone;
+}
+
 void SinkNodeItem::setInputCount(int count)
 {
     if (complexMode_)
@@ -71,12 +83,14 @@ void SinkNodeItem::setInputCount(int count)
         {
             detailWindow_->setInputCount(1);
         }
+        updatePreviewGeometry();
         return;
     }
 
     count = std::clamp(count, 1, 16);
     if (count == inputCount_)
     {
+        updatePreviewGeometry();
         return;
     }
 
@@ -105,6 +119,10 @@ void SinkNodeItem::setProbe(std::shared_ptr<s7::Probe> probe)
 {
     complexProbe_.reset();
     probe_ = probe;
+    if (detailWindow_)
+    {
+        detailWindow_->setProbe(probe);
+    }
     if (probe)
     {
         // Switch preview to live mode
@@ -121,6 +139,10 @@ void SinkNodeItem::setComplexProbe(std::shared_ptr<s7::ComplexProbe> probe)
 {
     probe_.reset();
     complexProbe_ = probe;
+    if (detailWindow_)
+    {
+        detailWindow_->setComplexProbe(probe);
+    }
     if (probe)
     {
         preview_->setSignalMode(VisualSinkPreviewWidget::SignalMode::Live);
@@ -137,6 +159,10 @@ void SinkNodeItem::clearProbe()
 {
     probe_.reset();
     complexProbe_.reset();
+    if (detailWindow_)
+    {
+        detailWindow_->clearProbe();
+    }
     stopPolling();
     // Revert to flat static display
     preview_->setSignalMode(VisualSinkPreviewWidget::SignalMode::Flat);
@@ -218,12 +244,24 @@ void SinkNodeItem::updatePreviewGeometry()
     }
 
     const QRectF r = sizeRect();
-    const qreal left = r.width() * 0.15;
-    const qreal right = r.width() * 0.05;
-    const qreal top = r.height() * 0.1;
-    const qreal bottom = r.height() * 0.1;
+    // Insets tuned for oscilloscope design: keep a stable screen area that
+    // stays inside the body even with rounded borders and anti-aliased edges.
+    const qreal left = std::max<qreal>(6.0, r.width() * 0.16);
+    const qreal right = std::max<qreal>(5.0, r.width() * 0.10);
+    const qreal top = std::max<qreal>(4.0, r.height() * 0.14);
+    const qreal bottom = std::max<qreal>(6.0, r.height() * 0.20);
     const QRectF inner = r.adjusted(left, top, -right, -bottom);
     proxy_->setGeometry(inner);
+
+    // Keep the embedded widget's backing size in lock-step with proxy geometry.
+    // Use resize (not fixed size) so QWidget internals do not keep stale hard
+    // constraints that can paint an extra rectangle in proxy rendering.
+    if (preview_)
+    {
+        const int w = std::max(1, static_cast<int>(std::lround(inner.width())));
+        const int h = std::max(1, static_cast<int>(std::lround(inner.height())));
+        preview_->resize(w, h);
+    }
 }
 
 void SinkNodeItem::openPropertiesDialog()
@@ -243,6 +281,14 @@ void SinkNodeItem::openPropertiesDialog()
     }
 
     detailWindow_->setIdentity(nodeName(), nodeId());
+    if (auto cprobe = complexProbe_.lock())
+    {
+        detailWindow_->setComplexProbe(cprobe);
+    }
+    else
+    {
+        detailWindow_->setProbe(probe_.lock());
+    }
 
     detailWindow_->show();
     detailWindow_->raise();

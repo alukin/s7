@@ -4,7 +4,9 @@
 
 #include <qschematic/items/item.hpp>
 
+#include <QPoint>
 #include <QPointF>
+#include <QRectF>
 
 #include <memory>
 
@@ -29,6 +31,12 @@ public:
         const NodeTemplate& nodeTemplate,
         int index,
         const QPointF& position) const;
+
+    [[nodiscard]] std::shared_ptr<QSchematic::Items::Item> createPrototypeItem(
+        const NodeTemplate& nodeTemplate) const;
+    [[nodiscard]] QPointF preferredAnchorInItem(const QSchematic::Items::Item& item) const;
+    [[nodiscard]] QPoint pixmapHotSpotForItem(const QSchematic::Items::Item& item) const;
+    [[nodiscard]] QRectF preferredPreviewRectInItem(const QSchematic::Items::Item& item) const;
 
 private:
     const s7ui::visual::Catalog* visualCatalog_ = nullptr;

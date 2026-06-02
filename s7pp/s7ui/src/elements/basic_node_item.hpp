@@ -11,6 +11,7 @@
 
 class QGraphicsSceneMouseEvent;
 class QPainter;
+class QPainterPath;
 
 namespace s7ui::elements {
 
@@ -30,6 +31,8 @@ public:
     };
 
     explicit BasicNodeItem(const QString& typeName, QGraphicsItem* parent = nullptr);
+
+    [[nodiscard]] std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
 
     void setNodeId(const QString& nodeId);
     [[nodiscard]] QString nodeId() const;
@@ -69,21 +72,18 @@ public:
 
 protected:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
+    [[nodiscard]] QPainterPath shape() const override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
     virtual void openPropertiesDialog();
 
     void sizeChangedEvent(QSizeF oldSize, QSizeF newSize) override;
+    void copyAttributes(BasicNodeItem& dest) const;
 
 private:
+    [[nodiscard]] QPainterPath bodyPath(const QRectF& rect) const;
     void relayoutConnectors();
     void refreshToolTip();
 
-    /// Paint helper methods for each shape type
-    void paintRectangle(QPainter* painter, const QRectF& rect);
-    void paintRoundedRect(QPainter* painter, const QRectF& rect);
-    void paintDiamond(QPainter* painter, const QRectF& rect);
-    void paintHexagon(QPainter* painter, const QRectF& rect);
-    void paintCircle(QPainter* painter, const QRectF& rect);
 
     /// Serialise the type descriptor's default_params to a JSON object string.
     [[nodiscard]] static QString defaultParamsJsonFor(const std::string& typeName);

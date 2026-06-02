@@ -86,7 +86,7 @@ QString SheetPresenter::currentStandardName() const
 // Preset application
 // -------------------------------------------------------------------------
 void SheetPresenter::applyPreset(Preset preset,
-                                  const std::function<void(const QString&)>& logCallback)
+                                    const std::function<void(const QString&)>& logCallback)
 {
     preset_ = preset;
     const auto sheet = sizeForPreset(preset_);
@@ -95,7 +95,7 @@ void SheetPresenter::applyPreset(Preset preset,
     }
     rebuildOverlay();
     if (logCallback) {
-        logCallback(QString("[sheet] %1 (%2 x %3 mm), units=mm")
+        logCallback(QString("[sheet] %1 (%2 x %3 mm), units=mm, sceneRect set to (0,0,%2,%3)")
             .arg(sheet.label)
             .arg(sheet.width,  0, 'f', 0)
             .arg(sheet.height, 0, 'f', 0));
@@ -223,8 +223,21 @@ void SheetPresenter::fitInView(QSchematic::View* view) const
     if (!view || !scene_) return;
     const QRectF rect = scene_->sceneRect();
     if (rect.isEmpty()) return;
+
+    // Log before fit
+    const QTransform beforeTransform = static_cast<QGraphicsView*>(view)->transform();
+    qDebug() << "[fitInView] BEFORE fit:"
+             << "  scene rect:" << rect.width() << "x" << rect.height() << "mm"
+             << "  view transform m11=" << beforeTransform.m11() << " m22=" << beforeTransform.m22();
+
     view->setSceneRect(rect);
     static_cast<QGraphicsView*>(view)->fitInView(rect, Qt::KeepAspectRatio);
+
+    // Log after fit
+    const QTransform afterTransform = static_cast<QGraphicsView*>(view)->transform();
+    qDebug() << "[fitInView] AFTER fit:"
+             << "  view transform m11=" << afterTransform.m11() << " m22=" << afterTransform.m22()
+             << "  viewport size:" << static_cast<QGraphicsView*>(view)->viewport()->size();
 }
 void SheetPresenter::fitSelectionInView(QSchematic::View* view) const
 {

@@ -1,8 +1,12 @@
 #pragma once
 
 #include "sheet_presenter.hpp"
+#include "sidebar_widget.hpp"
+
+#include "s7_view.hpp"
 
 #include <qschematic/scene.hpp>
+#include <qschematic/settings.hpp>
 #include <qschematic/items/item.hpp>
 
 #include <QMainWindow>
@@ -18,8 +22,9 @@ class QSpinBox;
 class QLabel;
 class QKeyEvent;
 class QShowEvent;
+class QDockWidget;
+class QPointF;
 
-namespace QSchematic { class View; }
 
 class RemoteNodesWidget;
 
@@ -53,6 +58,7 @@ public:
 
 private slots:
     void addSelectedPaletteNode();
+    void addSelectedPaletteNodeAt(const QPointF& scenePos);
     void appendLog(const QString& message);
     void loadSchema();
     void saveSchema();
@@ -68,6 +74,7 @@ private slots:
     void onRunStatusPoll(long completed, long total);
     void toggleWireMode();
     void onSceneModeChanged(int mode);
+    void onAdditiveRubberBandDragChanged(bool active);
     void onRunCompleted(bool success, const QString& error);
 
 private:
@@ -77,7 +84,7 @@ private:
     void createMenus();
     void createToolbars();
     void createCentralEditor();
-    void createDocks();
+    void createSidebar();
 
     // --- Helpers ---
     void populatePalette();
@@ -92,6 +99,8 @@ private:
     void updateModelActionStates();
     void setModelStatus(const QString& status);
     void updateWindowTitle();
+    void updateInteractionHint();
+    void addPaletteNodeTypeAt(const QString& typeName, const QPointF& scenePos, bool cascadeOffset);
     void linkSinkProbes();
     void unlinkSinkProbes();
 
@@ -99,11 +108,13 @@ private:
     void showEvent(QShowEvent* event) override;
 
     // --- Qt GUI widgets ---
-    QSchematic::Scene*  scene_      = nullptr;
-    QSchematic::View*   view_       = nullptr;
-    QTreeWidget*        paletteTree_= nullptr;
-    QTextEdit*          logView_    = nullptr;
-    RemoteNodesWidget*  remoteNodes_= nullptr;
+    QSchematic::Scene*          scene_      = nullptr;
+    s7ui::ui::S7View*           view_       = nullptr;
+    QTreeWidget*                paletteTree_= nullptr;
+    QTextEdit*                  logView_    = nullptr;
+    QDockWidget*                logDock_    = nullptr;
+    RemoteNodesWidget*          remoteNodes_= nullptr;
+    s7ui::ui::SidebarWidget*    sidebar_    = nullptr;
 
     QAction* actionOpenSchema_     = nullptr;
     QAction* actionSaveSchema_     = nullptr;
@@ -139,6 +150,8 @@ private:
     QString schemaName_ = "s7ui_schema";
     int     createdNodeCounter_ = 0;
     bool    initialSheetFitDone_= false;
+    bool    additiveRubberBandDragActive_ = false;
+    QSchematic::Settings cadSettings_;
 
     // --- Services (owned) ---
     s7ui::SchemaRunner*                              schemaRunner_            = nullptr;

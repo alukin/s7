@@ -1,0 +1,163 @@
+{
+  "document_kind": "s7.diagram",
+  "diagram_magic": "S7UI_DIAGRAM_V1",
+  "schema_version": 1,
+  "diagram_version": 1,
+  "id": "diagram_dual_oscilloscope_test",
+  "dt": 0.001,
+  "units": "mm",
+  "sheet": {
+    "standard": "A4",
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "nodes": [
+    {
+      "id": "oscillator_1",
+      "type": "DigitalOscillator",
+      "params": {
+        "frequency_hz": 1.0,
+        "phase_rad": 0.0,
+        "amplitude": 1.0,
+        "radius": 1.0
+      }
+    },
+    {
+      "id": "oscillator_2",
+      "type": "DigitalOscillator",
+      "params": {
+        "frequency_hz": 2.0,
+        "phase_rad": 0.4,
+        "amplitude": 0.8,
+        "radius": 1.0
+      }
+    },
+    {
+      "id": "scope_sink",
+      "type": "Probe",
+      "params": {
+        "channels": 2
+      }
+    }
+  ],
+  "nets": [
+    {
+      "name": "n_osc1_scope_in0",
+      "connections": [
+        { "node": "oscillator_1", "connector": "out0" },
+        { "node": "scope_sink", "connector": "in0" }
+      ]
+    },
+    {
+      "name": "n_osc2_scope_in1",
+      "connections": [
+        { "node": "oscillator_2", "connector": "out0" },
+        { "node": "scope_sink", "connector": "in1" }
+      ]
+    }
+  ],
+  "wires": [
+    {
+      "name": "n_osc1_scope_in0",
+      "from": { "node": "oscillator_1", "connector": "out0" },
+      "to": { "node": "scope_sink", "connector": "in0" },
+      "points": [
+        { "x": 125.0, "y": 80.0 },
+        { "x": 225.0, "y": 80.0 }
+      ]
+    },
+    {
+      "name": "n_osc2_scope_in1",
+      "from": { "node": "oscillator_2", "connector": "out0" },
+      "to": { "node": "scope_sink", "connector": "in1" },
+      "points": [
+        { "x": 125.0, "y": 145.0 },
+        { "x": 225.0, "y": 120.0 }
+      ]
+    }
+  ],
+  "diagram": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "oscillator_1",
+        "type": "DigitalOscillator",
+        "name": "Digital Oscillator 1",
+        "visual": false,
+        "position": { "x": 70.0, "y": 80.0 },
+        "input_ports": 0,
+        "output_ports": 1,
+        "params": {
+          "frequency_hz": 1.0,
+          "phase_rad": 0.0,
+          "amplitude": 1.0,
+          "radius": 1.0
+        }
+      },
+      {
+        "id": "oscillator_2",
+        "type": "DigitalOscillator",
+        "name": "Digital Oscillator 2",
+        "visual": false,
+        "position": { "x": 70.0, "y": 145.0 },
+        "input_ports": 0,
+        "output_ports": 1,
+        "params": {
+          "frequency_hz": 2.0,
+          "phase_rad": 0.4,
+          "amplitude": 0.8,
+          "radius": 1.0
+        }
+      },
+      {
+        "id": "scope_sink",
+        "type": "ScopeSink",
+        "name": "Scope Sink",
+        "visual": true,
+        "position": { "x": 250.0, "y": 110.0 },
+        "input_ports": 2,
+        "output_ports": 0,
+        "params": {
+          "buffer_size": 512
+        }
+      }
+    ],
+    "nets": [
+      {
+        "name": "n_osc1_scope_in0",
+        "connections": [
+          { "node": "oscillator_1", "connector": "out0" },
+          { "node": "scope_sink", "connector": "in0" }
+        ]
+      },
+      {
+        "name": "n_osc2_scope_in1",
+        "connections": [
+          { "node": "oscillator_2", "connector": "out0" },
+          { "node": "scope_sink", "connector": "in1" }
+        ]
+      }
+    ],
+    "wires": [
+      {
+        "name": "n_osc1_scope_in0",
+        "from": { "node": "oscillator_1", "connector": "out0" },
+        "to": { "node": "scope_sink", "connector": "in0" },
+        "points": [
+          { "x": 125.0, "y": 80.0 },
+          { "x": 225.0, "y": 80.0 }
+        ]
+      },
+      {
+        "name": "n_osc2_scope_in1",
+        "from": { "node": "oscillator_2", "connector": "out0" },
+        "to": { "node": "scope_sink", "connector": "in1" },
+        "points": [
+          { "x": 125.0, "y": 145.0 },
+          { "x": 225.0, "y": 120.0 }
+        ]
+      }
+    ]
+  }
+}

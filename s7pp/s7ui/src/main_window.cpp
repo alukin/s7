@@ -3,6 +3,7 @@
 #include "model_run_controller.hpp"
 #include "node_factory.hpp"
 #include "palette_service.hpp"
+#include "palette_tree_widget.hpp"
 #include "documents/diagram_document.hpp"
 #include "scene_roles.hpp"
 #include "schema_document_controller.hpp"
@@ -17,11 +18,12 @@
 #include "remote_nodes_widget.hpp"
 
 #include <boost/json.hpp>
-#include <qschematic/view.hpp>
+#include <QApplication>
+#include <QScreen>
+#include <QWindow>
 
 #include <QAction>
 #include <QActionGroup>
-#include <QDir>
 #include <QDoubleSpinBox>
 #include <QDockWidget>
 #include <QFileDialog>
@@ -38,11 +40,14 @@
 #include <QShowEvent>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStatusBar>
+#include <QStyle>
 #include <QTextEdit>
 #include <QTimer>
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QWidgetAction>
 
 #include <cmath>
@@ -63,18 +68,24 @@ MainWindow::MainWindow(QWidget* parent)
     setDockNestingEnabled(true);
 
     scene_ = new QSchematic::Scene(this);
-    QSchematic::Settings cadSettings;
-    cadSettings.gridSize               = 5;
-    cadSettings.gridPointSize          = 1;
-    cadSettings.showGrid               = true;
-    cadSettings.routeStraightAngles    = true;
-    cadSettings.preserveStraightAngles = true;
-    scene_->setSettings(cadSettings);
+    cadSettings_.gridSize               = 5;
+    cadSettings_.gridPointSize          = 1;
+    cadSettings_.showGrid               = true;
+    cadSettings_.routeStraightAngles    = true;
+    cadSettings_.preserveStraightAngles = true;
+    scene_->setSettings(cadSettings_);
     scene_->setWireFactory([]() -> std::shared_ptr<QSchematic::Items::Wire> {
         return std::make_shared<s7ui::elements::S7WireItem>();
     });
     connect(scene_, &QSchematic::Scene::modeChanged,
             this,   &MainWindow::onSceneModeChanged);
+
+    // -----------------------------------------------------------------------
+    // View zoom limits — expressed in pixels-per-scene-unit (pixels per mm).
+    // At 96 DPI: 1mm ≈ 3.78 px.  We allow 4% … 400% physical zoom.
+    // The actual limit values are applied in createCentralEditor() once the
+    // view widget exists.  Screen DPI is computed on demand in setZoomPreset().
+    // -----------------------------------------------------------------------
 
     sheetPresenter_ = std::make_unique<SheetPresenter>(scene_);
     schemaFileService_ = std::make_unique<SchemaFileService>();
@@ -103,11 +114,12 @@ MainWindow::MainWindow(QWidget* parent)
     createToolbars();
     createCentralEditor();
     applySheetPreset(SheetPresenter::Preset::A4Landscape);
-    createDocks();
+    createSidebar();
     populatePalette();
     updateModelActionStates();
     setModelStatus("idle");
     updateWindowTitle();
+    updateInteractionHint();
     resize(1600, 950);
 
     QTimer::singleShot(0, this, [this]() -> void { sheetPresenter_->fitInView(view_); });
@@ -120,15 +132,15 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::createActions()
 {
-    actionOpenSchema_ = new QAction("Open Schema...", this);
+    actionOpenSchema_ = new QAction("Load Diagram...", this);
     actionOpenSchema_->setShortcut(QKeySequence::Open);
     connect(actionOpenSchema_, &QAction::triggered, this, &MainWindow::loadSchema);
 
-    actionSaveSchema_ = new QAction("Save Schema", this);
+    actionSaveSchema_ = new QAction("Save Diagram", this);
     actionSaveSchema_->setShortcut(QKeySequence::Save);
     connect(actionSaveSchema_, &QAction::triggered, this, &MainWindow::saveSchema);
 
-    actionSaveSchemaAs_ = new QAction("Save Schema As...", this);
+    actionSaveSchemaAs_ = new QAction("Save Diagram As...", this);
     actionSaveSchemaAs_->setShortcut(QKeySequence::SaveAs);
     connect(actionSaveSchemaAs_, &QAction::triggered, this, &MainWindow::saveSchemaAs);
 
@@ -282,56 +294,77 @@ void MainWindow::createToolbars()
 
 void MainWindow::createCentralEditor()
 {
-    view_ = new QSchematic::View(this);
+    view_ = new s7ui::ui::S7View(this);
     view_->setScene(scene_);
+
+    // Set zoom limits to match physical-size expectations.
+    // zoom_factor_min/max in QSchematic View are view transform values (pixels/scene-unit).
+    // Since 1 scene unit = 1 mm, we compute limits from screen DPI.
+    // Allow 4% … 400% physical zoom.
+    {
+        const QScreen* screen = QApplication::primaryScreen();
+        const double dpi     = screen ? screen->logicalDotsPerInchX() : 96.0;
+        const double mmToPx  = dpi / 25.4;
+        view_->zoom_factor_min  = 0.04 * mmToPx;   //   4% physical
+        view_->zoom_factor_max  = 4.00 * mmToPx;   // 400% physical
+        view_->zoom_factor_step = 0.10 * mmToPx;   //  10% physical per step
+    }
+    connect(view_, &s7ui::ui::S7View::additiveRubberBandDragChanged,
+            this, &MainWindow::onAdditiveRubberBandDragChanged);
     view_->setAlignment(Qt::AlignCenter);
     view_->setRenderHint(QPainter::Antialiasing, true);
     view_->setRenderHint(QPainter::TextAntialiasing, true);
     view_->setRenderHint(QPainter::SmoothPixmapTransform, true);
     view_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-    setCentralWidget(view_);
+    view_->setAcceptDrops(true);
+    view_->viewport()->setAcceptDrops(true);
+
+    // Wrap view with sidebar on the left
+    auto* container = new QWidget(this);
+    auto* layout = new QHBoxLayout(container);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    sidebar_ = new s7ui::ui::SidebarWidget(this);
+    layout->addWidget(sidebar_);
+    layout->addWidget(view_, 1);
+
+    container->setLayout(layout);
+    setCentralWidget(container);
+
 }
 
-void MainWindow::createDocks()
+void MainWindow::createSidebar()
 {
-    // Palette
-    auto* paletteDock = new QDockWidget("S7 Node Palette", this);
-    auto* paletteHost = new QWidget(paletteDock);
+    // --- Palette Panel ---
+    auto* paletteHost = new QWidget();
     auto* paletteLayout = new QVBoxLayout(paletteHost);
-    paletteTree_ = new QTreeWidget(paletteHost);
+    paletteTree_ = new PaletteTreeWidget(paletteHost);
     paletteTree_->setHeaderLabel("Node Types");
     paletteTree_->header()->setSectionResizeMode(QHeaderView::Stretch);
+    paletteTree_->setDragEnabled(true);
+    paletteTree_->setSelectionMode(QAbstractItemView::SingleSelection);
+    paletteTree_->setDragDropMode(QAbstractItemView::DragOnly);
     connect(paletteTree_, &QTreeWidget::itemDoubleClicked,
             this, [this](QTreeWidgetItem* item, int) -> void {
                 if (item && item->childCount() == 0) {
                     addSelectedPaletteNode();
                 }
             });
-    auto* addBtn = new QPushButton("Add Selected Node", paletteHost);
-    connect(addBtn, &QPushButton::clicked, this, &MainWindow::addSelectedPaletteNode);
     paletteLayout->addWidget(paletteTree_);
-    paletteLayout->addWidget(addBtn);
-    paletteDock->setWidget(paletteHost);
-    addDockWidget(Qt::RightDockWidgetArea, paletteDock);
+    paletteHost->setLayout(paletteLayout);
 
-    // Remote
-    auto* remoteDock = new QDockWidget("Remote Models", this);
-    remoteNodes_ = new RemoteNodesWidget(remoteDock);
+    // --- Remote Models Panel ---
+    auto* remoteHost = new QWidget();
+    auto* remoteLayout = new QVBoxLayout(remoteHost);
+    remoteNodes_ = new RemoteNodesWidget(remoteHost);
     connect(remoteNodes_, &RemoteNodesWidget::logMessage, this, &MainWindow::appendLog);
-    remoteDock->setWidget(remoteNodes_);
-    addDockWidget(Qt::LeftDockWidgetArea, remoteDock);
+    remoteLayout->addWidget(remoteNodes_);
+    remoteHost->setLayout(remoteLayout);
 
-    // Log
-    auto* logDock = new QDockWidget("Runtime Log", this);
-    logView_ = new QTextEdit(logDock);
-    logView_->setReadOnly(true);
-    logDock->setWidget(logView_);
-    addDockWidget(Qt::BottomDockWidgetArea, logDock);
-
-    // Schema properties
-    auto* schemaDock = new QDockWidget("Schema Properties", this);
-    auto* schemaHost   = new QWidget(schemaDock);
-    auto* schemaForm   = new QFormLayout(schemaHost);
+    // --- Diagram Properties Panel ---
+    auto* schemaHost = new QWidget();
+    auto* schemaForm = new QFormLayout(schemaHost);
     schemaNameEdit_ = new QLineEdit(schemaName_, schemaHost);
     schemaDtSpin_ = new QDoubleSpinBox(schemaHost);
     schemaDtSpin_->setDecimals(9);
@@ -342,13 +375,69 @@ void MainWindow::createDocks()
     schemaForm->addRow("Sampling Interval (dt)", schemaDtSpin_);
     connect(schemaNameEdit_, &QLineEdit::editingFinished,
             this, &MainWindow::schemaPropertiesEdited);
-    connect(schemaDtSpin_,   &QDoubleSpinBox::editingFinished,
+    connect(schemaDtSpin_, &QDoubleSpinBox::editingFinished,
             this, &MainWindow::schemaPropertiesEdited);
-    schemaDock->setWidget(schemaHost);
-    addDockWidget(Qt::LeftDockWidgetArea, schemaDock);
+    schemaHost->setLayout(schemaForm);
 
-    tabifyDockWidget(schemaDock, remoteDock);
-    schemaDock->raise();
+    // --- Runtime Log (bottom dock, like previous layout) ---
+    logDock_ = new QDockWidget("Runtime Log", this);
+    logView_ = new QTextEdit(logDock_);
+    logView_->setReadOnly(true);
+    logDock_->setWidget(logView_);
+    addDockWidget(Qt::BottomDockWidgetArea, logDock_);
+
+    // Use style-provided icons so sidebar colors follow the active UI palette/theme.
+    const auto paletteIcon = style()->standardIcon(QStyle::SP_FileDialogDetailedView);
+    const auto remoteIcon = style()->standardIcon(QStyle::SP_ComputerIcon);
+    const auto propertiesIcon = style()->standardIcon(QStyle::SP_FileDialogInfoView);
+    const auto logIcon = style()->standardIcon(QStyle::SP_FileDialogContentsView);
+
+    // Add items to sidebar with icons
+    sidebar_->addItem({
+        .id = "palette",
+        .title = "Node Types",
+        .icon = paletteIcon,
+        .tooltip = "Node Palette (Add nodes to diagram)",
+        .panel = paletteHost
+    });
+
+    sidebar_->addItem({
+        .id = "remote",
+        .title = "Remote Nodes",
+        .icon = remoteIcon,
+        .tooltip = "Remote Models (Manage remote nodes)",
+        .panel = remoteHost
+    });
+
+    sidebar_->addItem({
+        .id = "properties",
+        .title = "Diagram Properties",
+        .icon = propertiesIcon,
+        .tooltip = "Diagram Properties (Name, dt, etc.)",
+        .panel = schemaHost
+    });
+
+    sidebar_->addItem({
+        .id = "log",
+        .title = "",
+        .icon = logIcon,
+        .tooltip = "Runtime Log (Show/hide bottom log window)",
+        .group = s7ui::ui::SidebarGroup::Logs,
+        .panel = nullptr,
+        .onClick = [this]() -> void {
+            if (!logDock_) {
+                return;
+            }
+            if (logDock_->isVisible()) {
+                logDock_->hide();
+            } else {
+                logDock_->show();
+                logDock_->raise();
+            }
+        }
+    });
+
+
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +466,19 @@ void MainWindow::populatePalette()
 {
     ensureVisualCatalogLoaded();
     PaletteService::populate(paletteTree_, visualCatalog_.get());
+    if (auto* paletteWidget = qobject_cast<PaletteTreeWidget*>(paletteTree_)) {
+        paletteWidget->setNodeFactory(nodeFactory_.get());
+        // Give the palette widget the scene settings so prototype connector
+        // symbol rects are sized correctly in the drag preview.
+        paletteWidget->setSceneSettings(cadSettings_);
+        // Give the palette widget a live view-scale provider so the drag
+        // preview pixmap always matches the node's apparent size on canvas.
+        if (view_) {
+            paletteWidget->setViewScaleProvider([this]() -> qreal {
+                return view_->transform().m11();
+            });
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -392,7 +494,7 @@ void MainWindow::seedStarterScene()
         applyLoadedSchemaResult(schemaWorkflowController_->loadFromFile(*schemaDocumentController_, path));
     }
     catch (const std::exception& ex) {
-        appendLog(QString("[schema] startup load failed: %1")
+        appendLog(QString("[diagram] startup load failed: %1")
                       .arg(QString::fromUtf8(ex.what())));
     }
 }
@@ -421,10 +523,10 @@ void MainWindow::applyLoadedSchemaResult(const LoadedSchemaResult& r)
 void MainWindow::loadSchema()
 {
     const QString startDir = currentSchemaPath_.isEmpty()
-        ? QDir::homePath()
+        ? QDir::currentPath()
         : QFileInfo(currentSchemaPath_).absolutePath();
     const QString path = QFileDialog::getOpenFileName(
-        this, "Open Schema", startDir, "Schema Files (*.json);;All Files (*)");
+        this, "Load Diagram", startDir, "Diagram Files (*.json);;All Files (*)");
     if (path.isEmpty()) {
         return;
     }
@@ -437,7 +539,7 @@ void MainWindow::loadSchema()
         applyLoadedSchemaResult(r);
     }
     catch (const std::exception& ex) {
-        QMessageBox::warning(this, "Open Schema Failed", QString::fromUtf8(ex.what()));
+        QMessageBox::warning(this, "Load Diagram Failed", QString::fromUtf8(ex.what()));
     }
 }
 
@@ -448,22 +550,22 @@ void MainWindow::saveSchema()
         return;
     }
     if (saveSchemaToPath(currentSchemaPath_, false)) {
-        appendLog(QString("[schema] saved to %1").arg(currentSchemaPath_));
+        appendLog(QString("[diagram] saved to %1").arg(currentSchemaPath_));
     }
 }
 
 void MainWindow::saveSchemaAs()
 {
     const QString startDir = currentSchemaPath_.isEmpty()
-        ? QDir::homePath()
+        ? QDir::currentPath()
         : QFileInfo(currentSchemaPath_).absolutePath();
     const QString path = QFileDialog::getSaveFileName(
-        this, "Save Schema As", startDir, "Schema Files (*.json);;All Files (*)");
+        this, "Save Diagram As", startDir, "Diagram Files (*.json);;All Files (*)");
     if (path.isEmpty()) {
         return;
     }
     if (saveSchemaToPath(path, true)) {
-        appendLog(QString("[schema] saved to %1").arg(path));
+        appendLog(QString("[diagram] saved to %1").arg(path));
     }
 }
 
@@ -497,7 +599,7 @@ auto MainWindow::saveSchemaToPath(const QString& path, const bool setAsCurrentPa
         return true;
     }
     catch (const std::exception& ex) {
-        QMessageBox::warning(this, "Save Schema Failed", QString::fromUtf8(ex.what()));
+        QMessageBox::warning(this, "Save Diagram Failed", QString::fromUtf8(ex.what()));
         return false;
     }
 }
@@ -538,14 +640,33 @@ void MainWindow::printSheet()
 void MainWindow::applySheetPreset(SheetPresenter::Preset preset)
 {
     using P = SheetPresenter::Preset;
+
+    appendLog(QString("[sheet] Applying preset %1").arg(static_cast<int>(preset)));
+
     sheetPresenter_->applyPreset(preset, [this](const QString& msg) -> void { appendLog(msg); });
+
     if (actionSheetA4_) actionSheetA4_->setChecked(preset == P::A4Landscape);
     if (actionSheetA3_) actionSheetA3_->setChecked(preset == P::A3Landscape);
     if (actionSheetA2_) actionSheetA2_->setChecked(preset == P::A2Landscape);
     if (actionSheetA1_) actionSheetA1_->setChecked(preset == P::A1Landscape);
-    if (view_) {
-        view_->setSceneRect(scene_->sceneRect());
+
+    if (view_ && scene_) {
+        const QRectF sceneRect = scene_->sceneRect();
+        appendLog(QString("[sheet] Scene rect after preset: %.1f x %.1f mm @ (%.1f, %.1f)")
+                  .arg(sceneRect.width(), 0, 'f', 1)
+                  .arg(sceneRect.height(), 0, 'f', 1)
+                  .arg(sceneRect.left(), 0, 'f', 1)
+                  .arg(sceneRect.top(), 0, 'f', 1));
+
+        view_->setSceneRect(sceneRect);
+
+        appendLog(QString("[sheet] View sceneRect set. Calling fitInView..."));
         sheetPresenter_->fitInView(view_);
+
+        const QTransform viewTransform = view_->transform();
+        appendLog(QString("[sheet] After fitInView: view transform m11=%1 m22=%2")
+                  .arg(viewTransform.m11(), 0, 'f', 4)
+                  .arg(viewTransform.m22(), 0, 'f', 4));
     }
 }
 
@@ -555,22 +676,48 @@ void MainWindow::applySheetPreset(SheetPresenter::Preset preset)
 
 void MainWindow::addSelectedPaletteNode()
 {
-    if (!nodeFactory_) return;
-    const auto tmpl = nodeFactory_->selectedTemplate(paletteTree_);
-    const auto item = nodeFactory_->createItemFromTemplate(tmpl, createdNodeCounter_++, {});
-    if (view_ && item) {
-        const QPoint vpCenter = view_->viewport()->rect().center();
-        QPointF sc = view_->mapToScene(vpCenter);
-        sc += QPointF(static_cast<double>((createdNodeCounter_ - 1) % 5) * 20.0,
-                      static_cast<double>((createdNodeCounter_ - 1) % 5) * 20.0);
-        item->setScenePos(sc);
+    if (!view_) {
+        return;
     }
+    const QPoint vpCenter = view_->viewport()->rect().center();
+    addPaletteNodeTypeAt(
+        nodeFactory_ ? nodeFactory_->selectedTemplate(paletteTree_).typeName : QString(),
+        view_->mapToScene(vpCenter),
+        true);
+}
+
+void MainWindow::addSelectedPaletteNodeAt(const QPointF& scenePos)
+{
+    addPaletteNodeTypeAt(
+        nodeFactory_ ? nodeFactory_->selectedTemplate(paletteTree_).typeName : QString(),
+        scenePos,
+        false);
+}
+
+void MainWindow::addPaletteNodeTypeAt(const QString& typeName,
+                                      const QPointF& scenePos,
+                                      const bool cascadeOffset)
+{
+    if (!nodeFactory_ || typeName.trimmed().isEmpty()) {
+        return;
+    }
+
+    const auto tmpl = nodeFactory_->templateForType(typeName);
+    const int itemIndex = createdNodeCounter_++;
+    QPointF itemOrigin = scenePos;
+    if (const auto prototype = nodeFactory_->createPrototypeItem(tmpl)) {
+        itemOrigin -= nodeFactory_->preferredAnchorInItem(*prototype);
+    }
+    if (cascadeOffset) {
+        const qreal cascade = static_cast<qreal>(itemIndex % 5) * 10.0;
+        itemOrigin += QPointF(cascade, cascade);
+    }
+
+    const auto item = nodeFactory_->createItemFromTemplate(tmpl, itemIndex, itemOrigin);
     if (scene_->addItem(item)) {
         appendLog(QString("[scene] Added node: %1").arg(tmpl.typeName));
         if (view_ && item) {
-            const QPointF p = item->scenePos();
-            const QRectF  b = item->boundingRect();
-            view_->ensureVisible(QRectF(p.x(), p.y(), b.width(), b.height()), 20, 20);
+            view_->ensureVisible(item->sceneBoundingRect().adjusted(-20.0, -20.0, 20.0, 20.0));
         }
     }
 }
@@ -596,7 +743,9 @@ void MainWindow::runSchemaModel()
     }
     const double dt = currentDt();
     modelRunController_->run(rj, dt, runHoursSpin_, runMinutesSpin_, runSecondsSpin_);
-    if (schemaRunner_->isRunning()) linkSinkProbes();
+    if (schemaRunner_->isRunning()) {
+        linkSinkProbes();
+    }
     updateModelActionStates();
 }
 
@@ -662,6 +811,7 @@ void MainWindow::unlinkSinkProbes()
     }
 }
 
+
 // ---------------------------------------------------------------------------
 // Schema properties
 // ---------------------------------------------------------------------------
@@ -675,7 +825,7 @@ void MainWindow::schemaPropertiesEdited()
     }
     sheetPresenter_->setSchemaName(schemaName_);
     updateModelActionStates();
-    appendLog(QString("[schema] properties updated: name=%1 dt=%2")
+    appendLog(QString("[diagram] properties updated: name=%1 dt=%2")
                   .arg(schemaName_)
                   .arg(currentDt(), 0, 'g', 9));
 }
@@ -691,7 +841,53 @@ void MainWindow::appendLog(const QString& msg)
 
 void MainWindow::setZoomPreset(const double zoom)
 {
-    if (view_) view_->setZoomValue(std::clamp(zoom, 0.05, 8.0));
+    if (!view_) return;
+
+    // -----------------------------------------------------------------------
+    // Physical-size zoom mapping
+    // -----------------------------------------------------------------------
+    // Our scene uses 1 scene unit = 1 mm.  QSchematic's setZoomValue(f) sets
+    // the view transform to f, meaning "f pixels per scene unit (mm)".
+    // At f=1 the A4 sheet (297 mm) appears only 297 pixels wide — a matchbox.
+    //
+    // Physical 100% (1 mm on screen = 1 real mm) requires:
+    //   f = screen_logical_dpi / 25.4   (pixels per mm at 100% physical size)
+    //
+    // We call setZoomValue(zoom * mmToPixels) so that:
+    //   zoom=1.00  →  physical 100%  (true A4 size on screen)
+    //   zoom=0.50  →  physical  50%
+    //   zoom=0.25  →  physical  25%
+    // -----------------------------------------------------------------------
+    const QScreen* screen = windowHandle() ? windowHandle()->screen()
+                                           : QApplication::primaryScreen();
+    const double dpi        = screen ? screen->logicalDotsPerInchX() : 96.0;
+    const double mmToPixels = dpi / 25.4;                  // e.g. ~3.78 at 96 DPI
+
+    const double physicalScale = zoom * mmToPixels;
+
+    // Debug logging
+    const QRectF sceneRect = scene_ ? scene_->sceneRect() : QRectF();
+    const QSizeF viewSize = view_->viewport()->size();
+
+    appendLog(QString("[zoom] %1% physical (scale=%.4f, DPI=%.1f, mm→px=%.3f)")
+              .arg(qRound(zoom * 100.0))
+              .arg(physicalScale, 0, 'f', 4)
+              .arg(dpi, 0, 'f', 1)
+              .arg(mmToPixels, 0, 'f', 3));
+
+    appendLog(QString("[zoom] Scene rect: %.1f x %.1f mm | View size: %1 x %2 px")
+              .arg(sceneRect.width(), 0, 'f', 1)
+              .arg(sceneRect.height(), 0, 'f', 1)
+              .arg(viewSize.width())
+              .arg(viewSize.height()));
+
+
+    view_->setZoomValue(physicalScale);
+
+    const QTransform newTransform = view_->transform();
+    appendLog(QString("[zoom] After zoom: transform m11=%1 m22=%2")
+              .arg(newTransform.m11(), 0, 'f', 4)
+              .arg(newTransform.m22(), 0, 'f', 4));
 }
 
 void MainWindow::updateModelActionStates()
@@ -721,8 +917,38 @@ void MainWindow::toggleWireMode()
 
 void MainWindow::onSceneModeChanged(int mode)
 {
-    if (actionToggleWireMode_)
+    if (actionToggleWireMode_) {
         actionToggleWireMode_->setChecked(mode == QSchematic::Scene::WireMode);
+    }
+    updateInteractionHint();
+}
+
+void MainWindow::onAdditiveRubberBandDragChanged(const bool active)
+{
+    additiveRubberBandDragActive_ = active;
+    updateInteractionHint();
+}
+
+void MainWindow::updateInteractionHint()
+{
+    if (!statusBar() || !scene_) {
+        return;
+    }
+
+    if (scene_->mode() == QSchematic::Scene::WireMode) {
+        statusBar()->showMessage(
+            tr("Wire mode: click to place points, click a pin to finish, Esc to return to select mode."));
+        return;
+    }
+
+    if (additiveRubberBandDragActive_) {
+        statusBar()->showMessage(
+            tr("Additive selection: drag a box to add items to the current selection."));
+        return;
+    }
+
+    statusBar()->showMessage(
+        tr("Select mode: drag to box-select. Hold Shift/Ctrl while dragging to add to selection."));
 }
 
 void MainWindow::keyPressEvent(QKeyEvent* evt)

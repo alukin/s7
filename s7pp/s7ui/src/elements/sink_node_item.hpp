@@ -24,6 +24,8 @@ public:
     explicit SinkNodeItem(const QString& typeName, int inputCount = 2, QGraphicsItem* parent = nullptr);
     ~SinkNodeItem() override;
 
+    [[nodiscard]] std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
+
     void setInputCount(int count);
     void setPreviewLevels(const QVector<double>& levels);
 

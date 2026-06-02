@@ -55,6 +55,10 @@ add_executable(s7ui
     src/main.cpp
     src/main_window.cpp
     src/main_window.hpp
+    src/sidebar_widget.cpp
+    src/sidebar_widget.hpp
+    src/palette_tree_widget.cpp
+    src/palette_tree_widget.hpp
     src/documents/diagram_document.cpp
     src/documents/diagram_document.hpp
     src/documents/plot_document.hpp
@@ -99,6 +103,8 @@ add_executable(s7ui
     src/elements/visual_sink_detail_window.hpp
     src/elements/sink_node_item.cpp
     src/elements/sink_node_item.hpp
+    src/s7_view.cpp
+    src/s7_view.hpp
     src/remote_nodes_widget.cpp
     src/remote_nodes_widget.hpp
     src/dialogs/properties_dialog.cpp

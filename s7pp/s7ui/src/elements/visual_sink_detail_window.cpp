@@ -1,6 +1,6 @@
 #include "visual_sink_detail_window.hpp"
 
-#include "visual_sink_preview_widget.hpp"
+#include "oscilloscope_widget.hpp"
 
 #include <QDial>
 #include <QFormLayout>
@@ -16,21 +16,18 @@ namespace s7ui::elements {
 VisualSinkDetailWindow::VisualSinkDetailWindow(const QString& title, QWidget* parent)
     : QWidget(parent)
 {
-    setWindowTitle(title + " - details");
-    resize(980, 560);
+    setWindowTitle(title + " - oscilloscope");
+    resize(1080, 640);
 
     auto* root = new QVBoxLayout(this);
 
-    preview_ = new VisualSinkPreviewWidget(false, this);
-    root->addWidget(preview_, 1);
+    oscilloscope_ = new OscilloscopeWidget(this);
+    oscilloscope_->setTimeWindow(5.0);
+    oscilloscope_->setSampleRate(1000.0);
+    root->addWidget(oscilloscope_, 1);
 
     auto* controls = new QGroupBox("Controls", this);
     auto* form = new QFormLayout(controls);
-
-    gainDial_ = new QDial(controls);
-    gainDial_->setRange(1, 60);
-    gainDial_->setValue(10);
-    gainDial_->setNotchesVisible(true);
 
     windowDial_ = new QDial(controls);
     windowDial_->setRange(5, 120);
@@ -44,22 +41,13 @@ VisualSinkDetailWindow::VisualSinkDetailWindow(const QString& title, QWidget* pa
     nameEdit_ = new QLineEdit(controls);
     idEdit_ = new QLineEdit(controls);
 
-    gainValueLabel_ = new QLabel("1.0", controls);
-    windowValueLabel_ = new QLabel("4.0 s", controls);
-
-    auto* gainRow = new QWidget(controls);
-    auto* gainLayout = new QHBoxLayout(gainRow);
-    gainLayout->setContentsMargins(0, 0, 0, 0);
-    gainLayout->addWidget(gainDial_);
-    gainLayout->addWidget(gainValueLabel_);
-
     auto* windowRow = new QWidget(controls);
     auto* windowLayout = new QHBoxLayout(windowRow);
     windowLayout->setContentsMargins(0, 0, 0, 0);
     windowLayout->addWidget(windowDial_);
-    windowLayout->addWidget(windowValueLabel_);
+    auto* windowValueLabel = new QLabel("4.0 s", controls);
+    windowLayout->addWidget(windowValueLabel);
 
-    form->addRow("Gain", gainRow);
     form->addRow("Time Window", windowRow);
     form->addRow("Inputs", inputsSpin_);
     form->addRow("Name", nameEdit_);
@@ -67,22 +55,13 @@ VisualSinkDetailWindow::VisualSinkDetailWindow(const QString& title, QWidget* pa
 
     root->addWidget(controls, 0);
 
-    connect(gainDial_, &QDial::valueChanged, this, [this](int value) {
-        const double gain = static_cast<double>(value) / 10.0;
-        gainValueLabel_->setText(QString::number(gain, 'f', 1));
-        preview_->setGain(gain);
-    });
-
-    connect(windowDial_, &QDial::valueChanged, this, [this](int value) {
+    connect(windowDial_, &QDial::valueChanged, this, [this, windowValueLabel](int value) {
         const double seconds = static_cast<double>(value) / 10.0;
-        windowValueLabel_->setText(QString::number(seconds, 'f', 1) + " s");
-        preview_->setTimeWindow(seconds);
+        windowValueLabel->setText(QString::number(seconds, 'f', 1) + " s");
+        oscilloscope_->setTimeWindow(seconds);
     });
 
-    connect(inputsSpin_, &QSpinBox::valueChanged, this, [this](int value) {
-        preview_->setInputCount(value);
-        emit inputCountChanged(value);
-    });
+    connect(inputsSpin_, &QSpinBox::valueChanged, this, [this](int value) { emit inputCountChanged(value); });
 
     connect(nameEdit_, &QLineEdit::editingFinished, this, [this] {
         emit identityChanged(nameEdit_->text(), idEdit_->text());
@@ -96,13 +75,37 @@ VisualSinkDetailWindow::VisualSinkDetailWindow(const QString& title, QWidget* pa
 void VisualSinkDetailWindow::setInputCount(int count)
 {
     inputsSpin_->setValue(count);
-    preview_->setInputCount(count);
 }
 
 void VisualSinkDetailWindow::setIdentity(const QString& nodeName, const QString& nodeId)
 {
     nameEdit_->setText(nodeName);
     idEdit_->setText(nodeId);
+}
+
+void VisualSinkDetailWindow::setProbe(const std::shared_ptr<s7::Probe>& probe)
+{
+    if (!oscilloscope_) return;
+    oscilloscope_->clearAllProbes();
+    if (probe) {
+        oscilloscope_->attachProbe(probe, QStringLiteral("Signal"));
+    }
+}
+
+void VisualSinkDetailWindow::setComplexProbe(const std::shared_ptr<s7::ComplexProbe>& probe)
+{
+    if (!oscilloscope_) return;
+    oscilloscope_->clearAllProbes();
+    if (probe) {
+        oscilloscope_->attachComplexProbe(probe, QStringLiteral("Signal"));
+    }
+}
+
+void VisualSinkDetailWindow::clearProbe()
+{
+    if (oscilloscope_) {
+        oscilloscope_->clearAllProbes();
+    }
 }
 
 } // namespace s7ui::elements

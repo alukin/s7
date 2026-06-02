@@ -1,15 +1,15 @@
 #pragma once
 
+#include <s7probe.hpp>
+
 #include <QWidget>
 
 class QDial;
-class QLabel;
 class QLineEdit;
 class QSpinBox;
+class OscilloscopeWidget;
 
 namespace s7ui::elements {
-
-class VisualSinkPreviewWidget;
 
 class VisualSinkDetailWindow : public QWidget
 {
@@ -20,20 +20,20 @@ public:
 
     void setInputCount(int count);
     void setIdentity(const QString& nodeName, const QString& nodeId);
+    void setProbe(const std::shared_ptr<s7::Probe>& probe);
+    void setComplexProbe(const std::shared_ptr<s7::ComplexProbe>& probe);
+    void clearProbe();
 
 Q_SIGNALS:
     void inputCountChanged(int count);
     void identityChanged(const QString& nodeName, const QString& nodeId);
 
 private:
-    VisualSinkPreviewWidget* preview_ = nullptr;
-    QDial* gainDial_ = nullptr;
+    OscilloscopeWidget* oscilloscope_ = nullptr;
     QDial* windowDial_ = nullptr;
     QSpinBox* inputsSpin_ = nullptr;
     QLineEdit* nameEdit_ = nullptr;
     QLineEdit* idEdit_ = nullptr;
-    QLabel* gainValueLabel_ = nullptr;
-    QLabel* windowValueLabel_ = nullptr;
 };
 
 } // namespace s7ui::elements
