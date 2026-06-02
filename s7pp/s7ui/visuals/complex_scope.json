@@ -2,7 +2,9 @@
   "type": "ComplexScopeSink",
   "display_name": "Complex Scope Sink",
   "category": "Visual",
-  "shape": "hex",
+  "shape": "rectangle",
+  "size": { "width": 80, "height": 48 },
+  "preview_area": { "x": 6, "y": 10, "width": 68, "height": 30 },
   "description": "Visual complex oscilloscope sink",
   "node_style": {
     "color": "#8f5ab3"

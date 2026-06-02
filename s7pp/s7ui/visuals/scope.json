@@ -3,6 +3,8 @@
   "display_name": "Scope Sink",
   "category": "Visual",
   "shape": "diamond",
+  "size": { "width": 70, "height": 43 },
+  "preview_area": { "x": 11, "y": 6, "width": 52, "height": 28 },
   "description": "Visual oscilloscope sink",
   "node_style": {
     "color": "#7b4fa3"

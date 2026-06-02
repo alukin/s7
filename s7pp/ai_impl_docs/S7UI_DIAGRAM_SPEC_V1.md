@@ -1,7 +1,7 @@
-# S7 UI Graph Authoring Specification v1
+# S7 UI Diagram Authoring Specification v1
 
 **Status:** Active (Draft)  
-**Purpose:** Schema diagram format and editor authoring semantics  
+**Purpose:** Diagram format and editor authoring semantics  
 **Last Updated:** May 13, 2026
 
 ---
@@ -13,13 +13,13 @@ This specification defines the authoring model for S7 graphical design in the UI
 The system has three distinct layers:
 
 1. **Diagram document** — the editable visual document.
-2. **Visual library** — reusable appearance metadata for element types.
-3. **Compiled schema** — the executable graph consumed by the computational engine.
+2. **Visual library** — reusable appearance and layout metadata for element types.
+3. **Compiled schema** — the minimal executable graph consumed by the runtime engine.
 
 This separation is intentional and strict.
 
 - The diagram document is what the user edits.
-- The visual library defines how nodes, ports, and decorations look.
+- The visual library defines how nodes, ports, decorations, labels, and preview regions look and are placed.
 - The compiled schema is generated from the diagram and must not contain visual layout data.
 
 The project is still in early development, so this document intentionally does **not** preserve legacy file formats or migration rules. We are free to change the shape of the data while the architecture is being finalized.
@@ -81,8 +81,18 @@ Examples:
 - `visuals/converters.json`
 - `visuals/io.json`
 
-The visual library is not a diagram instance and not a compiled schema.
-It is a style catalog.
+The visual library is not a runtime schema and not a diagram instance.
+It is a diagram-time visual catalog.
+
+Visual entries describe a whole shape as a collection of sub-visuals in local millimeter coordinates, for example:
+
+- overall `size`
+- body / frame shape
+- preview area / plot region
+- label region / text placement
+- connector decoration positions
+
+Those values are editor-facing and must be compiled away when producing `schema.json` for the runtime.
 
 ---
 
@@ -230,6 +240,16 @@ The diagram document is the canonical place to store element placement, wire rou
 
 Sizes belong to the diagram document only.
 They may be used for print/layout/rendering.
+
+### 5.4 Visual library geometry
+
+Visual library records may additionally define the geometry of a reusable appearance in the same mm-based local coordinate system:
+
+- `size` — the full bounding box of the visual composition.
+- `preview_area` — a sub-rectangle reserved for oscilloscope-style plots or other embedded content.
+- future fields may describe label zones, icon zones, or connector decoration zones.
+
+The key rule is that a visual entry describes the full composite look of the element, not just a single shape primitive.
 
 ### 5.3 Labels
 

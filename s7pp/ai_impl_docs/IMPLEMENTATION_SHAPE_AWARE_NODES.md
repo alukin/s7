@@ -144,7 +144,13 @@ struct VisualSpec {
 };
 ```
 
-No changes needed - NodeFactory now uses it!
+The visual spec is now treated as a diagram-layer composite layout record as well:
+
+- `size` describes the whole element body
+- `preview_area` describes the embedded preview/content region
+- `shape` still selects the outline primitive
+
+NodeFactory uses this metadata for sink-style visual elements.
 
 ## Testing
 

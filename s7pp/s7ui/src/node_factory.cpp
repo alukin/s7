@@ -16,6 +16,13 @@
 
 namespace s7ui::ui {
 namespace {
+constexpr auto kComplexElementColorHex = "#8f5ab3";
+
+auto isComplexType(const QString& typeName) -> bool
+{
+    return typeName.contains("complex", Qt::CaseInsensitive);
+}
+
 auto defaultScenePosForIndex(const int index) -> QPointF
 {
     return {static_cast<qreal>(20.0 + (index % 6) * 70.0),
@@ -48,11 +55,37 @@ void applyVisualStyleToBasicNode(s7ui::elements::BasicNodeItem& node,
                                  const s7ui::visual::Catalog* visualCatalog)
 {
     if (!visualCatalog) {
+        if (isComplexType(nodeTemplate.typeName)) {
+            node.setFillColor(QColor(kComplexElementColorHex));
+        }
         return;
     }
 
     if (const auto visualSpec = visualCatalog->specForType(nodeTemplate.typeName)) {
         node.setVisualStyle(QColor(visualSpec->color), shapeFromString(visualSpec->shape));
+        if (isComplexType(nodeTemplate.typeName)) {
+            node.setFillColor(QColor(kComplexElementColorHex));
+        }
+        return;
+    }
+
+    if (isComplexType(nodeTemplate.typeName)) {
+        node.setFillColor(QColor(kComplexElementColorHex));
+    }
+}
+
+void applyVisualLayoutToSink(s7ui::elements::SinkNodeItem& sink,
+                             const std::optional<s7ui::visual::VisualSpec>& visualSpec)
+{
+    if (!visualSpec) {
+        return;
+    }
+
+    if (visualSpec->size) {
+        sink.setVisualSize(*visualSpec->size);
+    }
+    if (visualSpec->previewArea) {
+        sink.setPreviewArea(*visualSpec->previewArea);
     }
 }
 
@@ -127,6 +160,7 @@ std::shared_ptr<QSchematic::Items::Item> NodeFactory::createItemFromTemplate(
         sink->setData(kRoleNodeName, nodeName);
         sink->setData(kRoleNodeType, nodeTemplate.typeName);
         sink->setData(kRoleVisualSink, true);
+        applyVisualLayoutToSink(*sink, visualSpecForType(nodeTemplate.typeName));
         applyVisualStyleToBasicNode(*sink, nodeTemplate, visualCatalog_);
         sink->setScenePos(resolvedPosition);
         return sink;
@@ -204,6 +238,11 @@ QRectF NodeFactory::preferredPreviewRectInItem(const QSchematic::Items::Item& it
     }
 
     return combinedItemRect(item);
+}
+
+std::optional<s7ui::visual::VisualSpec> NodeFactory::visualSpecForType(const QString& typeName) const
+{
+    return visualCatalog_ ? visualCatalog_->specForType(typeName) : std::nullopt;
 }
 
 } // namespace s7ui::ui

@@ -61,6 +61,24 @@ SinkNodeItem::~SinkNodeItem()
     }
 }
 
+void SinkNodeItem::setVisualSize(const QSizeF& size)
+{
+    if (size.isValid() && size.width() > 0.0 && size.height() > 0.0) {
+        visualSize_ = size;
+        setSize(std::max<qreal>(size.width(), kSinkMinWidthMm),
+                std::max<qreal>(size.height(), kSinkMinHeightMm));
+        updatePreviewGeometry();
+    }
+}
+
+void SinkNodeItem::setPreviewArea(const QRectF& previewArea)
+{
+    if (previewArea.isValid() && previewArea.width() > 0.0 && previewArea.height() > 0.0) {
+        previewArea_ = previewArea;
+        updatePreviewGeometry();
+    }
+}
+
 std::shared_ptr<QSchematic::Items::Item> SinkNodeItem::deepCopy() const
 {
     auto clone = std::make_shared<SinkNodeItem>(typeName_, inputCount_, parentItem());
@@ -244,13 +262,12 @@ void SinkNodeItem::updatePreviewGeometry()
     }
 
     const QRectF r = sizeRect();
-    // Insets tuned for oscilloscope design: keep a stable screen area that
-    // stays inside the body even with rounded borders and anti-aliased edges.
-    const qreal left = std::max<qreal>(6.0, r.width() * 0.16);
-    const qreal right = std::max<qreal>(5.0, r.width() * 0.10);
-    const qreal top = std::max<qreal>(4.0, r.height() * 0.14);
-    const qreal bottom = std::max<qreal>(6.0, r.height() * 0.20);
-    const QRectF inner = r.adjusted(left, top, -right, -bottom);
+    const QRectF inner = previewArea_.has_value() && previewArea_->isValid()
+                             ? *previewArea_
+                             : r.adjusted(std::max<qreal>(6.0, r.width() * 0.16),
+                                          std::max<qreal>(4.0, r.height() * 0.14),
+                                          -std::max<qreal>(5.0, r.width() * 0.10),
+                                          -std::max<qreal>(6.0, r.height() * 0.20));
     proxy_->setGeometry(inner);
 
     // Keep the embedded widget's backing size in lock-step with proxy geometry.

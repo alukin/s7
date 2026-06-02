@@ -2,6 +2,9 @@
 
 #include <QString>
 
+#include <QRectF>
+#include <QSizeF>
+
 #include <functional>
 #include <optional>
 #include <unordered_map>
@@ -15,6 +18,8 @@ struct VisualSpec {
     QString shape = "rect";
     QString color = "#4f4f4f";
     QString description;
+    std::optional<QSizeF> size;
+    std::optional<QRectF> previewArea;
 };
 
 class Catalog {

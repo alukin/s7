@@ -5,7 +5,10 @@
 #include <s7probe.hpp>
 
 #include <memory>
+#include <optional>
 #include <QVector>
+#include <QRectF>
+#include <QSizeF>
 
 class QGraphicsProxyWidget;
 class QGraphicsSceneMouseEvent;
@@ -26,6 +29,8 @@ public:
 
     [[nodiscard]] std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
 
+    void setVisualSize(const QSizeF& size);
+    void setPreviewArea(const QRectF& previewArea);
     void setInputCount(int count);
     void setPreviewLevels(const QVector<double>& levels);
 
@@ -48,6 +53,9 @@ private:
     void updatePreviewGeometry();
     void startPolling();
     void stopPolling();
+
+    std::optional<QRectF> previewArea_;
+    std::optional<QSizeF> visualSize_;
 
     QString typeName_;
     bool complexMode_ = false;

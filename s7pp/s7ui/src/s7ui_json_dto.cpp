@@ -124,6 +124,13 @@ auto VisualSpecDto::fromJson(const boost::json::value& root) -> visual::VisualSp
 	if (const auto* v = obj.if_contains("description"); v && v->is_string()) {
 		spec.description = QString::fromStdString(boost::json::value_to<std::string>(*v));
 	}
+	if (const auto* v = obj.if_contains("size"); v && v->is_object()) {
+		const auto& sizeObj = v->as_object();
+		spec.size = QSizeF{jsonValueOr<double>(sizeObj, "width", 0.0), jsonValueOr<double>(sizeObj, "height", 0.0)};
+	}
+	if (const auto* v = obj.if_contains("preview_area"); v && v->is_object()) {
+		spec.previewArea = JsonRect::fromJson(*v);
+	}
 	if (const auto* styleVal = obj.if_contains("node_style"); styleVal && styleVal->is_object()) {
 		const auto& styleObj = styleVal->as_object();
 		if (const auto* colorVal = styleObj.if_contains("color"); colorVal && colorVal->is_string()) {
@@ -149,6 +156,30 @@ auto JsonPoint::fromJson(const boost::json::value& value) -> QPointF
 		return {jsonValueOr<double>(obj, "x", 0.0), jsonValueOr<double>(obj, "y", 0.0)};
 	}
 	throw std::runtime_error("Point value must be an array [x, y] or an object with x/y fields");
+}
+
+auto JsonRect::toJson(const QRectF& rect) -> boost::json::value
+{
+	return boost::json::object{{"x", rect.x()}, {"y", rect.y()}, {"width", rect.width()}, {"height", rect.height()}};
+}
+
+auto JsonRect::fromJson(const boost::json::value& value) -> QRectF
+{
+	if (value.is_array() && value.as_array().size() >= 4) {
+		const auto& arr = value.as_array();
+		return {boost::json::value_to<double>(arr.at(0)),
+		        boost::json::value_to<double>(arr.at(1)),
+		        boost::json::value_to<double>(arr.at(2)),
+		        boost::json::value_to<double>(arr.at(3))};
+	}
+	if (value.is_object()) {
+		const auto& obj = value.as_object();
+		return {jsonValueOr<double>(obj, "x", 0.0),
+		        jsonValueOr<double>(obj, "y", 0.0),
+		        jsonValueOr<double>(obj, "width", 0.0),
+		        jsonValueOr<double>(obj, "height", 0.0)};
+	}
+	throw std::runtime_error("Rect value must be an array [x, y, width, height] or an object with x/y/width/height fields");
 }
 
 auto JsonParamsObject::validateObject(const QString& text) -> void

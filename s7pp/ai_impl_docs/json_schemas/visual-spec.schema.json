@@ -20,7 +20,7 @@
     },
     "shape": {
       "type": "string",
-      "enum": ["rect", "round_rect", "hex", "diamond", "custom"]
+      "enum": ["rect", "rectangle", "round_rect", "hex", "diamond", "custom"]
     },
     "icon": {
       "type": "string",
@@ -34,6 +34,16 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "preview_area": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
         "width": { "type": "number", "exclusiveMinimum": 0 },
         "height": { "type": "number", "exclusiveMinimum": 0 }
       }

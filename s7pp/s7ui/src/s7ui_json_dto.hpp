@@ -63,6 +63,11 @@ struct JsonPoint {
     static auto fromJson(const boost::json::value& value) -> QPointF;
 };
 
+struct JsonRect {
+    static auto toJson(const QRectF& rect) -> boost::json::value;
+    static auto fromJson(const boost::json::value& value) -> QRectF;
+};
+
 struct JsonParamsObject {
     static auto validateObject(const QString& text) -> void;
 };

@@ -1,20 +1,21 @@
 #pragma once
 
 #include "node_template.hpp"
-
-#include <qschematic/items/item.hpp>
+#include "visual_catalog.hpp"
 
 #include <QPoint>
-#include <QPointF>
-#include <QRectF>
+
+#include <optional>
 
 #include <memory>
 
 class QTreeWidget;
 class QTreeWidgetItem;
+class QPointF;
+class QRectF;
 
-namespace s7ui::visual {
-class Catalog;
+namespace QSchematic::Items {
+class Item;
 }
 
 namespace s7ui::ui {
@@ -37,6 +38,8 @@ public:
     [[nodiscard]] QPointF preferredAnchorInItem(const QSchematic::Items::Item& item) const;
     [[nodiscard]] QPoint pixmapHotSpotForItem(const QSchematic::Items::Item& item) const;
     [[nodiscard]] QRectF preferredPreviewRectInItem(const QSchematic::Items::Item& item) const;
+
+    [[nodiscard]] std::optional<s7ui::visual::VisualSpec> visualSpecForType(const QString& typeName) const;
 
 private:
     const s7ui::visual::Catalog* visualCatalog_ = nullptr;
