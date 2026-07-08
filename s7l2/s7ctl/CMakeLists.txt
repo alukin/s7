@@ -1,0 +1,11 @@
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_executable(s7ctl
+    src/main.cpp
+)
+
+target_link_libraries(s7ctl PRIVATE s7observe s7io s7net)
+
+add_test(NAME s7ctl_smoke COMMAND s7ctl)
+
