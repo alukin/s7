@@ -20,5 +20,18 @@ const std::vector<NetworkBoundary>& NetTopology::boundaries() const {
     return boundaries_;
 }
 
-} // namespace s7
+NetSink::NetSink(std::string topic)
+    : Element("NetSink"), topic_(std::move(topic))
+{
+    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
+}
 
+void NetSink::step() {
+    (void)read_input<RealValue>(0);
+}
+
+const std::string& NetSink::topic() const {
+    return topic_;
+}
+
+} // namespace s7

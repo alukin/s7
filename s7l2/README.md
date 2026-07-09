@@ -93,9 +93,10 @@ Instead it now:
 
 ## Runtime JSON example
 
-Default schema file:
+Example schema files:
 
 - `s7runtime/examples/schema_minimal.json`
+- `s7runtime/examples/schema_oscillator_gnuplot.json`
 
 Current shape includes:
 
@@ -142,4 +143,3 @@ ctest --test-dir build --output-on-failure
 ./build/s7ctl/s7ctl
 ./build/s7studio/s7studio
 ```
-

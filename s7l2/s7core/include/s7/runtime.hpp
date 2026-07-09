@@ -1,4 +1,5 @@
-#pragma once
+#ifndef S7CORE_INCLUDE_S7_RUNTIME_HPP
+#define S7CORE_INCLUDE_S7_RUNTIME_HPP
 
 #include "s7/graph.hpp"
 
@@ -28,3 +29,4 @@ private:
 
 } // namespace s7
 
+#endif // S7CORE_INCLUDE_S7_RUNTIME_HPP

@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cassert>
 #include <complex>
+#include <exception>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -55,7 +57,7 @@ s7::Schema make_implicit_conversion_schema() {
 
 } // namespace
 
-int main() {
+int main() try {
     {
         auto constant = std::make_unique<s7::Constant>(1.0);
         auto output_ports = constant->output_ports();
@@ -74,6 +76,17 @@ int main() {
         assert(adder_inputs.size() == 2);
         assert(adder_inputs[0].type == s7::SignalType::DOUBLE);
         assert(adder_inputs[1].type == s7::SignalType::DOUBLE);
+
+        auto multiply = std::make_unique<s7::Multiply>();
+        auto multiply_inputs = multiply->input_ports();
+        assert(multiply_inputs.size() == 2);
+        assert(multiply_inputs[0].type == s7::SignalType::DOUBLE);
+        assert(multiply_inputs[1].type == s7::SignalType::DOUBLE);
+
+        auto analog = std::make_unique<s7::AnalogOscillator>(1.0, 1.0, 1000.0);
+        assert(analog->has_causal_memory());
+        assert(analog->output_ports().size() == 1);
+        assert(analog->output_ports()[0].type == s7::SignalType::DOUBLE);
     }
 
     {
@@ -98,6 +111,19 @@ int main() {
         previous_value->bind_inputs({pv_inputs2.data(), pv_inputs2.size()});
         previous_value->step();
         assert(s7::bound_value<s7::SignalType::DOUBLE>(previous_value->outputs()[0]) == 8.0);
+
+        auto integrator = std::make_unique<s7::Integrator>(1.5);
+        assert(integrator->has_causal_memory());
+        const s7::RealValue int_in1{2.0};
+        const s7::RealValue int_in2{-0.5};
+        const std::array<s7::InputBinding, 1> int_inputs1{s7::bind_input<s7::SignalType::DOUBLE>(int_in1)};
+        const std::array<s7::InputBinding, 1> int_inputs2{s7::bind_input<s7::SignalType::DOUBLE>(int_in2)};
+        integrator->bind_inputs({int_inputs1.data(), int_inputs1.size()});
+        integrator->step();
+        assert(s7::bound_value<s7::SignalType::DOUBLE>(integrator->outputs()[0]) == 3.5);
+        integrator->bind_inputs({int_inputs2.data(), int_inputs2.size()});
+        integrator->step();
+        assert(s7::bound_value<s7::SignalType::DOUBLE>(integrator->outputs()[0]) == 3.0);
 
         auto complex_to_mag_phase = std::make_unique<s7::ComplexToMagnitudePhase>();
         assert(complex_to_mag_phase->input_ports()[0].type == s7::SignalType::COMPLEX);
@@ -205,5 +231,10 @@ int main() {
     }
 
     return 0;
+} catch (const std::exception& ex) {
+    std::cerr << "s7tests: fatal error: " << ex.what() << '\n';
+    return 1;
+} catch (...) {
+    std::cerr << "s7tests: unknown fatal error\n";
+    return 1;
 }
-

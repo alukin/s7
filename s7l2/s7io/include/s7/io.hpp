@@ -1,9 +1,11 @@
-#pragma once
+#ifndef S7IO_INCLUDE_S7_IO_HPP
+#define S7IO_INCLUDE_S7_IO_HPP
 
 #include <string>
 #include <vector>
 
 #include "s7/core.hpp"
+#include "s7/file_io.hpp"
 
 namespace s7 {
 
@@ -27,3 +29,4 @@ private:
 
 } // namespace s7
 
+#endif // S7IO_INCLUDE_S7_IO_HPP

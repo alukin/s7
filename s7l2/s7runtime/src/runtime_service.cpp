@@ -1,6 +1,8 @@
 #include "s7/runtime_service.hpp"
 
+#include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -11,6 +13,9 @@
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/system/error_code.hpp>
+
+#include "s7/io.hpp"
+#include "s7/net.hpp"
 
 namespace s7 {
 namespace {
@@ -47,6 +52,23 @@ bool get_bool(const boost::json::object& object, const std::string_view key, boo
         throw std::invalid_argument("Expected boolean field '" + std::string(key) + "'.");
     }
     return it->value().as_bool();
+}
+
+double get_f64(const boost::json::object& object, const std::string_view key, double default_value) {
+    const auto it = object.find(key);
+    if (it == object.end()) {
+        return default_value;
+    }
+    if (it->value().is_double()) {
+        return it->value().as_double();
+    }
+    if (it->value().is_int64()) {
+        return static_cast<double>(it->value().as_int64());
+    }
+    if (it->value().is_uint64()) {
+        return static_cast<double>(it->value().as_uint64());
+    }
+    throw std::invalid_argument("Expected floating-point field '" + std::string(key) + "'.");
 }
 
 std::uint64_t get_u64(const boost::json::object& object, const std::string_view key, std::uint64_t default_value) {
@@ -131,6 +153,15 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
         }
     }
 
+    const auto simulation_it = root.find("simulation");
+    if (simulation_it != root.end()) {
+        const auto& simulation_obj = expect_object(simulation_it->value(), "simulation");
+        definition.simulation.enabled = true;
+        definition.simulation.periods = get_u64(simulation_obj, "periods", 20);
+        definition.simulation.sample_rate_hz = get_u64(simulation_obj, "sample_rate_hz", 1);
+        definition.simulation.frequency_hz = get_f64(simulation_obj, "frequency_hz", 1.0);
+    }
+
     return definition;
 }
 
@@ -188,6 +219,136 @@ const RuntimeSchemaDefinition& RuntimeService::schema() const {
     return definition_;
 }
 
+bool RuntimeService::has_simulation() const {
+    return definition_.simulation.enabled;
+}
+
+std::uint64_t RuntimeService::simulation_step_count() const {
+    if (!definition_.simulation.enabled) {
+        return 0;
+    }
+
+    if (definition_.simulation.periods == 0 || definition_.simulation.sample_rate_hz == 0) {
+        return 0;
+    }
+
+    if (definition_.simulation.frequency_hz <= 0.0) {
+        throw std::invalid_argument("Simulation frequency must be positive.");
+    }
+
+    const auto steps = std::llround(static_cast<long double>(definition_.simulation.periods) *
+                                    static_cast<long double>(definition_.simulation.sample_rate_hz) /
+                                    static_cast<long double>(definition_.simulation.frequency_hz));
+    if (steps < 0) {
+        throw std::invalid_argument("Simulation step count computed as negative.");
+    }
+
+    return static_cast<std::uint64_t>(steps);
+}
+
+std::vector<std::filesystem::path> RuntimeService::output_files() const {
+    std::vector<std::filesystem::path> files;
+
+    for (const auto& element : definition_.elements) {
+        if (element.type == "RealGnuplotFileSink" || element.type == "RealCompactBinaryFileSink") {
+            const auto params_it = element.params.find("file_path");
+            if (params_it != element.params.end() && params_it->value().is_string()) {
+                files.emplace_back(params_it->value().as_string().c_str());
+            }
+        }
+    }
+
+    return files;
+}
+
+s7::Schema RuntimeService::build_schema() const {
+    s7::Schema schema{definition_.name};
+
+    for (const auto& element : definition_.elements) {
+        const auto& params = element.params;
+
+        if (element.type == "Constant") {
+            const auto value = get_f64(params, "value", 0.0);
+            schema.add_element(element.id, [value] { return std::make_unique<s7::Constant>(value); });
+            continue;
+        }
+
+        if (element.type == "Integrator") {
+            const auto initial_value = get_f64(params, "initial_value", 0.0);
+            schema.add_element(element.id, [initial_value] { return std::make_unique<s7::Integrator>(initial_value); });
+            continue;
+        }
+
+        if (element.type == "Adder") {
+            schema.add_element(element.id, [] { return std::make_unique<s7::Adder>(); });
+            continue;
+        }
+
+        if (element.type == "Multiply") {
+            schema.add_element(element.id, [] { return std::make_unique<s7::Multiply>(); });
+            continue;
+        }
+
+        if (element.type == "AnalogOscillator") {
+            const auto amplitude = get_f64(params, "amplitude", 1.0);
+            const auto frequency_hz = get_f64(params, "frequency_hz", definition_.simulation.frequency_hz);
+            const auto sample_rate_hz = get_f64(params, "sample_rate_hz", definition_.simulation.sample_rate_hz);
+            const auto phase = get_f64(params, "phase", 0.0);
+            schema.add_element(element.id, [amplitude, frequency_hz, sample_rate_hz, phase] {
+                return std::make_unique<s7::AnalogOscillator>(amplitude, frequency_hz, sample_rate_hz, phase);
+            });
+            continue;
+        }
+
+        if (element.type == "NetSink") {
+            const auto topic = expect_string(params, "topic");
+            schema.add_element(element.id, [topic] { return std::make_unique<s7::NetSink>(topic); });
+            continue;
+        }
+
+        if (element.type == "RealGnuplotFileSink") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema.add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealGnuplotFileSink>(file_path);
+            });
+            continue;
+        }
+
+        if (element.type == "RealCompactBinaryFileSink") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema.add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealCompactBinaryFileSink>(file_path);
+            });
+            continue;
+        }
+
+        if (element.type == "RealGnuplotFileSource") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema.add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealGnuplotFileSource>(file_path);
+            });
+            continue;
+        }
+
+        if (element.type == "RealCompactBinaryFileSource") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema.add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealCompactBinaryFileSource>(file_path);
+            });
+            continue;
+        }
+
+        throw std::invalid_argument("Unsupported runtime element type: '" + element.type + "'.");
+    }
+
+    for (const auto& connection : definition_.connections) {
+        schema.connect(connection.from_element, static_cast<std::size_t>(connection.from_port), connection.to_element,
+                       static_cast<std::size_t>(connection.to_port));
+    }
+
+    return schema;
+}
+
 void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.schema=" << definition_.name << '\n';
     out << "runtime.elements=" << definition_.elements.size() << '\n';
@@ -196,6 +357,10 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.websocket.server.port=" << definition_.server.port << '\n';
     out << "runtime.websocket.client.enabled=" << (definition_.client.enabled ? "true" : "false") << '\n';
     out << "runtime.websocket.client.url=" << definition_.client.url << '\n';
+    out << "runtime.simulation.enabled=" << (definition_.simulation.enabled ? "true" : "false") << '\n';
+    out << "runtime.simulation.periods=" << definition_.simulation.periods << '\n';
+    out << "runtime.simulation.sample_rate_hz=" << definition_.simulation.sample_rate_hz << '\n';
+    out << "runtime.simulation.frequency_hz=" << definition_.simulation.frequency_hz << '\n';
 }
 
 void RuntimeService::start_websocket_server() {
@@ -239,5 +404,3 @@ void RuntimeService::connect_websocket_client() {
 }
 
 } // namespace s7
-
-

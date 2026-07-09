@@ -1,4 +1,5 @@
-#pragma once
+#ifndef S7CORE_INCLUDE_S7_ELEMENTS_HPP
+#define S7CORE_INCLUDE_S7_ELEMENTS_HPP
 
 #include "s7/element.hpp"
 #include <vector>
@@ -85,6 +86,27 @@ private:
     T output_value_;  // Element owns the storage
 };
 
+/// Multiplier: 2 inputs, 1 output of type T
+template <typename T>
+class MultiplyT final : public Element {
+public:
+    MultiplyT()
+        : Element("Multiply"),
+          output_value_{}
+    {
+        register_input(0, port_names::lhs, signal_type_for<T>(), nullptr);
+        register_input(1, port_names::rhs, signal_type_for<T>(), nullptr);
+        register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
+    }
+
+    void step() override {
+        output_value_ = read_input<T>(0) * read_input<T>(1);
+    }
+
+private:
+    T output_value_;  // Element owns the storage
+};
+
 /// Delay (z^-1): 1 input, 1 output of type T, stateful
 template <typename T>
 class DelayT final : public Element {
@@ -109,6 +131,29 @@ private:
     T output_value_;  // Element owns the storage
 };
 
+/// Classical digital integrator: accumulates the input into the output state.
+class Integrator final : public Element {
+public:
+    explicit Integrator(RealValue initial_value = 0.0);
+    void step() override;
+
+private:
+    RealValue output_value_;
+};
+
+/// Reference sinusoidal oscillator using sin(phase).
+class AnalogOscillator final : public Element {
+public:
+    AnalogOscillator(RealValue amplitude, RealValue frequency_hz, RealValue sample_rate_hz, RealValue phase = 0.0);
+    void step() override;
+
+private:
+    RealValue amplitude_;
+    RealValue phase_;
+    RealValue phase_increment_;
+    RealValue output_value_;
+};
+
 // ============================================================================
 // Type aliases for concrete element types
 // ============================================================================
@@ -121,6 +166,9 @@ using ComplexGain = GainT<ComplexValue>;
 
 using Adder = AdderT<RealValue>;
 using ComplexAdder = AdderT<ComplexValue>;
+
+using Multiply = MultiplyT<RealValue>;
+using ComplexMultiply = MultiplyT<ComplexValue>;
 
 using Delay = DelayT<RealValue>;
 using ComplexDelay = DelayT<ComplexValue>;
@@ -229,3 +277,4 @@ private:
 
 } // namespace s7
 
+#endif // S7CORE_INCLUDE_S7_ELEMENTS_HPP

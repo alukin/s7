@@ -1,3 +1,4 @@
+#include <exception>
 #include <iostream>
 #include <memory>
 
@@ -22,7 +23,7 @@ s7::Schema build_schema() {
 
 } // namespace
 
-int main() {
+int main() try {
     const auto schema = build_schema();
     const auto validation = s7::Validator::validate(schema);
     if (!validation.ok()) {
@@ -51,5 +52,10 @@ int main() {
     std::cout << "net.boundaries=" << topology.boundaries().size() << '\n';
 
     return 0;
+} catch (const std::exception& ex) {
+    std::cerr << "s7ctl: fatal error: " << ex.what() << '\n';
+    return 1;
+} catch (...) {
+    std::cerr << "s7ctl: unknown fatal error\n";
+    return 1;
 }
-

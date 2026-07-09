@@ -1,4 +1,5 @@
-#pragma once
+#ifndef S7CORE_INCLUDE_S7_SCHEMA_HPP
+#define S7CORE_INCLUDE_S7_SCHEMA_HPP
 
 #include "s7/element.hpp"
 
@@ -32,9 +33,9 @@ public:
                  std::string to_element,
                  std::size_t to_port);
 
-    const std::string& name() const;
-    const std::vector<ElementSpec>& elements() const;
-    const std::vector<Connection>& connections() const;
+    [[nodiscard]] const std::string& name() const;
+    [[nodiscard]] const std::vector<ElementSpec>& elements() const;
+    [[nodiscard]] const std::vector<Connection>& connections() const;
 
 private:
     std::string name_;
@@ -44,3 +45,4 @@ private:
 
 } // namespace s7
 
+#endif // S7CORE_INCLUDE_S7_SCHEMA_HPP

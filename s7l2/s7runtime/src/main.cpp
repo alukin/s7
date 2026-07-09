@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 #include "../include/s7/runtime_service.hpp"
 
@@ -40,10 +41,24 @@ int main(int argc, char** argv) {
 
         const auto definition = s7::JsonSchemaLoader::load_from_file(schema_path);
         s7::RuntimeService service{definition};
+        const auto schema = service.build_schema();
+        auto executable_graph = s7::Compiler::compile(schema);
+        s7::NodeRuntime runtime{std::move(executable_graph)};
 
         std::cout << "s7runtime starter\n";
         std::cout << "schema.file=" << schema_path << '\n';
         service.print_summary(std::cout);
+
+        if (service.has_simulation()) {
+            const auto step_count = service.simulation_step_count();
+            for (std::uint64_t step = 0; step < step_count; ++step) {
+                runtime.step();
+            }
+            std::cout << "runtime.executed_steps=" << step_count << '\n';
+            for (const auto& file : service.output_files()) {
+                std::cout << "runtime.output_file=" << file.string() << '\n';
+            }
+        }
 
         if (start_network) {
             service.start_websocket_server();

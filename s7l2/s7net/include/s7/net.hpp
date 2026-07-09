@@ -1,4 +1,5 @@
-#pragma once
+#ifndef S7NET_INCLUDE_S7_NET_HPP
+#define S7NET_INCLUDE_S7_NET_HPP
 
 #include <string>
 #include <vector>
@@ -31,5 +32,18 @@ private:
     std::vector<NetworkBoundary> boundaries_;
 };
 
+class NetSink final : public Element {
+public:
+    explicit NetSink(std::string topic = {});
+
+    void step() override;
+
+    [[nodiscard]] const std::string& topic() const;
+
+private:
+    std::string topic_;
+};
+
 } // namespace s7
 
+#endif // S7NET_INCLUDE_S7_NET_HPP

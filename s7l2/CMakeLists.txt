@@ -13,9 +13,13 @@ option(S7_BUILD_STUDIO "Build the s7studio runtime client" ON)
 
 find_package(Boost 1.75 REQUIRED COMPONENTS json system)
 find_package(Threads REQUIRED)
+if (S7_BUILD_STUDIO)
+	find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+endif()
 
 enable_testing()
 
+add_subdirectory(external/QSchematic)
 add_subdirectory(s7core)
 add_subdirectory(s7io)
 add_subdirectory(s7net)

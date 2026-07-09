@@ -9,6 +9,8 @@ add_executable(s7runtime
 target_include_directories(s7runtime PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/s7core/include
+    ${PROJECT_SOURCE_DIR}/s7net/include
+    ${PROJECT_SOURCE_DIR}/s7io/include
 )
 
 target_compile_definitions(s7runtime PRIVATE
@@ -17,8 +19,9 @@ target_compile_definitions(s7runtime PRIVATE
 
 target_link_libraries(s7runtime PRIVATE
     s7core
+    s7net
+    s7io
     Boost::json
     Boost::system
     Threads::Threads
 )
-

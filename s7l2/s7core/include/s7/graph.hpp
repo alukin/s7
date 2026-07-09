@@ -1,4 +1,5 @@
-#pragma once
+#ifndef S7CORE_INCLUDE_S7_GRAPH_HPP
+#define S7CORE_INCLUDE_S7_GRAPH_HPP
 
 #include "s7/element.hpp"
 
@@ -19,3 +20,4 @@ struct ExecutableGraph {
 
 } // namespace s7
 
+#endif // S7CORE_INCLUDE_S7_GRAPH_HPP

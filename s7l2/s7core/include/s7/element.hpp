@@ -1,7 +1,9 @@
-#pragma once
+#ifndef S7CORE_INCLUDE_S7_ELEMENT_HPP
+#define S7CORE_INCLUDE_S7_ELEMENT_HPP
 
 #include <complex>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <span>
@@ -25,7 +27,7 @@ namespace port_names {
 }
 
 // Signal types - ports have types, elements don't
-enum class SignalType {
+enum class SignalType : std::uint8_t {
     DOUBLE,
     COMPLEX,
     INT8,
@@ -180,3 +182,4 @@ using ElementFactory = std::function<std::unique_ptr<Element>()>;
 
 } // namespace s7
 
+#endif // S7CORE_INCLUDE_S7_ELEMENT_HPP

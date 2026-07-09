@@ -1,4 +1,5 @@
-#pragma once
+#ifndef S7OBSERVE_INCLUDE_S7_OBSERVE_HPP
+#define S7OBSERVE_INCLUDE_S7_OBSERVE_HPP
 
 #include <cstddef>
 #include <stdexcept>
@@ -53,3 +54,5 @@ private:
 };
 
 } // namespace s7
+
+#endif // S7OBSERVE_INCLUDE_S7_OBSERVE_HPP

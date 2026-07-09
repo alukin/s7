@@ -1,0 +1,173 @@
+{
+  "name": "runtime_oscillator_gnuplot_20_periods",
+  "elements": [
+    {
+      "id": "dt",
+      "type": "Constant",
+      "params": {
+        "value": 0.001
+      }
+    },
+    {
+      "id": "omega",
+      "type": "Constant",
+      "params": {
+        "value": 6.283185307179586
+      }
+    },
+    {
+      "id": "neg_one",
+      "type": "Constant",
+      "params": {
+        "value": -1.0
+      }
+    },
+    {
+      "id": "omega_dt",
+      "type": "Multiply"
+    },
+    {
+      "id": "neg_omega_dt",
+      "type": "Multiply"
+    },
+    {
+      "id": "x",
+      "type": "Integrator",
+      "params": {
+        "initial_value": 1.0
+      }
+    },
+    {
+      "id": "y",
+      "type": "Integrator",
+      "params": {
+        "initial_value": 0.0
+      }
+    },
+    {
+      "id": "x_step",
+      "type": "Multiply"
+    },
+    {
+      "id": "y_step",
+      "type": "Multiply"
+    },
+    {
+      "id": "digital_plot",
+      "type": "RealGnuplotFileSink",
+      "params": {
+        "file_path": "oscillator_20_periods_digital.gnuplot"
+      }
+    },
+    {
+      "id": "analog",
+      "type": "AnalogOscillator",
+      "params": {
+        "amplitude": 1.0,
+        "frequency_hz": 1.0,
+        "sample_rate_hz": 1000.0,
+        "phase": 0.0
+      }
+    },
+    {
+      "id": "analog_plot",
+      "type": "RealGnuplotFileSink",
+      "params": {
+        "file_path": "oscillator_20_periods.gnuplot"
+      }
+    },
+    {
+      "id": "sink",
+      "type": "NetSink",
+      "params": {
+        "topic": "oscillator.debug"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_element": "omega",
+      "from_port": 0,
+      "to_element": "omega_dt",
+      "to_port": 0
+    },
+    {
+      "from_element": "dt",
+      "from_port": 0,
+      "to_element": "omega_dt",
+      "to_port": 1
+    },
+    {
+      "from_element": "neg_one",
+      "from_port": 0,
+      "to_element": "neg_omega_dt",
+      "to_port": 0
+    },
+    {
+      "from_element": "omega_dt",
+      "from_port": 0,
+      "to_element": "neg_omega_dt",
+      "to_port": 1
+    },
+    {
+      "from_element": "omega_dt",
+      "from_port": 0,
+      "to_element": "x_step",
+      "to_port": 0
+    },
+    {
+      "from_element": "y",
+      "from_port": 0,
+      "to_element": "x_step",
+      "to_port": 1
+    },
+    {
+      "from_element": "neg_omega_dt",
+      "from_port": 0,
+      "to_element": "y_step",
+      "to_port": 0
+    },
+    {
+      "from_element": "x",
+      "from_port": 0,
+      "to_element": "y_step",
+      "to_port": 1
+    },
+    {
+      "from_element": "x_step",
+      "from_port": 0,
+      "to_element": "x",
+      "to_port": 0
+    },
+    {
+      "from_element": "y_step",
+      "from_port": 0,
+      "to_element": "y",
+      "to_port": 0
+    },
+    {
+      "from_element": "x",
+      "from_port": 0,
+      "to_element": "digital_plot",
+      "to_port": 0
+    },
+    {
+      "from_element": "analog",
+      "from_port": 0,
+      "to_element": "analog_plot",
+      "to_port": 0
+    },
+    {
+      "from_element": "x",
+      "from_port": 0,
+      "to_element": "sink",
+      "to_port": 0
+    }
+  ],
+  "simulation": {
+    "periods": 20,
+    "sample_rate_hz": 1000,
+    "frequency_hz": 1.0,
+    "notes": "Quadrature digital oscillator and analog sine reference written to separate gnuplot files."
+  }
+}

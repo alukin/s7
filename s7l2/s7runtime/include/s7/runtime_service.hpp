@@ -1,12 +1,16 @@
-#pragma once
+#ifndef S7RUNTIME_INCLUDE_S7_RUNTIME_SERVICE_HPP
+#define S7RUNTIME_INCLUDE_S7_RUNTIME_SERVICE_HPP
 
 #include <cstdint>
 #include <optional>
 #include <ostream>
+#include <filesystem>
 #include <string>
 #include <vector>
 
 #include <boost/json.hpp>
+
+#include "s7/core.hpp"
 
 namespace s7 {
 
@@ -33,12 +37,20 @@ struct WebSocketClientConfig {
     std::string url;
 };
 
+struct SimulationConfig {
+    bool enabled{};
+    std::uint64_t periods{};
+    std::uint64_t sample_rate_hz{};
+    double frequency_hz{};
+};
+
 struct RuntimeSchemaDefinition {
     std::string name;
     std::vector<JsonElementDefinition> elements;
     std::vector<JsonConnectionDefinition> connections;
     WebSocketServerConfig server;
     WebSocketClientConfig client;
+    SimulationConfig simulation;
 };
 
 class JsonSchemaLoader {
@@ -51,6 +63,10 @@ public:
     explicit RuntimeService(RuntimeSchemaDefinition definition);
 
     [[nodiscard]] const RuntimeSchemaDefinition& schema() const;
+    [[nodiscard]] bool has_simulation() const;
+    [[nodiscard]] std::uint64_t simulation_step_count() const;
+    [[nodiscard]] std::vector<std::filesystem::path> output_files() const;
+    [[nodiscard]] s7::Schema build_schema() const;
     void print_summary(std::ostream& out) const;
 
     void start_websocket_server();
@@ -62,3 +78,4 @@ private:
 
 } // namespace s7
 
+#endif // S7RUNTIME_INCLUDE_S7_RUNTIME_SERVICE_HPP

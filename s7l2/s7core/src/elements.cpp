@@ -1,6 +1,8 @@
 #include "s7/elements.hpp"
+
 #include <cmath>
 #include <stdexcept>
+#include <numbers>
 
 namespace s7 {
 
@@ -68,6 +70,46 @@ void PreviousValue::step() {
     output_value_ = previous_;  // Output old value first
     previous_ = read_input<RealValue>(0);  // Then update
 }
+
+Integrator::Integrator(RealValue initial_value)
+    : Element("Integrator", true),
+      output_value_(initial_value)
+{
+    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
+    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+}
+
+void Integrator::step() {
+    output_value_ += read_input<RealValue>(0);
+}
+
+AnalogOscillator::AnalogOscillator(RealValue amplitude, RealValue frequency_hz, RealValue sample_rate_hz, RealValue phase)
+    : Element("AnalogOscillator", true),
+      amplitude_(amplitude),
+      phase_(phase),
+      phase_increment_(0.0),
+      output_value_(0.0)
+{
+    if (sample_rate_hz <= 0.0) {
+        throw std::invalid_argument("AnalogOscillator requires a positive sample rate.");
+    }
+    phase_increment_ = (2.0 * std::numbers::pi * frequency_hz) / sample_rate_hz;
+    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+}
+
+void AnalogOscillator::step() {
+    output_value_ = amplitude_ * std::sin(phase_);
+    phase_ += phase_increment_;
+    if (phase_ > 2.0 * std::numbers::pi || phase_ < -2.0 * std::numbers::pi) {
+        phase_ = std::fmod(phase_, 2.0 * std::numbers::pi);
+    }
+}
+
+// ============================================================================
+// Binary arithmetic elements
+// ============================================================================
+
+// Multiply is implemented inline in the header as a templated element.
 
 // ============================================================================
 // Type conversion elements
@@ -156,4 +198,3 @@ void ComplexToMagnitudePhase::step() {
 }
 
 } // namespace s7
-
