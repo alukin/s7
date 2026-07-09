@@ -84,9 +84,9 @@ namespace s7studio::diagram {
 // Format Notes:
 // - Schema is the s7l2 runtime format: elements array + connections array
 // - Diagram.nodes: visual representation (positions, names, custom properties)
-// - Diagram.wires: routing info (list of points for wire paths)
+// - Diagram.wires: routing info (list of absolute scene-coordinate points for wire paths)
 // - Positions are in absolute scene coordinates (mm)
-// - Wire points are relative to wire start
+// - Wire points are stored in absolute scene coordinates so moved wires reload with stable endpoint attachments
 // - Type names match s7::Element types: Constant, Adder, Multiply, Delay, Integrator, etc.
 // - Parameters are element-type-specific (stored in schema, not diagram)
 

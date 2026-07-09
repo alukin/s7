@@ -1,6 +1,9 @@
 #pragma once
 
+#include "diagram_document.hpp"
+
 #include <QWidget>
+#include <boost/json.hpp>
 #include <memory>
 
 namespace QSchematic {
@@ -19,12 +22,25 @@ public:
     explicit DiagramEditor(QWidget* parent = nullptr);
     ~DiagramEditor() override;
 
+    void clearDiagram();
+    void loadDocument(const DiagramDocument& document);
+    void loadRuntimeSchema(const boost::json::value& schemaJson);
+    void fitToContents();
+
     QSchematic::Scene* scene();
     const QSchematic::Scene* scene() const;
 
 private:
+    void scheduleFitToContents();
+
+protected:
+    void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+private:
     std::unique_ptr<QSchematic::Scene> _scene;
     QSchematic::View* _view = nullptr;
+    bool _pendingFitToContents = false;
 };
 
 } // namespace s7studio::diagram
