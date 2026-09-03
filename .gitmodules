@@ -6,7 +6,7 @@
 	url = https://gitlab.com/ecme2/QCustomPlot.git
 [submodule "s7l2/external/QSchematic"]
 	path = s7l2/external/QSchematic
-	url = https://github.com/simulton/QSchematic.git
+	url = git@github.com:alukin/QSchematic.git
 [submodule "s7l2/external/QCustomPlot"]
 	path = s7l2/external/QCustomPlot
 	url = https://gitlab.com/ecme2/QCustomPlot.git
