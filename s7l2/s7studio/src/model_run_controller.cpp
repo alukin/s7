@@ -1,9 +1,5 @@
 #include "model_run_controller.hpp"
 
-#include <QAction>
-#include <QLabel>
-#include <QSpinBox>
-
 namespace s7studio::ui {
 
 ModelRunController::ModelRunController(s7studio::ISchemaRunner* runner)
@@ -13,19 +9,13 @@ ModelRunController::ModelRunController(s7studio::ISchemaRunner* runner)
 
 void ModelRunController::run(const boost::json::value& runtimeJson,
                              const double dt,
-                             const QSpinBox* hours,
-                             const QSpinBox* minutes,
-                             const QSpinBox* seconds) const
+                             const RunDuration& duration) const
 {
     if (!runner_) {
         return;
     }
 
-    const int h = hours ? hours->value() : 0;
-    const int m = minutes ? minutes->value() : 1;
-    const int s = seconds ? seconds->value() : 0;
-
-    const long ticks = computeTicks(h, m, s, dt);
+    const long ticks = computeTicks(duration.hours, duration.minutes, duration.seconds, dt);
     runner_->run(runtimeJson, dt, ticks);
 }
 
@@ -57,38 +47,21 @@ void ModelRunController::reset() const
     }
 }
 
-void ModelRunController::updateActionStates(QAction* runAction,
-                                            QAction* pauseAction,
-                                            QAction* resumeAction,
-                                            QAction* stopAction,
-                                            QAction* resetAction) const
+auto ModelRunController::actionState() const -> RunActionState
 {
+    RunActionState state;
     if (!runner_) {
-        return;
+        return state;
     }
 
-    if (runAction) {
-        runAction->setEnabled(!runner_->isRunning());
-    }
-    if (pauseAction) {
-        pauseAction->setEnabled(runner_->isRunning() && !runner_->isPaused());
-    }
-    if (resumeAction) {
-        resumeAction->setEnabled(runner_->isRunning() && runner_->isPaused());
-    }
-    if (stopAction) {
-        stopAction->setEnabled(runner_->isRunning());
-    }
-    if (resetAction) {
-        resetAction->setEnabled(runner_->isRunning());
-    }
-}
-
-void ModelRunController::setStatusLabel(QLabel* label, const QString& status) const
-{
-    if (label) {
-        label->setText(status);
-    }
+    const bool running = runner_->isRunning();
+    const bool paused = runner_->isPaused();
+    state.runEnabled = !running;
+    state.pauseEnabled = running && !paused;
+    state.resumeEnabled = running && paused;
+    state.stopEnabled = running;
+    state.resetEnabled = running;
+    return state;
 }
 
 } // namespace s7studio::ui

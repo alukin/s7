@@ -1,4 +1,7 @@
 #include "scene_serializer.hpp"
+#include "diagram_node_roles.hpp"
+#include "json_utils.hpp"
+#include "runtime_schema_extractor.hpp"
 
 #include <qschematic/items/node.hpp>
 #include <qschematic/items/connector.hpp>
@@ -10,7 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <optional>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -21,11 +24,13 @@ namespace {
 struct NodeModel {
     std::string id;
     std::string type = "Element";
+    boost::json::object params;
     QString title;
     QPointF position;
     bool hasExplicitPosition = false;
     int inputPorts = 0;
     int outputPorts = 0;
+    int channelCount = 1;
 };
 
 struct ConnectionModel {
@@ -39,71 +44,6 @@ struct NodeWiring {
     std::vector<std::shared_ptr<QSchematic::Items::Connector>> inputs;
     std::vector<std::shared_ptr<QSchematic::Items::Connector>> outputs;
 };
-
-struct ConnectorEndpointInfo {
-    std::string nodeId;
-    int portIndex = 0;
-    bool isOutput = false;
-};
-
-auto findObjectValue(const boost::json::object& object, const char* key) -> const boost::json::value*
-{
-    if (const auto it = object.find(key); it != object.end()) {
-        return &it->value();
-    }
-
-    return nullptr;
-}
-
-auto jsonString(const boost::json::object& object, const char* key, const std::string& fallback = {}) -> std::string
-{
-    if (const auto* value = findObjectValue(object, key); value && value->is_string()) {
-        return std::string(value->as_string().c_str());
-    }
-
-    return fallback;
-}
-
-auto jsonNumber(const boost::json::value& value, const double fallback = 0.0) -> double
-{
-    if (value.is_double()) {
-        return value.as_double();
-    }
-    if (value.is_int64()) {
-        return static_cast<double>(value.as_int64());
-    }
-    if (value.is_uint64()) {
-        return static_cast<double>(value.as_uint64());
-    }
-
-    return fallback;
-}
-
-auto jsonInt(const boost::json::object& object, const char* key, const int fallback = 0) -> int
-{
-    if (const auto* value = findObjectValue(object, key)) {
-        return static_cast<int>(jsonNumber(*value, fallback));
-    }
-
-    return fallback;
-}
-
-auto jsonPoint(const boost::json::object& object, const char* key, QPointF fallback = {}) -> QPointF
-{
-    const auto* value = findObjectValue(object, key);
-    if (!value || !value->is_object()) {
-        return fallback;
-    }
-
-    const auto& pointObject = value->as_object();
-    const auto* xValue = findObjectValue(pointObject, "x");
-    const auto* yValue = findObjectValue(pointObject, "y");
-    if (!xValue || !yValue) {
-        return fallback;
-    }
-
-    return QPointF(jsonNumber(*xValue), jsonNumber(*yValue));
-}
 
 auto portOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
 {
@@ -127,39 +67,6 @@ auto sortedSceneNodes(const QSchematic::Scene& scene) -> std::vector<std::shared
         }
         return lhs.get() < rhs.get();
     });
-    return ordered;
-}
-
-auto orderedNodeConnectors(const std::shared_ptr<QSchematic::Items::Node>& node,
-                           const bool outputs) -> std::vector<std::shared_ptr<QSchematic::Items::Connector>>
-{
-    std::vector<std::shared_ptr<QSchematic::Items::Connector>> ordered;
-    if (!node) {
-        return ordered;
-    }
-
-    const auto splitX = node->size().width() / 2.0;
-    for (const auto& connector : node->connectors()) {
-        if (!connector) {
-            continue;
-        }
-
-        const bool isOutput = connector->pos().x() > splitX;
-        if (isOutput == outputs) {
-            ordered.push_back(connector);
-        }
-    }
-
-    std::sort(ordered.begin(), ordered.end(), [](const auto& lhs, const auto& rhs) {
-        if (lhs->pos().y() != rhs->pos().y()) {
-            return lhs->pos().y() < rhs->pos().y();
-        }
-        if (lhs->pos().x() != rhs->pos().x()) {
-            return lhs->pos().x() < rhs->pos().x();
-        }
-        return lhs.get() < rhs.get();
-    });
-
     return ordered;
 }
 
@@ -251,7 +158,8 @@ auto SceneSerializer::serialize(const QSchematic::Scene& scene,
     doc.pageLayout.heightMm = options.sheetHeightMm;
     
     if (options.includeDiagram) {
-        doc.runtimeSchema = extractRuntimeSchema(scene, options);
+        RuntimeSchemaExtractor extractor;
+        doc.runtimeSchema = extractor.extract(scene, options);
         doc.diagram = extractDiagramLayout(scene);
     }
     
@@ -275,7 +183,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
     if (document.runtimeSchema.is_object()) {
         const auto& schemaObject = document.runtimeSchema.as_object();
 
-        if (const auto* elementsValue = findObjectValue(schemaObject, "elements"); elementsValue && elementsValue->is_array()) {
+        if (const auto* elementsValue = json_utils::findObjectValue(schemaObject, "elements"); elementsValue && elementsValue->is_array()) {
             int elementIndex = 0;
             for (const auto& elementValue : elementsValue->as_array()) {
                 if (!elementValue.is_object()) {
@@ -284,8 +192,16 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
 
                 const auto& element = elementValue.as_object();
                 NodeModel model;
-                model.id = jsonString(element, "id", "element_" + std::to_string(elementIndex++));
-                model.type = jsonString(element, "type", "Element");
+                model.id = json_utils::stringValue(element, "id", "element_" + std::to_string(elementIndex++));
+                model.type = json_utils::stringValue(element, "type", "Element");
+                if (const auto* paramsValue = json_utils::findObjectValue(element, "params"); paramsValue && paramsValue->is_object()) {
+                    model.params = paramsValue->as_object();
+                }
+                if (model.type == "Scope") {
+                    model.channelCount = std::max(1, json_utils::intValue(model.params, "channel_count", 1));
+                    model.inputPorts = std::max(model.inputPorts, model.channelCount);
+                    model.outputPorts = std::max(model.outputPorts, model.channelCount);
+                }
                 model.title = QString::fromUtf8(model.id.c_str());
 
                 nodeOrder.push_back(model.id);
@@ -293,7 +209,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             }
         }
 
-        if (const auto* connectionsValue = findObjectValue(schemaObject, "connections"); connectionsValue && connectionsValue->is_array()) {
+        if (const auto* connectionsValue = json_utils::findObjectValue(schemaObject, "connections"); connectionsValue && connectionsValue->is_array()) {
             for (const auto& connectionValue : connectionsValue->as_array()) {
                 if (!connectionValue.is_object()) {
                     continue;
@@ -301,10 +217,10 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
 
                 const auto& connectionObject = connectionValue.as_object();
                 ConnectionModel model;
-                model.fromElement = jsonString(connectionObject, "from_element");
-                model.fromPort = jsonInt(connectionObject, "from_port");
-                model.toElement = jsonString(connectionObject, "to_element");
-                model.toPort = jsonInt(connectionObject, "to_port");
+                model.fromElement = json_utils::stringValue(connectionObject, "from_element");
+                model.fromPort = json_utils::intValue(connectionObject, "from_port");
+                model.toElement = json_utils::stringValue(connectionObject, "to_element");
+                model.toPort = json_utils::intValue(connectionObject, "to_port");
                 connections.push_back(model);
 
                 if (auto it = nodesById.find(model.fromElement); it != nodesById.end()) {
@@ -325,24 +241,29 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             }
 
             const auto& nodeObject = nodeValue.as_object();
-            const auto id = jsonString(nodeObject, "id", "node_" + std::to_string(fallbackIndex++));
+            const auto id = json_utils::stringValue(nodeObject, "id", "node_" + std::to_string(fallbackIndex++));
 
             auto [it, inserted] = nodesById.try_emplace(id);
             if (inserted) {
                 it->second.id = id;
-                it->second.type = jsonString(nodeObject, "type", "Element");
+                it->second.type = json_utils::stringValue(nodeObject, "type", "Element");
                 it->second.title = QString::fromUtf8(id.c_str());
                 nodeOrder.push_back(id);
             }
 
-            if (const auto name = jsonString(nodeObject, "name"); !name.empty()) {
+            if (const auto name = json_utils::stringValue(nodeObject, "name"); !name.empty()) {
                 it->second.title = QString::fromUtf8(name.c_str());
             }
-            if (const auto type = jsonString(nodeObject, "type"); !type.empty()) {
+            if (const auto type = json_utils::stringValue(nodeObject, "type"); !type.empty()) {
                 it->second.type = type;
             }
+            if (it->second.type == "Scope") {
+                it->second.channelCount = std::max(1, json_utils::intValue(nodeObject, "channel_count", it->second.channelCount));
+                it->second.inputPorts = std::max(it->second.inputPorts, it->second.channelCount);
+                it->second.outputPorts = std::max(it->second.outputPorts, it->second.channelCount);
+            }
 
-            it->second.position = jsonPoint(nodeObject, "position", it->second.position);
+            it->second.position = json_utils::pointValue(nodeObject, "position", it->second.position);
             it->second.hasExplicitPosition = true;
         }
     }
@@ -354,7 +275,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             }
 
             const auto& wireObject = wireValue.as_object();
-            const auto* pointsValue = findObjectValue(wireObject, "points");
+            const auto* pointsValue = json_utils::findObjectValue(wireObject, "points");
             if (!pointsValue || !pointsValue->is_array()) {
                 continue;
             }
@@ -366,9 +287,13 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
                 }
 
                 const auto& pointObject = pointValue.as_object();
-                points.emplace_back(
-                    jsonNumber(*findObjectValue(pointObject, "x")),
-                    jsonNumber(*findObjectValue(pointObject, "y")));
+                const auto* xValue = json_utils::findObjectValue(pointObject, "x");
+                const auto* yValue = json_utils::findObjectValue(pointObject, "y");
+                if (!xValue || !yValue) {
+                    continue;
+                }
+
+                points.emplace_back(json_utils::numberValue(*xValue), json_utils::numberValue(*yValue));
             }
 
             if (points.size() >= 2) {
@@ -431,6 +356,12 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         label->setDefaultTextColor(Qt::black);
         label->setTextWidth(nodeWidth - 20.0);
         label->setPos(10.0, 10.0);
+
+        node->setData(kNodeIdRole, QString::fromStdString(model.id));
+        node->setData(kNodeTypeRole, QString::fromStdString(model.type));
+        node->setData(kNodeTitleRole, model.title);
+        node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(model.params)));
+        node->setData(kNodeChannelCountRole, model.channelCount);
 
         scene.addItem(node);
         sceneNodes.emplace(nodeId, std::move(node));
@@ -497,95 +428,6 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
     }
 }
 
-auto SceneSerializer::extractRuntimeSchema(const QSchematic::Scene& scene,
-                                          const SerializationOptions& options) const -> boost::json::value {
-    boost::json::object root;
-    root["name"] = options.schemaName.toStdString();
-    root["elements"] = boost::json::array();
-    root["connections"] = boost::json::array();
-    
-    auto& elementsArray = root["elements"].as_array();
-    auto& connectionsArray = root["connections"].as_array();
-    
-    // Extract nodes as elements
-    const auto nodes = sortedSceneNodes(scene);
-    std::unordered_map<QSchematic::Items::Node*, std::string> nodeIdMap;
-    std::unordered_map<const QSchematic::Items::Connector*, ConnectorEndpointInfo> connectorInfo;
-
-    int nodeIndex = 0;
-    for (const auto& nodePtr : nodes) {
-        auto node = nodePtr.get();
-        if (!node) continue;
-        
-        // Generate node ID
-        std::string nodeId = "node_" + std::to_string(nodeIndex++);
-        nodeIdMap[node] = nodeId;
-        
-        boost::json::object elementObj;
-        elementObj["id"] = nodeId;
-        elementObj["type"] = "Element";  // Generic type; would need node-specific metadata
-        
-        boost::json::object params;
-        elementObj["params"] = params;
-        
-        elementsArray.push_back(elementObj);
-
-        const auto inputs = orderedNodeConnectors(nodePtr, false);
-        for (int portIndex = 0; portIndex < static_cast<int>(inputs.size()); ++portIndex) {
-            connectorInfo.emplace(inputs[portIndex].get(), ConnectorEndpointInfo{nodeId, portIndex, false});
-        }
-
-        const auto outputs = orderedNodeConnectors(nodePtr, true);
-        for (int portIndex = 0; portIndex < static_cast<int>(outputs.size()); ++portIndex) {
-            connectorInfo.emplace(outputs[portIndex].get(), ConnectorEndpointInfo{nodeId, portIndex, true});
-        }
-    }
-    
-    struct WireEndpoints {
-        std::optional<ConnectorEndpointInfo> source;
-        std::optional<ConnectorEndpointInfo> target;
-    };
-
-    std::unordered_map<const wire_system::wire*, WireEndpoints> wireEndpoints;
-    if (const auto wireManager = scene.wire_manager()) {
-        for (const auto& [connector, endpoint] : connectorInfo) {
-            const auto connection = wireManager->attached_wire(connector);
-            if (!connection || !connection->wire) {
-                continue;
-            }
-
-            auto& endpoints = wireEndpoints[connection->wire];
-            if (endpoint.isOutput) {
-                endpoints.source = endpoint;
-            } else {
-                endpoints.target = endpoint;
-            }
-        }
-    }
-
-    const auto wires = scene.items<QSchematic::Items::Wire>();
-    for (const auto& wirePtr : wires) {
-        auto wire = wirePtr.get();
-        if (!wire) continue;
-
-        const auto endpointsIt = wireEndpoints.find(wire);
-        if (endpointsIt == wireEndpoints.end() || !endpointsIt->second.source || !endpointsIt->second.target) {
-            continue;
-        }
-
-        const auto& source = *endpointsIt->second.source;
-        const auto& target = *endpointsIt->second.target;
-
-        boost::json::object connObj;
-        connObj["from_element"] = source.nodeId;
-        connObj["from_port"] = source.portIndex;
-        connObj["to_element"] = target.nodeId;
-        connObj["to_port"] = target.portIndex;
-        connectionsArray.push_back(connObj);
-    }
-    
-    return root;
-}
 
 auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene) const -> boost::json::object {
     boost::json::object diagram;
@@ -604,13 +446,22 @@ auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene) const
         auto node = nodePtr.get();
         if (!node) continue;
         
-        std::string nodeId = "node_" + std::to_string(nodeIndex++);
-        
+        const auto storedNodeId = node->data(kNodeIdRole).toString();
+        std::string nodeId = storedNodeId.isEmpty()
+            ? "node_" + std::to_string(nodeIndex++)
+            : storedNodeId.toStdString();
+        const auto storedType = node->data(kNodeTypeRole).toString();
+        const auto storedTitle = node->data(kNodeTitleRole).toString();
+
         boost::json::object nodeObj;
         nodeObj["id"] = nodeId;
-        nodeObj["type"] = "Element";
-        nodeObj["name"] = nodeId;
-        
+        const auto nodeType = storedType.isEmpty() ? QStringLiteral("Element") : storedType;
+        nodeObj["type"] = nodeType.toStdString();
+        nodeObj["name"] = storedTitle.isEmpty() ? nodeId : storedTitle.toStdString();
+        if (nodeType == QStringLiteral("Scope")) {
+            nodeObj["channel_count"] = std::max(1, node->data(kNodeChannelCountRole).toInt());
+        }
+
         boost::json::object posObj;
         posObj["x"] = node->pos().x();
         posObj["y"] = node->pos().y();

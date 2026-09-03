@@ -1,38 +1,112 @@
 #include "diagram_editor.hpp"
 
+#include "diagram_ruler.hpp"
+#include "diagram_node_roles.hpp"
 #include "scene_serializer.hpp"
 
+#include <qschematic/items/node.hpp>
 #include <qschematic/scene.hpp>
 #include <qschematic/view.hpp>
 
+#include <QEvent>
+#include <QGraphicsRectItem>
+#include <QGraphicsItem>
 #include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QMouseEvent>
+#include <QWheelEvent>
+#include <QPen>
+#include <QBrush>
+#include <QColor>
 #include <QResizeEvent>
+#include <QScrollBar>
 #include <QShowEvent>
 #include <QSizePolicy>
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
+
 namespace s7studio::diagram {
+
+namespace {
+
+class DiagramView final : public QSchematic::View
+{
+public:
+    using QSchematic::View::View;
+    using QAbstractScrollArea::setViewportMargins;
+};
+
+constexpr double kSceneUnitsPerMm = 96.0 / 25.4;
+constexpr double kPageMarginMm = 20.0;
+constexpr int kRulerThicknessPx = 22;
+
+auto sceneUnitsFromMm(const double millimeters) -> double
+{
+    return millimeters * kSceneUnitsPerMm;
+}
+
+auto orientedPageRectMm(const DiagramPageLayout& pageLayout) -> QRectF
+{
+    if (pageLayout.orientation == PageOrientation::Portrait) {
+        return {0.0, 0.0, std::min(pageLayout.widthMm, pageLayout.heightMm), std::max(pageLayout.widthMm, pageLayout.heightMm)};
+    }
+
+    return {0.0, 0.0, std::max(pageLayout.widthMm, pageLayout.heightMm), std::min(pageLayout.widthMm, pageLayout.heightMm)};
+}
+
+auto orientedPageRect(const DiagramPageLayout& pageLayout) -> QRectF
+{
+    const auto rectMm = orientedPageRectMm(pageLayout);
+    return {0.0, 0.0, sceneUnitsFromMm(rectMm.width()), sceneUnitsFromMm(rectMm.height())};
+}
+
+} // namespace
 
 DiagramEditor::DiagramEditor(QWidget* parent)
     : QWidget(parent),
       _scene(std::make_unique<QSchematic::Scene>(this))
 {
     auto layout = new QVBoxLayout(this);
-    setMinimumSize(720, 520);
+    setMinimumSize(240, 180);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
     // Create editor view
-    _view = new QSchematic::View(this);
+    auto* diagramView = new DiagramView(this);
+    _view = diagramView;
     _view->setScene(_scene.get());
     _view->setRenderHint(QPainter::Antialiasing);
     _view->setDragMode(QGraphicsView::RubberBandDrag);
-    _view->setMinimumSize(640, 480);
+    _view->setBackgroundBrush(QColor(0xd8, 0xd8, 0xd8));
+    _view->setAlignment(Qt::AlignCenter);
+    _view->setMinimumSize(160, 120);
     _view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    diagramView->setViewportMargins(kRulerThicknessPx, kRulerThicknessPx, 0, 0);
+    _view->viewport()->installEventFilter(this);
+
+    horizontalRuler_ = new DiagramRuler(_view, DiagramRuler::Axis::Horizontal, _view);
+    verticalRuler_ = new DiagramRuler(_view, DiagramRuler::Axis::Vertical, _view);
+    rulerCorner_ = new QWidget(_view);
+    rulerCorner_->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    rulerCorner_->setStyleSheet("background: #f5f5f5; border-right: 1px solid #b8b8b8; border-bottom: 1px solid #b8b8b8;");
+
+    connect(_view, &QSchematic::View::zoomChanged, this, [this] {
+        updateRulers();
+    });
+    connect(_view->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this] {
+        updateRulers();
+    });
+    connect(_view->verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
+        updateRulers();
+    });
 
     layout->addWidget(_view);
     layout->setContentsMargins(0, 0, 0, 0);
     setLayout(layout);
+
+    updateRulerLayout();
+    rebuildPageFrame();
 }
 
 DiagramEditor::~DiagramEditor() = default;
@@ -40,12 +114,16 @@ DiagramEditor::~DiagramEditor() = default;
 void DiagramEditor::clearDiagram()
 {
     _scene->clear();
+    pageFrame_ = nullptr;
+    rebuildPageFrame();
 }
 
 void DiagramEditor::loadDocument(const DiagramDocument& document)
 {
     SceneSerializer serializer;
     serializer.deserialize(document, *_scene);
+    pageFrame_ = nullptr;
+    setPageLayout(document.pageLayout);
     scheduleFitToContents();
 }
 
@@ -66,6 +144,11 @@ void DiagramEditor::loadRuntimeSchema(const boost::json::value& schemaJson)
 
 void DiagramEditor::fitToContents()
 {
+    fitPageInView();
+}
+
+void DiagramEditor::fitPageInView()
+{
     if (!_view || !_scene) {
         return;
     }
@@ -75,18 +158,40 @@ void DiagramEditor::fitToContents()
         return;
     }
 
-    const auto bounds = _scene->itemsBoundingRect();
-    if (!bounds.isValid() || bounds.isEmpty()) {
-        _scene->setSceneRect(QRectF(-200.0, -150.0, 400.0, 300.0));
-        _view->centerOn(0.0, 0.0);
-        _pendingFitToContents = false;
-        return;
-    }
-
-    const auto paddedBounds = bounds.adjusted(-60.0, -60.0, 60.0, 60.0);
-    _scene->setSceneRect(paddedBounds);
-    _view->fitInView();
+    const auto pageRect = orientedPageRect(pageLayout_);
+    updateSceneRectFromPage();
+    _view->QGraphicsView::fitInView(pageRect.adjusted(-4.0, -4.0, 4.0, 4.0), Qt::KeepAspectRatio);
     _pendingFitToContents = false;
+    updateRulers();
+}
+
+void DiagramEditor::zoomIn()
+{
+    zoomBy(1.15);
+}
+
+void DiagramEditor::zoomOut()
+{
+    zoomBy(1.0 / 1.15);
+}
+
+void DiagramEditor::resetZoom()
+{
+    if (_view) {
+        _view->setZoomValue(1.0);
+    }
+}
+
+void DiagramEditor::setPageLayout(const DiagramPageLayout& pageLayout)
+{
+    pageLayout_ = pageLayout;
+    rebuildPageFrame();
+    updateRulers();
+}
+
+auto DiagramEditor::pageLayout() const -> DiagramPageLayout
+{
+    return pageLayout_;
 }
 
 void DiagramEditor::scheduleFitToContents()
@@ -99,9 +204,57 @@ void DiagramEditor::scheduleFitToContents()
     });
 }
 
+bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
+{
+    if (_view && watched == _view->viewport() && event && event->type() == QEvent::Resize) {
+        updateRulerLayout();
+        updateRulers();
+    }
+
+    if (_view && watched == _view->viewport() && event && event->type() == QEvent::Wheel) {
+        if (const auto* wheelEvent = dynamic_cast<QWheelEvent*>(event)) {
+            if (wheelEvent->angleDelta().y() > 0) {
+                zoomIn();
+            } else if (wheelEvent->angleDelta().y() < 0) {
+                zoomOut();
+            }
+            return true;
+        }
+    }
+
+    if (_view && watched == _view->viewport() && event && event->type() == QEvent::MouseButtonDblClick) {
+        if (const auto* mouseEvent = dynamic_cast<QMouseEvent*>(event)) {
+            const QPoint viewPos = mouseEvent->position().toPoint();
+            const QPointF scenePos = _view->mapToScene(viewPos);
+            QGraphicsItem* item = _scene ? _scene->itemAt(scenePos, QTransform()) : nullptr;
+
+            while (item) {
+                auto* node = dynamic_cast<QSchematic::Items::Node*>(item);
+                if (node) {
+                    const QString type = node->data(kNodeTypeRole).toString();
+                    if (type == QStringLiteral("Scope")) {
+                        const QString scopeId = node->data(kNodeIdRole).toString();
+                        const int channelCount = std::max(1, node->data(kNodeChannelCountRole).toInt());
+                        if (!scopeId.isEmpty()) {
+                            emit scopeNodeDoubleClicked(scopeId, channelCount);
+                        }
+                    }
+                    break;
+                }
+                item = item->parentItem();
+            }
+        }
+    }
+
+    return QWidget::eventFilter(watched, event);
+}
+
 void DiagramEditor::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
+
+    updateRulerLayout();
+    updateRulers();
 
     if (_pendingFitToContents) {
         scheduleFitToContents();
@@ -112,9 +265,88 @@ void DiagramEditor::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
 
+    updateRulerLayout();
+    updateRulers();
+
     if (_pendingFitToContents && event->size().width() > 32 && event->size().height() > 32) {
         scheduleFitToContents();
     }
+}
+
+void DiagramEditor::rebuildPageFrame()
+{
+    if (!_scene) {
+        return;
+    }
+
+    if (pageFrame_) {
+        _scene->QGraphicsScene::removeItem(pageFrame_);
+        delete pageFrame_;
+        pageFrame_ = nullptr;
+    }
+
+    pageFrame_ = _scene->addRect(
+        orientedPageRect(pageLayout_),
+        QPen(QColor("#202020"), 1.0),
+        QBrush(QColor("#ffffff")));
+    pageFrame_->setZValue(-1000.0);
+    pageFrame_->setFlag(QGraphicsItem::ItemIsMovable, false);
+    pageFrame_->setFlag(QGraphicsItem::ItemIsSelectable, false);
+    updateSceneRectFromPage();
+    updateRulers();
+}
+
+void DiagramEditor::updateSceneRectFromPage()
+{
+    if (!_scene) {
+        return;
+    }
+
+    const auto pageRect = orientedPageRect(pageLayout_);
+    const double pageMargin = sceneUnitsFromMm(kPageMarginMm);
+    _scene->setSceneRect(pageRect.adjusted(-pageMargin, -pageMargin, pageMargin, pageMargin));
+}
+
+void DiagramEditor::updateRulerLayout()
+{
+    if (!_view || !horizontalRuler_ || !verticalRuler_ || !rulerCorner_) {
+        return;
+    }
+
+    const int frame = _view->frameWidth();
+    const QRect viewportRect = _view->viewport()->geometry();
+    const int leftWidth = std::max(0, viewportRect.left() - frame);
+    const int topHeight = std::max(0, viewportRect.top() - frame);
+
+    horizontalRuler_->setGeometry(viewportRect.left(), frame, viewportRect.width(), topHeight);
+    verticalRuler_->setGeometry(frame, viewportRect.top(), leftWidth, viewportRect.height());
+    rulerCorner_->setGeometry(frame, frame, leftWidth, topHeight);
+}
+
+void DiagramEditor::updateRulers()
+{
+    if (horizontalRuler_) {
+        horizontalRuler_->update();
+    }
+    if (verticalRuler_) {
+        verticalRuler_->update();
+    }
+    if (rulerCorner_) {
+        rulerCorner_->update();
+    }
+}
+
+void DiagramEditor::zoomBy(const double factor)
+{
+    if (!_view) {
+        return;
+    }
+
+    const double currentZoom = _view->transform().m11();
+    const double nextZoom = std::clamp(currentZoom * factor,
+                                       static_cast<double>(_view->zoom_factor_min),
+                                       static_cast<double>(_view->zoom_factor_max));
+    _view->setZoomValue(nextZoom);
 }
 
 QSchematic::Scene* DiagramEditor::scene() {

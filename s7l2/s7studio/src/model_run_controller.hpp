@@ -4,16 +4,24 @@
 
 #include <boost/json.hpp>
 
-#include <QString>
-
 #include <algorithm>
 #include <cmath>
 
-class QAction;
-class QLabel;
-class QSpinBox;
-
 namespace s7studio::ui {
+
+struct RunDuration {
+    int hours = 0;
+    int minutes = 1;
+    int seconds = 0;
+};
+
+struct RunActionState {
+    bool runEnabled = true;
+    bool pauseEnabled = false;
+    bool resumeEnabled = false;
+    bool stopEnabled = false;
+    bool resetEnabled = false;
+};
 
 class ModelRunController
 {
@@ -31,21 +39,13 @@ public:
 
     void run(const boost::json::value& runtimeJson,
              double dt,
-             const QSpinBox* hours,
-             const QSpinBox* minutes,
-             const QSpinBox* seconds) const;
+             const RunDuration& duration) const;
     void pause() const;
     void resume() const;
     void stop() const;
     void reset() const;
 
-    void updateActionStates(QAction* runAction,
-                            QAction* pauseAction,
-                            QAction* resumeAction,
-                            QAction* stopAction,
-                            QAction* resetAction) const;
-
-    void setStatusLabel(QLabel* label, const QString& status) const;
+    [[nodiscard]] auto actionState() const -> RunActionState;
 
 private:
     s7studio::ISchemaRunner* runner_ = nullptr;

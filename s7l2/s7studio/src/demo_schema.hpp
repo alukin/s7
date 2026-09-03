@@ -15,12 +15,15 @@ inline boost::json::value makeDemoSchemaJson()
         "elements": [
             { "id": "unit", "type": "Constant", "params": { "value": 2.0 } },
             { "id": "sum", "type": "Adder" },
-            { "id": "memory", "type": "Delay", "params": { "initial_value": 1.0 } }
+            { "id": "memory", "type": "Delay", "params": { "initial_value": 1.0 } },
+            { "id": "scope_main", "type": "Scope", "params": { "channel_count": 2 } }
         ],
         "connections": [
             { "from_element": "unit", "from_port": 0, "to_element": "sum", "to_port": 0 },
             { "from_element": "memory", "from_port": 0, "to_element": "sum", "to_port": 1 },
-            { "from_element": "sum", "from_port": 0, "to_element": "memory", "to_port": 0 }
+            { "from_element": "sum", "from_port": 0, "to_element": "memory", "to_port": 0 },
+            { "from_element": "sum", "from_port": 0, "to_element": "scope_main", "to_port": 0 },
+            { "from_element": "memory", "from_port": 0, "to_element": "scope_main", "to_port": 1 }
         ]
     })json";
 

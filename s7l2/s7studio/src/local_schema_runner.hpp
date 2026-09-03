@@ -8,8 +8,10 @@
 
 #include <atomic>
 #include <memory>
+#include <cstddef>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace s7studio {
 
@@ -35,14 +37,29 @@ signals:
     void statusChanged(const QString& status);
     void runCompleted(bool success, const QString& error);
     void ticksProgress(long completed, long total);
+    void scopeSample(const QString& scopeId, int channel, long step, double timeSeconds, double value);
 
 private:
+    struct ScopeConfig {
+        std::string id;
+        std::size_t channelCount = 1;
+    };
+
+    void parseScopeConfigs(const boost::json::value& schemaJson);
+    void emitScopeSamples(long step);
+    void requestStop();
+    auto prepareRuntime(const boost::json::value& schemaJson) -> bool;
+    void startRunLoop();
+    void executeRunLoop();
+    void finalizeRun(bool success, const std::string& error);
     void waitForCompletion();
     void emitFinalSamples();
 
     std::shared_ptr<s7::Schema> schema_;
     std::unique_ptr<s7::NodeRuntime> runtime_;
     std::thread worker_;
+    std::vector<ScopeConfig> scopeConfigs_;
+    double dt_ = 0.001;
     long totalTicks_ = 0;
     std::atomic<long> completedTicks_{0};
     std::atomic<bool> running_{false};

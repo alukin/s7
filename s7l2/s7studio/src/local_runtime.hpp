@@ -7,6 +7,7 @@
 
 #include <boost/json.hpp>
 
+#include <algorithm>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -17,6 +18,32 @@
 namespace s7studio::runtime {
 
 namespace detail {
+
+class ScopeElement final : public s7::Element
+{
+public:
+    explicit ScopeElement(std::size_t channelCount)
+        : s7::Element("Scope")
+        , outputs_(std::max<std::size_t>(1, channelCount), 0.0)
+    {
+        const std::size_t effectiveChannelCount = outputs_.size();
+        for (std::size_t channel = 0; channel < effectiveChannelCount; ++channel) {
+            const std::string portName = "ch" + std::to_string(channel);
+            register_input(channel, portName, s7::SignalType::DOUBLE, nullptr);
+            register_output(channel, portName, s7::SignalType::DOUBLE, &outputs_[channel]);
+        }
+    }
+
+    void step() override
+    {
+        for (std::size_t channel = 0; channel < outputs_.size(); ++channel) {
+            outputs_[channel] = read_input<s7::RealValue>(channel);
+        }
+    }
+
+private:
+    std::vector<s7::RealValue> outputs_;
+};
 
 inline const boost::json::object& expectObject(const boost::json::value& value, std::string_view name)
 {
@@ -132,6 +159,15 @@ inline void addElementFromJson(s7::Schema& schema, const boost::json::object& el
         schema.add_element(id, [amplitude, frequency_hz, sample_rate_hz, phase] {
             return std::make_unique<s7::AnalogOscillator>(amplitude, frequency_hz, sample_rate_hz, phase);
         });
+        return;
+    }
+
+    if (type == "Scope") {
+        const auto& params = paramsIt != elementObj.end() && paramsIt->value().is_object()
+            ? paramsIt->value().as_object()
+            : boost::json::object{};
+        const std::size_t channelCount = std::max<std::size_t>(1, getSizeT(params, "channel_count", 1));
+        schema.add_element(id, [channelCount] { return std::make_unique<ScopeElement>(channelCount); });
         return;
     }
 

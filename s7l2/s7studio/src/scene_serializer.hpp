@@ -3,7 +3,6 @@
 #include "diagram_document.hpp"
 #include <boost/json.hpp>
 #include <QString>
-#include <memory>
 
 namespace QSchematic {
 class Scene;
@@ -32,10 +31,7 @@ public:
                      QSchematic::Scene& scene) const;
 
 private:
-    auto extractRuntimeSchema(const QSchematic::Scene& scene,
-                             const SerializationOptions& options) const -> boost::json::value;
-    
-    auto extractDiagramLayout(const QSchematic::Scene& scene) const -> boost::json::object;
+    [[nodiscard]] auto extractDiagramLayout(const QSchematic::Scene& scene) const -> boost::json::object;
 };
 
 } // namespace s7studio::diagram

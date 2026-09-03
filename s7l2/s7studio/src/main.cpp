@@ -5,10 +5,19 @@
 #include <QApplication>
 
 #include <algorithm>
+#include <cerrno>
 #include <exception>
+#include <fstream>
 #include <iostream>
+#include <string>
 #include <string_view>
+#include <cstring>
 #include <utility>
+
+#if defined(__linux__)
+#include <sys/prctl.h>
+#include <sys/resource.h>
+#endif
 
 namespace {
 
@@ -22,6 +31,70 @@ bool hasArg(int argc, char** argv, std::string_view needle)
 
     return false;
 }
+
+auto executableName(char** argv) -> std::string
+{
+    if (!argv || !argv[0]) {
+        return "s7studio";
+    }
+
+    return argv[0];
+}
+
+#if defined(__linux__)
+auto readSingleLine(const char* path) -> std::string
+{
+    std::ifstream input(path);
+    std::string line;
+    std::getline(input, line);
+    return line;
+}
+
+void enableCrashDumps()
+{
+    rlimit limits{};
+    limits.rlim_cur = RLIM_INFINITY;
+    limits.rlim_max = RLIM_INFINITY;
+    if (setrlimit(RLIMIT_CORE, &limits) != 0) {
+        std::cerr << "s7studio: warning: failed to raise RLIMIT_CORE: " << std::strerror(errno) << '\n';
+    }
+
+    if (prctl(PR_SET_DUMPABLE, 1) != 0) {
+        std::cerr << "s7studio: warning: failed to mark process dumpable: " << std::strerror(errno) << '\n';
+    }
+}
+
+void printCrashDumpHelp(const std::string& program)
+{
+    const std::string corePattern = readSingleLine("/proc/sys/kernel/core_pattern");
+    std::cout << "s7studio crash-dump help\n";
+    std::cout << "program=" << program << '\n';
+    std::cout << "core_pattern=" << corePattern << '\n';
+    std::cout << "RLIMIT_CORE will be raised when --enable-core-dumps is passed.\n";
+
+    if (!corePattern.empty() && corePattern.front() == '|') {
+        std::cout << "This system pipes crashes to systemd-coredump, so you usually will not see a local core file appear next to the executable.\n";
+        std::cout << "After a crash, export a real core file with:\n";
+        std::cout << "  coredumpctl list s7studio\n";
+        std::cout << "  coredumpctl dump s7studio --output ./core.s7studio\n";
+        std::cout << "You can also inspect it directly with:\n";
+        std::cout << "  coredumpctl gdb s7studio\n";
+    } else {
+        std::cout << "This system should write a core file directly according to core_pattern.\n";
+    }
+}
+#else
+void enableCrashDumps()
+{
+}
+
+void printCrashDumpHelp(const std::string& program)
+{
+    std::cout << "s7studio crash-dump help\n";
+    std::cout << "program=" << program << '\n';
+    std::cout << "Automatic Linux core-dump configuration is not available on this platform.\n";
+}
+#endif
 
 int runSmoke()
 {
@@ -53,6 +126,17 @@ int runSmoke()
 
 int main(int argc, char** argv) try
 {
+    const auto program = executableName(argv);
+
+    if (hasArg(argc, argv, "--crash-dump-help")) {
+        printCrashDumpHelp(program);
+        return 0;
+    }
+
+    if (hasArg(argc, argv, "--enable-core-dumps")) {
+        enableCrashDumps();
+    }
+
     if (hasArg(argc, argv, "--smoke")) {
         return runSmoke();
     }
@@ -60,7 +144,7 @@ int main(int argc, char** argv) try
     QApplication app(argc, argv);
     s7studio::MainWindow window;
     window.show();
-    return app.exec();
+    return QApplication::exec();
 }
 catch (const std::exception& ex) {
     std::cerr << "s7studio: fatal error: " << ex.what() << '\n';

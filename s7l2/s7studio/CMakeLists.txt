@@ -2,25 +2,51 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS PrintSupport)
+
+file(GLOB_RECURSE S7_QCUSTOMPLOT_SOURCES
+    "${PROJECT_SOURCE_DIR}/external/QCustomPlot/src/*.cpp")
+file(GLOB_RECURSE S7_QCUSTOMPLOT_HEADERS
+    "${PROJECT_SOURCE_DIR}/external/QCustomPlot/src/*.h")
+
+add_library(s7_qcustomplot STATIC ${S7_QCUSTOMPLOT_SOURCES} ${S7_QCUSTOMPLOT_HEADERS})
+target_include_directories(s7_qcustomplot PUBLIC
+    ${PROJECT_SOURCE_DIR}/external/QCustomPlot/src)
+target_link_libraries(s7_qcustomplot PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets)
+target_link_libraries(s7_qcustomplot PUBLIC Qt6::PrintSupport)
+set_target_properties(s7_qcustomplot PROPERTIES AUTOMOC ON)
 
 add_executable(s7studio
     src/main.cpp
     src/main_window.cpp
     src/main_window.hpp
+    src/main_window_builder.cpp
+    src/main_window_builder.hpp
+    src/scope_view_window.cpp
+    src/scope_view_window.hpp
     src/model_run_controller.cpp
     src/is_schema_runner.hpp
     src/model_run_controller.hpp
+    src/json_utils.hpp
     src/local_runtime.hpp
     src/local_schema_runner.cpp
     src/local_schema_runner.hpp
     src/demo_schema.hpp
     src/diagram_document.hpp
     src/diagram_document.cpp
+    src/diagram_node_roles.hpp
     src/scene_serializer.hpp
     src/scene_serializer.cpp
+    src/runtime_schema_extractor.hpp
+    src/runtime_schema_extractor.cpp
     src/diagram_format.hpp
     src/diagram_editor.hpp
     src/diagram_editor.cpp
+    src/diagram_ruler.hpp
+    src/diagram_ruler.cpp
 )
 
 target_include_directories(s7studio PRIVATE
@@ -34,6 +60,7 @@ target_link_libraries(s7studio PRIVATE
     Qt6::Gui
     Qt6::Widgets
     qschematic-static
+    s7_qcustomplot
     s7core
     s7observe
     Boost::json

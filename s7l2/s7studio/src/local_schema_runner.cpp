@@ -2,9 +2,10 @@
 
 #include <chrono>
 #include <exception>
-#include <stdexcept>
 #include <thread>
 #include <utility>
+
+#include <algorithm>
 
 namespace s7studio {
 
@@ -24,7 +25,7 @@ LocalSchemaRunner::LocalSchemaRunner(QObject* parent)
 
 LocalSchemaRunner::~LocalSchemaRunner()
 {
-    stop();
+    requestStop();
     waitForCompletion();
 }
 
@@ -54,15 +55,10 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, const double d
 
     waitForCompletion();
 
-    try {
-        schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(schemaJson));
-        runtime::validateSchema(*schema_);
-        auto graph = s7::Compiler::compile(*schema_);
-        runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
-    } catch (const std::exception& ex) {
-        emit statusChanged("error");
-        emit logMessage(QString("[runtime] build failed: %1").arg(QString::fromUtf8(joinValidationError(ex))));
-        emit runCompleted(false, QString::fromUtf8(joinValidationError(ex)));
+    dt_ = dt;
+    parseScopeConfigs(schemaJson);
+
+    if (!prepareRuntime(schemaJson)) {
         return;
     }
 
@@ -75,53 +71,154 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, const double d
     emit statusChanged("running");
     emit logMessage(QString("[runtime] starting local embedded run: dt=%1 ticks=%2").arg(dt).arg(ticks));
 
-    worker_ = std::thread([this] {
-        bool success = true;
-        std::string error;
+    startRunLoop();
+}
 
-        try {
-            for (long step = 0; step < totalTicks_; ++step) {
-                if (stopRequested_.load()) {
-                    break;
-                }
+auto LocalSchemaRunner::prepareRuntime(const boost::json::value& schemaJson) -> bool
+{
+    try {
+        schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(schemaJson));
+        runtime::validateSchema(*schema_);
+        auto graph = s7::Compiler::compile(*schema_);
+        runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
+    } catch (const std::exception& ex) {
+        emit statusChanged("error");
+        emit logMessage(QString("[runtime] build failed: %1").arg(QString::fromUtf8(joinValidationError(ex))));
+        emit runCompleted(false, QString::fromUtf8(joinValidationError(ex)));
+        return false;
+    }
 
-                while (paused_.load() && !stopRequested_.load()) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
+    return true;
+}
 
-                if (stopRequested_.load()) {
-                    break;
-                }
+void LocalSchemaRunner::startRunLoop()
+{
+    worker_ = std::thread([this] { executeRunLoop(); });
+}
 
-                runtime_->step();
-                completedTicks_.store(step + 1);
-                emit ticksProgress(step + 1, totalTicks_);
+void LocalSchemaRunner::executeRunLoop()
+{
+    bool success = true;
+    std::string error;
+
+    try {
+        for (long step = 0; step < totalTicks_; ++step) {
+            if (stopRequested_.load()) {
+                break;
             }
 
-            if (!stopRequested_.load()) {
-                emitFinalSamples();
+            while (paused_.load() && !stopRequested_.load()) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
-        } catch (const std::exception& ex) {
-            success = false;
-            error = ex.what();
+
+            if (stopRequested_.load()) {
+                break;
+            }
+
+            runtime_->step();
+            completedTicks_.store(step + 1);
+            emitScopeSamples(step + 1);
+            emit ticksProgress(step + 1, totalTicks_);
         }
 
-        running_.store(false);
-        paused_.store(false);
+        if (!stopRequested_.load()) {
+            emitFinalSamples();
+        }
+    } catch (const std::exception& ex) {
+        success = false;
+        error = ex.what();
+    }
 
-        if (stopRequested_.load() && success) {
-            emit statusChanged("stopped");
-            emit logMessage("[runtime] stopped");
-        } else if (success) {
-            emit statusChanged("completed");
-            emit logMessage("[runtime] run completed");
-        } else {
-            emit statusChanged("error");
-            emit logMessage(QString("[runtime] run failed: %1").arg(QString::fromStdString(error)));
+    finalizeRun(success, error);
+}
+
+void LocalSchemaRunner::parseScopeConfigs(const boost::json::value& schemaJson)
+{
+    scopeConfigs_.clear();
+    if (!schemaJson.is_object()) {
+        return;
+    }
+
+    const auto& root = schemaJson.as_object();
+    const auto elementsIt = root.find("elements");
+    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
+        return;
+    }
+
+    for (const auto& elementValue : elementsIt->value().as_array()) {
+        if (!elementValue.is_object()) {
+            continue;
+        }
+        const auto& elementObject = elementValue.as_object();
+        const auto idIt = elementObject.find("id");
+        const auto typeIt = elementObject.find("type");
+        if (idIt == elementObject.end() || typeIt == elementObject.end() ||
+            !idIt->value().is_string() || !typeIt->value().is_string()) {
+            continue;
         }
 
-        emit runCompleted(success, QString::fromStdString(error));
-    });
+        if (typeIt->value().as_string() != "Scope") {
+            continue;
+        }
+
+        std::size_t channelCount = 1;
+        if (const auto paramsIt = elementObject.find("params");
+            paramsIt != elementObject.end() && paramsIt->value().is_object()) {
+            const auto& params = paramsIt->value().as_object();
+            const auto ccIt = params.find("channel_count");
+            if (ccIt != params.end()) {
+                if (ccIt->value().is_uint64()) {
+                    channelCount = static_cast<std::size_t>(ccIt->value().as_uint64());
+                } else if (ccIt->value().is_int64() && ccIt->value().as_int64() > 0) {
+                    channelCount = static_cast<std::size_t>(ccIt->value().as_int64());
+                }
+            }
+        }
+
+        ScopeConfig config;
+        config.id = idIt->value().as_string().c_str();
+        config.channelCount = std::max<std::size_t>(1, channelCount);
+        scopeConfigs_.push_back(std::move(config));
+    }
+}
+
+void LocalSchemaRunner::emitScopeSamples(const long step)
+{
+    if (!runtime_ || scopeConfigs_.empty()) {
+        return;
+    }
+
+    s7::ObservationService observation(*runtime_);
+    const double timeSeconds = static_cast<double>(step) * dt_;
+    for (const auto& scope : scopeConfigs_) {
+        for (std::size_t channel = 0; channel < scope.channelCount; ++channel) {
+            const auto sample = observation.sample_output(scope.id, channel);
+            emit scopeSample(QString::fromStdString(scope.id),
+                             static_cast<int>(channel),
+                             static_cast<long>(sample.step),
+                             timeSeconds,
+                             sample.as_real());
+        }
+    }
+}
+
+void LocalSchemaRunner::finalizeRun(const bool success, const std::string& error)
+{
+    running_.store(false);
+    paused_.store(false);
+
+    if (stopRequested_.load() && success) {
+        emit statusChanged("stopped");
+        emit logMessage("[runtime] stopped");
+    } else if (success) {
+        emit statusChanged("completed");
+        emit logMessage("[runtime] run completed");
+    } else {
+        emit statusChanged("error");
+        emit logMessage(QString("[runtime] run failed: %1").arg(QString::fromStdString(error)));
+    }
+
+    emit runCompleted(success, QString::fromStdString(error));
 }
 
 void LocalSchemaRunner::pause()
@@ -155,6 +252,11 @@ void LocalSchemaRunner::stop()
         return;
     }
 
+    requestStop();
+}
+
+void LocalSchemaRunner::requestStop()
+{
     stopRequested_.store(true);
     paused_.store(false);
 }
@@ -166,6 +268,7 @@ void LocalSchemaRunner::reset()
 
     schema_.reset();
     runtime_.reset();
+    scopeConfigs_.clear();
     completedTicks_.store(0);
     totalTicks_ = 0;
     running_.store(false);
