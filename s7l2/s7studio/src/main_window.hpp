@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QHash>
 #include <QPointer>
+#include <QVector>
 
 #include <memory>
 
@@ -29,6 +30,12 @@ namespace ui {
 class ScopeViewWindow;
 }
 
+struct ScopeSamplePoint {
+    int channel = 0;
+    double timeSeconds = 0.0;
+    double value = 0.0;
+};
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -43,15 +50,19 @@ private slots:
     void onRunCompleted(bool success, const QString& error);
     void onTickProgress(long completed, long total);
     void onScopeNodeDoubleClicked(const QString& scopeId, int channelCount);
+    void onElementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
     void onScopeSample(const QString& scopeId, int channel, long step, double timeSeconds, double value);
-    void openSchemaFile();
-    void openDiagramFile();
+    void openDocumentFile();
+    void closeCurrentDiagram();
+    void saveDocument();
+    void saveDocumentAs();
     void loadDemoDiagram();
     void fitDiagramToView();
     void zoomDiagramIn();
     void zoomDiagramOut();
     void resetDiagramZoom();
     void setRuntimePanelVisible(bool visible);
+    void setDiagramMode(int mode);
     void setPaperA5();
     void setPaperA4();
     void setPaperA3();
@@ -66,12 +77,15 @@ private:
     void refreshActions();
     void openScopeWindow(const QString& scopeId, int channelCount);
     void closeScopeWindows();
+    void clearScopeSamples();
+    void replayScopeSamples(const QString& scopeId, ui::ScopeViewWindow& window);
     void applyPaperSize(double widthMm, double heightMm);
     void syncPageActions();
     void openJsonDocument(const QString& dialogTitle,
                           const QString& filter,
                           bool preferDiagram,
                           const QString& errorTitle);
+    auto saveDocumentToPath(const QString& filePath) -> bool;
     [[nodiscard]] auto selectedRunDuration() const -> ui::RunDuration;
     void loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
     void loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel);
@@ -84,8 +98,10 @@ private:
     LocalSchemaRunner* runner_ = nullptr;
     std::unique_ptr<ui::ModelRunController> controller_;
 
-    QAction* openSchemaAction_ = nullptr;
-    QAction* openDiagramAction_ = nullptr;
+    QAction* openAction_ = nullptr;
+    QAction* closeDiagramAction_ = nullptr;
+    QAction* saveAction_ = nullptr;
+    QAction* saveAsAction_ = nullptr;
     QAction* loadDemoAction_ = nullptr;
     QAction* fitDiagramAction_ = nullptr;
     QAction* exitAction_ = nullptr;
@@ -99,6 +115,9 @@ private:
     QAction* resetZoomAction_ = nullptr;
     QAction* fitPageAction_ = nullptr;
     QAction* showRuntimePanelAction_ = nullptr;
+    QAction* overlayScopeTracesAction_ = nullptr;
+    QAction* modeNormalAction_ = nullptr;
+    QAction* modeWireAction_ = nullptr;
     QAction* paperA5Action_ = nullptr;
     QAction* paperA4Action_ = nullptr;
     QAction* paperA3Action_ = nullptr;
@@ -116,7 +135,9 @@ private:
     QPlainTextEdit* logView_ = nullptr;
     QSplitter* mainSplitter_ = nullptr;
     QWidget* runtimePanel_ = nullptr;
+    QString currentDiagramPath_;
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
+    QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
     QActionGroup* paperSizeGroup_ = nullptr;
     QActionGroup* pageOrientationGroup_ = nullptr;
 };

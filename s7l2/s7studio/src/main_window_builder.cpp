@@ -13,7 +13,9 @@
 #include <QSplitter>
 #include <QSpinBox>
 #include <QStatusBar>
+#include <QStyle>
 #include <QToolBar>
+#include <Qt>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -22,8 +24,10 @@ namespace s7studio::ui {
 auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
 {
     MainWindowActions actions;
-    actions.openSchemaAction = new QAction("Open Schema...", window);
-    actions.openDiagramAction = new QAction("Open Diagram...", window);
+    actions.openAction = new QAction("Open...", window);
+    actions.closeDiagramAction = new QAction("Close Diagram", window);
+    actions.saveAction = new QAction("Save", window);
+    actions.saveAsAction = new QAction("Save As...", window);
     actions.loadDemoAction = new QAction("Load Demo Diagram", window);
     actions.fitDiagramAction = new QAction("Fit Diagram to View", window);
     actions.exitAction = new QAction("Exit", window);
@@ -33,14 +37,27 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.resumeAction = new QAction("Resume", window);
     actions.stopAction = new QAction("Stop", window);
     actions.resetAction = new QAction("Reset", window);
+
+    actions.openAction->setIcon(window->style()->standardIcon(QStyle::SP_DialogOpenButton));
+    actions.saveAction->setIcon(window->style()->standardIcon(QStyle::SP_DialogSaveButton));
+    actions.runAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaPlay));
+    actions.pauseAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaPause));
+    actions.resumeAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaSeekForward));
+    actions.stopAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaStop));
+    actions.resetAction->setIcon(window->style()->standardIcon(QStyle::SP_BrowserReload));
+
     return actions;
 }
 
 void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions)
 {
     auto* fileMenu = window->menuBar()->addMenu("&File");
-    fileMenu->addAction(actions.openSchemaAction);
-    fileMenu->addAction(actions.openDiagramAction);
+    fileMenu->addAction(actions.openAction);
+    fileMenu->addAction(actions.closeDiagramAction);
+    fileMenu->addSeparator();
+    fileMenu->addAction(actions.saveAction);
+    fileMenu->addAction(actions.saveAsAction);
+    fileMenu->addSeparator();
     fileMenu->addAction(actions.loadDemoAction);
     fileMenu->addSeparator();
     fileMenu->addAction(actions.exitAction);
@@ -48,15 +65,25 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     auto* diagramMenu = window->menuBar()->addMenu("&Diagram");
     diagramMenu->addAction(actions.fitDiagramAction);
 
-    auto* toolBar = window->addToolBar("Runtime");
-    toolBar->addAction(actions.openSchemaAction);
-    toolBar->addAction(actions.openDiagramAction);
-    toolBar->addSeparator();
-    toolBar->addAction(actions.runAction);
-    toolBar->addAction(actions.pauseAction);
-    toolBar->addAction(actions.resumeAction);
-    toolBar->addAction(actions.stopAction);
-    toolBar->addAction(actions.resetAction);
+    auto* runMenu = window->menuBar()->addMenu("&Run");
+    runMenu->addAction(actions.runAction);
+    runMenu->addAction(actions.pauseAction);
+    runMenu->addAction(actions.resumeAction);
+    runMenu->addAction(actions.stopAction);
+    runMenu->addSeparator();
+    runMenu->addAction(actions.resetAction);
+
+    auto* fileToolBar = window->addToolBar("File");
+    fileToolBar->addAction(actions.openAction);
+    fileToolBar->addAction(actions.saveAction);
+
+    auto* runToolBar = window->addToolBar("Run");
+    runToolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    runToolBar->addAction(actions.runAction);
+    runToolBar->addAction(actions.pauseAction);
+    runToolBar->addAction(actions.resumeAction);
+    runToolBar->addAction(actions.stopAction);
+    runToolBar->addAction(actions.resetAction);
 }
 
 auto MainWindowBuilder::buildCentralWidgets(QMainWindow* window) -> MainWindowWidgets

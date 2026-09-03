@@ -2,25 +2,37 @@
 
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
+#include "diagram_node_roles.hpp"
 #include "json_utils.hpp"
 #include "main_window_builder.hpp"
+#include "scene_serializer.hpp"
 #include "scope_view_window.hpp"
+
+#include <qschematic/items/node.hpp>
+#include <qschematic/scene.hpp>
 
 #include <QAction>
 #include <QActionGroup>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QCloseEvent>
 #include <QSignalBlocker>
 #include <QLabel>
 #include <QKeySequence>
+#include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QPushButton>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QSplitter>
+#include <QVBoxLayout>
 #include <QWidget>
 
 #include <algorithm>
@@ -39,6 +51,7 @@ constexpr double kPaperA3WidthMm = 420.0;
 constexpr double kPaperA3HeightMm = 297.0;
 constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
+constexpr int kMaxScopeHistoryPointsPerScope = 20000;
 
 auto isDiagramDocument(const boost::json::value& json) -> bool
 {
@@ -66,6 +79,87 @@ auto schemaDisplayName(const boost::json::value& schemaJson, const QString& fall
     return fallback;
 }
 
+auto elementDescriptionForType(const QString& type) -> QString
+{
+    if (type == "Constant") return QStringLiteral("Constant source: outputs a fixed value.");
+    if (type == "Gain") return QStringLiteral("Gain: multiplies input by a factor.");
+    if (type == "Adder") return QStringLiteral("Adder: sums two inputs.");
+    if (type == "Multiply") return QStringLiteral("Multiply: multiplies two inputs.");
+    if (type == "Delay") return QStringLiteral("Delay: outputs previous input sample (stateful).");
+    if (type == "Integrator") return QStringLiteral("Integrator: accumulates input over time.");
+    if (type == "AnalogOscillator") return QStringLiteral("Analog oscillator: sinusoidal source.");
+    if (type == "Scope") return QStringLiteral("Scope observer: records selected channels for plotting.");
+    if (type == "FirFilter") return QStringLiteral("FIR filter: finite impulse response filter.");
+    if (type == "IirFilter") return QStringLiteral("IIR filter: recursive filter.");
+    if (type == "PreviousValue") return QStringLiteral("PreviousValue: unit-delay output element.");
+    if (type == "ReImToComplex") return QStringLiteral("ReImToComplex: combines real/imaginary inputs.");
+    if (type == "ComplexToReIm") return QStringLiteral("ComplexToReIm: splits complex input into real and imaginary outputs.");
+    if (type == "Int12ToDouble") return QStringLiteral("Int12ToDouble: converts 12-bit integer signal to double.");
+    if (type == "DoubleToInt12") return QStringLiteral("DoubleToInt12: converts double signal to 12-bit integer range.");
+    if (type == "ComplexToMagnitudePhase") return QStringLiteral("ComplexToMagnitudePhase: outputs magnitude and phase.");
+    return QStringLiteral("No built-in description available for this element type.");
+}
+
+auto elementLibraryForType(const QString& type) -> QString
+{
+    if (type == "Scope") {
+        return QStringLiteral("s7studio (embedded observer in executable)");
+    }
+    return QStringLiteral("s7core (.so at runtime link: libs7core)");
+}
+
+auto parseEditableParams(const QString& text, boost::json::object& paramsOut, QString& error) -> bool
+{
+    boost::system::error_code ec;
+    const auto parsed = boost::json::parse(text.toStdString(), ec);
+    if (ec) {
+        error = QStringLiteral("Invalid JSON: %1").arg(QString::fromUtf8(ec.message()));
+        return false;
+    }
+    if (!parsed.is_object()) {
+        error = QStringLiteral("Parameters must be a JSON object, e.g. {\"value\": 1.0}.");
+        return false;
+    }
+
+    paramsOut = parsed.as_object();
+    return true;
+}
+
+auto findElementParamsObject(boost::json::value& runtimeSchema, const QString& elementId) -> boost::json::object*
+{
+    if (!runtimeSchema.is_object()) {
+        return nullptr;
+    }
+
+    auto& root = runtimeSchema.as_object();
+    const auto elementsIt = root.find("elements");
+    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
+        return nullptr;
+    }
+
+    auto& elements = elementsIt->value().as_array();
+    for (auto& elementValue : elements) {
+        if (!elementValue.is_object()) {
+            continue;
+        }
+
+        auto& elementObject = elementValue.as_object();
+        const auto id = json_utils::stringValue(elementObject, "id");
+        if (QString::fromUtf8(id.c_str()) != elementId) {
+            continue;
+        }
+
+        if (const auto it = elementObject.find("params"); it != elementObject.end() && it->value().is_object()) {
+            return &it->value().as_object();
+        }
+
+        elementObject["params"] = boost::json::object{};
+        return &elementObject["params"].as_object();
+    }
+
+    return nullptr;
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
@@ -80,9 +174,9 @@ MainWindow::MainWindow(QWidget* parent)
 
     connectRunnerSignals();
     if (diagramEditor_) {
-        connect(diagramEditor_, &diagram::DiagramEditor::scopeNodeDoubleClicked,
+        connect(diagramEditor_, &diagram::DiagramEditor::elementNodeDoubleClicked,
                 this,
-                &MainWindow::onScopeNodeDoubleClicked);
+                &MainWindow::onElementNodeDoubleClicked);
     }
 
     appendLog("[studio] Local embedded runtime ready");
@@ -108,8 +202,10 @@ void MainWindow::connectRunnerSignals()
 void MainWindow::buildActions()
 {
     const auto actions = ui::MainWindowBuilder::createActions(this);
-    openSchemaAction_ = actions.openSchemaAction;
-    openDiagramAction_ = actions.openDiagramAction;
+    openAction_ = actions.openAction;
+    closeDiagramAction_ = actions.closeDiagramAction;
+    saveAction_ = actions.saveAction;
+    saveAsAction_ = actions.saveAsAction;
     loadDemoAction_ = actions.loadDemoAction;
     fitDiagramAction_ = actions.fitDiagramAction;
     exitAction_ = actions.exitAction;
@@ -124,6 +220,24 @@ void MainWindow::buildActions()
     resetZoomAction_ = new QAction("Actual Size", this);
     fitPageAction_ = new QAction("Fit Page", this);
     showRuntimePanelAction_ = new QAction("Show Runtime Panel", this);
+    overlayScopeTracesAction_ = new QAction("Overlay Scope Traces", this);
+    overlayScopeTracesAction_->setCheckable(true);
+    overlayScopeTracesAction_->setChecked(false);
+    overlayScopeTracesAction_->setToolTip("Keep previous scope traces when starting a new run");
+
+    modeNormalAction_ = new QAction("Normal Mode", this);
+    modeNormalAction_->setCheckable(true);
+    modeNormalAction_->setChecked(true);
+    modeNormalAction_->setToolTip("Switch to Normal mode (move/select elements)");
+
+    modeWireAction_ = new QAction("Wire Mode", this);
+    modeWireAction_->setCheckable(true);
+    modeWireAction_->setToolTip("Switch to Wire mode (draw connections)");
+
+    QActionGroup* modeGroup = new QActionGroup(this);
+    modeGroup->setExclusive(true);
+    modeGroup->addAction(modeNormalAction_);
+    modeGroup->addAction(modeWireAction_);
 
     paperA5Action_ = new QAction("A5", this);
     paperA4Action_ = new QAction("A4", this);
@@ -138,10 +252,8 @@ void MainWindow::buildActions()
     paperLetterAction_->setCheckable(true);
     portraitPageAction_->setCheckable(true);
     landscapePageAction_->setCheckable(true);
-    showRuntimePanelAction_->setCheckable(true);
-    showRuntimePanelAction_->setChecked(false);
 
-    paperSizeGroup_ = new QActionGroup(this);
+     paperSizeGroup_ = new QActionGroup(this);
     paperSizeGroup_->setExclusive(true);
     paperSizeGroup_->addAction(paperA5Action_);
     paperSizeGroup_->addAction(paperA4Action_);
@@ -158,13 +270,23 @@ void MainWindow::buildActions()
     resetZoomAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
     fitPageAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_9));
 
-    connect(openSchemaAction_, &QAction::triggered, this, &MainWindow::openSchemaFile);
-    connect(openDiagramAction_, &QAction::triggered, this, &MainWindow::openDiagramFile);
+    openAction_->setShortcut(QKeySequence::Open);
+    closeDiagramAction_->setShortcut(QKeySequence::Close);
+    saveAction_->setShortcut(QKeySequence::Save);
+    saveAsAction_->setShortcut(QKeySequence::SaveAs);
+
+    connect(openAction_, &QAction::triggered, this, &MainWindow::openDocumentFile);
+    connect(closeDiagramAction_, &QAction::triggered, this, &MainWindow::closeCurrentDiagram);
+    connect(saveAction_, &QAction::triggered, this, &MainWindow::saveDocument);
+    connect(saveAsAction_, &QAction::triggered, this, &MainWindow::saveDocumentAs);
     connect(loadDemoAction_, &QAction::triggered, this, &MainWindow::loadDemoDiagram);
     connect(fitDiagramAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
     connect(exitAction_, &QAction::triggered, this, &QWidget::close);
 
     connect(runAction_, &QAction::triggered, this, [this] {
+        if (!overlayScopeTracesAction_ || !overlayScopeTracesAction_->isChecked()) {
+            clearScopeSamples();
+        }
         controller_->run(runtimeSchema_, dtSpin_->value(), selectedRunDuration());
         refreshActions();
     });
@@ -173,6 +295,7 @@ void MainWindow::buildActions()
     connect(stopAction_, &QAction::triggered, this, [this] { controller_->stop(); });
     connect(resetAction_, &QAction::triggered, this, [this] {
         controller_->reset();
+        clearScopeSamples();
         refreshActions();
     });
 
@@ -181,6 +304,12 @@ void MainWindow::buildActions()
     connect(resetZoomAction_, &QAction::triggered, this, &MainWindow::resetDiagramZoom);
     connect(fitPageAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
     connect(showRuntimePanelAction_, &QAction::toggled, this, &MainWindow::setRuntimePanelVisible);
+    connect(modeNormalAction_, &QAction::triggered, this, [this] {
+        setDiagramMode(QSchematic::Scene::NormalMode);
+    });
+    connect(modeWireAction_, &QAction::triggered, this, [this] {
+        setDiagramMode(QSchematic::Scene::WireMode);
+    });
 
     connect(paperA5Action_, &QAction::triggered, this, &MainWindow::setPaperA5);
     connect(paperA4Action_, &QAction::triggered, this, &MainWindow::setPaperA4);
@@ -193,8 +322,10 @@ void MainWindow::buildActions()
 void MainWindow::buildUi()
 {
     ui::MainWindowActions actions;
-    actions.openSchemaAction = openSchemaAction_;
-    actions.openDiagramAction = openDiagramAction_;
+    actions.openAction = openAction_;
+    actions.closeDiagramAction = closeDiagramAction_;
+    actions.saveAction = saveAction_;
+    actions.saveAsAction = saveAsAction_;
     actions.loadDemoAction = loadDemoAction_;
     actions.fitDiagramAction = fitDiagramAction_;
     actions.exitAction = exitAction_;
@@ -207,6 +338,9 @@ void MainWindow::buildUi()
     ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
 
     auto* viewMenu = menuBar()->addMenu("&View");
+    viewMenu->addAction(modeNormalAction_);
+    viewMenu->addAction(modeWireAction_);
+    viewMenu->addSeparator();
     viewMenu->addAction(zoomInAction_);
     viewMenu->addAction(zoomOutAction_);
     viewMenu->addAction(resetZoomAction_);
@@ -214,6 +348,7 @@ void MainWindow::buildUi()
     viewMenu->addAction(fitPageAction_);
     viewMenu->addSeparator();
     viewMenu->addAction(showRuntimePanelAction_);
+    viewMenu->addAction(overlayScopeTracesAction_);
 
     auto* pageMenu = menuBar()->addMenu("&Page");
     pageMenu->addAction(paperA5Action_);
@@ -236,6 +371,18 @@ void MainWindow::buildUi()
     mainSplitter_ = widgets.splitter;
     runtimePanel_ = widgets.runtimePanel;
     setRuntimePanelVisible(false);
+
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        connect(diagramEditor_->scene(), &QSchematic::Scene::modeChanged, this, [this](int mode) {
+            if (modeNormalAction_ && modeWireAction_) {
+                const QSignalBlocker blockerNormal(modeNormalAction_);
+                const QSignalBlocker blockerWire(modeWireAction_);
+                modeNormalAction_->setChecked(mode == QSchematic::Scene::NormalMode);
+                modeWireAction_->setChecked(mode == QSchematic::Scene::WireMode);
+            }
+        });
+    }
+
     syncPageActions();
 }
 
@@ -277,12 +424,118 @@ void MainWindow::onScopeNodeDoubleClicked(const QString& scopeId, const int chan
     openScopeWindow(scopeId, channelCount);
 }
 
+void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
+                                            const QString& elementType,
+                                            const int channelCount)
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Element Properties - %1").arg(elementId));
+    dialog.resize(620, 460);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout();
+
+    auto* idEdit = new QLineEdit(elementId, &dialog);
+    idEdit->setReadOnly(true);
+    form->addRow(QStringLiteral("ID"), idEdit);
+
+    auto* typeEdit = new QLineEdit(elementType, &dialog);
+    typeEdit->setReadOnly(true);
+    form->addRow(QStringLiteral("Type"), typeEdit);
+
+    auto* libraryEdit = new QLineEdit(elementLibraryForType(elementType), &dialog);
+    libraryEdit->setReadOnly(true);
+    form->addRow(QStringLiteral("Library"), libraryEdit);
+
+    auto* descriptionLabel = new QLabel(elementDescriptionForType(elementType), &dialog);
+    descriptionLabel->setWordWrap(true);
+    descriptionLabel->setMinimumHeight(48);
+    form->addRow(QStringLiteral("Description"), descriptionLabel);
+
+    layout->addLayout(form);
+
+    auto* paramsLabel = new QLabel(QStringLiteral("Parameters (JSON object):"), &dialog);
+    layout->addWidget(paramsLabel);
+
+    QString currentParamsText = QStringLiteral("{}");
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        for (const auto& nodePtr : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
+            if (!nodePtr) {
+                continue;
+            }
+            if (nodePtr->data(diagram::kNodeIdRole).toString() == elementId) {
+                const QString storedParams = nodePtr->data(diagram::kNodeParamsRole).toString();
+                if (!storedParams.trimmed().isEmpty()) {
+                    currentParamsText = storedParams;
+                }
+                break;
+            }
+        }
+    }
+
+    auto* paramsEdit = new QPlainTextEdit(currentParamsText, &dialog);
+    paramsEdit->setPlaceholderText(QStringLiteral("{\n  \"value\": 1.0\n}"));
+    paramsEdit->setMinimumHeight(180);
+    layout->addWidget(paramsEdit, 1);
+
+    if (elementType == QStringLiteral("Scope")) {
+        auto* openScopeButton = new QPushButton(QStringLiteral("Open Scope Window"), &dialog);
+        connect(openScopeButton, &QPushButton::clicked, this, [this, elementId, channelCount] {
+            openScopeWindow(elementId, channelCount);
+        });
+        layout->addWidget(openScopeButton);
+    }
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    while (dialog.exec() == QDialog::Accepted) {
+        boost::json::object paramsObject;
+        QString parseError;
+        if (!parseEditableParams(paramsEdit->toPlainText().trimmed(), paramsObject, parseError)) {
+            QMessageBox::warning(this, QStringLiteral("Invalid parameters"), parseError);
+            continue;
+        }
+
+        const QString encodedParams = QString::fromStdString(boost::json::serialize(paramsObject));
+        if (diagramEditor_ && diagramEditor_->scene()) {
+            for (const auto& nodePtr : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
+                if (!nodePtr || nodePtr->data(diagram::kNodeIdRole).toString() != elementId) {
+                    continue;
+                }
+
+                nodePtr->setData(diagram::kNodeParamsRole, encodedParams);
+                if (elementType == QStringLiteral("Scope")) {
+                    nodePtr->setData(diagram::kNodeChannelCountRole, std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount)));
+                }
+                break;
+            }
+        }
+
+        if (auto* schemaParams = findElementParamsObject(runtimeSchema_, elementId)) {
+            *schemaParams = paramsObject;
+        }
+
+        appendLog(QStringLiteral("[studio] updated element params: %1").arg(elementId));
+        break;
+    }
+}
+
 void MainWindow::onScopeSample(const QString& scopeId,
                                const int channel,
                                const long /*step*/,
                                const double timeSeconds,
                                const double value)
 {
+    auto& history = scopeSampleHistory_[scopeId];
+    history.push_back(ScopeSamplePoint{channel, timeSeconds, value});
+    if (history.size() > kMaxScopeHistoryPointsPerScope) {
+        const int overflow = history.size() - kMaxScopeHistoryPointsPerScope;
+        history.erase(history.begin(), history.begin() + overflow);
+    }
+
     if (const auto window = scopeWindows_.value(scopeId)) {
         window->appendSample(channel, timeSeconds, value);
     }
@@ -325,11 +578,11 @@ void MainWindow::zoomDiagramOut()
 void MainWindow::resetDiagramZoom()
 {
     if (diagramEditor_) {
-        diagramEditor_->resetZoom();
-    }
-}
+     diagramEditor_->resetZoom();
+     }
+ }
 
-void MainWindow::setRuntimePanelVisible(const bool visible)
+ void MainWindow::setRuntimePanelVisible(const bool visible)
 {
     if (showRuntimePanelAction_ && showRuntimePanelAction_->isChecked() != visible) {
         const QSignalBlocker blocker(showRuntimePanelAction_);
@@ -349,6 +602,13 @@ void MainWindow::setRuntimePanelVisible(const bool visible)
     const int totalWidth = std::max(mainSplitter_->width(), 900);
     const int panelWidth = std::clamp(totalWidth / 5, 220, 320);
     mainSplitter_->setSizes({std::max(totalWidth - panelWidth, 400), panelWidth});
+}
+
+void MainWindow::setDiagramMode(const int mode)
+{
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        diagramEditor_->scene()->setMode(mode);
+    }
 }
 
 void MainWindow::applyPaperSize(const double widthMm, const double heightMm)
@@ -441,6 +701,7 @@ void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
     }
 
     if (const auto existing = scopeWindows_.value(scopeId)) {
+        replayScopeSamples(scopeId, *existing);
         existing->show();
         existing->raise();
         existing->activateWindow();
@@ -455,6 +716,7 @@ void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
     window->setAttribute(Qt::WA_DeleteOnClose, true);
     scopeWindows_.insert(scopeId, window);
     connect(window, &QObject::destroyed, this, [this, scopeId] { scopeWindows_.remove(scopeId); });
+    replayScopeSamples(scopeId, *window);
     window->show();
     window->raise();
     window->activateWindow();
@@ -468,6 +730,29 @@ void MainWindow::closeScopeWindows()
         if (window) {
             window->close();
         }
+    }
+}
+
+void MainWindow::clearScopeSamples()
+{
+    scopeSampleHistory_.clear();
+    for (const auto& window : scopeWindows_) {
+        if (window) {
+            window->clearSamples();
+        }
+    }
+}
+
+void MainWindow::replayScopeSamples(const QString& scopeId, ui::ScopeViewWindow& window)
+{
+    window.clearSamples();
+    const auto historyIt = scopeSampleHistory_.find(scopeId);
+    if (historyIt == scopeSampleHistory_.end()) {
+        return;
+    }
+
+    for (const auto& point : historyIt.value()) {
+        window.appendSample(point.channel, point.timeSeconds, point.value);
     }
 }
 
@@ -492,6 +777,7 @@ auto MainWindow::selectedRunDuration() const -> ui::RunDuration
 void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
     closeScopeWindows();
+    clearScopeSamples();
 
     runtimeSchema_ = schemaJson;
 
@@ -509,6 +795,7 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
 void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
     closeScopeWindows();
+    clearScopeSamples();
 
     const auto document = diagram::DiagramDocument::fromJson(diagramJson);
     runtimeSchema_ = document.runtimeSchema;
@@ -528,22 +815,74 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     setWindowTitle(QString("s7studio - %1").arg(name));
 }
 
-void MainWindow::openSchemaFile()
-{
-    openJsonDocument(
-        QStringLiteral("Open schema or diagram"),
-        QStringLiteral("JSON files (*.json);;All files (*)"),
-        false,
-        QStringLiteral("Open schema failed"));
-}
-
-void MainWindow::openDiagramFile()
+void MainWindow::openDocumentFile()
 {
     openJsonDocument(
         QStringLiteral("Open diagram"),
         QStringLiteral("Diagram or JSON files (*.json *.s7diagram);;All files (*)"),
         true,
-        QStringLiteral("Open diagram failed"));
+        QStringLiteral("Open failed"));
+}
+
+void MainWindow::closeCurrentDiagram()
+{
+    if (runner_ && runner_->isRunning()) {
+        runner_->reset();
+    }
+
+    closeScopeWindows();
+    clearScopeSamples();
+
+    runtimeSchema_ = boost::json::object{
+        {"name", "untitled"},
+        {"elements", boost::json::array{}},
+        {"connections", boost::json::array{}}
+    };
+    currentDiagramPath_.clear();
+
+    if (diagramEditor_) {
+        diagramEditor_->clearDiagram();
+        diagramEditor_->fitPageInView();
+        syncPageActions();
+    }
+
+    setWindowTitle(QStringLiteral("s7studio - untitled"));
+    appendLog(QStringLiteral("[studio] closed diagram"));
+    statusBar()->showMessage(QStringLiteral("Diagram closed"), 4000);
+    onStatusChanged(QStringLiteral("idle"));
+}
+
+void MainWindow::saveDocument()
+{
+    if (currentDiagramPath_.isEmpty()) {
+        saveDocumentAs();
+        return;
+    }
+
+    saveDocumentToPath(currentDiagramPath_);
+}
+
+void MainWindow::saveDocumentAs()
+{
+    QString selectedFilter;
+    const auto filePath = QFileDialog::getSaveFileName(
+        this,
+        QStringLiteral("Save diagram"),
+        currentDiagramPath_.isEmpty() ? QStringLiteral("diagram.s7diagram") : currentDiagramPath_,
+        QStringLiteral("Diagram files (*.s7diagram);;JSON files (*.json);;All files (*)"),
+        &selectedFilter);
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QString normalizedPath = filePath;
+    if (QFileInfo(normalizedPath).suffix().isEmpty()) {
+        normalizedPath += selectedFilter.startsWith(QStringLiteral("JSON"))
+            ? QStringLiteral(".json")
+            : QStringLiteral(".s7diagram");
+    }
+
+    saveDocumentToPath(normalizedPath);
 }
 
 void MainWindow::openJsonDocument(const QString& dialogTitle,
@@ -566,8 +905,10 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
         const bool diagramDocument = isDiagramDocument(parsed);
         if (diagramDocument) {
             loadDiagramJson(parsed, sourceLabel);
+            currentDiagramPath_ = filePath;
         } else {
             loadSchemaJson(parsed, sourceLabel);
+            currentDiagramPath_.clear();
             if (preferDiagram) {
                 appendLog(QString("[studio] file '%1' is a runtime schema; showing synthesized diagram view").arg(sourceLabel));
             }
@@ -581,6 +922,48 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
 void MainWindow::loadDemoDiagram()
 {
     loadSchemaJson(makeDemoSchemaJson(), QStringLiteral("embedded demo schema"));
+    currentDiagramPath_.clear();
+}
+
+auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        QMessageBox::critical(this, QStringLiteral("Save failed"), QStringLiteral("Diagram scene is not available."));
+        return false;
+    }
+
+    diagram::SerializationOptions options;
+    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("s7studio_diagram"));
+    options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+    if (diagramEditor_) {
+        const auto pageLayout = diagramEditor_->pageLayout();
+        options.sheetOrientation = pageLayout.orientation;
+        options.sheetWidthMm = pageLayout.widthMm;
+        options.sheetHeightMm = pageLayout.heightMm;
+    }
+
+    diagram::SceneSerializer serializer;
+    auto document = serializer.serialize(*diagramEditor_->scene(), options);
+
+    const auto payload = document.toJson();
+    const auto json = boost::json::serialize(payload);
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        QMessageBox::critical(this,
+                              QStringLiteral("Save failed"),
+                              QStringLiteral("Failed to write '%1': %2").arg(filePath, file.errorString()));
+        return false;
+    }
+
+    file.write(QByteArray::fromStdString(json));
+    file.write("\n");
+    file.close();
+
+    runtimeSchema_ = document.runtimeSchema;
+    currentDiagramPath_ = filePath;
+    appendLog(QString("[studio] saved diagram: %1").arg(QFileInfo(filePath).fileName()));
+    statusBar()->showMessage(QString("Saved diagram: %1").arg(QFileInfo(filePath).fileName()), 5000);
+    return true;
 }
 
 void MainWindow::fitDiagramToView()

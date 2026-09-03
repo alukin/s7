@@ -126,6 +126,11 @@ void ScopeViewWindow::appendSample(const int channel, const double timeSeconds, 
     dirty_ = true;
 }
 
+void ScopeViewWindow::clearSamples()
+{
+    clearBuffers();
+}
+
 void ScopeViewWindow::clearBuffers()
 {
     for (auto& series : channels_) {

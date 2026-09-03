@@ -60,7 +60,7 @@ auto ModelRunController::actionState() const -> RunActionState
     state.pauseEnabled = running && !paused;
     state.resumeEnabled = running && paused;
     state.stopEnabled = running;
-    state.resetEnabled = running;
+    state.resetEnabled = true;
     return state;
 }
 

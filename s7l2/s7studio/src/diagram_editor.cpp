@@ -68,6 +68,7 @@ DiagramEditor::DiagramEditor(QWidget* parent)
     : QWidget(parent),
       _scene(std::make_unique<QSchematic::Scene>(this))
 {
+
     auto layout = new QVBoxLayout(this);
     setMinimumSize(240, 180);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -213,12 +214,14 @@ bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
 
     if (_view && watched == _view->viewport() && event && event->type() == QEvent::Wheel) {
         if (const auto* wheelEvent = dynamic_cast<QWheelEvent*>(event)) {
-            if (wheelEvent->angleDelta().y() > 0) {
-                zoomIn();
-            } else if (wheelEvent->angleDelta().y() < 0) {
-                zoomOut();
+            if (wheelEvent->modifiers().testFlag(Qt::ControlModifier)) {
+                if (wheelEvent->angleDelta().y() > 0) {
+                    zoomIn();
+                } else if (wheelEvent->angleDelta().y() < 0) {
+                    zoomOut();
+                }
+                return true;
             }
-            return true;
         }
     }
 
@@ -232,12 +235,10 @@ bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
                 auto* node = dynamic_cast<QSchematic::Items::Node*>(item);
                 if (node) {
                     const QString type = node->data(kNodeTypeRole).toString();
-                    if (type == QStringLiteral("Scope")) {
-                        const QString scopeId = node->data(kNodeIdRole).toString();
-                        const int channelCount = std::max(1, node->data(kNodeChannelCountRole).toInt());
-                        if (!scopeId.isEmpty()) {
-                            emit scopeNodeDoubleClicked(scopeId, channelCount);
-                        }
+                    const QString elementId = node->data(kNodeIdRole).toString();
+                    const int channelCount = std::max(1, node->data(kNodeChannelCountRole).toInt());
+                    if (!elementId.isEmpty()) {
+                        emit elementNodeDoubleClicked(elementId, type, channelCount);
                     }
                     break;
                 }

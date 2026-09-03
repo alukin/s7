@@ -43,6 +43,7 @@ public:
 
 signals:
     void scopeNodeDoubleClicked(const QString& scopeId, int channelCount);
+    void elementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
 
 private:
     void scheduleFitToContents();

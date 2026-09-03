@@ -27,6 +27,7 @@ public:
     [[nodiscard]] auto channelCount() const -> int;
 
     void appendSample(int channel, double timeSeconds, double value);
+    void clearSamples();
 
 private slots:
     void clearBuffers();

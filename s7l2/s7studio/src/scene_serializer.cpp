@@ -8,12 +8,14 @@
 #include <qschematic/items/wire.hpp>
 #include <qschematic/scene.hpp>
 
+#include <QGraphicsColorizeEffect>
 #include <QGraphicsTextItem>
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -44,6 +46,56 @@ struct NodeWiring {
     std::vector<std::shared_ptr<QSchematic::Items::Connector>> inputs;
     std::vector<std::shared_ptr<QSchematic::Items::Connector>> outputs;
 };
+
+auto makeStyledConnector() -> std::shared_ptr<QSchematic::Items::Connector>
+{
+    auto connector = std::make_shared<QSchematic::Items::Connector>();
+    auto* colorize = new QGraphicsColorizeEffect();
+    colorize->setColor(QColor("#8fd3ff"));
+    colorize->setStrength(1.0);
+    connector->setGraphicsEffect(colorize);
+    return connector;
+}
+
+struct PortCounts {
+    int inputs = 0;
+    int outputs = 0;
+};
+
+auto declaredPortCounts(std::string_view type,
+                        const boost::json::object& params = {},
+                        const int fallbackChannelCount = 1) -> PortCounts
+{
+    if (type == "Constant" || type == "AnalogOscillator") {
+        return {0, 1};
+    }
+
+    if (type == "Gain" ||
+        type == "Delay" ||
+        type == "Integrator" ||
+        type == "FirFilter" ||
+        type == "IirFilter" ||
+        type == "PreviousValue" ||
+        type == "Int12ToDouble" ||
+        type == "DoubleToInt12") {
+        return {1, 1};
+    }
+
+    if (type == "Adder" || type == "Multiply" || type == "ReImToComplex") {
+        return {2, 1};
+    }
+
+    if (type == "ComplexToReIm" || type == "ComplexToMagnitudePhase") {
+        return {1, 2};
+    }
+
+    if (type == "Scope") {
+        const int channelCount = std::max(1, json_utils::intValue(params, "channel_count", fallbackChannelCount));
+        return {channelCount, 0};
+    }
+
+    return {};
+}
 
 auto portOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
 {
@@ -199,9 +251,10 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
                 }
                 if (model.type == "Scope") {
                     model.channelCount = std::max(1, json_utils::intValue(model.params, "channel_count", 1));
-                    model.inputPorts = std::max(model.inputPorts, model.channelCount);
-                    model.outputPorts = std::max(model.outputPorts, model.channelCount);
                 }
+                const auto declaredPorts = declaredPortCounts(model.type, model.params, model.channelCount);
+                model.inputPorts = std::max(model.inputPorts, declaredPorts.inputs);
+                model.outputPorts = std::max(model.outputPorts, declaredPorts.outputs);
                 model.title = QString::fromUtf8(model.id.c_str());
 
                 nodeOrder.push_back(model.id);
@@ -259,9 +312,10 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             }
             if (it->second.type == "Scope") {
                 it->second.channelCount = std::max(1, json_utils::intValue(nodeObject, "channel_count", it->second.channelCount));
-                it->second.inputPorts = std::max(it->second.inputPorts, it->second.channelCount);
-                it->second.outputPorts = std::max(it->second.outputPorts, it->second.channelCount);
             }
+            const auto declaredPorts = declaredPortCounts(it->second.type, it->second.params, it->second.channelCount);
+            it->second.inputPorts = std::max(it->second.inputPorts, declaredPorts.inputs);
+            it->second.outputPorts = std::max(it->second.outputPorts, declaredPorts.outputs);
 
             it->second.position = json_utils::pointValue(nodeObject, "position", it->second.position);
             it->second.hasExplicitPosition = true;
@@ -336,17 +390,17 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
 
         NodeWiring wiring;
 
-        const int inputPortCount = std::max(model.inputPorts, 1);
+        const int inputPortCount = std::max(model.inputPorts, 0);
         for (int portIndex = 0; portIndex < inputPortCount; ++portIndex) {
-            auto connector = std::make_shared<QSchematic::Items::Connector>();
+            auto connector = makeStyledConnector();
             connector->setPos(0.0, portOffsetY(nodeHeight, portIndex, inputPortCount));
             node->addConnector(connector);
             wiring.inputs.push_back(connector);
         }
 
-        const int outputPortCount = std::max(model.outputPorts, 1);
+        const int outputPortCount = model.type == "Scope" ? 0 : std::max(model.outputPorts, 0);
         for (int portIndex = 0; portIndex < outputPortCount; ++portIndex) {
-            auto connector = std::make_shared<QSchematic::Items::Connector>();
+            auto connector = makeStyledConnector();
             connector->setPos(nodeWidth, portOffsetY(nodeHeight, portIndex, outputPortCount));
             node->addConnector(connector);
             wiring.outputs.push_back(connector);
