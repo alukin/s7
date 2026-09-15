@@ -1,0 +1,152 @@
+{
+  "id": "s7studio_demo_oscillator_noise",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_magic": "S7STUDIO_DIAGRAM_V1",
+  "diagram_version": 1,
+  "units": "mm",
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "schema": {
+    "name": "s7studio_demo_oscillator_noise",
+    "elements": [
+      {
+        "id": "osc",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1.0,
+          "frequency_hz": 2.0,
+          "sample_rate_hz": 1000.0,
+          "phase": 0.0
+        }
+      },
+      {
+        "id": "noise",
+        "type": "WhiteNoiseGenerator",
+        "params": {
+          "amplitude": 0.15,
+          "seed": 42
+        }
+      },
+      {
+        "id": "summator",
+        "type": "Adder",
+        "params": {}
+      },
+      {
+        "id": "scope_main",
+        "type": "Scope",
+        "params": {
+          "channel_count": 1
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "osc",
+        "from_port": 0,
+        "to_element": "summator",
+        "to_port": 0
+      },
+      {
+        "from_element": "noise",
+        "from_port": 0,
+        "to_element": "summator",
+        "to_port": 1
+      },
+      {
+        "from_element": "summator",
+        "from_port": 0,
+        "to_element": "scope_main",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "version": 1,
+    "nodes": [
+      {
+        "id": "osc",
+        "type": "AnalogOscillator",
+        "name": "osc",
+        "position": {
+          "x": 40.0,
+          "y": 80.0
+        }
+      },
+      {
+        "id": "noise",
+        "type": "WhiteNoiseGenerator",
+        "name": "noise",
+        "position": {
+          "x": 40.0,
+          "y": 240.0
+        }
+      },
+      {
+        "id": "summator",
+        "type": "Adder",
+        "name": "summator",
+        "position": {
+          "x": 340.0,
+          "y": 160.0
+        }
+      },
+      {
+        "id": "scope_main",
+        "type": "Scope",
+        "name": "scope_main",
+        "channel_count": 1,
+        "position": {
+          "x": 670.0,
+          "y": 160.0
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "wire_0",
+        "points": [
+          {
+            "x": 220.0,
+            "y": 140.0
+          },
+          {
+            "x": 340.0,
+            "y": 193.0
+          }
+        ]
+      },
+      {
+        "id": "wire_1",
+        "points": [
+          {
+            "x": 220.0,
+            "y": 300.0
+          },
+          {
+            "x": 340.0,
+            "y": 226.0
+          }
+        ]
+      },
+      {
+        "id": "wire_2",
+        "points": [
+          {
+            "x": 520.0,
+            "y": 210.0
+          },
+          {
+            "x": 670.0,
+            "y": 210.0
+          }
+        ]
+      }
+    ]
+  }
+}
+

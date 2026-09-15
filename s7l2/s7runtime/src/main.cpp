@@ -5,6 +5,10 @@
 #include <utility>
 
 #include "../include/s7/runtime_service.hpp"
+#include "../include/s7/plugin_loader.hpp"
+
+#include <s7/builtin_element_registry.hpp>
+#include <s7/element_registry.hpp>
 
 #ifndef S7RUNTIME_DEFAULT_SCHEMA_PATH
 #define S7RUNTIME_DEFAULT_SCHEMA_PATH "s7runtime/examples/schema_minimal.json"
@@ -40,6 +44,13 @@ int main(int argc, char** argv) {
         }
 
         const auto definition = s7::JsonSchemaLoader::load_from_file(schema_path);
+
+        auto& registry = s7::ElementRegistry::instance();
+        s7::register_builtin_elements(registry);
+
+        s7::PluginLoader plugin_loader;
+        plugin_loader.load_plugins(registry);
+
         s7::RuntimeService service{definition};
         const auto schema = service.build_schema();
         auto executable_graph = s7::Compiler::compile(schema);
@@ -47,6 +58,7 @@ int main(int argc, char** argv) {
 
         std::cout << "s7runtime starter\n";
         std::cout << "schema.file=" << schema_path << '\n';
+        std::cout << "runtime.plugin_count=" << plugin_loader.loaded_count() << '\n';
         service.print_summary(std::cout);
 
         if (service.has_simulation()) {

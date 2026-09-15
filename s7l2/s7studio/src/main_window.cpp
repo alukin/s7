@@ -3,18 +3,27 @@
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
 #include "diagram_node_roles.hpp"
+#include "element_picker_panel.hpp"
 #include "json_utils.hpp"
 #include "main_window_builder.hpp"
 #include "scene_serializer.hpp"
 #include "scope_view_window.hpp"
+
+#include <s7/builtin_element_registry.hpp>
+#include <s7/element_catalog.hpp>
+#include <s7/element_registry.hpp>
+
+#include "s7/plugin_loader.hpp"
 
 #include <qschematic/items/node.hpp>
 #include <qschematic/scene.hpp>
 
 #include <QAction>
 #include <QActionGroup>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QFile>
 #include <QFileDialog>
@@ -29,6 +38,7 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QStringList>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QSplitter>
@@ -38,6 +48,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 namespace s7studio {
 
@@ -52,6 +63,30 @@ constexpr double kPaperA3HeightMm = 297.0;
 constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
 constexpr int kMaxScopeHistoryPointsPerScope = 20000;
+constexpr const char* kBundledDemoDiagramPath = S7STUDIO_SOURCE_DIR "/resources/demo_startup.s7diagram";
+
+auto developmentPluginCandidates() -> std::vector<std::string>
+{
+    const QString appDir = QCoreApplication::applicationDirPath();
+#if defined(_WIN32)
+    const QString suffix = QStringLiteral(".dll");
+    const QString noiseFile = QStringLiteral("s7noise") + suffix;
+#elif defined(__APPLE__)
+    const QString suffix = QStringLiteral(".dylib");
+    const QString noiseFile = QStringLiteral("libs7noise") + suffix;
+#else
+    const QString suffix = QStringLiteral(".so");
+    const QString noiseFile = QStringLiteral("libs7noise") + suffix;
+#endif
+
+    const QString candidateA = QFileInfo(appDir + QStringLiteral("/../s7noise/") + noiseFile).absoluteFilePath();
+    const QString candidateB = QFileInfo(appDir + QStringLiteral("/../../s7noise/") + noiseFile).absoluteFilePath();
+
+    return {
+        candidateA.toStdString(),
+        candidateB.toStdString(),
+    };
+}
 
 auto isDiagramDocument(const boost::json::value& json) -> bool
 {
@@ -81,10 +116,17 @@ auto schemaDisplayName(const boost::json::value& schemaJson, const QString& fall
 
 auto elementDescriptionForType(const QString& type) -> QString
 {
+    if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
+        const auto& metadata = descriptor->metadata();
+        if (!metadata.description.empty()) {
+            return QString::fromStdString(metadata.description);
+        }
+    }
+
     if (type == "Constant") return QStringLiteral("Constant source: outputs a fixed value.");
     if (type == "Gain") return QStringLiteral("Gain: multiplies input by a factor.");
-    if (type == "Adder") return QStringLiteral("Adder: sums two inputs.");
-    if (type == "Multiply") return QStringLiteral("Multiply: multiplies two inputs.");
+    if (type == "Adder") return QStringLiteral("Adder: weighted sum of N inputs.");
+    if (type == "Multiply") return QStringLiteral("Multiply: product of N inputs.");
     if (type == "Delay") return QStringLiteral("Delay: outputs previous input sample (stateful).");
     if (type == "Integrator") return QStringLiteral("Integrator: accumulates input over time.");
     if (type == "AnalogOscillator") return QStringLiteral("Analog oscillator: sinusoidal source.");
@@ -105,7 +147,73 @@ auto elementLibraryForType(const QString& type) -> QString
     if (type == "Scope") {
         return QStringLiteral("s7studio (embedded observer in executable)");
     }
+    if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
+        const auto& metadata = descriptor->metadata();
+        if (!metadata.category.empty()) {
+            return QStringLiteral("registry category: %1").arg(QString::fromStdString(metadata.category));
+        }
+        return QStringLiteral("registry");
+    }
     return QStringLiteral("s7core (.so at runtime link: libs7core)");
+}
+
+auto nextElementId(boost::json::value& runtimeSchema, const QString& elementType) -> QString
+{
+    const QString base = elementType.toLower() + QStringLiteral("_");
+    int suffix = 1;
+
+    auto hasId = [&runtimeSchema](const QString& probeId) {
+        if (!runtimeSchema.is_object()) {
+            return false;
+        }
+        auto& root = runtimeSchema.as_object();
+        const auto elementsIt = root.find("elements");
+        if (elementsIt == root.end() || !elementsIt->value().is_array()) {
+            return false;
+        }
+        for (const auto& item : elementsIt->value().as_array()) {
+            if (!item.is_object()) {
+                continue;
+            }
+            const auto id = json_utils::stringValue(item.as_object(), "id");
+            if (QString::fromUtf8(id.c_str()) == probeId) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    QString candidate;
+    do {
+        candidate = base + QString::number(suffix++);
+    } while (hasId(candidate));
+
+    return candidate;
+}
+
+auto suggestedNewNodePosition(const QSchematic::Scene& scene) -> QPointF
+{
+    constexpr double kOffsetX = 240.0;
+
+    const auto nodes = scene.items<QSchematic::Items::Node>();
+    if (nodes.empty()) {
+        return QPointF(40.0, 40.0);
+    }
+
+    double maxX = 40.0;
+    double yAtMaxX = 40.0;
+    for (const auto& node : nodes) {
+        if (!node) {
+            continue;
+        }
+
+        if (node->pos().x() >= maxX) {
+            maxX = node->pos().x();
+            yAtMaxX = node->pos().y();
+        }
+    }
+
+    return QPointF(maxX + kOffsetX, yAtMaxX);
 }
 
 auto parseEditableParams(const QString& text, boost::json::object& paramsOut, QString& error) -> bool
@@ -160,11 +268,92 @@ auto findElementParamsObject(boost::json::value& runtimeSchema, const QString& e
     return nullptr;
 }
 
+auto findElementParamsObjectView(const boost::json::value& runtimeSchema, const QString& elementId) -> const boost::json::object*
+{
+    if (!runtimeSchema.is_object()) {
+        return nullptr;
+    }
+
+    const auto& root = runtimeSchema.as_object();
+    const auto elementsIt = root.find("elements");
+    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
+        return nullptr;
+    }
+
+    const auto& elements = elementsIt->value().as_array();
+    for (const auto& elementValue : elements) {
+        if (!elementValue.is_object()) {
+            continue;
+        }
+
+        const auto& elementObject = elementValue.as_object();
+        const auto id = json_utils::stringValue(elementObject, "id");
+        if (QString::fromUtf8(id.c_str()) != elementId) {
+            continue;
+        }
+
+        if (const auto it = elementObject.find("params"); it != elementObject.end() && it->value().is_object()) {
+            return &it->value().as_object();
+        }
+
+        return nullptr;
+    }
+
+    return nullptr;
+}
+
+auto withDefaultedParams(const s7::ElementMetadata& metadata, const boost::json::object& params) -> boost::json::object
+{
+    auto effective = params;
+    for (const auto& parameter : metadata.parameters) {
+        if (effective.find(parameter.name) == effective.end()) {
+            effective[parameter.name] = parameter.default_value;
+        }
+    }
+    return effective;
+}
+
+auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
+{
+    if (ports.empty()) {
+        return QStringLiteral("none");
+    }
+
+    QStringList lines;
+    lines.reserve(static_cast<int>(ports.size()));
+    for (const auto& port : ports) {
+        const auto signalName = s7::signal_type_name(port.type);
+        lines.push_back(QStringLiteral("- %1 (%2): %3")
+                            .arg(QString::fromStdString(port.name),
+                                 QString::fromLatin1(signalName.data(), static_cast<int>(signalName.size())),
+                                 QString::fromStdString(port.description.empty() ? std::string("No description") : port.description)));
+    }
+    return lines.join('\n');
+}
+
+auto parameterListSummary(const std::vector<s7::ParameterSpec>& parameters) -> QString
+{
+    if (parameters.empty()) {
+        return QStringLiteral("none");
+    }
+
+    QStringList lines;
+    lines.reserve(static_cast<int>(parameters.size()));
+    for (const auto& parameter : parameters) {
+        lines.push_back(QStringLiteral("- %1 [%2], default=%3: %4")
+                            .arg(QString::fromStdString(parameter.name),
+                                 QString::fromStdString(parameter.type),
+                                 QString::fromStdString(boost::json::serialize(parameter.default_value)),
+                                 QString::fromStdString(parameter.description.empty() ? std::string("No description") : parameter.description)));
+    }
+    return lines.join('\n');
+}
+
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
-    , runtimeSchema_(makeDemoSchemaJson())
+    , runtimeSchema_(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}})
 {
     runner_ = new LocalSchemaRunner(this);
     controller_ = std::make_unique<ui::ModelRunController>(runner_);
@@ -174,13 +363,16 @@ MainWindow::MainWindow(QWidget* parent)
 
     connectRunnerSignals();
     if (diagramEditor_) {
+        connect(diagramEditor_, &diagram::DiagramEditor::scopeNodeDoubleClicked,
+                this,
+                &MainWindow::onScopeNodeDoubleClicked);
         connect(diagramEditor_, &diagram::DiagramEditor::elementNodeDoubleClicked,
                 this,
                 &MainWindow::onElementNodeDoubleClicked);
     }
 
     appendLog("[studio] Local embedded runtime ready");
-    loadSchemaJson(runtimeSchema_, QStringLiteral("embedded demo schema"));
+    loadDemoDiagram();
     refreshActions();
     onStatusChanged("idle");
 }
@@ -372,6 +564,37 @@ void MainWindow::buildUi()
     runtimePanel_ = widgets.runtimePanel;
     setRuntimePanelVisible(false);
 
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    pluginLoader_ = std::make_unique<s7::PluginLoader>();
+    pluginLoader_->load_plugins(registry);
+    if (pluginLoader_ && !registry.find("WhiteNoiseGenerator")) {
+        for (const auto& candidate : developmentPluginCandidates()) {
+            QFileInfo info(QString::fromStdString(candidate));
+            if (!info.exists() || !info.isFile()) {
+                continue;
+            }
+            pluginLoader_->load_plugin(candidate, registry);
+            if (registry.find("WhiteNoiseGenerator")) {
+                appendLog(QStringLiteral("[studio] loaded noise plugin from build tree: %1").arg(info.absoluteFilePath()));
+                break;
+            }
+        }
+    }
+
+    elementPickerPanel_ = new ui::ElementPickerPanel(registry, this);
+    elementPickerDock_ = new QDockWidget(QStringLiteral("Element Library"), this);
+    elementPickerDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
+    elementPickerDock_->setWidget(elementPickerPanel_);
+    addDockWidget(Qt::RightDockWidgetArea, elementPickerDock_);
+
+    connect(elementPickerPanel_, &ui::ElementPickerPanel::elementRequested,
+            this, &MainWindow::onElementRequested);
+
+    if (pluginLoader_) {
+        appendLog(QStringLiteral("[studio] plugins loaded: %1").arg(pluginLoader_->loaded_count()));
+    }
+
     if (diagramEditor_ && diagramEditor_->scene()) {
         connect(diagramEditor_->scene(), &QSchematic::Scene::modeChanged, this, [this](int mode) {
             if (modeNormalAction_ && modeWireAction_) {
@@ -384,6 +607,76 @@ void MainWindow::buildUi()
     }
 
     syncPageActions();
+}
+
+void MainWindow::onElementRequested(const QString& elementType, const QString& /*displayName*/)
+{
+    if (elementType.isEmpty()) {
+        return;
+    }
+
+    if (!runtimeSchema_.is_object()) {
+        runtimeSchema_ = boost::json::object{
+            {"name", "untitled"},
+            {"elements", boost::json::array{}},
+            {"connections", boost::json::array{}}
+        };
+    }
+
+    auto& root = runtimeSchema_.as_object();
+    if (!root.contains("elements") || !root.at("elements").is_array()) {
+        root["elements"] = boost::json::array{};
+    }
+
+    const QString elementId = nextElementId(runtimeSchema_, elementType);
+
+    boost::json::object elementObj;
+    elementObj["id"] = elementId.toStdString();
+    elementObj["type"] = elementType.toStdString();
+    elementObj["params"] = boost::json::object{};
+    root["elements"].as_array().push_back(elementObj);
+
+    if (diagramEditor_) {
+        if (auto* scene = diagramEditor_->scene()) {
+            diagram::SerializationOptions options;
+            options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+            options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+            const auto pageLayout = diagramEditor_->pageLayout();
+            options.sheetOrientation = pageLayout.orientation;
+            options.sheetWidthMm = pageLayout.widthMm;
+            options.sheetHeightMm = pageLayout.heightMm;
+
+            diagram::SceneSerializer serializer;
+            auto document = serializer.serialize(*scene, options);
+            document.runtimeSchema = runtimeSchema_;
+
+            if (!document.diagram.contains("nodes") || !document.diagram.at("nodes").is_array()) {
+                document.diagram["nodes"] = boost::json::array{};
+            }
+
+            const auto position = suggestedNewNodePosition(*scene);
+            boost::json::object positionJson;
+            positionJson["x"] = position.x();
+            positionJson["y"] = position.y();
+
+            boost::json::object nodeJson;
+            nodeJson["id"] = elementId.toStdString();
+            nodeJson["type"] = elementType.toStdString();
+            nodeJson["name"] = elementId.toStdString();
+            nodeJson["position"] = positionJson;
+            if (elementType == QStringLiteral("Scope")) {
+                nodeJson["channel_count"] = 1;
+            }
+            document.diagram["nodes"].as_array().push_back(nodeJson);
+
+            diagramEditor_->loadDocument(document);
+        } else {
+            diagramEditor_->loadRuntimeSchema(runtimeSchema_);
+        }
+        syncPageActions();
+    }
+
+    appendLog(QStringLiteral("[studio] added element %1 (%2)").arg(elementId, elementType));
 }
 
 void MainWindow::appendLog(const QString& message)
@@ -428,6 +721,8 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
                                             const QString& elementType,
                                             const int channelCount)
 {
+    const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
+
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Element Properties - %1").arg(elementId));
     dialog.resize(620, 460);
@@ -452,39 +747,55 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     descriptionLabel->setMinimumHeight(48);
     form->addRow(QStringLiteral("Description"), descriptionLabel);
 
-    layout->addLayout(form);
+    if (descriptor) {
+        const auto& metadata = descriptor->metadata();
+        auto* inputsLabel = new QLabel(portListSummary(metadata.input_ports), &dialog);
+        inputsLabel->setWordWrap(true);
+        form->addRow(QStringLiteral("Inputs"), inputsLabel);
 
-    auto* paramsLabel = new QLabel(QStringLiteral("Parameters (JSON object):"), &dialog);
-    layout->addWidget(paramsLabel);
+        auto* outputsLabel = new QLabel(portListSummary(metadata.output_ports), &dialog);
+        outputsLabel->setWordWrap(true);
+        form->addRow(QStringLiteral("Outputs"), outputsLabel);
 
-    QString currentParamsText = QStringLiteral("{}");
-    if (diagramEditor_ && diagramEditor_->scene()) {
-        for (const auto& nodePtr : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
-            if (!nodePtr) {
-                continue;
-            }
-            if (nodePtr->data(diagram::kNodeIdRole).toString() == elementId) {
-                const QString storedParams = nodePtr->data(diagram::kNodeParamsRole).toString();
-                if (!storedParams.trimmed().isEmpty()) {
-                    currentParamsText = storedParams;
-                }
-                break;
-            }
+        if (metadata.variadic_inputs.enabled) {
+            auto* variadicLabel = new QLabel(
+                QStringLiteral("enabled, min=%1, max=%2, template=%3")
+                    .arg(static_cast<int>(metadata.variadic_inputs.min_count))
+                    .arg(static_cast<int>(metadata.variadic_inputs.max_count))
+                    .arg(QString::fromStdString(metadata.variadic_inputs.port_name_template)),
+                &dialog);
+            variadicLabel->setWordWrap(true);
+            form->addRow(QStringLiteral("Variadic inputs"), variadicLabel);
         }
     }
+
+    layout->addLayout(form);
+
+    if (descriptor) {
+        const auto& metadata = descriptor->metadata();
+        auto* paramsInfoLabel = new QLabel(parameterListSummary(metadata.parameters), &dialog);
+        paramsInfoLabel->setWordWrap(true);
+        paramsInfoLabel->setMinimumHeight(56);
+        layout->addWidget(new QLabel(QStringLiteral("Parameter specs:"), &dialog));
+        layout->addWidget(paramsInfoLabel);
+    }
+
+    auto* paramsLabel = new QLabel(QStringLiteral("Parameters (effective JSON object):"), &dialog);
+    layout->addWidget(paramsLabel);
+
+    boost::json::object paramsForDialog;
+    if (const auto* schemaParams = findElementParamsObjectView(runtimeSchema_, elementId)) {
+        paramsForDialog = *schemaParams;
+    }
+    if (descriptor) {
+        paramsForDialog = withDefaultedParams(descriptor->metadata(), paramsForDialog);
+    }
+    const QString currentParamsText = QString::fromStdString(boost::json::serialize(paramsForDialog));
 
     auto* paramsEdit = new QPlainTextEdit(currentParamsText, &dialog);
     paramsEdit->setPlaceholderText(QStringLiteral("{\n  \"value\": 1.0\n}"));
     paramsEdit->setMinimumHeight(180);
     layout->addWidget(paramsEdit, 1);
-
-    if (elementType == QStringLiteral("Scope")) {
-        auto* openScopeButton = new QPushButton(QStringLiteral("Open Scope Window"), &dialog);
-        connect(openScopeButton, &QPushButton::clicked, this, [this, elementId, channelCount] {
-            openScopeWindow(elementId, channelCount);
-        });
-        layout->addWidget(openScopeButton);
-    }
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
@@ -516,6 +827,13 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
 
         if (auto* schemaParams = findElementParamsObject(runtimeSchema_, elementId)) {
             *schemaParams = paramsObject;
+        }
+
+        if ((elementType == QStringLiteral("Adder") ||
+             elementType == QStringLiteral("Multiply") ||
+             elementType == QStringLiteral("Scope")) && diagramEditor_) {
+            diagramEditor_->loadRuntimeSchema(runtimeSchema_);
+            syncPageActions();
         }
 
         appendLog(QStringLiteral("[studio] updated element params: %1").arg(elementId));
@@ -716,6 +1034,9 @@ void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
     window->setAttribute(Qt::WA_DeleteOnClose, true);
     scopeWindows_.insert(scopeId, window);
     connect(window, &QObject::destroyed, this, [this, scopeId] { scopeWindows_.remove(scopeId); });
+    connect(window, &ui::ScopeViewWindow::configureRequested, this, [this](const QString& id, const int channels) {
+        onElementNodeDoubleClicked(id, QStringLiteral("Scope"), channels);
+    });
     replayScopeSamples(scopeId, *window);
     window->show();
     window->raise();
@@ -921,7 +1242,20 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
 
 void MainWindow::loadDemoDiagram()
 {
-    loadSchemaJson(makeDemoSchemaJson(), QStringLiteral("embedded demo schema"));
+    try {
+        const auto filePath = QString::fromUtf8(kBundledDemoDiagramPath);
+        const auto parsed = json_utils::parseFile(filePath);
+        const auto sourceLabel = QFileInfo(filePath).fileName();
+        if (isDiagramDocument(parsed)) {
+            loadDiagramJson(parsed, sourceLabel);
+        } else {
+            loadSchemaJson(parsed, sourceLabel);
+        }
+    } catch (const std::exception& ex) {
+        appendLog(QStringLiteral("[studio] failed to load bundled demo: %1").arg(QString::fromUtf8(ex.what())));
+        loadSchemaJson(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}},
+                       QStringLiteral("empty schema"));
+    }
     currentDiagramPath_.clear();
 }
 

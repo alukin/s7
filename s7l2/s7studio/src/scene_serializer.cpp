@@ -81,7 +81,27 @@ auto declaredPortCounts(std::string_view type,
         return {1, 1};
     }
 
-    if (type == "Adder" || type == "Multiply" || type == "ReImToComplex") {
+    if (type == "Adder") {
+        int inputCount = 2;
+        if (const auto it = params.find("weights"); it != params.end() && it->value().is_array()) {
+            const auto& weights = it->value().as_array();
+            if (!weights.empty()) {
+                inputCount = static_cast<int>(weights.size());
+            }
+        }
+        return {std::max(2, inputCount), 1};
+    }
+    if (type == "Multiply") {
+        int inputCount = 2;
+        if (const auto it = params.find("factors"); it != params.end() && it->value().is_array()) {
+            const auto& factors = it->value().as_array();
+            if (!factors.empty()) {
+                inputCount = static_cast<int>(factors.size());
+            }
+        }
+        return {std::max(2, inputCount), 1};
+    }
+    if (type == "ReImToComplex") {
         return {2, 1};
     }
 

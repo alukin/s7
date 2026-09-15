@@ -19,6 +19,11 @@ class QSpinBox;
 class QCloseEvent;
 class QSplitter;
 class QWidget;
+class QDockWidget;
+
+namespace s7 {
+class PluginLoader;
+}
 
 namespace s7studio {
 
@@ -28,6 +33,7 @@ class DiagramEditor;
 
 namespace ui {
 class ScopeViewWindow;
+class ElementPickerPanel;
 }
 
 struct ScopeSamplePoint {
@@ -69,6 +75,7 @@ private slots:
     void setPaperLetter();
     void setPagePortrait();
     void setPageLandscape();
+    void onElementRequested(const QString& elementType, const QString& displayName);
 
 private:
     void buildUi();
@@ -135,6 +142,9 @@ private:
     QPlainTextEdit* logView_ = nullptr;
     QSplitter* mainSplitter_ = nullptr;
     QWidget* runtimePanel_ = nullptr;
+    QDockWidget* elementPickerDock_ = nullptr;
+    ui::ElementPickerPanel* elementPickerPanel_ = nullptr;
+    std::unique_ptr<s7::PluginLoader> pluginLoader_;
     QString currentDiagramPath_;
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
     QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "demo_schema.hpp"
-
 #include <s7/core.hpp>
 #include <s7/observe.hpp>
 
@@ -179,7 +177,7 @@ inline void addElementFromJson(s7::Schema& schema, const boost::json::object& el
 inline s7::Schema buildSchema(const boost::json::value& schemaJson)
 {
     if (!schemaJson.is_object()) {
-        return buildSchema(makeDemoSchemaJson());
+        throw std::invalid_argument("Schema root must be a JSON object.");
     }
 
     const auto& root = detail::expectObject(schemaJson, "root");
@@ -191,7 +189,7 @@ inline s7::Schema buildSchema(const boost::json::value& schemaJson)
 
     const auto elementsIt = root.find("elements");
     if (elementsIt == root.end()) {
-        return buildSchema(makeDemoSchemaJson());
+        throw std::invalid_argument("Schema must contain an 'elements' array.");
     }
 
     for (const auto& elementValue : detail::expectArray(root, "elements")) {

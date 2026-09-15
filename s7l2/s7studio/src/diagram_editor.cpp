@@ -238,7 +238,11 @@ bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
                     const QString elementId = node->data(kNodeIdRole).toString();
                     const int channelCount = std::max(1, node->data(kNodeChannelCountRole).toInt());
                     if (!elementId.isEmpty()) {
-                        emit elementNodeDoubleClicked(elementId, type, channelCount);
+                        if (type == QStringLiteral("Scope")) {
+                            emit scopeNodeDoubleClicked(elementId, channelCount);
+                        } else {
+                            emit elementNodeDoubleClicked(elementId, type, channelCount);
+                        }
                     }
                     break;
                 }

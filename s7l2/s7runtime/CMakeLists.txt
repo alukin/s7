@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(s7runtime
     src/main.cpp
     src/runtime_service.cpp
+    src/plugin_loader.cpp
 )
 
 target_include_directories(s7runtime PRIVATE
@@ -23,5 +24,6 @@ target_link_libraries(s7runtime PRIVATE
     s7io
     Boost::json
     Boost::system
+    ${CMAKE_DL_LIBS}
     Threads::Threads
 )

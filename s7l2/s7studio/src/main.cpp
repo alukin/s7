@@ -1,8 +1,10 @@
-#include "demo_schema.hpp"
-#include "local_runtime.hpp"
+#include "local_runtime_v2.hpp"
 #include "main_window.hpp"
 
 #include <QApplication>
+
+#include <boost/json.hpp>
+#include <boost/system/error_code.hpp>
 
 #include <algorithm>
 #include <cerrno>
@@ -99,7 +101,21 @@ void printCrashDumpHelp(const std::string& program)
 int runSmoke()
 {
     try {
-        const auto schemaJson = s7studio::makeDemoSchemaJson();
+        static constexpr std::string_view smokeSchema = R"json({
+            "name": "s7studio_smoke",
+            "elements": [
+                { "id": "osc", "type": "AnalogOscillator", "params": { "amplitude": 1.0, "frequency_hz": 1.0, "sample_rate_hz": 1000.0, "phase": 0.0 } },
+                { "id": "scope_main", "type": "Scope", "params": { "channel_count": 1 } }
+            ],
+            "connections": [
+                { "from_element": "osc", "from_port": 0, "to_element": "scope_main", "to_port": 0 }
+            ]
+        })json";
+        boost::system::error_code ec;
+        const auto schemaJson = boost::json::parse(smokeSchema, ec);
+        if (ec) {
+            throw std::runtime_error("Failed to parse smoke schema: " + ec.message());
+        }
         const auto schema = s7studio::runtime::buildSchema(schemaJson);
         s7studio::runtime::validateSchema(schema);
 

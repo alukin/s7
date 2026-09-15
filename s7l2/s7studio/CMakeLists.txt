@@ -32,9 +32,12 @@ add_executable(s7studio
     src/model_run_controller.hpp
     src/json_utils.hpp
     src/local_runtime.hpp
+    src/local_runtime_v2.hpp
     src/local_schema_runner.cpp
     src/local_schema_runner.hpp
-    src/demo_schema.hpp
+    src/element_picker_panel.cpp
+    src/element_picker_panel.hpp
+    resources/demo_startup.s7diagram
     src/diagram_document.hpp
     src/diagram_document.cpp
     src/diagram_node_roles.hpp
@@ -42,6 +45,7 @@ add_executable(s7studio
     src/scene_serializer.cpp
     src/runtime_schema_extractor.hpp
     src/runtime_schema_extractor.cpp
+    ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp
     src/diagram_format.hpp
     src/diagram_editor.hpp
     src/diagram_editor.cpp
@@ -53,6 +57,7 @@ target_include_directories(s7studio PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/s7core/include
     ${PROJECT_SOURCE_DIR}/s7observe/include
+    ${PROJECT_SOURCE_DIR}/s7runtime/include
 )
 
 target_link_libraries(s7studio PRIVATE
@@ -64,6 +69,7 @@ target_link_libraries(s7studio PRIVATE
     s7core
     s7observe
     Boost::json
+    ${CMAKE_DL_LIBS}
     Threads::Threads
 )
 
@@ -76,5 +82,9 @@ set_target_properties(s7studio PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )
+
+if (TARGET s7noise)
+    add_dependencies(s7studio s7noise)
+endif()
 
 add_test(NAME s7studio_smoke COMMAND s7studio --smoke)

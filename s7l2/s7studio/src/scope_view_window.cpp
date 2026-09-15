@@ -75,9 +75,11 @@ ScopeViewWindow::ScopeViewWindow(QString scopeId,
     recordButton_ = new QPushButton(QStringLiteral("Start Record"), this);
     clearButton_ = new QPushButton(QStringLiteral("Clear"), this);
     exportButton_ = new QPushButton(QStringLiteral("Export CSV"), this);
+    configureButton_ = new QPushButton(QStringLiteral("Configure"), this);
     controls->addWidget(recordButton_);
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
+    controls->addWidget(configureButton_);
     controls->addStretch(1);
 
     rootLayout->addLayout(controls);
@@ -95,6 +97,9 @@ ScopeViewWindow::ScopeViewWindow(QString scopeId,
     connect(recordButton_, &QPushButton::clicked, this, &ScopeViewWindow::toggleRecording);
     connect(clearButton_, &QPushButton::clicked, this, &ScopeViewWindow::clearBuffers);
     connect(exportButton_, &QPushButton::clicked, this, &ScopeViewWindow::exportRecordedCsv);
+    connect(configureButton_, &QPushButton::clicked, this, [this] {
+        emit configureRequested(scopeId_, channelCount_);
+    });
 }
 
 auto ScopeViewWindow::scopeId() const -> QString

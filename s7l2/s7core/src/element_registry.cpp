@@ -1,0 +1,163 @@
+#include "s7/element_registry.hpp"
+#include <stdexcept>
+#include <algorithm>
+#include <limits>
+
+namespace s7 {
+
+// ============================================================================
+// ElementCreationContext Implementation
+// ============================================================================
+
+double ElementCreationContext::get_real(const std::string& name) const {
+    if (!has_param(name)) {
+        throw std::invalid_argument("Required parameter not found: " + name);
+    }
+
+    const auto& value = params.at(name);
+    if (value.is_double()) {
+        return value.as_double();
+    }
+    if (value.is_int64()) {
+        return static_cast<double>(value.as_int64());
+    }
+    if (value.is_uint64()) {
+        return static_cast<double>(value.as_uint64());
+    }
+
+    throw std::invalid_argument("Parameter '" + name + "' is not a real number");
+}
+
+int64_t ElementCreationContext::get_int(const std::string& name) const {
+    if (!has_param(name)) {
+        throw std::invalid_argument("Required parameter not found: " + name);
+    }
+
+    const auto& value = params.at(name);
+    if (value.is_int64()) {
+        return value.as_int64();
+    }
+    if (value.is_uint64()) {
+        auto u = value.as_uint64();
+        if (u > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            throw std::invalid_argument("Parameter '" + name + "' exceeds int64 range");
+        }
+        return static_cast<int64_t>(u);
+    }
+    if (value.is_double()) {
+        auto d = value.as_double();
+        if (d < std::numeric_limits<int64_t>::min() || d > std::numeric_limits<int64_t>::max()) {
+            throw std::invalid_argument("Parameter '" + name + "' out of int64 range");
+        }
+        return static_cast<int64_t>(d);
+    }
+
+    throw std::invalid_argument("Parameter '" + name + "' is not an integer");
+}
+
+std::string ElementCreationContext::get_string(const std::string& name) const {
+    if (!has_param(name)) {
+        throw std::invalid_argument("Required parameter not found: " + name);
+    }
+
+    const auto& value = params.at(name);
+    if (!value.is_string()) {
+        throw std::invalid_argument("Parameter '" + name + "' is not a string");
+    }
+
+    return std::string(value.as_string());
+}
+
+bool ElementCreationContext::has_param(const std::string& name) const {
+    return params.find(name) != params.end();
+}
+
+// ============================================================================
+// ElementDescriptor Implementation
+// ============================================================================
+
+ElementDescriptor::ElementDescriptor(
+    std::string type_name,
+    std::function<std::unique_ptr<Element>(const ElementCreationContext&)> factory,
+    const ElementMetadata& metadata
+)
+    : type_name_(std::move(type_name)),
+      factory_(factory),
+      metadata_(metadata)
+{
+    if (!factory_) {
+        throw std::invalid_argument("Factory function cannot be null");
+    }
+}
+
+std::unique_ptr<Element> ElementDescriptor::create(const ElementCreationContext& ctx) const {
+    return factory_(ctx);
+}
+
+// ============================================================================
+// ElementRegistry Implementation
+// ============================================================================
+
+ElementRegistry& ElementRegistry::instance() {
+    static ElementRegistry registry;
+    return registry;
+}
+
+void ElementRegistry::register_element(const ElementDescriptor& descriptor) {
+    const auto& type_name = descriptor.type_name();
+
+    // Check for duplicate
+    if (name_to_index_.find(type_name) != name_to_index_.end()) {
+        throw std::invalid_argument("Element type already registered: " + type_name);
+    }
+
+    // Add to registry
+    size_t index = descriptors_.size();
+    name_to_index_[type_name] = index;
+    descriptors_.push_back(descriptor);
+}
+
+const ElementDescriptor* ElementRegistry::find(const std::string& type_name) const {
+    auto it = name_to_index_.find(type_name);
+    if (it == name_to_index_.end()) {
+        return nullptr;
+    }
+    return &descriptors_[it->second];
+}
+
+const std::vector<ElementDescriptor>& ElementRegistry::all_descriptors() const {
+    return descriptors_;
+}
+
+std::vector<std::string> ElementRegistry::element_types() const {
+    std::vector<std::string> types;
+    types.reserve(descriptors_.size());
+    for (const auto& desc : descriptors_) {
+        types.push_back(desc.type_name());
+    }
+    return types;
+}
+
+std::vector<std::string> ElementRegistry::element_types_in_category(
+    const std::string& category
+) const {
+    std::vector<std::string> types;
+    for (const auto& desc : descriptors_) {
+        if (desc.metadata().category == category) {
+            types.push_back(desc.type_name());
+        }
+    }
+    return types;
+}
+
+size_t ElementRegistry::element_count() const {
+    return descriptors_.size();
+}
+
+void ElementRegistry::clear() {
+    descriptors_.clear();
+    name_to_index_.clear();
+}
+
+} // namespace s7
+

@@ -16,6 +16,7 @@
 
 #include "s7/io.hpp"
 #include "s7/net.hpp"
+#include "s7/element_registry.hpp"
 
 namespace s7 {
 namespace {
@@ -263,9 +264,19 @@ std::vector<std::filesystem::path> RuntimeService::output_files() const {
 
 s7::Schema RuntimeService::build_schema() const {
     s7::Schema schema{definition_.name};
+    auto& registry = s7::ElementRegistry::instance();
 
     for (const auto& element : definition_.elements) {
         const auto& params = element.params;
+
+        // Prefer registry-backed construction to support dynamically loaded plugins.
+        if (const auto* descriptor = registry.find(element.type)) {
+            schema.add_element(element.id, [descriptor, params] {
+                const s7::ElementCreationContext local_ctx{descriptor->metadata(), params};
+                return descriptor->create(local_ctx);
+            });
+            continue;
+        }
 
         if (element.type == "Constant") {
             const auto value = get_f64(params, "value", 0.0);

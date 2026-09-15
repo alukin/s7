@@ -2,6 +2,11 @@
 #define S7CORE_INCLUDE_S7_ELEMENTS_HPP
 
 #include "s7/element.hpp"
+
+#include <cmath>
+#include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace s7 {
@@ -9,9 +14,9 @@ namespace s7 {
 // ============================================================================
 // Helper to determine SignalType from C++ type
 // ============================================================================
-
 template <typename T>
-constexpr SignalType signal_type_for() {
+constexpr SignalType signal_type_for()
+{
     if constexpr (std::is_same_v<T, ComplexValue>) {
         return SignalType::COMPLEX;
     } else {
@@ -20,27 +25,27 @@ constexpr SignalType signal_type_for() {
 }
 
 // ============================================================================
-// Templated signal processing elements - CLEAN like s7pp!
+// Templated signal processing elements
 // Element owns storage, ports reference it
 // ============================================================================
-
 /// Constant source: 0 inputs, 1 output of type T
 template <typename T>
 class ConstantT final : public Element {
 public:
     explicit ConstantT(T value)
-        : Element("Constant"),
-          output_value_(value)
+        : Element("Constant")
+        , output_value_(value)
     {
         register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
     }
 
-    void step() override {
-        // Output already holds the constant value, nothing to do!
+    void step() override
+    {
+        // Output already holds the constant value.
     }
 
 private:
-    T output_value_;  // Element owns the storage
+    T output_value_;
 };
 
 /// Gain (amplifier): 1 input, 1 output of type T
@@ -48,63 +53,96 @@ template <typename T>
 class GainT final : public Element {
 public:
     explicit GainT(T factor)
-        : Element("Gain"),
-          factor_(factor),
-          output_value_{}
+        : Element("Gain")
+        , factor_(factor)
+        , output_value_{}
     {
-        register_input(0, port_names::in, signal_type_for<T>(), nullptr);  // Input doesn't need storage
+        register_input(0, port_names::in, signal_type_for<T>(), nullptr);
         register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
     }
 
-    void step() override {
-        output_value_ = read_input<T>(0) * factor_;  // Direct assignment!
+    void step() override
+    {
+        output_value_ = read_input<T>(0) * factor_;
     }
 
 private:
     T factor_;
-    T output_value_;  // Element owns the storage
+    T output_value_;
 };
 
-/// Adder: 2 inputs, 1 output of type T
+/// Adder: weighted sum of N inputs, 1 output of type T
 template <typename T>
 class AdderT final : public Element {
 public:
-    AdderT()
-        : Element("Adder"),
-          output_value_{}
+    explicit AdderT(std::vector<RealValue> weights = {1.0, 1.0})
+        : Element("Adder")
+        , weights_(weights.empty() ? std::vector<RealValue>{1.0, 1.0} : std::move(weights))
+        , output_value_{}
     {
-        register_input(0, port_names::lhs, signal_type_for<T>(), nullptr);
-        register_input(1, port_names::rhs, signal_type_for<T>(), nullptr);
+        for (std::size_t index = 0; index < weights_.size(); ++index) {
+            std::string port_name;
+            if (index == 0) {
+                port_name = port_names::lhs;
+            } else if (index == 1) {
+                port_name = port_names::rhs;
+            } else {
+                port_name = "in" + std::to_string(index);
+            }
+            register_input(index, port_name, signal_type_for<T>(), nullptr);
+        }
         register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
     }
 
-    void step() override {
-        output_value_ = read_input<T>(0) + read_input<T>(1);  // Direct assignment!
+    void step() override
+    {
+        T weighted_sum{};
+        for (std::size_t index = 0; index < weights_.size(); ++index) {
+            weighted_sum += read_input<T>(index) * weights_[index];
+        }
+        output_value_ = weighted_sum;
     }
 
 private:
-    T output_value_;  // Element owns the storage
+    std::vector<RealValue> weights_;
+    T output_value_;
 };
 
-/// Multiplier: 2 inputs, 1 output of type T
+/// Multiplier: product of N inputs with optional per-input factors, 1 output of type T
 template <typename T>
 class MultiplyT final : public Element {
 public:
-    MultiplyT()
-        : Element("Multiply"),
-          output_value_{}
+    explicit MultiplyT(std::vector<RealValue> factors = {1.0, 1.0})
+        : Element("Multiply")
+        , factors_(factors.empty() ? std::vector<RealValue>{1.0, 1.0} : std::move(factors))
+        , output_value_{}
     {
-        register_input(0, port_names::lhs, signal_type_for<T>(), nullptr);
-        register_input(1, port_names::rhs, signal_type_for<T>(), nullptr);
+        for (std::size_t index = 0; index < factors_.size(); ++index) {
+            std::string port_name;
+            if (index == 0) {
+                port_name = port_names::lhs;
+            } else if (index == 1) {
+                port_name = port_names::rhs;
+            } else {
+                port_name = "in" + std::to_string(index);
+            }
+            register_input(index, port_name, signal_type_for<T>(), nullptr);
+        }
         register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
     }
 
-    void step() override {
-        output_value_ = read_input<T>(0) * read_input<T>(1);
+    void step() override
+    {
+        T product = static_cast<T>(1.0);
+        for (std::size_t index = 0; index < factors_.size(); ++index) {
+            product *= read_input<T>(index) * factors_[index];
+        }
+        output_value_ = product;
     }
 
 private:
-    T output_value_;  // Element owns the storage
+    std::vector<RealValue> factors_;
+    T output_value_;
 };
 
 /// Delay (z^-1): 1 input, 1 output of type T, stateful
@@ -112,26 +150,25 @@ template <typename T>
 class DelayT final : public Element {
 public:
     explicit DelayT(T initial_value = T{})
-        : Element("Delay", true),  // has_state = true
-          prev_value_(initial_value),
-          output_value_(initial_value)
+        : Element("Delay", true)
+        , prev_value_(initial_value)
+        , output_value_(initial_value)
     {
         register_input(0, port_names::in, signal_type_for<T>(), nullptr);
         register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
     }
 
-    void step() override {
-        // Update for next step
+    void step() override
+    {
         prev_value_ = read_input<T>(0);
-        output_value_ = prev_value_;  // Direct assignment!
+        output_value_ = prev_value_;
     }
 
 private:
     T prev_value_;
-    T output_value_;  // Element owns the storage
+    T output_value_;
 };
 
-/// Classical digital integrator: accumulates the input into the output state.
 class Integrator final : public Element {
 public:
     explicit Integrator(RealValue initial_value = 0.0);
@@ -141,7 +178,6 @@ private:
     RealValue output_value_;
 };
 
-/// Reference sinusoidal oscillator using sin(phase).
 class AnalogOscillator final : public Element {
 public:
     AnalogOscillator(RealValue amplitude, RealValue frequency_hz, RealValue sample_rate_hz, RealValue phase = 0.0);
@@ -153,10 +189,6 @@ private:
     RealValue phase_increment_;
     RealValue output_value_;
 };
-
-// ============================================================================
-// Type aliases for concrete element types
-// ============================================================================
 
 using Constant = ConstantT<RealValue>;
 using ComplexConstant = ConstantT<ComplexValue>;
@@ -173,16 +205,6 @@ using ComplexMultiply = MultiplyT<ComplexValue>;
 using Delay = DelayT<RealValue>;
 using ComplexDelay = DelayT<ComplexValue>;
 
-// ============================================================================
-// Real-valued specific elements (no complex equivalent)
-// ============================================================================
-
-
-// ============================================================================
-// Real-valued specific elements (no complex equivalent)
-// ============================================================================
-
-/// FIR filter: 1 input, 1 output, stateful
 class FirFilter final : public Element {
 public:
     explicit FirFilter(std::vector<RealValue> taps);
@@ -194,7 +216,6 @@ private:
     RealValue output_value_;
 };
 
-/// IIR filter (1st order): 1 input, 1 output, stateful
 class IirFilter final : public Element {
 public:
     IirFilter(RealValue b0, RealValue b1, RealValue a1);
@@ -206,7 +227,6 @@ private:
     RealValue output_value_;
 };
 
-/// Output the previous sample (unit delay) - for standalone testing
 class PreviousValue final : public Element {
 public:
     explicit PreviousValue(RealValue initial_value = 0.0);
@@ -217,11 +237,6 @@ private:
     RealValue output_value_;
 };
 
-// ============================================================================
-// Type conversion elements
-// ============================================================================
-
-/// Combine real and imaginary parts into complex: 2 DOUBLE inputs, 1 COMPLEX output
 class ReImToComplex final : public Element {
 public:
     ReImToComplex();
@@ -231,7 +246,6 @@ private:
     ComplexValue output_value_;
 };
 
-/// Split complex into real and imaginary: 1 COMPLEX input, 2 DOUBLE outputs
 class ComplexToReIm final : public Element {
 public:
     ComplexToReIm();
@@ -242,7 +256,6 @@ private:
     RealValue output_im_;
 };
 
-/// Split complex into magnitude and phase: 1 COMPLEX input, 2 DOUBLE outputs
 class ComplexToMagnitudePhase final : public Element {
 public:
     ComplexToMagnitudePhase();
@@ -254,7 +267,6 @@ private:
     RealValue output_phase_;
 };
 
-/// Convert int12 to double (ADC simulation)
 class Int12ToDouble final : public Element {
 public:
     Int12ToDouble();
@@ -264,7 +276,6 @@ private:
     RealValue output_value_;
 };
 
-/// Convert double to int12 (DAC simulation)
 class DoubleToInt12 final : public Element {
 public:
     DoubleToInt12();
@@ -273,7 +284,6 @@ public:
 private:
     RealValue output_value_;
 };
-
 
 } // namespace s7
 

@@ -29,6 +29,9 @@ public:
     void appendSample(int channel, double timeSeconds, double value);
     void clearSamples();
 
+signals:
+    void configureRequested(const QString& scopeId, int channelCount);
+
 private slots:
     void clearBuffers();
     void exportRecordedCsv();
@@ -59,6 +62,7 @@ private:
     QPushButton* recordButton_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
+    QPushButton* configureButton_ = nullptr;
     QTimer* repaintTimer_ = nullptr;
 };
 

@@ -7,7 +7,12 @@ add_library(s7core STATIC
     src/compiler.cpp
     src/runtime.cpp
     src/elements.cpp
+    src/element_registry.cpp
+    src/element_catalog.cpp
+    src/builtin_element_registry.cpp
 )
+
+set_target_properties(s7core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(s7core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

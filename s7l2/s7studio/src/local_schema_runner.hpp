@@ -1,7 +1,7 @@
 #pragma once
 
 #include "is_schema_runner.hpp"
-#include "local_runtime.hpp"
+#include "local_runtime_v2.hpp"
 
 #include <QObject>
 #include <QString>
