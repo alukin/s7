@@ -1,0 +1,73 @@
+{
+  "name": "nested_schema_demo",
+  "elements": [
+    {
+      "id": "source",
+      "type": "Constant",
+      "params": {
+        "value": 2.0
+      }
+    },
+    {
+      "id": "block",
+      "type": "Schema",
+      "schema": {
+        "name": "gain_block",
+        "elements": [
+          {
+            "id": "gain",
+            "type": "Gain",
+            "params": {
+              "factor": 4.0
+            }
+          }
+        ],
+        "connections": [],
+        "exposed_inputs": [
+          {
+            "name": "in",
+            "type": "DOUBLE",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "out",
+            "type": "DOUBLE",
+            "element": "gain",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "sink",
+      "type": "RealGnuplotFileSink",
+      "params": {
+        "file_path": "nested_schema_demo.gnuplot"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_element": "source",
+      "from_port": 0,
+      "to_element": "block",
+      "to_port": 0
+    },
+    {
+      "from_element": "block",
+      "from_port": 0,
+      "to_element": "sink",
+      "to_port": 0
+    }
+  ],
+  "simulation": {
+    "periods": 1,
+    "sample_rate_hz": 1,
+    "frequency_hz": 1.0,
+    "notes": "Top-level schema contains a nested schema element that exposes one input and one output."
+  }
+}
+

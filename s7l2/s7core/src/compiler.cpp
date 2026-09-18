@@ -6,6 +6,12 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include <boost/uuid/name_generator_sha1.hpp>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/string_generator.hpp>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
 namespace s7 {
 namespace {
 
@@ -39,6 +45,27 @@ std::string join_errors(const std::vector<std::string>& errors) {
         }
     }
     return builder.str();
+}
+
+std::string validated_or_generated_uuid(const std::string& candidate) {
+    if (candidate.empty()) {
+        return boost::uuids::to_string(boost::uuids::random_generator()());
+    }
+
+    try {
+        const boost::uuids::string_generator generator;
+        return boost::uuids::to_string(generator(candidate));
+    } catch (const std::exception&) {
+        throw std::invalid_argument("Invalid UUID string provided to compiler identity metadata.");
+    }
+}
+
+std::string element_instance_uuid_for(const std::string& schema_instance_uuid,
+                                      const std::string& element_id) {
+    const boost::uuids::string_generator generator;
+    const auto schema_uuid = generator(schema_instance_uuid);
+    const boost::uuids::name_generator_sha1 name_generator(schema_uuid);
+    return boost::uuids::to_string(name_generator(element_id));
 }
 
 class CausalScheduler {
@@ -98,6 +125,12 @@ public:
 } // namespace
 
 ExecutableGraph Compiler::compile(const Schema& schema) {
+    return compile(schema, {}, {});
+}
+
+ExecutableGraph Compiler::compile(const Schema& schema,
+                                  std::string runtime_instance_uuid,
+                                  std::string schema_instance_uuid) {
     const auto validation = Validator::validate(schema);
     if (!validation.ok()) {
         throw std::invalid_argument("Schema validation failed:\n" + join_errors(validation.errors));
@@ -105,14 +138,22 @@ ExecutableGraph Compiler::compile(const Schema& schema) {
 
     ExecutableGraph executable_graph;
     executable_graph.schema_name = schema.name();
+    executable_graph.runtime_instance_uuid = validated_or_generated_uuid(runtime_instance_uuid);
+    executable_graph.schema_instance_uuid = validated_or_generated_uuid(schema_instance_uuid);
 
     PrototypeMap prototypes;
     for (const auto& spec : schema.elements()) {
         auto element = make_element(spec);
+        const auto element_instance_uuid = element_instance_uuid_for(executable_graph.schema_instance_uuid, spec.id);
+        if (executable_graph.instance_uuid_to_id.contains(element_instance_uuid)) {
+            throw std::invalid_argument("Duplicate generated element instance UUID for element id: '" + spec.id + "'.");
+        }
         prototypes.emplace(spec.id,
                            PrototypeInfo{element->input_count(),
                                          element->output_count(),
                                          element->has_causal_memory()});
+        executable_graph.instance_uuid_to_id.emplace(element_instance_uuid, spec.id);
+        executable_graph.id_to_instance_uuid.emplace(spec.id, element_instance_uuid);
         executable_graph.elements.emplace(spec.id, std::move(element));
     }
 

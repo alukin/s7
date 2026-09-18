@@ -13,7 +13,11 @@ namespace s7 {
 
 struct ExecutableGraph {
     std::string schema_name;
+    std::string runtime_instance_uuid;
+    std::string schema_instance_uuid;
     std::unordered_map<std::string, std::unique_ptr<Element>> elements;
+    std::unordered_map<std::string, std::string> instance_uuid_to_id;
+    std::unordered_map<std::string, std::string> id_to_instance_uuid;
     std::vector<std::string> causal_order;
     std::vector<std::string> memory_order;
 };

@@ -54,10 +54,18 @@ Each s7runtime instance (computational node) has a unique node identifier:
 struct ComputationalNodeAddress {
     std::string node_id;           // e.g., "compute-01", "pi-raspberry-1"
     std::string hostname;          // DNS name or IP
-    uint16_t port;                 // Control port (WebSocket, etc.)
+    uint16_t port;                 // Control port for this runtime instance
     std::string node_uuid;         // UUID v5(namespace, node_id)
 };
 ```
+
+### Multiple Runtime Instances Per Host
+
+S7 supports running multiple `s7runtime` instances on the same host.
+
+- `node_id` and `node_uuid` identify a runtime instance, not a physical host.
+- `hostname` may repeat across nodes (for example, `localhost`).
+- `port` must be unique per runtime instance on the same host.
 
 ### Full Network Path
 
@@ -337,12 +345,14 @@ private:
     {
       "node_id": "compute-02",
       "node_uuid": "550e8400-e29b-41d4-a716-446655440001",
-      "hostname": "192.168.1.10",
+      "hostname": "localhost",
       "port": 8002
     }
   ]
 }
 ```
+
+In this example, `compute-01` and `compute-02` are two distinct runtime instances on the same host.
 
 ## Element Discovery via UUID
 
@@ -372,7 +382,7 @@ public:
 ### Remote Catalog Discovery
 
 ```cpp
-// On compute-01, query what's available on compute-02
+// On compute-01, query another runtime instance by node_id
 auto catalog = network_topology.get_node("compute-02")->catalog();
 
 for (const auto& entry : catalog.all_elements()) {

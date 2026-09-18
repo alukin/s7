@@ -53,7 +53,8 @@ int main(int argc, char** argv) {
 
         s7::RuntimeService service{definition};
         const auto schema = service.build_schema();
-        auto executable_graph = s7::Compiler::compile(schema);
+        const auto schema_instance_uuid = service.create_schema_instance_uuid();
+        auto executable_graph = s7::Compiler::compile(schema, service.runtime_instance_uuid(), schema_instance_uuid);
         s7::NodeRuntime runtime{std::move(executable_graph)};
 
         std::cout << "s7runtime starter\n";

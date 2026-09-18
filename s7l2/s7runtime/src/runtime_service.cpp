@@ -7,12 +7,13 @@
 #include <stdexcept>
 #include <string_view>
 
-#include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/websocket/stream.hpp>
 #include <boost/system/error_code.hpp>
+#include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/uuid_io.hpp>
 
 #include "s7/io.hpp"
 #include "s7/net.hpp"
@@ -42,6 +43,60 @@ std::string expect_string(const boost::json::object& object, const std::string_v
         throw std::invalid_argument("Expected string field '" + std::string(key) + "'.");
     }
     return it->value().as_string().c_str();
+}
+
+auto signal_type_from_string(const std::string_view value) -> SignalType
+{
+    if (value == "DOUBLE" || value == "double") {
+        return SignalType::DOUBLE;
+    }
+    if (value == "COMPLEX" || value == "complex") {
+        return SignalType::COMPLEX;
+    }
+    if (value == "INT8") return SignalType::INT8;
+    if (value == "UINT8") return SignalType::UINT8;
+    if (value == "INT12") return SignalType::INT12;
+    if (value == "UINT12") return SignalType::UINT12;
+    if (value == "INT16") return SignalType::INT16;
+    if (value == "UINT16") return SignalType::UINT16;
+    throw std::invalid_argument("Unsupported signal type string: '" + std::string(value) + "'.");
+}
+
+auto parse_schema_port_bindings(const boost::json::object& root, const std::string_view field_name)
+    -> std::vector<SchemaPortBinding>
+{
+    std::vector<SchemaPortBinding> bindings;
+    const auto it = root.find(field_name);
+    if (it == root.end()) {
+        return bindings;
+    }
+    if (!it->value().is_array()) {
+        throw std::invalid_argument("Expected array field '" + std::string(field_name) + "'.");
+    }
+
+    for (const auto& binding_value : it->value().as_array()) {
+        if (!binding_value.is_object()) {
+            throw std::invalid_argument("Expected object in field '" + std::string(field_name) + "'.");
+        }
+
+        const auto& binding_object = binding_value.as_object();
+        SchemaPortBinding binding;
+        binding.name = expect_string(binding_object, "name");
+        binding.type = expect_string(binding_object, "type");
+        binding.element = expect_string(binding_object, "element");
+        if (const auto port_it = binding_object.find("port"); port_it != binding_object.end()) {
+            if (port_it->value().is_uint64()) {
+                binding.port = port_it->value().as_uint64();
+            } else if (port_it->value().is_int64() && port_it->value().as_int64() >= 0) {
+                binding.port = static_cast<std::uint64_t>(port_it->value().as_int64());
+            } else {
+                throw std::invalid_argument("Expected non-negative integer 'port' in schema port binding.");
+            }
+        }
+        bindings.push_back(std::move(binding));
+    }
+
+    return bindings;
 }
 
 bool get_bool(const boost::json::object& object, const std::string_view key, bool default_value) {
@@ -98,6 +153,8 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
 
     RuntimeSchemaDefinition definition;
     definition.name = expect_string(root, "name");
+    definition.exposed_inputs = parse_schema_port_bindings(root, "exposed_inputs");
+    definition.exposed_outputs = parse_schema_port_bindings(root, "exposed_outputs");
 
     for (const auto& element_value : expect_array(root, "elements")) {
         const auto& element_obj = expect_object(element_value, "element");
@@ -112,6 +169,13 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
                 throw std::invalid_argument("Expected object field 'params'.");
             }
             element.params = params_it->value().as_object();
+        }
+
+        if (const auto schema_it = element_obj.find("schema"); schema_it != element_obj.end()) {
+            if (!schema_it->value().is_object()) {
+                throw std::invalid_argument("Expected object field 'schema'.");
+            }
+            element.nested_schema = schema_it->value();
         }
 
         definition.elements.push_back(std::move(element));
@@ -166,6 +230,135 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
     return definition;
 }
 
+auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> std::unique_ptr<s7::Schema>
+{
+    auto schema = std::make_unique<s7::Schema>(definition.name);
+    auto& registry = s7::ElementRegistry::instance();
+
+    for (const auto& element : definition.elements) {
+        const auto& params = element.params;
+
+        if (element.type == "Schema") {
+            if (!element.nested_schema.is_object()) {
+                throw std::invalid_argument("Schema element '" + element.id + "' is missing nested schema definition.");
+            }
+
+            const auto nested_definition = parse_schema_definition(element.nested_schema);
+            schema->add_element(element.id, [nested_definition] {
+                auto nested = build_schema_from_definition(nested_definition);
+                return std::unique_ptr<s7::Element>(nested.release());
+            });
+            continue;
+        }
+
+        // Prefer registry-backed construction to support dynamically loaded plugins.
+        if (const auto* descriptor = registry.find(element.type)) {
+            schema->add_element(element.id, [descriptor, params] {
+                const s7::ElementCreationContext local_ctx{descriptor->metadata(), params};
+                return descriptor->create(local_ctx);
+            });
+            continue;
+        }
+
+        if (element.type == "Constant") {
+            const auto value = get_f64(params, "value", 0.0);
+            schema->add_element(element.id, [value] { return std::make_unique<s7::Constant>(value); });
+            continue;
+        }
+
+        if (element.type == "Integrator") {
+            const auto initial_value = get_f64(params, "initial_value", 0.0);
+            schema->add_element(element.id, [initial_value] { return std::make_unique<s7::Integrator>(initial_value); });
+            continue;
+        }
+
+        if (element.type == "Adder") {
+            schema->add_element(element.id, [] { return std::make_unique<s7::Adder>(); });
+            continue;
+        }
+
+        if (element.type == "Multiply") {
+            schema->add_element(element.id, [] { return std::make_unique<s7::Multiply>(); });
+            continue;
+        }
+
+        if (element.type == "AnalogOscillator") {
+            const auto amplitude = get_f64(params, "amplitude", 1.0);
+            const auto frequency_hz = get_f64(params, "frequency_hz", definition.simulation.frequency_hz);
+            const auto sample_rate_hz = get_f64(params, "sample_rate_hz",
+                                                static_cast<double>(definition.simulation.sample_rate_hz));
+            const auto phase = get_f64(params, "phase", 0.0);
+            schema->add_element(element.id, [amplitude, frequency_hz, sample_rate_hz, phase] {
+                return std::make_unique<s7::AnalogOscillator>(amplitude, frequency_hz, sample_rate_hz, phase);
+            });
+            continue;
+        }
+
+        if (element.type == "NetSink") {
+            const auto topic = expect_string(params, "topic");
+            schema->add_element(element.id, [topic] { return std::make_unique<s7::NetSink>(topic); });
+            continue;
+        }
+
+        if (element.type == "RealGnuplotFileSink") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema->add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealGnuplotFileSink>(file_path);
+            });
+            continue;
+        }
+
+        if (element.type == "RealCompactBinaryFileSink") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema->add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealCompactBinaryFileSink>(file_path);
+            });
+            continue;
+        }
+
+        if (element.type == "RealGnuplotFileSource") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema->add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealGnuplotFileSource>(file_path);
+            });
+            continue;
+        }
+
+        if (element.type == "RealCompactBinaryFileSource") {
+            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
+            schema->add_element(element.id, [file_path] {
+                return std::make_unique<s7::io::RealCompactBinaryFileSource>(file_path);
+            });
+            continue;
+        }
+
+        throw std::invalid_argument("Unsupported runtime element type: '" + element.type + "'.");
+    }
+
+    for (const auto& connection : definition.connections) {
+        schema->connect(connection.from_element,
+                        static_cast<std::size_t>(connection.from_port),
+                        connection.to_element,
+                        static_cast<std::size_t>(connection.to_port));
+    }
+
+    for (const auto& binding : definition.exposed_inputs) {
+        schema->expose_input(binding.name,
+                             signal_type_from_string(binding.type),
+                             binding.element,
+                             static_cast<std::size_t>(binding.port));
+    }
+
+    for (const auto& binding : definition.exposed_outputs) {
+        schema->expose_output(binding.name,
+                              signal_type_from_string(binding.type),
+                              binding.element,
+                              static_cast<std::size_t>(binding.port));
+    }
+
+    return schema;
+}
+
 struct ParsedWebSocketUrl {
     std::string host;
     std::string port;
@@ -214,7 +407,9 @@ RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file
     return parse_schema_definition(parsed);
 }
 
-RuntimeService::RuntimeService(RuntimeSchemaDefinition definition) : definition_(std::move(definition)) {}
+RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
+    : definition_(std::move(definition))
+    , runtime_instance_uuid_(boost::uuids::to_string(boost::uuids::random_generator()())) {}
 
 const RuntimeSchemaDefinition& RuntimeService::schema() const {
     return definition_;
@@ -263,105 +458,13 @@ std::vector<std::filesystem::path> RuntimeService::output_files() const {
 }
 
 s7::Schema RuntimeService::build_schema() const {
-    s7::Schema schema{definition_.name};
-    auto& registry = s7::ElementRegistry::instance();
-
-    for (const auto& element : definition_.elements) {
-        const auto& params = element.params;
-
-        // Prefer registry-backed construction to support dynamically loaded plugins.
-        if (const auto* descriptor = registry.find(element.type)) {
-            schema.add_element(element.id, [descriptor, params] {
-                const s7::ElementCreationContext local_ctx{descriptor->metadata(), params};
-                return descriptor->create(local_ctx);
-            });
-            continue;
-        }
-
-        if (element.type == "Constant") {
-            const auto value = get_f64(params, "value", 0.0);
-            schema.add_element(element.id, [value] { return std::make_unique<s7::Constant>(value); });
-            continue;
-        }
-
-        if (element.type == "Integrator") {
-            const auto initial_value = get_f64(params, "initial_value", 0.0);
-            schema.add_element(element.id, [initial_value] { return std::make_unique<s7::Integrator>(initial_value); });
-            continue;
-        }
-
-        if (element.type == "Adder") {
-            schema.add_element(element.id, [] { return std::make_unique<s7::Adder>(); });
-            continue;
-        }
-
-        if (element.type == "Multiply") {
-            schema.add_element(element.id, [] { return std::make_unique<s7::Multiply>(); });
-            continue;
-        }
-
-        if (element.type == "AnalogOscillator") {
-            const auto amplitude = get_f64(params, "amplitude", 1.0);
-            const auto frequency_hz = get_f64(params, "frequency_hz", definition_.simulation.frequency_hz);
-            const auto sample_rate_hz = get_f64(params, "sample_rate_hz", definition_.simulation.sample_rate_hz);
-            const auto phase = get_f64(params, "phase", 0.0);
-            schema.add_element(element.id, [amplitude, frequency_hz, sample_rate_hz, phase] {
-                return std::make_unique<s7::AnalogOscillator>(amplitude, frequency_hz, sample_rate_hz, phase);
-            });
-            continue;
-        }
-
-        if (element.type == "NetSink") {
-            const auto topic = expect_string(params, "topic");
-            schema.add_element(element.id, [topic] { return std::make_unique<s7::NetSink>(topic); });
-            continue;
-        }
-
-        if (element.type == "RealGnuplotFileSink") {
-            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
-            schema.add_element(element.id, [file_path] {
-                return std::make_unique<s7::io::RealGnuplotFileSink>(file_path);
-            });
-            continue;
-        }
-
-        if (element.type == "RealCompactBinaryFileSink") {
-            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
-            schema.add_element(element.id, [file_path] {
-                return std::make_unique<s7::io::RealCompactBinaryFileSink>(file_path);
-            });
-            continue;
-        }
-
-        if (element.type == "RealGnuplotFileSource") {
-            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
-            schema.add_element(element.id, [file_path] {
-                return std::make_unique<s7::io::RealGnuplotFileSource>(file_path);
-            });
-            continue;
-        }
-
-        if (element.type == "RealCompactBinaryFileSource") {
-            const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
-            schema.add_element(element.id, [file_path] {
-                return std::make_unique<s7::io::RealCompactBinaryFileSource>(file_path);
-            });
-            continue;
-        }
-
-        throw std::invalid_argument("Unsupported runtime element type: '" + element.type + "'.");
-    }
-
-    for (const auto& connection : definition_.connections) {
-        schema.connect(connection.from_element, static_cast<std::size_t>(connection.from_port), connection.to_element,
-                       static_cast<std::size_t>(connection.to_port));
-    }
-
-    return schema;
+    auto schema = build_schema_from_definition(definition_);
+    return std::move(*schema);
 }
 
 void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.schema=" << definition_.name << '\n';
+    out << "runtime.instance_uuid=" << runtime_instance_uuid_ << '\n';
     out << "runtime.elements=" << definition_.elements.size() << '\n';
     out << "runtime.connections=" << definition_.connections.size() << '\n';
     out << "runtime.websocket.server.enabled=" << (definition_.server.enabled ? "true" : "false") << '\n';
@@ -374,7 +477,15 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.simulation.frequency_hz=" << definition_.simulation.frequency_hz << '\n';
 }
 
-void RuntimeService::start_websocket_server() {
+const std::string& RuntimeService::runtime_instance_uuid() const {
+    return runtime_instance_uuid_;
+}
+
+std::string RuntimeService::create_schema_instance_uuid() const {
+    return boost::uuids::to_string(boost::uuids::random_generator()());
+}
+
+void RuntimeService::start_websocket_server() const {
     if (!definition_.server.enabled) {
         return;
     }
@@ -392,7 +503,7 @@ void RuntimeService::start_websocket_server() {
     acceptor.listen(boost::asio::socket_base::max_listen_connections);
 }
 
-void RuntimeService::connect_websocket_client() {
+void RuntimeService::connect_websocket_client() const {
     if (!definition_.client.enabled) {
         return;
     }

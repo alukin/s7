@@ -171,20 +171,69 @@ int main() try
     }
 
     {
-        std::unique_ptr<s7::Element> composite = std::make_unique<s7::Schema>("composite");
-        assert(composite->type_name() == "Schema");
-        assert(composite->input_count() == 0);
-        assert(composite->output_count() == 0);
+        auto makeComposite = [] {
+            auto schema = std::make_unique<s7::Schema>("composite_gain");
+            schema->add_element("inner_gain", [] { return std::make_unique<s7::Gain>(2.5); });
+            schema->expose_input("in", s7::SignalType::DOUBLE, "inner_gain", 0);
+            schema->expose_output("out", s7::SignalType::DOUBLE, "inner_gain", 0);
+            return schema;
+        };
+        {
+            auto probeComposite = makeComposite();
+            assert(probeComposite->type_name() == "Schema");
+            assert(probeComposite->input_count() == 1);
+            assert(probeComposite->output_count() == 1);
+        }
+
+        s7::Schema outer{"outer_with_schema_element"};
+        outer.add_element("source", [] { return std::make_unique<s7::Constant>(4.0); });
+        outer.add_element("composite", [makeComposite] { return makeComposite(); });
+        outer.connect("source", 0, "composite", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(outer)};
+        runtime.step();
+        assert(std::abs(runtime.real_output_of("composite") - 10.0) < 1e-12);
+    }
+
+    {
+        s7::Schema root{"nested_schema"};
+        root.add_element("source", [] { return std::make_unique<s7::Constant>(3.0); });
+        root.add_element("nested", [] {
+            auto inner = std::make_unique<s7::Schema>("inner");
+            inner->add_element("g1", [] { return std::make_unique<s7::Gain>(2.0); });
+            inner->add_element("g2", [] { return std::make_unique<s7::Gain>(5.0); });
+            inner->connect("g1", 0, "g2", 0);
+            inner->expose_input("in", s7::SignalType::DOUBLE, "g1", 0);
+            inner->expose_output("out", s7::SignalType::DOUBLE, "g2", 0);
+            return inner;
+        });
+        root.connect("source", 0, "nested", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(root)};
+        runtime.step();
+        assert(std::abs(runtime.real_output_of("nested") - 30.0) < 1e-12);
+    }
+
+    {
+        s7::Schema outer{"invalid_nested_schema"};
+        outer.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
+        outer.add_element("broken_nested", [] {
+            auto inner = std::make_unique<s7::Schema>("broken");
+            inner->add_element("g", [] { return std::make_unique<s7::Gain>(2.0); });
+            inner->expose_input("in", s7::SignalType::DOUBLE, "g", 0);
+            inner->expose_output("out", s7::SignalType::DOUBLE, "missing", 0);
+            return inner;
+        });
+        outer.connect("source", 0, "broken_nested", 0);
 
         bool threw = false;
         try {
-            composite->step();
-        } catch (const std::logic_error&) {
+            auto runtime = s7::NodeRuntime{s7::Compiler::compile(outer)};
+            (void)runtime;
+        } catch (const std::exception&) {
             threw = true;
         }
-        if (!threw) {
-            throw std::runtime_error("Schema::step() was expected to throw std::logic_error.");
-        }
+        assert(threw);
     }
 
     {
@@ -196,6 +245,10 @@ int main() try
         const s7::ObservationService observation{runtime};
         runtime.step();
         assert(runtime.real_output_of("sum") == 1.0);
+        const auto sumInstanceUuid = runtime.element_instance_uuid_of("sum");
+        assert(!sumInstanceUuid.empty());
+        assert(runtime.element_id_of_instance_uuid(sumInstanceUuid) == "sum");
+        assert(runtime.real_output_of_instance_uuid(sumInstanceUuid) == 1.0);
         assert(observation.sample_output("sum").as_real() == 1.0);
         runtime.step();
         assert(runtime.real_output_of("sum") == 2.0);
@@ -204,6 +257,25 @@ int main() try
         assert(samples.size() == 2);
         assert(samples[0].as_real() == 2.0);
         assert(samples[1].as_real() == 2.0);
+    }
+
+    {
+        s7::Schema schema{"explicit_uuid_lookup"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(4.0); });
+        schema.add_element("gain", [] { return std::make_unique<s7::Gain>(3.0); });
+        schema.connect("source", 0, "gain", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema,
+                                                      "00000000-0000-4000-8000-000000000010",
+                                                      "00000000-0000-4000-8000-000000000020")};
+        runtime.step();
+        assert(runtime.runtime_instance_uuid() == "00000000-0000-4000-8000-000000000010");
+        assert(runtime.schema_instance_uuid() == "00000000-0000-4000-8000-000000000020");
+        const auto sourceUuid = runtime.element_instance_uuid_of("source");
+        const auto gainUuid = runtime.element_instance_uuid_of("gain");
+        assert(sourceUuid != gainUuid);
+        assert(runtime.element_id_of_instance_uuid(gainUuid) == "gain");
+        assert(std::abs(runtime.real_output_of_instance_uuid(gainUuid) - 12.0) < 1e-12);
     }
 
     {

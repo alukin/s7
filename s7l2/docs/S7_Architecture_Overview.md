@@ -218,6 +218,10 @@ Observation never modifies computational semantics.
 
 The Deployment Graph maps Schemas to Nodes.
 
+In deployment terms, a Node is a runtime instance (for example, one `s7runtime` process), not necessarily a unique physical host.
+
+Multiple runtime instances may run on the same host when they use distinct network endpoints and identifiers.
+
 Fundamental rule:
 
 Schema is the unit of deployment.
@@ -360,6 +364,8 @@ Responsible for:
 - resource management
 
 A NodeRuntime may execute independently.
+
+A single host may execute multiple `NodeRuntime` instances concurrently.
 
 ------------------------------------------------------------------------
 

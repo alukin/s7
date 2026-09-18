@@ -4,11 +4,16 @@
 #include "s7/graph.hpp"
 #include "s7/schema.hpp"
 
+#include <string>
+
 namespace s7 {
 
 class Compiler {
 public:
     static ExecutableGraph compile(const Schema& schema);
+    static ExecutableGraph compile(const Schema& schema,
+                                   std::string runtime_instance_uuid,
+                                   std::string schema_instance_uuid);
 };
 
 } // namespace s7

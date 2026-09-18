@@ -5,8 +5,6 @@
 
 #include <cstddef>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 namespace s7 {
 
@@ -15,9 +13,16 @@ public:
     explicit NodeRuntime(ExecutableGraph executable_graph);
 
     void step();
+    [[nodiscard]] const std::string& runtime_instance_uuid() const;
+    [[nodiscard]] const std::string& schema_instance_uuid() const;
+    [[nodiscard]] const std::string& element_instance_uuid_of(const std::string& element_id) const;
+    [[nodiscard]] const std::string& element_id_of_instance_uuid(const std::string& element_instance_uuid) const;
     [[nodiscard]] SignalType output_type_of(const std::string& element_id, std::size_t port = 0) const;
+    [[nodiscard]] SignalType output_type_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
     [[nodiscard]] RealValue real_output_of(const std::string& element_id, std::size_t port = 0) const;
+    [[nodiscard]] RealValue real_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
     [[nodiscard]] ComplexValue complex_output_of(const std::string& element_id, std::size_t port = 0) const;
+    [[nodiscard]] ComplexValue complex_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
     [[nodiscard]] std::size_t step_count() const;
 
 private:

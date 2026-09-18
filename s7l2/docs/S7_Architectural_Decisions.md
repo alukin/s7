@@ -187,6 +187,10 @@ Accepted
 
 Deployment metadata often applies to groups of Elements rather than individual Elements.
 
+In this context, node assignment means assignment to runtime instances (deployment nodes), not directly to physical hosts.
+
+Multiple runtime instances may be deployed on a single host.
+
 Examples:
 
 - node assignment;
@@ -206,7 +210,8 @@ The smallest deployable architectural unit is a Schema.
 Positive:
 
 - simpler deployment model;
-- natural mapping to processes and nodes.
+- natural mapping to processes and nodes;
+- supports multi-instance deployment on one host for isolation and scaling.
 
 Negative:
 
@@ -666,7 +671,8 @@ Positive:
 
 - embedded deployment;
 - automation;
-- remote operation.
+- remote operation;
+- allows multiple headless runtime instances on one host.
 
 ------------------------------------------------------------------------
 
