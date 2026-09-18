@@ -1,9 +1,3 @@
-[submodule "s7pp/external/QSchematic"]
-	path = s7pp/external/QSchematic
-	url = https://github.com/simulton/QSchematic.git
-[submodule "s7pp/external/QCustomPlot"]
-	path = s7pp/external/QCustomPlot
-	url = https://gitlab.com/ecme2/QCustomPlot.git
 [submodule "s7l2/external/QSchematic"]
 	path = s7l2/external/QSchematic
 	url = git@github.com:alukin/QSchematic.git
