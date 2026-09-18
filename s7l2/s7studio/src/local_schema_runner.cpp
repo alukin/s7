@@ -192,12 +192,16 @@ void LocalSchemaRunner::emitScopeSamples(const long step)
     const double timeSeconds = static_cast<double>(step) * dt_;
     for (const auto& scope : scopeConfigs_) {
         for (std::size_t channel = 0; channel < scope.channelCount; ++channel) {
-            const auto sample = observation.sample_output(scope.id, channel);
-            emit scopeSample(QString::fromStdString(scope.id),
-                             static_cast<int>(channel),
-                             static_cast<long>(sample.step),
-                             timeSeconds,
-                             sample.as_real());
+            try {
+                const auto sample = observation.sample_output(scope.id, channel);
+                emit scopeSample(QString::fromStdString(scope.id),
+                                 static_cast<int>(channel),
+                                 static_cast<long>(sample.step),
+                                 timeSeconds,
+                                 sample.as_real());
+            } catch (const std::exception&) {
+                // Ignore missing/unsupported scope channels so valid channels still render.
+            }
         }
     }
 }

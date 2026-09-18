@@ -37,6 +37,7 @@ add_executable(s7studio
     src/local_schema_runner.hpp
     src/element_picker_panel.cpp
     src/element_picker_panel.hpp
+    resources/icons.qrc
     resources/demo_startup.s7diagram
     src/diagram_document.hpp
     src/diagram_document.cpp
@@ -79,6 +80,7 @@ target_compile_definitions(s7studio PRIVATE
 
 set_target_properties(s7studio PROPERTIES
     AUTOMOC ON
+    AUTORCC ON
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
 )

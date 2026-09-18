@@ -3,8 +3,8 @@
 #include "local_schema_runner.hpp"
 #include "model_run_controller.hpp"
 
-#include <QMainWindow>
 #include <QHash>
+#include <QMainWindow>
 #include <QPointer>
 #include <QVector>
 
@@ -20,6 +20,9 @@ class QCloseEvent;
 class QSplitter;
 class QWidget;
 class QDockWidget;
+class QFontComboBox;
+class QToolBar;
+class QFont;
 
 namespace s7 {
 class PluginLoader;
@@ -76,6 +79,13 @@ private slots:
     void setPagePortrait();
     void setPageLandscape();
     void onElementRequested(const QString& elementType, const QString& displayName);
+    void addTextFrame();
+    void setSelectedTextFrameTextColor();
+    void setSelectedTextFrameLineColor();
+    void setSelectedTextFrameFillColor();
+    void setSelectedTextFrameFont(const QFont& font);
+    void setSelectedTextFrameFontSize(int pointSize);
+    void syncTextFrameStyleControls();
 
 private:
     void buildUi();
@@ -96,6 +106,7 @@ private:
     [[nodiscard]] auto selectedRunDuration() const -> ui::RunDuration;
     void loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
     void loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel);
+    void connectSceneSignals();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -131,6 +142,10 @@ private:
     QAction* paperLetterAction_ = nullptr;
     QAction* portraitPageAction_ = nullptr;
     QAction* landscapePageAction_ = nullptr;
+    QAction* addTextFrameAction_ = nullptr;
+    QAction* textColorAction_ = nullptr;
+    QAction* lineColorAction_ = nullptr;
+    QAction* fillColorAction_ = nullptr;
 
     diagram::DiagramEditor* diagramEditor_ = nullptr;
     QDoubleSpinBox* dtSpin_ = nullptr;
@@ -150,6 +165,10 @@ private:
     QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
     QActionGroup* paperSizeGroup_ = nullptr;
     QActionGroup* pageOrientationGroup_ = nullptr;
+    QToolBar* diagramDrawToolBar_ = nullptr;
+    QFontComboBox* textFrameFontCombo_ = nullptr;
+    QSpinBox* textFrameFontSizeSpin_ = nullptr;
+    bool shuttingDown_ = false;
 };
 
 } // namespace s7studio

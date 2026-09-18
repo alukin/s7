@@ -9,6 +9,8 @@
 #include <qschematic/scene.hpp>
 #include <qschematic/wire_system/wire.hpp>
 
+#include <QString>
+
 #include <algorithm>
 #include <boost/system/error_code.hpp>
 #include <optional>
@@ -121,6 +123,10 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
             ? "node_" + std::to_string(nodeIndex++)
             : storedId.toStdString();
         const auto storedType = node->data(kNodeTypeRole).toString();
+        if (storedType == QStringLiteral("TextFrame")) {
+            continue;
+        }
+
         boost::json::object params = parseParamsFromNode(*node);
         if (storedType == "Scope") {
             const auto storedChannelCount = node->data(kNodeChannelCountRole).toInt();
@@ -195,4 +201,3 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
 }
 
 } // namespace s7studio::diagram
-

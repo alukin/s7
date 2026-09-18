@@ -25,6 +25,7 @@ public:
 
     [[nodiscard]] auto scopeId() const -> QString;
     [[nodiscard]] auto channelCount() const -> int;
+    void setChannelCount(int channelCount);
 
     void appendSample(int channel, double timeSeconds, double value);
     void clearSamples();

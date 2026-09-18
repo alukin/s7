@@ -20,6 +20,7 @@
 
 #include <QAction>
 #include <QActionGroup>
+#include <QColorDialog>
 #include <QCoreApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -36,16 +37,29 @@
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QFontComboBox>
+#include <QFont>
+#include <QGraphicsItem>
+#include <QGraphicsRectItem>
+#include <QGraphicsScene>
+#include <QGraphicsTextItem>
+#include <QInputDialog>
+#include <QIcon>
+#include <QPainter>
 #include <QPlainTextEdit>
+#include <QPen>
+#include <QPalette>
 #include <QPushButton>
 #include <QStringList>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QSplitter>
+#include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <algorithm>
+#include <boost/system/error_code.hpp>
 #include <cmath>
 #include <string>
 #include <vector>
@@ -64,6 +78,183 @@ constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
 constexpr int kMaxScopeHistoryPointsPerScope = 20000;
 constexpr const char* kBundledDemoDiagramPath = S7STUDIO_SOURCE_DIR "/resources/demo_startup.s7diagram";
+constexpr double kDefaultTextFrameWidth = 260.0;
+constexpr double kDefaultTextFrameHeight = 120.0;
+
+auto parseEncodedParams(const QString& encodedParams) -> boost::json::object
+{
+    if (encodedParams.isEmpty()) {
+        return {};
+    }
+
+    boost::system::error_code ec;
+    const auto parsed = boost::json::parse(encodedParams.toStdString(), ec);
+    if (ec || !parsed.is_object()) {
+        return {};
+    }
+
+    return parsed.as_object();
+}
+
+auto defaultTextFrameParams() -> boost::json::object
+{
+    return boost::json::object{
+        {"text", "Text frame"},
+        {"text_color", "#202020"},
+        {"line_color", "#444444"},
+        {"fill_color", "#fff4cc"},
+        {"font_family", "Sans Serif"},
+        {"font_size", 12},
+        {"width", kDefaultTextFrameWidth},
+        {"height", kDefaultTextFrameHeight},
+    };
+}
+
+auto mergedTextFrameParams(const boost::json::object& custom) -> boost::json::object
+{
+    auto merged = defaultTextFrameParams();
+    for (const auto& [key, value] : custom) {
+        merged[key] = value;
+    }
+    return merged;
+}
+
+auto themedToolbarSvgIcon(const QString& resourcePath, const QColor& color) -> QIcon
+{
+    QIcon source(resourcePath);
+    if (source.isNull()) {
+        return source;
+    }
+
+    QIcon themed;
+    const std::vector<int> sizes{16, 18, 20, 24, 28, 32};
+    for (const int size : sizes) {
+        QPixmap base = source.pixmap(size, size);
+        if (base.isNull()) {
+            continue;
+        }
+
+        QPixmap normal = base;
+        {
+            QPainter painter(&normal);
+            painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+            painter.fillRect(normal.rect(), color);
+        }
+        themed.addPixmap(normal, QIcon::Normal, QIcon::Off);
+        themed.addPixmap(normal, QIcon::Active, QIcon::Off);
+        themed.addPixmap(normal, QIcon::Selected, QIcon::Off);
+
+        QPixmap disabled = base;
+        {
+            QColor disabledColor = color;
+            disabledColor.setAlpha(110);
+            QPainter painter(&disabled);
+            painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+            painter.fillRect(disabled.rect(), disabledColor);
+        }
+        themed.addPixmap(disabled, QIcon::Disabled, QIcon::Off);
+    }
+
+    return themed.isNull() ? source : themed;
+}
+
+auto applyTextFrameVisuals(QSchematic::Items::Node& node, const boost::json::object& rawParams) -> boost::json::object
+{
+    auto params = mergedTextFrameParams(rawParams);
+    const auto* widthValue = json_utils::findObjectValue(params, "width");
+    const auto* heightValue = json_utils::findObjectValue(params, "height");
+    const double width = std::max(80.0, json_utils::numberValue(widthValue ? *widthValue : boost::json::value{}, kDefaultTextFrameWidth));
+    const double height = std::max(50.0, json_utils::numberValue(heightValue ? *heightValue : boost::json::value{}, kDefaultTextFrameHeight));
+    params["width"] = width;
+    params["height"] = height;
+
+    const auto text = QString::fromStdString(json_utils::stringValue(params, "text", "Text frame"));
+    const auto lineColor = QColor(QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444")));
+    const auto fillColor = QColor(QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc")));
+    const auto textColor = QColor(QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020")));
+    const auto fontFamily = QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif"));
+    const int fontSize = std::max(6, json_utils::intValue(params, "font_size", 12));
+    params["font_size"] = fontSize;
+
+    node.setSize(width, height);
+
+    QGraphicsRectItem* frameRect = nullptr;
+    QGraphicsTextItem* frameText = nullptr;
+    for (auto* child : node.childItems()) {
+        if (!frameRect) {
+            frameRect = dynamic_cast<QGraphicsRectItem*>(child);
+        }
+        if (!frameText) {
+            frameText = dynamic_cast<QGraphicsTextItem*>(child);
+        }
+    }
+
+    if (!frameRect) {
+        frameRect = new QGraphicsRectItem(&node);
+    }
+    frameRect->setRect(0.0, 0.0, width, height);
+    frameRect->setPen(QPen(lineColor, 1.4));
+    frameRect->setBrush(fillColor);
+
+    if (!frameText) {
+        frameText = new QGraphicsTextItem(&node);
+    }
+    frameText->setPlainText(text);
+    frameText->setDefaultTextColor(textColor);
+    QFont font(fontFamily);
+    font.setPointSize(fontSize);
+    frameText->setFont(font);
+    frameText->setTextWidth(width - 20.0);
+    frameText->setPos(10.0, 8.0);
+
+    node.setData(diagram::kNodeTypeRole, QStringLiteral("TextFrame"));
+    node.setData(diagram::kNodeParamsRole, QString::fromStdString(boost::json::serialize(params)));
+    node.setData(diagram::kTextFrameTextRole, text);
+    node.setData(diagram::kTextFrameTextColorRole, textColor.name(QColor::HexRgb));
+    node.setData(diagram::kTextFrameLineColorRole, lineColor.name(QColor::HexRgb));
+    node.setData(diagram::kTextFrameFillColorRole, fillColor.name(QColor::HexRgb));
+    node.setData(diagram::kTextFrameFontFamilyRole, fontFamily);
+    node.setData(diagram::kTextFrameFontSizeRole, fontSize);
+    return params;
+}
+
+auto selectedTextFrameNode(QSchematic::Scene* scene) -> std::shared_ptr<QSchematic::Items::Node>
+{
+    if (!scene) {
+        return {};
+    }
+
+    for (const auto& node : scene->items<QSchematic::Items::Node>()) {
+        if (!node || !node->isSelected()) {
+            continue;
+        }
+        if (node->data(diagram::kNodeTypeRole).toString() == QStringLiteral("TextFrame")) {
+            return node;
+        }
+    }
+
+    return {};
+}
+
+auto nextTextFrameId(const QSchematic::Scene& scene) -> QString
+{
+    int maxSuffix = 0;
+    for (const auto& node : scene.items<QSchematic::Items::Node>()) {
+        if (!node) {
+            continue;
+        }
+        const auto id = node->data(diagram::kNodeIdRole).toString();
+        if (!id.startsWith(QStringLiteral("text_frame_"))) {
+            continue;
+        }
+        bool ok = false;
+        const int suffix = id.mid(QStringLiteral("text_frame_").size()).toInt(&ok);
+        if (ok) {
+            maxSuffix = std::max(maxSuffix, suffix);
+        }
+    }
+    return QStringLiteral("text_frame_%1").arg(maxSuffix + 1);
+}
 
 auto developmentPluginCandidates() -> std::vector<std::string>
 {
@@ -379,6 +570,18 @@ MainWindow::MainWindow(QWidget* parent)
 
 MainWindow::~MainWindow()
 {
+    shuttingDown_ = true;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        disconnect(diagramEditor_->scene(), nullptr, this, nullptr);
+    }
+    if (runner_) {
+        disconnect(runner_, nullptr, this, nullptr);
+    }
+    for (const auto& window : scopeWindows_) {
+        if (window) {
+            disconnect(window, nullptr, this, nullptr);
+        }
+    }
     closeScopeWindows();
 }
 
@@ -421,15 +624,29 @@ void MainWindow::buildActions()
     modeNormalAction_->setCheckable(true);
     modeNormalAction_->setChecked(true);
     modeNormalAction_->setToolTip("Switch to Normal mode (move/select elements)");
+    const QColor drawIconColor = palette().color(QPalette::ButtonText);
+    modeNormalAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/pointer.svg"), drawIconColor));
 
     modeWireAction_ = new QAction("Wire Mode", this);
     modeWireAction_->setCheckable(true);
-    modeWireAction_->setToolTip("Switch to Wire mode (draw connections)");
+    modeWireAction_->setText(QStringLiteral("Wire Draw"));
+    modeWireAction_->setToolTip("Toggle wire drawing mode");
+    modeWireAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
+    modeWireAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/vector-bezier-2.svg"), drawIconColor));
 
-    QActionGroup* modeGroup = new QActionGroup(this);
-    modeGroup->setExclusive(true);
-    modeGroup->addAction(modeNormalAction_);
-    modeGroup->addAction(modeWireAction_);
+    addTextFrameAction_ = new QAction("Text Frame", this);
+    addTextFrameAction_->setToolTip("Insert a diagram-only text frame");
+    addTextFrameAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/text-caption.svg"), drawIconColor));
+
+    textColorAction_ = new QAction("Text Color", this);
+    textColorAction_->setToolTip("Set selected text frame text color");
+    textColorAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/text-color.svg"), drawIconColor));
+    lineColorAction_ = new QAction("Line Color", this);
+    lineColorAction_->setToolTip("Set selected text frame border color");
+    lineColorAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/border-style-2.svg"), drawIconColor));
+    fillColorAction_ = new QAction("Fill Color", this);
+    fillColorAction_->setToolTip("Set selected text frame background color");
+    fillColorAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/bucket.svg"), drawIconColor));
 
     paperA5Action_ = new QAction("A5", this);
     paperA4Action_ = new QAction("A4", this);
@@ -463,7 +680,7 @@ void MainWindow::buildActions()
     fitPageAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_9));
 
     openAction_->setShortcut(QKeySequence::Open);
-    closeDiagramAction_->setShortcut(QKeySequence::Close);
+    closeDiagramAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W));
     saveAction_->setShortcut(QKeySequence::Save);
     saveAsAction_->setShortcut(QKeySequence::SaveAs);
 
@@ -479,6 +696,21 @@ void MainWindow::buildActions()
         if (!overlayScopeTracesAction_ || !overlayScopeTracesAction_->isChecked()) {
             clearScopeSamples();
         }
+
+        if (diagramEditor_ && diagramEditor_->scene()) {
+            diagram::SerializationOptions options;
+            options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+            options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+            const auto pageLayout = diagramEditor_->pageLayout();
+            options.sheetOrientation = pageLayout.orientation;
+            options.sheetWidthMm = pageLayout.widthMm;
+            options.sheetHeightMm = pageLayout.heightMm;
+
+            diagram::SceneSerializer serializer;
+            const auto document = serializer.serialize(*diagramEditor_->scene(), options);
+            runtimeSchema_ = document.runtimeSchema;
+        }
+
         controller_->run(runtimeSchema_, dtSpin_->value(), selectedRunDuration());
         refreshActions();
     });
@@ -496,12 +728,13 @@ void MainWindow::buildActions()
     connect(resetZoomAction_, &QAction::triggered, this, &MainWindow::resetDiagramZoom);
     connect(fitPageAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
     connect(showRuntimePanelAction_, &QAction::toggled, this, &MainWindow::setRuntimePanelVisible);
-    connect(modeNormalAction_, &QAction::triggered, this, [this] {
-        setDiagramMode(QSchematic::Scene::NormalMode);
+    connect(modeWireAction_, &QAction::toggled, this, [this](const bool checked) {
+        setDiagramMode(checked ? QSchematic::Scene::WireMode : QSchematic::Scene::NormalMode);
     });
-    connect(modeWireAction_, &QAction::triggered, this, [this] {
-        setDiagramMode(QSchematic::Scene::WireMode);
-    });
+    connect(addTextFrameAction_, &QAction::triggered, this, &MainWindow::addTextFrame);
+    connect(textColorAction_, &QAction::triggered, this, &MainWindow::setSelectedTextFrameTextColor);
+    connect(lineColorAction_, &QAction::triggered, this, &MainWindow::setSelectedTextFrameLineColor);
+    connect(fillColorAction_, &QAction::triggered, this, &MainWindow::setSelectedTextFrameFillColor);
 
     connect(paperA5Action_, &QAction::triggered, this, &MainWindow::setPaperA5);
     connect(paperA4Action_, &QAction::triggered, this, &MainWindow::setPaperA4);
@@ -529,10 +762,30 @@ void MainWindow::buildUi()
 
     ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
 
+    diagramDrawToolBar_ = addToolBar(QStringLiteral("Diagram Drawing"));
+    diagramDrawToolBar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    diagramDrawToolBar_->addAction(modeWireAction_);
+    diagramDrawToolBar_->addSeparator();
+    diagramDrawToolBar_->addAction(addTextFrameAction_);
+    diagramDrawToolBar_->addSeparator();
+    diagramDrawToolBar_->addAction(textColorAction_);
+    diagramDrawToolBar_->addAction(lineColorAction_);
+    diagramDrawToolBar_->addAction(fillColorAction_);
+    diagramDrawToolBar_->addSeparator();
+    textFrameFontCombo_ = new QFontComboBox(diagramDrawToolBar_);
+    textFrameFontCombo_->setMinimumContentsLength(10);
+    diagramDrawToolBar_->addWidget(textFrameFontCombo_);
+    textFrameFontSizeSpin_ = new QSpinBox(diagramDrawToolBar_);
+    textFrameFontSizeSpin_->setRange(6, 72);
+    textFrameFontSizeSpin_->setPrefix(QStringLiteral("Pt "));
+    diagramDrawToolBar_->addWidget(textFrameFontSizeSpin_);
+
+    connect(textFrameFontCombo_, &QFontComboBox::currentFontChanged,
+            this, &MainWindow::setSelectedTextFrameFont);
+    connect(textFrameFontSizeSpin_, qOverload<int>(&QSpinBox::valueChanged),
+            this, &MainWindow::setSelectedTextFrameFontSize);
+
     auto* viewMenu = menuBar()->addMenu("&View");
-    viewMenu->addAction(modeNormalAction_);
-    viewMenu->addAction(modeWireAction_);
-    viewMenu->addSeparator();
     viewMenu->addAction(zoomInAction_);
     viewMenu->addAction(zoomOutAction_);
     viewMenu->addAction(resetZoomAction_);
@@ -595,18 +848,9 @@ void MainWindow::buildUi()
         appendLog(QStringLiteral("[studio] plugins loaded: %1").arg(pluginLoader_->loaded_count()));
     }
 
-    if (diagramEditor_ && diagramEditor_->scene()) {
-        connect(diagramEditor_->scene(), &QSchematic::Scene::modeChanged, this, [this](int mode) {
-            if (modeNormalAction_ && modeWireAction_) {
-                const QSignalBlocker blockerNormal(modeNormalAction_);
-                const QSignalBlocker blockerWire(modeWireAction_);
-                modeNormalAction_->setChecked(mode == QSchematic::Scene::NormalMode);
-                modeWireAction_->setChecked(mode == QSchematic::Scene::WireMode);
-            }
-        });
-    }
-
+    connectSceneSignals();
     syncPageActions();
+    syncTextFrameStyleControls();
 }
 
 void MainWindow::onElementRequested(const QString& elementType, const QString& /*displayName*/)
@@ -721,6 +965,38 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
                                             const QString& elementType,
                                             const int channelCount)
 {
+    if (elementType == QStringLiteral("TextFrame")) {
+        if (!diagramEditor_ || !diagramEditor_->scene()) {
+            return;
+        }
+
+        for (const auto& node : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
+            if (!node || node->data(diagram::kNodeIdRole).toString() != elementId) {
+                continue;
+            }
+
+            auto params = parseEncodedParams(node->data(diagram::kNodeParamsRole).toString());
+            const auto defaults = mergedTextFrameParams(params);
+            bool accepted = false;
+            const QString editedText = QInputDialog::getMultiLineText(
+                this,
+                QStringLiteral("Edit Text Frame"),
+                QStringLiteral("Text"),
+                QString::fromStdString(json_utils::stringValue(defaults, "text", "Text frame")),
+                &accepted);
+            if (!accepted) {
+                return;
+            }
+
+            params["text"] = editedText.toStdString();
+            applyTextFrameVisuals(*node, params);
+            appendLog(QStringLiteral("[studio] updated text frame: %1").arg(elementId));
+            syncTextFrameStyleControls();
+            return;
+        }
+        return;
+    }
+
     const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
 
     QDialog dialog(this);
@@ -819,7 +1095,12 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
 
                 nodePtr->setData(diagram::kNodeParamsRole, encodedParams);
                 if (elementType == QStringLiteral("Scope")) {
-                    nodePtr->setData(diagram::kNodeChannelCountRole, std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount)));
+                    const int updatedChannels = std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount));
+                    nodePtr->setData(diagram::kNodeChannelCountRole, updatedChannels);
+                    if (const auto window = scopeWindows_.value(elementId); window && window->channelCount() != updatedChannels) {
+                        window->setChannelCount(updatedChannels);
+                        replayScopeSamples(elementId, *window);
+                    }
                 }
                 break;
             }
@@ -832,8 +1113,24 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         if ((elementType == QStringLiteral("Adder") ||
              elementType == QStringLiteral("Multiply") ||
              elementType == QStringLiteral("Scope")) && diagramEditor_) {
-            diagramEditor_->loadRuntimeSchema(runtimeSchema_);
+            if (auto* scene = diagramEditor_->scene()) {
+                diagram::SerializationOptions options;
+                options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+                options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+                const auto pageLayout = diagramEditor_->pageLayout();
+                options.sheetOrientation = pageLayout.orientation;
+                options.sheetWidthMm = pageLayout.widthMm;
+                options.sheetHeightMm = pageLayout.heightMm;
+
+                diagram::SceneSerializer serializer;
+                auto document = serializer.serialize(*scene, options);
+                document.runtimeSchema = runtimeSchema_;
+                diagramEditor_->loadDocument(document);
+            } else {
+                diagramEditor_->loadRuntimeSchema(runtimeSchema_);
+            }
             syncPageActions();
+            syncTextFrameStyleControls();
         }
 
         appendLog(QStringLiteral("[studio] updated element params: %1").arg(elementId));
@@ -929,6 +1226,161 @@ void MainWindow::setDiagramMode(const int mode)
     }
 }
 
+void MainWindow::connectSceneSignals()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        return;
+    }
+
+    connect(diagramEditor_->scene(), &QSchematic::Scene::modeChanged, this, [this](int mode) {
+        if (modeWireAction_) {
+            const QSignalBlocker blockerWire(modeWireAction_);
+            modeWireAction_->setChecked(mode == QSchematic::Scene::WireMode);
+        }
+    });
+
+    connect(diagramEditor_->scene(), &QGraphicsScene::selectionChanged,
+            this, &MainWindow::syncTextFrameStyleControls,
+            Qt::UniqueConnection);
+}
+
+void MainWindow::addTextFrame()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        return;
+    }
+
+    auto* scene = diagramEditor_->scene();
+    auto node = std::make_shared<QSchematic::Items::Node>();
+    node->setAllowMouseRotate(false);
+    node->setConnectorsMovable(false);
+    node->setPos(suggestedNewNodePosition(*scene));
+
+    const auto frameId = nextTextFrameId(*scene);
+    node->setData(diagram::kNodeIdRole, frameId);
+    node->setData(diagram::kNodeTitleRole, QStringLiteral("Text frame"));
+
+    applyTextFrameVisuals(*node, defaultTextFrameParams());
+    scene->addItem(node);
+
+    for (const auto& item : scene->selectedItems()) {
+        if (item) {
+            item->setSelected(false);
+        }
+    }
+    node->setSelected(true);
+    setDiagramMode(QSchematic::Scene::NormalMode);
+    syncTextFrameStyleControls();
+    appendLog(QStringLiteral("[studio] added diagram text frame: %1").arg(frameId));
+}
+
+void MainWindow::setSelectedTextFrameTextColor()
+{
+    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!node) {
+        return;
+    }
+
+    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    const auto current = QColor(QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020")));
+    const auto selected = QColorDialog::getColor(current, this, QStringLiteral("Select text color"));
+    if (!selected.isValid()) {
+        return;
+    }
+
+    params["text_color"] = selected.name(QColor::HexRgb).toStdString();
+    applyTextFrameVisuals(*node, params);
+    syncTextFrameStyleControls();
+}
+
+void MainWindow::setSelectedTextFrameLineColor()
+{
+    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!node) {
+        return;
+    }
+
+    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    const auto current = QColor(QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444")));
+    const auto selected = QColorDialog::getColor(current, this, QStringLiteral("Select line color"));
+    if (!selected.isValid()) {
+        return;
+    }
+
+    params["line_color"] = selected.name(QColor::HexRgb).toStdString();
+    applyTextFrameVisuals(*node, params);
+    syncTextFrameStyleControls();
+}
+
+void MainWindow::setSelectedTextFrameFillColor()
+{
+    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!node) {
+        return;
+    }
+
+    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    const auto current = QColor(QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc")));
+    const auto selected = QColorDialog::getColor(current, this, QStringLiteral("Select fill color"));
+    if (!selected.isValid()) {
+        return;
+    }
+
+    params["fill_color"] = selected.name(QColor::HexRgb).toStdString();
+    applyTextFrameVisuals(*node, params);
+    syncTextFrameStyleControls();
+}
+
+void MainWindow::setSelectedTextFrameFont(const QFont& font)
+{
+    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!node) {
+        return;
+    }
+
+    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    params["font_family"] = font.family().toStdString();
+    applyTextFrameVisuals(*node, params);
+}
+
+void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
+{
+    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!node) {
+        return;
+    }
+
+    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    params["font_size"] = std::max(6, pointSize);
+    applyTextFrameVisuals(*node, params);
+}
+
+void MainWindow::syncTextFrameStyleControls()
+{
+    const auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const bool enabled = static_cast<bool>(node);
+
+    if (textColorAction_) textColorAction_->setEnabled(enabled);
+    if (lineColorAction_) lineColorAction_->setEnabled(enabled);
+    if (fillColorAction_) fillColorAction_->setEnabled(enabled);
+    if (textFrameFontCombo_) textFrameFontCombo_->setEnabled(enabled);
+    if (textFrameFontSizeSpin_) textFrameFontSizeSpin_->setEnabled(enabled);
+
+    if (!enabled) {
+        return;
+    }
+
+    const auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    if (textFrameFontCombo_) {
+        const QSignalBlocker blocker(textFrameFontCombo_);
+        textFrameFontCombo_->setCurrentFont(QFont(QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif"))));
+    }
+    if (textFrameFontSizeSpin_) {
+        const QSignalBlocker blocker(textFrameFontSizeSpin_);
+        textFrameFontSizeSpin_->setValue(std::max(6, json_utils::intValue(params, "font_size", 12)));
+    }
+}
+
 void MainWindow::applyPaperSize(const double widthMm, const double heightMm)
 {
     if (!diagramEditor_) {
@@ -1019,6 +1471,9 @@ void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
     }
 
     if (const auto existing = scopeWindows_.value(scopeId)) {
+        if (existing->channelCount() != channelCount) {
+            existing->setChannelCount(channelCount);
+        }
         replayScopeSamples(scopeId, *existing);
         existing->show();
         existing->raise();
@@ -1033,7 +1488,6 @@ void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
         Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
     window->setAttribute(Qt::WA_DeleteOnClose, true);
     scopeWindows_.insert(scopeId, window);
-    connect(window, &QObject::destroyed, this, [this, scopeId] { scopeWindows_.remove(scopeId); });
     connect(window, &ui::ScopeViewWindow::configureRequested, this, [this](const QString& id, const int channels) {
         onElementNodeDoubleClicked(id, QStringLiteral("Scope"), channels);
     });
@@ -1079,6 +1533,24 @@ void MainWindow::replayScopeSamples(const QString& scopeId, ui::ScopeViewWindow&
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    if (shuttingDown_) {
+        QMainWindow::closeEvent(event);
+        return;
+    }
+
+    shuttingDown_ = true;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        disconnect(diagramEditor_->scene(), nullptr, this, nullptr);
+    }
+    if (runner_) {
+        disconnect(runner_, nullptr, this, nullptr);
+    }
+    for (const auto& window : scopeWindows_) {
+        if (window) {
+            disconnect(window, nullptr, this, nullptr);
+        }
+    }
+
     closeScopeWindows();
     if (runner_) {
         runner_->reset();
@@ -1105,6 +1577,7 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
     if (diagramEditor_) {
         diagramEditor_->loadRuntimeSchema(runtimeSchema_);
         syncPageActions();
+        syncTextFrameStyleControls();
     }
 
     const auto name = schemaDisplayName(runtimeSchema_, sourceLabel);
@@ -1128,6 +1601,7 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     if (diagramEditor_) {
         diagramEditor_->loadDocument(document);
         syncPageActions();
+        syncTextFrameStyleControls();
     }
 
     const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
@@ -1165,6 +1639,7 @@ void MainWindow::closeCurrentDiagram()
         diagramEditor_->clearDiagram();
         diagramEditor_->fitPageInView();
         syncPageActions();
+        syncTextFrameStyleControls();
     }
 
     setWindowTitle(QStringLiteral("s7studio - untitled"));

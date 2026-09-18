@@ -10,6 +10,12 @@ constexpr int kNodeTypeRole = Qt::UserRole + 101;
 constexpr int kNodeTitleRole = Qt::UserRole + 102;
 constexpr int kNodeParamsRole = Qt::UserRole + 103;
 constexpr int kNodeChannelCountRole = Qt::UserRole + 104;
+constexpr int kTextFrameTextRole = Qt::UserRole + 105;
+constexpr int kTextFrameTextColorRole = Qt::UserRole + 106;
+constexpr int kTextFrameLineColorRole = Qt::UserRole + 107;
+constexpr int kTextFrameFillColorRole = Qt::UserRole + 108;
+constexpr int kTextFrameFontFamilyRole = Qt::UserRole + 109;
+constexpr int kTextFrameFontSizeRole = Qt::UserRole + 110;
 
 } // namespace s7studio::diagram
 

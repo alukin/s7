@@ -112,6 +112,24 @@ auto ScopeViewWindow::channelCount() const -> int
     return channelCount_;
 }
 
+void ScopeViewWindow::setChannelCount(const int channelCount)
+{
+    const int normalized = std::max(1, channelCount);
+    if (normalized == channelCount_) {
+        return;
+    }
+
+    channelCount_ = normalized;
+    channels_.resize(channelCount_);
+
+    while (plot_->graphCount() > 0) {
+        plot_->removeGraph(plot_->graphCount() - 1);
+    }
+    configurePlot();
+    dirty_ = true;
+    plot_->replot(QCustomPlot::rpQueuedReplot);
+}
+
 void ScopeViewWindow::appendSample(const int channel, const double timeSeconds, const double value)
 {
     if (channel < 0 || channel >= channelCount_) {

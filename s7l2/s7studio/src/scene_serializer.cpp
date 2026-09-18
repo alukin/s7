@@ -9,7 +9,9 @@
 #include <qschematic/scene.hpp>
 
 #include <QGraphicsColorizeEffect>
+#include <QGraphicsRectItem>
 #include <QGraphicsTextItem>
+#include <QPen>
 
 #include <algorithm>
 #include <cmath>
@@ -22,6 +24,11 @@
 namespace s7studio::diagram {
 
 namespace {
+
+constexpr double kDefaultNodeWidth = 180.0;
+constexpr double kDefaultNodeHeight = 100.0;
+constexpr double kDefaultTextFrameWidth = 260.0;
+constexpr double kDefaultTextFrameHeight = 120.0;
 
 struct NodeModel {
     std::string id;
@@ -55,6 +62,44 @@ auto makeStyledConnector() -> std::shared_ptr<QSchematic::Items::Connector>
     colorize->setStrength(1.0);
     connector->setGraphicsEffect(colorize);
     return connector;
+}
+
+auto parseEncodedParams(const QString& encodedParams) -> boost::json::object
+{
+    if (encodedParams.isEmpty()) {
+        return {};
+    }
+
+    boost::system::error_code ec;
+    const auto parsed = boost::json::parse(encodedParams.toStdString(), ec);
+    if (ec || !parsed.is_object()) {
+        return {};
+    }
+
+    return parsed.as_object();
+}
+
+auto defaultTextFrameParams() -> boost::json::object
+{
+    return boost::json::object{
+        {"text", "Text frame"},
+        {"text_color", "#202020"},
+        {"line_color", "#444444"},
+        {"fill_color", "#fff4cc"},
+        {"font_family", "Sans Serif"},
+        {"font_size", 12},
+        {"width", kDefaultTextFrameWidth},
+        {"height", kDefaultTextFrameHeight},
+    };
+}
+
+auto mergedTextFrameParams(const boost::json::object& custom) -> boost::json::object
+{
+    auto merged = defaultTextFrameParams();
+    for (const auto& [key, value] : custom) {
+        merged[key] = value;
+    }
+    return merged;
 }
 
 struct PortCounts {
@@ -121,6 +166,22 @@ auto portOffsetY(const double nodeHeight, const int portIndex, const int portCou
 {
     const int effectivePortCount = std::max(portCount, 1);
     return (nodeHeight * static_cast<double>(portIndex + 1)) / static_cast<double>(effectivePortCount + 1);
+}
+
+auto scopeInputPortOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
+{
+    if (portIndex <= 0 || portCount <= 1) {
+        return nodeHeight / 2.0;
+    }
+
+    constexpr double kMargin = 12.0;
+    const int extraPorts = std::max(1, portCount - 1);
+    const double centerY = nodeHeight / 2.0;
+    const double maxY = std::max(centerY, nodeHeight - kMargin);
+    const double lowerSpan = std::max(0.0, maxY - centerY);
+    const double step = lowerSpan / static_cast<double>(extraPorts);
+    const double y = centerY + (step * static_cast<double>(portIndex));
+    return std::clamp(y, centerY, maxY);
 }
 
 auto sortedSceneNodes(const QSchematic::Scene& scene) -> std::vector<std::shared_ptr<QSchematic::Items::Node>>
@@ -242,8 +303,6 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
                                   QSchematic::Scene& scene) const {
     scene.clear();
 
-    constexpr double nodeWidth = 180.0;
-    constexpr double nodeHeight = 100.0;
     constexpr double xSpacing = 260.0;
     constexpr double ySpacing = 180.0;
 
@@ -330,6 +389,10 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             if (const auto type = json_utils::stringValue(nodeObject, "type"); !type.empty()) {
                 it->second.type = type;
             }
+            if (const auto* paramsValue = json_utils::findObjectValue(nodeObject, "params");
+                paramsValue && paramsValue->is_object()) {
+                it->second.params = paramsValue->as_object();
+            }
             if (it->second.type == "Scope") {
                 it->second.channelCount = std::max(1, json_utils::intValue(nodeObject, "channel_count", it->second.channelCount));
             }
@@ -403,17 +466,58 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         const auto& model = nodesById.at(nodeId);
 
         auto node = std::make_shared<QSchematic::Items::Node>();
-        node->setSize(nodeWidth, nodeHeight);
         node->setPos(model.position);
         node->setAllowMouseRotate(false);
         node->setConnectorsMovable(false);
 
         NodeWiring wiring;
 
+        if (model.type == "TextFrame") {
+            const auto params = mergedTextFrameParams(model.params);
+            const auto* widthValue = json_utils::findObjectValue(params, "width");
+            const auto* heightValue = json_utils::findObjectValue(params, "height");
+            const double frameWidth = std::max(80.0, json_utils::numberValue(widthValue ? *widthValue : boost::json::value{}, kDefaultTextFrameWidth));
+            const double frameHeight = std::max(50.0, json_utils::numberValue(heightValue ? *heightValue : boost::json::value{}, kDefaultTextFrameHeight));
+
+            node->setSize(frameWidth, frameHeight);
+            auto* frameRect = new QGraphicsRectItem(0.0, 0.0, frameWidth, frameHeight, node.get());
+            frameRect->setPen(QPen(QColor(QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444"))), 1.4));
+            frameRect->setBrush(QColor(QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc"))));
+
+            auto* label = new QGraphicsTextItem(QString::fromStdString(json_utils::stringValue(params, "text", "Text frame")), node.get());
+            label->setDefaultTextColor(QColor(QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020"))));
+            QFont labelFont(QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif")));
+            labelFont.setPointSize(std::max(6, json_utils::intValue(params, "font_size", 12)));
+            label->setFont(labelFont);
+            label->setTextWidth(frameWidth - 20.0);
+            label->setPos(10.0, 8.0);
+
+            node->setData(kNodeIdRole, QString::fromStdString(model.id));
+            node->setData(kNodeTypeRole, QStringLiteral("TextFrame"));
+            node->setData(kNodeTitleRole, model.title);
+            node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(params)));
+            node->setData(kTextFrameTextRole, QString::fromStdString(json_utils::stringValue(params, "text", "Text frame")));
+            node->setData(kTextFrameTextColorRole, QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020")));
+            node->setData(kTextFrameLineColorRole, QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444")));
+            node->setData(kTextFrameFillColorRole, QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc")));
+            node->setData(kTextFrameFontFamilyRole, QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif")));
+            node->setData(kTextFrameFontSizeRole, std::max(6, json_utils::intValue(params, "font_size", 12)));
+
+            scene.addItem(node);
+            sceneNodes.emplace(nodeId, std::move(node));
+            nodeWirings.emplace(nodeId, std::move(wiring));
+            continue;
+        }
+
+        node->setSize(kDefaultNodeWidth, kDefaultNodeHeight);
+
         const int inputPortCount = std::max(model.inputPorts, 0);
         for (int portIndex = 0; portIndex < inputPortCount; ++portIndex) {
             auto connector = makeStyledConnector();
-            connector->setPos(0.0, portOffsetY(nodeHeight, portIndex, inputPortCount));
+            const double y = (model.type == "Scope")
+                ? scopeInputPortOffsetY(kDefaultNodeHeight, portIndex, inputPortCount)
+                : portOffsetY(kDefaultNodeHeight, portIndex, inputPortCount);
+            connector->setPos(0.0, y);
             node->addConnector(connector);
             wiring.inputs.push_back(connector);
         }
@@ -421,14 +525,14 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         const int outputPortCount = model.type == "Scope" ? 0 : std::max(model.outputPorts, 0);
         for (int portIndex = 0; portIndex < outputPortCount; ++portIndex) {
             auto connector = makeStyledConnector();
-            connector->setPos(nodeWidth, portOffsetY(nodeHeight, portIndex, outputPortCount));
+            connector->setPos(kDefaultNodeWidth, portOffsetY(kDefaultNodeHeight, portIndex, outputPortCount));
             node->addConnector(connector);
             wiring.outputs.push_back(connector);
         }
 
         auto* label = new QGraphicsTextItem(QStringLiteral("%1\n%2").arg(model.title, QString::fromUtf8(model.type.c_str())), node.get());
         label->setDefaultTextColor(Qt::black);
-        label->setTextWidth(nodeWidth - 20.0);
+        label->setTextWidth(kDefaultNodeWidth - 20.0);
         label->setPos(10.0, 10.0);
 
         node->setData(kNodeIdRole, QString::fromStdString(model.id));
@@ -526,6 +630,7 @@ auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene) const
             : storedNodeId.toStdString();
         const auto storedType = node->data(kNodeTypeRole).toString();
         const auto storedTitle = node->data(kNodeTitleRole).toString();
+        const auto storedParams = node->data(kNodeParamsRole).toString();
 
         boost::json::object nodeObj;
         nodeObj["id"] = nodeId;
@@ -534,6 +639,11 @@ auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene) const
         nodeObj["name"] = storedTitle.isEmpty() ? nodeId : storedTitle.toStdString();
         if (nodeType == QStringLiteral("Scope")) {
             nodeObj["channel_count"] = std::max(1, node->data(kNodeChannelCountRole).toInt());
+        } else if (nodeType == QStringLiteral("TextFrame")) {
+            auto params = mergedTextFrameParams(parseEncodedParams(storedParams));
+            params["width"] = node->size().width();
+            params["height"] = node->size().height();
+            nodeObj["params"] = params;
         }
 
         boost::json::object posObj;
