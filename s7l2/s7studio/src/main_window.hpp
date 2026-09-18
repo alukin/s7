@@ -107,6 +107,13 @@ private:
     void loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
     void loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel);
     void connectSceneSignals();
+    void openRunParametersDialog();
+    auto configureRun(bool launchAfterAccept) -> bool;
+    void launchRunWithCurrentConfiguration();
+    void applyDiscretizationFrequency(double frequencyHz);
+    static auto updateSchemaDiscretizationParams(boost::json::value& schema,
+                                                 double frequencyHz,
+                                                 double dtSeconds) -> bool;
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -124,6 +131,7 @@ private:
     QAction* fitDiagramAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* runAction_ = nullptr;
+    QAction* runParametersAction_ = nullptr;
     QAction* pauseAction_ = nullptr;
     QAction* resumeAction_ = nullptr;
     QAction* stopAction_ = nullptr;
@@ -168,6 +176,9 @@ private:
     QToolBar* diagramDrawToolBar_ = nullptr;
     QFontComboBox* textFrameFontCombo_ = nullptr;
     QSpinBox* textFrameFontSizeSpin_ = nullptr;
+    double discretizationFrequencyHz_ = 1000.0;
+    long runtimeSeconds_ = 60;
+    bool clearScopesBeforeRun_ = true;
     bool shuttingDown_ = false;
 };
 

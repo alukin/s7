@@ -15,6 +15,10 @@ struct RunDuration {
     int seconds = 0;
 };
 
+struct RunExecutionConfig {
+    long runtimeSeconds = 60; // -1 means continuous until user stops
+};
+
 struct RunActionState {
     bool runEnabled = true;
     bool pauseEnabled = false;
@@ -37,9 +41,22 @@ public:
                 std::llround(static_cast<double>(totalSeconds) / std::max(1e-12, dt))));
     }
 
+    [[nodiscard]] static long computeTicks(const long runtimeSeconds, const double dt)
+    {
+        if (runtimeSeconds < 0) {
+            return -1;
+        }
+        const long clampedSeconds = std::max<long>(1, runtimeSeconds);
+        return std::max<long>(1, static_cast<long>(
+                std::llround(static_cast<double>(clampedSeconds) / std::max(1e-12, dt))));
+    }
+
     void run(const boost::json::value& runtimeJson,
              double dt,
              const RunDuration& duration) const;
+    void run(const boost::json::value& runtimeJson,
+             double dt,
+             const RunExecutionConfig& config) const;
     void pause() const;
     void resume() const;
     void stop() const;

@@ -1,0 +1,12 @@
+<RCC>
+    <qresource prefix="/icons/tabler">
+        <file alias="pointer.svg">icons/tabler/pointer.svg</file>
+        <file alias="vector-bezier-2.svg">icons/tabler/vector-bezier-2.svg</file>
+        <file alias="text-caption.svg">icons/tabler/text-caption.svg</file>
+        <file alias="text-color.svg">icons/tabler/text-color.svg</file>
+        <file alias="border-style-2.svg">icons/tabler/border-style-2.svg</file>
+        <file alias="bucket.svg">icons/tabler/bucket.svg</file>
+    </qresource>
+</RCC>
+
+

@@ -69,7 +69,8 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, const double d
     running_.store(true);
 
     emit statusChanged("running");
-    emit logMessage(QString("[runtime] starting local embedded run: dt=%1 ticks=%2").arg(dt).arg(ticks));
+    const QString ticksLabel = ticks < 0 ? QStringLiteral("continuous") : QString::number(ticks);
+    emit logMessage(QString("[runtime] starting local embedded run: dt=%1 ticks=%2").arg(dt).arg(ticksLabel));
 
     startRunLoop();
 }
@@ -102,7 +103,7 @@ void LocalSchemaRunner::executeRunLoop()
     std::string error;
 
     try {
-        for (long step = 0; step < totalTicks_; ++step) {
+        for (long step = 0; totalTicks_ < 0 || step < totalTicks_; ++step) {
             if (stopRequested_.load()) {
                 break;
             }

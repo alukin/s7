@@ -26,6 +26,7 @@ struct MainWindowActions {
     QAction* fitDiagramAction = nullptr;
     QAction* exitAction = nullptr;
     QAction* runAction = nullptr;
+    QAction* runParametersAction = nullptr;
     QAction* pauseAction = nullptr;
     QAction* resumeAction = nullptr;
     QAction* stopAction = nullptr;

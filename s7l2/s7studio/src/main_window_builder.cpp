@@ -33,6 +33,7 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.exitAction = new QAction("Exit", window);
 
     actions.runAction = new QAction("Run", window);
+    actions.runParametersAction = new QAction("Run Parameters...", window);
     actions.pauseAction = new QAction("Pause", window);
     actions.resumeAction = new QAction("Resume", window);
     actions.stopAction = new QAction("Stop", window);
@@ -67,6 +68,7 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
 
     auto* runMenu = window->menuBar()->addMenu("&Run");
     runMenu->addAction(actions.runAction);
+    runMenu->addAction(actions.runParametersAction);
     runMenu->addAction(actions.pauseAction);
     runMenu->addAction(actions.resumeAction);
     runMenu->addAction(actions.stopAction);

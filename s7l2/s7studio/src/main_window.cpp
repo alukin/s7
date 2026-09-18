@@ -31,6 +31,7 @@
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QCloseEvent>
+#include <QCheckBox>
 #include <QSignalBlocker>
 #include <QLabel>
 #include <QKeySequence>
@@ -605,6 +606,7 @@ void MainWindow::buildActions()
     fitDiagramAction_ = actions.fitDiagramAction;
     exitAction_ = actions.exitAction;
     runAction_ = actions.runAction;
+    runParametersAction_ = actions.runParametersAction;
     pauseAction_ = actions.pauseAction;
     resumeAction_ = actions.resumeAction;
     stopAction_ = actions.stopAction;
@@ -693,27 +695,9 @@ void MainWindow::buildActions()
     connect(exitAction_, &QAction::triggered, this, &QWidget::close);
 
     connect(runAction_, &QAction::triggered, this, [this] {
-        if (!overlayScopeTracesAction_ || !overlayScopeTracesAction_->isChecked()) {
-            clearScopeSamples();
-        }
-
-        if (diagramEditor_ && diagramEditor_->scene()) {
-            diagram::SerializationOptions options;
-            options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-            options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
-            const auto pageLayout = diagramEditor_->pageLayout();
-            options.sheetOrientation = pageLayout.orientation;
-            options.sheetWidthMm = pageLayout.widthMm;
-            options.sheetHeightMm = pageLayout.heightMm;
-
-            diagram::SceneSerializer serializer;
-            const auto document = serializer.serialize(*diagramEditor_->scene(), options);
-            runtimeSchema_ = document.runtimeSchema;
-        }
-
-        controller_->run(runtimeSchema_, dtSpin_->value(), selectedRunDuration());
-        refreshActions();
+        configureRun(true);
     });
+    connect(runParametersAction_, &QAction::triggered, this, &MainWindow::openRunParametersDialog);
     connect(pauseAction_, &QAction::triggered, this, [this] { controller_->pause(); });
     connect(resumeAction_, &QAction::triggered, this, [this] { controller_->resume(); });
     connect(stopAction_, &QAction::triggered, this, [this] { controller_->stop(); });
@@ -755,6 +739,7 @@ void MainWindow::buildUi()
     actions.fitDiagramAction = fitDiagramAction_;
     actions.exitAction = exitAction_;
     actions.runAction = runAction_;
+    actions.runParametersAction = runParametersAction_;
     actions.pauseAction = pauseAction_;
     actions.resumeAction = resumeAction_;
     actions.stopAction = stopAction_;
@@ -816,6 +801,16 @@ void MainWindow::buildUi()
     mainSplitter_ = widgets.splitter;
     runtimePanel_ = widgets.runtimePanel;
     setRuntimePanelVisible(false);
+
+    if (dtSpin_) {
+        discretizationFrequencyHz_ = 1.0 / std::max(dtSpin_->value(), 1e-12);
+        connect(dtSpin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](const double dtSeconds) {
+            if (dtSeconds <= 0.0) {
+                return;
+            }
+            applyDiscretizationFrequency(1.0 / dtSeconds);
+        });
+    }
 
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
@@ -952,7 +947,9 @@ void MainWindow::onRunCompleted(bool success, const QString& error)
 void MainWindow::onTickProgress(const long completed, const long total)
 {
     if (progressLabel_) {
-        progressLabel_->setText(QString("%1 / %2").arg(completed).arg(total));
+        progressLabel_->setText(total < 0
+            ? QString("%1 / continuous").arg(completed)
+            : QString("%1 / %2").arg(completed).arg(total));
     }
 }
 
@@ -1558,6 +1555,211 @@ void MainWindow::closeEvent(QCloseEvent* event)
     QMainWindow::closeEvent(event);
 }
 
+void MainWindow::openRunParametersDialog()
+{
+    configureRun(false);
+}
+
+auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
+{
+    if (overlayScopeTracesAction_) {
+        clearScopesBeforeRun_ = !overlayScopeTracesAction_->isChecked();
+    }
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Run Configuration"));
+    dialog.resize(420, 260);
+
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout();
+
+    auto* runtimeSecondsSpin = new QSpinBox(&dialog);
+    runtimeSecondsSpin->setRange(-1, 604800);
+    runtimeSecondsSpin->setSpecialValueText(QStringLiteral("-1 (continuous)"));
+    runtimeSecondsSpin->setValue(static_cast<int>(std::clamp<long>(runtimeSeconds_, -1, 604800)));
+
+    auto* frequencySpin = new QDoubleSpinBox(&dialog);
+    frequencySpin->setDecimals(6);
+    frequencySpin->setRange(0.001, 1'000'000.0);
+    frequencySpin->setSingleStep(10.0);
+    frequencySpin->setValue(std::max(0.001, discretizationFrequencyHz_));
+    frequencySpin->setSuffix(QStringLiteral(" Hz"));
+
+    auto* dtLabel = new QLabel(&dialog);
+    auto refreshDtLabel = [dtLabel](const double frequencyHz) {
+        const double dtSeconds = 1.0 / std::max(frequencyHz, 1e-12);
+        dtLabel->setText(QStringLiteral("%1 s").arg(dtSeconds, 0, 'g', 10));
+    };
+    refreshDtLabel(frequencySpin->value());
+    connect(frequencySpin,
+            qOverload<double>(&QDoubleSpinBox::valueChanged),
+            &dialog,
+            [refreshDtLabel](const double valueHz) { refreshDtLabel(valueHz); });
+
+    auto* clearSamplesCheck = new QCheckBox(QStringLiteral("Clear scope traces before run"), &dialog);
+    clearSamplesCheck->setChecked(clearScopesBeforeRun_);
+
+    form->addRow(QStringLiteral("Run time (s)"), runtimeSecondsSpin);
+    form->addRow(QStringLiteral("Discretization frequency"), frequencySpin);
+    form->addRow(QStringLiteral("Computed dt"), dtLabel);
+    layout->addLayout(form);
+    layout->addWidget(clearSamplesCheck);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return false;
+    }
+
+    runtimeSeconds_ = runtimeSecondsSpin->value();
+    clearScopesBeforeRun_ = clearSamplesCheck->isChecked();
+    if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == clearScopesBeforeRun_) {
+        const QSignalBlocker blocker(overlayScopeTracesAction_);
+        overlayScopeTracesAction_->setChecked(!clearScopesBeforeRun_);
+    }
+
+    applyDiscretizationFrequency(frequencySpin->value());
+
+    if (launchAfterAccept) {
+        launchRunWithCurrentConfiguration();
+    }
+
+    return true;
+}
+
+void MainWindow::launchRunWithCurrentConfiguration()
+{
+    if (clearScopesBeforeRun_) {
+        clearScopeSamples();
+    }
+
+    const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        diagram::SerializationOptions options;
+        options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+        options.dt = dtSeconds;
+        const auto pageLayout = diagramEditor_->pageLayout();
+        options.sheetOrientation = pageLayout.orientation;
+        options.sheetWidthMm = pageLayout.widthMm;
+        options.sheetHeightMm = pageLayout.heightMm;
+
+        diagram::SceneSerializer serializer;
+        const auto document = serializer.serialize(*diagramEditor_->scene(), options);
+        runtimeSchema_ = document.runtimeSchema;
+        updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
+    }
+
+    controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_});
+    refreshActions();
+}
+
+void MainWindow::applyDiscretizationFrequency(const double frequencyHz)
+{
+    if (frequencyHz <= 0.0) {
+        return;
+    }
+
+    discretizationFrequencyHz_ = frequencyHz;
+    const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
+    if (dtSpin_) {
+        const QSignalBlocker blocker(dtSpin_);
+        dtSpin_->setValue(dtSeconds);
+    }
+
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        diagram::SerializationOptions options;
+        options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+        options.dt = dtSeconds;
+        const auto pageLayout = diagramEditor_->pageLayout();
+        options.sheetOrientation = pageLayout.orientation;
+        options.sheetWidthMm = pageLayout.widthMm;
+        options.sheetHeightMm = pageLayout.heightMm;
+
+        diagram::SceneSerializer serializer;
+        auto document = serializer.serialize(*diagramEditor_->scene(), options);
+        runtimeSchema_ = document.runtimeSchema;
+        updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
+        document.runtimeSchema = runtimeSchema_;
+        diagramEditor_->loadDocument(document);
+        syncPageActions();
+        syncTextFrameStyleControls();
+        return;
+    }
+
+    updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
+}
+
+auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
+                                                  const double frequencyHz,
+                                                  const double dtSeconds) -> bool
+{
+    if (!schema.is_object()) {
+        return false;
+    }
+
+    auto& root = schema.as_object();
+    const auto elementsIt = root.find("elements");
+    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
+        return false;
+    }
+
+    bool changed = false;
+    for (auto& elementValue : elementsIt->value().as_array()) {
+        if (!elementValue.is_object()) {
+            continue;
+        }
+
+        auto& elementObject = elementValue.as_object();
+        const auto type = json_utils::stringValue(elementObject, "type");
+        bool needsSampleRate = false;
+        bool needsDt = false;
+        if (const auto* descriptor = s7::ElementRegistry::instance().find(type)) {
+            for (const auto& parameter : descriptor->metadata().parameters) {
+                if (parameter.name == "sample_rate_hz") {
+                    needsSampleRate = true;
+                }
+                if (parameter.name == "dt") {
+                    needsDt = true;
+                }
+            }
+        }
+
+        boost::json::object* params = nullptr;
+        if (const auto paramsIt = elementObject.find("params");
+            paramsIt != elementObject.end() && paramsIt->value().is_object()) {
+            params = &paramsIt->value().as_object();
+        }
+
+        if (!needsSampleRate && !needsDt && params) {
+            needsSampleRate = params->contains("sample_rate_hz");
+            needsDt = params->contains("dt");
+        }
+
+        if (!needsSampleRate && !needsDt) {
+            continue;
+        }
+
+        if (!params) {
+            elementObject["params"] = boost::json::object{};
+            params = &elementObject["params"].as_object();
+        }
+
+        if (needsSampleRate) {
+            (*params)["sample_rate_hz"] = frequencyHz;
+            changed = true;
+        }
+        if (needsDt) {
+            (*params)["dt"] = dtSeconds;
+            changed = true;
+        }
+    }
+
+    return changed;
+}
+
 auto MainWindow::selectedRunDuration() const -> ui::RunDuration
 {
     ui::RunDuration duration;
@@ -1595,7 +1797,9 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     runtimeSchema_ = document.runtimeSchema;
 
     if (dtSpin_ && document.dt > 0.0) {
+        const QSignalBlocker blocker(dtSpin_);
         dtSpin_->setValue(document.dt);
+        discretizationFrequencyHz_ = 1.0 / document.dt;
     }
 
     if (diagramEditor_) {

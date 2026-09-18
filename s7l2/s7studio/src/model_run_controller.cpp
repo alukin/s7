@@ -19,6 +19,17 @@ void ModelRunController::run(const boost::json::value& runtimeJson,
     runner_->run(runtimeJson, dt, ticks);
 }
 
+void ModelRunController::run(const boost::json::value& runtimeJson,
+                             const double dt,
+                             const RunExecutionConfig& config) const
+{
+    if (!runner_) {
+        return;
+    }
+
+    runner_->run(runtimeJson, dt, computeTicks(config.runtimeSeconds, dt));
+}
+
 void ModelRunController::pause() const
 {
     if (runner_) {
