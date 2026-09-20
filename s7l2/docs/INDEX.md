@@ -5,6 +5,8 @@
 ### Core Architecture
 - **DISTRIBUTED_ADDRESSING.md** - UUID-based element and node addressing for distributed computation
 - **ELEMENT_LIBRARY_TECH.md** - Element library architecture, registry, plugins, parameter validation
+- **REMOTE_NODE_INFO_AND_DEPLOYMENT.md** - Remote node capability reporting and heterogeneous deployment model
+- **S7_Control_Protocol_MVP.md** - Compact control-plane protocol reference for discovery and deployment MVP
 - **SCHEMA_LIBRARY_WORKFLOW.md** - Schema-based element libraries, studio workflow, and runtime loading
 - **S7_Transport_Architecture.md** - Transport module boundaries and runtime orchestration
 - **S7_Network_Wire_Protocol_v1.md** - One-port WebSocket control/data protocol baseline

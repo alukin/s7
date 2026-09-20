@@ -1,8 +1,12 @@
 #include "s7/runtime_service.hpp"
 
 #include <cmath>
+#include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <filesystem>
+#include <iomanip>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -199,6 +203,20 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
             const auto& server_obj = expect_object(server_it->value(), "server");
             definition.server.enabled = get_bool(server_obj, "enabled", false);
             definition.server.port = static_cast<std::uint16_t>(get_u64(server_obj, "port", 0));
+            if (const auto tls_it = server_obj.find("tls"); tls_it != server_obj.end()) {
+                const auto& tls_obj = expect_object(tls_it->value(), "websocket.server.tls");
+                definition.server.tls.enabled = get_bool(tls_obj, "enabled", false);
+                if (const auto cert_it = tls_obj.find("cert_file"); cert_it != tls_obj.end() && cert_it->value().is_string()) {
+                    definition.server.tls.cert_file = cert_it->value().as_string().c_str();
+                }
+                if (const auto key_it = tls_obj.find("key_file"); key_it != tls_obj.end() && key_it->value().is_string()) {
+                    definition.server.tls.key_file = key_it->value().as_string().c_str();
+                }
+                if (const auto ca_it = tls_obj.find("ca_file"); ca_it != tls_obj.end() && ca_it->value().is_string()) {
+                    definition.server.tls.ca_file = ca_it->value().as_string().c_str();
+                }
+                definition.server.tls.require_client_cert = get_bool(tls_obj, "require_client_cert", true);
+            }
         }
 
         const auto client_it = websocket_obj.find("client");
@@ -211,6 +229,20 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
                     throw std::invalid_argument("Expected string field 'websocket.client.url'.");
                 }
                 definition.client.url = url_it->value().as_string().c_str();
+            }
+            if (const auto tls_it = client_obj.find("tls"); tls_it != client_obj.end()) {
+                const auto& tls_obj = expect_object(tls_it->value(), "websocket.client.tls");
+                definition.client.tls.enabled = get_bool(tls_obj, "enabled", false);
+                if (const auto cert_it = tls_obj.find("cert_file"); cert_it != tls_obj.end() && cert_it->value().is_string()) {
+                    definition.client.tls.cert_file = cert_it->value().as_string().c_str();
+                }
+                if (const auto key_it = tls_obj.find("key_file"); key_it != tls_obj.end() && key_it->value().is_string()) {
+                    definition.client.tls.key_file = key_it->value().as_string().c_str();
+                }
+                if (const auto ca_it = tls_obj.find("ca_file"); ca_it != tls_obj.end() && ca_it->value().is_string()) {
+                    definition.client.tls.ca_file = ca_it->value().as_string().c_str();
+                }
+                definition.client.tls.require_client_cert = get_bool(tls_obj, "require_client_cert", true);
             }
         }
     }
@@ -361,6 +393,115 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 
     return schema;
 }
+
+[[nodiscard]] auto detect_os_family() -> std::string
+{
+#if defined(_WIN32)
+    return "windows";
+#elif defined(__APPLE__)
+    return "macos";
+#elif defined(__FreeBSD__)
+    return "freebsd";
+#elif defined(__linux__)
+    return "linux";
+#else
+    return "unknown";
+#endif
+}
+
+[[nodiscard]] auto detect_architecture() -> std::string
+{
+#if defined(__aarch64__) || defined(_M_ARM64)
+    return "arm64";
+#elif defined(__arm__) || defined(_M_ARM)
+    return "arm32";
+#elif defined(__x86_64__) || defined(_M_X64)
+    return "x86_64";
+#else
+    return "unknown";
+#endif
+}
+
+[[nodiscard]] auto default_node_storage_dir() -> std::filesystem::path
+{
+    if (const char* explicit_dir = std::getenv("S7_NODE_STATE_DIR")) {
+        return std::filesystem::path(explicit_dir);
+    }
+    if (const char* home = std::getenv("HOME")) {
+        return std::filesystem::path(home) / ".s7runtime" / "default-node";
+    }
+    return std::filesystem::temp_directory_path() / "s7runtime-default-node";
+}
+
+[[nodiscard]] auto load_or_create_node_uuid(const std::filesystem::path& node_dir) -> std::string
+{
+    std::filesystem::create_directories(node_dir);
+    const auto path = node_dir / "node_uuid.txt";
+    if (std::filesystem::exists(path)) {
+        std::ifstream in(path);
+        std::string existing;
+        std::getline(in, existing);
+        if (!existing.empty()) {
+            return existing;
+        }
+    }
+
+    const auto generated = boost::uuids::to_string(boost::uuids::random_generator()());
+    std::ofstream out(path, std::ios::trunc);
+    out << generated;
+    return generated;
+}
+
+[[nodiscard]] auto build_control_descriptor(const std::string& node_uuid,
+                                            const transport::RuntimeNetEndpointPtr& endpoint,
+                                            const RuntimeSchemaDefinition& definition) -> ControlNodeDescriptor
+{
+    ControlNodeDescriptor descriptor;
+    descriptor.node_uuid = node_uuid;
+    descriptor.node_name = "node-" + node_uuid.substr(0, 8);
+    descriptor.display_name = descriptor.node_name;
+    descriptor.instance_id = boost::uuids::to_string(boost::uuids::random_generator()());
+    {
+        const auto now = std::chrono::system_clock::now();
+        const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+        std::tm tm{};
+#if defined(_WIN32)
+        gmtime_s(&tm, &now_time);
+#else
+        gmtime_r(&now_time, &tm);
+#endif
+        std::ostringstream stamp;
+        stamp << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+        descriptor.started_at = stamp.str();
+    }
+    descriptor.os_family = detect_os_family();
+    descriptor.os_version = "unknown";
+    descriptor.architecture = detect_architecture();
+    descriptor.target_triple = descriptor.architecture + "-" + descriptor.os_family;
+    descriptor.listen_url = definition.server.enabled
+        ? ((definition.server.tls.enabled ? "wss://" : "ws://") + std::string("127.0.0.1:") + std::to_string(definition.server.port))
+        : std::string{};
+
+    std::set<std::string> unique_types;
+    for (const auto& element_desc : ElementRegistry::instance().all_descriptors()) {
+        unique_types.insert(element_desc.type_name());
+    }
+    descriptor.element_types.assign(unique_types.begin(), unique_types.end());
+
+    ControlLibraryInfo registry_library;
+    registry_library.library_id = "runtime-registry";
+    registry_library.kind = "builtin";
+    registry_library.version = "0.1.0";
+    registry_library.target_triple = descriptor.target_triple;
+    registry_library.origin = "registry";
+    registry_library.elements = descriptor.element_types;
+    descriptor.libraries.push_back(std::move(registry_library));
+
+    if (endpoint && endpoint->backend_name() == "beast") {
+        descriptor.hardware_capabilities.push_back("net:websocket");
+    }
+    return descriptor;
+}
 } // namespace
 
 RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file_path) {
@@ -383,7 +524,8 @@ RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file
 
 RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
     : definition_(std::move(definition))
-    , runtime_instance_uuid_(boost::uuids::to_string(boost::uuids::random_generator()()))
+    , runtime_instance_uuid_(load_or_create_node_uuid(default_node_storage_dir()))
+    , control_plane_(nullptr)
     , network_endpoint_(nullptr)
     , opened_server_endpoints_()
     , opened_client_endpoints_()
@@ -392,6 +534,21 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
         network_endpoint_ = std::make_shared<s7::transport::BeastRuntimeNetEndpoint>();
     } else {
         network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+    }
+
+    control_plane_ = std::make_shared<ControlPlaneMvp>(
+        build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_),
+        default_node_storage_dir());
+
+    if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
+        std::weak_ptr<ControlPlaneMvp> weak_control = control_plane_;
+        beast_endpoint->set_control_request_handler([weak_control](const std::string& request_json) {
+            const auto locked = weak_control.lock();
+            if (!locked) {
+                return std::string{"{\"type\":\"ERROR\",\"protocol_version\":1,\"code\":\"INTERNAL_ERROR\",\"message\":\"Control service unavailable\"}"};
+            }
+            return locked->handle_request_json(request_json);
+        });
     }
     RuntimeNetContext::set_endpoint(network_endpoint_);
 }
@@ -455,8 +612,14 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.connections=" << definition_.connections.size() << '\n';
     out << "runtime.websocket.server.enabled=" << (definition_.server.enabled ? "true" : "false") << '\n';
     out << "runtime.websocket.server.port=" << definition_.server.port << '\n';
+    out << "runtime.websocket.server.tls.enabled=" << (definition_.server.tls.enabled ? "true" : "false") << '\n';
+    out << "runtime.websocket.server.tls.cert_file=" << definition_.server.tls.cert_file << '\n';
+    out << "runtime.websocket.server.tls.ca_file=" << definition_.server.tls.ca_file << '\n';
     out << "runtime.websocket.client.enabled=" << (definition_.client.enabled ? "true" : "false") << '\n';
     out << "runtime.websocket.client.url=" << definition_.client.url << '\n';
+    out << "runtime.websocket.client.tls.enabled=" << (definition_.client.tls.enabled ? "true" : "false") << '\n';
+    out << "runtime.websocket.client.tls.cert_file=" << definition_.client.tls.cert_file << '\n';
+    out << "runtime.websocket.client.tls.ca_file=" << definition_.client.tls.ca_file << '\n';
     out << "runtime.simulation.enabled=" << (definition_.simulation.enabled ? "true" : "false") << '\n';
     out << "runtime.simulation.periods=" << definition_.simulation.periods << '\n';
     out << "runtime.simulation.sample_rate_hz=" << definition_.simulation.sample_rate_hz << '\n';
@@ -475,6 +638,22 @@ auto RuntimeService::network_endpoint() const -> transport::RuntimeNetEndpointPt
     return network_endpoint_;
 }
 
+auto RuntimeService::handle_control_request_json(const std::string& request_json) -> std::string
+{
+    if (!control_plane_) {
+        throw std::runtime_error("Control plane is not initialized.");
+    }
+    return control_plane_->handle_request_json(request_json);
+}
+
+void RuntimeService::add_seed_peer(const std::string& endpoint)
+{
+    if (!control_plane_) {
+        return;
+    }
+    control_plane_->add_seed_peer(endpoint);
+}
+
 void RuntimeService::start_websocket_server() const {
     if (!definition_.server.enabled) {
         return;
@@ -489,7 +668,7 @@ void RuntimeService::start_websocket_server() const {
     }
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        beast_endpoint->configure_server(definition_.server.port);
+        beast_endpoint->configure_server(definition_.server.port, definition_.server.tls);
     }
 
     const auto control_stream = "server:" + std::to_string(definition_.server.port) + ":/control";
@@ -536,7 +715,7 @@ void RuntimeService::connect_websocket_client() const {
     const auto parsed_url = s7::transport::parse_ws_url(definition_.client.url);
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        beast_endpoint->configure_client(definition_.client.url);
+        beast_endpoint->configure_client(definition_.client.url, definition_.client.tls);
     }
 
     const auto control_open = network_endpoint_->open_endpoint({

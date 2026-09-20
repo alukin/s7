@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
         std::string schema_path = S7RUNTIME_DEFAULT_SCHEMA_PATH;
         bool start_network = false;
         std::vector<std::string> library_paths;
+        std::vector<std::string> seed_peers;
 
         for (int index = 1; index < argc; ++index) {
             const std::string arg = argv[index];
@@ -47,8 +48,16 @@ int main(int argc, char** argv) {
                 continue;
             }
 
+            if (arg == "--seed-peer") {
+                if (index + 1 >= argc) {
+                    throw std::invalid_argument("Missing value after --seed-peer.");
+                }
+                seed_peers.emplace_back(argv[++index]);
+                continue;
+            }
+
             if (arg == "--help") {
-                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--start-net]\n";
+                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--seed-peer <url>]... [--start-net]\n";
                 return 0;
             }
 
@@ -69,6 +78,9 @@ int main(int argc, char** argv) {
         }
 
         s7::RuntimeService service{definition};
+        for (const auto& seed : seed_peers) {
+            service.add_seed_peer(seed);
+        }
         const auto schema = service.build_schema();
         const auto schema_instance_uuid = service.create_schema_instance_uuid();
         auto executable_graph = s7::Compiler::compile(schema, service.runtime_instance_uuid(), schema_instance_uuid);

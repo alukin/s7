@@ -11,6 +11,7 @@
 
 #include <boost/json.hpp>
 
+#include "s7/control_plane_mvp.hpp"
 #include "s7/core.hpp"
 #include "s7/transport.hpp"
 
@@ -40,11 +41,13 @@ struct JsonConnectionDefinition {
 struct WebSocketServerConfig {
     bool enabled{};
     std::uint16_t port{};
+    transport::TlsConfig tls{};
 };
 
 struct WebSocketClientConfig {
     bool enabled{};
     std::string url;
+    transport::TlsConfig tls{};
 };
 
 struct SimulationConfig {
@@ -82,6 +85,8 @@ public:
     [[nodiscard]] const std::string& runtime_instance_uuid() const;
     [[nodiscard]] std::string create_schema_instance_uuid() const;
     [[nodiscard]] auto network_endpoint() const -> transport::RuntimeNetEndpointPtr;
+    [[nodiscard]] auto handle_control_request_json(const std::string& request_json) -> std::string;
+    void add_seed_peer(const std::string& endpoint);
     void print_summary(std::ostream& out) const;
 
     void start_websocket_server() const;
@@ -90,6 +95,7 @@ public:
 private:
     RuntimeSchemaDefinition definition_;
     std::string runtime_instance_uuid_;
+    std::shared_ptr<ControlPlaneMvp> control_plane_;
     transport::RuntimeNetEndpointPtr network_endpoint_;
     mutable std::vector<transport::EndpointHandle> opened_server_endpoints_;
     mutable std::vector<transport::EndpointHandle> opened_client_endpoints_;

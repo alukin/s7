@@ -12,6 +12,8 @@ target_include_directories(s7transport PUBLIC
 
 target_link_libraries(s7transport PUBLIC
     Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
     Threads::Threads
 )
 

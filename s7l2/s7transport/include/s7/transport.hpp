@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -54,6 +55,15 @@ struct ParsedWebSocketUrl {
     std::string host;
     std::string port;
     std::string target;
+    bool secure{false};
+};
+
+struct TlsConfig {
+    bool enabled{false};
+    std::string cert_file;
+    std::string key_file;
+    std::string ca_file;
+    bool require_client_cert{true};
 };
 
 [[nodiscard]] auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl;
@@ -113,13 +123,18 @@ private:
 
 class BeastRuntimeNetEndpoint final : public IRuntimeNetEndpoint {
 public:
+    using ControlRequestHandler = std::function<std::string(const std::string& request_json)>;
+
     BeastRuntimeNetEndpoint();
     ~BeastRuntimeNetEndpoint() override;
 
     [[nodiscard]] auto backend_name() const -> std::string override;
 
-    void configure_server(std::uint16_t port);
-    void configure_client(const std::string& url);
+    void configure_server(std::uint16_t port, const TlsConfig& tls = {});
+    void configure_client(const std::string& url, const TlsConfig& tls = {});
+
+    void set_control_request_handler(ControlRequestHandler handler);
+    [[nodiscard]] auto request_control_json(const std::string& request_json) -> std::string;
 
     auto open_endpoint(const EndpointOpenRequest& request) -> EndpointOpenResult override;
     void close_endpoint(const EndpointHandle& handle) override;

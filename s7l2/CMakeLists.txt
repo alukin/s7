@@ -40,6 +40,7 @@ option(S7_BUILD_STUDIO "Build the s7studio runtime client" ON)
 
 find_package(Boost 1.75 REQUIRED COMPONENTS json system)
 find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
 if (S7_BUILD_STUDIO)
 	find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 endif()
@@ -80,6 +81,7 @@ s7_enable_project_warnings(s7ctl)
 s7_enable_project_warnings(s7tests)
 s7_enable_project_warnings(s7io_smoke)
 s7_enable_project_warnings(s7transport_smoke)
+s7_enable_project_warnings(s7runtime_control_smoke)
 s7_enable_project_warnings(s7studio)
 s7_enable_project_warnings(s7spectral)
 
@@ -95,6 +97,7 @@ set(S7_ALL_TARGETS
 	s7tests
 	s7io_smoke
 	s7transport_smoke
+	s7runtime_control_smoke
 )
 
 if (TARGET s7spectral)

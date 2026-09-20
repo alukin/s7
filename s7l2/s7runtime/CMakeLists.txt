@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_executable(s7runtime
     src/main.cpp
     src/runtime_service.cpp
+    src/control_plane_mvp.cpp
     src/plugin_loader.cpp
 )
 
@@ -28,3 +29,27 @@ target_link_libraries(s7runtime PRIVATE
     ${CMAKE_DL_LIBS}
     Threads::Threads
 )
+
+add_executable(s7runtime_control_smoke
+    src/control_plane_smoke.cpp
+    src/control_plane_mvp.cpp
+)
+
+target_include_directories(s7runtime_control_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/s7transport/include
+)
+
+target_link_libraries(s7runtime_control_smoke PRIVATE
+    s7transport
+    Boost::json
+    Boost::system
+    Threads::Threads
+)
+
+target_compile_definitions(s7runtime_control_smoke PRIVATE
+    S7_TEST_CERT_DIR="${PROJECT_SOURCE_DIR}/s7runtime/examples/certs"
+)
+
+add_test(NAME s7runtime_control_smoke COMMAND s7runtime_control_smoke)
+
