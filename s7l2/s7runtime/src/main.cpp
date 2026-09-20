@@ -115,12 +115,33 @@ int main(int argc, char** argv) {
         std::cout << "runtime.plugin_count=" << plugin_loader.loaded_count() << '\n';
         service.print_summary(std::cout);
 
-        if (start_network) {
+        // Start WebSocket server if enabled in schema, or if --start-net flag is provided
+        bool should_start_network = start_network || definition.server.enabled;
+        if (should_start_network) {
+            std::cout << "\n--- Starting Network Services ---\n";
+            if (definition.server.enabled) {
+                std::cout << "websocket.server.starting on port " << definition.server.port << "...\n";
+                std::cout.flush();
+            }
             service.start_websocket_server();
+            if (definition.server.enabled) {
+                std::cout << "websocket.server.listening at ws://127.0.0.1:" << definition.server.port << "\n";
+                std::cout.flush();
+            }
+            
+            if (definition.client.enabled) {
+                std::cout << "websocket.client.connecting to " << definition.client.url << "...\n";
+                std::cout.flush();
+            }
             service.connect_websocket_client();
+            if (definition.client.enabled) {
+                std::cout << "websocket.client.connected\n";
+            }
             std::cout << "runtime.network=started\n";
+            std::cout << "--- Network Services Ready ---\n\n";
+            std::cout.flush();
         } else {
-            std::cout << "runtime.network=not-started (use --start-net)\n";
+            std::cout << "runtime.network=not-started (use --start-net or enable in schema)\n";
         }
 
         if (service.has_simulation()) {

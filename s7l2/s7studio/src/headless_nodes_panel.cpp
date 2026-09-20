@@ -21,12 +21,25 @@
 
 #include <boost/json.hpp>
 #include <boost/system/error_code.hpp>
+#include <boost/asio/connect.hpp>
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/ssl/context.hpp>
+#include <boost/beast/core/flat_buffer.hpp>
+#include <boost/beast/core/tcp_stream.hpp>
+#include <boost/beast/core/buffers_to_string.hpp>
+#include <boost/beast/websocket.hpp>
+#include <boost/beast/ssl.hpp>
 
 #include <algorithm>
 #include <thread>
 
 namespace s7studio::ui {
 namespace {
+
+namespace websocket = boost::beast::websocket;
+namespace ssl = boost::asio::ssl;
+using Tcp = boost::asio::ip::tcp;
 
 [[nodiscard]] auto jsonString(const boost::json::object& object, const char* key) -> QString
 {
@@ -35,6 +48,88 @@ namespace {
         return {};
     }
     return QString::fromStdString(std::string(it->value().as_string().c_str()));
+}
+
+[[nodiscard]] auto control_target_for_parsed(const s7::transport::ParsedWebSocketUrl& parsed) -> std::string
+{
+    if (parsed.target.empty() || parsed.target == "/") {
+        return "/control";
+    }
+    if (parsed.target.ends_with("/control")) {
+        return parsed.target;
+    }
+    if (parsed.target.ends_with("/data")) {
+        auto base = parsed.target;
+        base.resize(base.size() - std::strlen("/data"));
+        if (base.empty()) {
+            return "/control";
+        }
+        return base + "/control";
+    }
+    return parsed.target + "/control";
+}
+
+auto request_control_once(const QString& endpoint,
+                         const QString& requestJson,
+                         const QString& caFile,
+                         const QString& certFile,
+                         const QString& keyFile,
+                         QString* error) -> QString
+{
+    try {
+        const auto parsed = s7::transport::parse_ws_url(endpoint.toStdString());
+        const auto host_port = parsed.host + ":" + parsed.port;
+        const auto target = control_target_for_parsed(parsed);
+
+        boost::asio::io_context io;
+        Tcp::resolver resolver(io);
+        auto results = resolver.resolve(parsed.host, parsed.port);
+
+        if (parsed.secure) {
+            if (caFile.isEmpty() || certFile.isEmpty() || keyFile.isEmpty()) {
+                if (error) {
+                    *error = QStringLiteral("Missing TLS files (CA/cert/key) for wss endpoint.");
+                }
+                return {};
+            }
+
+            ssl::context ctx(ssl::context::tls_client);
+            ctx.load_verify_file(caFile.toStdString());
+            ctx.use_certificate_chain_file(certFile.toStdString());
+            ctx.use_private_key_file(keyFile.toStdString(), ssl::context::pem);
+            ctx.set_verify_mode(ssl::verify_peer);
+
+            websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>> ws(io, ctx);
+            boost::beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(2));
+            boost::beast::get_lowest_layer(ws).connect(results);
+            ws.next_layer().handshake(ssl::stream_base::client);
+            ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::client));
+            ws.handshake(host_port, target);
+            ws.write(boost::asio::buffer(requestJson.toStdString()));
+            boost::beast::flat_buffer buffer;
+            ws.read(buffer);
+            boost::system::error_code close_ec;
+            ws.close(websocket::close_code::normal, close_ec);
+            return QString::fromStdString(boost::beast::buffers_to_string(buffer.data()));
+        }
+
+        websocket::stream<boost::beast::tcp_stream> ws(io);
+        boost::beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(2));
+        boost::beast::get_lowest_layer(ws).connect(results);
+        ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::client));
+        ws.handshake(host_port, target);
+        ws.write(boost::asio::buffer(requestJson.toStdString()));
+        boost::beast::flat_buffer buffer;
+        ws.read(buffer);
+        boost::system::error_code close_ec;
+        ws.close(websocket::close_code::normal, close_ec);
+        return QString::fromStdString(boost::beast::buffers_to_string(buffer.data()));
+    } catch (const std::exception& ex) {
+        if (error) {
+            *error = QString::fromUtf8(ex.what());
+        }
+        return {};
+    }
 }
 
 } // namespace
@@ -189,30 +284,7 @@ void HeadlessNodesPanel::refreshNow()
         auto requestJsonSync = [caFile, certFile, keyFile](const QString& endpoint,
                                                            const QString& requestJson,
                                                            QString* error) -> QString {
-            try {
-                s7::transport::BeastRuntimeNetEndpoint client;
-                s7::transport::TlsConfig tls;
-                if (endpoint.startsWith(QStringLiteral("wss://"))) {
-                    tls.enabled = true;
-                    tls.ca_file = caFile.toStdString();
-                    tls.cert_file = certFile.toStdString();
-                    tls.key_file = keyFile.toStdString();
-                    if (tls.ca_file.empty() || tls.cert_file.empty() || tls.key_file.empty()) {
-                        if (error) {
-                            *error = QStringLiteral("Missing TLS files (CA/cert/key) for wss endpoint.");
-                        }
-                        return {};
-                    }
-                }
-
-                client.configure_client(endpoint.toStdString(), tls);
-                return QString::fromStdString(client.request_control_json(requestJson.toStdString()));
-            } catch (const std::exception& ex) {
-                if (error) {
-                    *error = QString::fromUtf8(ex.what());
-                }
-                return {};
-            }
+            return request_control_once(endpoint, requestJson, caFile, certFile, keyFile, error);
         };
 
         QMap<QString, NodeSnapshot> discovered;
@@ -490,31 +562,12 @@ void HeadlessNodesPanel::onNodeItemDoubleClicked(QListWidgetItem* item)
 
 auto HeadlessNodesPanel::requestJson(const QString& endpoint, const QString& requestJson, QString* error) -> QString
 {
-    try {
-        s7::transport::BeastRuntimeNetEndpoint client;
-        s7::transport::TlsConfig tls;
-        const auto normalized = normalizeEndpoint(endpoint);
-        if (normalized.startsWith(QStringLiteral("wss://"))) {
-            tls.enabled = true;
-            tls.ca_file = caFileEdit_->text().trimmed().toStdString();
-            tls.cert_file = certFileEdit_->text().trimmed().toStdString();
-            tls.key_file = keyFileEdit_->text().trimmed().toStdString();
-            if (tls.ca_file.empty() || tls.cert_file.empty() || tls.key_file.empty()) {
-                if (error) {
-                    *error = QStringLiteral("Missing TLS files (CA/cert/key) for wss endpoint.");
-                }
-                return {};
-            }
-        }
-
-        client.configure_client(normalized.toStdString(), tls);
-        return QString::fromStdString(client.request_control_json(requestJson.toStdString()));
-    } catch (const std::exception& ex) {
-        if (error) {
-            *error = QString::fromUtf8(ex.what());
-        }
-        return {};
-    }
+    return request_control_once(normalizeEndpoint(endpoint),
+                                requestJson,
+                                caFileEdit_->text().trimmed(),
+                                certFileEdit_->text().trimmed(),
+                                keyFileEdit_->text().trimmed(),
+                                error);
 }
 
 auto HeadlessNodesPanel::normalizeEndpoint(const QString& raw) const -> QString
