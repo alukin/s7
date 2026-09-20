@@ -95,6 +95,22 @@ auto parseParamsFromNode(const QSchematic::Items::Node& node) -> boost::json::ob
     return parsed.as_object();
 }
 
+auto parseNestedSchemaFromNode(const QSchematic::Items::Node& node) -> boost::json::value
+{
+    const auto encoded = node.data(kNodeSchemaRole).toString();
+    if (encoded.isEmpty()) {
+        return {};
+    }
+
+    boost::system::error_code ec;
+    const auto parsed = boost::json::parse(encoded.toStdString(), ec);
+    if (ec) {
+        return {};
+    }
+
+    return parsed;
+}
+
 } // namespace
 
 auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
@@ -139,6 +155,10 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
         elementObj["id"] = nodeId;
         elementObj["type"] = storedType.isEmpty() ? "Element" : storedType.toStdString();
         elementObj["params"] = params;
+        const auto nestedSchema = parseNestedSchemaFromNode(*node);
+        if (nestedSchema.is_object()) {
+            elementObj["schema"] = nestedSchema;
+        }
         elementsArray.push_back(elementObj);
 
         const auto inputs = orderedNodeConnectors(nodePtr, false);

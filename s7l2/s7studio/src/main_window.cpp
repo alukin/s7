@@ -12,6 +12,7 @@
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_catalog.hpp>
 #include <s7/element_registry.hpp>
+#include <s7/schema_library.hpp>
 
 #include "s7/plugin_loader.hpp"
 
@@ -294,6 +295,20 @@ auto isDiagramDocument(const boost::json::value& json) -> bool
     return object.contains("diagram") || object.contains("schema");
 }
 
+auto isElementLibraryDocument(const boost::json::value& json) -> bool
+{
+    if (!json.is_object()) {
+        return false;
+    }
+
+    const auto& object = json.as_object();
+    if (const auto it = object.find("document_kind"); it != object.end() && it->value().is_string()) {
+        return it->value().as_string() == "s7.element_library";
+    }
+
+    return false;
+}
+
 auto schemaDisplayName(const boost::json::value& schemaJson, const QString& fallback) -> QString
 {
     if (schemaJson.is_object()) {
@@ -312,6 +327,9 @@ auto elementDescriptionForType(const QString& type) -> QString
         const auto& metadata = descriptor->metadata();
         if (!metadata.description.empty()) {
             return QString::fromStdString(metadata.description);
+        }
+        if (metadata.schema_definition.has_value()) {
+            return QStringLiteral("Schema-based library element.");
         }
     }
 
@@ -341,6 +359,9 @@ auto elementLibraryForType(const QString& type) -> QString
     }
     if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
         const auto& metadata = descriptor->metadata();
+        if (metadata.schema_definition.has_value()) {
+            return QStringLiteral("schema library: %1").arg(QString::fromStdString(metadata.category));
+        }
         if (!metadata.category.empty()) {
             return QStringLiteral("registry category: %1").arg(QString::fromStdString(metadata.category));
         }
@@ -602,6 +623,8 @@ void MainWindow::buildActions()
     closeDiagramAction_ = actions.closeDiagramAction;
     saveAction_ = actions.saveAction;
     saveAsAction_ = actions.saveAsAction;
+    loadLibraryAction_ = actions.loadLibraryAction;
+    saveLibraryAction_ = actions.saveLibraryAction;
     loadDemoAction_ = actions.loadDemoAction;
     fitDiagramAction_ = actions.fitDiagramAction;
     exitAction_ = actions.exitAction;
@@ -690,6 +713,8 @@ void MainWindow::buildActions()
     connect(closeDiagramAction_, &QAction::triggered, this, &MainWindow::closeCurrentDiagram);
     connect(saveAction_, &QAction::triggered, this, &MainWindow::saveDocument);
     connect(saveAsAction_, &QAction::triggered, this, &MainWindow::saveDocumentAs);
+    connect(loadLibraryAction_, &QAction::triggered, this, &MainWindow::loadElementLibrary);
+    connect(saveLibraryAction_, &QAction::triggered, this, &MainWindow::saveSchemaLibrary);
     connect(loadDemoAction_, &QAction::triggered, this, &MainWindow::loadDemoDiagram);
     connect(fitDiagramAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
     connect(exitAction_, &QAction::triggered, this, &QWidget::close);
@@ -735,6 +760,8 @@ void MainWindow::buildUi()
     actions.closeDiagramAction = closeDiagramAction_;
     actions.saveAction = saveAction_;
     actions.saveAsAction = saveAsAction_;
+    actions.loadLibraryAction = loadLibraryAction_;
+    actions.saveLibraryAction = saveLibraryAction_;
     actions.loadDemoAction = loadDemoAction_;
     actions.fitDiagramAction = fitDiagramAction_;
     actions.exitAction = exitAction_;
@@ -868,11 +895,18 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     }
 
     const QString elementId = nextElementId(runtimeSchema_, elementType);
+    const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
+    const auto* schemaDefinition = descriptor && descriptor->metadata().schema_definition.has_value()
+        ? &descriptor->metadata().schema_definition.value()
+        : nullptr;
 
     boost::json::object elementObj;
     elementObj["id"] = elementId.toStdString();
     elementObj["type"] = elementType.toStdString();
     elementObj["params"] = boost::json::object{};
+    if (schemaDefinition) {
+        elementObj["schema"] = *schemaDefinition;
+    }
     root["elements"].as_array().push_back(elementObj);
 
     if (diagramEditor_) {
@@ -903,6 +937,9 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
             nodeJson["type"] = elementType.toStdString();
             nodeJson["name"] = elementId.toStdString();
             nodeJson["position"] = positionJson;
+            if (schemaDefinition) {
+                nodeJson["schema"] = *schemaDefinition;
+            }
             if (elementType == QStringLiteral("Scope")) {
                 nodeJson["channel_count"] = 1;
             }
@@ -1818,7 +1855,7 @@ void MainWindow::openDocumentFile()
 {
     openJsonDocument(
         QStringLiteral("Open diagram"),
-        QStringLiteral("Diagram or JSON files (*.json *.s7diagram);;All files (*)"),
+        QStringLiteral("Diagram, schema, or library files (*.json *.s7diagram *.s7library);;All files (*)"),
         true,
         QStringLiteral("Open failed"));
 }
@@ -1902,6 +1939,10 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
     try {
         const auto parsed = json_utils::parseFile(filePath);
         const auto sourceLabel = QFileInfo(filePath).fileName();
+        if (isElementLibraryDocument(parsed)) {
+            loadElementLibraryJson(parsed, sourceLabel);
+            return;
+        }
         const bool diagramDocument = isDiagramDocument(parsed);
         if (diagramDocument) {
             loadDiagramJson(parsed, sourceLabel);
@@ -1916,6 +1957,45 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
     } catch (const std::exception& ex) {
         QMessageBox::critical(this, errorTitle, QString::fromUtf8(ex.what()));
         appendLog(QString("[studio] failed to open document: %1").arg(QString::fromUtf8(ex.what())));
+    }
+}
+
+void MainWindow::loadElementLibraryJson(const boost::json::value& libraryJson, const QString& sourceLabel)
+{
+    try {
+        const auto library = s7::SchemaLibraryLoader::load_from_json(libraryJson);
+        auto& registry = s7::ElementRegistry::instance();
+        s7::SchemaLibraryLoader::register_library(library, registry);
+
+        if (elementPickerPanel_) {
+            elementPickerPanel_->refreshCatalog();
+        }
+
+        appendLog(QString("[studio] loaded element library: %1").arg(sourceLabel));
+        statusBar()->showMessage(QString("Loaded element library: %1").arg(QString::fromStdString(library.name)), 5000);
+    } catch (const std::exception& ex) {
+        QMessageBox::critical(this, QStringLiteral("Load library failed"), QString::fromUtf8(ex.what()));
+        appendLog(QString("[studio] failed to load element library: %1").arg(QString::fromUtf8(ex.what())));
+    }
+}
+
+void MainWindow::loadElementLibrary()
+{
+    const auto filePath = QFileDialog::getOpenFileName(
+        this,
+        QStringLiteral("Load element library"),
+        QString(),
+        QStringLiteral("Element libraries (*.s7library *.json);;All files (*)"));
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    try {
+        const auto parsed = json_utils::parseFile(filePath);
+        loadElementLibraryJson(parsed, QFileInfo(filePath).fileName());
+    } catch (const std::exception& ex) {
+        QMessageBox::critical(this, QStringLiteral("Load library failed"), QString::fromUtf8(ex.what()));
+        appendLog(QString("[studio] failed to load element library: %1").arg(QString::fromUtf8(ex.what())));
     }
 }
 
@@ -1936,6 +2016,161 @@ void MainWindow::loadDemoDiagram()
                        QStringLiteral("empty schema"));
     }
     currentDiagramPath_.clear();
+}
+
+void MainWindow::saveSchemaLibrary()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        QMessageBox::critical(this,
+                              QStringLiteral("Save library failed"),
+                              QStringLiteral("Diagram scene is not available."));
+        return;
+    }
+
+    diagram::SerializationOptions options;
+    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("schema_library_element"));
+    options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+    if (diagramEditor_) {
+        const auto pageLayout = diagramEditor_->pageLayout();
+        options.sheetOrientation = pageLayout.orientation;
+        options.sheetWidthMm = pageLayout.widthMm;
+        options.sheetHeightMm = pageLayout.heightMm;
+    }
+
+    diagram::SceneSerializer serializer;
+    const auto document = serializer.serialize(*diagramEditor_->scene(), options);
+    const auto schemaJson = document.runtimeSchema;
+    if (!schemaJson.is_object()) {
+        QMessageBox::critical(this,
+                              QStringLiteral("Save library failed"),
+                              QStringLiteral("Current diagram does not contain a valid runtime schema."));
+        return;
+    }
+
+    QString selectedFilter;
+    const auto filePath = QFileDialog::getSaveFileName(
+        this,
+        QStringLiteral("Save schema library"),
+        QStringLiteral("schema_library.s7library"),
+        QStringLiteral("Element libraries (*.s7library *.json);;All files (*)"),
+        &selectedFilter);
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    QString normalizedPath = filePath;
+    if (QFileInfo(normalizedPath).suffix().isEmpty()) {
+        normalizedPath += selectedFilter.startsWith(QStringLiteral("JSON"))
+            ? QStringLiteral(".json")
+            : QStringLiteral(".s7library");
+    }
+
+    const auto defaultTypeName = schemaDisplayName(schemaJson, QFileInfo(normalizedPath).baseName());
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("Schema Library Element"));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout();
+
+    auto* typeEdit = new QLineEdit(defaultTypeName, &dialog);
+    auto* displayEdit = new QLineEdit(defaultTypeName, &dialog);
+    auto* descriptionEdit = new QLineEdit(QStringLiteral("Schema-based library element"), &dialog);
+    auto* categoryEdit = new QLineEdit(QFileInfo(normalizedPath).baseName(), &dialog);
+    auto* versionEdit = new QLineEdit(QStringLiteral("1.0.0"), &dialog);
+
+    form->addRow(QStringLiteral("Type name"), typeEdit);
+    form->addRow(QStringLiteral("Display name"), displayEdit);
+    form->addRow(QStringLiteral("Description"), descriptionEdit);
+    form->addRow(QStringLiteral("Category"), categoryEdit);
+    form->addRow(QStringLiteral("Version"), versionEdit);
+    layout->addLayout(form);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    const auto typeName = typeEdit->text().trimmed();
+    if (typeName.isEmpty()) {
+        QMessageBox::critical(this,
+                              QStringLiteral("Save library failed"),
+                              QStringLiteral("Type name cannot be empty."));
+        return;
+    }
+
+    s7::SchemaLibraryDefinition library;
+    const auto outputFile = normalizedPath;
+
+    if (QFile::exists(outputFile)) {
+        try {
+            library = s7::SchemaLibraryLoader::load_from_file(outputFile.toStdString());
+        } catch (const std::exception& ex) {
+            QMessageBox::critical(this, QStringLiteral("Save library failed"), QString::fromUtf8(ex.what()));
+            return;
+        }
+    } else {
+        library.name = QFileInfo(outputFile).baseName().toStdString();
+    }
+
+    s7::SchemaLibraryElementDefinition element;
+    element.type_name = typeName.toStdString();
+    element.display_name = displayEdit->text().trimmed().isEmpty() ? element.type_name : displayEdit->text().trimmed().toStdString();
+    element.description = descriptionEdit->text().trimmed().toStdString();
+    element.category = categoryEdit->text().trimmed().isEmpty() ? library.name : categoryEdit->text().trimmed().toStdString();
+    element.version = versionEdit->text().trimmed().isEmpty() ? std::string{"1.0.0"} : versionEdit->text().trimmed().toStdString();
+    element.schema = schemaJson;
+
+    for (const auto& existing : library.elements) {
+        if (existing.type_name == element.type_name) {
+            QMessageBox::critical(this,
+                                  QStringLiteral("Save library failed"),
+                                  QStringLiteral("The library already contains an element named '%1'.").arg(typeName));
+            return;
+        }
+    }
+
+    if (s7::ElementRegistry::instance().find(element.type_name)) {
+        QMessageBox::critical(this,
+                              QStringLiteral("Save library failed"),
+                              QStringLiteral("An element type with that name is already registered. Choose a different type name."));
+        return;
+    }
+
+    library.elements.push_back(element);
+
+    const auto payload = library.to_json();
+    QFile file(outputFile);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+        QMessageBox::critical(this,
+                              QStringLiteral("Save library failed"),
+                              QStringLiteral("Failed to write '%1': %2").arg(outputFile, file.errorString()));
+        return;
+    }
+
+    const auto json = boost::json::serialize(payload);
+    file.write(QByteArray::fromStdString(json));
+    file.write("\n");
+    file.close();
+
+    try {
+        s7::SchemaLibraryDefinition registrationOnly;
+        registrationOnly.name = library.name;
+        registrationOnly.elements.push_back(element);
+        s7::SchemaLibraryLoader::register_library(registrationOnly, s7::ElementRegistry::instance());
+    } catch (const std::exception& ex) {
+        appendLog(QString("[studio] library saved but registration skipped: %1").arg(QString::fromUtf8(ex.what())));
+    }
+
+    if (elementPickerPanel_) {
+        elementPickerPanel_->refreshCatalog();
+    }
+
+    appendLog(QString("[studio] saved schema library element: %1").arg(typeName));
+    statusBar()->showMessage(QString("Saved schema library: %1").arg(QFileInfo(outputFile).fileName()), 5000);
 }
 
 auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool

@@ -34,6 +34,7 @@ struct NodeModel {
     std::string id;
     std::string type = "Element";
     boost::json::object params;
+    boost::json::value nestedSchema;
     QString title;
     QPointF position;
     bool hasExplicitPosition = false;
@@ -58,7 +59,7 @@ auto makeStyledConnector() -> std::shared_ptr<QSchematic::Items::Connector>
 {
     auto connector = std::make_shared<QSchematic::Items::Connector>();
     auto* colorize = new QGraphicsColorizeEffect();
-    colorize->setColor(QColor("#8fd3ff"));
+    colorize->setColor(QColor(143, 211, 255));
     colorize->setStrength(1.0);
     connector->setGraphicsEffect(colorize);
     return connector;
@@ -107,10 +108,37 @@ struct PortCounts {
     int outputs = 0;
 };
 
+auto nestedSchemaPortCounts(const boost::json::value& schemaValue) -> PortCounts
+{
+    if (!schemaValue.is_object()) {
+        return {};
+    }
+
+    const auto& schemaObject = schemaValue.as_object();
+    PortCounts counts;
+
+    if (const auto* inputsValue = json_utils::findObjectValue(schemaObject, "exposed_inputs");
+        inputsValue && inputsValue->is_array()) {
+        counts.inputs = static_cast<int>(inputsValue->as_array().size());
+    }
+
+    if (const auto* outputsValue = json_utils::findObjectValue(schemaObject, "exposed_outputs");
+        outputsValue && outputsValue->is_array()) {
+        counts.outputs = static_cast<int>(outputsValue->as_array().size());
+    }
+
+    return counts;
+}
+
 auto declaredPortCounts(std::string_view type,
                         const boost::json::object& params = {},
-                        const int fallbackChannelCount = 1) -> PortCounts
+                        const int fallbackChannelCount = 1,
+                        const boost::json::value* nestedSchema = nullptr) -> PortCounts
 {
+    if (nestedSchema && nestedSchema->is_object()) {
+        return nestedSchemaPortCounts(*nestedSchema);
+    }
+
     if (type == "Constant" || type == "AnalogOscillator") {
         return {0, 1};
     }
@@ -328,10 +356,13 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
                 if (const auto* paramsValue = json_utils::findObjectValue(element, "params"); paramsValue && paramsValue->is_object()) {
                     model.params = paramsValue->as_object();
                 }
+                if (const auto* schemaValue = json_utils::findObjectValue(element, "schema"); schemaValue && schemaValue->is_object()) {
+                    model.nestedSchema = *schemaValue;
+                }
                 if (model.type == "Scope") {
                     model.channelCount = std::max(1, json_utils::intValue(model.params, "channel_count", 1));
                 }
-                const auto declaredPorts = declaredPortCounts(model.type, model.params, model.channelCount);
+                const auto declaredPorts = declaredPortCounts(model.type, model.params, model.channelCount, &model.nestedSchema);
                 model.inputPorts = std::max(model.inputPorts, declaredPorts.inputs);
                 model.outputPorts = std::max(model.outputPorts, declaredPorts.outputs);
                 model.title = QString::fromUtf8(model.id.c_str());
@@ -393,10 +424,17 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
                 paramsValue && paramsValue->is_object()) {
                 it->second.params = paramsValue->as_object();
             }
+            if (const auto* schemaValue = json_utils::findObjectValue(nodeObject, "schema");
+                schemaValue && schemaValue->is_object()) {
+                it->second.nestedSchema = *schemaValue;
+            }
             if (it->second.type == "Scope") {
                 it->second.channelCount = std::max(1, json_utils::intValue(nodeObject, "channel_count", it->second.channelCount));
             }
-            const auto declaredPorts = declaredPortCounts(it->second.type, it->second.params, it->second.channelCount);
+            const auto declaredPorts = declaredPortCounts(it->second.type,
+                                                         it->second.params,
+                                                         it->second.channelCount,
+                                                         &it->second.nestedSchema);
             it->second.inputPorts = std::max(it->second.inputPorts, declaredPorts.inputs);
             it->second.outputPorts = std::max(it->second.outputPorts, declaredPorts.outputs);
 
@@ -539,6 +577,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         node->setData(kNodeTypeRole, QString::fromStdString(model.type));
         node->setData(kNodeTitleRole, model.title);
         node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(model.params)));
+            if (model.nestedSchema.is_object()) {
+            node->setData(kNodeSchemaRole, QString::fromStdString(boost::json::serialize(model.nestedSchema)));
+        }
         node->setData(kNodeChannelCountRole, model.channelCount);
 
         scene.addItem(node);

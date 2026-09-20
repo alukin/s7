@@ -28,6 +28,8 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.closeDiagramAction = new QAction("Close Diagram", window);
     actions.saveAction = new QAction("Save", window);
     actions.saveAsAction = new QAction("Save As...", window);
+    actions.loadLibraryAction = new QAction("Load Element Library...", window);
+    actions.saveLibraryAction = new QAction("Save Schema Library...", window);
     actions.loadDemoAction = new QAction("Load Demo Diagram", window);
     actions.fitDiagramAction = new QAction("Fit Diagram to View", window);
     actions.exitAction = new QAction("Exit", window);
@@ -58,6 +60,8 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     fileMenu->addSeparator();
     fileMenu->addAction(actions.saveAction);
     fileMenu->addAction(actions.saveAsAction);
+    fileMenu->addAction(actions.loadLibraryAction);
+    fileMenu->addAction(actions.saveLibraryAction);
     fileMenu->addSeparator();
     fileMenu->addAction(actions.loadDemoAction);
     fileMenu->addSeparator();

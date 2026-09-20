@@ -60,6 +60,54 @@ s7::Schema make_implicit_conversion_schema()
     return schema;
 }
 
+boost::json::value make_schema_library_json()
+{
+    return boost::json::parse(R"json(
+    {
+      "document_kind": "s7.element_library",
+      "name": "test_library",
+      "elements": [
+        {
+          "type_name": "DoubleGain",
+          "display_name": "Double Gain",
+          "description": "Schema-backed gain element.",
+          "category": "tests",
+          "version": "1.0.0",
+          "schema": {
+            "name": "double_gain",
+            "elements": [
+              {
+                "id": "gain",
+                "type": "Gain",
+                "params": {
+                  "factor": 2.0
+                }
+              }
+            ],
+            "connections": [],
+            "exposed_inputs": [
+              {
+                "name": "in",
+                "type": "DOUBLE",
+                "element": "gain",
+                "port": 0
+              }
+            ],
+            "exposed_outputs": [
+              {
+                "name": "out",
+                "type": "DOUBLE",
+                "element": "gain",
+                "port": 0
+              }
+            ]
+          }
+        }
+      ]
+    }
+    )json");
+}
+
 } // namespace
 
 int main() try
@@ -233,7 +281,9 @@ int main() try
         } catch (const std::exception&) {
             threw = true;
         }
-        assert(threw);
+        if (!threw) {
+            throw std::runtime_error("Expected nested schema validation failure was not reported.");
+        }
     }
 
     {
@@ -350,6 +400,49 @@ int main() try
         });
         if (!hasCycleError) {
             throw std::runtime_error("Expected cycle validation error was not reported.");
+        }
+    }
+
+    {
+        auto& registry = s7::ElementRegistry::instance();
+        s7::register_builtin_elements(registry);
+
+        const auto library = s7::SchemaLibraryLoader::load_from_json(make_schema_library_json());
+        s7::SchemaLibraryLoader::register_library(library, registry);
+
+        const auto* descriptor = registry.find("DoubleGain");
+        assert(descriptor != nullptr);
+
+        const auto& metadata = descriptor->metadata();
+        assert(metadata.schema_definition.has_value());
+        assert(metadata.input_ports.size() == 1);
+        assert(metadata.output_ports.size() == 1);
+
+        const s7::ElementCreationContext ctx{metadata, boost::json::object{}};
+        auto libraryElement = descriptor->create(ctx);
+        assert(libraryElement != nullptr);
+        assert(libraryElement->type_name() == "Schema");
+
+        s7::Schema schema{"library_use"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(3.0); });
+        schema.add_element("gain", [descriptor] {
+            const auto& descriptorMetadata = descriptor->metadata();
+            const s7::ElementCreationContext libraryCtx{descriptorMetadata, boost::json::object{}};
+            return descriptor->create(libraryCtx);
+        });
+        schema.connect("source", 0, "gain", 0);
+
+        const auto validation = s7::Validator::validate(schema);
+        assert(validation.ok());
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step();
+        assert(std::abs(runtime.real_output_of("gain") - 6.0) < 1e-12);
+
+        s7::ElementCatalogService catalog(registry);
+        const auto* catalogEntry = catalog.find_element("DoubleGain");
+        if (!catalogEntry || catalogEntry->input_count != 1 || catalogEntry->output_count != 1) {
+            throw std::runtime_error("Schema library catalog entry was not indexed correctly.");
         }
     }
 

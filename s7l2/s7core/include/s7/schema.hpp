@@ -28,8 +28,9 @@ struct ElementSpec {
 class Schema : public Element {
 public:
     explicit Schema(std::string name);
-    Schema(Schema&&) noexcept = default;
-    Schema& operator=(Schema&&) noexcept = default;
+    ~Schema();
+    Schema(Schema&&) noexcept;
+    Schema& operator=(Schema&&) noexcept;
     Schema(const Schema&) = delete;
     Schema& operator=(const Schema&) = delete;
 

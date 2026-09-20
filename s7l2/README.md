@@ -2,6 +2,11 @@
 
 This repository now contains a runnable C++ starter aligned with the documents in `docs/`, organized as multiple subprojects in the same style as the previous `s7pp` repository structure.
 
+## Documentation quick links
+
+- `docs/INDEX.md` - technical reference entry point
+- `docs/SCHEMA_LIBRARY_WORKFLOW.md` - schema-based library format and Studio/runtime workflow
+
 ## Project layout
 
 The codebase is now split into focused subprojects:
@@ -103,6 +108,7 @@ Current shape includes:
 - schema name
 - elements array
 - connections array
+- nested schemas in `Schema` elements
 - websocket server config
 - websocket client config
 
@@ -112,7 +118,6 @@ This is a project bootstrap, not the full S7 platform yet.
 
 Not implemented yet:
 
-- nested schemas
 - schema input/output ports
 - generic typed signals
 - dynamic probe attachment and subscriptions

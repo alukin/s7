@@ -23,6 +23,8 @@ public:
     explicit ElementPickerPanel(const s7::ElementRegistry& registry, QWidget* parent = nullptr);
     ~ElementPickerPanel() override;
 
+    void refreshCatalog();
+
 signals:
     // Emitted when user wants to add element to diagram
     void elementRequested(const QString& elementType, const QString& displayName);

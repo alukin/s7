@@ -218,7 +218,9 @@ README_ELEMENT_LIBRARY.md (You are here)
         │        │
         │        └─→ ELEMENT_LIBRARY_IMPLEMENTATION.md (Roadmap)
         │
-        └─→ ELEMENT_DEVELOPMENT_GUIDE.md (Developer reference)
+        ├─→ ELEMENT_DEVELOPMENT_GUIDE.md (Developer reference)
+        │
+        └─→ SCHEMA_LIBRARY_WORKFLOW.md (Schema library usage)
         
 ELEMENT_LIBRARY_CHECKLIST.md (Project status)
 ```
@@ -279,6 +281,16 @@ ELEMENT_LIBRARY_CHECKLIST.md (Project status)
 - Testing examples
 - Troubleshooting guide
 - Implementation checklist
+
+### SCHEMA_LIBRARY_WORKFLOW.md
+**Type**: Integration Workflow
+**Length**: 4-6 pages
+**Read Time**: 15-20 minutes
+**Contents**:
+- `s7.element_library` JSON format
+- Export/import in `s7studio`
+- Headless runtime loading with `--library`
+- Validation constraints and troubleshooting
 
 ### ELEMENT_LIBRARY_DIAGRAMS.md
 **Type**: Visual Reference  

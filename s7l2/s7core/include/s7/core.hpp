@@ -10,6 +10,7 @@
 #include "s7/elements.hpp"
 #include "s7/graph.hpp"
 #include "s7/hardware_converters.hpp"
+#include "s7/schema_library.hpp"
 #include "s7/runtime.hpp"
 #include "s7/schema.hpp"
 #include "s7/spectral_types.hpp"

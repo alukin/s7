@@ -76,6 +76,11 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 
 ElementPickerPanel::~ElementPickerPanel() = default;
 
+void ElementPickerPanel::refreshCatalog()
+{
+    buildCategoryTree();
+}
+
 void ElementPickerPanel::buildCategoryTree() {
     s7::ElementCatalogService catalog(registry_);
 

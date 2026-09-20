@@ -5,6 +5,7 @@
 ### Core Architecture
 - **DISTRIBUTED_ADDRESSING.md** - UUID-based element and node addressing for distributed computation
 - **ELEMENT_LIBRARY_TECH.md** - Element library architecture, registry, plugins, parameter validation
+- **SCHEMA_LIBRARY_WORKFLOW.md** - Schema-based element libraries, studio workflow, and runtime loading
 
 ### Developer Guides
 - **ELEMENT_DEV_GUIDE.md** - Create custom elements, quick start, templates, troubleshooting
@@ -12,6 +13,7 @@
 ### Source Code References
 - **s7core/include/s7/element.hpp** - Element base class
 - **s7core/include/s7/elements.hpp** - Built-in templated elements
+- **s7core/include/s7/schema_library.hpp** - Schema library loader and registration API
 - **s7core/src/elements.cpp** - Element implementations
 - **s7runtime/src/runtime_service.cpp** - Schema loading and compilation
 

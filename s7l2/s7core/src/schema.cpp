@@ -61,6 +61,10 @@ Schema::Schema(std::string name)
 {
 }
 
+Schema::~Schema() = default;
+Schema::Schema(Schema&&) noexcept = default;
+Schema& Schema::operator=(Schema&&) noexcept = default;
+
 void Schema::bind_inputs(std::span<const InputBinding> bindings)
 {
     Element::bind_inputs(bindings);

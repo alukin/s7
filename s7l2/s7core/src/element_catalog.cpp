@@ -104,6 +104,10 @@ boost::json::value ElementCatalogService::to_json() const
         element["version"] = metadata.version;
         element["input_count"] = static_cast<int>(metadata.input_ports.size());
         element["output_count"] = static_cast<int>(metadata.output_ports.size());
+        element["schema_based"] = metadata.schema_definition.has_value();
+        if (metadata.schema_definition.has_value()) {
+            element["schema"] = *metadata.schema_definition;
+        }
 
         boost::json::array inputPorts;
         for (const auto& port : metadata.input_ports) {

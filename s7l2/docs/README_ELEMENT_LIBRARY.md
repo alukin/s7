@@ -121,6 +121,20 @@ This analysis package contains comprehensive documentation for the S7 Element Li
 
 ---
 
+### 6. **SCHEMA_LIBRARY_WORKFLOW.md**
+**Purpose**: Practical guide for schema-based element libraries
+**For**: Runtime/studio developers and integrators
+**Contents**:
+- Library JSON format (`document_kind: s7.element_library`)
+- Export flow from `s7studio` (`Save Schema Library...`)
+- Load flow in `s7studio` (`Load Element Library...`)
+- Headless runtime loading (`s7runtime --library ... --schema ...`)
+- Validation rules and troubleshooting
+
+**Action**: Use when packaging a schema as a reusable element type
+
+---
+
 ## How to Use This Package
 
 ### For Initial Review (30 minutes)
@@ -262,6 +276,7 @@ Use this to ensure all aspects are covered:
 | Implementation plan | IMPLEMENTATION | Stage Breakdown |
 | Developer guide | DEVELOPMENT_GUIDE | Quick Start |
 | Visuals | DIAGRAMS | All sections |
+| Schema library workflow | SCHEMA_LIBRARY_WORKFLOW | Studio + runtime usage |
 
 ## File Structure After Implementation
 

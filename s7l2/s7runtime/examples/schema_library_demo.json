@@ -1,0 +1,79 @@
+{
+  "document_kind": "s7.element_library",
+  "name": "demo_schema_library",
+  "elements": [
+    {
+      "type_name": "DoubleGain",
+      "display_name": "Double Gain",
+      "description": "A schema-based gain element that multiplies its input by 2.",
+      "category": "demo",
+      "version": "1.0.0",
+      "schema": {
+        "name": "double_gain",
+        "elements": [
+          {
+            "id": "gain",
+            "type": "Gain",
+            "params": {
+              "factor": 2.0
+            }
+          }
+        ],
+        "connections": [],
+        "exposed_inputs": [
+          {
+            "name": "in",
+            "type": "DOUBLE",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "out",
+            "type": "DOUBLE",
+            "element": "gain",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "HalfGain",
+      "display_name": "Half Gain",
+      "description": "A schema-based gain element that multiplies its input by 0.5.",
+      "category": "demo",
+      "version": "1.0.0",
+      "schema": {
+        "name": "half_gain",
+        "elements": [
+          {
+            "id": "gain",
+            "type": "Gain",
+            "params": {
+              "factor": 0.5
+            }
+          }
+        ],
+        "connections": [],
+        "exposed_inputs": [
+          {
+            "name": "in",
+            "type": "DOUBLE",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "out",
+            "type": "DOUBLE",
+            "element": "gain",
+            "port": 0
+          }
+        ]
+      }
+    }
+  ]
+}
+

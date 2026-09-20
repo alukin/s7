@@ -238,11 +238,7 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
     for (const auto& element : definition.elements) {
         const auto& params = element.params;
 
-        if (element.type == "Schema") {
-            if (!element.nested_schema.is_object()) {
-                throw std::invalid_argument("Schema element '" + element.id + "' is missing nested schema definition.");
-            }
-
+        if (element.nested_schema.is_object()) {
             const auto nested_definition = parse_schema_definition(element.nested_schema);
             schema->add_element(element.id, [nested_definition] {
                 auto nested = build_schema_from_definition(nested_definition);

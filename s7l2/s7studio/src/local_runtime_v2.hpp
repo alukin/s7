@@ -17,6 +17,8 @@
 
 namespace s7studio::runtime {
 
+inline s7::Schema buildSchema(const boost::json::value& schemaJson);
+
 namespace detail {
 
 class ScopeElement final : public s7::Element
@@ -108,6 +110,67 @@ inline std::size_t getSizeT(const boost::json::object& object, std::string_view 
     throw std::invalid_argument("Expected integer field '" + std::string(key) + "'.");
 }
 
+inline s7::SignalType signalTypeFromString(std::string_view value)
+{
+    if (value == "DOUBLE" || value == "double") {
+        return s7::SignalType::DOUBLE;
+    }
+    if (value == "COMPLEX" || value == "complex") {
+        return s7::SignalType::COMPLEX;
+    }
+    if (value == "INT8") return s7::SignalType::INT8;
+    if (value == "UINT8") return s7::SignalType::UINT8;
+    if (value == "INT12") return s7::SignalType::INT12;
+    if (value == "UINT12") return s7::SignalType::UINT12;
+    if (value == "INT16") return s7::SignalType::INT16;
+    if (value == "UINT16") return s7::SignalType::UINT16;
+    throw std::invalid_argument("Unsupported signal type string: '" + std::string(value) + "'.");
+}
+
+struct SchemaPortBinding {
+    std::string name;
+    std::string type;
+    std::string element;
+    std::size_t port{};
+};
+
+inline std::vector<SchemaPortBinding> parseSchemaPortBindings(const boost::json::object& root,
+                                                              std::string_view field_name)
+{
+    std::vector<SchemaPortBinding> bindings;
+    const auto it = root.find(field_name);
+    if (it == root.end()) {
+        return bindings;
+    }
+    if (!it->value().is_array()) {
+        throw std::invalid_argument("Expected array field '" + std::string(field_name) + "'.");
+    }
+
+    for (const auto& binding_value : it->value().as_array()) {
+        if (!binding_value.is_object()) {
+            throw std::invalid_argument("Expected object in field '" + std::string(field_name) + "'.");
+        }
+
+        const auto& binding_object = binding_value.as_object();
+        SchemaPortBinding binding;
+        binding.name = expectString(binding_object, "name");
+        binding.type = expectString(binding_object, "type");
+        binding.element = expectString(binding_object, "element");
+        if (const auto port_it = binding_object.find("port"); port_it != binding_object.end()) {
+            if (port_it->value().is_uint64()) {
+                binding.port = port_it->value().as_uint64();
+            } else if (port_it->value().is_int64() && port_it->value().as_int64() >= 0) {
+                binding.port = static_cast<std::size_t>(port_it->value().as_int64());
+            } else {
+                throw std::invalid_argument("Expected non-negative integer 'port' in schema port binding.");
+            }
+        }
+        bindings.push_back(std::move(binding));
+    }
+
+    return bindings;
+}
+
 // Create element from registry
 inline void addElementFromRegistry(s7::Schema& schema,
                                    const std::string& id,
@@ -122,14 +185,24 @@ inline void addElementFromRegistry(s7::Schema& schema,
         throw std::invalid_argument("Unknown element type: '" + type + "'");
     }
 
-    const boost::json::object params_copy = params;
-    schema.add_element(id, [descriptor, params_copy] {
-        const s7::ElementCreationContext ctx{descriptor->metadata(), params_copy};
+    schema.add_element(id, [descriptor, params] {
+        const s7::ElementCreationContext ctx{descriptor->metadata(), params};
         auto element = descriptor->create(ctx);
         if (!element) {
             throw std::invalid_argument("Failed to create element from descriptor");
         }
         return element;
+    });
+}
+
+inline void addNestedSchemaElement(s7::Schema& schema,
+                                   const std::string& id,
+                                   const boost::json::value& nested_schema)
+{
+    const auto nested_definition = nested_schema;
+    schema.add_element(id, [nested_definition] {
+        auto nested = buildSchema(nested_definition);
+        return std::make_unique<s7::Schema>(std::move(nested));
     });
 }
 
@@ -143,10 +216,18 @@ inline void addElementFromJson(s7::Schema& schema, const boost::json::object& el
         ? paramsIt->value().as_object()
         : boost::json::object{};
 
+    const auto schemaIt = elementObj.find("schema");
+    const auto hasNestedSchema = schemaIt != elementObj.end() && schemaIt->value().is_object();
+
     // Handle Scope element (special case for s7studio)
     if (type == "Scope") {
         const std::size_t channelCount = std::max<std::size_t>(1, getSizeT(params, "channel_count", 1));
         schema.add_element(id, [channelCount] { return std::make_unique<ScopeElement>(channelCount); });
+        return;
+    }
+
+    if (hasNestedSchema) {
+        addNestedSchemaElement(schema, id, schemaIt->value());
         return;
     }
 
@@ -191,6 +272,20 @@ inline s7::Schema buildSchema(const boost::json::value& schemaJson)
                            detail::expectString(connectionObj, "to_element"),
                            detail::getSizeT(connectionObj, "to_port", 0));
         }
+    }
+
+    for (const auto& binding : detail::parseSchemaPortBindings(root, "exposed_inputs")) {
+        schema.expose_input(binding.name,
+                            detail::signalTypeFromString(binding.type),
+                            binding.element,
+                            binding.port);
+    }
+
+    for (const auto& binding : detail::parseSchemaPortBindings(root, "exposed_outputs")) {
+        schema.expose_output(binding.name,
+                              detail::signalTypeFromString(binding.type),
+                              binding.element,
+                              binding.port);
     }
 
     return schema;

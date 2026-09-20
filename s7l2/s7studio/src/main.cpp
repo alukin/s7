@@ -7,7 +7,9 @@
 #include <boost/system/error_code.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <cerrno>
+#include <cmath>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -104,11 +106,32 @@ int runSmoke()
         static constexpr std::string_view smokeSchema = R"json({
             "name": "s7studio_smoke",
             "elements": [
-                { "id": "osc", "type": "AnalogOscillator", "params": { "amplitude": 1.0, "frequency_hz": 1.0, "sample_rate_hz": 1000.0, "phase": 0.0 } },
+                { "id": "source", "type": "Constant", "params": { "value": 3.0 } },
+                {
+                    "id": "nested",
+                    "type": "Schema",
+                    "schema": {
+                        "name": "nested_gain_chain",
+                        "elements": [
+                            { "id": "g1", "type": "Gain", "params": { "factor": 2.0 } },
+                            { "id": "g2", "type": "Gain", "params": { "factor": 5.0 } }
+                        ],
+                        "connections": [
+                            { "from_element": "g1", "from_port": 0, "to_element": "g2", "to_port": 0 }
+                        ],
+                        "exposed_inputs": [
+                            { "name": "in", "type": "DOUBLE", "element": "g1", "port": 0 }
+                        ],
+                        "exposed_outputs": [
+                            { "name": "out", "type": "DOUBLE", "element": "g2", "port": 0 }
+                        ]
+                    }
+                },
                 { "id": "scope_main", "type": "Scope", "params": { "channel_count": 1 } }
             ],
             "connections": [
-                { "from_element": "osc", "from_port": 0, "to_element": "scope_main", "to_port": 0 }
+                { "from_element": "source", "from_port": 0, "to_element": "nested", "to_port": 0 },
+                { "from_element": "nested", "from_port": 0, "to_element": "scope_main", "to_port": 0 }
             ]
         })json";
         boost::system::error_code ec;
@@ -127,6 +150,7 @@ int runSmoke()
 
         std::cout << "s7studio smoke\n";
         std::cout << "schema=" << schema.name() << '\n';
+        assert(std::abs(runtime.real_output_of("nested") - 30.0) < 1e-12);
         std::cout << "steps=" << runtime.step_count() << '\n';
         for (const auto& line : s7studio::runtime::collectSamples(schema, runtime)) {
             std::cout << line << '\n';

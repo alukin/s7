@@ -8,6 +8,8 @@
 #include <QPointer>
 #include <QVector>
 
+#include <boost/json.hpp>
+
 #include <memory>
 
 class QAction;
@@ -65,6 +67,8 @@ private slots:
     void closeCurrentDiagram();
     void saveDocument();
     void saveDocumentAs();
+    void loadElementLibrary();
+    void saveSchemaLibrary();
     void loadDemoDiagram();
     void fitDiagramToView();
     void zoomDiagramIn();
@@ -102,6 +106,7 @@ private:
                           const QString& filter,
                           bool preferDiagram,
                           const QString& errorTitle);
+    void loadElementLibraryJson(const boost::json::value& libraryJson, const QString& sourceLabel);
     auto saveDocumentToPath(const QString& filePath) -> bool;
     [[nodiscard]] auto selectedRunDuration() const -> ui::RunDuration;
     void loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
@@ -127,6 +132,8 @@ private:
     QAction* closeDiagramAction_ = nullptr;
     QAction* saveAction_ = nullptr;
     QAction* saveAsAction_ = nullptr;
+    QAction* loadLibraryAction_ = nullptr;
+    QAction* saveLibraryAction_ = nullptr;
     QAction* loadDemoAction_ = nullptr;
     QAction* fitDiagramAction_ = nullptr;
     QAction* exitAction_ = nullptr;
