@@ -8,6 +8,7 @@
 #include <boost/json.hpp>
 
 #include <s7/control_plane_mvp.hpp>
+#include <s7/runtime_service.hpp>
 #include <s7/transport.hpp>
 
 #ifndef S7_TEST_CERT_DIR
@@ -24,6 +25,9 @@ int main()
     descriptor.display_name = "Node A";
     descriptor.instance_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
     descriptor.started_at = "2026-09-20T00:00:00Z";
+    descriptor.identity_certificate_file = "/tmp/s7-runtime-node.cert.pem";
+    descriptor.identity_certificate_common_name = "s7-runtime-node";
+    descriptor.identity_certificate_fingerprint_sha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     descriptor.os_family = "linux";
     descriptor.os_version = "unknown";
     descriptor.architecture = "x86_64";
@@ -60,6 +64,19 @@ int main()
         const auto response = boost::json::parse(response_text).as_object();
         assert(response.at("type").as_string() == "HELLO_OK");
         assert(response.at("node_uuid").as_string() == descriptor.node_uuid);
+        const auto& certificate = response.at("certificate").as_object();
+        assert(certificate.at("common_name").as_string() == descriptor.identity_certificate_common_name);
+        assert(certificate.at("fingerprint_sha256").as_string() == descriptor.identity_certificate_fingerprint_sha256);
+    }
+
+    {
+        const auto response_text = client.request_control_json(R"json({"type":"GET_NODE_INFO","request_id":"node-info-1","protocol_version":1})json");
+        const auto response = boost::json::parse(response_text).as_object();
+        assert(response.at("type").as_string() == "NODE_INFO");
+        const auto& node = response.at("node").as_object();
+        const auto& certificate = node.at("certificate").as_object();
+        assert(certificate.at("common_name").as_string() == descriptor.identity_certificate_common_name);
+        assert(certificate.at("fingerprint_sha256").as_string() == descriptor.identity_certificate_fingerprint_sha256);
     }
 
     {
@@ -71,6 +88,7 @@ int main()
               "endpoint":"ws://node-b.local:8443",
               "node_uuid":"bbbbbbbb-2222-3333-4444-555555555555",
               "node_name":"node-b",
+              "certificate":{"common_name":"node-b","fingerprint_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
               "platform":{"os_family":"linux","architecture":"arm64"}
             }
         })json";
@@ -84,6 +102,21 @@ int main()
         const auto response = boost::json::parse(response_text).as_object();
         assert(response.at("type").as_string() == "PEERS");
         assert(response.at("peers").as_array().size() >= 2);
+        bool found_announced_peer = false;
+        for (const auto& peer_value : response.at("peers").as_array()) {
+            if (!peer_value.is_object()) {
+                continue;
+            }
+            const auto& peer = peer_value.as_object();
+            if (peer.at("endpoint").as_string() != "ws://node-b.local:8443") {
+                continue;
+            }
+            const auto& certificate = peer.at("certificate").as_object();
+            assert(certificate.at("common_name").as_string() == "node-b");
+            assert(certificate.at("fingerprint_sha256").as_string() == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+            found_announced_peer = true;
+        }
+        assert(found_announced_peer);
     }
 
     std::string prepare_token;
@@ -199,6 +232,21 @@ int main()
         const auto response_text = tls_client.request_control_json(R"json({"type":"HELLO","request_id":"hello-tls","protocol_version":1})json");
         const auto response = boost::json::parse(response_text).as_object();
         assert(response.at("type").as_string() == "HELLO_OK");
+    }
+
+    {
+        const auto cert_dir = std::filesystem::path(S7_TEST_CERT_DIR);
+        s7::RuntimeSchemaDefinition definition;
+        definition.name = "identity-test";
+        definition.server.enabled = true;
+        definition.server.port = 38401;
+        definition.server.tls.enabled = true;
+        definition.server.tls.cert_file = (cert_dir / "s7_runtime_node.cert.pem").string();
+        definition.server.tls.key_file = (cert_dir / "s7_runtime_node.key.pem").string();
+        definition.server.tls.ca_file = (cert_dir / "s7_root_ca.cert.pem").string();
+
+        s7::RuntimeService service{definition};
+        assert(service.runtime_instance_uuid() == "s7-runtime-node");
     }
 
     return 0;

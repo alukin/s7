@@ -31,6 +31,9 @@ struct ControlNodeDescriptor {
     std::uint64_t protocol_version{1};
     std::string instance_id;
     std::string started_at;
+    std::string identity_certificate_file;
+    std::string identity_certificate_common_name;
+    std::string identity_certificate_fingerprint_sha256;
     std::string listen_url;
     std::string os_family;
     std::string os_version;
@@ -53,6 +56,8 @@ private:
         std::string endpoint;
         std::optional<std::string> node_uuid;
         std::optional<std::string> node_name;
+        std::optional<std::string> identity_certificate_common_name;
+        std::optional<std::string> identity_certificate_fingerprint_sha256;
         std::string trust_state{"unverified"};
         std::string reachability{"offline"};
         std::optional<std::string> last_seen_at;
@@ -69,9 +74,6 @@ private:
         std::string expires_at;
     };
 
-    [[nodiscard]] auto make_error_response(const std::string& request_id,
-                                           const std::string& code,
-                                           const std::string& message) const -> boost::json::object;
     [[nodiscard]] auto handle_request_object(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_hello(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_get_node_info(const boost::json::object& request) const -> boost::json::object;

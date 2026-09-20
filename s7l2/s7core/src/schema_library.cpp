@@ -7,6 +7,8 @@
 #include <unordered_set>
 #include <string_view>
 
+#include <zlib.h>
+
 namespace s7 {
 namespace {
 
@@ -23,6 +25,49 @@ auto expect_object(const boost::json::value& value, std::string_view field) -> c
         throw std::invalid_argument("Expected object in field '" + std::string(field) + "'.");
     }
     return value.as_object();
+}
+
+auto read_file_contents(const std::filesystem::path& file_path) -> std::string
+{
+    if (file_path.extension() != ".gz") {
+        std::ifstream in(file_path);
+        if (!in) {
+            throw std::runtime_error("Could not open element library file: '" + file_path.string() + "'.");
+        }
+
+        std::ostringstream buffer;
+        buffer << in.rdbuf();
+        return buffer.str();
+    }
+
+    const auto path_string = file_path.string();
+    gzFile file = gzopen(path_string.c_str(), "rb");
+    if (!file) {
+        throw std::runtime_error("Could not open compressed element library file: '" + file_path.string() + "'.");
+    }
+
+    std::string output;
+    char chunk[8192];
+    while (true) {
+        const int bytes_read = gzread(file, chunk, static_cast<unsigned int>(sizeof(chunk)));
+        if (bytes_read > 0) {
+            output.append(chunk, static_cast<std::size_t>(bytes_read));
+            continue;
+        }
+        if (bytes_read == 0) {
+            break;
+        }
+
+        int error_code = Z_OK;
+        const char* error_message = gzerror(file, &error_code);
+        gzclose(file);
+        throw std::runtime_error(
+            std::string{"Could not read compressed element library file '"} + file_path.string() + "': " +
+            (error_message ? error_message : "unknown zlib error"));
+    }
+
+    gzclose(file);
+    return output;
 }
 
 auto expect_array(const boost::json::object& object, std::string_view field) -> const boost::json::array&
@@ -242,16 +287,9 @@ auto SchemaLibraryDefinition::to_json() const -> boost::json::value
 
 auto SchemaLibraryLoader::load_from_file(const std::filesystem::path& file_path) -> SchemaLibraryDefinition
 {
-    std::ifstream in(file_path);
-    if (!in) {
-        throw std::runtime_error("Could not open element library file: '" + file_path.string() + "'.");
-    }
-
-    std::ostringstream buffer;
-    buffer << in.rdbuf();
-
+    const auto contents = read_file_contents(file_path);
     boost::system::error_code ec;
-    const auto parsed = boost::json::parse(buffer.str(), ec);
+    const auto parsed = boost::json::parse(contents, ec);
     if (ec) {
         throw std::runtime_error("JSON parsing failed for element library '" + file_path.string() + "': " + ec.message());
     }

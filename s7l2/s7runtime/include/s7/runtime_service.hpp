@@ -88,7 +88,7 @@ public:
     [[nodiscard]] std::vector<std::filesystem::path> output_files() const;
     [[nodiscard]] s7::Schema build_schema() const;
     [[nodiscard]] const std::string& runtime_instance_uuid() const;
-    [[nodiscard]] std::string create_schema_instance_uuid() const;
+    [[nodiscard]] static std::string create_schema_instance_uuid();
     [[nodiscard]] auto network_endpoint() const -> transport::RuntimeNetEndpointPtr;
     [[nodiscard]] auto handle_control_request_json(const std::string& request_json) -> std::string;
     void add_seed_peer(const std::string& endpoint);

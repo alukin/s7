@@ -2,6 +2,7 @@
 #include <chrono>
 #include <csignal>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -32,6 +33,7 @@ int main(int argc, char** argv) {
         bool serve_forever = false;
         std::uint64_t serve_seconds = 0;
         std::vector<std::string> library_paths;
+        std::vector<std::filesystem::path> plugin_dirs;
         std::vector<std::string> seed_peers;
 
         for (int index = 1; index < argc; ++index) {
@@ -71,6 +73,14 @@ int main(int argc, char** argv) {
                 continue;
             }
 
+            if (arg == "--plugin-dir") {
+                if (index + 1 >= argc) {
+                    throw std::invalid_argument("Missing value after --plugin-dir.");
+                }
+                plugin_dirs.emplace_back(argv[++index]);
+                continue;
+            }
+
             if (arg == "--seed-peer") {
                 if (index + 1 >= argc) {
                     throw std::invalid_argument("Missing value after --seed-peer.");
@@ -80,7 +90,7 @@ int main(int argc, char** argv) {
             }
 
             if (arg == "--help") {
-                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--seed-peer <url>]... [--start-net] [--serve-seconds <n>] [--serve-forever]\n";
+                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--plugin-dir <dir>]... [--seed-peer <url>]... [--start-net] [--serve-seconds <n>] [--serve-forever]\n";
                 return 0;
             }
 
@@ -93,7 +103,7 @@ int main(int argc, char** argv) {
         s7::register_builtin_elements(registry);
         s7::register_net_elements(registry);
 
-        s7::PluginLoader plugin_loader;
+        s7::PluginLoader plugin_loader(std::move(plugin_dirs));
         plugin_loader.load_plugins(registry);
 
         for (const auto& library_path : library_paths) {

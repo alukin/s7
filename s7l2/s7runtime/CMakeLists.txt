@@ -33,15 +33,22 @@ target_link_libraries(s7runtime PRIVATE
 add_executable(s7runtime_control_smoke
     tests/control_plane_smoke.cpp
     src/control_plane_mvp.cpp
+    src/runtime_service.cpp
 )
 
 target_include_directories(s7runtime_control_smoke PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/s7core/include
+    ${PROJECT_SOURCE_DIR}/s7net/include
+    ${PROJECT_SOURCE_DIR}/s7io/include
     ${PROJECT_SOURCE_DIR}/s7transport/include
 )
 
 target_link_libraries(s7runtime_control_smoke PRIVATE
+    s7core
     s7transport
+    s7net
+    s7io
     Boost::json
     Boost::system
     Threads::Threads

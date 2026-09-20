@@ -23,6 +23,7 @@ target_include_directories(s7core PUBLIC
 target_link_libraries(s7core PUBLIC
     Boost::json
     Boost::system
+    ZLIB::ZLIB
 )
 
 add_executable(s7core_smoke

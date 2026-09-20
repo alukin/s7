@@ -17,10 +17,26 @@ static const S7PluginInfo plugin_info{
     .author = "S7 Project"
 };
 
+static const char plugin_manifest_json[] = R"json(
+{
+  "api_version": 1,
+  "plugin_name": "s7noise",
+  "plugin_version": "1.0.0",
+  "author": "S7 Project",
+  "description": "Noise source elements for the runtime.",
+  "element_count": 2,
+  "elements": ["WhiteNoiseGenerator", "PinkNoiseGenerator"]
+}
+)json";
+
 extern "C" {
 
 const S7PluginInfo* s7_plugin_query() {
     return &plugin_info;
+}
+
+const char* s7_plugin_manifest_json() {
+    return plugin_manifest_json;
 }
 
 } // extern "C"

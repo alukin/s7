@@ -41,6 +41,8 @@ private:
         QString endpoint;
         QString nodeUuid;
         QString nodeName;
+        QString certificateCommonName;
+        QString certificateFingerprintSha256;
         QString trustState;
         QString reachability;
         QString osFamily;
@@ -56,7 +58,8 @@ private:
     void openOrUpdateNodeTab(const NodeSnapshot& node);
     void addOrUpdateNode(const NodeSnapshot& node);
     auto requestJson(const QString& endpoint, const QString& requestJson, QString* error) -> QString;
-    auto normalizeEndpoint(const QString& raw) const -> QString;
+    static auto normalizeEndpoint(const QString& raw) -> QString;
+    static auto nodeKeyForSnapshot(const NodeSnapshot& node) -> QString;
 
     QLineEdit* seedInput_ = nullptr;
     QPushButton* addSeedButton_ = nullptr;

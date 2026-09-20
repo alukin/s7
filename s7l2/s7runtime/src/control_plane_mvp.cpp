@@ -98,6 +98,58 @@ namespace {
     return std::find(values.begin(), values.end(), needle) != values.end();
 }
 
+struct CertificateInfo {
+    std::optional<std::string> common_name;
+    std::optional<std::string> fingerprint_sha256;
+};
+
+[[nodiscard]] auto certificate_object(const std::optional<std::string>& common_name,
+                                      const std::optional<std::string>& fingerprint_sha256) -> boost::json::object
+{
+    boost::json::object certificate;
+    if (common_name && !common_name->empty()) {
+        certificate["common_name"] = *common_name;
+    }
+    if (fingerprint_sha256 && !fingerprint_sha256->empty()) {
+        certificate["fingerprint_sha256"] = *fingerprint_sha256;
+    }
+    return certificate;
+}
+
+[[nodiscard]] auto read_certificate_info(const boost::json::object& object) -> CertificateInfo
+{
+    CertificateInfo info;
+
+    if (const auto certificate_it = object.find("certificate"); certificate_it != object.end() && certificate_it->value().is_object()) {
+        const auto& certificate = certificate_it->value().as_object();
+        info.common_name = as_string(certificate, "common_name");
+        info.fingerprint_sha256 = as_string(certificate, "fingerprint_sha256");
+    }
+
+    if (!info.common_name) {
+        info.common_name = as_string(object, "certificate_common_name");
+    }
+    if (!info.fingerprint_sha256) {
+        info.fingerprint_sha256 = as_string(object, "certificate_fingerprint_sha256");
+    }
+
+    return info;
+}
+
+[[nodiscard]] auto make_error_response(const std::string& request_id,
+                                       const std::string& code,
+                                       const std::string& message) -> boost::json::object
+{
+    boost::json::object out;
+    out["type"] = "ERROR";
+    out["request_id"] = request_id;
+    out["protocol_version"] = 1;
+    out["code"] = code;
+    out["message"] = message;
+    out["details"] = boost::json::object{};
+    return out;
+}
+
 } // namespace
 
 ControlPlaneMvp::ControlPlaneMvp(ControlNodeDescriptor descriptor, std::filesystem::path storage_dir)
@@ -130,20 +182,6 @@ void ControlPlaneMvp::add_seed_peer(const std::string& endpoint)
         peer.reachability = "offline";
     }
     persist_peers_to_disk();
-}
-
-auto ControlPlaneMvp::make_error_response(const std::string& request_id,
-                                          const std::string& code,
-                                          const std::string& message) const -> boost::json::object
-{
-    boost::json::object out;
-    out["type"] = "ERROR";
-    out["request_id"] = request_id;
-    out["protocol_version"] = 1;
-    out["code"] = code;
-    out["message"] = message;
-    out["details"] = boost::json::object{};
-    return out;
 }
 
 auto ControlPlaneMvp::handle_request_json(const std::string& request_json) -> std::string
@@ -220,6 +258,12 @@ auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> 
     out["node_name"] = descriptor_.node_name;
     out["runtime_version"] = descriptor_.runtime_version;
     out["status"] = active_deployment_id.empty() ? "idle" : "running";
+    out["certificate"] = certificate_object(descriptor_.identity_certificate_common_name.empty()
+                                                  ? std::optional<std::string>{}
+                                                  : std::optional<std::string>{descriptor_.identity_certificate_common_name},
+                                              descriptor_.identity_certificate_fingerprint_sha256.empty()
+                                                  ? std::optional<std::string>{}
+                                                  : std::optional<std::string>{descriptor_.identity_certificate_fingerprint_sha256});
     return out;
 }
 
@@ -244,6 +288,12 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     node["protocol_version"] = descriptor_.protocol_version;
     node["instance_id"] = descriptor_.instance_id;
     node["started_at"] = descriptor_.started_at;
+    node["certificate"] = certificate_object(descriptor_.identity_certificate_common_name.empty()
+                                                  ? std::optional<std::string>{}
+                                                  : std::optional<std::string>{descriptor_.identity_certificate_common_name},
+                                              descriptor_.identity_certificate_fingerprint_sha256.empty()
+                                                  ? std::optional<std::string>{}
+                                                  : std::optional<std::string>{descriptor_.identity_certificate_fingerprint_sha256});
     out["node"] = node;
 
     boost::json::object platform;
@@ -349,9 +399,13 @@ auto ControlPlaneMvp::handle_get_peers(const boost::json::object& request) const
             break;
         }
 
+        const auto node_uuid = peer.node_uuid
+            ? *peer.node_uuid
+            : (peer.identity_certificate_common_name ? *peer.identity_certificate_common_name : std::string{});
+
         boost::json::object item;
         item["endpoint"] = peer.endpoint;
-        item["node_uuid"] = peer.node_uuid ? boost::json::value(*peer.node_uuid) : boost::json::value(nullptr);
+        item["node_uuid"] = node_uuid.empty() ? boost::json::value(nullptr) : boost::json::value(node_uuid);
         item["node_name"] = peer.node_name ? boost::json::value(*peer.node_name) : boost::json::value(nullptr);
         if (peer.os_family || peer.architecture) {
             boost::json::object platform;
@@ -365,7 +419,8 @@ auto ControlPlaneMvp::handle_get_peers(const boost::json::object& request) const
         item["reachability"] = peer.reachability;
         item["last_seen_at"] = peer.last_seen_at ? boost::json::value(*peer.last_seen_at) : boost::json::value(nullptr);
         item["last_failure_at"] = peer.last_failure_at ? boost::json::value(*peer.last_failure_at) : boost::json::value(nullptr);
-        item["cert_fingerprint_sha256"] = nullptr;
+        item["certificate"] = certificate_object(peer.identity_certificate_common_name,
+                                                  peer.identity_certificate_fingerprint_sha256);
         peers_array.emplace_back(std::move(item));
         ++emitted;
     }
@@ -393,11 +448,18 @@ auto ControlPlaneMvp::handle_peer_announce(const boost::json::object& request) -
         return make_error_response(request_id, "INVALID_REQUEST", "PEER_ANNOUNCE self.endpoint must be a non-empty string.");
     }
 
+    const auto certificate = read_certificate_info(self);
+
     std::lock_guard<std::mutex> lock(mutex_);
     auto& peer = peers_[*endpoint];
     peer.endpoint = *endpoint;
     peer.node_uuid = as_string(self, "node_uuid");
     peer.node_name = as_string(self, "node_name");
+    peer.identity_certificate_common_name = certificate.common_name;
+    peer.identity_certificate_fingerprint_sha256 = certificate.fingerprint_sha256;
+    if (!peer.node_uuid && peer.identity_certificate_common_name) {
+        peer.node_uuid = peer.identity_certificate_common_name;
+    }
     peer.trust_state = "unverified";
     peer.reachability = "online";
     peer.last_seen_at = now_utc_iso8601();
@@ -719,6 +781,12 @@ void ControlPlaneMvp::load_peers_from_disk()
         peer.endpoint = *endpoint;
         peer.node_uuid = as_string(item.as_object(), "node_uuid");
         peer.node_name = as_string(item.as_object(), "node_name");
+        const auto certificate = read_certificate_info(item.as_object());
+        peer.identity_certificate_common_name = certificate.common_name;
+        peer.identity_certificate_fingerprint_sha256 = certificate.fingerprint_sha256;
+        if (!peer.node_uuid && peer.identity_certificate_common_name) {
+            peer.node_uuid = peer.identity_certificate_common_name;
+        }
         peer.trust_state = as_string(item.as_object(), "trust_state").value_or("unverified");
         peer.reachability = as_string(item.as_object(), "reachability").value_or("offline");
         peer.last_seen_at = as_string(item.as_object(), "last_seen_at");
@@ -738,6 +806,8 @@ void ControlPlaneMvp::persist_peers_to_disk() const
         item["endpoint"] = peer.endpoint;
         item["node_uuid"] = peer.node_uuid ? boost::json::value(*peer.node_uuid) : boost::json::value(nullptr);
         item["node_name"] = peer.node_name ? boost::json::value(*peer.node_name) : boost::json::value(nullptr);
+        item["certificate"] = certificate_object(peer.identity_certificate_common_name,
+                                                  peer.identity_certificate_fingerprint_sha256);
         item["trust_state"] = peer.trust_state;
         item["reachability"] = peer.reachability;
         item["last_seen_at"] = peer.last_seen_at ? boost::json::value(*peer.last_seen_at) : boost::json::value(nullptr);

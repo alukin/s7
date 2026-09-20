@@ -32,7 +32,9 @@
 #include <boost/beast/ssl.hpp>
 
 #include <algorithm>
+#include <cstring>
 #include <thread>
+#include <utility>
 
 namespace s7studio::ui {
 namespace {
@@ -41,6 +43,35 @@ namespace websocket = boost::beast::websocket;
 namespace ssl = boost::asio::ssl;
 using Tcp = boost::asio::ip::tcp;
 
+[[nodiscard]] auto tlsConfigForRequest(const QString& caFile,
+                                       const QString& certFile,
+                                       const QString& keyFile,
+                                       bool enabled) -> s7::transport::TlsConfig
+{
+    s7::transport::TlsConfig tls;
+    tls.enabled = enabled;
+    tls.ca_file = caFile.toStdString();
+    tls.cert_file = certFile.toStdString();
+    tls.key_file = keyFile.toStdString();
+    return tls;
+}
+
+void configure_client_tls_context(ssl::context& ctx, const s7::transport::TlsConfig& tls)
+{
+    if (!tls.enabled) {
+        return;
+    }
+
+    if (tls.ca_file.empty() || tls.cert_file.empty() || tls.key_file.empty()) {
+        throw std::invalid_argument("Missing TLS files (CA/cert/key) for wss endpoint.");
+    }
+
+    ctx.load_verify_file(tls.ca_file);
+    ctx.use_certificate_chain_file(tls.cert_file);
+    ctx.use_private_key_file(tls.key_file, ssl::context::pem);
+    ctx.set_verify_mode(ssl::verify_peer);
+}
+
 [[nodiscard]] auto jsonString(const boost::json::object& object, const char* key) -> QString
 {
     const auto it = object.find(key);
@@ -48,6 +79,49 @@ using Tcp = boost::asio::ip::tcp;
         return {};
     }
     return QString::fromStdString(std::string(it->value().as_string().c_str()));
+}
+
+[[nodiscard]] auto jsonObject(const boost::json::object& object, const char* key) -> const boost::json::object*
+{
+    const auto it = object.find(key);
+    if (it == object.end() || !it->value().is_object()) {
+        return nullptr;
+    }
+    return &it->value().as_object();
+}
+
+[[nodiscard]] auto certificateInfoFromObject(const boost::json::object& object) -> std::pair<QString, QString>
+{
+    QString commonName;
+    QString fingerprint;
+
+    if (const auto* certificate = jsonObject(object, "certificate")) {
+        commonName = jsonString(*certificate, "common_name");
+        if (commonName.isEmpty()) {
+            commonName = jsonString(*certificate, "subject_common_name");
+        }
+        fingerprint = jsonString(*certificate, "fingerprint_sha256");
+    }
+
+    if (commonName.isEmpty()) {
+        commonName = jsonString(object, "certificate_common_name");
+    }
+    if (fingerprint.isEmpty()) {
+        fingerprint = jsonString(object, "certificate_fingerprint_sha256");
+    }
+
+    return {commonName, fingerprint};
+}
+
+[[nodiscard]] auto shortFingerprint(const QString& fingerprint) -> QString
+{
+    if (fingerprint.isEmpty()) {
+        return {};
+    }
+    if (fingerprint.size() <= 12) {
+        return fingerprint;
+    }
+    return fingerprint.left(12) + QStringLiteral("…");
 }
 
 [[nodiscard]] auto control_target_for_parsed(const s7::transport::ParsedWebSocketUrl& parsed) -> std::string
@@ -80,24 +154,15 @@ auto request_control_once(const QString& endpoint,
         const auto parsed = s7::transport::parse_ws_url(endpoint.toStdString());
         const auto host_port = parsed.host + ":" + parsed.port;
         const auto target = control_target_for_parsed(parsed);
+        const auto tls = tlsConfigForRequest(caFile, certFile, keyFile, parsed.secure);
 
         boost::asio::io_context io;
         Tcp::resolver resolver(io);
         auto results = resolver.resolve(parsed.host, parsed.port);
 
         if (parsed.secure) {
-            if (caFile.isEmpty() || certFile.isEmpty() || keyFile.isEmpty()) {
-                if (error) {
-                    *error = QStringLiteral("Missing TLS files (CA/cert/key) for wss endpoint.");
-                }
-                return {};
-            }
-
             ssl::context ctx(ssl::context::tls_client);
-            ctx.load_verify_file(caFile.toStdString());
-            ctx.use_certificate_chain_file(certFile.toStdString());
-            ctx.use_private_key_file(keyFile.toStdString(), ssl::context::pem);
-            ctx.set_verify_mode(ssl::verify_peer);
+            configure_client_tls_context(ctx, tls);
 
             websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>> ws(io, ctx);
             boost::beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(2));
@@ -297,12 +362,19 @@ void HeadlessNodesPanel::refreshNow()
 
         QMap<QString, NodeSnapshot> discovered;
         auto addOrUpdate = [&discovered](const NodeSnapshot& node) {
-            auto merged = discovered.value(node.endpoint);
-            if (merged.endpoint.isEmpty()) {
+            const auto key = HeadlessNodesPanel::nodeKeyForSnapshot(node);
+            if (key.isEmpty()) {
+                return;
+            }
+
+            auto merged = discovered.value(key);
+            if (merged.endpoint.isEmpty() || (!node.endpoint.isEmpty() && merged.endpoint == key)) {
                 merged.endpoint = node.endpoint;
             }
             if (!node.nodeUuid.isEmpty()) merged.nodeUuid = node.nodeUuid;
             if (!node.nodeName.isEmpty()) merged.nodeName = node.nodeName;
+            if (!node.certificateCommonName.isEmpty()) merged.certificateCommonName = node.certificateCommonName;
+            if (!node.certificateFingerprintSha256.isEmpty()) merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
             if (!node.trustState.isEmpty()) merged.trustState = node.trustState;
             if (!node.reachability.isEmpty()) merged.reachability = node.reachability;
             if (!node.osFamily.isEmpty()) merged.osFamily = node.osFamily;
@@ -310,7 +382,7 @@ void HeadlessNodesPanel::refreshNow()
             if (!node.activeDeployment.isEmpty()) merged.activeDeployment = node.activeDeployment;
             if (!node.detailText.isEmpty()) merged.detailText = node.detailText;
             merged.discoveredBy.unite(node.discoveredBy);
-            discovered.insert(node.endpoint, merged);
+            discovered.insert(key, merged);
         };
 
         QStringList queue = seeds;
@@ -343,6 +415,12 @@ void HeadlessNodesPanel::refreshNow()
                     const auto& obj = parsed.as_object();
                     node.nodeUuid = jsonString(obj, "node_uuid");
                     node.nodeName = jsonString(obj, "node_name");
+                    const auto [certificateCommonName, certificateFingerprint] = certificateInfoFromObject(obj);
+                    node.certificateCommonName = certificateCommonName;
+                    node.certificateFingerprintSha256 = certificateFingerprint;
+                    if (node.nodeUuid.isEmpty() && !node.certificateCommonName.isEmpty()) {
+                        node.nodeUuid = node.certificateCommonName;
+                    }
                 }
             }
 
@@ -353,12 +431,33 @@ void HeadlessNodesPanel::refreshNow()
                 if (!ec && parsed.is_object()) {
                     const auto& object = parsed.as_object();
                     if (const auto nodeIt = object.find("node"); nodeIt != object.end() && nodeIt->value().is_object()) {
-                        node.nodeUuid = jsonString(nodeIt->value().as_object(), "node_uuid");
-                        node.nodeName = jsonString(nodeIt->value().as_object(), "node_name");
+                        const auto& nodeObject = nodeIt->value().as_object();
+                        if (const auto value = jsonString(nodeObject, "node_uuid"); !value.isEmpty()) {
+                            node.nodeUuid = value;
+                        }
+                        if (const auto value = jsonString(nodeObject, "node_name"); !value.isEmpty()) {
+                            node.nodeName = value;
+                        }
+                        if (const auto value = jsonString(nodeObject, "display_name"); !value.isEmpty() && node.nodeName.isEmpty()) {
+                            node.nodeName = value;
+                        }
+                        const auto [certificateCommonName, certificateFingerprint] = certificateInfoFromObject(nodeObject);
+                        if (!certificateCommonName.isEmpty()) {
+                            node.certificateCommonName = certificateCommonName;
+                        }
+                        if (!certificateFingerprint.isEmpty()) {
+                            node.certificateFingerprintSha256 = certificateFingerprint;
+                        }
                     }
                     if (const auto platformIt = object.find("platform"); platformIt != object.end() && platformIt->value().is_object()) {
                         node.osFamily = jsonString(platformIt->value().as_object(), "os_family");
                         node.architecture = jsonString(platformIt->value().as_object(), "architecture");
+                    }
+                    if (const auto networkIt = object.find("network"); networkIt != object.end() && networkIt->value().is_object()) {
+                        const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
+                        if (!listenUrl.isEmpty()) {
+                            node.endpoint = listenUrl;
+                        }
                     }
                     if (const auto stateIt = object.find("state"); stateIt != object.end() && stateIt->value().is_object()) {
                         const auto& state = stateIt->value().as_object();
@@ -402,6 +501,12 @@ void HeadlessNodesPanel::refreshNow()
                 peerNode.endpoint = peerEndpoint;
                 peerNode.nodeUuid = jsonString(peerObject, "node_uuid");
                 peerNode.nodeName = jsonString(peerObject, "node_name");
+                const auto [peerCertificateCommonName, peerCertificateFingerprint] = certificateInfoFromObject(peerObject);
+                peerNode.certificateCommonName = peerCertificateCommonName;
+                peerNode.certificateFingerprintSha256 = peerCertificateFingerprint;
+                if (peerNode.nodeUuid.isEmpty() && !peerNode.certificateCommonName.isEmpty()) {
+                    peerNode.nodeUuid = peerNode.certificateCommonName;
+                }
                 peerNode.trustState = jsonString(peerObject, "trust_state");
                 if (peerNode.trustState.isEmpty()) {
                     peerNode.trustState = QStringLiteral("unverified");
@@ -413,6 +518,12 @@ void HeadlessNodesPanel::refreshNow()
                 if (const auto platformIt = peerObject.find("platform"); platformIt != peerObject.end() && platformIt->value().is_object()) {
                     peerNode.osFamily = jsonString(platformIt->value().as_object(), "os_family");
                     peerNode.architecture = jsonString(platformIt->value().as_object(), "architecture");
+                }
+                if (const auto networkIt = peerObject.find("network"); networkIt != peerObject.end() && networkIt->value().is_object()) {
+                    const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
+                    if (!listenUrl.isEmpty()) {
+                        peerNode.endpoint = listenUrl;
+                    }
                 }
                 peerNode.discoveredBy.insert(endpoint);
                 addOrUpdate(peerNode);
@@ -475,18 +586,24 @@ void HeadlessNodesPanel::updateNodeLists()
     trustedList_->clear();
     untrustedList_->clear();
 
-    QStringList endpoints = nodes_.keys();
-    std::sort(endpoints.begin(), endpoints.end());
+    QStringList keys = nodes_.keys();
+    std::sort(keys.begin(), keys.end());
 
-    for (const auto& endpoint : endpoints) {
-        const auto& node = nodes_[endpoint];
+    for (const auto& key : keys) {
+        const auto& node = nodes_[key];
         const auto name = node.nodeName.isEmpty() ? QStringLiteral("(unknown)") : node.nodeName;
         const auto uuid = node.nodeUuid.isEmpty() ? QStringLiteral("no-uuid") : node.nodeUuid;
-        const auto label = QStringLiteral("%1 [%2]  %3  (%4)")
-            .arg(name, uuid, endpoint, node.reachability);
+        const auto endpoint = node.endpoint.isEmpty() ? key : node.endpoint;
+        const auto certName = node.certificateCommonName.isEmpty() ? QStringLiteral("no-cert") : node.certificateCommonName;
+        const auto fingerprint = shortFingerprint(node.certificateFingerprintSha256);
+        const auto label = fingerprint.isEmpty()
+            ? QStringLiteral("%1 [%2]  %3  (%4) cert=%5")
+                  .arg(name, uuid, endpoint, node.reachability, certName)
+            : QStringLiteral("%1 [%2]  %3  (%4) cert=%5 fp=%6")
+                  .arg(name, uuid, endpoint, node.reachability, certName, fingerprint);
 
         auto* item = new QListWidgetItem(label);
-        item->setData(Qt::UserRole, endpoint);
+        item->setData(Qt::UserRole, key);
 
         if (node.trustState == QStringLiteral("verified")) {
             trustedList_->addItem(item);
@@ -502,11 +619,12 @@ void HeadlessNodesPanel::updateNetworkOverview()
     text += QStringLiteral("Known nodes: %1\n").arg(nodes_.size());
     text += QStringLiteral("\nEdges (discovered-by):\n");
 
-    QStringList endpoints = nodes_.keys();
-    std::sort(endpoints.begin(), endpoints.end());
+    QStringList keys = nodes_.keys();
+    std::sort(keys.begin(), keys.end());
 
-    for (const auto& endpoint : endpoints) {
-        const auto& node = nodes_[endpoint];
+    for (const auto& key : keys) {
+        const auto& node = nodes_[key];
+        const auto endpoint = node.endpoint.isEmpty() ? key : node.endpoint;
         if (node.discoveredBy.isEmpty()) {
             text += QStringLiteral("- %1  (seed/manual)\n").arg(endpoint);
             continue;
@@ -517,12 +635,18 @@ void HeadlessNodesPanel::updateNetworkOverview()
     }
 
     text += QStringLiteral("\nNodes:\n");
-    for (const auto& endpoint : endpoints) {
-        const auto& node = nodes_[endpoint];
-        text += QStringLiteral("- %1  trust=%2  reachability=%3  os=%4/%5  deployment=%6\n")
+    for (const auto& key : keys) {
+        const auto& node = nodes_[key];
+        const auto endpoint = node.endpoint.isEmpty() ? key : node.endpoint;
+        const auto certName = node.certificateCommonName.isEmpty() ? QStringLiteral("no-cert") : node.certificateCommonName;
+        const auto fingerprint = shortFingerprint(node.certificateFingerprintSha256);
+        text += QStringLiteral("- %1  uuid=%2  trust=%3  reachability=%4  cert=%5  fp=%6  os=%7/%8  deployment=%9\n")
             .arg(endpoint,
+                 node.nodeUuid.isEmpty() ? QStringLiteral("no-uuid") : node.nodeUuid,
                  node.trustState,
                  node.reachability,
+                 certName,
+                 fingerprint.isEmpty() ? QStringLiteral("none") : fingerprint,
                  node.osFamily.isEmpty() ? QStringLiteral("?") : node.osFamily,
                  node.architecture.isEmpty() ? QStringLiteral("?") : node.architecture,
                  node.activeDeployment.isEmpty() ? QStringLiteral("none") : node.activeDeployment);
@@ -561,11 +685,11 @@ void HeadlessNodesPanel::onNodeItemDoubleClicked(QListWidgetItem* item)
     if (!item) {
         return;
     }
-    const auto endpoint = item->data(Qt::UserRole).toString();
-    if (endpoint.isEmpty() || !nodes_.contains(endpoint)) {
+    const auto key = item->data(Qt::UserRole).toString();
+    if (key.isEmpty() || !nodes_.contains(key)) {
         return;
     }
-    openOrUpdateNodeTab(nodes_[endpoint]);
+    openOrUpdateNodeTab(nodes_[key]);
 }
 
 auto HeadlessNodesPanel::requestJson(const QString& endpoint, const QString& requestJson, QString* error) -> QString
@@ -578,7 +702,18 @@ auto HeadlessNodesPanel::requestJson(const QString& endpoint, const QString& req
                                 error);
 }
 
-auto HeadlessNodesPanel::normalizeEndpoint(const QString& raw) const -> QString
+auto HeadlessNodesPanel::nodeKeyForSnapshot(const NodeSnapshot& node) -> QString
+{
+    if (!node.nodeUuid.isEmpty()) {
+        return node.nodeUuid;
+    }
+    if (!node.certificateFingerprintSha256.isEmpty()) {
+        return node.certificateFingerprintSha256;
+    }
+    return node.endpoint;
+}
+
+auto HeadlessNodesPanel::normalizeEndpoint(const QString& raw) -> QString
 {
     auto value = raw.trimmed();
     if (value.isEmpty()) {

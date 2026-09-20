@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <memory>
 #include <cstddef>
+#include <unordered_set>
 
 namespace s7 {
 
@@ -14,7 +15,16 @@ class ElementRegistry;
 // Plugin loader for dynamic element libraries
 class PluginLoader {
 public:
-    PluginLoader() = default;
+    struct LoadedPluginInfo {
+        std::string name;
+        std::string version;
+        std::string author;
+        std::string description;
+        std::vector<std::string> elements;
+        std::filesystem::path path;
+    };
+
+    explicit PluginLoader(std::vector<std::filesystem::path> search_paths = {});
     ~PluginLoader();
 
     // Prevent copy/move
@@ -23,6 +33,9 @@ public:
 
     // Discover and load all plugins
     void load_plugins(ElementRegistry& registry);
+
+    // Add one more directory to the front of the discovery list.
+    void add_search_path(std::filesystem::path path);
 
     // Load specific plugin
     bool load_plugin(
@@ -36,22 +49,27 @@ public:
     // Get list of loaded plugin names
     [[nodiscard]] std::vector<std::string> loaded_plugins() const;
 
+    // Get the full loaded plugin metadata.
+    [[nodiscard]] std::vector<LoadedPluginInfo> loaded_plugin_info() const;
+
 private:
     struct LoadedPlugin {
-        std::string name;
-        std::string version;
+        LoadedPlugin() : info{}, handle(nullptr) {}
+        LoadedPluginInfo info;
         void* handle;  // dlopen handle
     };
 
+    std::vector<std::filesystem::path> search_paths_;
     std::vector<LoadedPlugin> loaded_plugins_;
+    std::unordered_set<std::string> loaded_paths_;
 
     // Plugin search paths
     [[nodiscard]] std::vector<std::filesystem::path> get_plugin_search_paths() const;
 
     // Discover plugins in directory
-    [[nodiscard]] std::vector<std::filesystem::path> discover_in_directory(
+    [[nodiscard]] static std::vector<std::filesystem::path> discover_in_directory(
         const std::filesystem::path& dir
-    ) const;
+    );
 
     // Unload all plugins
     void unload_all();

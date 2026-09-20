@@ -22,12 +22,19 @@ struct S7PluginInfo {
 // Query plugin information
 typedef const S7PluginInfo* (*S7PluginQueryFunc)();
 
+// Optional JSON manifest for richer discovery and extension fields.
+typedef const char* (*S7PluginManifestJsonFunc)();
+
 // Register elements with registry
 // registry_ptr is actually s7::ElementRegistry*
 typedef void (*S7RegisterElementsFunc)(void* registry_ptr);
 
 // Get plugin information
 const S7PluginInfo* s7_plugin_query();
+
+// Optional manifest payload as UTF-8 JSON.
+// Returning nullptr means the plugin does not provide a manifest.
+const char* s7_plugin_manifest_json();
 
 // Register all elements provided by this plugin
 void s7_register_elements(void* registry_ptr);

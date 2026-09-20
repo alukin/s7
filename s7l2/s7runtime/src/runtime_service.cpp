@@ -6,6 +6,7 @@
 #include <fstream>
 #include <filesystem>
 #include <iomanip>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -15,6 +16,12 @@
 #include <boost/system/error_code.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
+
+#include <openssl/asn1.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
 
 #include "s7/io.hpp"
 #include "s7/net.hpp"
@@ -434,7 +441,7 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 [[nodiscard]] auto default_node_storage_dir() -> std::filesystem::path
 {
     if (const char* explicit_dir = std::getenv("S7_NODE_STATE_DIR")) {
-        return std::filesystem::path(explicit_dir);
+        return {explicit_dir};
     }
     if (const char* home = std::getenv("HOME")) {
         return std::filesystem::path(home) / ".s7runtime" / "default-node";
@@ -442,10 +449,23 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
     return std::filesystem::temp_directory_path() / "s7runtime-default-node";
 }
 
-[[nodiscard]] auto load_or_create_node_uuid(const std::filesystem::path& node_dir) -> std::string
+[[nodiscard]] auto load_or_create_node_uuid(const std::filesystem::path& node_dir,
+                                            const std::optional<std::string>& preferred_uuid = std::nullopt) -> std::string
 {
     std::filesystem::create_directories(node_dir);
     const auto path = node_dir / "node_uuid.txt";
+    if (preferred_uuid && !preferred_uuid->empty()) {
+        std::ofstream out(path, std::ios::trunc);
+        if (!out) {
+            throw std::runtime_error("Could not persist node UUID at '" + path.string() + "'.");
+        }
+        out << *preferred_uuid;
+        if (!out) {
+            throw std::runtime_error("Failed while writing node UUID at '" + path.string() + "'.");
+        }
+        return *preferred_uuid;
+    }
+
     if (std::filesystem::exists(path)) {
         std::ifstream in(path);
         std::string existing;
@@ -457,19 +477,130 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 
     const auto generated = boost::uuids::to_string(boost::uuids::random_generator()());
     std::ofstream out(path, std::ios::trunc);
+    if (!out) {
+        throw std::runtime_error("Could not create node UUID file at '" + path.string() + "'.");
+    }
     out << generated;
+    if (!out) {
+        throw std::runtime_error("Failed while writing node UUID at '" + path.string() + "'.");
+    }
     return generated;
+}
+
+[[nodiscard]] auto select_identity_certificate(const RuntimeSchemaDefinition& definition) -> std::optional<std::filesystem::path>
+{
+    if (definition.server.enabled && definition.server.tls.enabled && !definition.server.tls.cert_file.empty()) {
+        return std::filesystem::path(definition.server.tls.cert_file);
+    }
+    if (definition.client.enabled && definition.client.tls.enabled && !definition.client.tls.cert_file.empty()) {
+        return std::filesystem::path(definition.client.tls.cert_file);
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] auto certificate_common_name(const std::filesystem::path& certificate_path) -> std::string
+{
+    const auto certificate_path_string = certificate_path.string();
+    BIO* bio = BIO_new_file(certificate_path_string.c_str(), R"(r)");
+    if (!bio) {
+        throw std::runtime_error("Could not open node certificate: '" + certificate_path_string + "'.");
+    }
+
+    std::unique_ptr<BIO, decltype(&BIO_free)> bio_guard(bio, BIO_free);
+    std::unique_ptr<X509, decltype(&X509_free)> certificate(
+        PEM_read_bio_X509(bio_guard.get(), nullptr, nullptr, nullptr),
+        X509_free);
+    if (!certificate) {
+        const std::string message = "Could not parse PEM certificate: '" + certificate_path_string + "'.";
+        throw std::runtime_error{message};
+    }
+
+    X509_NAME* subject = X509_get_subject_name(certificate.get());
+    if (!subject) {
+        throw std::runtime_error("Certificate subject is missing in '" + certificate_path_string + "'.");
+    }
+
+    const int cn_index = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
+    if (cn_index < 0) {
+        throw std::runtime_error("Certificate does not contain a common name: '" + certificate_path_string + "'.");
+    }
+
+    X509_NAME_ENTRY* cn_entry = X509_NAME_get_entry(subject, cn_index);
+    if (!cn_entry) {
+        throw std::runtime_error("Could not read common name from certificate: '" + certificate_path_string + "'.");
+    }
+
+    ASN1_STRING* cn_string = X509_NAME_ENTRY_get_data(cn_entry);
+    if (!cn_string) {
+        throw std::runtime_error("Common name entry is empty in certificate: '" + certificate_path_string + "'.");
+    }
+
+    unsigned char* utf8 = nullptr;
+    const int len = ASN1_STRING_to_UTF8(&utf8, cn_string);
+    if (len < 0 || !utf8) {
+        throw std::runtime_error("Failed to convert certificate common name to UTF-8: '" + certificate_path_string + "'.");
+    }
+
+    const auto utf8_deleter = [](unsigned char* ptr) { OPENSSL_free(ptr); };
+    std::unique_ptr<unsigned char, decltype(utf8_deleter)> utf8_guard(utf8, utf8_deleter);
+    return std::string(reinterpret_cast<char*>(utf8_guard.get()), static_cast<std::size_t>(len));
+}
+
+[[nodiscard]] auto certificate_fingerprint_sha256(const std::filesystem::path& certificate_path) -> std::string
+{
+    const auto certificate_path_string = certificate_path.string();
+    BIO* bio = BIO_new_file(certificate_path_string.c_str(), R"(r)");
+    if (!bio) {
+        throw std::runtime_error("Could not open node certificate: '" + certificate_path_string + "'.");
+    }
+
+    std::unique_ptr<BIO, decltype(&BIO_free)> bio_guard(bio, BIO_free);
+    std::unique_ptr<X509, decltype(&X509_free)> certificate(
+        PEM_read_bio_X509(bio_guard.get(), nullptr, nullptr, nullptr),
+        X509_free);
+    if (!certificate) {
+        throw std::runtime_error("Could not parse PEM certificate: '" + certificate_path_string + "'.");
+    }
+
+    unsigned int digest_len = 0;
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    if (X509_digest(certificate.get(), EVP_sha256(), digest, &digest_len) != 1 || digest_len == 0) {
+        throw std::runtime_error("Failed to compute certificate fingerprint: '" + certificate_path_string + "'.");
+    }
+
+    std::ostringstream hex;
+    hex << std::hex << std::setfill('0');
+    for (unsigned int i = 0; i < digest_len; ++i) {
+        hex << std::setw(2) << static_cast<int>(digest[i]);
+    }
+    return hex.str();
+}
+
+[[nodiscard]] auto resolve_runtime_instance_uuid(const RuntimeSchemaDefinition& definition) -> std::string
+{
+    const auto node_dir = default_node_storage_dir();
+    const auto identity_cert = select_identity_certificate(definition);
+    if (identity_cert) {
+        return load_or_create_node_uuid(node_dir, certificate_common_name(*identity_cert));
+    }
+    return load_or_create_node_uuid(node_dir);
 }
 
 [[nodiscard]] auto build_control_descriptor(const std::string& node_uuid,
                                             const transport::RuntimeNetEndpointPtr& endpoint,
-                                            const RuntimeSchemaDefinition& definition) -> ControlNodeDescriptor
+                                            const RuntimeSchemaDefinition& definition,
+                                            const std::optional<std::filesystem::path>& identity_cert = std::nullopt) -> ControlNodeDescriptor
 {
     ControlNodeDescriptor descriptor;
     descriptor.node_uuid = node_uuid;
     descriptor.node_name = "node-" + node_uuid.substr(0, 8);
     descriptor.display_name = descriptor.node_name;
     descriptor.instance_id = boost::uuids::to_string(boost::uuids::random_generator()());
+    if (identity_cert) {
+        descriptor.identity_certificate_file = identity_cert->string();
+        descriptor.identity_certificate_common_name = certificate_common_name(*identity_cert);
+        descriptor.identity_certificate_fingerprint_sha256 = certificate_fingerprint_sha256(*identity_cert);
+    }
     {
         const auto now = std::chrono::system_clock::now();
         const std::time_t now_time = std::chrono::system_clock::to_time_t(now);
@@ -504,7 +635,7 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
     registry_library.target_triple = descriptor.target_triple;
     registry_library.origin = "registry";
     registry_library.elements = descriptor.element_types;
-    descriptor.libraries.push_back(std::move(registry_library));
+    descriptor.libraries.emplace_back(std::move(registry_library));
 
     if (endpoint && endpoint->backend_name() == "beast") {
         descriptor.hardware_capabilities.push_back("net:websocket");
@@ -533,7 +664,7 @@ RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file
 
 RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
     : definition_(std::move(definition))
-    , runtime_instance_uuid_(load_or_create_node_uuid(default_node_storage_dir()))
+    , runtime_instance_uuid_()
     , control_plane_(nullptr)
     , network_endpoint_(nullptr)
     , opened_server_endpoints_()
@@ -545,8 +676,11 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
         network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     }
 
+    const auto identity_cert = select_identity_certificate(definition_);
+    runtime_instance_uuid_ = resolve_runtime_instance_uuid(definition_);
+
     control_plane_ = std::make_shared<ControlPlaneMvp>(
-        build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_),
+        build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
         default_node_storage_dir());
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
@@ -633,8 +767,15 @@ s7::Schema RuntimeService::build_schema() const {
 }
 
 void RuntimeService::print_summary(std::ostream& out) const {
+    const auto identity_cert = select_identity_certificate(definition_);
     out << "runtime.schema=" << definition_.name << '\n';
     out << "runtime.instance_uuid=" << runtime_instance_uuid_ << '\n';
+    out << "runtime.node_identity.source=" << (identity_cert ? "certificate" : "persistent_storage") << '\n';
+    if (identity_cert) {
+        out << "runtime.node_identity.certificate_file=" << identity_cert->string() << '\n';
+        out << "runtime.node_identity.certificate_common_name=" << certificate_common_name(*identity_cert) << '\n';
+        out << "runtime.node_identity.certificate_fingerprint_sha256=" << certificate_fingerprint_sha256(*identity_cert) << '\n';
+    }
     out << "runtime.transport.backend=" << (network_endpoint_ ? network_endpoint_->backend_name() : std::string{"none"}) << '\n';
     out << "runtime.elements=" << definition_.elements.size() << '\n';
     out << "runtime.connections=" << definition_.connections.size() << '\n';
@@ -658,7 +799,7 @@ const std::string& RuntimeService::runtime_instance_uuid() const {
     return runtime_instance_uuid_;
 }
 
-std::string RuntimeService::create_schema_instance_uuid() const {
+std::string RuntimeService::create_schema_instance_uuid() {
     return boost::uuids::to_string(boost::uuids::random_generator()());
 }
 
