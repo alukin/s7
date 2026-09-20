@@ -6,6 +6,9 @@
 - **DISTRIBUTED_ADDRESSING.md** - UUID-based element and node addressing for distributed computation
 - **ELEMENT_LIBRARY_TECH.md** - Element library architecture, registry, plugins, parameter validation
 - **SCHEMA_LIBRARY_WORKFLOW.md** - Schema-based element libraries, studio workflow, and runtime loading
+- **S7_Transport_Architecture.md** - Transport module boundaries and runtime orchestration
+- **S7_Network_Wire_Protocol_v1.md** - One-port WebSocket control/data protocol baseline
+- **S7_Net_Element_Contract.md** - `s7net` element abstraction and runtime service contract
 
 ### Developer Guides
 - **ELEMENT_DEV_GUIDE.md** - Create custom elements, quick start, templates, troubleshooting
@@ -16,6 +19,7 @@
 - **s7core/include/s7/schema_library.hpp** - Schema library loader and registration API
 - **s7core/src/elements.cpp** - Element implementations
 - **s7runtime/src/runtime_service.cpp** - Schema loading and compilation
+- **s7transport/** - Transport backend module (planned)
 
 ---
 

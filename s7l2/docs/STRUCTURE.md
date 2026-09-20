@@ -7,6 +7,9 @@ All documents focused on technical content, no management/organizational materia
 ### Core Reference
 - **INDEX.md** - Start here. Complete technical reference.
 - **DISTRIBUTED_ADDRESSING.md** - UUID-based addressing for distributed elements
+- **S7_Transport_Architecture.md** - Transport sub-project boundaries and backend strategy
+- **S7_Network_Wire_Protocol_v1.md** - Wire-level protocol baseline for `/control` and `/data`
+- **S7_Net_Element_Contract.md** - `s7net` abstraction contract and runtime integration
 - **ELEMENT_LIBRARY_TECH.md** - Element library architecture, registry, plugins
 - **ELEMENT_DEV_GUIDE.md** - Element development quick start and reference
 
@@ -53,6 +56,9 @@ These contained team management, discussion questions, and organizational conten
 - Element UUIDs and network addressing: `DISTRIBUTED_ADDRESSING.md`
 - Network topology and cross-node connections: `DISTRIBUTED_ADDRESSING.md`
 - Remote element proxies: `DISTRIBUTED_ADDRESSING.md`
+- Transport/runtime/s7net boundaries: `S7_Transport_Architecture.md`
+- One-port control/data wire protocol: `S7_Network_Wire_Protocol_v1.md`
+- `NetSink`/`NetSource` abstraction contract: `S7_Net_Element_Contract.md`
 
 ### Element Library System
 - Architecture overview: `ELEMENT_LIBRARY_TECH.md`
