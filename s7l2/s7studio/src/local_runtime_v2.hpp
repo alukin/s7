@@ -4,6 +4,7 @@
 #include <s7/observe.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/element_catalog.hpp>
+#include <s7/net.hpp>
 
 #include <boost/json.hpp>
 
@@ -179,6 +180,7 @@ inline void addElementFromRegistry(s7::Schema& schema,
 {
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
+    s7::register_net_elements(registry);
 
     const auto* descriptor = registry.find(type);
     if (!descriptor) {

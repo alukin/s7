@@ -49,6 +49,7 @@ enable_testing()
 add_subdirectory(external/QSchematic)
 add_subdirectory(s7core)
 add_subdirectory(s7io)
+add_subdirectory(s7transport)
 add_subdirectory(s7net)
 add_subdirectory(s7observe)
 add_subdirectory(s7noise)
@@ -70,6 +71,7 @@ s7_suppress_target_warnings(s7_qcustomplot)
 # Keep warnings enabled for first-party targets.
 s7_enable_project_warnings(s7core)
 s7_enable_project_warnings(s7io)
+s7_enable_project_warnings(s7transport)
 s7_enable_project_warnings(s7net)
 s7_enable_project_warnings(s7observe)
 s7_enable_project_warnings(s7noise)
@@ -77,12 +79,14 @@ s7_enable_project_warnings(s7runtime)
 s7_enable_project_warnings(s7ctl)
 s7_enable_project_warnings(s7tests)
 s7_enable_project_warnings(s7io_smoke)
+s7_enable_project_warnings(s7transport_smoke)
 s7_enable_project_warnings(s7studio)
 s7_enable_project_warnings(s7spectral)
 
 set(S7_ALL_TARGETS
 	s7core
 	s7io
+	s7transport
 	s7net
 	s7observe
 	s7noise
@@ -90,6 +94,7 @@ set(S7_ALL_TARGETS
 	s7ctl
 	s7tests
 	s7io_smoke
+	s7transport_smoke
 )
 
 if (TARGET s7spectral)

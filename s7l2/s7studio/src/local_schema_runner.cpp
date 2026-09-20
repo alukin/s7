@@ -1,5 +1,8 @@
 #include "local_schema_runner.hpp"
 
+#include <s7/net.hpp>
+#include <s7/transport.hpp>
+
 #include <chrono>
 #include <exception>
 #include <thread>
@@ -78,6 +81,8 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, const double d
 auto LocalSchemaRunner::prepareRuntime(const boost::json::value& schemaJson) -> bool
 {
     try {
+        netEndpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(netEndpoint_);
         schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(schemaJson));
         runtime::validateSchema(*schema_);
         auto graph = s7::Compiler::compile(*schema_);
@@ -273,6 +278,8 @@ void LocalSchemaRunner::reset()
 
     schema_.reset();
     runtime_.reset();
+    netEndpoint_.reset();
+    s7::RuntimeNetContext::set_endpoint(nullptr);
     scopeConfigs_.clear();
     completedTicks_.store(0);
     totalTicks_ = 0;

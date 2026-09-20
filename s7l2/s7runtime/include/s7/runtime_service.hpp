@@ -5,12 +5,14 @@
 #include <optional>
 #include <ostream>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <boost/json.hpp>
 
 #include "s7/core.hpp"
+#include "s7/transport.hpp"
 
 namespace s7 {
 
@@ -79,6 +81,7 @@ public:
     [[nodiscard]] s7::Schema build_schema() const;
     [[nodiscard]] const std::string& runtime_instance_uuid() const;
     [[nodiscard]] std::string create_schema_instance_uuid() const;
+    [[nodiscard]] auto network_endpoint() const -> transport::RuntimeNetEndpointPtr;
     void print_summary(std::ostream& out) const;
 
     void start_websocket_server() const;
@@ -87,6 +90,9 @@ public:
 private:
     RuntimeSchemaDefinition definition_;
     std::string runtime_instance_uuid_;
+    transport::RuntimeNetEndpointPtr network_endpoint_;
+    mutable std::vector<transport::EndpointHandle> opened_server_endpoints_;
+    mutable std::vector<transport::EndpointHandle> opened_client_endpoints_;
 };
 
 } // namespace s7

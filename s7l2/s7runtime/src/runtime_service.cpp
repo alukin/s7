@@ -6,11 +6,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/beast/core/tcp_stream.hpp>
-#include <boost/beast/websocket/stream.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -292,7 +289,17 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 
         if (element.type == "NetSink") {
             const auto topic = expect_string(params, "topic");
-            schema->add_element(element.id, [topic] { return std::make_unique<s7::NetSink>(topic); });
+            schema->add_element(element.id, [topic]() -> std::unique_ptr<s7::Element> {
+                return std::make_unique<s7::NetSink>(topic);
+            });
+            continue;
+        }
+
+        if (element.type == "NetSource") {
+            const auto topic = expect_string(params, "topic");
+            schema->add_element(element.id, [topic]() -> std::unique_ptr<s7::Element> {
+                return std::make_unique<s7::NetSource>(topic);
+            });
             continue;
         }
 
@@ -354,35 +361,6 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 
     return schema;
 }
-
-struct ParsedWebSocketUrl {
-    std::string host;
-    std::string port;
-    std::string target;
-};
-
-ParsedWebSocketUrl parse_ws_url(const std::string& url) {
-    const std::string prefix = "ws://";
-    if (url.rfind(prefix, 0) != 0) {
-        throw std::invalid_argument("Only ws:// URLs are supported in this starter: '" + url + "'.");
-    }
-
-    const auto host_start = prefix.size();
-    const auto path_pos = url.find('/', host_start);
-    const auto host_port = path_pos == std::string::npos ? url.substr(host_start) : url.substr(host_start, path_pos - host_start);
-
-    const auto colon_pos = host_port.rfind(':');
-    if (colon_pos == std::string::npos || colon_pos == 0 || colon_pos + 1 >= host_port.size()) {
-        throw std::invalid_argument("WebSocket URL must include host:port: '" + url + "'.");
-    }
-
-    ParsedWebSocketUrl parsed;
-    parsed.host = host_port.substr(0, colon_pos);
-    parsed.port = host_port.substr(colon_pos + 1);
-    parsed.target = path_pos == std::string::npos ? "/" : url.substr(path_pos);
-    return parsed;
-}
-
 } // namespace
 
 RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file_path) {
@@ -405,7 +383,18 @@ RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file
 
 RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
     : definition_(std::move(definition))
-    , runtime_instance_uuid_(boost::uuids::to_string(boost::uuids::random_generator()())) {}
+    , runtime_instance_uuid_(boost::uuids::to_string(boost::uuids::random_generator()()))
+    , network_endpoint_(nullptr)
+    , opened_server_endpoints_()
+    , opened_client_endpoints_()
+{
+    if (definition_.server.enabled || definition_.client.enabled) {
+        network_endpoint_ = std::make_shared<s7::transport::BeastRuntimeNetEndpoint>();
+    } else {
+        network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+    }
+    RuntimeNetContext::set_endpoint(network_endpoint_);
+}
 
 const RuntimeSchemaDefinition& RuntimeService::schema() const {
     return definition_;
@@ -461,6 +450,7 @@ s7::Schema RuntimeService::build_schema() const {
 void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.schema=" << definition_.name << '\n';
     out << "runtime.instance_uuid=" << runtime_instance_uuid_ << '\n';
+    out << "runtime.transport.backend=" << (network_endpoint_ ? network_endpoint_->backend_name() : std::string{"none"}) << '\n';
     out << "runtime.elements=" << definition_.elements.size() << '\n';
     out << "runtime.connections=" << definition_.connections.size() << '\n';
     out << "runtime.websocket.server.enabled=" << (definition_.server.enabled ? "true" : "false") << '\n';
@@ -481,6 +471,10 @@ std::string RuntimeService::create_schema_instance_uuid() const {
     return boost::uuids::to_string(boost::uuids::random_generator()());
 }
 
+auto RuntimeService::network_endpoint() const -> transport::RuntimeNetEndpointPtr {
+    return network_endpoint_;
+}
+
 void RuntimeService::start_websocket_server() const {
     if (!definition_.server.enabled) {
         return;
@@ -490,13 +484,40 @@ void RuntimeService::start_websocket_server() const {
         throw std::invalid_argument("WebSocket server is enabled but port is 0.");
     }
 
-    boost::asio::io_context io_context;
-    boost::asio::ip::tcp::acceptor acceptor(
-        io_context,
-        boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), definition_.server.port));
+    if (!network_endpoint_) {
+        throw std::runtime_error("Runtime transport endpoint is not configured.");
+    }
 
-    // This starter only verifies bind/listen behavior; accept loop and protocol are added later.
-    acceptor.listen(boost::asio::socket_base::max_listen_connections);
+    if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
+        beast_endpoint->configure_server(definition_.server.port);
+    }
+
+    const auto control_stream = "server:" + std::to_string(definition_.server.port) + ":/control";
+    const auto data_stream = "server:" + std::to_string(definition_.server.port) + ":/data";
+
+    const auto control_open = network_endpoint_->open_endpoint({
+        .endpoint_name = "server/control",
+        .stream_name = control_stream,
+        .allow_publish = true,
+        .allow_receive = true,
+    });
+    if (!control_open.ok) {
+        throw std::runtime_error("Failed to start control endpoint: " + control_open.error);
+    }
+
+    const auto data_open = network_endpoint_->open_endpoint({
+        .endpoint_name = "server/data",
+        .stream_name = data_stream,
+        .allow_publish = true,
+        .allow_receive = true,
+    });
+    if (!data_open.ok) {
+        network_endpoint_->close_endpoint(control_open.handle);
+        throw std::runtime_error("Failed to start data endpoint: " + data_open.error);
+    }
+
+    opened_server_endpoints_.push_back(control_open.handle);
+    opened_server_endpoints_.push_back(data_open.handle);
 }
 
 void RuntimeService::connect_websocket_client() const {
@@ -508,17 +529,39 @@ void RuntimeService::connect_websocket_client() const {
         throw std::invalid_argument("WebSocket client is enabled but URL is empty.");
     }
 
-    const auto parsed_url = parse_ws_url(definition_.client.url);
+    if (!network_endpoint_) {
+        throw std::runtime_error("Runtime transport endpoint is not configured.");
+    }
 
-    boost::asio::io_context io_context;
-    boost::asio::ip::tcp::resolver resolver(io_context);
-    boost::beast::tcp_stream tcp_stream(io_context);
-    auto websocket_stream = boost::beast::websocket::stream<boost::beast::tcp_stream>(std::move(tcp_stream));
+    const auto parsed_url = s7::transport::parse_ws_url(definition_.client.url);
 
-    const auto results = resolver.resolve(parsed_url.host, parsed_url.port);
-    websocket_stream.next_layer().connect(results);
-    websocket_stream.handshake(parsed_url.host, parsed_url.target);
-    websocket_stream.close(boost::beast::websocket::close_code::normal);
+    if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
+        beast_endpoint->configure_client(definition_.client.url);
+    }
+
+    const auto control_open = network_endpoint_->open_endpoint({
+        .endpoint_name = "client/control",
+        .stream_name = "client:" + parsed_url.host + ":" + parsed_url.port + parsed_url.target + ":/control",
+        .allow_publish = true,
+        .allow_receive = true,
+    });
+    if (!control_open.ok) {
+        throw std::runtime_error("Failed to connect control endpoint: " + control_open.error);
+    }
+
+    const auto data_open = network_endpoint_->open_endpoint({
+        .endpoint_name = "client/data",
+        .stream_name = "client:" + parsed_url.host + ":" + parsed_url.port + parsed_url.target + ":/data",
+        .allow_publish = true,
+        .allow_receive = true,
+    });
+    if (!data_open.ok) {
+        network_endpoint_->close_endpoint(control_open.handle);
+        throw std::runtime_error("Failed to connect data endpoint: " + data_open.error);
+    }
+
+    opened_client_endpoints_.push_back(control_open.handle);
+    opened_client_endpoints_.push_back(data_open.handle);
 }
 
 } // namespace s7

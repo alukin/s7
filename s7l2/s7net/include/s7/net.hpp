@@ -2,9 +2,12 @@
 #define S7NET_INCLUDE_S7_NET_HPP
 
 #include <string>
+#include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "s7/core.hpp"
+#include "s7/transport.hpp"
 
 namespace s7 {
 
@@ -35,14 +38,46 @@ private:
 class NetSink final : public Element {
 public:
     explicit NetSink(std::string topic = {});
+    ~NetSink() override;
 
     void step() override;
 
     [[nodiscard]] const std::string& topic() const;
 
 private:
+    void ensure_endpoint();
+
     std::string topic_;
+    transport::RuntimeNetEndpointPtr endpoint_;
+    transport::EndpointHandle endpoint_handle_{};
+    std::uint64_t sequence_{};
 };
+
+class NetSource final : public Element {
+public:
+    explicit NetSource(std::string topic = {});
+    ~NetSource() override;
+
+    void step() override;
+
+    [[nodiscard]] const std::string& topic() const;
+
+private:
+    void ensure_endpoint();
+
+    std::string topic_;
+    transport::RuntimeNetEndpointPtr endpoint_;
+    transport::EndpointHandle endpoint_handle_{};
+    RealValue output_value_{};
+};
+
+class RuntimeNetContext {
+public:
+    static void set_endpoint(transport::RuntimeNetEndpointPtr endpoint);
+    [[nodiscard]] static auto endpoint() -> transport::RuntimeNetEndpointPtr;
+};
+
+void register_net_elements(ElementRegistry& registry);
 
 } // namespace s7
 

@@ -3,6 +3,8 @@
 #include "json_utils.hpp"
 #include "runtime_schema_extractor.hpp"
 
+#include <s7/element_registry.hpp>
+
 #include <qschematic/items/node.hpp>
 #include <qschematic/items/connector.hpp>
 #include <qschematic/items/wire.hpp>
@@ -185,6 +187,14 @@ auto declaredPortCounts(std::string_view type,
     if (type == "Scope") {
         const int channelCount = std::max(1, json_utils::intValue(params, "channel_count", fallbackChannelCount));
         return {channelCount, 0};
+    }
+
+    if (const auto* descriptor = s7::ElementRegistry::instance().find(std::string(type))) {
+        const auto& metadata = descriptor->metadata();
+        return {
+            static_cast<int>(metadata.input_ports.size()),
+            static_cast<int>(metadata.output_ports.size())
+        };
     }
 
     return {};

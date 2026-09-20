@@ -21,6 +21,7 @@ target_compile_definitions(s7runtime PRIVATE
 target_link_libraries(s7runtime PRIVATE
     s7core
     s7net
+    s7transport
     s7io
     Boost::json
     Boost::system

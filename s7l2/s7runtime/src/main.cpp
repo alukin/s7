@@ -10,6 +10,7 @@
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_registry.hpp>
+#include <s7/net.hpp>
 #include <s7/schema_library.hpp>
 
 #ifndef S7RUNTIME_DEFAULT_SCHEMA_PATH
@@ -42,7 +43,7 @@ int main(int argc, char** argv) {
                 if (index + 1 >= argc) {
                     throw std::invalid_argument("Missing value after --library.");
                 }
-                library_paths.push_back(argv[++index]);
+                library_paths.emplace_back(argv[++index]);
                 continue;
             }
 
@@ -58,6 +59,7 @@ int main(int argc, char** argv) {
 
         auto& registry = s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry);
+        s7::register_net_elements(registry);
 
         s7::PluginLoader plugin_loader;
         plugin_loader.load_plugins(registry);
@@ -78,6 +80,14 @@ int main(int argc, char** argv) {
         std::cout << "runtime.plugin_count=" << plugin_loader.loaded_count() << '\n';
         service.print_summary(std::cout);
 
+        if (start_network) {
+            service.start_websocket_server();
+            service.connect_websocket_client();
+            std::cout << "runtime.network=started\n";
+        } else {
+            std::cout << "runtime.network=not-started (use --start-net)\n";
+        }
+
         if (service.has_simulation()) {
             const auto step_count = service.simulation_step_count();
             for (std::uint64_t step = 0; step < step_count; ++step) {
@@ -89,13 +99,6 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (start_network) {
-            service.start_websocket_server();
-            service.connect_websocket_client();
-            std::cout << "runtime.network=started\n";
-        } else {
-            std::cout << "runtime.network=not-started (use --start-net)\n";
-        }
 
         return 0;
     } catch (const std::exception& ex) {

@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -11,7 +12,9 @@
 #include <vector>
 
 #include "s7/core.hpp"
+#include "s7/net.hpp"
 #include "s7/observe.hpp"
+#include "s7/transport.hpp"
 
 namespace {
 
@@ -406,6 +409,15 @@ int main() try
     {
         auto& registry = s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry);
+        s7::register_net_elements(registry);
+
+        const auto* netSinkDescriptor = registry.find("NetSink");
+        const auto* netSourceDescriptor = registry.find("NetSource");
+        if (!netSinkDescriptor || !netSourceDescriptor) {
+            throw std::runtime_error("Network elements were not registered in the element registry.");
+        }
+        assert(netSinkDescriptor->metadata().category == "network");
+        assert(netSourceDescriptor->metadata().category == "network");
 
         const auto library = s7::SchemaLibraryLoader::load_from_json(make_schema_library_json());
         s7::SchemaLibraryLoader::register_library(library, registry);
@@ -444,6 +456,107 @@ int main() try
         if (!catalogEntry || catalogEntry->input_count != 1 || catalogEntry->output_count != 1) {
             throw std::runtime_error("Schema library catalog entry was not indexed correctly.");
         }
+    }
+
+    {
+        s7::transport::DataPacket packet;
+        packet.stream_name = "codec.demo";
+        packet.sequence = 11;
+        packet.stream_id = 22;
+        packet.channel_id = 3;
+        packet.data_type = 0x000C;
+        packet.elem_count = 1;
+        packet.t_model_ns = 123456789;
+        packet.t_system_ns = 223456789;
+        packet.extensions = {0x10, 0x20, 0x30};
+        packet.payload = s7::transport::encode_f64_payload(42.75);
+
+        const auto frame = s7::transport::encode_packet_v1(packet);
+        const auto decoded = s7::transport::decode_packet_v1(frame);
+        assert(decoded.sequence == 11);
+        assert(decoded.stream_id == 22);
+        assert(decoded.channel_id == 3);
+        assert(decoded.data_type == 0x000C);
+        assert(decoded.elem_count == 1);
+        assert(decoded.t_model_ns == 123456789);
+        assert(decoded.t_system_ns.has_value());
+        assert(decoded.t_system_ns.value() == 223456789);
+        assert(decoded.extensions.size() == 3);
+        assert(std::abs(s7::transport::decode_f64_payload(decoded.payload) - 42.75) < 1e-12);
+    }
+
+    {
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+
+        const auto rx = endpoint->open_endpoint({
+            .endpoint_name = "validation-rx",
+            .stream_name = "demo.out",
+            .allow_publish = false,
+            .allow_receive = true,
+        });
+        if (!rx.ok) {
+            throw std::runtime_error("Failed to open test receive endpoint: " + rx.error);
+        }
+
+        s7::Schema schema{"transport_net_sink"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.25); });
+        schema.add_element("sink", [] { return std::make_unique<s7::NetSink>("demo.out"); });
+        schema.connect("source", 0, "sink", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step();
+
+        s7::transport::DataPacket packet;
+        const auto receive = endpoint->receive(rx.handle, packet);
+        if (!receive.ok || !receive.has_packet) {
+            throw std::runtime_error("NetSink did not publish a packet through runtime endpoint.");
+        }
+
+        assert(packet.stream_name == "demo.out");
+        assert(packet.sequence == 0);
+        const auto decoded_value = s7::transport::decode_f64_payload(packet.payload);
+        if (std::abs(decoded_value - 7.25) >= 1e-12) {
+            throw std::runtime_error("NetSink payload value mismatch.");
+        }
+
+        s7::RuntimeNetContext::set_endpoint(nullptr);
+    }
+
+    {
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+
+        const auto tx = endpoint->open_endpoint({
+            .endpoint_name = "validation-tx",
+            .stream_name = "demo.in",
+            .allow_publish = true,
+            .allow_receive = false,
+        });
+        if (!tx.ok) {
+            throw std::runtime_error("Failed to open test publish endpoint: " + tx.error);
+        }
+
+        s7::transport::DataPacket packet;
+        packet.stream_name = "demo.in";
+        packet.sequence = 1;
+        packet.data_type = 0x000C;
+        packet.elem_count = 1;
+        packet.t_model_ns = 1;
+        packet.payload = s7::transport::encode_f64_payload(5.5);
+        const auto send = endpoint->publish(tx.handle, packet);
+        if (!send.ok) {
+            throw std::runtime_error("Failed to seed NetSource packet: " + send.error);
+        }
+
+        s7::Schema schema{"transport_net_source"};
+        schema.add_element("source", [] { return std::make_unique<s7::NetSource>("demo.in"); });
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step();
+        assert(std::abs(runtime.real_output_of("source") - 5.5) < 1e-12);
+
+        s7::RuntimeNetContext::set_endpoint(nullptr);
     }
 
     return 0;

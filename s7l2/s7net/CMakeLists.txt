@@ -10,5 +10,5 @@ target_include_directories(s7net PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(s7net PUBLIC s7core s7io)
+target_link_libraries(s7net PUBLIC s7core s7io s7transport)
 

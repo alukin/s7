@@ -1,6 +1,11 @@
 #include "local_runtime_v2.hpp"
 #include "main_window.hpp"
 
+#include <s7/builtin_element_registry.hpp>
+#include <s7/element_registry.hpp>
+#include <s7/net.hpp>
+#include <s7/transport.hpp>
+
 #include <QApplication>
 
 #include <boost/json.hpp>
@@ -103,6 +108,12 @@ void printCrashDumpHelp(const std::string& program)
 int runSmoke()
 {
     try {
+        auto& registry = s7::ElementRegistry::instance();
+        s7::register_builtin_elements(registry);
+        s7::register_net_elements(registry);
+        assert(registry.find("NetSink") != nullptr);
+        assert(registry.find("NetSource") != nullptr);
+
         static constexpr std::string_view smokeSchema = R"json({
             "name": "s7studio_smoke",
             "elements": [
@@ -155,6 +166,45 @@ int runSmoke()
         for (const auto& line : s7studio::runtime::collectSamples(schema, runtime)) {
             std::cout << line << '\n';
         }
+
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+        const auto tx = endpoint->open_endpoint({
+            .endpoint_name = "studio-smoke-tx",
+            .stream_name = "studio.demo.in",
+            .allow_publish = true,
+            .allow_receive = false,
+        });
+        assert(tx.ok);
+
+        s7::transport::DataPacket packet;
+        packet.stream_name = "studio.demo.in";
+        packet.sequence = 1;
+        packet.data_type = 0x000C;
+        packet.elem_count = 1;
+        packet.t_model_ns = 1;
+        packet.payload = s7::transport::encode_f64_payload(8.5);
+        const auto send = endpoint->publish(tx.handle, packet);
+        assert(send.ok);
+
+        static constexpr std::string_view netSchema = R"json({
+            "name": "s7studio_net_smoke",
+            "elements": [
+                { "id": "net_in", "type": "NetSource", "params": { "topic": "studio.demo.in" } }
+            ],
+            "connections": []
+        })json";
+        const auto netSchemaJson = boost::json::parse(netSchema, ec);
+        if (ec) {
+            throw std::runtime_error("Failed to parse studio net smoke schema: " + ec.message());
+        }
+        const auto netGraphSchema = s7studio::runtime::buildSchema(netSchemaJson);
+        s7studio::runtime::validateSchema(netGraphSchema);
+        auto netGraph = s7::Compiler::compile(netGraphSchema);
+        s7::NodeRuntime netRuntime{std::move(netGraph)};
+        netRuntime.step();
+        assert(std::abs(netRuntime.real_output_of("net_in") - 8.5) < 1e-12);
+        s7::RuntimeNetContext::set_endpoint(nullptr);
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "s7studio smoke error: " << ex.what() << '\n';

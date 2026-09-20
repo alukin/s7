@@ -13,6 +13,8 @@
 #include <thread>
 #include <vector>
 
+#include <s7/transport.hpp>
+
 namespace s7studio {
 
 class LocalSchemaRunner : public QObject, public ISchemaRunner
@@ -57,6 +59,7 @@ private:
 
     std::shared_ptr<s7::Schema> schema_;
     std::unique_ptr<s7::NodeRuntime> runtime_;
+    s7::transport::RuntimeNetEndpointPtr netEndpoint_;
     std::thread worker_;
     std::vector<ScopeConfig> scopeConfigs_;
     double dt_ = 0.001;

@@ -12,6 +12,7 @@
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_catalog.hpp>
 #include <s7/element_registry.hpp>
+#include <s7/net.hpp>
 #include <s7/schema_library.hpp>
 
 #include "s7/plugin_loader.hpp"
@@ -841,6 +842,7 @@ void MainWindow::buildUi()
 
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
+    s7::register_net_elements(registry);
     pluginLoader_ = std::make_unique<s7::PluginLoader>();
     pluginLoader_->load_plugins(registry);
     if (pluginLoader_ && !registry.find("WhiteNoiseGenerator")) {

@@ -5,7 +5,7 @@ add_executable(s7tests
     src/validation_smoke.cpp
 )
 
-target_link_libraries(s7tests PRIVATE s7observe)
+target_link_libraries(s7tests PRIVATE s7observe s7net)
 
 add_executable(s7io_smoke
     src/io_smoke.cpp

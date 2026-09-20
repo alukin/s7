@@ -57,8 +57,10 @@ add_executable(s7studio
 target_include_directories(s7studio PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/s7core/include
+    ${PROJECT_SOURCE_DIR}/s7net/include
     ${PROJECT_SOURCE_DIR}/s7observe/include
     ${PROJECT_SOURCE_DIR}/s7runtime/include
+    ${PROJECT_SOURCE_DIR}/s7transport/include
 )
 
 target_link_libraries(s7studio PRIVATE
@@ -68,6 +70,7 @@ target_link_libraries(s7studio PRIVATE
     qschematic-static
     s7_qcustomplot
     s7core
+    s7net
     s7observe
     Boost::json
     ${CMAKE_DL_LIBS}
