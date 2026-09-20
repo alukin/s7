@@ -75,12 +75,15 @@ s7_enable_project_warnings(s7io)
 s7_enable_project_warnings(s7transport)
 s7_enable_project_warnings(s7net)
 s7_enable_project_warnings(s7observe)
+s7_enable_project_warnings(s7core_smoke)
+s7_enable_project_warnings(s7observe_smoke)
+s7_enable_project_warnings(s7net_smoke)
 s7_enable_project_warnings(s7noise)
 s7_enable_project_warnings(s7runtime)
 s7_enable_project_warnings(s7ctl)
-s7_enable_project_warnings(s7tests)
 s7_enable_project_warnings(s7io_smoke)
 s7_enable_project_warnings(s7transport_smoke)
+s7_enable_project_warnings(s7transport_reconnect_smoke)
 s7_enable_project_warnings(s7runtime_control_smoke)
 s7_enable_project_warnings(s7studio)
 s7_enable_project_warnings(s7spectral)
@@ -91,12 +94,15 @@ set(S7_ALL_TARGETS
 	s7transport
 	s7net
 	s7observe
+	s7core_smoke
+	s7observe_smoke
+	s7net_smoke
 	s7noise
 	s7runtime
 	s7ctl
-	s7tests
 	s7io_smoke
 	s7transport_smoke
+	s7transport_reconnect_smoke
 	s7runtime_control_smoke
 )
 

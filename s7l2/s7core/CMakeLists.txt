@@ -25,3 +25,11 @@ target_link_libraries(s7core PUBLIC
     Boost::system
 )
 
+add_executable(s7core_smoke
+    tests/core_smoke.cpp
+)
+
+target_link_libraries(s7core_smoke PRIVATE s7core)
+
+add_test(NAME s7core_smoke COMMAND s7core_smoke)
+

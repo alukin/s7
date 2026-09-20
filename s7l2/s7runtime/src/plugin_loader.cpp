@@ -117,19 +117,17 @@ bool PluginLoader::load_plugin(
         return false;
     }
 
-    // Get plugin query function
+    // Resolve query symbol first, then cast after validating dlsym state.
     dlerror();
-    auto query_func = reinterpret_cast<S7PluginQueryFunc>(
-        dlsym(handle, "s7_plugin_query")
-    );
-
-    if (!query_func) {
-        const char* err = dlerror();
+    void* query_symbol = dlsym(handle, "s7_plugin_query");
+    const char* query_err = dlerror();
+    if (query_err || !query_symbol) {
         std::cerr << "Plugin " << plugin_path << " missing s7_plugin_query: "
-                  << (err ? err : "Unknown error") << "\n";
+                  << (query_err ? query_err : "Unknown error") << "\n";
         dlclose(handle);
         return false;
     }
+    auto query_func = reinterpret_cast<S7PluginQueryFunc>(query_symbol);
 
     // Get plugin info
     const auto* info = query_func();
@@ -152,19 +150,17 @@ bool PluginLoader::load_plugin(
               << " v" << info->plugin_version
               << " (" << info->element_count << " elements)\n";
 
-    // Get registration function
+    // Resolve registration symbol first, then cast after validating dlsym state.
     dlerror();
-    auto register_func = reinterpret_cast<S7RegisterElementsFunc>(
-        dlsym(handle, "s7_register_elements")
-    );
-
-    if (!register_func) {
-        const char* err = dlerror();
+    void* register_symbol = dlsym(handle, "s7_register_elements");
+    const char* register_err = dlerror();
+    if (register_err || !register_symbol) {
         std::cerr << "Plugin " << plugin_path << " missing s7_register_elements: "
-                  << (err ? err : "Unknown error") << "\n";
+                  << (register_err ? register_err : "Unknown error") << "\n";
         dlclose(handle);
         return false;
     }
+    auto register_func = reinterpret_cast<S7RegisterElementsFunc>(register_symbol);
 
     // Register elements
     try {

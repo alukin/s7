@@ -117,6 +117,14 @@ int main()
     }
 
     {
+        const auto response_text = client.request_control_json(R"json({"type":"LIST_DEPLOYMENTS","request_id":"list-before-commit","protocol_version":1})json");
+        const auto response = boost::json::parse(response_text).as_object();
+        assert(response.at("type").as_string() == "DEPLOYMENTS");
+        assert(response.at("state").as_string() == "idle");
+        assert(!response.at("prepared_deployments").as_array().empty());
+    }
+
+    {
         boost::json::object commit;
         commit["type"] = "COMMIT_DEPLOYMENT";
         commit["request_id"] = "commit-1";
@@ -128,6 +136,15 @@ int main()
         const auto response = boost::json::parse(response_text).as_object();
         assert(response.at("type").as_string() == "COMMIT_DEPLOYMENT_RESULT");
         assert(response.at("committed").as_bool());
+    }
+
+    {
+        const auto response_text = client.request_control_json(R"json({"type":"LIST_DEPLOYMENTS","request_id":"list-after-commit","protocol_version":1})json");
+        const auto response = boost::json::parse(response_text).as_object();
+        assert(response.at("type").as_string() == "DEPLOYMENTS");
+        assert(response.at("state").as_string() == "running");
+        const auto& active = response.at("active_deployment").as_object();
+        assert(active.at("deployment_id").as_string() == "dep-ok");
     }
 
     {
@@ -186,5 +203,6 @@ int main()
 
     return 0;
 }
+
 
 

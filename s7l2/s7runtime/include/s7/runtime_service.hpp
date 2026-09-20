@@ -76,6 +76,11 @@ public:
 class RuntimeService {
 public:
     explicit RuntimeService(RuntimeSchemaDefinition definition);
+    ~RuntimeService();
+    RuntimeService(const RuntimeService&) = delete;
+    RuntimeService& operator=(const RuntimeService&) = delete;
+    RuntimeService(RuntimeService&&) = delete;
+    RuntimeService& operator=(RuntimeService&&) = delete;
 
     [[nodiscard]] const RuntimeSchemaDefinition& schema() const;
     [[nodiscard]] bool has_simulation() const;

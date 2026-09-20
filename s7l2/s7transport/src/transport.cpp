@@ -1,6 +1,5 @@
 #include "s7/transport.hpp"
 
-#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -21,7 +20,6 @@
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/websocket/stream.hpp>
-#include <boost/system/error_code.hpp>
 
 namespace s7::transport {
 namespace {
@@ -33,6 +31,28 @@ namespace ssl = boost::asio::ssl;
 using boost::beast::flat_buffer;
 using PlainWs = websocket::stream<Tcp::socket>;
 using TlsWs = websocket::stream<boost::beast::ssl_stream<Tcp::socket>>;
+
+void interrupt_socket_reads(const std::shared_ptr<PlainWs>& socket)
+{
+    if (!socket) {
+        return;
+    }
+    boost::system::error_code ec;
+    static_cast<void>(socket->next_layer().cancel(ec));
+    static_cast<void>(socket->next_layer().shutdown(Tcp::socket::shutdown_both, ec));
+    static_cast<void>(socket->next_layer().close(ec));
+}
+
+void interrupt_socket_reads(const std::shared_ptr<TlsWs>& socket)
+{
+    if (!socket) {
+        return;
+    }
+    boost::system::error_code ec;
+    static_cast<void>(socket->next_layer().next_layer().cancel(ec));
+    static_cast<void>(socket->next_layer().next_layer().shutdown(Tcp::socket::shutdown_both, ec));
+    static_cast<void>(socket->next_layer().next_layer().close(ec));
+}
 
 constexpr std::uint16_t kProtocolVersion = 1;
 constexpr std::size_t kFixedHeaderBytes = 54;
@@ -47,16 +67,18 @@ void append_u16_be(std::vector<std::uint8_t>& out, const std::uint16_t value)
 
 void append_u32_be(std::vector<std::uint8_t>& out, const std::uint32_t value)
 {
-    for (int shift = 24; shift >= 0; shift -= 8) {
+    for (std::uint32_t shift = 24; shift > 0; shift -= 8) {
         out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFu));
     }
+    out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
 }
 
 void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
 {
-    for (int shift = 56; shift >= 0; shift -= 8) {
+    for (std::uint64_t shift = 56; shift > 0; shift -= 8) {
         out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFu));
     }
+    out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
 }
 
 [[nodiscard]] auto read_u16_be(const std::vector<std::uint8_t>& in, std::size_t& offset) -> std::uint16_t
@@ -77,7 +99,7 @@ void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
     }
 
     std::uint32_t value = 0;
-    for (int index = 0; index < 4; ++index) {
+    for (std::size_t index = 0; index < 4; ++index) {
         value = static_cast<std::uint32_t>((value << 8) | in[offset + index]);
     }
     offset += 4;
@@ -91,7 +113,7 @@ void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
     }
 
     std::uint64_t value = 0;
-    for (int index = 0; index < 8; ++index) {
+    for (std::size_t index = 0; index < 8; ++index) {
         value = (value << 8) | static_cast<std::uint64_t>(in[offset + index]);
     }
     offset += 8;
@@ -259,7 +281,18 @@ auto decode_packet_v1(const std::vector<std::uint8_t>& frame) -> DataPacket
         throw std::invalid_argument("Packet reserved field must be zero in v1.");
     }
 
-    if (offset + ext_len + payload_size > frame.size()) {
+    if (payload_size > kMaxPayloadBytes) {
+        throw std::invalid_argument("Packet payload exceeds v1 max packet size.");
+    }
+
+    if (offset > frame.size()) {
+        throw std::invalid_argument("Packet decode offset exceeds frame size.");
+    }
+    const auto remaining = frame.size() - offset;
+    if (static_cast<std::size_t>(ext_len) > remaining) {
+        throw std::invalid_argument("Packet extension length exceeds frame size.");
+    }
+    if (static_cast<std::size_t>(payload_size) > (remaining - static_cast<std::size_t>(ext_len))) {
         throw std::invalid_argument("Packet payload/extension lengths exceed frame size.");
     }
 
@@ -409,22 +442,10 @@ BeastRuntimeNetEndpoint::~BeastRuntimeNetEndpoint()
             boost::system::error_code ec;
             impl_->acceptor->close(ec);
         }
-        if (impl_->plain_data_socket) {
-            boost::system::error_code ec;
-            impl_->plain_data_socket->close(websocket::close_code::normal, ec);
-        }
-        if (impl_->plain_control_socket) {
-            boost::system::error_code ec;
-            impl_->plain_control_socket->close(websocket::close_code::normal, ec);
-        }
-        if (impl_->tls_data_socket) {
-            boost::system::error_code ec;
-            impl_->tls_data_socket->close(websocket::close_code::normal, ec);
-        }
-        if (impl_->tls_control_socket) {
-            boost::system::error_code ec;
-            impl_->tls_control_socket->close(websocket::close_code::normal, ec);
-        }
+        interrupt_socket_reads(impl_->plain_data_socket);
+        interrupt_socket_reads(impl_->plain_control_socket);
+        interrupt_socket_reads(impl_->tls_data_socket);
+        interrupt_socket_reads(impl_->tls_control_socket);
     }
     if (impl_->accept_thread.joinable()) {
         impl_->accept_thread.join();
@@ -435,6 +456,12 @@ BeastRuntimeNetEndpoint::~BeastRuntimeNetEndpoint()
     if (impl_->control_read_thread.joinable()) {
         impl_->control_read_thread.join();
     }
+
+    std::lock_guard<std::mutex> lock(impl_->socket_mutex);
+    impl_->plain_data_socket.reset();
+    impl_->plain_control_socket.reset();
+    impl_->tls_data_socket.reset();
+    impl_->tls_control_socket.reset();
 }
 
 auto BeastRuntimeNetEndpoint::backend_name() const -> std::string
@@ -498,35 +525,32 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                 auto& reader = is_data ? impl_->data_read_thread : impl_->control_read_thread;
                 if (is_data) {
                     if constexpr (std::is_same_v<std::decay_t<decltype(*ws)>, PlainWs>) {
-                        if (impl_->plain_data_socket) {
-                            boost::system::error_code close_ec;
-                            impl_->plain_data_socket->close(websocket::close_code::normal, close_ec);
+                        interrupt_socket_reads(impl_->plain_data_socket);
+                        if (reader.joinable()) {
+                            reader.join();
                         }
                         impl_->plain_data_socket = ws;
                     } else {
-                        if (impl_->tls_data_socket) {
-                            boost::system::error_code close_ec;
-                            impl_->tls_data_socket->close(websocket::close_code::normal, close_ec);
+                        interrupt_socket_reads(impl_->tls_data_socket);
+                        if (reader.joinable()) {
+                            reader.join();
                         }
                         impl_->tls_data_socket = ws;
                     }
                 } else {
                     if constexpr (std::is_same_v<std::decay_t<decltype(*ws)>, PlainWs>) {
-                        if (impl_->plain_control_socket) {
-                            boost::system::error_code close_ec;
-                            impl_->plain_control_socket->close(websocket::close_code::normal, close_ec);
+                        interrupt_socket_reads(impl_->plain_control_socket);
+                        if (reader.joinable()) {
+                            reader.join();
                         }
                         impl_->plain_control_socket = ws;
                     } else {
-                        if (impl_->tls_control_socket) {
-                            boost::system::error_code close_ec;
-                            impl_->tls_control_socket->close(websocket::close_code::normal, close_ec);
+                        interrupt_socket_reads(impl_->tls_control_socket);
+                        if (reader.joinable()) {
+                            reader.join();
                         }
                         impl_->tls_control_socket = ws;
                     }
-                }
-                if (reader.joinable()) {
-                    reader.join();
                 }
 
                 reader = std::thread([this, ws, is_data] {
@@ -547,7 +571,7 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                             }
                             const auto response_json = handler
                                 ? handler(request_json)
-                                : std::string{"{\"type\":\"ERROR\",\"protocol_version\":1,\"code\":\"INTERNAL_ERROR\",\"message\":\"No control handler registered\"}"};
+                                : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
                             ws->text(true);
                             boost::system::error_code write_ec;
                             ws->write(boost::asio::buffer(response_json), write_ec);
@@ -649,10 +673,7 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
         ws->handshake(parsed.host + ":" + parsed.port, target);
 
         std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        if (slot) {
-            boost::system::error_code close_ec;
-            slot->close(websocket::close_code::normal, close_ec);
-        }
+        interrupt_socket_reads(slot);
         if (reader.joinable()) {
             reader.join();
         }
@@ -688,10 +709,7 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
         ws->handshake(parsed.host + ":" + parsed.port, target);
 
         std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        if (slot) {
-            boost::system::error_code close_ec;
-            slot->close(websocket::close_code::normal, close_ec);
-        }
+        interrupt_socket_reads(slot);
         if (reader.joinable()) {
             reader.join();
         }

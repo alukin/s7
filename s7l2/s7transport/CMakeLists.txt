@@ -18,10 +18,17 @@ target_link_libraries(s7transport PUBLIC
 )
 
 add_executable(s7transport_smoke
-    src/transport_smoke.cpp
+    tests/transport_smoke.cpp
 )
 
 target_link_libraries(s7transport_smoke PRIVATE s7transport)
 
+add_executable(s7transport_reconnect_smoke
+    tests/transport_reconnect_smoke.cpp
+)
+
+target_link_libraries(s7transport_reconnect_smoke PRIVATE s7transport)
+
 add_test(NAME s7transport_smoke COMMAND s7transport_smoke)
+add_test(NAME s7transport_reconnect_smoke COMMAND s7transport_reconnect_smoke)
 

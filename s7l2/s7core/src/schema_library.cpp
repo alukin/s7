@@ -139,7 +139,10 @@ auto build_schema_from_object(const boost::json::object& root, const ElementRegi
         const auto id = string_value(element, "id");
         const auto type = string_value(element, "type", "Element");
         const auto params_it = element.find("params");
-        const auto& params = params_it != element.end() && params_it->value().is_object()
+        if (params_it != element.end() && !params_it->value().is_object()) {
+            throw std::invalid_argument("Expected object field 'params' in schema library element '" + id + "'.");
+        }
+        const auto& params = params_it != element.end()
             ? params_it->value().as_object()
             : boost::json::object{};
         const auto* nested_schema = optional_object(element, "schema");

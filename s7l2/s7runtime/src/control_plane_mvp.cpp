@@ -206,6 +206,12 @@ auto ControlPlaneMvp::handle_request_object(const boost::json::object& request) 
 
 auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> boost::json::object
 {
+    std::string active_deployment_id;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        active_deployment_id = active_deployment_id_;
+    }
+
     boost::json::object out;
     out["type"] = "HELLO_OK";
     out["request_id"] = as_string(request, "request_id").value_or("");
@@ -213,12 +219,18 @@ auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> 
     out["node_uuid"] = descriptor_.node_uuid;
     out["node_name"] = descriptor_.node_name;
     out["runtime_version"] = descriptor_.runtime_version;
-    out["status"] = active_deployment_id_.empty() ? "idle" : "running";
+    out["status"] = active_deployment_id.empty() ? "idle" : "running";
     return out;
 }
 
 auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) const -> boost::json::object
 {
+    std::string active_deployment_id;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        active_deployment_id = active_deployment_id_;
+    }
+
     boost::json::object out;
     out["type"] = "NODE_INFO";
     out["request_id"] = as_string(request, "request_id").value_or("");
@@ -292,10 +304,10 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     out["hardware"] = std::move(hardware);
 
     boost::json::object state;
-    state["mode"] = active_deployment_id_.empty() ? "idle" : "running";
-    state["active_deployment"] = active_deployment_id_.empty()
+    state["mode"] = active_deployment_id.empty() ? "idle" : "running";
+    state["active_deployment"] = active_deployment_id.empty()
         ? boost::json::value(nullptr)
-        : boost::json::value(active_deployment_id_);
+        : boost::json::value(active_deployment_id);
     out["state"] = std::move(state);
 
     return out;
@@ -406,19 +418,30 @@ auto ControlPlaneMvp::handle_peer_announce(const boost::json::object& request) -
 
 auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request) const -> boost::json::object
 {
+    std::string active_deployment_id;
+    std::vector<PreparedDeployment> prepared_snapshot;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        active_deployment_id = active_deployment_id_;
+        prepared_snapshot.reserve(prepared_.size());
+        for (const auto& [_, item] : prepared_) {
+            prepared_snapshot.push_back(item);
+        }
+    }
+
     boost::json::object out;
     out["type"] = "DEPLOYMENTS";
     out["request_id"] = as_string(request, "request_id").value_or("");
     out["protocol_version"] = descriptor_.protocol_version;
     out["node_uuid"] = descriptor_.node_uuid;
-    out["state"] = active_deployment_id_.empty() ? "idle" : "running";
+    out["state"] = active_deployment_id.empty() ? "idle" : "running";
 
-    out["active_deployment"] = active_deployment_id_.empty()
+    out["active_deployment"] = active_deployment_id.empty()
         ? boost::json::value(nullptr)
-        : boost::json::value(boost::json::object{{"deployment_id", active_deployment_id_}});
+        : boost::json::value(boost::json::object{{"deployment_id", active_deployment_id}});
 
     boost::json::array prepared;
-    for (const auto& [_, item] : prepared_) {
+    for (const auto& item : prepared_snapshot) {
         boost::json::object entry;
         entry["deployment_id"] = item.deployment_id;
         entry["prepare_token"] = item.prepare_token;

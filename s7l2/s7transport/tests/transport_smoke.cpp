@@ -1,6 +1,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdint>
+#include <stdexcept>
 #include <thread>
 
 #include "s7/transport.hpp"
@@ -50,6 +51,20 @@ int main()
         assert(decoded.t_system_ns.value() == outgoing.t_system_ns.value());
         assert(decoded.extensions.size() == outgoing.extensions.size());
         assert(s7::transport::decode_f64_payload(decoded.payload) == 12.5);
+
+        auto malformed = frame;
+        // Force payload_size in the v1 header to exceed the frame length.
+        malformed[30] = 0xFF;
+        malformed[31] = 0xFF;
+        malformed[32] = 0xFF;
+        malformed[33] = 0xFF;
+        bool rejected_malformed = false;
+        try {
+            static_cast<void>(s7::transport::decode_packet_v1(malformed));
+        } catch (const std::invalid_argument&) {
+            rejected_malformed = true;
+        }
+        assert(rejected_malformed);
 
         const auto send = endpoint.publish(tx.handle, outgoing);
         assert(send.ok);
@@ -123,4 +138,5 @@ int main()
 
     return 0;
 }
+
 

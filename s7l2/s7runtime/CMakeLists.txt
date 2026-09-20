@@ -31,7 +31,7 @@ target_link_libraries(s7runtime PRIVATE
 )
 
 add_executable(s7runtime_control_smoke
-    src/control_plane_smoke.cpp
+    tests/control_plane_smoke.cpp
     src/control_plane_mvp.cpp
 )
 

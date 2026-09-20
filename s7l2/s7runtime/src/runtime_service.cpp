@@ -149,6 +149,15 @@ std::uint64_t get_u64(const boost::json::object& object, const std::string_view 
     throw std::invalid_argument("Expected unsigned integer field '" + std::string(key) + "'.");
 }
 
+std::uint16_t get_u16_port(const boost::json::object& object, const std::string_view key, const std::uint16_t default_value)
+{
+    const auto value = get_u64(object, key, default_value);
+    if (value > 0xFFFFu) {
+        throw std::invalid_argument("Field '" + std::string(key) + "' exceeds uint16 port range.");
+    }
+    return static_cast<std::uint16_t>(value);
+}
+
 RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_value) {
     const auto& root = expect_object(json_value, "root");
 
@@ -202,7 +211,7 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
         if (server_it != websocket_obj.end()) {
             const auto& server_obj = expect_object(server_it->value(), "server");
             definition.server.enabled = get_bool(server_obj, "enabled", false);
-            definition.server.port = static_cast<std::uint16_t>(get_u64(server_obj, "port", 0));
+            definition.server.port = get_u16_port(server_obj, "port", 0);
             if (const auto tls_it = server_obj.find("tls"); tls_it != server_obj.end()) {
                 const auto& tls_obj = expect_object(tls_it->value(), "websocket.server.tls");
                 definition.server.tls.enabled = get_bool(tls_obj, "enabled", false);
@@ -553,6 +562,25 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
     RuntimeNetContext::set_endpoint(network_endpoint_);
 }
 
+RuntimeService::~RuntimeService()
+{
+    if (network_endpoint_) {
+        for (const auto& handle : opened_server_endpoints_) {
+            network_endpoint_->close_endpoint(handle);
+        }
+        for (const auto& handle : opened_client_endpoints_) {
+            network_endpoint_->close_endpoint(handle);
+        }
+    }
+    opened_server_endpoints_.clear();
+    opened_client_endpoints_.clear();
+
+    // Only clear global runtime endpoint context if it still points to this service's endpoint.
+    if (RuntimeNetContext::endpoint() == network_endpoint_) {
+        RuntimeNetContext::set_endpoint(nullptr);
+    }
+}
+
 const RuntimeSchemaDefinition& RuntimeService::schema() const {
     return definition_;
 }
@@ -667,6 +695,10 @@ void RuntimeService::start_websocket_server() const {
         throw std::runtime_error("Runtime transport endpoint is not configured.");
     }
 
+    if (!opened_server_endpoints_.empty()) {
+        return;
+    }
+
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
         beast_endpoint->configure_server(definition_.server.port, definition_.server.tls);
     }
@@ -710,6 +742,10 @@ void RuntimeService::connect_websocket_client() const {
 
     if (!network_endpoint_) {
         throw std::runtime_error("Runtime transport endpoint is not configured.");
+    }
+
+    if (!opened_client_endpoints_.empty()) {
+        return;
     }
 
     const auto parsed_url = s7::transport::parse_ws_url(definition_.client.url);

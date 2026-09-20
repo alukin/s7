@@ -101,7 +101,11 @@ void NetSink::ensure_endpoint()
         endpoint_ = RuntimeNetContext::endpoint();
     }
 
-    if (!endpoint_ || topic_.empty()) {
+    if (topic_.empty()) {
+        throw std::invalid_argument("NetSink topic must not be empty.");
+    }
+
+    if (!endpoint_) {
         return;
     }
 
@@ -171,7 +175,11 @@ void NetSource::ensure_endpoint()
         endpoint_ = RuntimeNetContext::endpoint();
     }
 
-    if (!endpoint_ || topic_.empty()) {
+    if (topic_.empty()) {
+        throw std::invalid_argument("NetSource topic must not be empty.");
+    }
+
+    if (!endpoint_) {
         return;
     }
 

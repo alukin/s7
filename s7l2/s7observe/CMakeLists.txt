@@ -12,3 +12,11 @@ target_include_directories(s7observe PUBLIC
 
 target_link_libraries(s7observe PUBLIC s7core)
 
+add_executable(s7observe_smoke
+    tests/observe_smoke.cpp
+)
+
+target_link_libraries(s7observe_smoke PRIVATE s7observe)
+
+add_test(NAME s7observe_smoke COMMAND s7observe_smoke)
+

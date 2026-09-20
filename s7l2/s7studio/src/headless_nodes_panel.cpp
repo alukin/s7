@@ -155,6 +155,7 @@ void HeadlessNodesPanel::setupUi()
     seedInputRow->addWidget(seedInput_, 1);
     seedInputRow->addWidget(addSeedButton_);
     seedInputRow->addWidget(removeSeedButton_);
+    removeSeedButton_->setEnabled(false);
     seedLayout->addLayout(seedInputRow);
 
     seedList_ = new QListWidget(seedGroup);
@@ -205,6 +206,9 @@ void HeadlessNodesPanel::setupUi()
 
     connect(addSeedButton_, &QPushButton::clicked, this, &HeadlessNodesPanel::addSeedFromInput);
     connect(removeSeedButton_, &QPushButton::clicked, this, &HeadlessNodesPanel::removeSelectedSeed);
+    connect(seedList_, &QListWidget::itemSelectionChanged, this, [this]() {
+        removeSeedButton_->setEnabled(seedList_->currentRow() >= 0);
+    });
     connect(refreshButton_, &QPushButton::clicked, this, &HeadlessNodesPanel::refreshNow);
     connect(autoRefreshCheck_, &QCheckBox::toggled, this, &HeadlessNodesPanel::onAutoRefreshToggled);
     connect(refreshTimer_, &QTimer::timeout, this, &HeadlessNodesPanel::refreshNow);
@@ -233,7 +237,11 @@ void HeadlessNodesPanel::addSeedFromInput()
 
 void HeadlessNodesPanel::removeSelectedSeed()
 {
-    delete seedList_->takeItem(seedList_->currentRow());
+    const auto selectedRow = seedList_->currentRow();
+    if (selectedRow < 0) {
+        return;
+    }
+    delete seedList_->takeItem(selectedRow);
     refreshNow();
 }
 

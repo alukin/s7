@@ -89,3 +89,4 @@ auto main() -> int try {
     std::cerr << "s7tests io: unknown fatal error\n";
     return 1;
 }
+

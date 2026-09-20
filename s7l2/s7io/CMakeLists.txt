@@ -12,3 +12,11 @@ target_include_directories(s7io PUBLIC
 
 target_link_libraries(s7io PUBLIC s7core)
 
+add_executable(s7io_smoke
+    tests/io_smoke.cpp
+)
+
+target_link_libraries(s7io_smoke PRIVATE s7io)
+
+add_test(NAME s7io_smoke COMMAND s7io_smoke)
+
