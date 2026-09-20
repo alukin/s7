@@ -4,6 +4,7 @@
 #include "diagram_editor.hpp"
 #include "diagram_node_roles.hpp"
 #include "element_picker_panel.hpp"
+#include "headless_nodes_panel.hpp"
 #include "json_utils.hpp"
 #include "main_window_builder.hpp"
 #include "scene_serializer.hpp"
@@ -868,6 +869,16 @@ void MainWindow::buildUi()
     connect(elementPickerPanel_, &ui::ElementPickerPanel::elementRequested,
             this, &MainWindow::onElementRequested);
 
+    headlessNodesPanel_ = new ui::HeadlessNodesPanel(this);
+    headlessNodesDock_ = new QDockWidget(QStringLiteral("Headless Nodes"), this);
+    headlessNodesDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
+    headlessNodesDock_->setWidget(headlessNodesPanel_);
+    addDockWidget(Qt::RightDockWidgetArea, headlessNodesDock_);
+    tabifyDockWidget(elementPickerDock_, headlessNodesDock_);
+
+    connect(headlessNodesPanel_, &ui::HeadlessNodesPanel::nodeActivated,
+            this, &MainWindow::onHeadlessNodeActivated);
+
     if (pluginLoader_) {
         appendLog(QStringLiteral("[studio] plugins loaded: %1").arg(pluginLoader_->loaded_count()));
     }
@@ -955,6 +966,14 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     }
 
     appendLog(QStringLiteral("[studio] added element %1 (%2)").arg(elementId, elementType));
+}
+
+void MainWindow::onHeadlessNodeActivated(const QString& endpoint,
+                                         const QString& nodeUuid,
+                                         const QString& nodeName)
+{
+    const auto title = nodeName.isEmpty() ? endpoint : nodeName;
+    appendLog(QStringLiteral("[studio] headless node activated: %1 (%2)").arg(title, nodeUuid.isEmpty() ? QStringLiteral("no-uuid") : nodeUuid));
 }
 
 void MainWindow::appendLog(const QString& message)

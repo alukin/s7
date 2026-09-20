@@ -741,6 +741,10 @@ auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_js
 
     std::lock_guard<std::mutex> call_lock(impl_->control_request_mutex);
     if (tls_control_socket) {
+        tls_control_socket->set_option(websocket::stream_base::timeout{
+            std::chrono::seconds(5),
+            std::chrono::seconds(5),
+            false});
         tls_control_socket->text(true);
         boost::system::error_code write_ec;
         tls_control_socket->write(boost::asio::buffer(request_json), write_ec);
@@ -756,12 +760,17 @@ auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_js
         return boost::beast::buffers_to_string(read_buffer.data());
     }
 
+    plain_control_socket->set_option(websocket::stream_base::timeout{
+        std::chrono::seconds(5),
+        std::chrono::seconds(5),
+        false});
     plain_control_socket->text(true);
     boost::system::error_code write_ec;
     plain_control_socket->write(boost::asio::buffer(request_json), write_ec);
     if (write_ec) {
         throw std::runtime_error("control write failed: " + write_ec.message());
     }
+
     flat_buffer read_buffer;
     boost::system::error_code read_ec;
     plain_control_socket->read(read_buffer, read_ec);

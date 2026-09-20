@@ -1,0 +1,38 @@
+{
+  "name": "runtime_service_starter_node2",
+  "elements": [
+    {
+      "id": "source",
+      "type": "Constant",
+      "params": {
+        "value": 2.0
+      }
+    },
+    {
+      "id": "sink",
+      "type": "NetSink",
+      "params": {
+        "topic": "demo.out.2"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_element": "source",
+      "from_port": 0,
+      "to_element": "sink",
+      "to_port": 0
+    }
+  ],
+  "websocket": {
+    "server": {
+      "enabled": true,
+      "port": 9003
+    },
+    "client": {
+      "enabled": false,
+      "url": "ws://127.0.0.1:9002/runtime"
+    }
+  }
+}
+

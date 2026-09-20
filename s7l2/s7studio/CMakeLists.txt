@@ -37,6 +37,8 @@ add_executable(s7studio
     src/local_schema_runner.hpp
     src/element_picker_panel.cpp
     src/element_picker_panel.hpp
+    src/headless_nodes_panel.cpp
+    src/headless_nodes_panel.hpp
     resources/icons.qrc
     resources/demo_startup.s7diagram
     src/diagram_document.hpp

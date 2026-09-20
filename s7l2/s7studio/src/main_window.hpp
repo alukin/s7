@@ -39,6 +39,7 @@ class DiagramEditor;
 namespace ui {
 class ScopeViewWindow;
 class ElementPickerPanel;
+class HeadlessNodesPanel;
 }
 
 struct ScopeSamplePoint {
@@ -83,6 +84,7 @@ private slots:
     void setPagePortrait();
     void setPageLandscape();
     void onElementRequested(const QString& elementType, const QString& displayName);
+    void onHeadlessNodeActivated(const QString& endpoint, const QString& nodeUuid, const QString& nodeName);
     void addTextFrame();
     void setSelectedTextFrameTextColor();
     void setSelectedTextFrameLineColor();
@@ -174,6 +176,8 @@ private:
     QWidget* runtimePanel_ = nullptr;
     QDockWidget* elementPickerDock_ = nullptr;
     ui::ElementPickerPanel* elementPickerPanel_ = nullptr;
+    QDockWidget* headlessNodesDock_ = nullptr;
+    ui::HeadlessNodesPanel* headlessNodesPanel_ = nullptr;
     std::unique_ptr<s7::PluginLoader> pluginLoader_;
     QString currentDiagramPath_;
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;

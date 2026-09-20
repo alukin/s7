@@ -1,7 +1,11 @@
+#include <atomic>
+#include <chrono>
+#include <csignal>
 #include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -19,8 +23,14 @@
 
 int main(int argc, char** argv) {
     try {
+        static std::atomic<bool> stop_requested{false};
+        std::signal(SIGINT, [](int) { stop_requested.store(true); });
+        std::signal(SIGTERM, [](int) { stop_requested.store(true); });
+
         std::string schema_path = S7RUNTIME_DEFAULT_SCHEMA_PATH;
         bool start_network = false;
+        bool serve_forever = false;
+        std::uint64_t serve_seconds = 0;
         std::vector<std::string> library_paths;
         std::vector<std::string> seed_peers;
 
@@ -37,6 +47,19 @@ int main(int argc, char** argv) {
 
             if (arg == "--start-net") {
                 start_network = true;
+                continue;
+            }
+
+            if (arg == "--serve-forever") {
+                serve_forever = true;
+                continue;
+            }
+
+            if (arg == "--serve-seconds") {
+                if (index + 1 >= argc) {
+                    throw std::invalid_argument("Missing value after --serve-seconds.");
+                }
+                serve_seconds = static_cast<std::uint64_t>(std::stoull(argv[++index]));
                 continue;
             }
 
@@ -57,7 +80,7 @@ int main(int argc, char** argv) {
             }
 
             if (arg == "--help") {
-                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--seed-peer <url>]... [--start-net]\n";
+                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--seed-peer <url>]... [--start-net] [--serve-seconds <n>] [--serve-forever]\n";
                 return 0;
             }
 
@@ -109,6 +132,18 @@ int main(int argc, char** argv) {
             for (const auto& file : service.output_files()) {
                 std::cout << "runtime.output_file=" << file.string() << '\n';
             }
+        }
+
+        if (serve_forever || serve_seconds > 0) {
+            std::cout << "runtime.serve=" << (serve_forever ? "forever" : std::to_string(serve_seconds) + "s") << '\n';
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(serve_seconds);
+            while (!stop_requested.load()) {
+                if (!serve_forever && std::chrono::steady_clock::now() >= deadline) {
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            std::cout << "runtime.serve.stopped=" << (stop_requested.load() ? "signal" : "timeout") << '\n';
         }
 
 
