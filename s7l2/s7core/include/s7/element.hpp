@@ -1,6 +1,8 @@
 #ifndef S7CORE_INCLUDE_S7_ELEMENT_HPP
 #define S7CORE_INCLUDE_S7_ELEMENT_HPP
 
+#include <algorithm>
+#include <cmath>
 #include <complex>
 #include <cstddef>
 #include <cstdint>
@@ -77,6 +79,61 @@ using OutputBinding = const void*;
 
 [[nodiscard]] inline constexpr bool is_runtime_convertible(SignalType from, SignalType to) {
     return from == to;
+}
+
+// Portable meaning of each SignalType. DOUBLE is IEEE 754 binary64 and
+// COMPLEX a pair of binary64 values. Integer types are stored in a RealValue
+// (double) that always holds an exact integer within the type's range: every
+// integer type here is at most 16 bits wide, so the double is exact. Elements
+// producing an integer type must write values that satisfy this; converting a
+// real value uses quantize_to_signal_type() (round half to even, saturate,
+// NaN to 0). wire_type_id is the data type code of the candidate wire format
+// (S7_Network_Wire_Protocol_v1.md section 8).
+struct SignalTypeInfo {
+    SignalType type;
+    bool is_integer;
+    bool is_signed;
+    unsigned bits;         // value width (64 for DOUBLE, 128 for COMPLEX)
+    double min_value;      // integer types only
+    double max_value;      // integer types only
+    std::uint16_t wire_type_id;
+};
+
+[[nodiscard]] inline constexpr SignalTypeInfo signal_type_info(SignalType type) {
+    switch (type) {
+        case SignalType::DOUBLE: return {type, false, true, 64, 0.0, 0.0, 0x000F};
+        case SignalType::COMPLEX: return {type, false, true, 128, 0.0, 0.0, 0x0103};
+        case SignalType::INT8: return {type, true, true, 8, -128.0, 127.0, 0x0001};
+        case SignalType::UINT8: return {type, true, false, 8, 0.0, 255.0, 0x0002};
+        case SignalType::INT12: return {type, true, true, 12, -2048.0, 2047.0, 0x0003};
+        case SignalType::UINT12: return {type, true, false, 12, 0.0, 4095.0, 0x0004};
+        case SignalType::INT16: return {type, true, true, 16, -32768.0, 32767.0, 0x0005};
+        case SignalType::UINT16: return {type, true, false, 16, 0.0, 65535.0, 0x0006};
+    }
+    return {type, false, false, 0, 0.0, 0.0, 0};
+}
+
+// Whether value is a valid stored value of an integer type (or any value for DOUBLE).
+[[nodiscard]] inline bool is_valid_signal_value(SignalType type, RealValue value) {
+    const auto info = signal_type_info(type);
+    if (!info.is_integer) {
+        return true;
+    }
+    return std::nearbyint(value) == value && value >= info.min_value && value <= info.max_value;
+}
+
+// Converts a real value to an integer signal type: round half to even, then
+// saturate to the type's range; NaN becomes 0. DOUBLE values pass unchanged.
+[[nodiscard]] inline RealValue quantize_to_signal_type(SignalType type, RealValue value) {
+    const auto info = signal_type_info(type);
+    if (!info.is_integer) {
+        return value;
+    }
+    if (std::isnan(value)) {
+        return 0.0;
+    }
+    const auto rounded = std::nearbyint(value); // default rounding mode: half to even
+    return std::clamp(rounded, info.min_value, info.max_value);
 }
 
 template <SignalType Type>

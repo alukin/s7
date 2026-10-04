@@ -16,6 +16,7 @@ void ObservationService::require_stepping_thread() const {
 ObservationSample ObservationService::read(const std::string& element_id, const std::size_t port) const {
     ObservationSample sample;
     sample.step = runtime_->step_count();
+    sample.model_time_ns = runtime_->model_time_ns();
     sample.element_id = element_id;
     sample.port = port;
     sample.type = runtime_->output_type_of(element_id, port);
@@ -38,6 +39,7 @@ ObservationSnapshot ObservationService::snapshot(const std::vector<ProbePoint>& 
     require_stepping_thread();
     ObservationSnapshot snapshot;
     snapshot.step = runtime_->step_count();
+    snapshot.model_time_ns = runtime_->model_time_ns();
     snapshot.samples.reserve(probes.size());
     for (const auto& probe : probes) {
         snapshot.samples.push_back(read(probe.element_id, probe.port));

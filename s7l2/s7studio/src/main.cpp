@@ -263,6 +263,7 @@ int runSmoke()
             assert(batch.samples.size() == 200'000);
             assert(batch.dropped == static_cast<std::uint64_t>(ticks) - 200'000);
             assert(batch.samples.back().step == ticks);
+            assert(std::abs(batch.samples.back().timeSeconds - static_cast<double>(ticks) * 0.001) < 1e-9);
             runner.reset();
         }
         return 0;

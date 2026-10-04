@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <memory>
+#include <set>
 #include <cstddef>
 #include <string>
 #include <thread>
@@ -54,7 +55,7 @@ private:
     };
 
     void parseScopeConfigs(const boost::json::value& schemaJson);
-    void emitScopeSamples(long step);
+    void emitScopeSamples();
     void requestStop();
     auto prepareRuntime(const boost::json::value& schemaJson) -> bool;
     void startRunLoop();
@@ -75,6 +76,7 @@ private:
     std::atomic<bool> paused_{false};
     std::atomic<bool> stopRequested_{false};
     ScopeSampleMailbox scopeMailbox_;
+    std::set<std::string> unreadableScopeChannels_; // worker thread only
 };
 
 } // namespace s7studio

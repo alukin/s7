@@ -10,7 +10,17 @@ Source: `s7core/include/s7/element.hpp`.
 - Ports are registered in the constructor with `register_input(index, name, type, nullptr)` and `register_output(index, name, type, &member)`. Port types are fixed per element type; conversion between signal types is done by explicit converter elements, never implicitly (a type mismatch is a validation error).
 - `Port::name` is a `std::string` owned by the port; `register_input/register_output` copy the name, so any string (including a local one) may be passed.
 - `step()` reads inputs with `read_input<T>(index)` and assigns outputs directly. `read_input` performs no checks; bindings are validated once when the compiler calls `bind_inputs()`.
-- Value storage: `SignalType::COMPLEX` uses `std::complex<double>`; every other `SignalType` (including the integer types) is currently stored as `double`.
+- Value storage: `SignalType::COMPLEX` uses `std::complex<double>`; every other `SignalType` is stored as `double`. For the integer types that `double` must always hold an exact integer within the type's range (all are at most 16 bits, so the value is exact). Convert real values with `quantize_to_signal_type()` (round half to even, saturate, NaN → 0) and check with `is_valid_signal_value()`; `signal_type_info()` gives the contract below.
+
+  | SignalType | Meaning | Range | Wire type id |
+  |---|---|---|---|
+  | `DOUBLE` | IEEE 754 binary64 | — | `0x000F` (F64) |
+  | `COMPLEX` | two binary64: real, imaginary | — | `0x0103` (C64) |
+  | `INT8` / `UINT8` | 8-bit two's complement / unsigned | −128..127 / 0..255 | `0x0001` / `0x0002` |
+  | `INT12` / `UINT12` | 12-bit two's complement / unsigned | −2048..2047 / 0..4095 | `0x0003` / `0x0004` |
+  | `INT16` / `UINT16` | 16-bit two's complement / unsigned | −32768..32767 / 0..65535 | `0x0005` / `0x0006` |
+
+  Wire ids are those of the candidate wire format (section 8), whose encodings are big-endian and, for 12-bit types, packed. `DoubleToInt12` / `Int12ToDouble` use Q11 fixed point (code = x × 2048).
 - The `Element` constructor takes `has_state` (informational: the element keeps internal state) and `Feedthrough` (default `Feedthrough::Direct`). Elements with direct feedthrough, stateful or not, run in topological order and their outputs are visible downstream in the same step: `Constant → FirFilter([1]) → Gain` yields the constant at step 1.
 - `Feedthrough::None` marks the element as causal memory (`Delay`, `PreviousValue`). Its `step()` writes the output for the *next* step from the current inputs. The runtime steps causal-memory elements after the others, keeps their published outputs unchanged until the step ends, and publishes the new outputs at the start of the next step. Cycles in a graph are valid only if they contain at least one causal-memory element; a stateful element with direct feedthrough (`Integrator`, filters, nested `Schema`) does not break a cycle.
 

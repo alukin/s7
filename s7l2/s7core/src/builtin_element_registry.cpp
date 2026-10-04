@@ -299,7 +299,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return std::make_unique<Int12ToDouble>();
         },
         [] {
-            auto m = make_simple_metadata("Int12ToDouble", "Int12 to Double", "Convert INT12 input to normalized DOUBLE", "conversion", 1, 1);
+            auto m = make_simple_metadata("Int12ToDouble", "Int12 to Double", "Convert INT12 code to DOUBLE (code / 2048)", "conversion", 1, 1);
             m.input_ports[0].name = "in";
             m.input_ports[0].description = "INT12 input sample.";
             m.input_ports[0].type = SignalType::INT12;
@@ -314,7 +314,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return std::make_unique<DoubleToInt12>();
         },
         [] {
-            auto m = make_simple_metadata("DoubleToInt12", "Double to Int12", "Quantize DOUBLE input to INT12 range", "conversion", 1, 1);
+            auto m = make_simple_metadata("DoubleToInt12", "Double to Int12", "Quantize DOUBLE to INT12 (x * 2048, round half to even, saturate)", "conversion", 1, 1);
             m.input_ports[0].name = "in";
             m.input_ports[0].description = "DOUBLE input sample.";
             m.input_ports[0].type = SignalType::DOUBLE;

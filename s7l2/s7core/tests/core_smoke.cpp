@@ -176,6 +176,36 @@ int main() try
         assert(doubleToInt12->input_ports()[0].type == s7::SignalType::DOUBLE);
         assert(doubleToInt12->output_ports()[0].type == s7::SignalType::INT12);
 
+        // INT12 conversion: Q11 scaling, round half to even, saturation.
+        const std::vector<std::pair<double, double>> int12Cases{
+            {0.0, 0.0}, {0.5, 1024.0}, {-1.0, -2048.0}, {1.0, 2047.0}, {100.0, 2047.0}, {-100.0, -2048.0},
+            {0.5 / 2048.0, 0.0}, {1.5 / 2048.0, 2.0}, {-2.5 / 2048.0, -2.0}, {std::nan(""), 0.0},
+        };
+        for (const auto& [input, expected] : int12Cases) {
+            const std::array<s7::InputBinding, 1> binding{s7::bind_input<s7::SignalType::DOUBLE>(input)};
+            doubleToInt12->bind_inputs({binding.data(), binding.size()});
+            doubleToInt12->step();
+            const auto code = s7::bound_value<s7::SignalType::DOUBLE>(doubleToInt12->outputs()[0]);
+            assert(code == expected);
+            assert(s7::is_valid_signal_value(s7::SignalType::INT12, code));
+
+            const std::array<s7::InputBinding, 1> back{s7::bind_input<s7::SignalType::INT12>(code)};
+            int12ToDouble->bind_inputs({back.data(), back.size()});
+            int12ToDouble->step();
+            assert(s7::bound_value<s7::SignalType::DOUBLE>(int12ToDouble->outputs()[0]) == code / 2048.0);
+        }
+
+        // Every integer type has a defined range, quantization and wire id.
+        assert(s7::signal_type_info(s7::SignalType::UINT8).max_value == 255.0);
+        assert(s7::signal_type_info(s7::SignalType::INT16).min_value == -32768.0);
+        assert(s7::signal_type_info(s7::SignalType::DOUBLE).wire_type_id == 0x000F);
+        assert(s7::quantize_to_signal_type(s7::SignalType::UINT8, -3.0) == 0.0);
+        assert(s7::quantize_to_signal_type(s7::SignalType::UINT16, 70000.0) == 65535.0);
+        assert(s7::quantize_to_signal_type(s7::SignalType::INT8, 2.5) == 2.0);
+        assert(s7::quantize_to_signal_type(s7::SignalType::DOUBLE, 2.5) == 2.5);
+        assert(!s7::is_valid_signal_value(s7::SignalType::UINT12, 4096.0));
+        assert(!s7::is_valid_signal_value(s7::SignalType::INT8, 1.5));
+
         // Standalone step() writes the next-step output; NodeRuntime defers its publication.
         auto previousValue = std::make_unique<s7::PreviousValue>(3.5);
         assert(previousValue->has_causal_memory());

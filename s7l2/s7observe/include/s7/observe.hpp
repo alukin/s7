@@ -2,6 +2,8 @@
 #define S7OBSERVE_INCLUDE_S7_OBSERVE_HPP
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -15,8 +17,20 @@ struct ProbePoint {
     std::size_t port{};
 };
 
+// The value of one output after step `step`.
+//
+// Time: `step` orders samples; `model_time_ns` is the model time of that step
+// when the runtime has a model-time base (NodeRuntime::set_model_time_step_ns),
+// otherwise unavailable. Local observation has no source or processing
+// timestamps: those belong to data-stream packets (wire protocol section 6)
+// and become observable only through network elements that expose them.
+//
+// Type: `type` is the port's SignalType. DOUBLE and the integer types are read
+// with as_real() (integer types hold exact integers, see signal_type_info()) or
+// as_integer(); COMPLEX with as_complex().
 struct ObservationSample {
     std::size_t step{};
+    std::optional<std::int64_t> model_time_ns;
     std::string element_id;
     std::size_t port{};
     SignalType type{SignalType::DOUBLE};
@@ -34,6 +48,13 @@ struct ObservationSample {
         return real_value;
     }
 
+    [[nodiscard]] std::int64_t as_integer() const {
+        if (!signal_type_info(type).is_integer) {
+            throw std::invalid_argument("ObservationSample does not contain an integer value.");
+        }
+        return static_cast<std::int64_t>(real_value);
+    }
+
     [[nodiscard]] ComplexValue as_complex() const {
         if (!is_complex()) {
             throw std::invalid_argument("ObservationSample does not contain a complex value.");
@@ -46,6 +67,7 @@ struct ObservationSample {
 // the step `step`.
 struct ObservationSnapshot {
     std::size_t step{};
+    std::optional<std::int64_t> model_time_ns;
     std::vector<ObservationSample> samples;
 };
 

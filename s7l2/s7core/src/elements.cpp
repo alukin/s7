@@ -153,9 +153,10 @@ Int12ToDouble::Int12ToDouble()
     register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
 }
 
+// INT12 <-> DOUBLE use Q11 fixed point: code / 2048, so [-2048, 2047] maps
+// to [-1.0, 1 - 2^-11].
 void Int12ToDouble::step() {
-    const auto raw_value = static_cast<int16_t>(read_input<RealValue>(0));
-    output_value_ = static_cast<RealValue>(raw_value) / 2048.0;  // Direct assignment!
+    output_value_ = read_input<RealValue>(0) / 2048.0;
 }
 
 DoubleToInt12::DoubleToInt12()
@@ -167,13 +168,7 @@ DoubleToInt12::DoubleToInt12()
 }
 
 void DoubleToInt12::step() {
-    const double scaled = read_input<RealValue>(0) * 2047.0;
-    auto quantized = static_cast<int16_t>(scaled);
-
-    if (quantized > 2047) quantized = 2047;
-    if (quantized < -2048) quantized = -2048;
-
-    output_value_ = static_cast<RealValue>(quantized);  // Direct assignment!
+    output_value_ = quantize_to_signal_type(SignalType::INT12, read_input<RealValue>(0) * 2048.0);
 }
 
 ComplexToMagnitudePhase::ComplexToMagnitudePhase()

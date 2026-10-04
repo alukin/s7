@@ -22,6 +22,20 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
     }
 }
 
+void NodeRuntime::set_model_time_step_ns(const std::optional<std::int64_t> step_ns) {
+    if (step_ns && *step_ns <= 0) {
+        throw std::invalid_argument("Model time step must be positive.");
+    }
+    model_time_step_ns_ = step_ns;
+}
+
+std::optional<std::int64_t> NodeRuntime::model_time_ns() const {
+    if (!model_time_step_ns_) {
+        return std::nullopt;
+    }
+    return static_cast<std::int64_t>(step_count_) * *model_time_step_ns_;
+}
+
 std::thread::id NodeRuntime::stepping_thread() const {
     return stepping_thread_.load();
 }

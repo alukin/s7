@@ -29,18 +29,44 @@ int main() try
     runtime.step();
     assert(runtime.real_output_of("sum") == 1.0);
     assert(observation.sample_output("sum").as_real() == 1.0);
+    assert(!observation.sample_output("sum").model_time_ns.has_value());
+
+    // With a model-time base, samples carry the model time of their step.
+    runtime.set_model_time_step_ns(1'000'000);
 
     runtime.step();
     assert(runtime.real_output_of("sum") == 2.0);
 
     const auto snapshot = observation.snapshot({s7::ProbePoint{"memory", 0}, s7::ProbePoint{"sum", 0}});
     assert(snapshot.step == 2);
+    assert(snapshot.model_time_ns == 2'000'000);
+    assert(snapshot.samples[0].model_time_ns == 2'000'000);
     const auto& samples = snapshot.samples;
     assert(samples.size() == 2);
     assert(samples[0].step == 2 && samples[1].step == 2);
     // Samples belong to one step: memory holds the value sum consumed in step 2.
     assert(samples[0].as_real() == 1.0);
     assert(samples[1].as_real() == 2.0);
+
+    // Integer-typed outputs are exposed as exact integers.
+    {
+        s7::Schema typed{"typed"};
+        typed.add_element("x", [] { return std::make_unique<s7::Constant>(0.75); });
+        typed.add_element("q", [] { return std::make_unique<s7::DoubleToInt12>(); });
+        typed.connect("x", 0, "q", 0);
+        s7::NodeRuntime typedRuntime{s7::Compiler::compile(typed)};
+        typedRuntime.step();
+        const auto sample = s7::ObservationService{typedRuntime}.sample_output("q");
+        assert(sample.type == s7::SignalType::INT12);
+        assert(sample.as_integer() == 1536);
+        bool rejected = false;
+        try {
+            static_cast<void>(s7::ObservationService{runtime}.sample_output("sum").as_integer());
+        } catch (const std::invalid_argument&) {
+            rejected = true;
+        }
+        assert(rejected);
+    }
 
     // Observation from another thread than the stepping thread is refused.
     bool refused = false;

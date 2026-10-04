@@ -4,6 +4,9 @@
 #include <s7/transport.hpp>
 
 #include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <optional>
 #include <exception>
 #include <thread>
 #include <utility>
@@ -88,6 +91,10 @@ auto LocalSchemaRunner::prepareRuntime(const boost::json::value& schemaJson) -> 
         runtime::validateSchema(*schema_);
         auto graph = s7::Compiler::compile(*schema_);
         runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
+        // Model time of the embedded run: one step per discretization interval.
+        const auto stepNs = static_cast<std::int64_t>(std::llround(dt_ * 1e9));
+        runtime_->set_model_time_step_ns(stepNs > 0 ? std::optional<std::int64_t>{stepNs} : std::nullopt);
+        unreadableScopeChannels_.clear();
     } catch (const std::exception& ex) {
         emit statusChanged("error");
         emit logMessage(QString("[runtime] build failed: %1").arg(QString::fromUtf8(joinValidationError(ex))));
@@ -126,7 +133,7 @@ void LocalSchemaRunner::executeRunLoop()
 
             runtime_->step();
             completedTicks_.store(step + 1);
-            emitScopeSamples(step + 1);
+            emitScopeSamples();
             if (const auto now = std::chrono::steady_clock::now(); now >= nextProgress) {
                 emit ticksProgress(step + 1, totalTicks_);
                 nextProgress = now + progressInterval;
@@ -195,7 +202,7 @@ void LocalSchemaRunner::parseScopeConfigs(const boost::json::value& schemaJson)
     }
 }
 
-void LocalSchemaRunner::emitScopeSamples(const long step)
+void LocalSchemaRunner::emitScopeSamples()
 {
     if (!runtime_ || scopeConfigs_.empty()) {
         return;
@@ -204,19 +211,28 @@ void LocalSchemaRunner::emitScopeSamples(const long step)
     // Runs on the worker thread that steps the runtime (observation contract);
     // samples reach the UI through the bounded mailbox.
     s7::ObservationService observation(*runtime_);
-    const double timeSeconds = static_cast<double>(step) * dt_;
     bool notify = false;
     for (const auto& scope : scopeConfigs_) {
         for (std::size_t channel = 0; channel < scope.channelCount; ++channel) {
             try {
                 const auto sample = observation.sample_output(scope.id, channel);
+                const double timeSeconds = sample.model_time_ns
+                    ? static_cast<double>(*sample.model_time_ns) * 1e-9
+                    : static_cast<double>(sample.step) * dt_;
                 notify |= scopeMailbox_.push(ScopeSample{scope.id,
                                                          static_cast<int>(channel),
                                                          static_cast<long>(sample.step),
                                                          timeSeconds,
                                                          sample.as_real()});
-            } catch (const std::exception&) {
-                // Ignore missing/unsupported scope channels so valid channels still render.
+            } catch (const std::exception& ex) {
+                // Other channels keep rendering; report each unreadable channel once per run.
+                const auto key = scope.id + "#" + std::to_string(channel);
+                if (unreadableScopeChannels_.insert(key).second) {
+                    emit logMessage(QString("[runtime] scope %1 channel %2 cannot be displayed: %3")
+                                        .arg(QString::fromStdString(scope.id))
+                                        .arg(channel)
+                                        .arg(QString::fromUtf8(ex.what())));
+                }
             }
         }
     }

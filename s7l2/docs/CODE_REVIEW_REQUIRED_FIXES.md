@@ -220,7 +220,7 @@ Bound the sample path between the runtime worker and UI. Use batched delivery, a
 
 Relevant code: [local_schema_runner.cpp](../s7studio/src/local_schema_runner.cpp:124), [local_schema_runner.cpp](../s7studio/src/local_schema_runner.cpp:191), [main_window.cpp](../s7studio/src/main_window.cpp:1196), [scope_view_window.cpp](../s7studio/src/scope_view_window.cpp:133).
 
-## P3: Give observations explicit time and type semantics
+## P3: Give observations explicit time and type semantics — fixed 2026-10-04
 
 ### Current problem
 
@@ -237,6 +237,8 @@ Define the types and time fields exposed by observation and how they relate to t
 - Each observation has unambiguous value type and timestamp semantics, or explicitly declares which are unavailable.
 - Scope displays or clearly reports unsupported signal types.
 - Observation probes stay within the local runtime; remotely sourced values are visible only through explicit network elements and their local outputs.
+
+**Resolution:** `ObservationSample` and `ObservationSnapshot` carry `step` and an optional `model_time_ns`, set when the runtime has a model-time base (`NodeRuntime::set_model_time_step_ns`; Studio sets it from the discretization step, `s7runtime` from a `simulation` block, deployed graphs have none). Source and processing timestamps are documented as unavailable to local observation: they belong to data-stream packets. Values are typed by the port's `SignalType`, with `as_real()`, `as_integer()` (integer types only) and `as_complex()`. Scope ports accept `DOUBLE` only; other types are a validation error, and a channel that cannot be read is logged once per run instead of being skipped silently. Scope's time axis now comes from the sample's model time. Observation remains local to one runtime node.
 
 Relevant code: [observe.hpp](../s7observe/include/s7/observe.hpp:18), [local_schema_runner.cpp](../s7studio/src/local_schema_runner.cpp:197), [local_runtime_v2.hpp](../s7studio/src/local_runtime_v2.hpp:28).
 
@@ -260,7 +262,7 @@ Generate tokens from an operating-system cryptographic random source or an estab
 
 Relevant code: [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:86), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:691).
 
-## P3: Align signal types with their portable representation
+## P3: Align signal types with their portable representation — fixed 2026-10-04
 
 ### Current problem
 
@@ -275,9 +277,11 @@ Specify whether integer signal values are stored and computed as their declared 
 - Every declared type has defined width, signedness, range, conversion, overflow, and serialization behavior.
 - A value round-trips between C++, Python, Rust, and JVM implementations without changing its meaning.
 
+**Resolution:** the canonical-representation option: integer types (all ≤ 16 bits) are stored as a `double` that must hold an exact in-range integer. `signal_type_info()` defines width, signedness, range and candidate wire type id per type; `quantize_to_signal_type()` defines conversion (round half to even, saturate, NaN → 0) and `is_valid_signal_value()` the invariant. `DoubleToInt12` cast to `int16_t` before clamping (undefined for large inputs) and scaled by 2047 while `Int12ToDouble` divided by 2048; both now use Q11 (× / ÷ 2048) with the defined quantization. The table is in `ELEMENT_DEV_GUIDE.md`; `core_smoke` covers ranges, rounding, saturation, NaN and the INT12 round trip. Cross-language round trips need the wire codec (step 3).
+
 Relevant code: [element.hpp](../s7core/include/s7/element.hpp:29), [element.hpp](../s7core/include/s7/element.hpp:82).
 
-## P3: Integrate or clearly isolate the spectral plugin build
+## P3: Integrate or clearly isolate the spectral plugin build — isolated 2026-10-04
 
 ### Current problem
 
@@ -299,6 +303,8 @@ Either integrate `s7spectral` as an optional top-level target with its FFTW depe
 
 - The supported build instructions reliably produce the advertised plugin, or clearly state that it is an independently built optional component.
 - Plugin discovery paths match the chosen install output.
+
+**Resolution:** isolated rather than integrated: the plugin cannot work until the runtime has block/frame signal types (a `SpectralFrame` port type), so fixing its compile errors would only ship elements without usable ports. The top-level README, AGENTS.md and the plugin README state that it is experimental and deliberately excluded from the build. Integration is future work together with block signal types.
 
 Relevant code: [CMakeLists.txt](../CMakeLists.txt:51), [s7spectral/CMakeLists.txt](../s7spectral/CMakeLists.txt:7), [plugin_spectral.cpp](../s7spectral/src/plugin_spectral.cpp:53), [fft_element.cpp](../s7spectral/src/fft_element.cpp:69).
 
@@ -504,6 +510,6 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients. *Proposals written (wire draft 12.1); awaiting approval before the codec is implemented.*
 4. ~~Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.~~ Done 2026-10-04, except routing by stream descriptor (needs step 3 approval). Follow-up: make the transport's socket threading safe (new P2 finding above).
 5. ~~Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.~~ Done 2026-10-04.
-6. Address signal representation, observation timestamps/types, and plugin build integration.
+6. ~~Address signal representation, observation timestamps/types, and plugin build integration.~~ Done 2026-10-04 (spectral plugin isolated, not integrated).
 
 This order addresses immediate correctness and trust boundaries first, then stabilizes contracts needed by heterogeneous nodes.
