@@ -13,11 +13,11 @@ The project is a work in progress. These items are prioritized by their effect o
 
 ## Progress
 
-- **Implemented, build-checked:** stateful element outputs are staged and published after the stateful pass, preserving the existing `step()` interface. The element contract now describes snapshot-then-commit output semantics. The `s7core` target compiles. Tests were not run.
+- **Implemented and tested (2026-10-04):** only causal-memory elements (`Feedthrough::None`: `Delay`, `PreviousValue`) are deferred; their outputs are staged and published at the start of the next step. Stateful elements with direct feedthrough run in topological order with stateless ones. See the resolved "Every stateful element delays its output by one step" item.
 - **Implemented, build-checked:** the transport prototype accepts model time zero, rejects trailing frame bytes and unsupported flags, validates timestamp presence, and converts decoder exceptions into reported endpoint errors rather than allowing them to escape reader threads. Its codec API is named `*_prototype` to distinguish it from the candidate wire format. The `s7transport`, `s7net`, `s7runtime`, and `s7studio` targets compile. Tests were not run.
 - **Wire format remains under review:** [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md) now describes candidate draft 0.3, explicitly not a conformance standard. Decisions recorded: every listed numeric type and all timestamp roles are mandatory capabilities; each stream declares the roles carried per packet; both ends persist sequence state; non-model clock domains are configured and must change when continuity across restart is not guaranteed. The exact crash delivery guarantee, descriptor serialization, fault messages, and conformance fixtures remain open. The candidate still does not match the prototype codec.
 - **Control draft updated:** canonical JSON digesting uses RFC 8785 JCS plus SHA-256; configuration bundles have bounded direct/chunked transfer; one CA-policy-authorized Studio is configured; partial commits are reconciled through status queries and idempotent retries. Exact message schemas, diagram/schema representation, retention, and request replay cache policy remain open.
-- **Pending:** the transport endpoint still has singleton active peer sockets; multiple-peer routing, per-peer queueing, and backpressure behavior are not implemented.
+- **Pending:** the transport endpoint still has singleton active peer sockets; multiple-peer routing, per-peer queueing, and backpressure behavior are not implemented. Interim policy (2026-10-04): publishing with no connected data peer, or after the peer's socket failed, drops the packet and reports `SendResult::delivered == false` (counted by `NetSink::dropped_count()`); it no longer stops the runtime.
 - The review also confirmed that observation is local to one runtime node. Remote-origin values can be observed after entering the local graph through explicit network source/sink elements; observation does not bypass network boundaries. Scope queue and recording bounds remain open work.
 
 ## P1: Fix data packet validation and receive failure handling — partially implemented
@@ -43,7 +43,7 @@ Network reader threads called the packet decoder without handling its exceptions
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:256), [transport.cpp](../s7transport/src/transport.cpp:556).
 
-## P1: Make stateful graph updates independent of declaration order — implementation in place; tests pending
+## P1: Make stateful graph updates independent of declaration order — implemented and tested
 
 ### Current problem
 
@@ -61,7 +61,7 @@ The chosen lifecycle (for example, read/compute followed by commit) must be docu
 - A delay chain advances by the documented number of steps.
 - Feedback loops with memory remain valid and deterministic.
 
-**Progress:** runtime outputs are snapshotted before the stateful pass, each stateful element computes against pre-pass outputs, and staged outputs are published after the pass. This implements the selected snapshot-then-commit behavior for exposed outputs. Build compilation passed; declaration-order, delay-chain, and feedback behavior still needs test coverage. Element-private state advances during its own `step()` call; it must not serve as same-pass cross-element communication.
+**Progress:** causal-memory elements step after all other elements; each one's published output stays at its pre-step value until the step ends, and the staged outputs are published at the start of the next step. Elements with direct feedthrough are ordered topologically, so declaration order does not matter for them either. `core_smoke` covers a delay chain declared in both orders, `Delay`/`PreviousValue` timing, and the feedback loop. Element-private state advances during its own `step()` call; it must not serve as same-pass cross-element communication.
 
 Relevant code: [runtime.cpp](../s7core/src/runtime.cpp:9), [compiler.cpp](../s7core/src/compiler.cpp:160), [elements.hpp](../s7core/include/s7/elements.hpp:161).
 
@@ -292,7 +292,7 @@ Relevant code: [CMakeLists.txt](../CMakeLists.txt:51), [s7spectral/CMakeLists.tx
 
 Items below come from a full read of the code and documentation. "Verified" means the defect was reproduced; the others were found by code reading.
 
-## P1: Port names dangle for Adder, Multiply, and Studio Scope — verified
+## P1: Port names dangle for Adder, Multiply, and Studio Scope — fixed 2026-10-04
 
 ### Current problem
 
@@ -307,9 +307,11 @@ Port names must refer to storage that lives as long as the element: either `Port
 - Adder/Multiply with 2 and N inputs and a multi-channel Scope report correct port names.
 - Smoke tests read port names and pass under AddressSanitizer.
 
+**Resolution:** `Port::name` is now a `std::string` owned by the port; `register_input/register_output` copy the name. The unused `local_runtime.hpp` was removed. `core_smoke` checks 3-input Adder and 4-input Multiply names, the Studio smoke checks a 3-channel Scope, and the full test suite passes under AddressSanitizer/UBSan.
+
 Relevant code: [elements.hpp](../s7core/include/s7/elements.hpp:92), [elements.hpp](../s7core/include/s7/elements.hpp:129), [local_runtime_v2.hpp](../s7studio/src/local_runtime_v2.hpp:35), [element.hpp](../s7core/include/s7/element.hpp:45).
 
-## P1: Every stateful element delays its output by one step — verified
+## P1: Every stateful element delays its output by one step — fixed 2026-10-04
 
 ### Current problem
 
@@ -326,9 +328,11 @@ Separate "keeps state" from "breaks instantaneous dependency". Only elements wit
 - A loop closed only through `FirFilter` / `Integrator` without a delay element is rejected, or explicitly allowed only for elements that declare no direct feedthrough.
 - A graph and the same graph wrapped in a nested schema produce identical traces.
 
+**Resolution:** `Element` takes a `Feedthrough` flag (default `Direct`); `has_causal_memory()` means `Feedthrough::None`, which only `Delay` and `PreviousValue` declare. `has_state` is informational. A nested `Schema` has direct feedthrough. `PreviousValue` previously delayed by two steps in a graph; it now matches `Delay`. The runtime publishes causal-memory outputs at the start of the next step, so all values read after a step belong to that step. A loop through `Integrator` or `FirFilter` without a `Delay` is rejected; `schema_oscillator_gnuplot.json` now closes its integrator loop through a `Delay` (semi-implicit Euler, bounded amplitude). All four acceptance criteria are covered in `core_smoke`; the formal model, terminology, architecture overview and element guide describe the rule.
+
 Relevant code: [element.hpp](../s7core/include/s7/element.hpp:119), [compiler.cpp](../s7core/src/compiler.cpp:88), [runtime.cpp](../s7core/src/runtime.cpp), [schema.cpp](../s7core/src/schema.cpp:59).
 
-## P1: Node identity uses the certificate CN and a shared state directory — verified
+## P1: Node identity uses the certificate CN and a shared state directory — fixed 2026-10-04
 
 ### Current problem
 
@@ -344,9 +348,11 @@ Extract `node_uuid` from the SAN URI and fail startup if the certificate has no 
 - Two runtimes started per `LOCAL_HEADLESS_NODES_DEMO.md` report different `node_uuid`s and appear as two nodes in Studio.
 - `ctest` does not create or modify files under `$HOME`.
 
+**Resolution:** `node_uuid` comes from the certificate's single `spiffe://s7/node/<uuid>` SAN URI; startup fails if it is missing, invalid, ambiguous, or disagrees with `node_uuid.txt` in the state directory. The common name is no longer used as a node UUID anywhere (including peer records). `RuntimeService` takes the state directory explicitly; `s7runtime --state-dir <dir>` sets it (default `~/.s7runtime/default-node` for single-node development; `S7_NODE_STATE_DIR` was removed). The runtime holds an exclusive `flock` on `<dir>/runtime.lock`, so a second runtime using the same directory fails at startup. `control_plane_smoke` uses temporary directories and checks the certificate UUID, the conflict and lock errors, and distinct persistent UUIDs for two directories; `ctest` with an empty `HOME` leaves it empty.
+
 Relevant code: [runtime_service.cpp](../s7runtime/src/runtime_service.cpp:441), [runtime_service.cpp](../s7runtime/src/runtime_service.cpp:584), [control_plane_smoke.cpp](../s7runtime/tests/control_plane_smoke.cpp:248).
 
-## P2: Headless runtime never executes its graph while serving
+## P2: Headless runtime never executes its graph while serving — fixed 2026-10-04 (configuration-driven)
 
 ### Current problem
 
@@ -360,6 +366,8 @@ Define the runtime execution loop for served nodes: continuous stepping (free-ru
 
 - A served node with `Constant → NetSink` publishes packets that a peer receives.
 - Stopping the process stops stepping cleanly; step rate is configurable and observable.
+
+**Resolution:** while serving, `s7runtime` steps the graph on the main thread at `execution.step_rate_hz` from the schema or `--step-rate <hz>` (0 or unset: control plane only). `run_step_loop()` paces steps against a steady clock, drops backlog instead of bursting, and returns on SIGINT/SIGTERM or the `--serve-seconds` deadline; the runtime prints the configured rate, step count and achieved rate. Free-running (unpaced) stepping is not offered. Starting/stopping from a control-plane commit remains part of "Make deployment readiness and commit reflect actual runtime state". Verified: `control_plane_smoke` steps `Constant → NetSink` at 200 Hz and receives every packet; manually, node A at 50 Hz published to node B (`NetSource` → file) over WebSocket and kept running while B disconnected and reconnected.
 
 Relevant code: [main.cpp](../s7runtime/src/main.cpp:157).
 
@@ -457,7 +465,7 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 
 ## Suggested order
 
-0. Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.
+0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.
 1. Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.
 2. Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.
 3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients.

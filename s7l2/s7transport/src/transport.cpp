@@ -919,24 +919,29 @@ auto BeastRuntimeNetEndpoint::publish(const EndpointHandle& handle, const DataPa
         tls_data_socket = impl_->tls_data_socket;
     }
     if (!plain_data_socket && !tls_data_socket) {
-        return SendResult{false, "data channel is not connected", 0};
-    }
-
-    if (tls_data_socket) {
-        boost::system::error_code ec;
-        tls_data_socket->binary(true);
-        tls_data_socket->write(boost::asio::buffer(frame), ec);
-        if (ec) {
-            return SendResult{false, ec.message(), 0};
-        }
-        return SendResult{true, {}, 0};
+        // No peer is connected: a published stream without a receiver drops the packet.
+        return SendResult{true, {}, 0, false};
     }
 
     boost::system::error_code ec;
-    plain_data_socket->binary(true);
-    plain_data_socket->write(boost::asio::buffer(frame), ec);
+    if (tls_data_socket) {
+        tls_data_socket->binary(true);
+        tls_data_socket->write(boost::asio::buffer(frame), ec);
+    } else {
+        plain_data_socket->binary(true);
+        plain_data_socket->write(boost::asio::buffer(frame), ec);
+    }
     if (ec) {
-        return SendResult{false, ec.message(), 0};
+        // The peer is gone: forget its socket (unless a new peer already replaced
+        // it) and drop the packet, as when no peer is connected.
+        std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
+        if (tls_data_socket && impl_->tls_data_socket == tls_data_socket) {
+            impl_->tls_data_socket.reset();
+        }
+        if (plain_data_socket && impl_->plain_data_socket == plain_data_socket) {
+            impl_->plain_data_socket.reset();
+        }
+        return SendResult{true, {}, 0, false};
     }
 
     return SendResult{true, {}, 0};

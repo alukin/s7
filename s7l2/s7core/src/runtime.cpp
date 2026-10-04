@@ -6,70 +6,78 @@ namespace s7 {
 
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
-    stateful_output_ranges_.reserve(graph_.memory_order.size());
+    memory_output_ranges_.reserve(graph_.memory_order.size());
     for (const auto& id : graph_.memory_order) {
         const auto& element = graph_.elements.at(id);
         const auto ports = element->output_ports();
-        const auto begin = stateful_outputs_.size();
-        stateful_outputs_.reserve(begin + ports.size());
+        const auto begin = memory_outputs_.size();
+        memory_outputs_.reserve(begin + ports.size());
         for (const auto& port : ports) {
-            stateful_outputs_.push_back(StatefulOutput{
+            memory_outputs_.push_back(MemoryOutput{
                 .value_ptr = port.value_ptr,
                 .type = port.type,
             });
         }
-        stateful_output_ranges_.push_back(StatefulOutputRange{begin, stateful_outputs_.size()});
+        memory_output_ranges_.push_back(MemoryOutputRange{begin, memory_outputs_.size()});
     }
 }
 
 void NodeRuntime::step() {
+    if (memory_outputs_staged_) {
+        for (auto& output : memory_outputs_) {
+            if (is_complex_signal_type(output.type)) {
+                *static_cast<ComplexValue*>(output.value_ptr) = output.staged_complex;
+            } else {
+                *static_cast<RealValue*>(output.value_ptr) = output.staged_real;
+            }
+        }
+        memory_outputs_staged_ = false;
+    }
+
     for (const auto& id : graph_.causal_order) {
         graph_.elements.at(id)->step();
     }
 
-    for (std::size_t index = 0; index < stateful_outputs_.size(); ++index) {
-        auto& output = stateful_outputs_[index];
-        if (is_complex_signal_type(output.type)) {
-            output.snapshot_complex = *static_cast<const ComplexValue*>(output.value_ptr);
-        } else {
-            output.snapshot_real = *static_cast<const RealValue*>(output.value_ptr);
+    // Each causal-memory element computes its next output from this step's
+    // inputs; its published output is restored right away so that other
+    // causal-memory elements still read this step's values.
+    for (std::size_t element_index = 0; element_index < graph_.memory_order.size(); ++element_index) {
+        const auto range = memory_output_ranges_[element_index];
+        for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
+            auto& output = memory_outputs_[output_index];
+            if (is_complex_signal_type(output.type)) {
+                output.snapshot_complex = *static_cast<const ComplexValue*>(output.value_ptr);
+            } else {
+                output.snapshot_real = *static_cast<const RealValue*>(output.value_ptr);
+            }
         }
-    }
 
-    try {
-        for (std::size_t element_index = 0; element_index < graph_.memory_order.size(); ++element_index) {
+        try {
             graph_.elements.at(graph_.memory_order[element_index])->step();
-
-            const auto range = stateful_output_ranges_[element_index];
+        } catch (...) {
             for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
-                auto& output = stateful_outputs_[output_index];
+                auto& output = memory_outputs_[output_index];
                 if (is_complex_signal_type(output.type)) {
-                    output.staged_complex = *static_cast<const ComplexValue*>(output.value_ptr);
                     *static_cast<ComplexValue*>(output.value_ptr) = output.snapshot_complex;
                 } else {
-                    output.staged_real = *static_cast<const RealValue*>(output.value_ptr);
                     *static_cast<RealValue*>(output.value_ptr) = output.snapshot_real;
                 }
             }
+            throw;
         }
-    } catch (...) {
-        for (auto& output : stateful_outputs_) {
+
+        for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
+            auto& output = memory_outputs_[output_index];
             if (is_complex_signal_type(output.type)) {
+                output.staged_complex = *static_cast<const ComplexValue*>(output.value_ptr);
                 *static_cast<ComplexValue*>(output.value_ptr) = output.snapshot_complex;
             } else {
+                output.staged_real = *static_cast<const RealValue*>(output.value_ptr);
                 *static_cast<RealValue*>(output.value_ptr) = output.snapshot_real;
             }
         }
-        throw;
     }
-
-    for (auto& output : stateful_outputs_) {
-        if (is_complex_signal_type(output.type)) {
-            *static_cast<ComplexValue*>(output.value_ptr) = output.staged_complex;
-        } else {
-            *static_cast<RealValue*>(output.value_ptr) = output.staged_real;
-        }
-    }
+    memory_outputs_staged_ = !memory_outputs_.empty();
 
     ++step_count_;
 }

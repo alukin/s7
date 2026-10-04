@@ -33,6 +33,8 @@
       "enabled": false,
       "url": "ws://127.0.0.1:9003/runtime"
     }
+  },
+  "execution": {
+    "step_rate_hz": 10
   }
 }
-

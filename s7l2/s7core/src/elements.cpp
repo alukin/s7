@@ -11,7 +11,7 @@ namespace s7 {
 // ============================================================================
 
 FirFilter::FirFilter(std::vector<RealValue> taps)
-    : Element("FirFilter", true),  // has_state = true
+    : Element("FirFilter", true),
       taps_(std::move(taps)),
       history_(taps_.size(), 0.0),
       output_value_(0.0)
@@ -39,7 +39,7 @@ void FirFilter::step() {
 }
 
 IirFilter::IirFilter(RealValue b0, RealValue b1, RealValue a1)
-    : Element("IirFilter", true),  // has_state = true
+    : Element("IirFilter", true),
       b0_(b0), b1_(b1), a1_(a1),
       x1_(0.0), y1_(0.0),
       output_value_(0.0)
@@ -58,8 +58,7 @@ void IirFilter::step() {
 }
 
 PreviousValue::PreviousValue(RealValue initial_value)
-    : Element("PreviousValue", true),  // has_state = true
-      previous_(initial_value),
+    : Element("PreviousValue", true, Feedthrough::None),
       output_value_(initial_value)
 {
     register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
@@ -67,8 +66,8 @@ PreviousValue::PreviousValue(RealValue initial_value)
 }
 
 void PreviousValue::step() {
-    output_value_ = previous_;  // Output old value first
-    previous_ = read_input<RealValue>(0);  // Then update
+    // Writes the next step's output; NodeRuntime publishes it after the step.
+    output_value_ = read_input<RealValue>(0);
 }
 
 Integrator::Integrator(RealValue initial_value)

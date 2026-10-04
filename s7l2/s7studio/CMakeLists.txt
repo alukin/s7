@@ -31,7 +31,6 @@ add_executable(s7studio
     src/is_schema_runner.hpp
     src/model_run_controller.hpp
     src/json_utils.hpp
-    src/local_runtime.hpp
     src/local_runtime_v2.hpp
     src/local_schema_runner.cpp
     src/local_schema_runner.hpp

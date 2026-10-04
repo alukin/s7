@@ -45,6 +45,13 @@
       }
     },
     {
+      "id": "y_prev",
+      "type": "Delay",
+      "params": {
+        "initial_value": 0.0
+      }
+    },
+    {
       "id": "x_step",
       "type": "Multiply"
     },
@@ -116,7 +123,7 @@
       "to_port": 0
     },
     {
-      "from_element": "y",
+      "from_element": "y_prev",
       "from_port": 0,
       "to_element": "x_step",
       "to_port": 1
@@ -146,6 +153,12 @@
       "to_port": 0
     },
     {
+      "from_element": "y",
+      "from_port": 0,
+      "to_element": "y_prev",
+      "to_port": 0
+    },
+    {
       "from_element": "x",
       "from_port": 0,
       "to_element": "digital_plot",
@@ -168,6 +181,6 @@
     "periods": 20,
     "sample_rate_hz": 1000,
     "frequency_hz": 1.0,
-    "notes": "Quadrature digital oscillator and analog sine reference written to separate gnuplot files."
+    "notes": "Quadrature digital oscillator (semi-implicit Euler; the y_prev delay closes the integrator loop) and analog sine reference written to separate gnuplot files."
   }
 }

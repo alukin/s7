@@ -33,7 +33,8 @@ int main() try
 
     const auto samples = observation.sample_outputs({s7::ProbePoint{"memory", 0}, s7::ProbePoint{"sum", 0}});
     assert(samples.size() == 2);
-    assert(samples[0].as_real() == 2.0);
+    // Samples belong to one step: memory holds the value sum consumed in step 2.
+    assert(samples[0].as_real() == 1.0);
     assert(samples[1].as_real() == 2.0);
 
     return 0;

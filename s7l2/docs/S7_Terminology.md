@@ -241,13 +241,14 @@ A valid feedback loop must contain causal memory.
 
 ## Causal Memory
 
-A mechanism that breaks instantaneous circular dependency.
+A mechanism that breaks instantaneous circular dependency: an Element without direct feedthrough, whose outputs do not depend on its inputs in the same step.
 
 Examples:
 
 - Delay
-- Integrator
-- State-holding Elements
+- PreviousValue
+
+State-holding Elements with direct feedthrough (Integrator, FIR/IIR filters, nested Schemas) are not causal memory.
 
 Causal memory allows valid cycles.
 

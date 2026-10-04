@@ -14,7 +14,6 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | `s7studio/src/main_window.cpp` | Wiring: add element, parameter dialog, run, save/load, schema libraries |
 | `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp` | Embedded runtime: builds the schema through the registry, runs it on a worker thread, emits Scope samples |
 
-`local_runtime.hpp` is an older hard-coded builder kept in the source list but not used.
 
 ## Model and conventions
 

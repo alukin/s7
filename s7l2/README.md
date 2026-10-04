@@ -27,7 +27,7 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 
 - Element model with typed ports, templated real/complex elements, converters, filters, oscillator, file I/O, network elements.
 - Validation before execution: port indices and types, single driver per input, every input connected, cycles must contain causal memory.
-- Compilation to an executable graph with instance UUIDs; stateless elements run in causal order, stateful elements use snapshot-then-commit.
+- Compilation to an executable graph with instance UUIDs; elements with direct feedthrough (stateful or not) run in causal order; causal-memory elements (`Delay`, `PreviousValue`) publish their outputs one step later.
 - Nested schemas as elements with exposed inputs/outputs; schema-backed element libraries (`.json`, `.s7library`, `.gz`).
 - Element registry with metadata; C ABI plugins loaded at startup.
 - Runtime JSON schema loading, optional WebSocket server/client with mTLS, persistent node identity, control-plane MVP (`HELLO`, `GET_NODE_INFO`, `GET_PEERS`, `PEER_ANNOUNCE`, deployment prepare/commit/abort/list).
@@ -61,6 +61,6 @@ ctest --test-dir build --output-on-failure
 ./build/s7studio/s7studio
 ```
 
-Runtime schema examples are in `s7runtime/examples/`. A schema runs its graph only when it contains a `simulation` block (step count = `periods * sample_rate_hz / frequency_hz`). For two local nodes discovered by Studio see `docs/LOCAL_HEADLESS_NODES_DEMO.md`.
+Runtime schema examples are in `s7runtime/examples/`. A `simulation` block runs a fixed number of steps at startup (`periods * sample_rate_hz / frequency_hz`). While serving (`--serve-forever` / `--serve-seconds`), the runtime steps the graph continuously at `execution.step_rate_hz` (or `--step-rate <hz>`); with no rate set it serves the control plane only. SIGINT/SIGTERM stop stepping cleanly and print the step count and achieved rate. For two local nodes discovered by Studio see `docs/LOCAL_HEADLESS_NODES_DEMO.md`.
 
-Runtime state (node identity, peer cache) is stored in `$S7_NODE_STATE_DIR` or `~/.s7runtime/default-node`.
+Runtime state (node identity, peer cache) is stored in the directory given by `--state-dir` (default `~/.s7runtime/default-node`, for single-node development); each node needs its own, and the runtime locks it while running. With a TLS certificate, the node UUID comes from its SAN URI `spiffe://s7/node/<node_uuid>`.

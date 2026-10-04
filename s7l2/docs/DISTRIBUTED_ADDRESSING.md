@@ -26,12 +26,11 @@ A fully qualified element address is `node_uuid / element instance UUID`; the hu
 
 ## Node state directory
 
-Each node keeps persistent state (identity, peer cache, deployment records) in its own directory:
+Each node keeps persistent state (`node_uuid.txt`, `peers.json`, later deployment records) in its own directory, given with `s7runtime --state-dir <dir>`. Without the option the runtime uses `~/.s7runtime/default-node`, which is meant for single-node development only.
 
-- `$S7_NODE_STATE_DIR` if set;
-- otherwise `~/.s7runtime/default-node`.
+The runtime holds an exclusive lock (`runtime.lock`) on the directory while it runs, so two nodes cannot share one identity: a second runtime pointed at the same directory fails at startup.
 
-Multiple nodes on one host must use different `S7_NODE_STATE_DIR` values. The target layout per node (`REMOTE_NODE_INFO_AND_DEPLOYMENT.md`) is `config/`, `certs/`, `deployments/`, `state/`, `logs/`.
+With a TLS certificate, `node_uuid` is taken from the SAN URI `spiffe://s7/node/<node_uuid>`; startup fails if the certificate has no such URI, names more than one node, or disagrees with the `node_uuid.txt` already stored in the state directory. Without a certificate, a UUID is generated on first start and persisted. The target layout per node (`REMOTE_NODE_INFO_AND_DEPLOYMENT.md`) is `config/`, `certs/`, `deployments/`, `state/`, `logs/`.
 
 ## Cross-node streams
 

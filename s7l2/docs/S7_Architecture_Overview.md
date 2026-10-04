@@ -302,11 +302,15 @@ Adder → Delay → Adder
 
 Valid:
 
-Integrator → Gain → Integrator
+Integrator → Gain → Delay → Integrator
 
 Invalid:
 
 Adder → Gain → Adder
+
+Invalid (an Integrator keeps state but has direct feedthrough, so it is not causal memory):
+
+Integrator → Gain → Integrator
 
 The precise definition of causal memory is part of the formal model.
 

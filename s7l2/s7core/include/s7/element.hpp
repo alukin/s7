@@ -38,11 +38,11 @@ enum class SignalType : std::uint8_t {
     UINT16,
 };
 
-// Port is a lightweight reference to storage owned by the Element
+// Port names the port and references value storage owned by the Element
 // (Inspired by s7pp's TypedOutput<T> holding T& val_)
 struct Port {
     std::size_t index;
-    std::string_view name;
+    std::string name;
     SignalType type;
     void* value_ptr;  // Points to element's member variable
 
@@ -107,6 +107,15 @@ template <SignalType Type>
     return *static_cast<const signal_storage_t<Type>*>(binding);
 }
 
+/// Whether an element's outputs in a step depend on its inputs in the same step.
+/// Direct: outputs are computed from current inputs (Gain, FirFilter, Integrator).
+/// None: outputs depend only on earlier steps (Delay, PreviousValue). Only these
+/// elements may close a feedback loop.
+enum class Feedthrough : std::uint8_t {
+    Direct,
+    None,
+};
+
 /// Signal processing element base class.
 /// Elements own their storage as member variables (like s7pp).
 /// Ports are lightweight references to that storage.
@@ -116,7 +125,8 @@ public:
 
     [[nodiscard]] std::string_view type_name() const { return type_name_; }
     [[nodiscard]] bool has_state() const { return has_state_; }
-    [[nodiscard]] bool has_causal_memory() const { return has_state_; }
+    [[nodiscard]] Feedthrough feedthrough() const { return feedthrough_; }
+    [[nodiscard]] bool has_causal_memory() const { return feedthrough_ == Feedthrough::None; }
 
     [[nodiscard]] std::size_t input_count() const { return input_ports_.size(); }
     [[nodiscard]] std::size_t output_count() const { return output_ports_.size(); }
@@ -147,16 +157,22 @@ public:
         return result;
     }
 
-    // Process one sample: read from inputs, write to outputs. For stateful
-    // elements, NodeRuntime keeps all stateful outputs at their pre-step values
-    // while each element runs, then publishes the staged outputs together. An
-    // element's private state may advance during step(), but must not be shared
-    // with another element as an implicit communication channel.
+    // Process one sample: read from inputs, write to outputs. Elements with
+    // direct feedthrough (stateful or not) run in topological order, so their
+    // outputs are visible downstream in the same step. Causal-memory elements
+    // (Feedthrough::None) run afterwards: step() writes the output for the
+    // next step from the current inputs, and NodeRuntime keeps all causal-memory
+    // outputs at their pre-step values until every one has run, then publishes
+    // them together. An element's private state may advance during step(), but
+    // must not be shared with another element as an implicit communication
+    // channel.
     virtual void step() = 0;
 
 protected:
-    Element(std::string_view type_name, bool has_state = false)
-        : type_name_(type_name), has_state_(has_state)
+    Element(std::string_view type_name,
+            bool has_state = false,
+            Feedthrough feedthrough = Feedthrough::Direct)
+        : type_name_(type_name), has_state_(has_state), feedthrough_(feedthrough)
     {}
 
     // Read input value - FAST! No checks (validated at compile time)
@@ -167,16 +183,17 @@ protected:
 
     // Register ports - called by subclass constructor after members are initialized
     void register_input(std::size_t idx, std::string_view name, SignalType type, void* ptr) {
-        input_ports_.push_back({idx, name, type, ptr});
+        input_ports_.push_back({idx, std::string(name), type, ptr});
     }
 
     void register_output(std::size_t idx, std::string_view name, SignalType type, void* ptr) {
-        output_ports_.push_back({idx, name, type, ptr});
+        output_ports_.push_back({idx, std::string(name), type, ptr});
     }
 
 private:
     std::string_view type_name_;
     bool has_state_;
+    Feedthrough feedthrough_;
     std::vector<Port> input_ports_;
     std::vector<Port> output_ports_;
     std::vector<InputBinding> input_bindings_;

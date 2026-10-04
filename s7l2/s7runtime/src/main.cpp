@@ -1,9 +1,12 @@
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <csignal>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -35,6 +38,8 @@ int main(int argc, char** argv) {
         std::vector<std::string> library_paths;
         std::vector<std::filesystem::path> plugin_dirs;
         std::vector<std::string> seed_peers;
+        std::filesystem::path state_dir;
+        std::optional<double> step_rate_hz;
 
         for (int index = 1; index < argc; ++index) {
             const std::string arg = argv[index];
@@ -89,15 +94,41 @@ int main(int argc, char** argv) {
                 continue;
             }
 
+            if (arg == "--state-dir") {
+                if (index + 1 >= argc) {
+                    throw std::invalid_argument("Missing value after --state-dir.");
+                }
+                state_dir = argv[++index];
+                continue;
+            }
+
+            if (arg == "--step-rate") {
+                if (index + 1 >= argc) {
+                    throw std::invalid_argument("Missing value after --step-rate.");
+                }
+                step_rate_hz = std::stod(argv[++index]);
+                if (!std::isfinite(*step_rate_hz) || *step_rate_hz < 0.0) {
+                    throw std::invalid_argument("--step-rate must be a non-negative number.");
+                }
+                continue;
+            }
+
             if (arg == "--help") {
-                std::cout << "Usage: s7runtime [--schema <file>] [--library <file>]... [--plugin-dir <dir>]... [--seed-peer <url>]... [--start-net] [--serve-seconds <n>] [--serve-forever]\n";
+                std::cout << "Usage: s7runtime [--schema <file>] [--state-dir <dir>] [--library <file>]... [--plugin-dir <dir>]... [--seed-peer <url>]... [--start-net] [--serve-seconds <n>] [--serve-forever] [--step-rate <hz>]\n"
+                          << "  --state-dir <dir>  node identity and peer cache; each node needs its own\n"
+                          << "                     (default: ~/.s7runtime/default-node, for single-node development)\n"
+                          << "  --step-rate <hz>   step the graph at this rate while serving; overrides\n"
+                          << "                     execution.step_rate_hz in the schema (0: do not step)\n";
                 return 0;
             }
 
             throw std::invalid_argument("Unknown argument: '" + arg + "'.");
         }
 
-        const auto definition = s7::JsonSchemaLoader::load_from_file(schema_path);
+        auto definition = s7::JsonSchemaLoader::load_from_file(schema_path);
+        if (step_rate_hz) {
+            definition.execution.step_rate_hz = *step_rate_hz;
+        }
 
         auto& registry = s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry);
@@ -110,7 +141,15 @@ int main(int argc, char** argv) {
             s7::SchemaLibraryLoader::register_library_file(library_path, registry);
         }
 
-        s7::RuntimeService service{definition};
+        if (state_dir.empty()) {
+            const char* home = std::getenv("HOME");
+            if (!home || !*home) {
+                throw std::invalid_argument("HOME is not set; pass --state-dir.");
+            }
+            state_dir = std::filesystem::path(home) / ".s7runtime" / "default-node";
+        }
+
+        s7::RuntimeService service{definition, state_dir};
         for (const auto& seed : seed_peers) {
             service.add_seed_peer(seed);
         }
@@ -167,16 +206,34 @@ int main(int argc, char** argv) {
 
         if (serve_forever || serve_seconds > 0) {
             std::cout << "runtime.serve=" << (serve_forever ? "forever" : std::to_string(serve_seconds) + "s") << '\n';
-            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(serve_seconds);
-            while (!stop_requested.load()) {
-                if (!serve_forever && std::chrono::steady_clock::now() >= deadline) {
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::optional<std::chrono::steady_clock::time_point> deadline;
+            if (!serve_forever) {
+                deadline = std::chrono::steady_clock::now() + std::chrono::seconds(serve_seconds);
             }
-            std::cout << "runtime.serve.stopped=" << (stop_requested.load() ? "signal" : "timeout") << '\n';
-        }
 
+            bool stopped_by_signal = false;
+            if (definition.execution.step_rate_hz > 0.0) {
+                std::cout << "runtime.execution=stepping step_rate_hz=" << definition.execution.step_rate_hz << '\n';
+                std::cout.flush();
+                const auto stats = s7::run_step_loop(runtime, definition.execution.step_rate_hz, stop_requested, deadline);
+                stopped_by_signal = stats.stop_reason == s7::StepLoopStats::StopReason::StopRequested;
+                std::cout << "runtime.execution.steps=" << stats.steps << '\n';
+                std::cout << "runtime.execution.achieved_rate_hz="
+                          << (stats.elapsed_seconds > 0.0 ? static_cast<double>(stats.steps) / stats.elapsed_seconds : 0.0)
+                          << '\n';
+            } else {
+                std::cout << "runtime.execution=idle (set execution.step_rate_hz or --step-rate to step the graph)\n";
+                std::cout.flush();
+                while (!stop_requested.load()) {
+                    if (deadline && std::chrono::steady_clock::now() >= *deadline) {
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+                stopped_by_signal = stop_requested.load();
+            }
+            std::cout << "runtime.serve.stopped=" << (stopped_by_signal ? "signal" : "timeout") << '\n';
+        }
 
         return 0;
     } catch (const std::exception& ex) {

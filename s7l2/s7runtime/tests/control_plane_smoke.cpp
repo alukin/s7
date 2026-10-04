@@ -1,19 +1,39 @@
+#include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <random>
+#include <stdexcept>
+#include <string>
 #include <thread>
 
 #include <boost/json.hpp>
 
 #include <s7/control_plane_mvp.hpp>
+#include <s7/net.hpp>
 #include <s7/runtime_service.hpp>
 #include <s7/transport.hpp>
 
 #ifndef S7_TEST_CERT_DIR
 #define S7_TEST_CERT_DIR "s7runtime/examples/certs"
 #endif
+
+namespace {
+
+// Tests never touch the developer's real node state under $HOME.
+std::filesystem::path make_temp_state_dir(const std::string& label)
+{
+    std::random_device random;
+    auto dir = std::filesystem::temp_directory_path() /
+               ("s7runtime-test-" + label + "-" + std::to_string(random()));
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+} // namespace
 
 int main()
 {
@@ -245,8 +265,107 @@ int main()
         definition.server.tls.key_file = (cert_dir / "s7_runtime_node.key.pem").string();
         definition.server.tls.ca_file = (cert_dir / "s7_root_ca.cert.pem").string();
 
-        s7::RuntimeService service{definition};
-        assert(service.runtime_instance_uuid() == "s7-runtime-node");
+        const auto state_dir = make_temp_state_dir("identity");
+        {
+            s7::RuntimeService service{definition, state_dir};
+            assert(service.runtime_instance_uuid() == "11111111-2222-3333-4444-555555555555");
+
+            // A second runtime cannot share the state directory.
+            bool rejected = false;
+            try {
+                s7::RuntimeService second{s7::RuntimeSchemaDefinition{}, state_dir};
+            } catch (const std::runtime_error&) {
+                rejected = true;
+            }
+            assert(rejected);
+        }
+
+        // The stored identity must agree with the certificate.
+        {
+            std::ofstream(state_dir / "node_uuid.txt", std::ios::trunc) << "aaaaaaaa-2222-3333-4444-555555555555\n";
+            bool rejected = false;
+            try {
+                s7::RuntimeService service{definition, state_dir};
+            } catch (const std::runtime_error&) {
+                rejected = true;
+            }
+            assert(rejected);
+        }
+        std::filesystem::remove_all(state_dir);
+    }
+
+    {
+        // Without a certificate, distinct state directories give distinct, persistent node UUIDs.
+        const auto dir_a = make_temp_state_dir("node-a");
+        const auto dir_b = make_temp_state_dir("node-b");
+        std::string uuid_a;
+        {
+            s7::RuntimeService a{s7::RuntimeSchemaDefinition{}, dir_a};
+            s7::RuntimeService b{s7::RuntimeSchemaDefinition{}, dir_b};
+            uuid_a = a.runtime_instance_uuid();
+            assert(uuid_a != b.runtime_instance_uuid());
+        }
+        {
+            s7::RuntimeService a{s7::RuntimeSchemaDefinition{}, dir_a};
+            assert(a.runtime_instance_uuid() == uuid_a);
+        }
+        std::filesystem::remove_all(dir_a);
+        std::filesystem::remove_all(dir_b);
+    }
+
+    {
+        // A served node steps Constant -> NetSink at the configured rate, and a peer receives the packets.
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+        const auto receiver = endpoint->open_endpoint({
+            .endpoint_name = "peer",
+            .stream_name = "step.loop",
+            .allow_publish = false,
+            .allow_receive = true,
+        });
+        assert(receiver.ok);
+
+        s7::Schema schema{"step_loop"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.0); });
+        schema.add_element("sink", [] { return std::make_unique<s7::NetSink>("step.loop"); });
+        schema.connect("source", 0, "sink", 0);
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+
+        const std::atomic<bool> never_stop{false};
+        const auto stats = s7::run_step_loop(runtime, 200.0, never_stop,
+                                             std::chrono::steady_clock::now() + std::chrono::milliseconds(250));
+        assert(stats.stop_reason == s7::StepLoopStats::StopReason::Deadline);
+        assert(stats.steps == runtime.step_count());
+        assert(stats.steps >= 25 && stats.steps <= 60);
+
+        std::uint64_t received = 0;
+        s7::transport::DataPacket packet;
+        while (true) {
+            const auto result = endpoint->receive(receiver.handle, packet);
+            assert(result.ok);
+            if (!result.has_packet) {
+                break;
+            }
+            assert(s7::transport::decode_f64_payload(packet.payload) == 7.0);
+            ++received;
+        }
+        assert(received == stats.steps);
+
+        // A stop request ends the loop promptly even at a low step rate.
+        std::atomic<bool> stop{false};
+        std::thread stopper([&stop] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            stop.store(true);
+        });
+        const auto started = std::chrono::steady_clock::now();
+        const auto stopped = s7::run_step_loop(runtime, 1.0, stop);
+        stopper.join();
+        assert(stopped.stop_reason == s7::StepLoopStats::StopReason::StopRequested);
+        assert(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(500));
+        assert(stopped.steps == 1);
+
+        endpoint->close_endpoint(receiver.handle);
+        s7::RuntimeNetContext::set_endpoint(nullptr);
     }
 
     return 0;

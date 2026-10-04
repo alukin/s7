@@ -142,10 +142,17 @@ void NetSink::step() {
     if (!send_result.ok) {
         throw std::runtime_error("NetSink failed to publish packet for topic '" + topic_ + "': " + send_result.error);
     }
+    if (!send_result.delivered) {
+        ++dropped_count_;
+    }
 }
 
 const std::string& NetSink::topic() const {
     return topic_;
+}
+
+std::uint64_t NetSink::dropped_count() const {
+    return dropped_count_;
 }
 
 NetSource::NetSource(std::string topic)

@@ -145,27 +145,25 @@ private:
     T output_value_;
 };
 
-/// Delay (z^-1): 1 input, 1 output of type T, stateful
+/// Delay (z^-1): 1 input, 1 output of type T, causal memory (no direct feedthrough)
 template <typename T>
 class DelayT final : public Element {
 public:
     explicit DelayT(T initial_value = T{})
-        : Element("Delay", true)
-        , prev_value_(initial_value)
+        : Element("Delay", true, Feedthrough::None)
         , output_value_(initial_value)
     {
         register_input(0, port_names::in, signal_type_for<T>(), nullptr);
         register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
     }
 
+    // Writes the next step's output; NodeRuntime publishes it after the step.
     void step() override
     {
-        prev_value_ = read_input<T>(0);
-        output_value_ = prev_value_;
+        output_value_ = read_input<T>(0);
     }
 
 private:
-    T prev_value_;
     T output_value_;
 };
 
@@ -233,7 +231,6 @@ public:
     void step() override;
 
 private:
-    RealValue previous_;
     RealValue output_value_;
 };
 

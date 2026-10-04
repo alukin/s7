@@ -77,6 +77,9 @@ struct SendResult {
     bool ok{false};
     std::string error;
     std::size_t queue_depth{};
+    // False when the packet was accepted but had no receiver (no connected peer)
+    // and was dropped. Only meaningful when ok is true.
+    bool delivered{true};
 };
 
 struct ReceiveResult {

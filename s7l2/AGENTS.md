@@ -39,9 +39,9 @@ ctest --test-dir build -R s7core_smoke
 ctest --test-dir build -R s7runtime_control_smoke
 ctest --test-dir build -R s7io_smoke
 ```
-- Run runtime service:
+- Run runtime service (steps the graph at the schema's `execution.step_rate_hz` while serving; use a distinct `--state-dir` per node):
 ```bash
-./build/s7runtime/s7runtime --schema s7runtime/examples/schema_minimal.json
+./build/s7runtime/s7runtime --schema s7runtime/examples/schema_minimal.json --state-dir /tmp/s7-node-a --serve-forever
 ```
 - Optional net mode:
 ```bash
@@ -57,8 +57,7 @@ ctest --test-dir build -R s7io_smoke
 - New elements follow the port-centric pattern: own output storage in the element and register ports in the constructor via `register_input/register_output` (`s7core/include/s7/elements.hpp`).
 - Ports are introspected via `Port{index,name,type,value_ptr}`; preserve `SignalType` correctness and typed access (`s7core/include/s7/element.hpp`).
 - Port-type mismatches are hard validation errors in current runtime wiring (no implicit conversion path enabled by default) (`s7core/src/validation.cpp`, `s7core/tests/core_smoke.cpp`).
-- Respect execution ordering: `NodeRuntime::step()` runs `causal_order`, then steps `memory_order` elements against a snapshot of stateful outputs and publishes them together (snapshot-then-commit) (`s7core/src/runtime.cpp`).
-- `Port::name` is a `std::string_view`; never register ports with names backed by a local `std::string`.
+- Respect execution ordering: `NodeRuntime::step()` publishes the outputs staged by causal-memory elements in the previous step, runs `causal_order` (every element with direct feedthrough, stateful or not), then steps `memory_order` (`Feedthrough::None` elements such as `Delay`) and stages their outputs for the next step (`s7core/src/runtime.cpp`).
 - Validation expects cycles to include at least one causal-memory element; do not bypass this in compiler/runtime paths.
 - Observation is non-invasive: use `ObservationService` reads, never mutate runtime state from observe code.
 - Observation sampling pattern: `sample_output(element_id, port)` and `sample_outputs({ProbePoint{...}})` (`s7observe/include/s7/observe.hpp`, `s7observe/tests/observe_smoke.cpp`).
@@ -80,6 +79,7 @@ ctest --test-dir build -R s7io_smoke
 - If touching compiler/validator/runtime, add or update a smoke test in the module's `tests/` directory (e.g. `s7core/tests/core_smoke.cpp`).
 - The project is pre-MVP with no deployments: breaking changes to APIs, formats, and protocols are allowed; do not add compatibility shims.
 - Prefer explicit errors around schema/type mismatches over silent coercion.
+- Tests must not write under `$HOME`: give `RuntimeService` a temporary state directory.
 - Preserve public namespace and API surface conventions (`namespace s7`, public headers under `s7core/include/s7/`).
 - Before any edit in `external/`, stop and confirm explicit user approval; otherwise, do not change vendored sources.
 

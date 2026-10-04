@@ -159,6 +159,14 @@ int runSmoke()
         runtime.step();
         runtime.step();
 
+        const s7studio::runtime::detail::ScopeElement scope3{3};
+        assert(scope3.input_ports().size() == 3 && scope3.output_ports().size() == 3);
+        for (std::size_t channel = 0; channel < 3; ++channel) {
+            const std::string expected = "ch" + std::to_string(channel);
+            assert(scope3.input_ports()[channel].name == expected);
+            assert(scope3.output_ports()[channel].name == expected);
+        }
+
         std::cout << "s7studio smoke\n";
         std::cout << "schema=" << schema.name() << '\n';
         assert(std::abs(runtime.real_output_of("nested") - 30.0) < 1e-12);

@@ -286,13 +286,22 @@ Cycles are permitted.
 
 # Causal Memory
 
-A Causal Memory Element is an Element whose evaluation depends on previously preserved State.
+A Causal Memory Element is an Element without direct feedthrough: its outputs at step n depend only on its State and inputs from steps before n, never on its inputs at step n.
 
 Examples:
 
 - Delay
-- Integrator
-- IIR Filter
+- PreviousValue
+
+Keeping State does not make an Element causal memory. An Integrator (y[n] = y[n-1] + x[n]) or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit Delay.
+
+A nested Schema has direct feedthrough. It adds no delay beyond the Elements it contains, and it cannot close an outer cycle even if it contains causal memory internally.
+
+Evaluation of one step:
+
+1. Publish the outputs that Causal Memory Elements computed in the previous step.
+2. Evaluate all other Elements, stateful or not, in topological order.
+3. Evaluate each Causal Memory Element from the current inputs. Its new output is staged and published at the start of the next step (1), so all values read after a step belong to that step.
 
 ------------------------------------------------------------------------
 

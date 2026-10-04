@@ -27,7 +27,10 @@ public:
     [[nodiscard]] std::size_t step_count() const;
 
 private:
-    struct StatefulOutput {
+    // Output of a causal-memory element. Its step() writes the next step's
+    // value; the runtime stages it and publishes it at the start of the next
+    // step, so all outputs read after step() belong to the same step.
+    struct MemoryOutput {
         void* value_ptr{};
         SignalType type{SignalType::DOUBLE};
         RealValue snapshot_real{};
@@ -36,7 +39,7 @@ private:
         ComplexValue staged_complex{};
     };
 
-    struct StatefulOutputRange {
+    struct MemoryOutputRange {
         std::size_t begin{};
         std::size_t end{};
     };
@@ -44,8 +47,9 @@ private:
     [[nodiscard]] OutputBinding output_binding_of(const std::string& element_id, std::size_t port) const;
 
     ExecutableGraph graph_;
-    std::vector<StatefulOutput> stateful_outputs_;
-    std::vector<StatefulOutputRange> stateful_output_ranges_;
+    std::vector<MemoryOutput> memory_outputs_;
+    std::vector<MemoryOutputRange> memory_output_ranges_;
+    bool memory_outputs_staged_{};
     std::size_t step_count_{};
 };
 

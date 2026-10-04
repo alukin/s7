@@ -399,13 +399,9 @@ auto ControlPlaneMvp::handle_get_peers(const boost::json::object& request) const
             break;
         }
 
-        const auto node_uuid = peer.node_uuid
-            ? *peer.node_uuid
-            : (peer.identity_certificate_common_name ? *peer.identity_certificate_common_name : std::string{});
-
         boost::json::object item;
         item["endpoint"] = peer.endpoint;
-        item["node_uuid"] = node_uuid.empty() ? boost::json::value(nullptr) : boost::json::value(node_uuid);
+        item["node_uuid"] = peer.node_uuid ? boost::json::value(*peer.node_uuid) : boost::json::value(nullptr);
         item["node_name"] = peer.node_name ? boost::json::value(*peer.node_name) : boost::json::value(nullptr);
         if (peer.os_family || peer.architecture) {
             boost::json::object platform;
@@ -457,9 +453,6 @@ auto ControlPlaneMvp::handle_peer_announce(const boost::json::object& request) -
     peer.node_name = as_string(self, "node_name");
     peer.identity_certificate_common_name = certificate.common_name;
     peer.identity_certificate_fingerprint_sha256 = certificate.fingerprint_sha256;
-    if (!peer.node_uuid && peer.identity_certificate_common_name) {
-        peer.node_uuid = peer.identity_certificate_common_name;
-    }
     peer.trust_state = "unverified";
     peer.reachability = "online";
     peer.last_seen_at = now_utc_iso8601();
@@ -784,9 +777,6 @@ void ControlPlaneMvp::load_peers_from_disk()
         const auto certificate = read_certificate_info(item.as_object());
         peer.identity_certificate_common_name = certificate.common_name;
         peer.identity_certificate_fingerprint_sha256 = certificate.fingerprint_sha256;
-        if (!peer.node_uuid && peer.identity_certificate_common_name) {
-            peer.node_uuid = peer.identity_certificate_common_name;
-        }
         peer.trust_state = as_string(item.as_object(), "trust_state").value_or("unverified");
         peer.reachability = as_string(item.as_object(), "reachability").value_or("offline");
         peer.last_seen_at = as_string(item.as_object(), "last_seen_at");

@@ -9,6 +9,8 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <boost/json.hpp>
@@ -126,6 +128,21 @@ int main() try
 
         auto adder = std::make_unique<s7::Adder>();
         assert(adder->input_ports().size() == 2);
+        assert(adder->input_ports()[0].name == "lhs");
+        assert(adder->input_ports()[1].name == "rhs");
+
+        const s7::Adder adder3{{1.0, 1.0, 1.0}};
+        assert(adder3.input_ports().size() == 3);
+        assert(adder3.input_ports()[0].name == "lhs");
+        assert(adder3.input_ports()[1].name == "rhs");
+        assert(adder3.input_ports()[2].name == "in2");
+
+        const s7::Multiply multiply4{{1.0, 1.0, 1.0, 1.0}};
+        assert(multiply4.input_ports().size() == 4);
+        assert(multiply4.input_ports()[0].name == "lhs");
+        assert(multiply4.input_ports()[1].name == "rhs");
+        assert(multiply4.input_ports()[2].name == "in2");
+        assert(multiply4.input_ports()[3].name == "in3");
         assert(adder->input_ports()[0].type == s7::SignalType::DOUBLE);
         assert(adder->input_ports()[1].type == s7::SignalType::DOUBLE);
 
@@ -143,7 +160,8 @@ int main() try
         assert(variadicMultiply->input_ports()[2].type == s7::SignalType::DOUBLE);
 
         auto analog = std::make_unique<s7::AnalogOscillator>(1.0, 1.0, 1000.0);
-        assert(analog->has_causal_memory());
+        assert(analog->has_state());
+        assert(!analog->has_causal_memory());
         assert(analog->output_ports().size() == 1);
         assert(analog->output_ports()[0].type == s7::SignalType::DOUBLE);
     }
@@ -158,21 +176,24 @@ int main() try
         assert(doubleToInt12->input_ports()[0].type == s7::SignalType::DOUBLE);
         assert(doubleToInt12->output_ports()[0].type == s7::SignalType::INT12);
 
+        // Standalone step() writes the next-step output; NodeRuntime defers its publication.
         auto previousValue = std::make_unique<s7::PreviousValue>(3.5);
         assert(previousValue->has_causal_memory());
+        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 3.5);
         const s7::RealValue pvIn1{8.0};
         const s7::RealValue pvIn2{9.0};
         const std::array<s7::InputBinding, 1> pvInputs1{s7::bind_input<s7::SignalType::DOUBLE>(pvIn1)};
         const std::array<s7::InputBinding, 1> pvInputs2{s7::bind_input<s7::SignalType::DOUBLE>(pvIn2)};
         previousValue->bind_inputs({pvInputs1.data(), pvInputs1.size()});
         previousValue->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 3.5);
+        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 8.0);
         previousValue->bind_inputs({pvInputs2.data(), pvInputs2.size()});
         previousValue->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 8.0);
+        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 9.0);
 
         auto integrator = std::make_unique<s7::Integrator>(1.5);
-        assert(integrator->has_causal_memory());
+        assert(integrator->has_state());
+        assert(!integrator->has_causal_memory());
         const s7::RealValue intIn1{2.0};
         const s7::RealValue intIn2{-0.5};
         const std::array<s7::InputBinding, 1> intInputs1{s7::bind_input<s7::SignalType::DOUBLE>(intIn1)};
@@ -395,6 +416,138 @@ int main() try
         if (!hasCycleError) {
             throw std::runtime_error("Expected cycle validation error was not reported.");
         }
+    }
+
+    {
+        // Stateful elements with direct feedthrough add no delay.
+        s7::Schema schema{"fir_feedthrough"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
+        schema.add_element("fir", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{1.0}); });
+        schema.add_element("gain", [] { return std::make_unique<s7::Gain>(1.0); });
+        schema.connect("source", 0, "fir", 0);
+        schema.connect("fir", 0, "gain", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step();
+        assert(runtime.real_output_of("fir") == 1.0);
+        assert(runtime.real_output_of("gain") == 1.0);
+    }
+
+    {
+        // Stateful-to-stateful chains run in topological order within one step.
+        s7::Schema schema{"stateful_chain"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(2.0); });
+        schema.add_element("integrator", [] { return std::make_unique<s7::Integrator>(0.0); });
+        schema.add_element("iir", [] { return std::make_unique<s7::IirFilter>(1.0, 0.0, 0.0); });
+        schema.connect("source", 0, "integrator", 0);
+        schema.connect("integrator", 0, "iir", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step();
+        assert(runtime.real_output_of("iir") == 2.0);
+        runtime.step();
+        assert(runtime.real_output_of("iir") == 4.0);
+    }
+
+    {
+        // Delay and PreviousValue delay by exactly one step, including in a chain,
+        // independent of declaration order.
+        for (const bool reversed : {false, true}) {
+            s7::Schema schema{"unit_delays"};
+            std::vector<std::pair<std::string, s7::ElementFactory>> elements{
+                {"source", [] { return std::make_unique<s7::Integrator>(0.0); }},
+                {"unit", [] { return std::make_unique<s7::Constant>(1.0); }},
+                {"delay", [] { return std::make_unique<s7::Delay>(-1.0); }},
+                {"previous", [] { return std::make_unique<s7::PreviousValue>(-2.0); }},
+                {"after_delay", [] { return std::make_unique<s7::Gain>(1.0); }},
+            };
+            if (reversed) {
+                std::ranges::reverse(elements);
+            }
+            for (auto& [id, factory] : elements) {
+                schema.add_element(id, std::move(factory));
+            }
+            schema.connect("unit", 0, "source", 0);
+            schema.connect("source", 0, "delay", 0);
+            schema.connect("delay", 0, "previous", 0);
+            schema.connect("delay", 0, "after_delay", 0);
+
+            s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+            const std::array<double, 4> expectedSource{1.0, 2.0, 3.0, 4.0};
+            const std::array<double, 4> expectedDelay{-1.0, 1.0, 2.0, 3.0};
+            const std::array<double, 4> expectedPrevious{-2.0, -1.0, 1.0, 2.0};
+            for (std::size_t step = 0; step < expectedSource.size(); ++step) {
+                runtime.step();
+                assert(runtime.real_output_of("source") == expectedSource[step]);
+                assert(runtime.real_output_of("delay") == expectedDelay[step]);
+                assert(runtime.real_output_of("after_delay") == expectedDelay[step]);
+                assert(runtime.real_output_of("previous") == expectedPrevious[step]);
+            }
+        }
+    }
+
+    {
+        // A loop closed only through elements with direct feedthrough is rejected.
+        for (const auto* type : {"FirFilter", "Integrator"}) {
+            s7::Schema schema{"stateful_loop_without_memory"};
+            schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
+            schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
+            if (std::string_view{type} == "FirFilter") {
+                schema.add_element("state", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{0.5}); });
+            } else {
+                schema.add_element("state", [] { return std::make_unique<s7::Integrator>(0.0); });
+            }
+            schema.connect("unit", 0, "sum", 0);
+            schema.connect("state", 0, "sum", 1);
+            schema.connect("sum", 0, "state", 0);
+
+            const auto validation = s7::Validator::validate(schema);
+            const auto hasCycleError = std::ranges::any_of(validation.errors, [](const std::string& error) {
+                return error.find("Cycle detected without causal memory") != std::string::npos;
+            });
+            if (!hasCycleError) {
+                throw std::runtime_error(std::string{"Expected cycle through "} + type + " to be rejected.");
+            }
+        }
+    }
+
+    {
+        // Wrapping a graph in a nested schema does not change its trace.
+        auto buildChain = [](s7::Schema& schema) {
+            schema.add_element("fir", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{0.5, 0.5}); });
+            schema.add_element("integrator", [] { return std::make_unique<s7::Integrator>(0.0); });
+            schema.add_element("delay", [] { return std::make_unique<s7::Delay>(0.0); });
+            schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
+            schema.connect("fir", 0, "integrator", 0);
+            schema.connect("integrator", 0, "sum", 0);
+            schema.connect("delay", 0, "sum", 1);
+            schema.connect("sum", 0, "delay", 0);
+        };
+
+        s7::Schema flat{"flat"};
+        flat.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
+        buildChain(flat);
+        flat.connect("source", 0, "fir", 0);
+
+        s7::Schema wrapped{"wrapped"};
+        wrapped.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
+        wrapped.add_element("nested", [buildChain] {
+            auto inner = std::make_unique<s7::Schema>("chain");
+            buildChain(*inner);
+            inner->expose_input("in", s7::SignalType::DOUBLE, "fir", 0);
+            inner->expose_output("out", s7::SignalType::DOUBLE, "sum", 0);
+            return inner;
+        });
+        wrapped.connect("source", 0, "nested", 0);
+
+        s7::NodeRuntime flatRuntime{s7::Compiler::compile(flat)};
+        s7::NodeRuntime wrappedRuntime{s7::Compiler::compile(wrapped)};
+        for (int step = 0; step < 6; ++step) {
+            flatRuntime.step();
+            wrappedRuntime.step();
+            assert(flatRuntime.real_output_of("sum") == wrappedRuntime.real_output_of("nested"));
+        }
+        assert(flatRuntime.real_output_of("sum") != 0.0);
     }
 
     {

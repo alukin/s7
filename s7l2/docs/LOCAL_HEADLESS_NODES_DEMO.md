@@ -11,13 +11,14 @@ cmake --build build --parallel
 
 ## 2) Start two local nodes (plain WebSocket)
 
-Each node needs its own state directory; otherwise both nodes share one persistent identity and peer cache.
+Each node needs its own state directory (`--state-dir`). The runtime locks the directory, so a second runtime pointed at the same directory exits with an error instead of sharing the identity and peer cache.
 
 Terminal A (server port 9002 from `schema_minimal.json`):
 
 ```bash
-S7_NODE_STATE_DIR=/tmp/s7-node-a ./build/s7runtime/s7runtime \
+./build/s7runtime/s7runtime \
   --schema s7runtime/examples/schema_minimal.json \
+  --state-dir /tmp/s7-node-a \
   --start-net \
   --seed-peer ws://127.0.0.1:9003 \
   --serve-forever
@@ -26,14 +27,15 @@ S7_NODE_STATE_DIR=/tmp/s7-node-a ./build/s7runtime/s7runtime \
 Terminal B (server port 9003 from `schema_minimal_node2.json`):
 
 ```bash
-S7_NODE_STATE_DIR=/tmp/s7-node-b ./build/s7runtime/s7runtime \
+./build/s7runtime/s7runtime \
   --schema s7runtime/examples/schema_minimal_node2.json \
+  --state-dir /tmp/s7-node-b \
   --start-net \
   --seed-peer ws://127.0.0.1:9002 \
   --serve-forever
 ```
 
-The runtimes serve the control plane only; they do not execute their graphs while serving (see `CODE_REVIEW_REQUIRED_FIXES.md`).
+Both example schemas set `"execution": { "step_rate_hz": 10 }`, so each node steps its graph 10 times per second while serving and its `NetSink` publishes to a connected peer; packets published while no peer is connected are dropped. Use `--step-rate <hz>` to override the rate (`0` serves the control plane without stepping). Ctrl+C stops the node and prints `runtime.execution.steps` and `runtime.execution.achieved_rate_hz`.
 
 ## 3) Open Studio and discover nodes
 

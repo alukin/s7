@@ -1,6 +1,8 @@
 #ifndef S7RUNTIME_INCLUDE_S7_RUNTIME_SERVICE_HPP
 #define S7RUNTIME_INCLUDE_S7_RUNTIME_SERVICE_HPP
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <ostream>
@@ -57,6 +59,12 @@ struct SimulationConfig {
     double frequency_hz{};
 };
 
+// Continuous stepping of a served node. step_rate_hz == 0 means the node
+// serves the control plane but does not step its graph.
+struct ExecutionConfig {
+    double step_rate_hz{};
+};
+
 struct RuntimeSchemaDefinition {
     std::string name;
     std::vector<JsonElementDefinition> elements;
@@ -66,6 +74,7 @@ struct RuntimeSchemaDefinition {
     WebSocketServerConfig server;
     WebSocketClientConfig client;
     SimulationConfig simulation;
+    ExecutionConfig execution;
 };
 
 class JsonSchemaLoader {
@@ -75,7 +84,9 @@ public:
 
 class RuntimeService {
 public:
-    explicit RuntimeService(RuntimeSchemaDefinition definition);
+    // state_dir holds the node's persistent state (node_uuid.txt, peers.json)
+    // and is locked for the life of the service; each node needs its own.
+    RuntimeService(RuntimeSchemaDefinition definition, std::filesystem::path state_dir);
     ~RuntimeService();
     RuntimeService(const RuntimeService&) = delete;
     RuntimeService& operator=(const RuntimeService&) = delete;
@@ -99,12 +110,30 @@ public:
 
 private:
     RuntimeSchemaDefinition definition_;
+    std::filesystem::path state_dir_;
+    int state_dir_lock_fd_{-1};
     std::string runtime_instance_uuid_;
     std::shared_ptr<ControlPlaneMvp> control_plane_;
     transport::RuntimeNetEndpointPtr network_endpoint_;
     mutable std::vector<transport::EndpointHandle> opened_server_endpoints_;
     mutable std::vector<transport::EndpointHandle> opened_client_endpoints_;
 };
+
+struct StepLoopStats {
+    enum class StopReason { StopRequested, Deadline };
+
+    std::uint64_t steps{};
+    double elapsed_seconds{};
+    StopReason stop_reason{StopReason::StopRequested};
+};
+
+// Steps the runtime at step_rate_hz on the calling thread until stop_requested
+// is set or the deadline passes. If stepping falls behind, the backlog is
+// dropped rather than replayed in a burst.
+StepLoopStats run_step_loop(NodeRuntime& runtime,
+                            double step_rate_hz,
+                            const std::atomic<bool>& stop_requested,
+                            std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
 
 } // namespace s7
 

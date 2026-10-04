@@ -1,5 +1,6 @@
 #include "s7/runtime_service.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <chrono>
 #include <cstdlib>
@@ -11,10 +12,12 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <thread>
 #include <utility>
 
 #include <boost/system/error_code.hpp>
 #include <boost/uuid/random_generator.hpp>
+#include <boost/uuid/string_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
 #include <openssl/asn1.h>
@@ -22,6 +25,11 @@
 #include <openssl/evp.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
+
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
 
 #include "s7/io.hpp"
 #include "s7/net.hpp"
@@ -272,6 +280,14 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
         definition.simulation.frequency_hz = get_f64(simulation_obj, "frequency_hz", 1.0);
     }
 
+    if (const auto execution_it = root.find("execution"); execution_it != root.end()) {
+        const auto& execution_obj = expect_object(execution_it->value(), "execution");
+        definition.execution.step_rate_hz = get_f64(execution_obj, "step_rate_hz", 0.0);
+        if (!std::isfinite(definition.execution.step_rate_hz) || definition.execution.step_rate_hz < 0.0) {
+            throw std::invalid_argument("execution.step_rate_hz must be a non-negative number.");
+        }
+    }
+
     return definition;
 }
 
@@ -438,52 +454,66 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 #endif
 }
 
-[[nodiscard]] auto default_node_storage_dir() -> std::filesystem::path
+// Returns the canonical lower-case form, or nullopt if the text is not a UUID.
+[[nodiscard]] auto canonical_uuid(const std::string& text) -> std::optional<std::string>
 {
-    if (const char* explicit_dir = std::getenv("S7_NODE_STATE_DIR")) {
-        return {explicit_dir};
+    if (text.size() != 36) {
+        return std::nullopt;
     }
-    if (const char* home = std::getenv("HOME")) {
-        return std::filesystem::path(home) / ".s7runtime" / "default-node";
+    try {
+        return boost::uuids::to_string(boost::uuids::string_generator{}(text));
+    } catch (const std::exception&) {
+        return std::nullopt;
     }
-    return std::filesystem::temp_directory_path() / "s7runtime-default-node";
 }
 
-[[nodiscard]] auto load_or_create_node_uuid(const std::filesystem::path& node_dir,
-                                            const std::optional<std::string>& preferred_uuid = std::nullopt) -> std::string
+void write_node_uuid_file(const std::filesystem::path& path, const std::string& node_uuid)
 {
-    std::filesystem::create_directories(node_dir);
-    const auto path = node_dir / "node_uuid.txt";
-    if (preferred_uuid && !preferred_uuid->empty()) {
-        std::ofstream out(path, std::ios::trunc);
-        if (!out) {
-            throw std::runtime_error("Could not persist node UUID at '" + path.string() + "'.");
-        }
-        out << *preferred_uuid;
-        if (!out) {
-            throw std::runtime_error("Failed while writing node UUID at '" + path.string() + "'.");
-        }
-        return *preferred_uuid;
+    std::ofstream out(path, std::ios::trunc);
+    if (!out) {
+        throw std::runtime_error("Could not create node UUID file at '" + path.string() + "'.");
     }
+    out << node_uuid << '\n';
+    if (!out) {
+        throw std::runtime_error("Failed while writing node UUID at '" + path.string() + "'.");
+    }
+}
 
+// Reads node_uuid.txt from the state directory. When the node has a certificate,
+// its UUID is authoritative: it is stored on first start and must match afterwards.
+[[nodiscard]] auto load_or_create_node_uuid(const std::filesystem::path& state_dir,
+                                            const std::optional<std::string>& certificate_uuid) -> std::string
+{
+    const auto path = state_dir / "node_uuid.txt";
+    std::optional<std::string> stored;
     if (std::filesystem::exists(path)) {
         std::ifstream in(path);
         std::string existing;
         std::getline(in, existing);
         if (!existing.empty()) {
-            return existing;
+            stored = canonical_uuid(existing);
+            if (!stored) {
+                throw std::runtime_error("Node UUID file '" + path.string() + "' does not contain a valid UUID.");
+            }
         }
     }
 
+    if (certificate_uuid) {
+        if (stored && *stored != *certificate_uuid) {
+            throw std::runtime_error("Node state directory '" + state_dir.string() + "' belongs to node " + *stored +
+                                     ", but the certificate identifies node " + *certificate_uuid + ".");
+        }
+        if (!stored) {
+            write_node_uuid_file(path, *certificate_uuid);
+        }
+        return *certificate_uuid;
+    }
+
+    if (stored) {
+        return *stored;
+    }
     const auto generated = boost::uuids::to_string(boost::uuids::random_generator()());
-    std::ofstream out(path, std::ios::trunc);
-    if (!out) {
-        throw std::runtime_error("Could not create node UUID file at '" + path.string() + "'.");
-    }
-    out << generated;
-    if (!out) {
-        throw std::runtime_error("Failed while writing node UUID at '" + path.string() + "'.");
-    }
+    write_node_uuid_file(path, generated);
     return generated;
 }
 
@@ -546,6 +576,61 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
     return std::string(reinterpret_cast<char*>(utf8_guard.get()), static_cast<std::size_t>(len));
 }
 
+// Extracts node_uuid from the SAN URI spiffe://s7/node/<node_uuid>. The certificate
+// must carry exactly one such identity.
+[[nodiscard]] auto certificate_node_uuid(const std::filesystem::path& certificate_path) -> std::string
+{
+    constexpr std::string_view prefix = "spiffe://s7/node/";
+    const auto certificate_path_string = certificate_path.string();
+    BIO* bio = BIO_new_file(certificate_path_string.c_str(), "r");
+    if (!bio) {
+        throw std::runtime_error("Could not open node certificate: '" + certificate_path_string + "'.");
+    }
+
+    std::unique_ptr<BIO, decltype(&BIO_free)> bio_guard(bio, BIO_free);
+    std::unique_ptr<X509, decltype(&X509_free)> certificate(
+        PEM_read_bio_X509(bio_guard.get(), nullptr, nullptr, nullptr),
+        X509_free);
+    if (!certificate) {
+        throw std::runtime_error("Could not parse PEM certificate: '" + certificate_path_string + "'.");
+    }
+
+    const auto names_deleter = [](GENERAL_NAMES* names) { GENERAL_NAMES_free(names); };
+    std::unique_ptr<GENERAL_NAMES, decltype(names_deleter)> names(
+        static_cast<GENERAL_NAMES*>(X509_get_ext_d2i(certificate.get(), NID_subject_alt_name, nullptr, nullptr)),
+        names_deleter);
+
+    std::set<std::string> node_uuids;
+    const int count = names ? sk_GENERAL_NAME_num(names.get()) : 0;
+    for (int index = 0; index < count; ++index) {
+        const GENERAL_NAME* name = sk_GENERAL_NAME_value(names.get(), index);
+        if (name->type != GEN_URI) {
+            continue;
+        }
+        const ASN1_IA5STRING* uri = name->d.uniformResourceIdentifier;
+        const std::string_view text(reinterpret_cast<const char*>(ASN1_STRING_get0_data(uri)),
+                                    static_cast<std::size_t>(ASN1_STRING_length(uri)));
+        if (!text.starts_with(prefix)) {
+            continue;
+        }
+        const auto node_uuid = canonical_uuid(std::string(text.substr(prefix.size())));
+        if (!node_uuid) {
+            throw std::runtime_error("Certificate '" + certificate_path_string + "' has an invalid S7 node URI: '" +
+                                     std::string(text) + "'.");
+        }
+        node_uuids.insert(*node_uuid);
+    }
+
+    if (node_uuids.empty()) {
+        throw std::runtime_error("Certificate '" + certificate_path_string +
+                                 "' has no SAN URI of the form spiffe://s7/node/<node_uuid>.");
+    }
+    if (node_uuids.size() > 1) {
+        throw std::runtime_error("Certificate '" + certificate_path_string + "' names more than one S7 node.");
+    }
+    return *node_uuids.begin();
+}
+
 [[nodiscard]] auto certificate_fingerprint_sha256(const std::filesystem::path& certificate_path) -> std::string
 {
     const auto certificate_path_string = certificate_path.string();
@@ -576,14 +661,21 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
     return hex.str();
 }
 
-[[nodiscard]] auto resolve_runtime_instance_uuid(const RuntimeSchemaDefinition& definition) -> std::string
+// Takes an exclusive lock on the state directory for the life of the process,
+// so that two runtimes never share one node identity and peer cache.
+[[nodiscard]] auto lock_state_dir(const std::filesystem::path& state_dir) -> int
 {
-    const auto node_dir = default_node_storage_dir();
-    const auto identity_cert = select_identity_certificate(definition);
-    if (identity_cert) {
-        return load_or_create_node_uuid(node_dir, certificate_common_name(*identity_cert));
+    const auto path = state_dir / "runtime.lock";
+    const int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        throw std::runtime_error("Could not open state directory lock '" + path.string() + "'.");
     }
-    return load_or_create_node_uuid(node_dir);
+    if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        ::close(fd);
+        throw std::runtime_error("Node state directory '" + state_dir.string() +
+                                 "' is in use by another runtime; give each node its own --state-dir.");
+    }
+    return fd;
 }
 
 [[nodiscard]] auto build_control_descriptor(const std::string& node_uuid,
@@ -662,8 +754,9 @@ RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file
     return parse_schema_definition(parsed);
 }
 
-RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
+RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesystem::path state_dir)
     : definition_(std::move(definition))
+    , state_dir_(std::move(state_dir))
     , runtime_instance_uuid_()
     , control_plane_(nullptr)
     , network_endpoint_(nullptr)
@@ -676,12 +769,25 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition)
         network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     }
 
-    const auto identity_cert = select_identity_certificate(definition_);
-    runtime_instance_uuid_ = resolve_runtime_instance_uuid(definition_);
+    if (state_dir_.empty()) {
+        throw std::invalid_argument("RuntimeService requires a node state directory.");
+    }
+    std::filesystem::create_directories(state_dir_);
+    state_dir_lock_fd_ = lock_state_dir(state_dir_);
 
-    control_plane_ = std::make_shared<ControlPlaneMvp>(
-        build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
-        default_node_storage_dir());
+    try {
+        const auto identity_cert = select_identity_certificate(definition_);
+        runtime_instance_uuid_ = load_or_create_node_uuid(
+            state_dir_,
+            identity_cert ? std::optional<std::string>{certificate_node_uuid(*identity_cert)} : std::nullopt);
+
+        control_plane_ = std::make_shared<ControlPlaneMvp>(
+            build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
+            state_dir_);
+    } catch (...) {
+        ::close(state_dir_lock_fd_);
+        throw;
+    }
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
         std::weak_ptr<ControlPlaneMvp> weak_control = control_plane_;
@@ -712,6 +818,10 @@ RuntimeService::~RuntimeService()
     // Only clear global runtime endpoint context if it still points to this service's endpoint.
     if (RuntimeNetContext::endpoint() == network_endpoint_) {
         RuntimeNetContext::set_endpoint(nullptr);
+    }
+
+    if (state_dir_lock_fd_ >= 0) {
+        ::close(state_dir_lock_fd_);
     }
 }
 
@@ -770,6 +880,7 @@ void RuntimeService::print_summary(std::ostream& out) const {
     const auto identity_cert = select_identity_certificate(definition_);
     out << "runtime.schema=" << definition_.name << '\n';
     out << "runtime.instance_uuid=" << runtime_instance_uuid_ << '\n';
+    out << "runtime.state_dir=" << state_dir_.string() << '\n';
     out << "runtime.node_identity.source=" << (identity_cert ? "certificate" : "persistent_storage") << '\n';
     if (identity_cert) {
         out << "runtime.node_identity.certificate_file=" << identity_cert->string() << '\n';
@@ -793,6 +904,7 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.simulation.periods=" << definition_.simulation.periods << '\n';
     out << "runtime.simulation.sample_rate_hz=" << definition_.simulation.sample_rate_hz << '\n';
     out << "runtime.simulation.frequency_hz=" << definition_.simulation.frequency_hz << '\n';
+    out << "runtime.execution.step_rate_hz=" << definition_.execution.step_rate_hz << '\n';
 }
 
 const std::string& RuntimeService::runtime_instance_uuid() const {
@@ -918,6 +1030,56 @@ void RuntimeService::connect_websocket_client() const {
 
     opened_client_endpoints_.push_back(control_open.handle);
     opened_client_endpoints_.push_back(data_open.handle);
+}
+
+StepLoopStats run_step_loop(NodeRuntime& runtime,
+                            const double step_rate_hz,
+                            const std::atomic<bool>& stop_requested,
+                            const std::optional<std::chrono::steady_clock::time_point> deadline)
+{
+    if (!std::isfinite(step_rate_hz) || step_rate_hz <= 0.0) {
+        throw std::invalid_argument("Step loop requires a positive step rate.");
+    }
+
+    using clock = std::chrono::steady_clock;
+    const auto period = std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(1.0 / step_rate_hz));
+    // Longest single sleep, so that a stop request is noticed promptly at low rates.
+    constexpr auto max_sleep = std::chrono::milliseconds(50);
+    // When the loop falls further behind than this, it drops the backlog instead of bursting.
+    const auto max_lag = std::max<clock::duration>(period, std::chrono::milliseconds(100));
+
+    StepLoopStats stats;
+    const auto started = clock::now();
+    auto next_step = started;
+    while (true) {
+        if (stop_requested.load()) {
+            stats.stop_reason = StepLoopStats::StopReason::StopRequested;
+            break;
+        }
+        const auto now = clock::now();
+        if (deadline && now >= *deadline) {
+            stats.stop_reason = StepLoopStats::StopReason::Deadline;
+            break;
+        }
+        if (now < next_step) {
+            auto wake = std::min(next_step, now + max_sleep);
+            if (deadline) {
+                wake = std::min(wake, *deadline);
+            }
+            std::this_thread::sleep_until(wake);
+            continue;
+        }
+
+        runtime.step();
+        ++stats.steps;
+        next_step += period;
+        if (clock::now() - next_step > max_lag) {
+            next_step = clock::now();
+        }
+    }
+
+    stats.elapsed_seconds = std::chrono::duration<double>(clock::now() - started).count();
+    return stats;
 }
 
 } // namespace s7

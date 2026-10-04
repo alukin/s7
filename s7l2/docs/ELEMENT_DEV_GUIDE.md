@@ -8,10 +8,11 @@ Source: `s7core/include/s7/element.hpp`.
 
 - An element **owns its output storage** as member variables. Ports are lightweight `Port{index, name, type, value_ptr}` records pointing at that storage. There is no separate output buffer in the base class.
 - Ports are registered in the constructor with `register_input(index, name, type, nullptr)` and `register_output(index, name, type, &member)`. Port types are fixed per element type; conversion between signal types is done by explicit converter elements, never implicitly (a type mismatch is a validation error).
-- `Port::name` is a `std::string_view`. The string it refers to must outlive the element: use string literals, `port_names::*` constants, or strings owned by the element. Do not pass a local `std::string`.
+- `Port::name` is a `std::string` owned by the port; `register_input/register_output` copy the name, so any string (including a local one) may be passed.
 - `step()` reads inputs with `read_input<T>(index)` and assigns outputs directly. `read_input` performs no checks; bindings are validated once when the compiler calls `bind_inputs()`.
 - Value storage: `SignalType::COMPLEX` uses `std::complex<double>`; every other `SignalType` (including the integer types) is currently stored as `double`.
-- `has_state = true` marks the element as causal memory. The runtime runs stateless elements first in topological order, then steps all stateful elements against a snapshot of stateful outputs and publishes their new outputs together (snapshot-then-commit). A stateful element's output therefore becomes visible to downstream elements one step later. Cycles in a graph are valid only if they contain at least one stateful element.
+- The `Element` constructor takes `has_state` (informational: the element keeps internal state) and `Feedthrough` (default `Feedthrough::Direct`). Elements with direct feedthrough, stateful or not, run in topological order and their outputs are visible downstream in the same step: `Constant → FirFilter([1]) → Gain` yields the constant at step 1.
+- `Feedthrough::None` marks the element as causal memory (`Delay`, `PreviousValue`). Its `step()` writes the output for the *next* step from the current inputs. The runtime steps causal-memory elements after the others, keeps their published outputs unchanged until the step ends, and publishes the new outputs at the start of the next step. Cycles in a graph are valid only if they contain at least one causal-memory element; a stateful element with direct feedthrough (`Integrator`, filters, nested `Schema`) does not break a cycle.
 
 ## Minimal element
 
@@ -120,4 +121,4 @@ assert(s7::bound_value<s7::SignalType::DOUBLE>(element.outputs()[0]) == 11.5);
 - **Unknown element type**: the type name is case-sensitive; check that the plugin was found (the runtime prints plugin search paths and loaded plugins at startup).
 - **Port type mismatch**: connect through an explicit converter (`ReImToComplex`, `ComplexToReIm`, `Int12ToDouble`, …).
 - **Input port N is unconnected**: every input must have exactly one driver.
-- **Cycle detected without causal memory**: put a stateful element (e.g. `Delay`) in the loop.
+- **Cycle detected without causal memory**: put a causal-memory element (`Delay` or `PreviousValue`) in the loop; an `Integrator` or filter alone does not break it.

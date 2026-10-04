@@ -43,6 +43,8 @@ public:
     void step() override;
 
     [[nodiscard]] const std::string& topic() const;
+    // Packets that had no receiver when published.
+    [[nodiscard]] std::uint64_t dropped_count() const;
 
 private:
     void ensure_endpoint();
@@ -51,6 +53,7 @@ private:
     transport::RuntimeNetEndpointPtr endpoint_;
     transport::EndpointHandle endpoint_handle_{};
     std::uint64_t sequence_{};
+    std::uint64_t dropped_count_{};
 };
 
 class NetSource final : public Element {
