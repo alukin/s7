@@ -32,7 +32,7 @@ int main()
         outgoing.sequence = 1;
         outgoing.stream_id = 42;
         outgoing.channel_id = 7;
-        outgoing.data_type = 0x000C;
+        outgoing.data_type = s7::transport::kPrototypeDataTypeF64;
         outgoing.elem_count = 1;
         outgoing.t_model_ns = 1'000'000;
         outgoing.t_system_ns = 2'000'000;
@@ -107,7 +107,7 @@ int main()
         outgoing.sequence = 5;
         outgoing.stream_id = 77;
         outgoing.channel_id = 3;
-        outgoing.data_type = 0x000C;
+        outgoing.data_type = s7::transport::kPrototypeDataTypeF64;
         outgoing.elem_count = 1;
         outgoing.t_model_ns = 5'000'000;
         outgoing.payload = s7::transport::encode_f64_payload(9.75);

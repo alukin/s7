@@ -133,9 +133,11 @@ void NetSink::step() {
     transport::DataPacket packet;
     packet.stream_name = topic_;
     packet.sequence = sequence_++;
-    packet.data_type = 0x000C;
+    packet.data_type = transport::kPrototypeDataTypeF64;
     packet.elem_count = 1;
-    packet.t_model = static_cast<double>(packet.sequence);
+    // Placeholder model time: one second per packet, starting at zero (see the
+    // review item on observation time semantics).
+    packet.t_model_ns = packet.sequence * 1'000'000'000ULL;
     packet.payload = transport::encode_f64_payload(value);
 
     const auto send_result = endpoint_->publish(endpoint_handle_, packet);

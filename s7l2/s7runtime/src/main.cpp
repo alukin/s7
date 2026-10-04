@@ -215,7 +215,8 @@ int main(int argc, char** argv) {
             if (definition.execution.step_rate_hz > 0.0) {
                 std::cout << "runtime.execution=stepping step_rate_hz=" << definition.execution.step_rate_hz << '\n';
                 std::cout.flush();
-                const auto stats = s7::run_step_loop(runtime, definition.execution.step_rate_hz, stop_requested, deadline);
+                const auto stats = s7::run_step_loop(runtime, definition.execution.step_rate_hz, stop_requested, deadline,
+                                                     [&service] { service.report_transport_errors(std::cerr); });
                 stopped_by_signal = stats.stop_reason == s7::StepLoopStats::StopReason::StopRequested;
                 std::cout << "runtime.execution.steps=" << stats.steps << '\n';
                 std::cout << "runtime.execution.achieved_rate_hz="
@@ -229,9 +230,11 @@ int main(int argc, char** argv) {
                         break;
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    service.report_transport_errors(std::cerr);
                 }
                 stopped_by_signal = stop_requested.load();
             }
+            service.report_transport_errors(std::cerr);
             std::cout << "runtime.serve.stopped=" << (stopped_by_signal ? "signal" : "timeout") << '\n';
         }
 

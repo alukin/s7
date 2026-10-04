@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <iterator>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
@@ -58,6 +59,18 @@ constexpr std::uint16_t kProtocolVersion = 1;
 constexpr std::size_t kFixedHeaderBytes = 54;
 constexpr std::size_t kMaxPayloadBytes = 256u * 1024u;
 constexpr std::uint16_t kFlagHasSystemTimestamp = 0x0001u;
+constexpr std::size_t kF64Bytes = 8;
+
+void validate_payload_shape(const std::uint16_t data_type, const std::uint32_t elem_count, const std::size_t payload_size)
+{
+    if (data_type != kPrototypeDataTypeF64) {
+        throw std::invalid_argument("Unsupported packet data type: " + std::to_string(data_type));
+    }
+    if (static_cast<std::uint64_t>(elem_count) * kF64Bytes != payload_size) {
+        throw std::invalid_argument("Packet payload size " + std::to_string(payload_size) +
+                                    " does not match element count " + std::to_string(elem_count) + ".");
+    }
+}
 
 void append_u16_be(std::vector<std::uint8_t>& out, const std::uint16_t value)
 {
@@ -118,24 +131,6 @@ void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
     }
     offset += 8;
     return value;
-}
-
-[[nodiscard]] auto seconds_to_ns(const double seconds) -> std::uint64_t
-{
-    if (!std::isfinite(seconds) || seconds < 0.0) {
-        throw std::invalid_argument("Model time must be a finite non-negative value in the current packet profile.");
-    }
-    const auto scaled = static_cast<long double>(seconds) * 1'000'000'000.0L;
-    const auto rounded = std::round(scaled);
-    if (rounded >= std::ldexp(1.0L, 64)) {
-        throw std::invalid_argument("Model time exceeds the current packet profile range.");
-    }
-    return static_cast<std::uint64_t>(rounded);
-}
-
-[[nodiscard]] auto ns_to_seconds(const std::uint64_t ns) -> double
-{
-    return static_cast<double>(ns) / 1'000'000'000.0;
 }
 
 [[nodiscard]] auto normalize_ws_base_target(std::string target) -> std::string
@@ -229,15 +224,20 @@ auto encode_packet_prototype(const DataPacket& packet) -> std::vector<std::uint8
         throw std::invalid_argument("Extension area exceeds prototype format limit.");
     }
 
-    const auto t_model_ns = packet.t_model_ns
-        ? *packet.t_model_ns
-        : seconds_to_ns(packet.t_model);
+    if (!packet.t_model_ns) {
+        throw std::invalid_argument("Packet has no model timestamp.");
+    }
+    const auto t_model_ns = *packet.t_model_ns;
 
     const auto has_system_timestamp = packet.t_system_ns.has_value();
+    if ((packet.flags & kFlagHasSystemTimestamp) != 0u && !has_system_timestamp) {
+        throw std::invalid_argument("Packet sets the system timestamp flag without a system timestamp.");
+    }
     const auto flags = static_cast<std::uint16_t>(packet.flags | (has_system_timestamp ? kFlagHasSystemTimestamp : 0u));
     const auto elem_count = packet.elem_count != 0
         ? packet.elem_count
-        : static_cast<std::uint32_t>(packet.payload.size() / (packet.data_type == 0x000Cu ? 8u : 1u));
+        : static_cast<std::uint32_t>(packet.payload.size() / kF64Bytes);
+    validate_payload_shape(packet.data_type, elem_count, packet.payload.size());
 
     std::vector<std::uint8_t> frame;
     frame.reserve(kFixedHeaderBytes + extension_bytes + packet.payload.size());
@@ -311,6 +311,10 @@ auto decode_packet_prototype(const std::vector<std::uint8_t>& frame) -> DataPack
     if (static_cast<std::size_t>(ext_len) + static_cast<std::size_t>(payload_size) != remaining) {
         throw std::invalid_argument("Packet frame contains trailing bytes after the declared payload.");
     }
+    validate_payload_shape(packet.data_type, packet.elem_count, payload_size);
+    if (ext_len == 1) {
+        throw std::invalid_argument("Packet extension area is too short for the stream-name length.");
+    }
 
     const auto extension_end = offset + ext_len;
     if (ext_len >= 2) {
@@ -327,7 +331,6 @@ auto decode_packet_prototype(const std::vector<std::uint8_t>& frame) -> DataPack
     offset = extension_end;
     packet.payload.assign(frame.begin() + static_cast<std::ptrdiff_t>(offset),
                           frame.begin() + static_cast<std::ptrdiff_t>(offset + payload_size));
-    packet.t_model = ns_to_seconds(packet.t_model_ns.value());
     if ((packet.flags & kFlagHasSystemTimestamp) != 0u) {
         packet.t_system_ns = t_system_ns;
     }
@@ -386,6 +389,13 @@ auto InMemoryRuntimeNetEndpoint::publish(const EndpointHandle& handle, const Dat
     auto packet_to_queue = packet;
     if (packet_to_queue.stream_name.empty()) {
         packet_to_queue.stream_name = endpoint_it->second.stream_name;
+    }
+    // Round-trip through the codec so in-memory delivery applies the same
+    // validation as a network peer.
+    try {
+        packet_to_queue = decode_packet_prototype(encode_packet_prototype(packet_to_queue));
+    } catch (const std::exception& ex) {
+        return SendResult{false, std::string{"invalid data packet: "} + ex.what(), 0};
     }
 
     auto& queue = stream_queues_[packet_to_queue.stream_name];
@@ -610,13 +620,7 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                         try {
                             packet = decode_packet_prototype(frame);
                         } catch (const std::exception& ex) {
-                            {
-                                std::lock_guard<std::mutex> queue_lock(mutex_);
-                                if (transport_errors_.size() == 32) {
-                                    transport_errors_.pop_front();
-                                }
-                                transport_errors_.push_back(std::string{"invalid data packet: "} + ex.what());
-                            }
+                            record_transport_error(std::string{"invalid data packet: "} + ex.what());
                             interrupt_socket_reads(ws);
                             break;
                         }
@@ -732,13 +736,7 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
                 try {
                     packet = decode_packet_prototype(frame);
                 } catch (const std::exception& ex) {
-                    {
-                        std::lock_guard<std::mutex> queue_lock(mutex_);
-                        if (transport_errors_.size() == 32) {
-                            transport_errors_.pop_front();
-                        }
-                        transport_errors_.push_back(std::string{"invalid data packet: "} + ex.what());
-                    }
+                    record_transport_error(std::string{"invalid data packet: "} + ex.what());
                     interrupt_socket_reads(ws);
                     break;
                 }
@@ -781,13 +779,7 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
                 try {
                     packet = decode_packet_prototype(frame);
                 } catch (const std::exception& ex) {
-                    {
-                        std::lock_guard<std::mutex> queue_lock(mutex_);
-                        if (transport_errors_.size() == 32) {
-                            transport_errors_.pop_front();
-                        }
-                        transport_errors_.push_back(std::string{"invalid data packet: "} + ex.what());
-                    }
+                    record_transport_error(std::string{"invalid data packet: "} + ex.what());
                     interrupt_socket_reads(ws);
                     break;
                 }
@@ -963,12 +955,6 @@ auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& 
         return ReceiveResult{false, false, "endpoint is not receive-enabled"};
     }
 
-    if (!transport_errors_.empty()) {
-        auto error = std::move(transport_errors_.front());
-        transport_errors_.pop_front();
-        return ReceiveResult{false, false, std::move(error)};
-    }
-
     auto queue_it = stream_queues_.find(endpoint_it->second.stream_name);
     if (queue_it == stream_queues_.end() || queue_it->second.empty()) {
         return ReceiveResult{true, false, {}};
@@ -977,6 +963,25 @@ auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& 
     packet = std::move(queue_it->second.front());
     queue_it->second.pop_front();
     return ReceiveResult{true, true, {}};
+}
+
+void BeastRuntimeNetEndpoint::record_transport_error(std::string error)
+{
+    constexpr std::size_t max_recorded_errors = 32;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (transport_errors_.size() == max_recorded_errors) {
+        transport_errors_.pop_front();
+    }
+    transport_errors_.push_back(std::move(error));
+}
+
+auto BeastRuntimeNetEndpoint::take_transport_errors() -> std::vector<std::string>
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> errors(std::make_move_iterator(transport_errors_.begin()),
+                                    std::make_move_iterator(transport_errors_.end()));
+    transport_errors_.clear();
+    return errors;
 }
 
 } // namespace s7::transport

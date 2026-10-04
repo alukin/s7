@@ -80,7 +80,7 @@ int main() try
         s7::transport::DataPacket packet;
         packet.stream_name = "demo.in";
         packet.sequence = 1;
-        packet.data_type = 0x000C;
+        packet.data_type = s7::transport::kPrototypeDataTypeF64;
         packet.elem_count = 1;
         packet.t_model_ns = 1;
         packet.payload = s7::transport::encode_f64_payload(5.5);

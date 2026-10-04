@@ -40,7 +40,7 @@ int main()
         outgoing.sequence = sequence;
         outgoing.stream_id = 100 + sequence;
         outgoing.channel_id = static_cast<std::uint32_t>(sequence);
-        outgoing.data_type = 0x000C;
+        outgoing.data_type = s7::transport::kPrototypeDataTypeF64;
         outgoing.elem_count = 1;
         outgoing.t_model_ns = 1'000'000 + (sequence * 1'000);
         outgoing.payload = s7::transport::encode_f64_payload(value);

@@ -14,13 +14,13 @@ The project is a work in progress. These items are prioritized by their effect o
 ## Progress
 
 - **Implemented and tested (2026-10-04):** only causal-memory elements (`Feedthrough::None`: `Delay`, `PreviousValue`) are deferred; their outputs are staged and published at the start of the next step. Stateful elements with direct feedthrough run in topological order with stateless ones. See the resolved "Every stateful element delays its output by one step" item.
-- **Implemented, build-checked:** the transport prototype accepts model time zero, rejects trailing frame bytes and unsupported flags, validates timestamp presence, and converts decoder exceptions into reported endpoint errors rather than allowing them to escape reader threads. Its codec API is named `*_prototype` to distinguish it from the candidate wire format. The `s7transport`, `s7net`, `s7runtime`, and `s7studio` targets compile. Tests were not run.
+- **Implemented and tested (2026-10-04):** the transport prototype requires a model timestamp (zero is valid), validates frame length, flags, reserved field, timestamp presence, data type and payload size, and reports reader-thread decode failures through `take_transport_errors()` instead of `receive()`. In-memory delivery round-trips packets through the same codec. Covered by `s7transport_validation_smoke`. Its codec API is named `*_prototype` to distinguish it from the candidate wire format.
 - **Wire format remains under review:** [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md) now describes candidate draft 0.3, explicitly not a conformance standard. Decisions recorded: every listed numeric type and all timestamp roles are mandatory capabilities; each stream declares the roles carried per packet; both ends persist sequence state; non-model clock domains are configured and must change when continuity across restart is not guaranteed. The exact crash delivery guarantee, descriptor serialization, fault messages, and conformance fixtures remain open. The candidate still does not match the prototype codec.
 - **Control draft updated:** canonical JSON digesting uses RFC 8785 JCS plus SHA-256; configuration bundles have bounded direct/chunked transfer; one CA-policy-authorized Studio is configured; partial commits are reconciled through status queries and idempotent retries. Exact message schemas, diagram/schema representation, retention, and request replay cache policy remain open.
 - **Pending:** the transport endpoint still has singleton active peer sockets; multiple-peer routing, per-peer queueing, and backpressure behavior are not implemented. Interim policy (2026-10-04): publishing with no connected data peer, or after the peer's socket failed, drops the packet and reports `SendResult::delivered == false` (counted by `NetSink::dropped_count()`); it no longer stops the runtime.
 - The review also confirmed that observation is local to one runtime node. Remote-origin values can be observed after entering the local graph through explicit network source/sink elements; observation does not bypass network boundaries. Scope queue and recording bounds remain open work.
 
-## P1: Fix data packet validation and receive failure handling — partially implemented
+## P1: Fix data packet validation and receive failure handling — implemented and tested
 
 ### Current problem
 
@@ -39,7 +39,7 @@ Network reader threads called the packet decoder without handling its exceptions
 - Rejection is observable through the endpoint/runtime error path.
 - A malformed frame does not terminate the process or prevent unrelated runtime work from continuing.
 
-**Progress:** exact frame length, supported flags, timestamp/flag consistency, and reader-thread exception handling are implemented in the prototype. The close-on-malformed-frame policy is to report the error and interrupt that connection's reader. Broader field validation, protocol-version behavior, and acceptance tests remain to be completed.
+**Progress:** exact frame length, supported flags, reserved field, timestamp/flag consistency, data type (prototype supports scalar F64 only, code `kPrototypeDataTypeF64`), element count versus payload size, extension layout, and reader-thread exception handling are implemented. Policy: a malformed frame is reported as a connection-level error and closes that peer's connection; the endpoint keeps serving and accepts new peers. Errors are not tied to a stream, so they are returned by `IRuntimeNetEndpoint::take_transport_errors()` (bounded to 32, oldest dropped) rather than by `receive()`; `NetSource` therefore no longer fails a runtime step because of another peer's bad frame. `s7runtime` prints them as `runtime.transport.error=` while serving. Protocol-version behavior is "reject anything but version 1". Tests: `s7transport_validation_smoke` rejects 16 malformed-frame variants (truncated, oversized, unsupported version/flags/type, invalid lengths, trailing bytes, count mismatch), rejects 6 invalid packets at encode time, and checks over WebSocket that a malformed frame is reported and closes only that connection while a new peer's packets are still delivered. Manually verified: a stepping `s7runtime` node kept stepping after receiving a malformed frame and logged the error. Mapping errors to control-plane fault messages waits for the wire/control drafts.
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:256), [transport.cpp](../s7transport/src/transport.cpp:556).
 
@@ -65,7 +65,7 @@ The chosen lifecycle (for example, read/compute followed by commit) must be docu
 
 Relevant code: [runtime.cpp](../s7core/src/runtime.cpp:9), [compiler.cpp](../s7core/src/compiler.cpp:160), [elements.hpp](../s7core/include/s7/elements.hpp:161).
 
-## P1: Permit zero model time — implemented; tests pending
+## P1: Permit zero model time — implemented and tested
 
 ### Current problem
 
@@ -81,7 +81,7 @@ Timestamp presence MUST be represented separately from timestamp value. A presen
 - A packet without a required timestamp is rejected explicitly.
 - The runtime's first packet on a newly created stream can be sent.
 
-**Progress:** timestamp presence is represented separately from its value in the prototype packet API, so zero is valid. Round-trip and missing-required-timestamp tests remain pending.
+**Progress:** `DataPacket::t_model_ns` is the only model-time field (the redundant `double t_model` was removed) and is required: the encoder rejects a packet without it, and zero is valid. `s7transport_validation_smoke` round-trips model time zero and system time zero, rejects a missing model timestamp (codec and in-memory publish), and delivers a first packet with sequence 0 and model time 0 over WebSocket. `NetSink` sets `t_model_ns = sequence × 1 s` as a placeholder until the observation-time item defines model time.
 
 Relevant code: [net.cpp](../s7net/src/net.cpp:133), [transport.cpp](../s7transport/src/transport.cpp:224).
 
@@ -466,7 +466,7 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 ## Suggested order
 
 0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.
-1. Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.
+1. ~~Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.~~ Done 2026-10-04.
 2. Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.
 3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients.
 4. Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.

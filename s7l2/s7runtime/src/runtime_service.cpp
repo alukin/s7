@@ -907,6 +907,15 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.execution.step_rate_hz=" << definition_.execution.step_rate_hz << '\n';
 }
 
+void RuntimeService::report_transport_errors(std::ostream& out) const {
+    if (!network_endpoint_) {
+        return;
+    }
+    for (const auto& error : network_endpoint_->take_transport_errors()) {
+        out << "runtime.transport.error=" << error << '\n';
+    }
+}
+
 const std::string& RuntimeService::runtime_instance_uuid() const {
     return runtime_instance_uuid_;
 }
@@ -1035,7 +1044,8 @@ void RuntimeService::connect_websocket_client() const {
 StepLoopStats run_step_loop(NodeRuntime& runtime,
                             const double step_rate_hz,
                             const std::atomic<bool>& stop_requested,
-                            const std::optional<std::chrono::steady_clock::time_point> deadline)
+                            const std::optional<std::chrono::steady_clock::time_point> deadline,
+                            const std::function<void()>& housekeeping)
 {
     if (!std::isfinite(step_rate_hz) || step_rate_hz <= 0.0) {
         throw std::invalid_argument("Step loop requires a positive step rate.");
@@ -1048,10 +1058,17 @@ StepLoopStats run_step_loop(NodeRuntime& runtime,
     // When the loop falls further behind than this, it drops the backlog instead of bursting.
     const auto max_lag = std::max<clock::duration>(period, std::chrono::milliseconds(100));
 
+    constexpr auto housekeeping_interval = std::chrono::milliseconds(100);
+
     StepLoopStats stats;
     const auto started = clock::now();
     auto next_step = started;
+    auto next_housekeeping = started + housekeeping_interval;
     while (true) {
+        if (housekeeping && clock::now() >= next_housekeeping) {
+            housekeeping();
+            next_housekeeping = clock::now() + housekeeping_interval;
+        }
         if (stop_requested.load()) {
             stats.stop_reason = StepLoopStats::StopReason::StopRequested;
             break;

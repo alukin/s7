@@ -36,18 +36,23 @@ struct EndpointOpenResult {
     std::string error;
 };
 
+// Data type code of a scalar F64 payload in the prototype packet layout (the
+// only payload type it supports). The candidate wire format uses other codes.
+constexpr std::uint16_t kPrototypeDataTypeF64 = 0x000C;
+
 struct DataPacket {
     std::string stream_name;
     std::uint64_t sequence{};
     std::uint64_t stream_id{};
     std::uint32_t channel_id{};
-    std::uint16_t data_type{0x000C}; // F64
+    std::uint16_t data_type{kPrototypeDataTypeF64};
+    // 0 lets the encoder derive the count from the payload size.
     std::uint32_t elem_count{};
     std::uint16_t flags{};
+    // Required. Zero is a valid model time; absence is an encoding error.
     std::optional<std::uint64_t> t_model_ns;
     std::optional<std::uint64_t> t_system_ns;
     std::vector<std::uint8_t> extensions;
-    double t_model{};
     std::vector<std::uint8_t> payload;
 };
 
@@ -99,6 +104,12 @@ public:
 
     virtual auto publish(const EndpointHandle& handle, const DataPacket& packet) -> SendResult = 0;
     virtual auto receive(const EndpointHandle& handle, DataPacket& packet) -> ReceiveResult = 0;
+
+    // Connection-level failures (for example a malformed frame from a peer,
+    // which closes that peer's connection). They are not tied to one stream,
+    // so they are reported here rather than through receive(). Returns and
+    // clears the errors recorded since the last call (bounded; oldest dropped).
+    virtual auto take_transport_errors() -> std::vector<std::string> { return {}; }
 };
 
 class InMemoryRuntimeNetEndpoint final : public IRuntimeNetEndpoint {
@@ -143,9 +154,13 @@ public:
     void close_endpoint(const EndpointHandle& handle) override;
     auto publish(const EndpointHandle& handle, const DataPacket& packet) -> SendResult override;
     auto receive(const EndpointHandle& handle, DataPacket& packet) -> ReceiveResult override;
+    auto take_transport_errors() -> std::vector<std::string> override;
 
 private:
     struct Impl;
+
+    void record_transport_error(std::string error);
+
     struct EndpointState {
         std::string stream_name;
         bool allow_publish{true};

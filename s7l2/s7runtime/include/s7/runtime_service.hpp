@@ -7,6 +7,7 @@
 #include <optional>
 #include <ostream>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -103,6 +104,8 @@ public:
     [[nodiscard]] auto network_endpoint() const -> transport::RuntimeNetEndpointPtr;
     [[nodiscard]] auto handle_control_request_json(const std::string& request_json) -> std::string;
     void add_seed_peer(const std::string& endpoint);
+    // Prints and clears connection-level transport errors (e.g. malformed frames).
+    void report_transport_errors(std::ostream& out) const;
     void print_summary(std::ostream& out) const;
 
     void start_websocket_server() const;
@@ -129,11 +132,13 @@ struct StepLoopStats {
 
 // Steps the runtime at step_rate_hz on the calling thread until stop_requested
 // is set or the deadline passes. If stepping falls behind, the backlog is
-// dropped rather than replayed in a burst.
+// dropped rather than replayed in a burst. housekeeping, if set, runs on the
+// same thread about every 100 ms.
 StepLoopStats run_step_loop(NodeRuntime& runtime,
                             double step_rate_hz,
                             const std::atomic<bool>& stop_requested,
-                            std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt);
+                            std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt,
+                            const std::function<void()>& housekeeping = {});
 
 } // namespace s7
 
