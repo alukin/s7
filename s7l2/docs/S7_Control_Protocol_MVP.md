@@ -1,7 +1,7 @@
 # S7 Control Protocol — MVP Draft
 
 **Status:** Proposed protocol draft; not yet a conformance standard.
-**Version:** 0.1
+**Version:** 0.2
 **Transport:** WebSocket carrying UTF-8 JSON messages.
 
 This document defines how the S7 control Studio and runtime nodes identify one another, discover peers, exchange network configuration, and prepare/commit a configuration update. It is intended to be implementable in C++, Rust, Python, and JVM runtimes without depending on a shared implementation library.
@@ -41,7 +41,7 @@ Runtime-node identity uses the SAN URI form:
 spiffe://s7/node/<node_uuid>
 ```
 
-The control Studio certificate MUST carry the configured authorization attribute that permits network configuration changes. The exact X.509 extension or policy OID is not fixed by this draft. A valid runtime-node certificate alone does not authorize configuration changes.
+The control Studio certificate MUST carry a CA-issued X.509 Certificate Policies entry for the S7 control-node role. Each network's trust configuration MUST identify the exact policy OID it accepts and the single authorized Studio certificate identity (certificate fingerprint or an equivalent pinned key identity). A second Studio certificate is not authorized until an operator updates that configuration. Certificate rotation requires an explicit trust-configuration update. A valid runtime-node certificate alone does not authorize configuration changes.
 
 Plain WebSocket is not trusted membership and MUST NOT be used to authorize configuration changes.
 
@@ -72,7 +72,7 @@ The initial request/response profile is synchronous: a connection has at most on
 - `instance_id` identifies one runtime process incarnation and MUST change when that process restarts.
 - A configuration revision identifies immutable configuration content; it MUST NOT be a moving branch name.
 - `project_revision` MAY be the Git commit identifier held by Studio. Runtime nodes treat it as opaque metadata and do not fetch from Git.
-- `configuration_digest` identifies the exact canonical configuration bundle bytes or their specified canonical representation. The digest algorithm and canonical serialization profile remain to be fixed.
+- `configuration_digest` is the lowercase hexadecimal SHA-256 digest of the UTF-8 bytes produced by RFC 8785 JSON Canonicalization Scheme (JCS) over the complete configuration bundle, excluding the `configuration_digest` member itself. The canonicalized bundle MUST contain no duplicate JSON object member names. `project_revision` remains separate opaque Git metadata.
 
 JSON identity fields are claims. The authenticated certificate identity is authoritative; a mismatch MUST fail the request.
 
@@ -123,7 +123,11 @@ The node validates the bundle, fragment, local capabilities, and `base_revision`
 }
 ```
 
-The two objects above are placeholders for the selected schema/configuration representation; this protocol does not standardize that format. The node MUST stage the prepared material without activating it. A ready response contains a short-lived, node-local `prepare_token`; a negative response contains structured incompatibilities.
+The two objects above are placeholders for the selected schema/configuration representation; this protocol does not standardize the schema format. A direct bundle MAY be sent in one request up to the receiver's advertised `max_configuration_bytes`. Larger bundles MUST use the chunked transfer messages below. The absolute MVP limit is 256 MiB per configuration bundle and 1 MiB per chunk. A receiver MUST reject a bundle exceeding either its advertised limit or the absolute limit before allocating its full declared size.
+
+Chunk transfer uses `BEGIN_CONFIGURATION_TRANSFER`, `CONFIGURATION_CHUNK`, and `END_CONFIGURATION_TRANSFER` requests. Each chunk carries a transfer ID, zero-based chunk index, byte offset, and base64url-encoded bytes. Chunks MUST be contiguous and ordered; receivers reject overlaps, missing indices, inconsistent offsets, excess size, and digest mismatch. The receiver MUST stage the complete bundle and verify its canonical digest before it can become a prepared deployment. Repeated chunks with identical transfer ID/index/content are idempotent; conflicting repeats fail the transfer.
+
+The node MUST stage the prepared material without activating it. A ready response contains a short-lived, node-local `prepare_token`; a negative response contains structured incompatibilities.
 
 Repeating the same prepare request for the same deployment and revision SHOULD return the same live prepare token. A different request using a stale `base_revision` MUST return `REVISION_CONFLICT`.
 
@@ -131,7 +135,7 @@ Repeating the same prepare request for the same deployment and revision SHOULD r
 
 Commits a previously prepared deployment using its token. The operation MUST be idempotent. A node MUST record the committed revision and digest before reporting success. It activates its assigned fragment according to local runtime policy and reports the resulting state.
 
-The MVP uses two-phase prepare/commit, but does not promise that separate nodes switch at the same physical instant. A connection failure during commit can leave a deployment partially committed; the Studio MUST query participants and retry or explicitly recover the transaction. Revision matching on network data streams is specified by the data-stream protocol.
+The MVP uses two-phase prepare/commit, but does not promise that separate nodes switch at the same physical instant. A connection failure during commit can leave a deployment partially committed. The Studio MUST query `LIST_DEPLOYMENTS`, retry idempotent commits on nodes still prepared, and report the per-node committed revision and digest. If the operator elects to revert a partially applied change, Studio MUST deploy the previous project revision as a new transaction; nodes MUST NOT autonomously vote or roll back. Revision matching on network data streams is specified by the data-stream protocol.
 
 ### 5.8 `ABORT_DEPLOYMENT` → `ABORT_DEPLOYMENT_RESULT`
 
@@ -153,7 +157,7 @@ The normal deployment flow is:
 
 Nodes MUST reject prepare requests whose `base_revision` does not match their active revision, unless the request explicitly identifies a recovery operation. This provides optimistic conflict detection without runtime voting.
 
-The protocol MUST retain enough transaction identifiers and state to make prepare, commit, abort, and recovery requests idempotent across reconnects. Retention duration and crash-recovery journal format are implementation-specific in the MVP.
+The protocol MUST retain enough transaction identifiers and state to make prepare, commit, abort, and recovery requests idempotent across reconnects and node restarts. Retention duration and crash-recovery journal format are implementation-specific in the MVP. `LIST_DEPLOYMENTS` MUST report enough state for Studio to distinguish committed, prepared, aborted, and unknown deployment IDs and to resume status reconciliation.
 
 ## 7. Error Responses
 
@@ -201,12 +205,10 @@ Errors MUST NOT disclose private key material, credentials, or sensitive local p
 
 ## 9. Open Items Before Interoperability Freeze
 
-1. Exact JSON schema for each message and the canonical form used to compute `configuration_digest`.
-2. Exact Studio authorization certificate extension and how a single authorized control Studio is configured.
-3. Configuration bundle representation and maximum message size or chunking protocol.
-4. Recovery procedure for partially committed multi-node deployments.
-5. Retention and garbage-collection rules for configuration and deployment history.
-6. Whether request IDs use UUIDv4 specifically and how long duplicate responses are cached.
+1. Exact JSON schemas for each message and chunk-transfer operation.
+2. Configuration schema/diagram bundle representation and the mapping from Git project revision to exact executable configuration.
+3. Retention and garbage-collection rules for configuration and deployment history.
+4. Whether request IDs use UUIDv4 specifically and how long duplicate responses are cached.
 
 ## 10. Relationship to Implementation
 

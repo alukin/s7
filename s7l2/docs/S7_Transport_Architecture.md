@@ -155,7 +155,7 @@ This is required for mixed private/public deployments.
 
 Data-plane candidate baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md)):
 
-- persistent per-stream sequence numbers; gaps are detectable after crashes/reconnects but are not automatically recovered
+- persistent per-stream sender and receiver sequence state; durable state prevents sequence reuse and duplicate re-acceptance, while any crash replay guarantee must be defined separately
 - ordering is defined per stream; no global ordering is implied across different streams or peers
 - timestamps are described by explicit stream roles (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) and clock domains
 - model time is simulation time; it is not inferred from wall-clock time
@@ -164,4 +164,4 @@ Data-plane candidate baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_W
 
 Observation is local to a runtime node. Studio Scope may observe outputs in its local runtime, including outputs of configured network-source elements after packets cross an explicit graph boundary. The observation API does not probe remote nodes and does not bypass the data protocol.
 
-The packet layout, timestamp records, type IDs, multi-peer routing details, and transport error behavior remain candidate design decisions. See the linked wire protocol and control protocol drafts; neither is yet a conformance standard.
+The candidate wire draft now requires support for all listed numeric types and all timestamp roles, with each stream declaring which timestamp roles occur on its packets. Non-model clocks have configured domains and must change domain ID when restart continuity cannot be guaranteed. Control drafts define canonical JSON SHA-256 digests, bounded chunked bundle transfer, one CA-policy-authorized Studio identity, and status/retry recovery for partial commits. Packet layout, exact message JSON schemas, multi-peer routing details, durable sequence record formats, and the crash delivery guarantee remain open. Neither protocol draft is yet a conformance standard.

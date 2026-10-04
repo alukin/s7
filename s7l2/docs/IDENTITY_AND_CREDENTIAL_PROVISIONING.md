@@ -39,7 +39,7 @@ spiffe://s7/node/<node_uuid>
 
 The certificate identity is authoritative. Any `node_uuid` reported in a control-plane message must agree with the authenticated certificate identity. This follows the binding described in `REMOTE_NODE_INFO_AND_DEPLOYMENT.md`.
 
-The MVP has one control Studio. Its identity carries an authorization attribute indicating that it may control the computational network. Multiple Studio nodes, master handover, and coordination between Studio operators are future work.
+The MVP has one configured control Studio. Its certificate carries a CA-issued X.509 Certificate Policies entry for the S7 control-node role. Each runtime trust configuration pins the accepted policy OID and the authorized Studio identity; adding or rotating the authorized Studio requires an explicit trust-configuration update. Multiple Studio nodes, master handover, and coordination between Studio operators are future work.
 
 ## Provisioning Workflow
 
@@ -117,13 +117,12 @@ The format and storage location of this record are not yet standardized. It shou
 ## Open Decisions
 
 - Which service issues S7 certificates, and how initial trust roots are delivered and rotated.
-- Exact certificate profiles, role OIDs/extensions, key algorithms, and validity periods.
-- Whether the Studio control authorization attribute is an X.509 extension, a separate signed grant, or both.
+- Numeric assignment of the S7 Certificate Policies OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods.
 - Whether project diagrams and executable schemas are stored as separate files or in one project document.
 - How the Studio maps a Git commit to the exact schema/configuration sent to runtime nodes.
 - Whether and how remote Git hosting is added after the MVP.
 - Whether private-key protection uses OS keystores, encrypted files, hardware-backed keys, or configurable alternatives.
-- What signing or digest format accompanies the deployment artifact in addition to its project revision identifier.
+- Whether deployment artifacts require a signature in addition to the canonical JSON SHA-256 configuration digest and project revision identifier.
 
 ## Current Repository State
 

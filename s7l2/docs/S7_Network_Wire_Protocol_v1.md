@@ -1,7 +1,7 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
 **Status:** Candidate wire-format draft; not yet a conformance standard.
-**Draft revision:** 0.2
+**Draft revision:** 0.3
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
 
@@ -24,7 +24,7 @@ The MVP data transport is a WebSocket binary message per S7 data packet. A runti
 
 Each packet carries a persistent per-stream sequence number. Receivers use it to detect duplicates, regressions, and gaps, including discontinuities caused by producer restart or connection loss. A sequence number does not by itself make a missing packet recoverable.
 
-The MVP does not define UDP behavior, multicast membership, packet retransmission, forward error correction, global ordering between unrelated streams or peer connections, or a synchronized global clock. A receiver MUST NOT infer causal order between packets from different streams based on arrival order.
+The MVP does not define UDP behavior, multicast membership, forward error correction, global ordering between unrelated streams or peer connections, or a synchronized global clock. Crash replay behavior is being resolved separately; sequence numbers and persistent checkpoints alone MUST NOT be described as reliable delivery. A receiver MUST NOT infer causal order between packets from different streams based on arrival order.
 
 ## 3. Stream Identity and Setup
 
@@ -47,6 +47,7 @@ An implementation MUST NOT infer stream type, timestamp semantics, or gap policy
 
 - The first packet for a newly created stream starts at zero.
 - The producer MUST persist sequence state and continue it across process restarts and reconnects for that `stream_id`, so it never reuses a sequence number after a crash. A crash may therefore leave a gap. Implementations MAY durably reserve ranges of sequence numbers and consume them in memory, avoiding a durable storage write for every packet; after restart, the producer begins at the first number beyond its previous reservation.
+- The receiver MUST persist its per-stream sequence checkpoint across process restarts. Checkpoint writes MUST be crash-safe and MUST NOT move backwards. The receiver resumes duplicate/gap checks from that checkpoint; if its durable state is unavailable or corrupt, it MUST report state loss and require explicit stream recovery rather than silently adopting an arbitrary sequence.
 - A transport reconnect does not reset the sequence.
 - A deliberate stream replacement uses a new `stream_id` and a new sequence beginning at zero.
 
@@ -83,7 +84,11 @@ When processing preserves source timing, a packet MAY carry both the original `S
 
 Timestamp values use signed 64-bit integer nanoseconds from the origin defined by the stream profile. Zero is a valid timestamp; presence is represented by the timestamp record, never by a sentinel value. `MODEL_TIME` is relative to the model-time origin declared by the deployment. It is simulation/model time and MUST NOT be inferred from wall-clock time. `SOURCE_TIME` and `PROCESSING_TIME` are relative to clock domains declared in configuration. A clock-domain identifier identifies the clock and origin; it does not imply synchronization with another domain. Receivers MUST NOT directly compare timestamps from different domains unless configuration explicitly declares a conversion/synchronization relationship.
 
-The stream descriptor declares the timestamp roles required on each packet and the clock domain for each role. A packet MUST contain exactly the roles required by its descriptor. It MAY contain optional roles only if the descriptor allows them. Timestamp presence and role are encoded by the extension in Section 7; no timestamp field is mandatory for a stream whose descriptor declares no timestamp roles.
+Every conforming MVP implementation MUST support all three roles. The stream descriptor declares which roles are required on each packet and the clock domain for each role. A configured stream MUST declare at least one role, and a packet MUST contain exactly the roles required by that stream descriptor. Timestamp presence and role are encoded by the extension in Section 7.
+
+Every conforming MVP implementation MUST encode, decode, and preserve all numeric types listed in Section 8. Arithmetic support is a separate element/schema capability: a node MUST reject a graph assignment that requires an operation it cannot implement, while still being able to transport every listed type through compatible network boundaries.
+
+Each non-model clock domain MUST have a stable configured identifier and an origin/units definition. A node MUST declare whether that clock remains continuous across restart. If it cannot guarantee continuity, it MUST use a new clock-domain identifier after restart. Model time uses the deployment's model-time domain and is not reset by a process restart unless a new model run/configuration explicitly establishes a new origin.
 
 For block data, a timestamp role describes the first logical sample in the packet. Uniformly sampled blocks declare a rational sample rate in stream setup; later sample times are derived from the first-sample time and sample index. Irregular/event blocks MUST carry per-item times or offsets in a separately specified payload/profile; receivers MUST NOT assume uniform spacing for them.
 
@@ -171,7 +176,7 @@ The initial catalog includes:
 
 For `I12` and `U12`, values are packed most-significant bit first, with no padding between values. If the final value leaves unused low-order bits in the final byte, those bits MUST be zero. Signed `I12` uses two's-complement range `-2048..2047`; `U12` uses range `0..4095`. All other multi-byte values use network byte order (big-endian). `element_count` counts logical values; for complex types, it counts complex pairs, not individual real/imaginary components. Payload length MUST equal the encoded size implied by `data_type` and `element_count`.
 
-IEEE NaNs, infinities, and signed zero are transported as their interchange bit patterns without canonicalization. An implementation MAY lack arithmetic support for a type while still transporting it as opaque bytes, but stream setup MUST fail if a receiver cannot consume the declared type. Capability negotiation is defined by the control protocol.
+IEEE NaNs, infinities, and signed zero are transported as their interchange bit patterns without canonicalization. All listed representations are mandatory for MVP transport. A runtime that cannot perform arithmetic for a type MUST still preserve and transport it, and MUST reject graph execution that requires unsupported arithmetic. Capability negotiation is defined by the control protocol.
 
 ## 9. Validation and Fault Behavior
 
@@ -199,14 +204,10 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 
 ## 12. Items Requiring Review Before Interoperability Freeze
 
-1. Confirm that model time is simulation/model time and that real-time source/processing timestamps use separately declared clock domains.
-2. Confirm the timestamp extension and configuration-level clock-domain mapping in Section 7.1.
-3. Confirm whether `I128`/`U128` and `F128` are required to be consumable by every runtime or may be advertised as unsupported while still being transported opaquely.
-4. Confirm whether packed `I12`/`U12` are required in the initial MVP profile.
-5. Define the stream descriptor's exact serialization and the point at which its timestamp domains are updated after a source/runtime restart.
-6. Define receiver join/rejoin state and how expected sequence is restored after receiver restart.
-7. Define control-plane fault/alarm messages for sequence gaps and malformed packets.
-8. Define protocol negotiation for supported packet versions, types, and extensions.
+1. Define the stream descriptor's exact serialization and the point at which its timestamp domains are updated after a source/runtime restart.
+2. Specify durable sender/receiver sequence checkpoint formats, crash consistency, and the selected crash-delivery guarantee.
+3. Define control-plane fault/alarm messages for sequence gaps and malformed packets.
+4. Define protocol negotiation for supported packet versions and extensions; all Section 8 type IDs are mandatory in the MVP profile.
 
 ## 13. Relationship to Implementation
 
