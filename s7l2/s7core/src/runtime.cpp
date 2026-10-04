@@ -22,7 +22,12 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
     }
 }
 
+std::thread::id NodeRuntime::stepping_thread() const {
+    return stepping_thread_.load();
+}
+
 void NodeRuntime::step() {
+    stepping_thread_.store(std::this_thread::get_id());
     if (memory_outputs_staged_) {
         for (auto& output : memory_outputs_) {
             if (is_complex_signal_type(output.type)) {

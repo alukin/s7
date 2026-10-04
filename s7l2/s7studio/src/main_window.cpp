@@ -21,6 +21,7 @@
 #include <qschematic/items/node.hpp>
 #include <qschematic/scene.hpp>
 
+#include <QDateTime>
 #include <QAction>
 #include <QActionGroup>
 #include <QColorDialog>
@@ -615,7 +616,7 @@ void MainWindow::connectRunnerSignals()
     connect(runner_, &LocalSchemaRunner::statusChanged, this, &MainWindow::onStatusChanged);
     connect(runner_, &LocalSchemaRunner::runCompleted, this, &MainWindow::onRunCompleted);
     connect(runner_, &LocalSchemaRunner::ticksProgress, this, &MainWindow::onTickProgress);
-    connect(runner_, &LocalSchemaRunner::scopeSample, this, &MainWindow::onScopeSample);
+    connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, &MainWindow::onScopeSamplesAvailable);
 }
 
 void MainWindow::buildActions()
@@ -1193,21 +1194,43 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     }
 }
 
-void MainWindow::onScopeSample(const QString& scopeId,
-                               const int channel,
-                               const long /*step*/,
-                               const double timeSeconds,
-                               const double value)
+void MainWindow::onScopeSamplesAvailable()
 {
-    auto& history = scopeSampleHistory_[scopeId];
-    history.push_back(ScopeSamplePoint{channel, timeSeconds, value});
-    if (history.size() > kMaxScopeHistoryPointsPerScope) {
-        const int overflow = history.size() - kMaxScopeHistoryPointsPerScope;
-        history.erase(history.begin(), history.begin() + overflow);
+    if (!runner_) {
+        return;
+    }
+    const auto batch = runner_->takeScopeSamples();
+
+    QHash<QString, int> touched;
+    for (const auto& sample : batch.samples) {
+        const auto scopeId = QString::fromStdString(sample.scopeId);
+        scopeSampleHistory_[scopeId].push_back(ScopeSamplePoint{sample.channel, sample.timeSeconds, sample.value});
+        touched.insert(scopeId, 0);
+        if (const auto window = scopeWindows_.value(scopeId)) {
+            window->appendSample(sample.channel, sample.timeSeconds, sample.value);
+        }
+    }
+    for (auto it = touched.cbegin(); it != touched.cend(); ++it) {
+        auto& history = scopeSampleHistory_[it.key()];
+        if (history.size() > kMaxScopeHistoryPointsPerScope) {
+            history.erase(history.begin(), history.begin() + (history.size() - kMaxScopeHistoryPointsPerScope));
+        }
     }
 
-    if (const auto window = scopeWindows_.value(scopeId)) {
-        window->appendSample(channel, timeSeconds, value);
+    if (batch.dropped > 0) {
+        // The runtime produced samples faster than the UI took them; the oldest were dropped.
+        scopeSamplesDropped_ += batch.dropped;
+        for (const auto& window : std::as_const(scopeWindows_)) {
+            if (window) {
+                window->setDroppedSampleCount(scopeSamplesDropped_);
+            }
+        }
+        const auto nowMs = QDateTime::currentMSecsSinceEpoch();
+        if (nowMs - lastScopeDropLogMs_ >= 1000) {
+            lastScopeDropLogMs_ = nowMs;
+            appendLog(QStringLiteral("[studio] scope display could not keep up; %1 samples dropped so far (oldest first)")
+                          .arg(scopeSamplesDropped_));
+        }
     }
 }
 
@@ -1566,6 +1589,7 @@ void MainWindow::closeScopeWindows()
 void MainWindow::clearScopeSamples()
 {
     scopeSampleHistory_.clear();
+    scopeSamplesDropped_ = 0;
     for (const auto& window : scopeWindows_) {
         if (window) {
             window->clearSamples();

@@ -12,7 +12,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | `s7studio/src/diagram_document.*`, `diagram_format.hpp` | Diagram file model and format description |
 | `s7studio/src/element_picker_panel.*` | Element Library dock built from `ElementCatalogService`; double-click emits `elementRequested` |
 | `s7studio/src/main_window.cpp` | Wiring: add element, parameter dialog, run, save/load, schema libraries |
-| `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp` | Embedded runtime: builds the schema through the registry, runs it on a worker thread, emits Scope samples |
+| `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp`, `scope_sample_mailbox.hpp` | Embedded runtime: builds the schema through the registry, runs it on a worker thread, hands Scope samples to the UI through a bounded mailbox (oldest dropped and counted when the UI falls behind) |
 
 
 ## Model and conventions

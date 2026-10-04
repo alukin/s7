@@ -42,14 +42,31 @@ struct ObservationSample {
     }
 };
 
+// Values of several outputs taken between two steps: every sample belongs to
+// the step `step`.
+struct ObservationSnapshot {
+    std::size_t step{};
+    std::vector<ObservationSample> samples;
+};
+
+// Reads a runtime's outputs without changing it.
+//
+// Threading contract: observation runs between steps on the thread that steps
+// the runtime, so it never races with step() and a snapshot is coherent. Calls
+// from any other thread (once the runtime has stepped) throw std::logic_error.
+// Code that observes from another thread must hand samples over itself, as
+// Studio's local runner does with its sample mailbox.
 class ObservationService {
 public:
     explicit ObservationService(const NodeRuntime& runtime);
 
     [[nodiscard]] ObservationSample sample_output(const std::string& element_id, std::size_t port = 0) const;
-    [[nodiscard]] std::vector<ObservationSample> sample_outputs(const std::vector<ProbePoint>& probes) const;
+    [[nodiscard]] ObservationSnapshot snapshot(const std::vector<ProbePoint>& probes) const;
 
 private:
+    void require_stepping_thread() const;
+    [[nodiscard]] ObservationSample read(const std::string& element_id, std::size_t port) const;
+
     const NodeRuntime* runtime_;
 };
 

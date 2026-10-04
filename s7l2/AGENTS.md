@@ -60,7 +60,7 @@ ctest --test-dir build -R s7io_smoke
 - Respect execution ordering: `NodeRuntime::step()` publishes the outputs staged by causal-memory elements in the previous step, runs `causal_order` (every element with direct feedthrough, stateful or not), then steps `memory_order` (`Feedthrough::None` elements such as `Delay`) and stages their outputs for the next step (`s7core/src/runtime.cpp`).
 - Validation expects cycles to include at least one causal-memory element; do not bypass this in compiler/runtime paths.
 - Observation is non-invasive: use `ObservationService` reads, never mutate runtime state from observe code.
-- Observation sampling pattern: `sample_output(element_id, port)` and `sample_outputs({ProbePoint{...}})` (`s7observe/include/s7/observe.hpp`, `s7observe/tests/observe_smoke.cpp`).
+- Observation sampling pattern: `sample_output(element_id, port)` and `snapshot({ProbePoint{...}})` (one coherent step); observe only on the thread that steps the runtime, otherwise `std::logic_error` (`s7observe/include/s7/observe.hpp`, `s7observe/tests/observe_smoke.cpp`).
 - Plugin elements are loaded at runtime via `PluginLoader`; keep element registration idempotent and scoped to plugin registration hooks (`s7runtime/include/s7/plugin_loader.hpp`, `s7runtime/src/plugin_loader.cpp`).
 
 ## Integration and dependency notes

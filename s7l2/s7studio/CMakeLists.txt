@@ -32,6 +32,7 @@ add_executable(s7studio
     src/model_run_controller.hpp
     src/json_utils.hpp
     src/local_runtime_v2.hpp
+    src/scope_sample_mailbox.hpp
     src/local_schema_runner.cpp
     src/local_schema_runner.hpp
     src/element_picker_panel.cpp

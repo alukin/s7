@@ -5,6 +5,8 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
+#include <thread>
 
 #include "s7/observe.hpp"
 
@@ -31,11 +33,26 @@ int main() try
     runtime.step();
     assert(runtime.real_output_of("sum") == 2.0);
 
-    const auto samples = observation.sample_outputs({s7::ProbePoint{"memory", 0}, s7::ProbePoint{"sum", 0}});
+    const auto snapshot = observation.snapshot({s7::ProbePoint{"memory", 0}, s7::ProbePoint{"sum", 0}});
+    assert(snapshot.step == 2);
+    const auto& samples = snapshot.samples;
     assert(samples.size() == 2);
+    assert(samples[0].step == 2 && samples[1].step == 2);
     // Samples belong to one step: memory holds the value sum consumed in step 2.
     assert(samples[0].as_real() == 1.0);
     assert(samples[1].as_real() == 2.0);
+
+    // Observation from another thread than the stepping thread is refused.
+    bool refused = false;
+    std::thread other([&] {
+        try {
+            static_cast<void>(observation.snapshot({s7::ProbePoint{"sum", 0}}));
+        } catch (const std::logic_error&) {
+            refused = true;
+        }
+    });
+    other.join();
+    assert(refused);
 
     return 0;
 } catch (const std::exception& ex) {

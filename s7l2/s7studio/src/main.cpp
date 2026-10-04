@@ -1,4 +1,6 @@
 #include "local_runtime_v2.hpp"
+#include "local_schema_runner.hpp"
+#include "scope_sample_mailbox.hpp"
 #include "main_window.hpp"
 
 #include <s7/builtin_element_registry.hpp>
@@ -13,6 +15,9 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
+#include <thread>
+#include <chrono>
 #include <cerrno>
 #include <cmath>
 #include <exception>
@@ -159,6 +164,27 @@ int runSmoke()
         runtime.step();
         runtime.step();
 
+        {
+            // The Scope mailbox stays bounded, drops oldest first, keeps order,
+            // and asks for one UI notification at a time.
+            s7studio::ScopeSampleMailbox mailbox{4};
+            bool notified = false;
+            int notifications = 0;
+            for (long step = 0; step < 10; ++step) {
+                notified = mailbox.push(s7studio::ScopeSample{"scope", 0, step, 0.001 * step, static_cast<double>(step)});
+                notifications += notified ? 1 : 0;
+            }
+            assert(notifications == 1);
+            auto batch = mailbox.take();
+            assert(batch.samples.size() == 4 && batch.dropped == 6);
+            for (std::size_t index = 0; index < batch.samples.size(); ++index) {
+                assert(batch.samples[index].step == static_cast<long>(6 + index));
+            }
+            assert(mailbox.push(s7studio::ScopeSample{"scope", 0, 10, 0.01, 10.0}));
+            batch = mailbox.take();
+            assert(batch.samples.size() == 1 && batch.dropped == 0);
+        }
+
         const s7studio::runtime::detail::ScopeElement scope3{3};
         assert(scope3.input_ports().size() == 3 && scope3.output_ports().size() == 3);
         for (std::size_t channel = 0; channel < 3; ++channel) {
@@ -213,6 +239,32 @@ int runSmoke()
         netRuntime.step();
         assert(std::abs(netRuntime.real_output_of("net_in") - 8.5) < 1e-12);
         s7::RuntimeNetContext::set_endpoint(nullptr);
+
+        {
+            // A run that produces samples while the UI takes none keeps at most
+            // the mailbox capacity; the rest is counted as dropped.
+            const auto scopeSchema = boost::json::parse(R"json({
+                "name": "scope_backlog",
+                "elements": [
+                    { "id": "source", "type": "Constant", "params": { "value": 1.0 } },
+                    { "id": "scope", "type": "Scope", "params": { "channel_count": 1 } }
+                ],
+                "connections": [ { "from_element": "source", "from_port": 0, "to_element": "scope", "to_port": 0 } ]
+            })json");
+            s7studio::LocalSchemaRunner runner;
+            constexpr long ticks = 300'000;
+            runner.run(scopeSchema, 0.001, ticks);
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+            while (runner.isRunning() && std::chrono::steady_clock::now() < deadline) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            assert(!runner.isRunning());
+            const auto batch = runner.takeScopeSamples();
+            assert(batch.samples.size() == 200'000);
+            assert(batch.dropped == static_cast<std::uint64_t>(ticks) - 200'000);
+            assert(batch.samples.back().step == ticks);
+            runner.reset();
+        }
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "s7studio smoke error: " << ex.what() << '\n';

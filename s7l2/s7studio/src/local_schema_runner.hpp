@@ -2,6 +2,7 @@
 
 #include "is_schema_runner.hpp"
 #include "local_runtime_v2.hpp"
+#include "scope_sample_mailbox.hpp"
 
 #include <QObject>
 #include <QString>
@@ -34,12 +35,17 @@ public:
     [[nodiscard]] bool isRunning() const override;
     [[nodiscard]] bool isPaused() const override;
 
+    // UI thread: takes the Scope samples queued since the last call.
+    [[nodiscard]] auto takeScopeSamples() -> ScopeSampleBatch;
+
 signals:
     void logMessage(const QString& message);
     void statusChanged(const QString& status);
     void runCompleted(bool success, const QString& error);
+    // Throttled to at most 20 per second, plus the final count.
     void ticksProgress(long completed, long total);
-    void scopeSample(const QString& scopeId, int channel, long step, double timeSeconds, double value);
+    // New samples are waiting in takeScopeSamples(); at most one is pending.
+    void scopeSamplesAvailable();
 
 private:
     struct ScopeConfig {
@@ -68,6 +74,7 @@ private:
     std::atomic<bool> running_{false};
     std::atomic<bool> paused_{false};
     std::atomic<bool> stopRequested_{false};
+    ScopeSampleMailbox scopeMailbox_;
 };
 
 } // namespace s7studio

@@ -12,6 +12,7 @@
 #include <QMessageBox>
 #include <QPen>
 #include <QPushButton>
+#include <QStringList>
 #include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -81,6 +82,8 @@ ScopeViewWindow::ScopeViewWindow(QString scopeId,
     controls->addWidget(exportButton_);
     controls->addWidget(configureButton_);
     controls->addStretch(1);
+    statusLabel_ = new QLabel(this);
+    controls->addWidget(statusLabel_);
 
     rootLayout->addLayout(controls);
 
@@ -140,8 +143,13 @@ void ScopeViewWindow::appendSample(const int channel, const double timeSeconds, 
     series.time.push_back(timeSeconds);
     series.value.push_back(value);
     if (recording_) {
-        series.recordedTime.push_back(timeSeconds);
-        series.recordedValue.push_back(value);
+        if (series.recordedTime.size() >= kMaxRecordedSamplesPerChannel) {
+            recordingLimitReached_ = true;
+            setRecording(false);
+        } else {
+            series.recordedTime.push_back(timeSeconds);
+            series.recordedValue.push_back(value);
+        }
     }
 
     const double minTime = std::max(0.0, timeSeconds - windowSecondsSpin_->value());
@@ -154,6 +162,33 @@ void ScopeViewWindow::clearSamples()
     clearBuffers();
 }
 
+void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
+{
+    droppedSamples_ = dropped;
+    updateStatus();
+}
+
+void ScopeViewWindow::setRecording(const bool recording)
+{
+    recording_ = recording;
+    recordButton_->setText(recording_ ? QStringLiteral("Stop Record") : QStringLiteral("Start Record"));
+    updateStatus();
+}
+
+void ScopeViewWindow::updateStatus()
+{
+    QStringList parts;
+    if (recording_) {
+        parts << QStringLiteral("recording");
+    } else if (recordingLimitReached_) {
+        parts << QStringLiteral("recording stopped at %1 samples/channel").arg(kMaxRecordedSamplesPerChannel);
+    }
+    if (droppedSamples_ > 0) {
+        parts << QStringLiteral("display dropped %1 samples").arg(droppedSamples_);
+    }
+    statusLabel_->setText(parts.join(QStringLiteral(" | ")));
+}
+
 void ScopeViewWindow::clearBuffers()
 {
     for (auto& series : channels_) {
@@ -162,6 +197,9 @@ void ScopeViewWindow::clearBuffers()
         series.recordedTime.clear();
         series.recordedValue.clear();
     }
+    recordingLimitReached_ = false;
+    droppedSamples_ = 0;
+    updateStatus();
 
     for (int i = 0; i < plot_->graphCount(); ++i) {
         if (auto* graph = plot_->graph(i)) {
@@ -203,8 +241,10 @@ void ScopeViewWindow::exportRecordedCsv()
 
 void ScopeViewWindow::toggleRecording()
 {
-    recording_ = !recording_;
-    recordButton_->setText(recording_ ? QStringLiteral("Stop Record") : QStringLiteral("Start Record"));
+    if (!recording_) {
+        recordingLimitReached_ = false;
+    }
+    setRecording(!recording_);
 }
 
 void ScopeViewWindow::refreshPlot()

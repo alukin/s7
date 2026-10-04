@@ -10,6 +10,7 @@
 
 #include <boost/json.hpp>
 
+#include <cstdint>
 #include <memory>
 
 class QAction;
@@ -63,7 +64,7 @@ private slots:
     void onTickProgress(long completed, long total);
     void onScopeNodeDoubleClicked(const QString& scopeId, int channelCount);
     void onElementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
-    void onScopeSample(const QString& scopeId, int channel, long step, double timeSeconds, double value);
+    void onScopeSamplesAvailable();
     void openDocumentFile();
     void closeCurrentDiagram();
     void saveDocument();
@@ -182,6 +183,8 @@ private:
     QString currentDiagramPath_;
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
     QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
+    std::uint64_t scopeSamplesDropped_ = 0;
+    qint64 lastScopeDropLogMs_ = 0;
     QActionGroup* paperSizeGroup_ = nullptr;
     QActionGroup* pageOrientationGroup_ = nullptr;
     QToolBar* diagramDrawToolBar_ = nullptr;

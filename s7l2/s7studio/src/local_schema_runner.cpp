@@ -67,6 +67,7 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, const double d
 
     totalTicks_ = ticks;
     completedTicks_.store(0);
+    scopeMailbox_.clear();
     stopRequested_.store(false);
     paused_.store(false);
     running_.store(true);
@@ -108,6 +109,8 @@ void LocalSchemaRunner::executeRunLoop()
     std::string error;
 
     try {
+        constexpr auto progressInterval = std::chrono::milliseconds(50);
+        auto nextProgress = std::chrono::steady_clock::now();
         for (long step = 0; totalTicks_ < 0 || step < totalTicks_; ++step) {
             if (stopRequested_.load()) {
                 break;
@@ -124,8 +127,12 @@ void LocalSchemaRunner::executeRunLoop()
             runtime_->step();
             completedTicks_.store(step + 1);
             emitScopeSamples(step + 1);
-            emit ticksProgress(step + 1, totalTicks_);
+            if (const auto now = std::chrono::steady_clock::now(); now >= nextProgress) {
+                emit ticksProgress(step + 1, totalTicks_);
+                nextProgress = now + progressInterval;
+            }
         }
+        emit ticksProgress(completedTicks_.load(), totalTicks_);
 
         if (!stopRequested_.load()) {
             emitFinalSamples();
@@ -194,22 +201,33 @@ void LocalSchemaRunner::emitScopeSamples(const long step)
         return;
     }
 
+    // Runs on the worker thread that steps the runtime (observation contract);
+    // samples reach the UI through the bounded mailbox.
     s7::ObservationService observation(*runtime_);
     const double timeSeconds = static_cast<double>(step) * dt_;
+    bool notify = false;
     for (const auto& scope : scopeConfigs_) {
         for (std::size_t channel = 0; channel < scope.channelCount; ++channel) {
             try {
                 const auto sample = observation.sample_output(scope.id, channel);
-                emit scopeSample(QString::fromStdString(scope.id),
-                                 static_cast<int>(channel),
-                                 static_cast<long>(sample.step),
-                                 timeSeconds,
-                                 sample.as_real());
+                notify |= scopeMailbox_.push(ScopeSample{scope.id,
+                                                         static_cast<int>(channel),
+                                                         static_cast<long>(sample.step),
+                                                         timeSeconds,
+                                                         sample.as_real()});
             } catch (const std::exception&) {
                 // Ignore missing/unsupported scope channels so valid channels still render.
             }
         }
     }
+    if (notify) {
+        emit scopeSamplesAvailable();
+    }
+}
+
+auto LocalSchemaRunner::takeScopeSamples() -> ScopeSampleBatch
+{
+    return scopeMailbox_.take();
 }
 
 void LocalSchemaRunner::finalizeRun(const bool success, const std::string& error)
@@ -281,6 +299,7 @@ void LocalSchemaRunner::reset()
     netEndpoint_.reset();
     s7::RuntimeNetContext::set_endpoint(nullptr);
     scopeConfigs_.clear();
+    scopeMailbox_.clear();
     completedTicks_.store(0);
     totalTicks_ = 0;
     running_.store(false);

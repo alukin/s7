@@ -179,7 +179,7 @@ Reject malformed required capability structures instead of silently treating the
 
 Relevant code: [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:519), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:552), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:675).
 
-## P2: Define a thread-safe consistency model for observation
+## P2: Define a thread-safe consistency model for observation — fixed 2026-10-04
 
 ### Current problem
 
@@ -195,9 +195,11 @@ Define how observation obtains a consistent sample while execution is active. Op
 - A multi-probe snapshot has a coherent step identity, or explicitly reports per-sample step identities when coherence is not guaranteed.
 - Sampling cannot data-race with element output writes or `step_count_` updates.
 
+**Resolution:** the contract is "observe between steps on the thread that steps the runtime". `NodeRuntime` records its stepping thread; `ObservationService` throws `std::logic_error` when called from any other thread after the runtime has stepped. `sample_outputs()` is replaced by `snapshot()`, which returns one `step` for all samples. Code that needs samples elsewhere hands them over itself (Studio's runner uses its mailbox; `RuntimeService` exposes reads under its graph mutex). `observe_smoke` checks the coherent step and the cross-thread refusal.
+
 Relevant code: [observe.cpp](../s7observe/src/observe.cpp:5), [runtime.cpp](../s7core/src/runtime.cpp:9), [runtime.hpp](../s7core/include/s7/runtime.hpp:15).
 
-## P2: Bound Scope sample delivery and recording
+## P2: Bound Scope sample delivery and recording — fixed 2026-10-04
 
 ### Current problem
 
@@ -213,6 +215,8 @@ Bound the sample path between the runtime worker and UI. Use batched delivery, a
 - Plot updates remain responsive under sustained high-rate sampling.
 - Recording memory use is bounded or the selected storage mode has documented capacity behavior.
 - Any decimation/drop policy is clear to the user and preserves timestamp/order information for retained samples.
+
+**Resolution:** the local runner pushes Scope samples into a bounded `ScopeSampleMailbox` (200,000 samples) and emits at most one pending `scopeSamplesAvailable` notification; the UI drains everything queued in one batch. When the UI falls behind, the oldest samples are dropped; retained samples keep their order, step and time. Drops are shown in each Scope window ("display dropped N samples") and logged at most once per second. `ticksProgress` is throttled to 20 per second plus the final count. Recording stops by itself at 2,000,000 samples per channel and says so in the window. Plot refresh stays on its 33 ms timer. Tests: Studio smoke checks the mailbox policy and runs 300,000 steps with no UI draining (exactly 200,000 kept, 100,000 counted, newest last). The interactive GUI path was not exercised by automation.
 
 Relevant code: [local_schema_runner.cpp](../s7studio/src/local_schema_runner.cpp:124), [local_schema_runner.cpp](../s7studio/src/local_schema_runner.cpp:191), [main_window.cpp](../s7studio/src/main_window.cpp:1196), [scope_view_window.cpp](../s7studio/src/scope_view_window.cpp:133).
 
@@ -499,7 +503,7 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 2. ~~Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.~~ Done 2026-10-04 (also the prepare-token item).
 3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients. *Proposals written (wire draft 12.1); awaiting approval before the codec is implemented.*
 4. ~~Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.~~ Done 2026-10-04, except routing by stream descriptor (needs step 3 approval). Follow-up: make the transport's socket threading safe (new P2 finding above).
-5. Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.
+5. ~~Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.~~ Done 2026-10-04.
 6. Address signal representation, observation timestamps/types, and plugin build integration.
 
 This order addresses immediate correctness and trust boundaries first, then stabilizes contracts needed by heterogeneous nodes.
