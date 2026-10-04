@@ -1022,6 +1022,22 @@ void RuntimeService::report_transport_errors(std::ostream& out) const {
     }
 }
 
+void RuntimeService::report_transport_stats(std::ostream& out) const {
+    if (!network_endpoint_) {
+        return;
+    }
+    const auto stats = network_endpoint_->stats();
+    out << "runtime.transport.data_connections=" << stats.data_connections << '\n'
+        << "runtime.transport.control_connections=" << stats.control_connections << '\n'
+        << "runtime.transport.connections_rejected=" << stats.connections_rejected << '\n'
+        << "runtime.transport.packets_sent=" << stats.packets_sent << '\n'
+        << "runtime.transport.send_dropped_no_peer=" << stats.send_dropped_no_peer << '\n'
+        << "runtime.transport.send_dropped_queue_full=" << stats.send_dropped_queue_full << '\n'
+        << "runtime.transport.packets_received=" << stats.packets_received << '\n'
+        << "runtime.transport.receive_dropped_queue_full=" << stats.receive_dropped_queue_full << '\n'
+        << "runtime.transport.receive_dropped_stream_limit=" << stats.receive_dropped_stream_limit << '\n';
+}
+
 const std::string& RuntimeService::runtime_instance_uuid() const {
     return runtime_instance_uuid_;
 }

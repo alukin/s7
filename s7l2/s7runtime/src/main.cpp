@@ -235,6 +235,7 @@ int main(int argc, char** argv) {
                 stopped_by_signal = stop_requested.load();
             }
             service.report_transport_errors(std::cerr);
+            service.report_transport_stats(std::cout);
             std::cout << "runtime.serve.stopped=" << (stopped_by_signal ? "signal" : "timeout") << '\n';
         }
 

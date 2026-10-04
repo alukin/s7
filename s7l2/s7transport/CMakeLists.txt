@@ -35,7 +35,14 @@ add_executable(s7transport_validation_smoke
 
 target_link_libraries(s7transport_validation_smoke PRIVATE s7transport)
 
+add_executable(s7transport_multipeer_smoke
+    tests/transport_multipeer_smoke.cpp
+)
+
+target_link_libraries(s7transport_multipeer_smoke PRIVATE s7transport)
+
 add_test(NAME s7transport_smoke COMMAND s7transport_smoke)
+add_test(NAME s7transport_multipeer_smoke COMMAND s7transport_multipeer_smoke)
 add_test(NAME s7transport_validation_smoke COMMAND s7transport_validation_smoke)
 add_test(NAME s7transport_reconnect_smoke COMMAND s7transport_reconnect_smoke)
 

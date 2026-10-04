@@ -126,6 +126,8 @@ public:
     void add_seed_peer(const std::string& endpoint);
     // Prints and clears connection-level transport errors (e.g. malformed frames).
     void report_transport_errors(std::ostream& out) const;
+    // Prints connection counts, queue drops and packet counters of the transport.
+    void report_transport_stats(std::ostream& out) const;
     void print_summary(std::ostream& out) const;
 
     void start_websocket_server() const;

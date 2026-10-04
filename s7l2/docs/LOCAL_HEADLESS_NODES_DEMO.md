@@ -35,7 +35,7 @@ Terminal B (server port 9003 from `schema_minimal_node2.json`):
   --serve-forever
 ```
 
-Both example schemas set `"execution": { "step_rate_hz": 10 }`, so each node steps its graph 10 times per second while serving and its `NetSink` publishes to a connected peer; packets published while no peer is connected are dropped. Use `--step-rate <hz>` to override the rate (`0` serves the control plane without stepping). Ctrl+C stops the node and prints `runtime.execution.steps` and `runtime.execution.achieved_rate_hz`.
+Both example schemas set `"execution": { "step_rate_hz": 10 }`, so each node steps its graph 10 times per second while serving and its `NetSink` publishes to a connected peer; packets published while no peer is connected are dropped. Use `--step-rate <hz>` to override the rate (`0` serves the control plane without stepping). Ctrl+C stops the node and prints `runtime.execution.steps`, `runtime.execution.achieved_rate_hz` and the transport counters (`runtime.transport.*`: connections, packets sent/received, queue drops). A node accepts many peers at once and sends each published packet to every connected data peer.
 
 ## 3) Open Studio and discover nodes
 

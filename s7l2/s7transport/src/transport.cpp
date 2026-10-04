@@ -1,7 +1,10 @@
 #include "s7/transport.hpp"
 
 #include <bit>
+#include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cmath>
 #include <cstring>
 #include <functional>
@@ -471,10 +474,8 @@ auto InMemoryRuntimeNetEndpoint::publish(const EndpointHandle& handle, const Dat
         return SendResult{false, std::string{"invalid data packet: "} + ex.what(), 0};
     }
 
-    auto& queue = stream_queues_[packet_to_queue.stream_name];
-    queue.push_back(std::move(packet_to_queue));
-
-    return SendResult{true, {}, queue.size()};
+    receive_queues_.push(std::move(packet_to_queue));
+    return SendResult{true, {}, 0};
 }
 
 auto InMemoryRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& packet) -> ReceiveResult
@@ -493,42 +494,185 @@ auto InMemoryRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacke
         return ReceiveResult{false, false, "endpoint is not receive-enabled"};
     }
 
-    auto queue_it = stream_queues_.find(endpoint_it->second.stream_name);
-    if (queue_it == stream_queues_.end() || queue_it->second.empty()) {
-        return ReceiveResult{true, false, {}};
+    const auto has_packet = receive_queues_.pop(endpoint_it->second.stream_name, packet);
+    return ReceiveResult{true, has_packet, {}};
+}
+
+auto InMemoryRuntimeNetEndpoint::stats() const -> TransportStats
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    TransportStats stats;
+    receive_queues_.add_to(stats);
+    return stats;
+}
+
+void ReceiveQueues::push(DataPacket packet)
+{
+    ++received_;
+    auto it = queues_.find(packet.stream_name);
+    if (it == queues_.end()) {
+        // Drop emptied queues before refusing a new stream.
+        std::erase_if(queues_, [](const auto& entry) { return entry.second.empty(); });
+        if (queues_.size() >= limits_->max_receive_streams) {
+            ++dropped_stream_limit_;
+            return;
+        }
+        it = queues_.emplace(packet.stream_name, std::deque<DataPacket>{}).first;
+    }
+    auto& queue = it->second;
+    if (queue.size() >= limits_->max_receive_queue_packets) {
+        queue.pop_front();
+        ++dropped_queue_full_;
+    }
+    queue.push_back(std::move(packet));
+}
+
+auto ReceiveQueues::pop(const std::string& stream_name, DataPacket& packet) -> bool
+{
+    const auto it = queues_.find(stream_name);
+    if (it == queues_.end() || it->second.empty()) {
+        return false;
+    }
+    packet = std::move(it->second.front());
+    it->second.pop_front();
+    return true;
+}
+
+void ReceiveQueues::add_to(TransportStats& stats) const
+{
+    stats.packets_received += received_;
+    stats.receive_dropped_queue_full += dropped_queue_full_;
+    stats.receive_dropped_stream_limit += dropped_stream_limit_;
+}
+
+// One WebSocket connection (inbound or outbound, control or data). A data
+// connection owns a bounded send queue drained by its writer thread; its
+// reader thread queues received packets. An inbound control connection's
+// reader answers requests. Threads never join themselves: closed connections
+// are reaped by the accept thread, configure_client(), or the destructor.
+struct BeastRuntimeNetEndpoint::Connection {
+    bool is_data{false};
+    bool outbound{false};
+    ControlPeer peer;
+    std::shared_ptr<PlainWs> plain;
+    std::shared_ptr<TlsWs> tls;
+
+    std::mutex write_mutex; // one writer at a time (writer thread or control replies)
+    std::mutex queue_mutex;
+    std::condition_variable queue_cv;
+    std::deque<std::shared_ptr<const std::vector<std::uint8_t>>> send_queue;
+    std::atomic<bool> closed{false};
+    std::thread reader;
+    std::thread writer;
+
+    void close()
+    {
+        if (closed.exchange(true)) {
+            queue_cv.notify_all();
+            return;
+        }
+        if (tls) {
+            interrupt_socket_reads(tls);
+        } else {
+            interrupt_socket_reads(plain);
+        }
+        queue_cv.notify_all();
     }
 
-    packet = std::move(queue_it->second.front());
-    queue_it->second.pop_front();
-    return ReceiveResult{true, true, {}};
-}
+    void write(const std::string_view bytes, const bool binary, boost::system::error_code& ec)
+    {
+        std::lock_guard<std::mutex> lock(write_mutex);
+        if (tls) {
+            tls->binary(binary);
+            tls->write(boost::asio::buffer(bytes.data(), bytes.size()), ec);
+        } else {
+            plain->binary(binary);
+            plain->write(boost::asio::buffer(bytes.data(), bytes.size()), ec);
+        }
+    }
+
+    auto read(boost::system::error_code& ec) -> std::string
+    {
+        flat_buffer buffer;
+        if (tls) {
+            tls->read(buffer, ec);
+        } else {
+            plain->read(buffer, ec);
+        }
+        return ec ? std::string{} : boost::beast::buffers_to_string(buffer.data());
+    }
+
+    void join()
+    {
+        if (reader.joinable()) {
+            reader.join();
+        }
+        if (writer.joinable()) {
+            writer.join();
+        }
+    }
+};
 
 struct BeastRuntimeNetEndpoint::Impl {
     std::shared_ptr<boost::asio::io_context> io_context = std::make_shared<boost::asio::io_context>();
     std::shared_ptr<ssl::context> server_ssl_context;
     std::shared_ptr<ssl::context> client_ssl_context;
     bool server_tls_enabled{false};
-    bool client_tls_enabled{false};
-    std::mutex socket_mutex;
     std::mutex lifecycle_mutex;
-    std::shared_ptr<PlainWs> plain_data_socket;
-    std::shared_ptr<PlainWs> plain_control_socket;
-    std::shared_ptr<TlsWs> tls_data_socket;
-    std::shared_ptr<TlsWs> tls_control_socket;
     std::unique_ptr<Tcp::acceptor> acceptor;
     std::thread accept_thread;
-    std::thread data_read_thread;
-    std::thread control_read_thread;
     std::atomic<bool> stop{false};
-    std::mutex control_handler_mutex;
-    std::mutex control_request_mutex;
-    ControlRequestHandler control_request_handler;
     std::optional<std::uint16_t> server_port;
-    std::optional<ParsedWebSocketUrl> client_url;
+
+    std::mutex control_handler_mutex;
+    ControlRequestHandler control_request_handler;
+    std::mutex control_request_mutex; // one outbound request/response at a time
+
+    std::mutex connections_mutex;
+    std::vector<std::shared_ptr<Connection>> connections;
+
+    std::atomic<std::uint64_t> connections_rejected{0};
+    std::atomic<std::uint64_t> packets_sent{0};
+    std::atomic<std::uint64_t> send_dropped_no_peer{0};
+    std::atomic<std::uint64_t> send_dropped_queue_full{0};
+
+    // Removes closed connections and returns them for joining outside the lock.
+    auto take_closed_connections() -> std::vector<std::shared_ptr<Connection>>
+    {
+        std::vector<std::shared_ptr<Connection>> closed;
+        std::lock_guard<std::mutex> lock(connections_mutex);
+        std::erase_if(connections, [&closed](const std::shared_ptr<Connection>& connection) {
+            if (connection->closed.load()) {
+                closed.push_back(connection);
+                return true;
+            }
+            return false;
+        });
+        return closed;
+    }
+
+    void reap_closed_connections()
+    {
+        for (const auto& connection : take_closed_connections()) {
+            connection->join();
+        }
+    }
+
+    auto open_outbound(const bool is_data) -> std::shared_ptr<Connection>
+    {
+        std::lock_guard<std::mutex> lock(connections_mutex);
+        for (const auto& connection : connections) {
+            if (connection->outbound && connection->is_data == is_data && !connection->closed.load()) {
+                return connection;
+            }
+        }
+        return nullptr;
+    }
 };
 
-BeastRuntimeNetEndpoint::BeastRuntimeNetEndpoint()
-    : impl_(std::make_unique<Impl>())
+BeastRuntimeNetEndpoint::BeastRuntimeNetEndpoint(TransportLimits limits)
+    : limits_(limits)
+    , impl_(std::make_unique<Impl>())
 {
 }
 
@@ -536,31 +680,27 @@ BeastRuntimeNetEndpoint::~BeastRuntimeNetEndpoint()
 {
     impl_->stop = true;
     {
-        std::lock_guard<std::mutex> lock(impl_->socket_mutex);
+        std::lock_guard<std::mutex> lock(impl_->lifecycle_mutex);
         if (impl_->acceptor) {
             boost::system::error_code ec;
             impl_->acceptor->close(ec);
         }
-        interrupt_socket_reads(impl_->plain_data_socket);
-        interrupt_socket_reads(impl_->plain_control_socket);
-        interrupt_socket_reads(impl_->tls_data_socket);
-        interrupt_socket_reads(impl_->tls_control_socket);
     }
     if (impl_->accept_thread.joinable()) {
         impl_->accept_thread.join();
     }
-    if (impl_->data_read_thread.joinable()) {
-        impl_->data_read_thread.join();
-    }
-    if (impl_->control_read_thread.joinable()) {
-        impl_->control_read_thread.join();
-    }
 
-    std::lock_guard<std::mutex> lock(impl_->socket_mutex);
-    impl_->plain_data_socket.reset();
-    impl_->plain_control_socket.reset();
-    impl_->tls_data_socket.reset();
-    impl_->tls_control_socket.reset();
+    std::vector<std::shared_ptr<Connection>> connections;
+    {
+        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+        connections.swap(impl_->connections);
+    }
+    for (const auto& connection : connections) {
+        connection->close();
+    }
+    for (const auto& connection : connections) {
+        connection->join();
+    }
 }
 
 auto BeastRuntimeNetEndpoint::backend_name() const -> std::string
@@ -574,6 +714,92 @@ void BeastRuntimeNetEndpoint::set_control_request_handler(ControlRequestHandler 
     impl_->control_request_handler = std::move(handler);
 }
 
+void BeastRuntimeNetEndpoint::handle_data_frame(const std::string& bytes, Connection& connection)
+{
+    const std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
+    DataPacket packet;
+    try {
+        packet = decode_packet_prototype(frame);
+    } catch (const std::exception& ex) {
+        // A malformed frame closes only this peer's connection.
+        record_transport_error(std::string{"invalid data packet: "} + ex.what());
+        connection.close();
+        return;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    receive_queues_.push(std::move(packet));
+}
+
+void BeastRuntimeNetEndpoint::start_connection(const std::shared_ptr<Connection>& connection)
+{
+    auto* conn = connection.get();
+    if (connection->is_data) {
+        connection->reader = std::thread([this, conn] {
+            while (!impl_->stop.load() && !conn->closed.load()) {
+                boost::system::error_code ec;
+                const auto bytes = conn->read(ec);
+                if (ec) {
+                    break;
+                }
+                handle_data_frame(bytes, *conn);
+            }
+            conn->close();
+        });
+        connection->writer = std::thread([this, conn] {
+            while (true) {
+                std::shared_ptr<const std::vector<std::uint8_t>> frame;
+                {
+                    std::unique_lock<std::mutex> lock(conn->queue_mutex);
+                    conn->queue_cv.wait(lock, [conn] { return conn->closed.load() || !conn->send_queue.empty(); });
+                    if (conn->closed.load()) {
+                        return;
+                    }
+                    frame = std::move(conn->send_queue.front());
+                    conn->send_queue.pop_front();
+                }
+                boost::system::error_code ec;
+                conn->write({reinterpret_cast<const char*>(frame->data()), frame->size()}, true, ec);
+                if (ec) {
+                    conn->close();
+                    return;
+                }
+                impl_->packets_sent.fetch_add(1);
+            }
+        });
+    } else if (!connection->outbound) {
+        connection->reader = std::thread([this, conn] {
+            while (!impl_->stop.load() && !conn->closed.load()) {
+                boost::system::error_code ec;
+                const auto request_json = conn->read(ec);
+                if (ec) {
+                    break;
+                }
+                ControlRequestHandler handler;
+                {
+                    std::lock_guard<std::mutex> lock(impl_->control_handler_mutex);
+                    handler = impl_->control_request_handler;
+                }
+                std::string response_json;
+                try {
+                    response_json = handler
+                        ? handler(conn->peer, request_json)
+                        : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
+                } catch (...) {
+                    response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
+                }
+                conn->write(response_json, false, ec);
+                if (ec) {
+                    break;
+                }
+            }
+            conn->close();
+        });
+    }
+
+    std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+    impl_->connections.push_back(connection);
+}
+
 void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls)
 {
     if (port == 0) {
@@ -583,6 +809,9 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
     std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
     if (impl_->server_port == port && impl_->accept_thread.joinable()) {
         return;
+    }
+    if (impl_->accept_thread.joinable()) {
+        throw std::logic_error("BeastRuntimeNetEndpoint server is already listening on another port.");
     }
 
     impl_->server_port = port;
@@ -604,6 +833,8 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
     impl_->acceptor->non_blocking(true);
     impl_->accept_thread = std::thread([this] {
         while (!impl_->stop.load()) {
+            impl_->reap_closed_connections();
+
             Tcp::socket socket(*impl_->io_context);
             boost::system::error_code ec;
             impl_->acceptor->accept(socket, ec);
@@ -611,105 +842,36 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
-            if (ec == boost::asio::error::operation_aborted || !impl_->acceptor) {
+            if (ec == boost::asio::error::operation_aborted || ec == boost::asio::error::bad_descriptor) {
                 break;
             }
             if (ec) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 continue;
             }
+            socket.non_blocking(false, ec);
 
-            auto bind_and_start_reader = [this](const auto& ws, const bool is_data, ControlPeer peer) {
-                std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-                auto& reader = is_data ? impl_->data_read_thread : impl_->control_read_thread;
-                if (is_data) {
-                    if constexpr (std::is_same_v<std::decay_t<decltype(*ws)>, PlainWs>) {
-                        interrupt_socket_reads(impl_->plain_data_socket);
-                        if (reader.joinable()) {
-                            reader.join();
-                        }
-                        impl_->plain_data_socket = ws;
-                    } else {
-                        interrupt_socket_reads(impl_->tls_data_socket);
-                        if (reader.joinable()) {
-                            reader.join();
-                        }
-                        impl_->tls_data_socket = ws;
-                    }
-                } else {
-                    if constexpr (std::is_same_v<std::decay_t<decltype(*ws)>, PlainWs>) {
-                        interrupt_socket_reads(impl_->plain_control_socket);
-                        if (reader.joinable()) {
-                            reader.join();
-                        }
-                        impl_->plain_control_socket = ws;
-                    } else {
-                        interrupt_socket_reads(impl_->tls_control_socket);
-                        if (reader.joinable()) {
-                            reader.join();
-                        }
-                        impl_->tls_control_socket = ws;
-                    }
-                }
+            std::size_t inbound = 0;
+            {
+                std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+                inbound = static_cast<std::size_t>(std::count_if(
+                    impl_->connections.begin(), impl_->connections.end(),
+                    [](const auto& connection) { return !connection->outbound && !connection->closed.load(); }));
+            }
+            if (inbound >= limits_.max_inbound_connections) {
+                impl_->connections_rejected.fetch_add(1);
+                socket.close(ec);
+                continue;
+            }
 
-                reader = std::thread([this, ws, is_data, peer = std::move(peer)] {
-                    while (!impl_->stop.load()) {
-                        flat_buffer read_buffer;
-                        boost::system::error_code read_ec;
-                        ws->read(read_buffer, read_ec);
-                        if (read_ec) {
-                            break;
-                        }
-
-                        if (!is_data) {
-                            const auto request_json = boost::beast::buffers_to_string(read_buffer.data());
-                            ControlRequestHandler handler;
-                            {
-                                std::lock_guard<std::mutex> lock(impl_->control_handler_mutex);
-                                handler = impl_->control_request_handler;
-                            }
-                            std::string response_json;
-                            try {
-                                response_json = handler
-                                    ? handler(peer, request_json)
-                                    : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
-                            } catch (const std::exception&) {
-                                response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
-                            } catch (...) {
-                                response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
-                            }
-                            ws->text(true);
-                            boost::system::error_code write_ec;
-                            ws->write(boost::asio::buffer(response_json), write_ec);
-                            if (write_ec) {
-                                break;
-                            }
-                            continue;
-                        }
-
-                        const auto bytes = boost::beast::buffers_to_string(read_buffer.data());
-                        std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-                        DataPacket packet;
-                        try {
-                            packet = decode_packet_prototype(frame);
-                        } catch (const std::exception& ex) {
-                            record_transport_error(std::string{"invalid data packet: "} + ex.what());
-                            interrupt_socket_reads(ws);
-                            break;
-                        }
-                        std::lock_guard<std::mutex> queue_lock(mutex_);
-                        stream_queues_[packet.stream_name].push_back(std::move(packet));
-                    }
-                });
-            };
-
+            auto connection = std::make_shared<Connection>();
+            std::string target;
             if (impl_->server_tls_enabled) {
                 auto ws = std::make_shared<TlsWs>(std::move(socket), *impl_->server_ssl_context);
                 ws->next_layer().handshake(ssl::stream_base::server, ec);
                 if (ec) {
                     continue;
                 }
-
                 flat_buffer buffer;
                 http::request<http::string_body> request;
                 http::read(ws->next_layer(), buffer, request, ec);
@@ -720,18 +882,10 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                 if (ec) {
                     continue;
                 }
-
-                const auto target = std::string(request.target());
-                const auto is_data = target.ends_with("/data");
-                const auto is_control = target.ends_with("/control");
-                if (!is_data && !is_control) {
-                    boost::system::error_code close_ec;
-                    ws->close(websocket::close_code::policy_error, close_ec);
-                    continue;
-                }
-                bind_and_start_reader(ws, is_data,
-                                      ControlPeer{.tls = true,
-                                                  .certificate = verified_peer_certificate(ws->next_layer().native_handle())});
+                target = std::string(request.target());
+                connection->peer = ControlPeer{.tls = true,
+                                               .certificate = verified_peer_certificate(ws->next_layer().native_handle())};
+                connection->tls = std::move(ws);
             } else {
                 flat_buffer buffer;
                 http::request<http::string_body> request;
@@ -744,17 +898,22 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                 if (ec) {
                     continue;
                 }
-
-                const auto target = std::string(request.target());
-                const auto is_data = target.ends_with("/data");
-                const auto is_control = target.ends_with("/control");
-                if (!is_data && !is_control) {
-                    boost::system::error_code close_ec;
-                    ws->close(websocket::close_code::policy_error, close_ec);
-                    continue;
-                }
-                bind_and_start_reader(ws, is_data, ControlPeer{});
+                target = std::string(request.target());
+                connection->plain = std::move(ws);
             }
+
+            const auto is_data = target.ends_with("/data");
+            if (!is_data && !target.ends_with("/control")) {
+                boost::system::error_code close_ec;
+                if (connection->tls) {
+                    connection->tls->close(websocket::close_code::policy_error, close_ec);
+                } else {
+                    connection->plain->close(websocket::close_code::policy_error, close_ec);
+                }
+                continue;
+            }
+            connection->is_data = is_data;
+            start_connection(connection);
         }
     });
 }
@@ -762,169 +921,83 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
 void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls)
 {
     const auto parsed = parse_ws_url(url);
+    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
+
+    const auto tls_enabled = parsed.secure || tls.enabled;
+    if (tls_enabled) {
+        if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
+            throw std::invalid_argument("TLS client requires cert_file, key_file, and ca_file.");
+        }
+        impl_->client_ssl_context = std::make_shared<ssl::context>(ssl::context::tls_client);
+        impl_->client_ssl_context->set_default_verify_paths();
+        impl_->client_ssl_context->use_certificate_chain_file(tls.cert_file);
+        impl_->client_ssl_context->use_private_key_file(tls.key_file, ssl::context::pem);
+        impl_->client_ssl_context->load_verify_file(tls.ca_file);
+        impl_->client_ssl_context->set_verify_mode(ssl::verify_peer);
+    }
+
+    // Reconnect: close the previous outbound connections first.
     {
-        std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
-        impl_->client_url = parsed;
-        impl_->client_tls_enabled = parsed.secure || tls.enabled;
-        if (impl_->client_tls_enabled) {
-            if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
-                throw std::invalid_argument("TLS client requires cert_file, key_file, and ca_file.");
+        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+        for (const auto& connection : impl_->connections) {
+            if (connection->outbound) {
+                connection->close();
             }
-            impl_->client_ssl_context = std::make_shared<ssl::context>(ssl::context::tls_client);
-            impl_->client_ssl_context->set_default_verify_paths();
-            impl_->client_ssl_context->use_certificate_chain_file(tls.cert_file);
-            impl_->client_ssl_context->use_private_key_file(tls.key_file, ssl::context::pem);
-            impl_->client_ssl_context->load_verify_file(tls.ca_file);
-            impl_->client_ssl_context->set_verify_mode(ssl::verify_peer);
         }
     }
+    impl_->reap_closed_connections();
 
-    auto connect_plain = [this, &parsed](const std::string_view suffix, std::shared_ptr<PlainWs>& slot, std::thread& reader, const bool is_data) {
+    auto connect = [&](const std::string_view suffix, const bool is_data) {
         Tcp::resolver resolver(*impl_->io_context);
-        auto results = resolver.resolve(parsed.host, parsed.port);
-        auto ws = std::make_shared<PlainWs>(*impl_->io_context);
-        boost::asio::connect(ws->next_layer(), results.begin(), results.end());
+        const auto results = resolver.resolve(parsed.host, parsed.port);
         const auto target = ws_target_for_path(parsed, suffix);
-        ws->handshake(parsed.host + ":" + parsed.port, target);
-
-        std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        interrupt_socket_reads(slot);
-        if (reader.joinable()) {
-            reader.join();
+        auto connection = std::make_shared<Connection>();
+        connection->is_data = is_data;
+        connection->outbound = true;
+        if (tls_enabled) {
+            auto ws = std::make_shared<TlsWs>(*impl_->io_context, *impl_->client_ssl_context);
+            boost::asio::connect(ws->next_layer().next_layer(), results.begin(), results.end());
+            ws->next_layer().handshake(ssl::stream_base::client);
+            ws->handshake(parsed.host + ":" + parsed.port, target);
+            connection->tls = std::move(ws);
+        } else {
+            auto ws = std::make_shared<PlainWs>(*impl_->io_context);
+            boost::asio::connect(ws->next_layer(), results.begin(), results.end());
+            ws->handshake(parsed.host + ":" + parsed.port, target);
+            connection->plain = std::move(ws);
         }
-        slot = ws;
-        if (!is_data) {
-            return;
-        }
-        reader = std::thread([this, ws] {
-            while (!impl_->stop.load()) {
-                flat_buffer read_buffer;
-                boost::system::error_code read_ec;
-                ws->read(read_buffer, read_ec);
-                if (read_ec) {
-                    break;
-                }
-
-                const auto bytes = boost::beast::buffers_to_string(read_buffer.data());
-                std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-                DataPacket packet;
-                try {
-                    packet = decode_packet_prototype(frame);
-                } catch (const std::exception& ex) {
-                    record_transport_error(std::string{"invalid data packet: "} + ex.what());
-                    interrupt_socket_reads(ws);
-                    break;
-                }
-                std::lock_guard<std::mutex> queue_lock(mutex_);
-                stream_queues_[packet.stream_name].push_back(std::move(packet));
-            }
-        });
+        start_connection(connection);
     };
-
-    auto connect_tls = [this, &parsed](const std::string_view suffix, std::shared_ptr<TlsWs>& slot, std::thread& reader, const bool is_data) {
-        Tcp::resolver resolver(*impl_->io_context);
-        auto results = resolver.resolve(parsed.host, parsed.port);
-        auto ws = std::make_shared<TlsWs>(*impl_->io_context, *impl_->client_ssl_context);
-        boost::asio::connect(ws->next_layer().next_layer(), results.begin(), results.end());
-        ws->next_layer().handshake(ssl::stream_base::client);
-        const auto target = ws_target_for_path(parsed, suffix);
-        ws->handshake(parsed.host + ":" + parsed.port, target);
-
-        std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        interrupt_socket_reads(slot);
-        if (reader.joinable()) {
-            reader.join();
-        }
-        slot = ws;
-        if (!is_data) {
-            return;
-        }
-        reader = std::thread([this, ws] {
-            while (!impl_->stop.load()) {
-                flat_buffer read_buffer;
-                boost::system::error_code read_ec;
-                ws->read(read_buffer, read_ec);
-                if (read_ec) {
-                    break;
-                }
-
-                const auto bytes = boost::beast::buffers_to_string(read_buffer.data());
-                std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-                DataPacket packet;
-                try {
-                    packet = decode_packet_prototype(frame);
-                } catch (const std::exception& ex) {
-                    record_transport_error(std::string{"invalid data packet: "} + ex.what());
-                    interrupt_socket_reads(ws);
-                    break;
-                }
-                std::lock_guard<std::mutex> queue_lock(mutex_);
-                stream_queues_[packet.stream_name].push_back(std::move(packet));
-            }
-        });
-    };
-
-    if (impl_->client_tls_enabled) {
-        connect_tls("/control", impl_->tls_control_socket, impl_->control_read_thread, false);
-        connect_tls("/data", impl_->tls_data_socket, impl_->data_read_thread, true);
-    } else {
-        connect_plain("/control", impl_->plain_control_socket, impl_->control_read_thread, false);
-        connect_plain("/data", impl_->plain_data_socket, impl_->data_read_thread, true);
-    }
+    connect("/control", false);
+    connect("/data", true);
 }
 
 auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_json) -> std::string
 {
-    std::shared_ptr<PlainWs> plain_control_socket;
-    std::shared_ptr<TlsWs> tls_control_socket;
-    {
-        std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        plain_control_socket = impl_->plain_control_socket;
-        tls_control_socket = impl_->tls_control_socket;
-    }
-    if (!plain_control_socket && !tls_control_socket) {
+    const auto connection = impl_->open_outbound(false);
+    if (!connection) {
         throw std::runtime_error("control channel is not connected");
     }
 
     std::lock_guard<std::mutex> call_lock(impl_->control_request_mutex);
-    if (tls_control_socket) {
-        tls_control_socket->set_option(websocket::stream_base::timeout{
-            std::chrono::seconds(5),
-            std::chrono::seconds(5),
-            false});
-        tls_control_socket->text(true);
-        boost::system::error_code write_ec;
-        tls_control_socket->write(boost::asio::buffer(request_json), write_ec);
-        if (write_ec) {
-            throw std::runtime_error("control write failed: " + write_ec.message());
-        }
-        flat_buffer read_buffer;
-        boost::system::error_code read_ec;
-        tls_control_socket->read(read_buffer, read_ec);
-        if (read_ec) {
-            throw std::runtime_error("control read failed: " + read_ec.message());
-        }
-        return boost::beast::buffers_to_string(read_buffer.data());
+    const websocket::stream_base::timeout timeout{std::chrono::seconds(5), std::chrono::seconds(5), false};
+    if (connection->tls) {
+        connection->tls->set_option(timeout);
+    } else {
+        connection->plain->set_option(timeout);
     }
-
-    plain_control_socket->set_option(websocket::stream_base::timeout{
-        std::chrono::seconds(5),
-        std::chrono::seconds(5),
-        false});
-    plain_control_socket->text(true);
-    boost::system::error_code write_ec;
-    plain_control_socket->write(boost::asio::buffer(request_json), write_ec);
-    if (write_ec) {
-        throw std::runtime_error("control write failed: " + write_ec.message());
+    boost::system::error_code ec;
+    connection->write(request_json, false, ec);
+    if (ec) {
+        connection->close();
+        throw std::runtime_error("control write failed: " + ec.message());
     }
-
-    flat_buffer read_buffer;
-    boost::system::error_code read_ec;
-    plain_control_socket->read(read_buffer, read_ec);
-    if (read_ec) {
-        throw std::runtime_error("control read failed: " + read_ec.message());
+    auto response = connection->read(ec);
+    if (ec) {
+        connection->close();
+        throw std::runtime_error("control read failed: " + ec.message());
     }
-    return boost::beast::buffers_to_string(read_buffer.data());
+    return response;
 }
 
 auto BeastRuntimeNetEndpoint::open_endpoint(const EndpointOpenRequest& request) -> EndpointOpenResult
@@ -953,13 +1026,17 @@ void BeastRuntimeNetEndpoint::close_endpoint(const EndpointHandle& handle)
     endpoints_.erase(handle.value);
 }
 
+// Queues the packet for every connected data peer without blocking. Streams
+// are not yet routed per peer: that needs the stream descriptors of the
+// committed configuration (wire draft section 12.1); receivers keep only the
+// streams they queue within their limits.
 auto BeastRuntimeNetEndpoint::publish(const EndpointHandle& handle, const DataPacket& packet) -> SendResult
 {
     if (!handle.valid()) {
         return SendResult{false, "invalid handle", 0};
     }
 
-    EndpointState state;
+    std::string stream_name;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         const auto endpoint_it = endpoints_.find(handle.value);
@@ -969,49 +1046,48 @@ auto BeastRuntimeNetEndpoint::publish(const EndpointHandle& handle, const DataPa
         if (!endpoint_it->second.allow_publish) {
             return SendResult{false, "endpoint is not publish-enabled", 0};
         }
-        state = endpoint_it->second;
+        stream_name = endpoint_it->second.stream_name;
     }
 
     auto packet_to_send = packet;
     if (packet_to_send.stream_name.empty()) {
-        packet_to_send.stream_name = state.stream_name;
+        packet_to_send.stream_name = stream_name;
+    }
+    std::shared_ptr<const std::vector<std::uint8_t>> frame;
+    try {
+        frame = std::make_shared<const std::vector<std::uint8_t>>(encode_packet_prototype(packet_to_send));
+    } catch (const std::exception& ex) {
+        return SendResult{false, std::string{"invalid data packet: "} + ex.what(), 0};
     }
 
-    const auto frame = encode_packet_prototype(packet_to_send);
-    std::shared_ptr<PlainWs> plain_data_socket;
-    std::shared_ptr<TlsWs> tls_data_socket;
+    std::vector<std::shared_ptr<Connection>> peers;
     {
-        std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        plain_data_socket = impl_->plain_data_socket;
-        tls_data_socket = impl_->tls_data_socket;
+        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+        for (const auto& connection : impl_->connections) {
+            if (connection->is_data && !connection->closed.load()) {
+                peers.push_back(connection);
+            }
+        }
     }
-    if (!plain_data_socket && !tls_data_socket) {
-        // No peer is connected: a published stream without a receiver drops the packet.
+    if (peers.empty()) {
+        impl_->send_dropped_no_peer.fetch_add(1);
         return SendResult{true, {}, 0, false};
     }
 
-    boost::system::error_code ec;
-    if (tls_data_socket) {
-        tls_data_socket->binary(true);
-        tls_data_socket->write(boost::asio::buffer(frame), ec);
-    } else {
-        plain_data_socket->binary(true);
-        plain_data_socket->write(boost::asio::buffer(frame), ec);
-    }
-    if (ec) {
-        // The peer is gone: forget its socket (unless a new peer already replaced
-        // it) and drop the packet, as when no peer is connected.
-        std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
-        if (tls_data_socket && impl_->tls_data_socket == tls_data_socket) {
-            impl_->tls_data_socket.reset();
+    std::size_t deepest = 0;
+    for (const auto& peer : peers) {
+        {
+            std::lock_guard<std::mutex> lock(peer->queue_mutex);
+            if (peer->send_queue.size() >= limits_.max_send_queue_packets) {
+                peer->send_queue.pop_front();
+                impl_->send_dropped_queue_full.fetch_add(1);
+            }
+            peer->send_queue.push_back(frame);
+            deepest = std::max(deepest, peer->send_queue.size());
         }
-        if (plain_data_socket && impl_->plain_data_socket == plain_data_socket) {
-            impl_->plain_data_socket.reset();
-        }
-        return SendResult{true, {}, 0, false};
+        peer->queue_cv.notify_one();
     }
-
-    return SendResult{true, {}, 0};
+    return SendResult{true, {}, deepest, true};
 }
 
 auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& packet) -> ReceiveResult
@@ -1021,7 +1097,6 @@ auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& 
     }
 
     std::lock_guard<std::mutex> lock(mutex_);
-
     const auto endpoint_it = endpoints_.find(handle.value);
     if (endpoint_it == endpoints_.end()) {
         return ReceiveResult{false, false, "unknown endpoint handle"};
@@ -1029,15 +1104,33 @@ auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& 
     if (!endpoint_it->second.allow_receive) {
         return ReceiveResult{false, false, "endpoint is not receive-enabled"};
     }
+    const auto has_packet = receive_queues_.pop(endpoint_it->second.stream_name, packet);
+    return ReceiveResult{true, has_packet, {}};
+}
 
-    auto queue_it = stream_queues_.find(endpoint_it->second.stream_name);
-    if (queue_it == stream_queues_.end() || queue_it->second.empty()) {
-        return ReceiveResult{true, false, {}};
+auto BeastRuntimeNetEndpoint::stats() const -> TransportStats
+{
+    TransportStats stats;
+    {
+        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+        for (const auto& connection : impl_->connections) {
+            if (connection->closed.load()) {
+                continue;
+            }
+            if (connection->is_data) {
+                ++stats.data_connections;
+            } else {
+                ++stats.control_connections;
+            }
+        }
     }
-
-    packet = std::move(queue_it->second.front());
-    queue_it->second.pop_front();
-    return ReceiveResult{true, true, {}};
+    stats.connections_rejected = impl_->connections_rejected.load();
+    stats.packets_sent = impl_->packets_sent.load();
+    stats.send_dropped_no_peer = impl_->send_dropped_no_peer.load();
+    stats.send_dropped_queue_full = impl_->send_dropped_queue_full.load();
+    std::lock_guard<std::mutex> lock(mutex_);
+    receive_queues_.add_to(stats);
+    return stats;
 }
 
 void BeastRuntimeNetEndpoint::record_transport_error(std::string error)
