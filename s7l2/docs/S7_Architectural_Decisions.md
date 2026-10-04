@@ -283,7 +283,7 @@ Accepted
 
 The term:
 
-`cpp id="m0ql3m" tick()`
+`tick()`
 
 implies a global clock.
 
@@ -295,7 +295,7 @@ S7 intentionally avoids making global time fundamental.
 
 The preferred evaluation method name becomes:
 
-`cpp id="e2af7l" step()`
+`step()`
 
 ------------------------------------------------------------------------
 
@@ -303,7 +303,7 @@ The preferred evaluation method name becomes:
 
 A step represents a local causal transition:
 
-`text id="4hqt7h" (State, Inputs)         → (State', Outputs)`
+`(State, Inputs) → (State', Outputs)`
 
 ------------------------------------------------------------------------
 
@@ -394,11 +394,11 @@ Examples:
 
 Valid:
 
-`text id="qkg4y5" Adder   ↓ Delay   ↓ Adder`
+`Adder → Delay → Adder`
 
 Invalid:
 
-`text id="u7f9hg" Adder   ↓ Gain   ↓ Adder`
+`Adder → Gain → Adder`
 
 ------------------------------------------------------------------------
 
@@ -858,26 +858,16 @@ Negative:
 
 The current S7 architecture is based on the following accepted principles:
 
-\`\`\`text id=“j12h0v” Causality precedes time.
-
-Coherence is contextual.
-
-Schema is Element.
-
-Schema is the unit of deployment.
-
-State belongs only to Element instances.
-
-Connections define causality.
-
-Cycles require causal memory.
-
-Observation is independent.
-
-Deployment is independent.
-
-Network boundaries are explicit.
-
-Headless execution is primary. \`\`\`
+- Causality precedes time.
+- Coherence is contextual.
+- Schema is Element.
+- Schema is the unit of deployment.
+- State belongs only to Element instances.
+- Connections define causality.
+- Cycles require causal memory.
+- Observation is independent.
+- Deployment is independent.
+- Network boundaries are explicit.
+- Headless execution is primary.
 
 These decisions form the architectural foundation of S7 2.0 and should be revisited only with strong justification.

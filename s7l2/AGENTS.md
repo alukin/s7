@@ -11,11 +11,13 @@
 - `s7observe/`: read-only probing/sampling API around runtime (`s7observe/include/s7/observe.hpp`).
 - `s7noise/`: plugin-loaded noise elements (e.g., white/pink noise generators).
 - `s7spectral/`: plugin-loaded spectral-analysis elements (FFT/spectrum pipeline, `SpectralFrame` outputs).
-- `s7io/`: hardware-facing abstractions and converters.
+- `s7io/`: file source/sink elements (compact binary, gnuplot text); future hardware I/O.
 - `s7net/`: network boundary elements and websocket/server-client scaffolding.
 - `s7ctl/`: CLI control/tooling module (currently minimal smoke-test scaffold).
 - `s7studio/`: Qt UI client (guarded by `S7_BUILD_STUDIO`).
-- `s7tests/`: smoke/integration checks (validation + I/O focused).
+- `s7transport/`: transport backends (in-memory, Beast WebSocket/TLS) and prototype packet codec.
+- `s7tests/`: reserved for whole-system tests; module smoke tests live in `<module>/tests/`.
+- Docs map: `docs/INDEX.md`; known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
 
 ## Build/test workflow (verified from repo docs/config)
 - Configure + build:
@@ -33,8 +35,8 @@ ctest --test-dir build --output-on-failure
 ```
 - Run specific smoke tests:
 ```bash
-ctest --test-dir build -R s7runtime_smoke
-ctest --test-dir build -R s7tests_smoke
+ctest --test-dir build -R s7core_smoke
+ctest --test-dir build -R s7runtime_control_smoke
 ctest --test-dir build -R s7io_smoke
 ```
 - Run runtime service:
@@ -51,22 +53,23 @@ ctest --test-dir build -R s7io_smoke
 ```
 
 ## Project-specific coding patterns
-- Build schemas via element factories, e.g. `schema.add_element("id", [] { return std::make_unique<MyElement>(); });`, and prefer runtime `ElementRegistry` registration for built-ins/plugins (`s7runtime/src/main.cpp`, `s7tests/src/validation_smoke.cpp`).
+- Build schemas via element factories, e.g. `schema.add_element("id", [] { return std::make_unique<MyElement>(); });`, and prefer runtime `ElementRegistry` registration for built-ins/plugins (`s7runtime/src/main.cpp`, `s7core/tests/core_smoke.cpp`).
 - New elements follow the port-centric pattern: own output storage in the element and register ports in the constructor via `register_input/register_output` (`s7core/include/s7/elements.hpp`).
 - Ports are introspected via `Port{index,name,type,value_ptr}`; preserve `SignalType` correctness and typed access (`s7core/include/s7/element.hpp`).
-- Port-type mismatches are hard validation errors in current runtime wiring (no implicit conversion path enabled by default) (`s7core/src/validation.cpp`, `s7tests/src/validation_smoke.cpp`).
-- Respect execution ordering: `NodeRuntime::step()` runs `causal_order` then `memory_order` (`s7core/src/runtime.cpp`).
+- Port-type mismatches are hard validation errors in current runtime wiring (no implicit conversion path enabled by default) (`s7core/src/validation.cpp`, `s7core/tests/core_smoke.cpp`).
+- Respect execution ordering: `NodeRuntime::step()` runs `causal_order`, then steps `memory_order` elements against a snapshot of stateful outputs and publishes them together (snapshot-then-commit) (`s7core/src/runtime.cpp`).
+- `Port::name` is a `std::string_view`; never register ports with names backed by a local `std::string`.
 - Validation expects cycles to include at least one causal-memory element; do not bypass this in compiler/runtime paths.
 - Observation is non-invasive: use `ObservationService` reads, never mutate runtime state from observe code.
-- Observation sampling pattern: `sample_output(element_id, port)` and `sample_outputs({ProbePoint{...}})` (`s7observe/include/s7/observe.hpp`, `s7tests/src/validation_smoke.cpp`).
+- Observation sampling pattern: `sample_output(element_id, port)` and `sample_outputs({ProbePoint{...}})` (`s7observe/include/s7/observe.hpp`, `s7observe/tests/observe_smoke.cpp`).
 - Plugin elements are loaded at runtime via `PluginLoader`; keep element registration idempotent and scoped to plugin registration hooks (`s7runtime/include/s7/plugin_loader.hpp`, `s7runtime/src/plugin_loader.cpp`).
 
 ## Integration and dependency notes
 - C++20 project; top-level dependencies include Boost (JSON/Asio/Beast) and optional Qt6 (`CMakeLists.txt`).
 - Optional plugin dependencies include FFTW3 for `s7spectral` and standard RNG-based noise generation in `s7noise`.
 - JSON schemas under `s7runtime/examples/` are canonical runtime inputs.
-- Runtime default schema path is compiled via `S7RUNTIME_DEFAULT_SCHEMA_PATH` in `s7runtime/CMakeLists.txt`; `s7runtime_smoke` depends on that default.
-- Runtime/plugin integration point: plugin `.so` discovery uses `~/.s7/plugins`, `/opt/s7/plugins`, `./plugins`, and `$S7_PLUGIN_PATH`; plugin targets install under `lib/s7/plugins`.
+- Runtime default schema path is compiled via `S7RUNTIME_DEFAULT_SCHEMA_PATH` in `s7runtime/CMakeLists.txt`.
+- Runtime/plugin integration point: plugin `.so` discovery uses `--plugin-dir` directories, `~/.s7/plugins`, `/opt/s7/plugins`, `./plugins`, and `$S7_PLUGIN_PATH`; plugin targets install under `lib/s7/plugins`.
 - External UI libs live in `external/` (e.g., `QCustomPlot`, `QSchematic`); avoid coupling core logic to them.
 - Treat code under `external/` as vendor code: default to **no edits**.
 - If behavior/style changes are needed, implement wrappers/subclasses/adapters in project modules (typically `s7studio/`) instead of patching `external/`.
@@ -74,7 +77,8 @@ ctest --test-dir build -R s7io_smoke
 
 ## Guardrails for AI edits
 - Keep changes module-local unless cross-module contracts require expansion.
-- If touching compiler/validator/runtime, add or update a smoke test in `s7tests/src/`.
+- If touching compiler/validator/runtime, add or update a smoke test in the module's `tests/` directory (e.g. `s7core/tests/core_smoke.cpp`).
+- The project is pre-MVP with no deployments: breaking changes to APIs, formats, and protocols are allowed; do not add compatibility shims.
 - Prefer explicit errors around schema/type mismatches over silent coercion.
 - Preserve public namespace and API surface conventions (`namespace s7`, public headers under `s7core/include/s7/`).
 - Before any edit in `external/`, stop and confirm explicit user approval; otherwise, do not change vendored sources.

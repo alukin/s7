@@ -1,413 +1,123 @@
-# Element Development Reference
+# Element Development Guide
 
-## Quick Start: Creating a Custom Element
+How to write an S7 element, describe it with metadata, and register it. For packaging elements as a loadable shared library see `PLUGIN_INTERFACE.md`; for schema-backed elements see `SCHEMA_LIBRARY_WORKFLOW.md`.
 
-### 1. Define the Element Class
+## Element contract
+
+Source: `s7core/include/s7/element.hpp`.
+
+- An element **owns its output storage** as member variables. Ports are lightweight `Port{index, name, type, value_ptr}` records pointing at that storage. There is no separate output buffer in the base class.
+- Ports are registered in the constructor with `register_input(index, name, type, nullptr)` and `register_output(index, name, type, &member)`. Port types are fixed per element type; conversion between signal types is done by explicit converter elements, never implicitly (a type mismatch is a validation error).
+- `Port::name` is a `std::string_view`. The string it refers to must outlive the element: use string literals, `port_names::*` constants, or strings owned by the element. Do not pass a local `std::string`.
+- `step()` reads inputs with `read_input<T>(index)` and assigns outputs directly. `read_input` performs no checks; bindings are validated once when the compiler calls `bind_inputs()`.
+- Value storage: `SignalType::COMPLEX` uses `std::complex<double>`; every other `SignalType` (including the integer types) is currently stored as `double`.
+- `has_state = true` marks the element as causal memory. The runtime runs stateless elements first in topological order, then steps all stateful elements against a snapshot of stateful outputs and publishes their new outputs together (snapshot-then-commit). A stateful element's output therefore becomes visible to downstream elements one step later. Cycles in a graph are valid only if they contain at least one stateful element.
+
+## Minimal element
 
 ```cpp
-// my_elements.hpp
-#pragma once
-
 #include "s7/element.hpp"
 
-namespace my {
-
-class LinearTransform : public s7::Element {
+class LinearTransform final : public s7::Element {
 public:
-    LinearTransform(double scale, double offset);
-    void step() override;
+    LinearTransform(double scale, double offset)
+        : s7::Element("LinearTransform"), scale_(scale), offset_(offset)
+    {
+        register_input(0, s7::port_names::in, s7::SignalType::DOUBLE, nullptr);
+        register_output(0, s7::port_names::out, s7::SignalType::DOUBLE, &output_);
+    }
+
+    void step() override { output_ = read_input<double>(0) * scale_ + offset_; }
 
 private:
     double scale_;
     double offset_;
-    double output_value_;
+    double output_{};
 };
-
-} // namespace my
 ```
 
-### 2. Implement the Element
+Generic elements that work on both real and complex values are written as templates (`ConstantT<T>`, `GainT<T>`, `AdderT<T>`, `MultiplyT<T>`, `DelayT<T>` in `elements.hpp`) with aliases such as `Gain` / `ComplexGain`.
+
+Variable input count is expressed through parameters: `Adder` takes `weights` and `Multiply` takes `factors`, and the number of input ports equals the array length. `ElementMetadata::variadic_inputs` documents this for tools.
+
+## Metadata
+
+Source: `s7core/include/s7/element_metadata.hpp`.
 
 ```cpp
-// my_elements.cpp
-#include "my_elements.hpp"
-
-namespace my {
-
-LinearTransform::LinearTransform(double scale, double offset)
-    : s7::Element("LinearTransform", false),
-      scale_(scale),
-      offset_(offset),
-      output_value_(0.0)
-{
-    register_input(0, "in", s7::SignalType::DOUBLE, nullptr);
-    register_output(0, "out", s7::SignalType::DOUBLE, &output_value_);
-}
-
-void LinearTransform::step() {
-    double input = read_input<double>(0);
-    output_value_ = (input * scale_) + offset_;
-}
-
-} // namespace my
+s7::ElementMetadata meta;
+meta.type_name = "LinearTransform";
+meta.display_name = "Linear Transform";
+meta.description = "y = x * scale + offset";
+meta.category = "basic";
+meta.version = "1.0.0";
+meta.input_ports.push_back({"in", "Input signal", s7::SignalType::DOUBLE, false});
+meta.output_ports.push_back({"out", "Output signal", s7::SignalType::DOUBLE, false});
+// ParameterSpec fields: name, type, description, default_value, min, max, enum_values, required
+meta.parameters.push_back({"scale", "real", "Multiplication factor", 1.0, std::nullopt, std::nullopt, {}, false});
+meta.parameters.push_back({"offset", "real", "Additive offset", 0.0, std::nullopt, std::nullopt, {}, false});
+meta.visual = {"box", "#4CAF50", 100, 50, ""};  // shape, color, width, height, icon
 ```
 
-### 3. Create Metadata
+Parameter `type` values: `real`, `int`, `string`, `bool`, `enum` (with `enum_values`), `array`.
 
-```cpp
-s7::ElementMetadata create_linear_transform_metadata() {
-    s7::ElementMetadata meta;
-    meta.type_name = "LinearTransform";
-    meta.display_name = "Linear Transform";
-    meta.description = "Applies y = x*scale + offset";
-    meta.category = "basic";
-    meta.version = "1.0.0";
-    
-    meta.input_ports.push_back({
-        "in", "Input signal", s7::SignalType::DOUBLE, false
-    });
-    
-    meta.output_ports.push_back({
-        "out", "Output signal", s7::SignalType::DOUBLE, false
-    });
-    
-    meta.parameters = {
-        {"scale", "real", "Multiplication factor", 1.0, -1e6, 1e6, true},
-        {"offset", "real", "Additive offset", 0.0, std::nullopt, std::nullopt, false}
-    };
-    
-    meta.visual = {"box", "#4CAF50", 100, 50, "calculator"};
-    return meta;
-}
-```
+The registry does **not** validate parameters or apply `default_value`; Studio only uses defaults to pre-fill its parameter dialog. Factories must handle missing parameters themselves (check `has_param` before `get_*`).
 
-### 4. Register in Plugin
+Conventional categories and colors used by Studio: `basic` #4CAF50, `filters` #2196F3, `io` #FF9800, `network` #9C27B0 / #5C6BC0, `conversion` #00BCD4, `simulation` #FFEB3B, `spectral` #9C27B0, `sources` #42A5F5, `custom` #795548. Shapes: `box` (processing), `circle` (sources).
 
-```cpp
-// plugin_my_elements.cpp
-extern "C" {
-    const S7_PLUGIN_INFO = {
-        .api_version = 1,
-        .element_count = 1,
-        .plugin_name = "my-elements"
-    };
-    
-    void s7_register_elements(s7::ElementRegistry* registry) {
-        registry->register_element(s7::ElementDescriptor(
-            "LinearTransform",
-            [](const s7::ElementCreationContext& ctx) {
-                double scale = ctx.get_real("scale");
-                double offset = ctx.get_real("offset");
-                return std::make_unique<my::LinearTransform>(scale, offset);
-            },
-            create_linear_transform_metadata()
-        ));
-    }
-}
-```
-
-## Parameter Types
-
-### Real (Double)
-```cpp
-{
-    .name = "frequency_hz",
-    .type = "real",
-    .description = "Frequency in Hz",
-    .default_value = 1000.0,
-    .min_value = 0.1,
-    .max_value = 100000.0,
-    .required = true
-}
-```
-
-### Integer
-```cpp
-{
-    .name = "order",
-    .type = "int",
-    .description = "Filter order",
-    .default_value = 4,
-    .min_value = 1,
-    .max_value = 16,
-    .required = true
-}
-```
-
-### String
-```cpp
-{
-    .name = "file_path",
-    .type = "string",
-    .description = "Path to file",
-    .required = true
-}
-```
-
-### Enumeration
-```cpp
-{
-    .name = "filter_type",
-    .type = "enum",
-    .description = "Type of filter",
-    .default_value = "lowpass",
-    .enum_values = {"lowpass", "highpass", "bandpass"},
-    .required = true
-}
-```
-
-### Boolean
-```cpp
-{
-    .name = "normalize",
-    .type = "bool",
-    .description = "Normalize output",
-    .default_value = false,
-    .required = false
-}
-```
-
-## Element Categories
-
-| Category | Use For | Color |
-|----------|---------|-------|
-| `basic` | Arithmetic, constants, gains | #4CAF50 |
-| `filters` | FIR, IIR, integrators | #2196F3 |
-| `io` | File/network I/O | #FF9800 |
-| `network` | Network communication | #9C27B0 |
-| `control` | Logic, multiplexing | #F44336 |
-| `conversion` | Type conversion | #00BCD4 |
-| `custom` | User-defined | #795548 |
-
-## Registry Usage
+## Registration
 
 ```cpp
 #include "s7/element_registry.hpp"
 
-auto& registry = s7::ElementRegistry::instance();
-
-// Find element
-const auto* descriptor = registry.find("LinearTransform");
-if (!descriptor) throw std::runtime_error("Not found");
-
-// Get metadata
-const auto& meta = descriptor->metadata();
-
-// List all elements
-auto all = registry.element_types();
-
-// Filter by category
-auto filters = registry.element_types_in_category("filters");
-
-// Create element
-s7::ElementCreationContext ctx{meta, params_json};
-auto elem = descriptor->create(ctx);
+registry.register_element(s7::ElementDescriptor(
+    "LinearTransform",
+    [](const s7::ElementCreationContext& ctx) {
+        const double scale = ctx.has_param("scale") ? ctx.get_real("scale") : 1.0;
+        const double offset = ctx.has_param("offset") ? ctx.get_real("offset") : 0.0;
+        return std::make_unique<LinearTransform>(scale, offset);
+    },
+    meta));
 ```
 
-## Stateful Elements
+`ElementCreationContext` offers `get_real`, `get_int`, `get_string`, and `has_param`; the `get_*` functions throw if the parameter is missing or has the wrong JSON type. `register_element` throws if the type name is already registered.
 
-Elements with internal state set `has_state = true`:
+Built-ins are registered by `s7::register_builtin_elements()` (`s7core/src/builtin_element_registry.cpp`) and network elements by `s7::register_net_elements()` (`s7net`). Both are idempotent.
 
-```cpp
-class DelayBuffer : public s7::Element {
-public:
-    explicit DelayBuffer(int delay_samples)
-        : s7::Element("DelayBuffer", true),  // has_state = true
-          delay_(delay_samples),
-          buffer_(delay_samples, 0.0),
-          output_value_(0.0)
-    {
-        register_input(0, "in", s7::SignalType::DOUBLE, nullptr);
-        register_output(0, "out", s7::SignalType::DOUBLE, &output_value_);
-    }
-    
-    void step() override {
-        output_value_ = buffer_.front();
-        buffer_.pop_front();
-        buffer_.push_back(read_input<double>(0));
-    }
+## Using elements in a schema
 
-private:
-    int delay_;
-    std::deque<double> buffer_;
-    double output_value_;
-};
-```
-
-## Variadic Input Element
-
-```cpp
-class SignalMixer : public s7::Element {
-public:
-    SignalMixer() : s7::Element("SignalMixer") {
-        register_output(0, "mix", s7::SignalType::DOUBLE, &output_value_);
-    }
-    
-    bool supports_variadic_inputs() const override { return true; }
-    std::size_t min_inputs() const override { return 2; }
-    std::size_t max_inputs() const override { return 16; }
-    
-    void add_input(std::string_view name, s7::SignalType type) override {
-        register_input(input_ports_.size(), std::string(name), type, nullptr);
-    }
-    
-    void step() override {
-        double sum = 0.0;
-        for (std::size_t i = 0; i < input_ports_.size(); ++i) {
-            sum += read_input<double>(i);
-        }
-        output_value_ = sum / static_cast<double>(input_ports_.size());
-    }
-
-private:
-    double output_value_;
-};
-
-s7::ElementMetadata create_mixer_metadata() {
-    s7::ElementMetadata meta;
-    meta.type_name = "SignalMixer";
-    meta.display_name = "Signal Mixer";
-    meta.category = "basic";
-    
-    meta.variadic_inputs.enabled = true;
-    meta.variadic_inputs.min_count = 2;
-    meta.variadic_inputs.max_count = 16;
-    meta.variadic_inputs.port_name_template = "in_{index}";
-    meta.variadic_inputs.signal_type = s7::SignalType::DOUBLE;
-    
-    meta.output_ports.push_back({
-        "mix", "Averaged output", s7::SignalType::DOUBLE
-    });
-    
-    return meta;
-}
-```
-
-## Complex Signal Elements
-
-```cpp
-class ComplexGain : public s7::Element {
-public:
-    explicit ComplexGain(s7::ComplexValue gain)
-        : s7::Element("ComplexGain"),
-          gain_(gain),
-          output_value_(0.0)
-    {
-        register_input(0, "in", s7::SignalType::COMPLEX, nullptr);
-        register_output(0, "out", s7::SignalType::COMPLEX, &output_value_);
-    }
-    
-    void step() override {
-        output_value_ = read_input<s7::ComplexValue>(0) * gain_;
-    }
-
-private:
-    s7::ComplexValue gain_;
-    s7::ComplexValue output_value_;
-};
-```
-
-## CMakeLists.txt for Plugin
-
-```cmake
-cmake_minimum_required(VERSION 3.20)
-project(my_elements_plugin)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-find_package(s7core REQUIRED)
-
-add_library(my_elements SHARED
-    src/my_elements.cpp
-    src/plugin_my_elements.cpp
-)
-
-target_include_directories(my_elements PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(my_elements PRIVATE s7core)
-
-set_target_properties(my_elements PROPERTIES
-    VERSION 1.0.0
-    SOVERSION 1
-)
-
-install(TARGETS my_elements
-    LIBRARY DESTINATION lib/s7/plugins
-)
-```
-
-## Schema JSON
+Runtime JSON schema:
 
 ```json
 {
   "name": "my_schema",
   "elements": [
-    {
-      "id": "gen",
-      "type": "AnalogOscillator",
-      "params": {
-        "frequency_hz": 1000,
-        "amplitude": 1.0,
-        "sample_rate_hz": 44100
-      }
-    },
-    {
-      "id": "transform",
-      "type": "LinearTransform",
-      "params": {
-        "scale": 2.5,
-        "offset": -1.0
-      }
-    }
+    { "id": "src", "type": "Constant", "params": { "value": 2.0 } },
+    { "id": "lt",  "type": "LinearTransform", "params": { "scale": 2.5, "offset": -1.0 } }
   ],
   "connections": [
-    {
-      "from_element": "gen",
-      "from_port": 0,
-      "to_element": "transform",
-      "to_port": 0
-    }
+    { "from_element": "src", "from_port": 0, "to_element": "lt", "to_port": 0 }
   ]
 }
 ```
 
+In C++ code: `schema.add_element("lt", [] { return std::make_unique<LinearTransform>(2.5, -1.0); });`. The factory may be called several times (validation and compilation each instantiate elements), so constructors must not have external side effects.
+
+## Testing
+
+Each module keeps its smoke tests in `<module>/tests/` and registers them with `add_test` in its `CMakeLists.txt`. Tests use `assert`, so build tests without `NDEBUG`. Elements can be tested standalone by binding inputs directly:
+
+```cpp
+const double in = 5.0;
+const std::array<s7::InputBinding, 1> bindings{s7::bind_input<s7::SignalType::DOUBLE>(in)};
+element.bind_inputs(bindings);
+element.step();
+assert(s7::bound_value<s7::SignalType::DOUBLE>(element.outputs()[0]) == 11.5);
+```
+
 ## Troubleshooting
 
-### "Unknown element type" error
-- Check type name matches exactly (case-sensitive)
-- Verify plugin loaded (check startup logs)
-- Confirm registration called in s7_register_elements()
-
-### Parameter validation failures
-- Check parameter names match metadata exactly
-- Verify parameter types (real vs int vs string)
-- Ensure required parameters in JSON
-- Check numeric ranges
-
-### Port connection errors
-- Verify port index correct (0-based)
-- Check signal types match
-- Confirm source has outputs, sink has inputs
-- Verify element IDs exist in schema
-
-### Symbol not found when loading plugin
-- Check plugin linked against s7core shared library
-- Verify s7core shared library in LD_LIBRARY_PATH
-- Use `ldd` to verify dependencies
-
-## Implementation Checklist
-
-- [ ] Element class created and constructor working
-- [ ] `step()` method implemented
-- [ ] All ports registered in constructor
-- [ ] Input/output members initialized
-- [ ] Metadata created with all fields
-- [ ] Factory lambda captures parameters correctly
-- [ ] Plugin entry point created (if plugin)
-- [ ] CMakeLists.txt configured
-- [ ] Builds without errors
-- [ ] Registers successfully with ElementRegistry
-
+- **Unknown element type**: the type name is case-sensitive; check that the plugin was found (the runtime prints plugin search paths and loaded plugins at startup).
+- **Port type mismatch**: connect through an explicit converter (`ReImToComplex`, `ComplexToReIm`, `Int12ToDouble`, …).
+- **Input port N is unconnected**: every input must have exactly one driver.
+- **Cycle detected without causal memory**: put a stateful element (e.g. `Delay`) in the loop.

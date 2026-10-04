@@ -1,150 +1,66 @@
-# S7 starter project
+# S7 (s7l2)
 
-This repository now contains a runnable C++ starter aligned with the documents in `docs/`, organized as multiple subprojects in the same style as the previous `s7pp` repository structure.
+S7 is a platform for constructing, executing, and observing distributed causal systems: a schema of elements and connections is validated, compiled into an executable graph, and stepped by a headless runtime. Studio is an optional GUI client.
 
-## Documentation quick links
+The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
 
-- `docs/INDEX.md` - technical reference entry point
-- `docs/SCHEMA_LIBRARY_WORKFLOW.md` - schema-based library format and Studio/runtime workflow
+Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
 
-## Project layout
+## Repository layout
 
-The codebase is now split into focused subprojects:
+| Module | Content |
+|---|---|
+| `s7core/` | Element model, built-in elements, schema (incl. nested schemas with exposed ports), validation, compiler, `NodeRuntime`, element registry and metadata, schema-library loader |
+| `s7io/` | File source/sink elements (compact binary, gnuplot text) |
+| `s7transport/` | Transport abstraction: in-memory backend and Boost.Beast WebSocket/TLS backend (prototype packet codec) |
+| `s7net/` | `NetSink` / `NetSource` elements bound to the runtime transport endpoint |
+| `s7observe/` | Read-only output sampling (`ObservationService`) |
+| `s7runtime/` | Headless runtime executable: JSON schema loader, plugin loader, node identity, control-plane MVP |
+| `s7noise/` | Example plugin: white and pink noise sources |
+| `s7spectral/` | FFT plugin (work in progress, not part of the build) |
+| `s7studio/` | Qt6 Studio: diagram editor, element library, local embedded runtime with Scope windows, headless node discovery |
+| `s7ctl/` | CLI placeholder |
+| `s7tests/` | Reserved for whole-system tests; module smoke tests live in `<module>/tests/` |
+| `external/` | Vendor code (QSchematic, QCustomPlot) — do not modify |
 
-- `s7core/` — core causal model, validation, compilation, and headless runtime
-- `s7io/` — placeholder I/O-facing module for future external interfaces
-- `s7net/` — placeholder network/deployment-facing module for explicit network boundaries
-- `s7observe/` — observation-side APIs built on top of `s7core`
-- `s7runtime/` — headless runtime service executable
-- `s7ctl/` — command-line control/tooling starter
-- `s7studio/` — Studio client starter, replacing the old `s7ui` name
-- `s7tests/` — smoke tests
+## Implemented
 
-This mirrors the earlier modular layout approach without copying implementation code from the previous project.
+- Element model with typed ports, templated real/complex elements, converters, filters, oscillator, file I/O, network elements.
+- Validation before execution: port indices and types, single driver per input, every input connected, cycles must contain causal memory.
+- Compilation to an executable graph with instance UUIDs; stateless elements run in causal order, stateful elements use snapshot-then-commit.
+- Nested schemas as elements with exposed inputs/outputs; schema-backed element libraries (`.json`, `.s7library`, `.gz`).
+- Element registry with metadata; C ABI plugins loaded at startup.
+- Runtime JSON schema loading, optional WebSocket server/client with mTLS, persistent node identity, control-plane MVP (`HELLO`, `GET_NODE_INFO`, `GET_PEERS`, `PEER_ANNOUNCE`, deployment prepare/commit/abort/list).
+- Studio diagram editing, element library, parameter dialogs, local runs with Scope plots, diagram/schema/library files, headless node discovery.
 
-## What is implemented
+## Not implemented yet
 
-The current code focuses on the smallest useful subset of the architecture described in the S7 documents:
-
-- `Element` as the smallest executable unit
-- `Schema` as a structure-only graph definition
-- `Connection` as the explicit representation of causality
-- validation before execution
-- compilation into an `ExecutableGraph`
-- a headless runtime service entry point in `s7runtime`
-- JSON schema loading/parsing from file (Boost.JSON)
-- websocket server/client skeleton service paths (Boost.Beast/Asio)
-- placeholder subprojects for I/O, networking, CLI tooling, and Studio
-- a minimal observation layer in `s7observe`
-
-## How it maps to the docs
-
-### Formal model
-
-The implementation mirrors the central ideas from `docs/S7_Formal_Model.md` and `docs/S7_Architecture_Overview.md`:
-
-- computation is local
-- state is local
-- connections define causality
-- schemas contain structure, not runtime state
-- cycles are allowed only when they contain causal memory
-- execution is headless and independent from any GUI
-
-### Runtime architecture
-
-The project includes minimal versions of the runtime pipeline described in `docs/S7_Runtime_Architecture.md`:
-
-1. load schema definition JSON from file
-2. parse/validate JSON structure
-3. expose runtime service metadata
-4. provide websocket server/client startup hooks for protocol work
-
-### Observation architecture
-
-The new `s7observe` subproject starts a separate observation-facing layer, consistent with `docs/S7_Observation_Architecture.md`:
-
-- observation depends on runtime data but is separate from execution
-- observation is read-only
-- observation consumes outputs from the running system
-- observation does not modify the functional graph
-
-### Additional scaffolding
-
-The newly added sibling subprojects are intentionally small, but they establish the long-term repository shape:
-
-- `s7io` starts a dedicated place for external data ingress/egress abstractions
-- `s7net` starts a dedicated place for node/topology and explicit network boundary concepts
-- `s7ctl` starts a command-line operational surface
-- `s7studio` starts the future Studio client as a runtime client, not part of runtime execution
-
-### Runtime service focus
-
-`s7runtime` no longer uses programmatic schema construction examples.
-
-Instead it now:
-
-- loads JSON schema definitions from a file;
-- parses the schema with Boost.JSON;
-- provides a Boost-based websocket server/client skeleton (`ws://`) for later protocol definition;
-- supports a safe default mode where networking is not started unless requested.
-
-### Architectural decisions already reflected
-
-- `step()`-style progression rather than global time
-- explicit causal graph
-- validation before execution
-- headless-first operation
-- cycles require causal memory
-
-## Runtime JSON example
-
-Example schema files:
-
-- `s7runtime/examples/schema_minimal.json`
-- `s7runtime/examples/schema_oscillator_gnuplot.json`
-
-Current shape includes:
-
-- schema name
-- elements array
-- connections array
-- nested schemas in `Schema` elements
-- websocket server config
-- websocket client config
-
-## Current limitations of this MVP
-
-This is a project bootstrap, not the full S7 platform yet.
-
-Not implemented yet:
-
-- schema input/output ports
-- generic typed signals
-- dynamic probe attachment and subscriptions
-- real deployment graph semantics
-- `NetRuntime`
-- explicit `NetSource` / `NetSink`
-- metadata-driven element registration
-- snapshots and restore
-- real GUI implementation for `s7studio`
-- websocket message protocol definition (planned)
-
-## Suggested next milestones
-
-1. add typed ports and signal metadata
-2. support nested schemas and schema ports
-3. introduce executable-graph instance identifiers
-4. add observation probes and subscriptions
-5. define deployment and explicit network boundary elements
-6. extend from `NodeRuntime` toward `NetRuntime`
+- Executing a deployed configuration (commit currently only records state), multi-peer transport, the draft wire format.
+- Control authorization bound to authenticated certificates; certificate-bound node identity.
+- Snapshots/restore, dynamic probe subscriptions, remote observation streams.
+- `NetRuntime`, distributed scheduling, coherence domains.
+- Generic typed signals (all non-complex types are stored as `double`).
 
 ## Build
 
+Install dependencies (Ubuntu): `tools/install_deps_ubuntu.sh` (`--no-studio` for headless only).
+
 ```bash
-cmake -S . -B build
-cmake --build build
+cmake -S . -B build                       # add -DS7_BUILD_STUDIO=OFF to skip Qt
+cmake --build build --parallel
 ctest --test-dir build --output-on-failure
-./build/s7runtime/s7runtime
-./build/s7ctl/s7ctl
+```
+
+## Run
+
+```bash
+./build/s7runtime/s7runtime --help
+./build/s7runtime/s7runtime --schema s7runtime/examples/schema_oscillator_gnuplot.json
+./build/s7runtime/s7runtime --schema s7runtime/examples/schema_minimal.json --serve-seconds 10
+./build/s7runtime/s7runtime --plugin-dir build/s7noise --library s7runtime/examples/schema_library_demo.json --schema <schema.json>
 ./build/s7studio/s7studio
 ```
+
+Runtime schema examples are in `s7runtime/examples/`. A schema runs its graph only when it contains a `simulation` block (step count = `periods * sample_rate_hz / frequency_hz`). For two local nodes discovered by Studio see `docs/LOCAL_HEADLESS_NODES_DEMO.md`.
+
+Runtime state (node identity, peer cache) is stored in `$S7_NODE_STATE_DIR` or `~/.s7runtime/default-node`.

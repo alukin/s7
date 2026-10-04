@@ -2,6 +2,8 @@
 
 Standalone spectral analysis library for S7 runtime. Provides real-to-complex FFT elements with sliding windowed analysis for waterfall visualization.
 
+> **Status: work in progress, not built.** The plugin is not added to the top-level build, its CMake file expects a `find_package(s7core)` package that does not exist, `src/plugin_spectral.cpp` does not compile (parameter metadata initializers), `WindowedFFT` registers no output port, and `MagnitudeSpectrum` / `PowerSpectrumDB` are placeholders without inputs bound to spectral frames. `SpectralFrame` is not a supported port signal type yet. See `docs/CODE_REVIEW_REQUIRED_FIXES.md`. This README describes the intended design.
+
 ## Overview
 
 s7spectral is a separate compilation unit that:

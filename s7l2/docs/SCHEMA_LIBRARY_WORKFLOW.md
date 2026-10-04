@@ -107,6 +107,7 @@ You can also open library files via `File -> Open...`.
 
 Notes:
 
+- Library files may be plain JSON (`.json`, `.s7library`) or gzip-compressed (`.gz`).
 - Library element types must be unique in the process registry.
 - Runtime reports loaded library count (`runtime.library_count=...`).
 

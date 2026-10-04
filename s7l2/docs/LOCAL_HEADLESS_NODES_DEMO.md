@@ -1,67 +1,64 @@
 # Local Headless Nodes Demo
 
-This guide shows how to run two local headless `s7runtime` nodes and discover them in `s7studio`.
+Run two local headless `s7runtime` nodes and discover them in `s7studio`. Commands are run from the `s7l2` directory.
 
 ## 1) Build
 
 ```bash
-cmake -S /home/al/projects/s7/s7l2 -B /home/al/projects/s7/s7l2/build
-cmake --build /home/al/projects/s7/s7l2/build -j2
+cmake -S . -B build
+cmake --build build --parallel
 ```
 
 ## 2) Start two local nodes (plain WebSocket)
 
-Terminal A:
+Each node needs its own state directory; otherwise both nodes share one persistent identity and peer cache.
+
+Terminal A (server port 9002 from `schema_minimal.json`):
 
 ```bash
-/home/al/projects/s7/s7l2/build/s7runtime/s7runtime \
-  --schema /home/al/projects/s7/s7l2/s7runtime/examples/schema_minimal.json \
+S7_NODE_STATE_DIR=/tmp/s7-node-a ./build/s7runtime/s7runtime \
+  --schema s7runtime/examples/schema_minimal.json \
   --start-net \
   --seed-peer ws://127.0.0.1:9003 \
   --serve-forever
 ```
 
-Terminal B (copy schema and change server port to 9003, then run):
+Terminal B (server port 9003 from `schema_minimal_node2.json`):
 
 ```bash
-/home/al/projects/s7/s7l2/build/s7runtime/s7runtime \
-  --schema /home/al/projects/s7/s7l2/s7runtime/examples/schema_minimal_node2.json \
+S7_NODE_STATE_DIR=/tmp/s7-node-b ./build/s7runtime/s7runtime \
+  --schema s7runtime/examples/schema_minimal_node2.json \
   --start-net \
   --seed-peer ws://127.0.0.1:9002 \
   --serve-forever
 ```
 
-Note: create `schema_minimal_node2.json` from `schema_minimal.json` and set `websocket.server.port` to `9003`.
+The runtimes serve the control plane only; they do not execute their graphs while serving (see `CODE_REVIEW_REQUIRED_FIXES.md`).
 
 ## 3) Open Studio and discover nodes
 
 ```bash
-/home/al/projects/s7/s7l2/build/s7studio/s7studio
+./build/s7studio/s7studio
 ```
 
 In Studio:
 
 1. Open the `Headless Nodes` dock.
-2. Add seed `ws://127.0.0.1:9002` and `ws://127.0.0.1:9003`.
+2. Add seed `ws://127.0.0.1:9002` (node B is found through its peer list) or add both seeds.
 3. Click `Refresh` (or enable auto refresh).
-4. Check `Trusted nodes` / `Untrusted or unknown nodes` lists.
-5. Double-click a node to open/update a node-specific tab in the panel.
+4. Check the `Trusted nodes` / `Untrusted or unknown nodes` lists. Plain `ws://` nodes are always untrusted.
+5. Double-click a node to open or update its tab.
 
 ## 4) Optional mTLS run
 
-Test certs are available in:
-
-- `/home/al/projects/s7/s7l2/s7runtime/examples/certs`
-
-To regenerate:
+Test certificates are in `s7runtime/examples/certs` (development fixtures only). To regenerate them:
 
 ```bash
-/home/al/projects/s7/s7l2/tools/generate_test_runtime_certs.sh
+tools/generate_test_runtime_certs.sh
 ```
 
-For `wss://` peers in Studio, fill CA/cert/key fields in the `Headless Nodes` dock.
+Enable `websocket.server.tls` in the schema with `cert_file`, `key_file`, and `ca_file`. For `wss://` seeds in Studio, fill the CA/cert/key fields in the `Headless Nodes` dock.
 
 ## 5) Stop nodes
 
 Press `Ctrl+C` in each runtime terminal.
-

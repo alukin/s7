@@ -332,9 +332,11 @@ Schemas do not have State.
 
 ## Node
 
-A runtime host capable of executing Schemas.
+A runtime instance (for example, one `s7runtime` process) capable of executing Schemas.
 
-Examples:
+A Node is not necessarily a unique physical host: several Nodes may run on one host with distinct endpoints, identities and state.
+
+Example hosts:
 
 - desktop computer
 - server

@@ -38,7 +38,7 @@ Generates white noise with normal (Gaussian) distribution.
 ### PinkNoiseGenerator
 **Type**: Source (0 inputs, 1 output)
 
-Generates pink noise (1/f noise) using Voss-McCartney algorithm.
+Intended to generate pink (1/f) noise. The current implementation is a 7-sample moving average of white noise, which is low-pass filtered noise rather than true 1/f noise (see `docs/CODE_REVIEW_REQUIRED_FIXES.md`).
 
 **Parameters**:
 - `amplitude` (real, default 1.0): Standard deviation of noise
@@ -66,21 +66,14 @@ Generates pink noise (1/f noise) using Voss-McCartney algorithm.
 - CMake 3.20+
 
 ### Build Command
-```bash
-cd s7noise
-mkdir build
-cd build
-cmake ..
-make
-make install
-```
+`s7noise` is built as part of the top-level build (`cmake --build build`); the library is `build/s7noise/libs7noise.so`. `cmake --install` places it in `lib/s7/plugins`.
 
 ### Installation
 Installs to: `lib/s7/plugins/libs7noise.so` (Linux/macOS)
 
 ## Plugin Discovery
 
-The plugin is loaded automatically if found in:
+Studio loads it from the build tree automatically. For `s7runtime`, pass `--plugin-dir build/s7noise` or install it. The plugin is also loaded if found in:
 1. `~/.s7/plugins/`
 2. `/opt/s7/plugins/`
 3. `./plugins/`
@@ -130,11 +123,8 @@ The plugin is loaded automatically if found in:
 - Use: General noise source, testing, flat spectrum
 
 ### Pink Noise (1/f)
-- Power decreases with frequency
-- More low-frequency content than white noise
-- Algorithm: Voss-McCartney with 7-stage filter
-- Use: Natural sounds, music, frequency sweep testing
-- Spectral characteristics: -3dB/octave
+- Target: power decreasing with frequency, -3 dB/octave
+- Current implementation: 7-sample moving average of white noise (not yet 1/f)
 
 ## Seeding for Reproducibility
 
@@ -178,13 +168,8 @@ s7noise/
 ### White Noise
 Uses `std::mt19937` with `std::normal_distribution<double>`.
 
-### Pink Noise (1/f)
-Voss-McCartney algorithm:
-- Maintains 7 random values (one for each octave)
-- On each step, updates one random value (round-robin)
-- Sums all 7 values to produce output
-- Produces -3dB/octave spectrum (true 1/f)
-- Very efficient: 7 operations per sample
+### Pink Noise
+Current implementation: keeps the last 7 white-noise samples in a ring buffer and outputs their mean. A true Voss-McCartney generator updates octave rows at different rates (row *k* every 2^k samples).
 
 ## Testing
 

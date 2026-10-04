@@ -6,7 +6,7 @@ Date: 2026-09-20
 
 We just finished a focused architecture update around node identity and headless discovery, and the changes were committed in:
 
-- `ba9462e` — `Add node identity metadata to studio discovery`
+- `971a518` — `Add node identity metadata to studio discovery`
 
 ### Completed work
 
