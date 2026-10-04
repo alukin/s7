@@ -38,7 +38,12 @@ endfunction()
 
 option(S7_BUILD_STUDIO "Build the s7studio runtime client" ON)
 
-find_package(Boost 1.75 REQUIRED COMPONENTS json system)
+find_package(Boost 1.75 REQUIRED COMPONENTS json OPTIONAL_COMPONENTS system)
+if (NOT TARGET Boost::system)
+	# Boost >= 1.89 makes Boost.System header-only and drops its CMake component.
+	add_library(Boost::system INTERFACE IMPORTED)
+	target_link_libraries(Boost::system INTERFACE Boost::headers)
+endif()
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -48,7 +53,9 @@ endif()
 
 enable_testing()
 
-add_subdirectory(external/QSchematic)
+if (S7_BUILD_STUDIO)
+	add_subdirectory(external/QSchematic)
+endif()
 add_subdirectory(s7core)
 add_subdirectory(s7io)
 add_subdirectory(s7transport)
