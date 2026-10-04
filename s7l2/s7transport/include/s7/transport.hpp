@@ -44,7 +44,7 @@ struct DataPacket {
     std::uint16_t data_type{0x000C}; // F64
     std::uint32_t elem_count{};
     std::uint16_t flags{};
-    std::uint64_t t_model_ns{};
+    std::optional<std::uint64_t> t_model_ns;
     std::optional<std::uint64_t> t_system_ns;
     std::vector<std::uint8_t> extensions;
     double t_model{};
@@ -68,8 +68,8 @@ struct TlsConfig {
 
 [[nodiscard]] auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl;
 
-[[nodiscard]] auto encode_packet_v1(const DataPacket& packet) -> std::vector<std::uint8_t>;
-[[nodiscard]] auto decode_packet_v1(const std::vector<std::uint8_t>& frame) -> DataPacket;
+[[nodiscard]] auto encode_packet_prototype(const DataPacket& packet) -> std::vector<std::uint8_t>;
+[[nodiscard]] auto decode_packet_prototype(const std::vector<std::uint8_t>& frame) -> DataPacket;
 [[nodiscard]] auto encode_f64_payload(double value) -> std::vector<std::uint8_t>;
 [[nodiscard]] auto decode_f64_payload(const std::vector<std::uint8_t>& payload) -> double;
 
@@ -154,6 +154,7 @@ private:
     std::uint64_t next_handle_{1};
     std::unordered_map<std::uint64_t, EndpointState> endpoints_;
     std::unordered_map<std::string, std::deque<DataPacket>> stream_queues_;
+    std::deque<std::string> transport_errors_;
 };
 
 using RuntimeNetEndpointPtr = std::shared_ptr<IRuntimeNetEndpoint>;
@@ -161,4 +162,3 @@ using RuntimeNetEndpointPtr = std::shared_ptr<IRuntimeNetEndpoint>;
 } // namespace s7::transport
 
 #endif // S7TRANSPORT_INCLUDE_S7_TRANSPORT_HPP
-

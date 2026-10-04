@@ -39,8 +39,8 @@ int main()
         outgoing.extensions = {0xAA, 0x55};
         outgoing.payload = s7::transport::encode_f64_payload(12.5);
 
-        const auto frame = s7::transport::encode_packet_v1(outgoing);
-        const auto decoded = s7::transport::decode_packet_v1(frame);
+        const auto frame = s7::transport::encode_packet_prototype(outgoing);
+        const auto decoded = s7::transport::decode_packet_prototype(frame);
         assert(decoded.sequence == outgoing.sequence);
         assert(decoded.stream_id == outgoing.stream_id);
         assert(decoded.channel_id == outgoing.channel_id);
@@ -53,14 +53,14 @@ int main()
         assert(s7::transport::decode_f64_payload(decoded.payload) == 12.5);
 
         auto malformed = frame;
-        // Force payload_size in the v1 header to exceed the frame length.
+        // Force payload_size in the prototype header to exceed the frame length.
         malformed[30] = 0xFF;
         malformed[31] = 0xFF;
         malformed[32] = 0xFF;
         malformed[33] = 0xFF;
         bool rejected_malformed = false;
         try {
-            static_cast<void>(s7::transport::decode_packet_v1(malformed));
+            static_cast<void>(s7::transport::decode_packet_prototype(malformed));
         } catch (const std::invalid_argument&) {
             rejected_malformed = true;
         }
@@ -138,5 +138,3 @@ int main()
 
     return 0;
 }
-
-

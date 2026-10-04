@@ -6,11 +6,13 @@
 - **DISTRIBUTED_ADDRESSING.md** - UUID-based element and node addressing for distributed computation
 - **ELEMENT_LIBRARY_TECH.md** - Element library architecture, registry, plugins, parameter validation
 - **REMOTE_NODE_INFO_AND_DEPLOYMENT.md** - Remote node capability reporting and heterogeneous deployment model
-- **S7_Control_Protocol_MVP.md** - Compact control-plane protocol reference for discovery and deployment MVP
+- **S7_Control_Protocol_MVP.md** - RFC-style control-plane protocol draft for discovery and deployment MVP
+- **CODE_REVIEW_REQUIRED_FIXES.md** - prioritized fixes from review of the current runtime, transport, and control-plane code
+- **IDENTITY_AND_CREDENTIAL_PROVISIONING.md** - X.509 node identity and Git SSH credential provisioning design
 - **LOCAL_HEADLESS_NODES_DEMO.md** - Run two local headless runtimes and discover them in Studio
 - **SCHEMA_LIBRARY_WORKFLOW.md** - Schema-based element libraries, studio workflow, and runtime loading
 - **S7_Transport_Architecture.md** - Transport module boundaries and runtime orchestration
-- **S7_Network_Wire_Protocol_v1.md** - One-port WebSocket control/data protocol baseline
+- **S7_Network_Wire_Protocol_v1.md** - Binary inter-node data-stream wire-format draft
 - **S7_Net_Element_Contract.md** - `s7net` element abstraction and runtime service contract
 
 ### Developer Guides
@@ -391,5 +393,3 @@ struct VisualHints {
 - **Runtime Architecture**: `/docs/S7_Runtime_Architecture.md`
 - **Formal Model**: `/docs/S7_Formal_Model.md`
 - **Terminology**: `/docs/S7_Terminology.md`
-
-

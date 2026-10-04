@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace s7 {
 
@@ -26,9 +27,25 @@ public:
     [[nodiscard]] std::size_t step_count() const;
 
 private:
+    struct StatefulOutput {
+        void* value_ptr{};
+        SignalType type{SignalType::DOUBLE};
+        RealValue snapshot_real{};
+        RealValue staged_real{};
+        ComplexValue snapshot_complex{};
+        ComplexValue staged_complex{};
+    };
+
+    struct StatefulOutputRange {
+        std::size_t begin{};
+        std::size_t end{};
+    };
+
     [[nodiscard]] OutputBinding output_binding_of(const std::string& element_id, std::size_t port) const;
 
     ExecutableGraph graph_;
+    std::vector<StatefulOutput> stateful_outputs_;
+    std::vector<StatefulOutputRange> stateful_output_ranges_;
     std::size_t step_count_{};
 };
 

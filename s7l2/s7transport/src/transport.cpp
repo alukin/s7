@@ -122,10 +122,15 @@ void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
 
 [[nodiscard]] auto seconds_to_ns(const double seconds) -> std::uint64_t
 {
-    if (seconds <= 0.0) {
-        return 0;
+    if (!std::isfinite(seconds) || seconds < 0.0) {
+        throw std::invalid_argument("Model time must be a finite non-negative value in the current packet profile.");
     }
-    return static_cast<std::uint64_t>(std::llround(seconds * 1'000'000'000.0));
+    const auto scaled = static_cast<long double>(seconds) * 1'000'000'000.0L;
+    const auto rounded = std::round(scaled);
+    if (rounded >= std::ldexp(1.0L, 64)) {
+        throw std::invalid_argument("Model time exceeds the current packet profile range.");
+    }
+    return static_cast<std::uint64_t>(rounded);
 }
 
 [[nodiscard]] auto ns_to_seconds(const std::uint64_t ns) -> double
@@ -207,24 +212,26 @@ auto decode_f64_payload(const std::vector<std::uint8_t>& payload) -> double
     return std::bit_cast<double>(raw);
 }
 
-auto encode_packet_v1(const DataPacket& packet) -> std::vector<std::uint8_t>
+auto encode_packet_prototype(const DataPacket& packet) -> std::vector<std::uint8_t>
 {
+    if ((packet.flags & static_cast<std::uint16_t>(~kFlagHasSystemTimestamp)) != 0u) {
+        throw std::invalid_argument("Packet contains unsupported prototype flags.");
+    }
     if (packet.payload.size() > kMaxPayloadBytes) {
-        throw std::invalid_argument("Payload exceeds v1 max packet size.");
+        throw std::invalid_argument("Payload exceeds prototype packet size limit.");
     }
     if (packet.stream_name.size() > 0xFFFFu) {
-        throw std::invalid_argument("Stream name exceeds v1 extension encoding limit.");
+        throw std::invalid_argument("Stream name exceeds prototype extension encoding limit.");
     }
 
     const auto extension_bytes = static_cast<std::size_t>(2u + packet.stream_name.size() + packet.extensions.size());
     if (extension_bytes > 0xFFFFu) {
-        throw std::invalid_argument("Extension area exceeds v1 max length.");
+        throw std::invalid_argument("Extension area exceeds prototype format limit.");
     }
 
-    const auto t_model_ns = packet.t_model_ns != 0 ? packet.t_model_ns : seconds_to_ns(packet.t_model);
-    if (t_model_ns == 0) {
-        throw std::invalid_argument("DataPacket requires non-zero t_model_ns or t_model.");
-    }
+    const auto t_model_ns = packet.t_model_ns
+        ? *packet.t_model_ns
+        : seconds_to_ns(packet.t_model);
 
     const auto has_system_timestamp = packet.t_system_ns.has_value();
     const auto flags = static_cast<std::uint16_t>(packet.flags | (has_system_timestamp ? kFlagHasSystemTimestamp : 0u));
@@ -253,7 +260,7 @@ auto encode_packet_v1(const DataPacket& packet) -> std::vector<std::uint8_t>
     return frame;
 }
 
-auto decode_packet_v1(const std::vector<std::uint8_t>& frame) -> DataPacket
+auto decode_packet_prototype(const std::vector<std::uint8_t>& frame) -> DataPacket
 {
     if (frame.size() < kFixedHeaderBytes) {
         throw std::invalid_argument("Packet frame shorter than fixed header.");
@@ -277,12 +284,18 @@ auto decode_packet_v1(const std::vector<std::uint8_t>& frame) -> DataPacket
     const auto t_system_ns = read_u64_be(frame, offset);
     const auto ext_len = read_u16_be(frame, offset);
     const auto reserved = read_u16_be(frame, offset);
+    if ((packet.flags & static_cast<std::uint16_t>(~kFlagHasSystemTimestamp)) != 0u) {
+        throw std::invalid_argument("Packet contains unsupported prototype flags.");
+    }
     if (reserved != 0) {
-        throw std::invalid_argument("Packet reserved field must be zero in v1.");
+        throw std::invalid_argument("Packet reserved field must be zero in the prototype format.");
+    }
+    if ((packet.flags & kFlagHasSystemTimestamp) == 0u && t_system_ns != 0u) {
+        throw std::invalid_argument("Packet has a system timestamp value without the presence flag.");
     }
 
     if (payload_size > kMaxPayloadBytes) {
-        throw std::invalid_argument("Packet payload exceeds v1 max packet size.");
+        throw std::invalid_argument("Packet payload exceeds prototype packet size limit.");
     }
 
     if (offset > frame.size()) {
@@ -294,6 +307,9 @@ auto decode_packet_v1(const std::vector<std::uint8_t>& frame) -> DataPacket
     }
     if (static_cast<std::size_t>(payload_size) > (remaining - static_cast<std::size_t>(ext_len))) {
         throw std::invalid_argument("Packet payload/extension lengths exceed frame size.");
+    }
+    if (static_cast<std::size_t>(ext_len) + static_cast<std::size_t>(payload_size) != remaining) {
+        throw std::invalid_argument("Packet frame contains trailing bytes after the declared payload.");
     }
 
     const auto extension_end = offset + ext_len;
@@ -311,7 +327,7 @@ auto decode_packet_v1(const std::vector<std::uint8_t>& frame) -> DataPacket
     offset = extension_end;
     packet.payload.assign(frame.begin() + static_cast<std::ptrdiff_t>(offset),
                           frame.begin() + static_cast<std::ptrdiff_t>(offset + payload_size));
-    packet.t_model = ns_to_seconds(packet.t_model_ns);
+    packet.t_model = ns_to_seconds(packet.t_model_ns.value());
     if ((packet.flags & kFlagHasSystemTimestamp) != 0u) {
         packet.t_system_ns = t_system_ns;
     }
@@ -569,9 +585,16 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                                 std::lock_guard<std::mutex> lock(impl_->control_handler_mutex);
                                 handler = impl_->control_request_handler;
                             }
-                            const auto response_json = handler
-                                ? handler(request_json)
-                                : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
+                            std::string response_json;
+                            try {
+                                response_json = handler
+                                    ? handler(request_json)
+                                    : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
+                            } catch (const std::exception&) {
+                                response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
+                            } catch (...) {
+                                response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
+                            }
                             ws->text(true);
                             boost::system::error_code write_ec;
                             ws->write(boost::asio::buffer(response_json), write_ec);
@@ -583,7 +606,20 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
 
                         const auto bytes = boost::beast::buffers_to_string(read_buffer.data());
                         std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-                        auto packet = decode_packet_v1(frame);
+                        DataPacket packet;
+                        try {
+                            packet = decode_packet_prototype(frame);
+                        } catch (const std::exception& ex) {
+                            {
+                                std::lock_guard<std::mutex> queue_lock(mutex_);
+                                if (transport_errors_.size() == 32) {
+                                    transport_errors_.pop_front();
+                                }
+                                transport_errors_.push_back(std::string{"invalid data packet: "} + ex.what());
+                            }
+                            interrupt_socket_reads(ws);
+                            break;
+                        }
                         std::lock_guard<std::mutex> queue_lock(mutex_);
                         stream_queues_[packet.stream_name].push_back(std::move(packet));
                     }
@@ -692,7 +728,20 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
 
                 const auto bytes = boost::beast::buffers_to_string(read_buffer.data());
                 std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-                auto packet = decode_packet_v1(frame);
+                DataPacket packet;
+                try {
+                    packet = decode_packet_prototype(frame);
+                } catch (const std::exception& ex) {
+                    {
+                        std::lock_guard<std::mutex> queue_lock(mutex_);
+                        if (transport_errors_.size() == 32) {
+                            transport_errors_.pop_front();
+                        }
+                        transport_errors_.push_back(std::string{"invalid data packet: "} + ex.what());
+                    }
+                    interrupt_socket_reads(ws);
+                    break;
+                }
                 std::lock_guard<std::mutex> queue_lock(mutex_);
                 stream_queues_[packet.stream_name].push_back(std::move(packet));
             }
@@ -728,7 +777,20 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
 
                 const auto bytes = boost::beast::buffers_to_string(read_buffer.data());
                 std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-                auto packet = decode_packet_v1(frame);
+                DataPacket packet;
+                try {
+                    packet = decode_packet_prototype(frame);
+                } catch (const std::exception& ex) {
+                    {
+                        std::lock_guard<std::mutex> queue_lock(mutex_);
+                        if (transport_errors_.size() == 32) {
+                            transport_errors_.pop_front();
+                        }
+                        transport_errors_.push_back(std::string{"invalid data packet: "} + ex.what());
+                    }
+                    interrupt_socket_reads(ws);
+                    break;
+                }
                 std::lock_guard<std::mutex> queue_lock(mutex_);
                 stream_queues_[packet.stream_name].push_back(std::move(packet));
             }
@@ -848,7 +910,7 @@ auto BeastRuntimeNetEndpoint::publish(const EndpointHandle& handle, const DataPa
         packet_to_send.stream_name = state.stream_name;
     }
 
-    const auto frame = encode_packet_v1(packet_to_send);
+    const auto frame = encode_packet_prototype(packet_to_send);
     std::shared_ptr<PlainWs> plain_data_socket;
     std::shared_ptr<TlsWs> tls_data_socket;
     {
@@ -896,6 +958,12 @@ auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& 
         return ReceiveResult{false, false, "endpoint is not receive-enabled"};
     }
 
+    if (!transport_errors_.empty()) {
+        auto error = std::move(transport_errors_.front());
+        transport_errors_.pop_front();
+        return ReceiveResult{false, false, std::move(error)};
+    }
+
     auto queue_it = stream_queues_.find(endpoint_it->second.stream_name);
     if (queue_it == stream_queues_.end() || queue_it->second.empty()) {
         return ReceiveResult{true, false, {}};
@@ -907,5 +975,3 @@ auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& 
 }
 
 } // namespace s7::transport
-
-

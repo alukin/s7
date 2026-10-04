@@ -147,7 +147,11 @@ public:
         return result;
     }
 
-    // Process one sample: read from inputs, write to outputs
+    // Process one sample: read from inputs, write to outputs. For stateful
+    // elements, NodeRuntime keeps all stateful outputs at their pre-step values
+    // while each element runs, then publishes the staged outputs together. An
+    // element's private state may advance during step(), but must not be shared
+    // with another element as an implicit communication channel.
     virtual void step() = 0;
 
 protected:

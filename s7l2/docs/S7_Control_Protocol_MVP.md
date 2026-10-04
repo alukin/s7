@@ -1,357 +1,213 @@
-# S7 Control Protocol MVP
+# S7 Control Protocol — MVP Draft
 
-## Status
+**Status:** Proposed protocol draft; not yet a conformance standard.
+**Version:** 0.1
+**Transport:** WebSocket carrying UTF-8 JSON messages.
 
-Normative MVP protocol reference (v1).
+This document defines how the S7 control Studio and runtime nodes identify one another, discover peers, exchange network configuration, and prepare/commit a configuration update. It is intended to be implementable in C++, Rust, Python, and JVM runtimes without depending on a shared implementation library.
 
-This document defines the control-plane message contract for decentralized discovery and deployment orchestration over `/control`.
+The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** express protocol requirements and recommendations in this draft.
 
----
+## 1. MVP Scope
 
-## Scope
+The MVP supports:
 
-Included in MVP:
+- runtime node identity and capability discovery;
+- peer discovery without requiring a central registry;
+- retrieval of the committed network configuration from a runtime node;
+- configuration deployment from one authorized control Studio;
+- per-node prepare, commit, and abort operations;
+- structured errors and versioned configuration identifiers.
 
-- node hello and identity bootstrap
-- node capability retrieval
-- decentralized peer discovery
-- deployment lifecycle (`prepare`/`commit`/`abort`)
-- standardized error semantics
+The MVP has one control Studio authorized to change a computational network at a time. It does not define collaboration or master election between multiple Studio nodes, operator voting, distributed consensus, plugin distribution, or conflict merging. Runtime nodes do not vote on Studio authority.
 
-Out of scope for MVP:
+Each runtime node MAY execute only its assigned graph fragment. The configuration bundle SHOULD describe the full network and its placement so a node can report or serve the committed network configuration. Runtime nodes do not need Git access: Studio selects a revision from its local Git repository and sends the required configuration bundle through the control protocol.
 
-- centralized registry service
-- plugin binary distribution/install
-- advanced liveness grades beyond `online`/`offline`
+## 2. Transport and Authentication
 
----
+Control messages use a WebSocket connection at the `/control` path. The connection MAY use `ws://` for local development and testing. A trusted network deployment MUST use `wss://` with mutual TLS (mTLS).
 
-## Transport and Security
+For trusted membership, the receiver MUST:
 
-- Transport path: `/control` WebSocket
-- Encoding: JSON
-- Security: strict mTLS for trusted membership
-- Node identity: certificate-bound `node_uuid` (SAN URI `spiffe://s7/node/<node_uuid>`)
+1. validate the peer certificate chain against configured trust roots;
+2. validate certificate validity and applicable usage constraints;
+3. extract the authenticated node identity from the certificate SAN URI;
+4. verify that the identity matches the identity claimed in protocol messages;
+5. authorize the requested operation for the certificate role.
 
-A node is trusted only when certificate validation succeeds and identity binding matches.
+Runtime-node identity uses the SAN URI form:
 
----
-
-## Common Envelope
-
-All request/response messages include:
-
-```json
-{
-  "type": "MESSAGE_TYPE",
-  "request_id": "uuid-v4-or-equivalent",
-  "protocol_version": 1
-}
+```text
+spiffe://s7/node/<node_uuid>
 ```
 
-Rules:
+The control Studio certificate MUST carry the configured authorization attribute that permits network configuration changes. The exact X.509 extension or policy OID is not fixed by this draft. A valid runtime-node certificate alone does not authorize configuration changes.
 
-- `request_id` is required for request/response correlation.
-- `protocol_version` is required and must be `1` in MVP.
-- Unknown fields must be ignored for forward compatibility.
+Plain WebSocket is not trusted membership and MUST NOT be used to authorize configuration changes.
 
----
+## 3. Message Framing and Common Envelope
 
-## Enums
+Each WebSocket text message contains exactly one JSON object encoded as UTF-8. A request and its response use the same connection. A client MUST NOT rely on JSON object member order.
 
-### Trust State
-
-- `verified`
-- `unverified`
-- `rejected`
-- `expired`
-- `identity_mismatch`
-
-### Reachability State (MVP)
-
-- `online`
-- `offline`
-
-### Deployment State (Node-Local)
-
-- `idle`
-- `prepared`
-- `running`
-- `error`
-
-### Prepare Status
-
-- `READY`
-- `NOT_READY`
-
----
-
-## Message Set
-
-## 1. Hello and Node Info
-
-### `HELLO`
-
-Purpose:
-
-- reachability check
-- protocol negotiation
-- minimal identity snapshot
-
-Request:
+Every request MUST contain:
 
 ```json
 {
+  "protocol": "S7CP",
+  "protocol_version": 1,
   "type": "HELLO",
-  "request_id": "a3d7b808-89f7-4a4f-96ef-4dfc4ab97aa4",
-  "protocol_version": 1
+  "request_id": "<unique-request-id>"
 }
 ```
 
-Response:
+Every response MUST include `protocol`, `protocol_version`, `type`, and the request's `request_id`. `request_id` is an opaque identifier used only to correlate a response with a request; UUID format is RECOMMENDED. It is not an authorization credential.
+
+Receivers MUST reject unsupported protocol versions with `UNSUPPORTED_PROTOCOL_VERSION`. Receivers SHOULD ignore unknown object members. Unknown message types MUST return `ERROR` with `UNSUPPORTED_MESSAGE_TYPE`.
+
+The initial request/response profile is synchronous: a connection has at most one outstanding request. A later revision may define pipelining or notifications.
+
+## 4. Identity and Version Fields
+
+- `node_uuid` identifies a logical runtime node and MUST remain stable across process restarts.
+- `instance_id` identifies one runtime process incarnation and MUST change when that process restarts.
+- A configuration revision identifies immutable configuration content; it MUST NOT be a moving branch name.
+- `project_revision` MAY be the Git commit identifier held by Studio. Runtime nodes treat it as opaque metadata and do not fetch from Git.
+- `configuration_digest` identifies the exact canonical configuration bundle bytes or their specified canonical representation. The digest algorithm and canonical serialization profile remain to be fixed.
+
+JSON identity fields are claims. The authenticated certificate identity is authoritative; a mismatch MUST fail the request.
+
+## 5. MVP Message Set
+
+### 5.1 `HELLO` → `HELLO_OK`
+
+Checks reachability and protocol compatibility. The response includes `node_uuid`, `instance_id`, `node_name`, `runtime_version`, and current configuration revision when available.
+
+### 5.2 `GET_NODE_INFO` → `NODE_INFO`
+
+Returns the node descriptor: identity, platform, network endpoints, runtime state, supported protocol versions, available libraries/elements, and hardware capabilities. The capability structure is specified in [REMOTE_NODE_INFO_AND_DEPLOYMENT.md](REMOTE_NODE_INFO_AND_DEPLOYMENT.md); that document remains the detailed source for descriptor fields.
+
+### 5.3 `GET_PEERS` → `PEERS`
+
+Returns the node's known peer cache. Each entry SHOULD contain an endpoint, verified `node_uuid` when known, trust state, reachability, last-seen information, and certificate fingerprint when available. Peer records learned from announcements are claims until verified by connecting and validating the peer certificate.
+
+### 5.4 `PEER_ANNOUNCE` → `PEER_ANNOUNCE_OK`
+
+Shares the sender's endpoint and identity claims with a peer. The recipient MAY cache this information. An announcement MUST NOT by itself establish trust or authorize a peer.
+
+### 5.5 `GET_NETWORK_CONFIGURATION` → `NETWORK_CONFIGURATION`
+
+Returns the node's latest committed network configuration bundle, or a requested retained revision if available. The response MUST identify the immutable revision and digest. It MUST distinguish the full network configuration from the fragment assigned to this node.
+
+If the node does not retain the requested revision, it returns `REVISION_NOT_FOUND`. This operation supports inspection and recovery from any runtime node that has the committed configuration; it does not make that node an authority for editing.
+
+### 5.6 `PREPARE_DEPLOYMENT` → `PREPARE_DEPLOYMENT_RESULT`
+
+The authorized Studio sends the proposed full network configuration metadata and the node-specific assigned fragment to each participating runtime node. The request MUST include:
+
+- `deployment_id` and `revision`;
+- `base_revision` (the currently active revision expected by the Studio);
+- `project_revision` and `configuration_digest`;
+- a configuration bundle included in the request;
+- the recipient's assigned graph fragment and its required capabilities.
+
+The node validates the bundle, fragment, local capabilities, and `base_revision`. The request MUST contain the configuration content; a runtime node MUST NOT need Git access to resolve a Git commit identifier. At minimum, the bundle distinguishes the full network configuration from this node's assigned fragment:
 
 ```json
 {
-  "type": "HELLO_OK",
-  "request_id": "a3d7b808-89f7-4a4f-96ef-4dfc4ab97aa4",
-  "protocol_version": 1,
-  "node_uuid": "3e89b2be-1a23-4bc8-a73d-7a99ae9c0df2",
-  "node_name": "rf-edge-01",
-  "runtime_version": "0.1.0",
-  "status": "idle"
-}
-```
-
-### `GET_NODE_INFO`
-
-Purpose:
-
-- full capability descriptor for deployment preflight
-
-Request:
-
-```json
-{
-  "type": "GET_NODE_INFO",
-  "request_id": "dc78bd66-2dca-4d8e-9a41-dda10fbf1ef5",
-  "protocol_version": 1
-}
-```
-
-Response (`NODE_INFO`) includes at minimum:
-
-- `node` identity (`node_uuid`, `node_name`, `instance_id`, runtime info)
-- `platform` (`os_family`, `architecture`, `target_triple`)
-- `network` (`listen_url`, control/data paths)
-- `libraries` with status metadata
-- `elements` summary and deployability metadata
-- `hardware` adapter/device summary
-- `state` deployment/runtime status
-
----
-
-## 2. Discovery and Membership
-
-### `GET_PEERS`
-
-Purpose:
-
-- retrieve known peers from a node-local last-seen cache
-
-Request:
-
-```json
-{
-  "type": "GET_PEERS",
-  "request_id": "8f7d9775-31f1-4d1c-9e65-2f9ce3acdcde",
-  "protocol_version": 1,
-  "include_unverified": true,
-  "max_entries": 512
-}
-```
-
-Response (`PEERS`) includes entries with:
-
-- `endpoint`
-- `node_uuid` / `node_name` when known
-- optional `platform` summary
-- `trust_state`
-- `reachability`
-- `last_seen_at`
-- `last_failure_at`
-- optional `cert_fingerprint_sha256`
-
-### `PEER_ANNOUNCE`
-
-Purpose:
-
-- proactive self-announcement to a known peer
-
-Request:
-
-```json
-{
-  "type": "PEER_ANNOUNCE",
-  "request_id": "fbb454be-95d9-477d-a4d9-a4439f8cecb8",
-  "protocol_version": 1,
-  "self": {
-    "endpoint": "wss://node-a.example.net:8443",
-    "node_uuid": "7fbf65b0-2ac4-427c-8f55-a826d2f89d11",
-    "node_name": "node-a",
-    "platform": {
-      "os_family": "linux",
-      "architecture": "x86_64"
-    },
-    "instance_id": "6de8ef16-f924-4502-a486-8bcb4ce35e9e"
+  "configuration": {
+    "project_revision": "<opaque-immutable-revision>",
+    "configuration_digest": "<digest>",
+    "full_network": {},
+    "assigned_fragment": {}
   }
 }
 ```
 
-Response:
+The two objects above are placeholders for the selected schema/configuration representation; this protocol does not standardize that format. The node MUST stage the prepared material without activating it. A ready response contains a short-lived, node-local `prepare_token`; a negative response contains structured incompatibilities.
+
+Repeating the same prepare request for the same deployment and revision SHOULD return the same live prepare token. A different request using a stale `base_revision` MUST return `REVISION_CONFLICT`.
+
+### 5.7 `COMMIT_DEPLOYMENT` → `COMMIT_DEPLOYMENT_RESULT`
+
+Commits a previously prepared deployment using its token. The operation MUST be idempotent. A node MUST record the committed revision and digest before reporting success. It activates its assigned fragment according to local runtime policy and reports the resulting state.
+
+The MVP uses two-phase prepare/commit, but does not promise that separate nodes switch at the same physical instant. A connection failure during commit can leave a deployment partially committed; the Studio MUST query participants and retry or explicitly recover the transaction. Revision matching on network data streams is specified by the data-stream protocol.
+
+### 5.8 `ABORT_DEPLOYMENT` → `ABORT_DEPLOYMENT_RESULT`
+
+Discards a prepared deployment and its reservations. Abort is idempotent. A committed deployment cannot be undone with abort; reverting configuration is a new deployment based on an earlier project revision.
+
+### 5.9 `LIST_DEPLOYMENTS` → `DEPLOYMENTS`
+
+Returns active, prepared, and retained deployment records, including revision, digest, state, and expiry information where applicable.
+
+## 6. Configuration Transaction Rules
+
+The normal deployment flow is:
+
+1. Studio reads the current revision from participating nodes.
+2. Studio prepares the same proposed configuration revision on every target node.
+3. If any target is not ready, Studio aborts prepared participants and reports the incompatibilities.
+4. If all targets are ready, Studio commits the deployment on every target.
+5. Studio queries participants after commit and reports any incomplete or mixed state.
+
+Nodes MUST reject prepare requests whose `base_revision` does not match their active revision, unless the request explicitly identifies a recovery operation. This provides optimistic conflict detection without runtime voting.
+
+The protocol MUST retain enough transaction identifiers and state to make prepare, commit, abort, and recovery requests idempotent across reconnects. Retention duration and crash-recovery journal format are implementation-specific in the MVP.
+
+## 7. Error Responses
+
+Errors use this shape:
 
 ```json
 {
-  "type": "PEER_ANNOUNCE_OK",
-  "request_id": "fbb454be-95d9-477d-a4d9-a4439f8cecb8",
+  "protocol": "S7CP",
   "protocol_version": 1,
-  "accepted": true
-}
-```
-
----
-
-## 3. Deployment Lifecycle
-
-### `LIST_DEPLOYMENTS` -> `DEPLOYMENTS`
-
-Purpose:
-
-- list active/prepared/history deployment records on node
-
-### `PREPARE_DEPLOYMENT` -> `PREPARE_DEPLOYMENT_RESULT`
-
-Purpose:
-
-- validate assigned placement subset
-- reserve resources if deployable
-- return structured incompatibilities when not deployable
-
-Result:
-
-- `prepare_status: READY` with `prepare_token`, reservation window
-- `prepare_status: NOT_READY` with `incompatibilities[]`
-
-### `COMMIT_DEPLOYMENT` -> `COMMIT_DEPLOYMENT_RESULT`
-
-Purpose:
-
-- activate previously prepared deployment
-
-Requires:
-
-- matching valid `prepare_token`
-
-### `ABORT_DEPLOYMENT` -> `ABORT_DEPLOYMENT_RESULT`
-
-Purpose:
-
-- release reservations and discard staged prepare state
-
-Requires:
-
-- matching valid `prepare_token`
-
----
-
-## Incompatibility Taxonomy (`PREPARE_DEPLOYMENT_RESULT`)
-
-Allowed `code` values:
-
-- `PLATFORM_MISMATCH`
-- `MISSING_LIBRARY`
-- `LIBRARY_VERSION_MISMATCH`
-- `MISSING_ELEMENT`
-- `ELEMENT_BLOCKED`
-- `HARDWARE_MISSING`
-- `HARDWARE_BUSY`
-- `STREAM_CONFLICT`
-- `RESOURCE_LIMIT`
-- `POLICY_DENIED`
-
-Recommended `scope` values:
-
-- `platform`, `library`, `element`, `hardware`, `stream`, `resource`, `policy`
-
-Each incompatibility should include:
-
-- `code`
-- `scope`
-- `target`
-- `message`
-- optional `details`
-
----
-
-## Error Message
-
-### `ERROR`
-
-```json
-{
   "type": "ERROR",
-  "request_id": "same-as-request",
-  "protocol_version": 1,
+  "request_id": "<request-id>",
   "code": "INVALID_REQUEST",
-  "message": "human-readable summary",
+  "message": "Human-readable summary",
   "details": {}
 }
 ```
 
-Allowed error codes (MVP):
+Initial error codes:
 
 - `INVALID_REQUEST`
 - `UNSUPPORTED_PROTOCOL_VERSION`
+- `UNSUPPORTED_MESSAGE_TYPE`
 - `UNAUTHORIZED`
 - `CERTIFICATE_REQUIRED`
 - `CERTIFICATE_INVALID`
 - `IDENTITY_MISMATCH`
-- `FORBIDDEN`
-- `RATE_LIMITED`
+- `REVISION_NOT_FOUND`
+- `REVISION_CONFLICT`
+- `PREPARE_TOKEN_INVALID`
+- `PREPARE_EXPIRED`
+- `CAPABILITY_MISSING`
+- `RESOURCE_LIMIT`
 - `INTERNAL_ERROR`
 
----
+Errors MUST NOT disclose private key material, credentials, or sensitive local paths.
 
-## Idempotency and Token Rules
+## 8. Security and Operational Requirements
 
-- `PREPARE_DEPLOYMENT` may return the same valid token when replayed for same `deployment_id` + `revision`.
-- `COMMIT_DEPLOYMENT` and `ABORT_DEPLOYMENT` must validate token ownership and expiry.
-- Unknown/expired token returns `ERROR` with `code: INVALID_REQUEST`.
+- Control mutation requests MUST be authorized using authenticated certificate identity and role, never JSON claims alone.
+- Prepare tokens MUST be unpredictable, scoped to the node, deployment, and revision, and expire.
+- Requests that mutate state MUST be idempotent or carry an idempotency key.
+- Configuration bundles MUST be validated before activation.
+- A failed or disconnected Studio does not stop a runtime node's last committed execution.
+- Local Git history on Studio is not a runtime-node dependency. Runtime configuration retrieval and deployment use S7 control messages.
 
----
+## 9. Open Items Before Interoperability Freeze
 
-## Canonicalization Rules (Seeds)
+1. Exact JSON schema for each message and the canonical form used to compute `configuration_digest`.
+2. Exact Studio authorization certificate extension and how a single authorized control Studio is configured.
+3. Configuration bundle representation and maximum message size or chunking protocol.
+4. Recovery procedure for partially committed multi-node deployments.
+5. Retention and garbage-collection rules for configuration and deployment history.
+6. Whether request IDs use UUIDv4 specifically and how long duplicate responses are cached.
 
-- Seed peers may be entered as full URL or hostname/IP shorthand.
-- Persist canonical form as full URL: `wss://host:port`.
-- Default port may be injected by local policy during normalization.
+## 10. Relationship to Implementation
 
----
-
-## Studio UX Requirements (Protocol-Driven)
-
-- Separate trusted and untrusted node lists.
-- Untrusted nodes are diagnostics-only (not deployment targets).
-- Provide per-node view and network topology view.
-- Double-click node reuses existing node tab when already open.
-- Node tab displays deployed diagram plus live node/library/hardware panel.
-
----
-
-## Normative Source and Schemas
-
-Normative examples and JSON Schemas are maintained in:
-
-- `docs/REMOTE_NODE_INFO_AND_DEPLOYMENT.md`
-
-This file is the compact implementer reference. If conflicts appear, follow `docs/REMOTE_NODE_INFO_AND_DEPLOYMENT.md`.
-
+The C++ runtime is the reference implementation. Existing code contains JSON control handlers for several messages and mTLS configuration, but this document also specifies behavior that is not yet implemented. Conformance must be established with cross-language protocol fixtures and tests before this draft is treated as a stable wire contract.

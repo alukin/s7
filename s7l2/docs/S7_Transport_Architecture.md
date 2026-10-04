@@ -2,7 +2,7 @@
 
 ## Status
 
-Draft v1 baseline for implementation.
+Evolving architecture proposal. The current implementation is a prototype and does not yet meet every contract described here.
 
 This document defines module boundaries and runtime transport responsibilities for distributed S7 execution.
 
@@ -128,14 +128,14 @@ Only `control-node` role may perform control mutations.
 
 ---
 
-## One-Port Channel Model
+## Peer and Channel Model
 
-A node exposes one TLS port with two WebSocket paths:
+A runtime node MAY maintain simultaneous peer connections to multiple runtime nodes. Each peer connection pair uses one authenticated identity and two WebSocket paths:
 
 - `/control` for authenticated control messages (JSON)
-- `/data` for multiplexed data transport (binary)
+- `/data` for multiplexed binary data packets
 
-Both paths share peer identity and certificate context.
+The control and data connections for a peer MUST be bound to the same authenticated peer identity. A data connection can carry multiple configured streams for that peer. Stream routing is by configured stream identity; an implementation MUST NOT use packet arrival order to infer causal ordering across separate streams or peer connections. The current Beast endpoint still keeps one data/control socket pair and must be changed to support this model.
 
 ---
 
@@ -153,26 +153,15 @@ This is required for mixed private/public deployments.
 
 ## Reliability and Ordering Baseline
 
-Data-plane baseline:
+Data-plane candidate baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md)):
 
-- all samples must be delivered
-- global ordering across all multiplexed channels per connection
-- packet-level model timestamp required (`t_model`)
-- system timestamp optional/required by source profile (`t_system`)
+- persistent per-stream sequence numbers; gaps are detectable after crashes/reconnects but are not automatically recovered
+- ordering is defined per stream; no global ordering is implied across different streams or peers
+- timestamps are described by explicit stream roles (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) and clock domains
+- model time is simulation time; it is not inferred from wall-clock time
 - variable-length packets with max payload `256 KiB`
 - big-endian numeric encoding on wire
 
-Priority policy baseline:
+Observation is local to a runtime node. Studio Scope may observe outputs in its local runtime, including outputs of configured network-source elements after packets cross an explicit graph boundary. The observation API does not probe remote nodes and does not bypass the data protocol.
 
-1. control traffic
-2. element-connection data traffic
-3. observation traffic
-
-Observer transport is network-transparent but lower priority than functional graph data transport.
-
----
-
-## Open Questions
-
-No unresolved architecture questions remain for v1 baseline in this document.
-
+The packet layout, timestamp records, type IDs, multi-peer routing details, and transport error behavior remain candidate design decisions. See the linked wire protocol and control protocol drafts; neither is yet a conformance standard.

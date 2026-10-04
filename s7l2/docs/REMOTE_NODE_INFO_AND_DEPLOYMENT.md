@@ -13,7 +13,7 @@ This document records the current design direction for two related concerns:
 1. how `s7studio` / `s7ctl` retrieve trustworthy information about a remote headless node;
 2. how a diagram/schema is deployed to heterogeneous remote nodes.
 
-It is intended to refine the control-plane work that sits above the already implemented `s7transport` data/control channels.
+It refines the control-plane and deployment work that uses the `s7transport` data/control channel scaffolding. The MVP message and wire-format drafts are maintained in `S7_Control_Protocol_MVP.md` and `S7_Network_Wire_Protocol_v1.md`; this document provides additional capability-descriptor and deployment-model detail.
 
 ---
 
@@ -1977,4 +1977,3 @@ These topics remain for subsequent discussions:
 3. topology display and live status overlays in `s7studio`
 4. remote element/library version constraints and upgrade policy
 5. remote hardware reservation/conflict policy
-
