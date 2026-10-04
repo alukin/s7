@@ -6,35 +6,67 @@ mkdir -p "$OUT_DIR"
 
 ROOT_KEY="$OUT_DIR/s7_root_ca.key.pem"
 ROOT_CERT="$OUT_DIR/s7_root_ca.cert.pem"
-NODE_KEY="$OUT_DIR/s7_runtime_node.key.pem"
-NODE_CSR="$OUT_DIR/s7_runtime_node.csr.pem"
-NODE_EXT="$OUT_DIR/s7_runtime_node.ext"
-NODE_CERT="$OUT_DIR/s7_runtime_node.cert.pem"
 SERIAL="$OUT_DIR/s7_root_ca.cert.srl"
 
 NODE_UUID="11111111-2222-3333-4444-555555555555"
+STUDIO_UUID="22222222-3333-4444-5555-666666666666"
+
+# Development placeholder for the S7 control-node (Studio) role policy OID:
+# a UUID-derived OID under 2.25 (ITU-T X.667), pending assignment of S7 OIDs
+# under an enterprise arc. Keep in sync with S7_DEV_STUDIO_POLICY_OID users.
+STUDIO_POLICY_OID="2.25.4266950079767543379770189370854073200"
 
 openssl genrsa -out "$ROOT_KEY" 4096
 openssl req -x509 -new -nodes -key "$ROOT_KEY" -sha256 -days 3650 \
   -out "$ROOT_CERT" \
   -subj "/C=US/ST=Test/L=Test/O=S7/OU=Test/CN=S7 Test Root CA"
 
-openssl genrsa -out "$NODE_KEY" 2048
-openssl req -new -key "$NODE_KEY" -out "$NODE_CSR" \
-  -subj "/C=US/ST=Test/L=Test/O=S7/OU=Runtime/CN=s7-runtime-node" \
-  -addext "subjectAltName=URI:spiffe://s7/node/$NODE_UUID"
+# issue <name> <subject> <extensions> [ca_cert ca_key serial]
+issue() {
+  local name="$1" subject="$2" extensions="$3"
+  local ca_cert="${4:-$ROOT_CERT}" ca_key="${5:-$ROOT_KEY}" serial="${6:-$SERIAL}"
+  local key="$OUT_DIR/$name.key.pem" csr="$OUT_DIR/$name.csr.pem"
+  local ext="$OUT_DIR/$name.ext" cert="$OUT_DIR/$name.cert.pem"
 
-cat > "$NODE_EXT" <<EOF
-basicConstraints=CA:FALSE
+  openssl genrsa -out "$key" 2048
+  openssl req -new -key "$key" -out "$csr" -subj "$subject"
+  printf '%s\n' "$extensions" > "$ext"
+  openssl x509 -req -in "$csr" -CA "$ca_cert" -CAkey "$ca_key" \
+    -CAcreateserial -CAserial "$serial" -out "$cert" -days 825 -sha256 -extfile "$ext"
+  rm -f "$csr"
+}
+
+# Runtime node: identity in the SAN URI, no Studio role.
+issue s7_runtime_node "/C=US/ST=Test/L=Test/O=S7/OU=Runtime/CN=s7-runtime-node" \
+"basicConstraints=CA:FALSE
 keyUsage=digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth,clientAuth
-subjectAltName=URI:spiffe://s7/node/$NODE_UUID
-EOF
+subjectAltName=URI:spiffe://s7/node/$NODE_UUID"
 
-openssl x509 -req -in "$NODE_CSR" -CA "$ROOT_CERT" -CAkey "$ROOT_KEY" \
-  -CAcreateserial -CAserial "$SERIAL" -out "$NODE_CERT" -days 825 -sha256 -extfile "$NODE_EXT"
+# Control Studio: carries the control-node role policy.
+issue s7_studio "/C=US/ST=Test/L=Test/O=S7/OU=Studio/CN=s7-studio" \
+"basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=clientAuth
+subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID
+certificatePolicies=$STUDIO_POLICY_OID"
 
-openssl verify -CAfile "$ROOT_CERT" "$NODE_CERT"
+# Untrusted CA and a Studio-role certificate it signed, for negative tests.
+UNTRUSTED_KEY="$OUT_DIR/s7_untrusted_ca.key.pem"
+UNTRUSTED_CERT="$OUT_DIR/s7_untrusted_ca.cert.pem"
+openssl genrsa -out "$UNTRUSTED_KEY" 2048
+openssl req -x509 -new -nodes -key "$UNTRUSTED_KEY" -sha256 -days 3650 \
+  -out "$UNTRUSTED_CERT" -subj "/C=US/ST=Test/L=Test/O=Elsewhere/CN=Untrusted Test CA"
+issue s7_untrusted_studio "/C=US/ST=Test/L=Test/O=Elsewhere/CN=s7-studio" \
+"basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=clientAuth
+subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID
+certificatePolicies=$STUDIO_POLICY_OID" \
+  "$UNTRUSTED_CERT" "$UNTRUSTED_KEY" "$OUT_DIR/s7_untrusted_ca.cert.srl"
 
+openssl verify -CAfile "$ROOT_CERT" "$OUT_DIR/s7_runtime_node.cert.pem" "$OUT_DIR/s7_studio.cert.pem"
+
+echo "Studio certificate SHA-256 fingerprint:"
+openssl x509 -in "$OUT_DIR/s7_studio.cert.pem" -noout -fingerprint -sha256 | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f'
 echo "Generated test certificates in: $OUT_DIR"
-

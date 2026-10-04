@@ -85,7 +85,7 @@ Timestamp presence MUST be represented separately from timestamp value. A presen
 
 Relevant code: [net.cpp](../s7net/src/net.cpp:133), [transport.cpp](../s7transport/src/transport.cpp:224).
 
-## P1: Enforce control authorization using the authenticated peer
+## P1: Enforce control authorization using the authenticated peer — fixed 2026-10-04
 
 ### Current problem
 
@@ -105,6 +105,8 @@ The certificate attribute format and provisioning policy should match the identi
 - An untrusted, missing, invalid, or wrong-role certificate cannot prepare, commit, or abort a deployment.
 - A valid runtime-node certificate cannot act as Studio authority solely by sending a Studio identity in JSON.
 - Authorized requests are associated with the authenticated certificate identity in logs/errors without exposing key material.
+
+**Resolution:** the transport hands each control request to the handler with a `ControlPeer` (TLS flag plus, for a chain-verified client certificate, its SHA-256 fingerprint, SAN URIs and policy OIDs). Prepare/commit/abort require TLS, a verified certificate, the configured control-node policy OID and the pinned Studio fingerprint (schema `control` block); JSON claims are ignored. Decisions are logged (`control.authorized` / `control.denied`) with the certificate fingerprint. The test PKI now has a Studio certificate with a development policy OID (`2.25.…`, placeholder until S7 OIDs are assigned) and an untrusted-CA Studio certificate. `s7runtime_deployment_smoke` covers plain, certificate-less, runtime-node (with forged JSON claims), unpinned, unconfigured and untrusted-CA peers, and an authorized Studio over real mTLS; `s7runtime_control_smoke` checks that plain WebSocket mutations are refused.
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:500), [transport.cpp](../s7transport/src/transport.cpp:565), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:200).
 
@@ -148,7 +150,7 @@ Define bounded queue/backpressure behavior as part of endpoint operation. A prod
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:523), [transport.cpp](../s7transport/src/transport.cpp:587).
 
-## P2: Make deployment readiness and commit reflect actual runtime state
+## P2: Make deployment readiness and commit reflect actual runtime state — fixed 2026-10-04
 
 ### Current problem
 
@@ -166,6 +168,8 @@ Reject malformed required capability structures instead of silently treating the
 - A successful commit can be observed in the actual runtime state.
 - A failed compile/activation does not report `running` and leaves the last committed runtime configuration active.
 - Invalid capability/request shapes produce an explicit error or `NOT_READY` result.
+
+**Resolution:** prepare requires `revision`, `base_revision` and a `configuration` whose `configuration_digest` (SHA-256 of RFC 8785 canonical JSON) must match; the node compiles `assigned_fragment` and keeps the compiled graph staged. Commit swaps it into the running node through `RuntimeService` (graph owned by the service, stepped under a mutex) and reports `state: active` plus the real `execution` state; a failed activation returns `INTERNAL_ERROR` and leaves the previous graph running. Revisions are range-checked (≤ 2^53), malformed `requires` entries are `INVALID_REQUEST`, compile failures are `NOT_READY`/`INVALID_CONFIGURATION`, and a preparation superseded by another commit on the same base gets `REVISION_CONFLICT`. "running" is no longer reported anywhere. Details in `S7_Control_Protocol_MVP.md` section 10.1. Not done: chunked transfer, persistence of deployment state across restarts.
 
 Relevant code: [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:519), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:552), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:675).
 
@@ -226,7 +230,7 @@ Define the types and time fields exposed by observation and how they relate to t
 
 Relevant code: [observe.hpp](../s7observe/include/s7/observe.hpp:18), [local_schema_runner.cpp](../s7studio/src/local_schema_runner.cpp:197), [local_runtime_v2.hpp](../s7studio/src/local_runtime_v2.hpp:28).
 
-## P2: Use a cryptographically secure prepare token
+## P2: Use a cryptographically secure prepare token — fixed 2026-10-04
 
 ### Current problem
 
@@ -241,6 +245,8 @@ Generate tokens from an operating-system cryptographic random source or an estab
 - Token generation uses a documented CSPRNG API on every supported platform.
 - Expired tokens are rejected based on parsed expiry/state, not merely removed opportunistically.
 - Tokens are not returned in peer listings or logs beyond the protocol response that needs them.
+
+**Resolution:** 256-bit tokens from OpenSSL `RAND_bytes`, compared in constant time, scoped to the node's deployment/revision, with a monotonic-clock expiry checked at commit and abort (`PREPARE_EXPIRED`). `LIST_DEPLOYMENTS` no longer returns tokens. Covered by `s7runtime_deployment_smoke`.
 
 Relevant code: [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:86), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:691).
 
@@ -467,10 +473,10 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 
 0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.
 1. ~~Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.~~ Done 2026-10-04.
-2. Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.
+2. ~~Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.~~ Done 2026-10-04 (also the prepare-token item).
 3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients.
 4. Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.
 5. Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.
-6. Address token generation, signal representation, observation timestamps/types, and plugin build integration.
+6. Address signal representation, observation timestamps/types, and plugin build integration.
 
 This order addresses immediate correctness and trust boundaries first, then stabilizes contracts needed by heterogeneous nodes.

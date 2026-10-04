@@ -61,6 +61,8 @@ tools/generate_test_runtime_certs.sh
 
 Enable `websocket.server.tls` in the schema with `cert_file`, `key_file`, and `ca_file`. For `wss://` seeds in Studio, fill the CA/cert/key fields in the `Headless Nodes` dock.
 
+Deployments (`PREPARE_DEPLOYMENT` / `COMMIT_DEPLOYMENT` / `ABORT_DEPLOYMENT`) are accepted only over mTLS from the Studio certificate pinned in the node's `control` block; see `s7runtime/examples/certs/README.md` and `S7_Control_Protocol_MVP.md` section 10.1. Plain `ws://` nodes refuse them.
+
 ## 5) Stop nodes
 
 Press `Ctrl+C` in each runtime terminal.

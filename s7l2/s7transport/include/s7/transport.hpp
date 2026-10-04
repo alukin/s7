@@ -56,6 +56,24 @@ struct DataPacket {
     std::vector<std::uint8_t> payload;
 };
 
+// Identity attributes of an X.509 certificate.
+struct PeerCertificate {
+    std::string fingerprint_sha256; // lower-case hex of the DER encoding
+    std::vector<std::string> uri_sans;
+    std::vector<std::string> policy_oids; // Certificate Policies, dotted form
+};
+
+// The authenticated peer of a control connection, as established by the
+// transport. certificate is set only for a TLS client certificate that
+// passed chain verification against the server's trust roots.
+struct ControlPeer {
+    bool tls{false};
+    std::optional<PeerCertificate> certificate;
+};
+
+// Reads identity attributes from a PEM certificate file.
+[[nodiscard]] auto inspect_certificate_file(const std::string& pem_path) -> PeerCertificate;
+
 struct ParsedWebSocketUrl {
     std::string host;
     std::string port;
@@ -137,7 +155,7 @@ private:
 
 class BeastRuntimeNetEndpoint final : public IRuntimeNetEndpoint {
 public:
-    using ControlRequestHandler = std::function<std::string(const std::string& request_json)>;
+    using ControlRequestHandler = std::function<std::string(const ControlPeer& peer, const std::string& request_json)>;
 
     BeastRuntimeNetEndpoint();
     ~BeastRuntimeNetEndpoint() override;

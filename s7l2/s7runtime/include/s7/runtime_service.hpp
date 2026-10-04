@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -66,6 +67,8 @@ struct ExecutionConfig {
     double step_rate_hz{};
 };
 
+struct RuntimeSchemaDefinition;
+
 struct RuntimeSchemaDefinition {
     std::string name;
     std::vector<JsonElementDefinition> elements;
@@ -76,11 +79,15 @@ struct RuntimeSchemaDefinition {
     WebSocketClientConfig client;
     SimulationConfig simulation;
     ExecutionConfig execution;
+    // Node settings, not deployable: "control": { "studio_policy_oid": "...",
+    // "studio_certificate_sha256": "<hex>" } names the authorized Studio.
+    ControlAuthorization control;
 };
 
 class JsonSchemaLoader {
 public:
     static RuntimeSchemaDefinition load_from_file(const std::string& file_path);
+    static RuntimeSchemaDefinition load_from_json(const boost::json::value& json);
 };
 
 class RuntimeService {
@@ -99,10 +106,23 @@ public:
     [[nodiscard]] std::uint64_t simulation_step_count() const;
     [[nodiscard]] std::vector<std::filesystem::path> output_files() const;
     [[nodiscard]] s7::Schema build_schema() const;
+
+    // The running graph. initialize_graph() compiles the schema the service was
+    // started with; a committed deployment replaces it. step() and
+    // step_count() are safe to call while the control plane activates a new
+    // graph from another thread.
+    void initialize_graph();
+    void step();
+    [[nodiscard]] std::uint64_t step_count() const;
+    [[nodiscard]] double active_real_output(const std::string& element_id, std::size_t port = 0) const;
+    // Reported to the control plane as the execution state of the active graph.
+    void set_stepping(bool stepping);
     [[nodiscard]] const std::string& runtime_instance_uuid() const;
     [[nodiscard]] static std::string create_schema_instance_uuid();
     [[nodiscard]] auto network_endpoint() const -> transport::RuntimeNetEndpointPtr;
-    [[nodiscard]] auto handle_control_request_json(const std::string& request_json) -> std::string;
+    // In-process control request, as if received from peer.
+    [[nodiscard]] auto handle_control_request_json(const transport::ControlPeer& peer, const std::string& request_json)
+        -> std::string;
     void add_seed_peer(const std::string& endpoint);
     // Prints and clears connection-level transport errors (e.g. malformed frames).
     void report_transport_errors(std::ostream& out) const;
@@ -120,6 +140,14 @@ private:
     transport::RuntimeNetEndpointPtr network_endpoint_;
     mutable std::vector<transport::EndpointHandle> opened_server_endpoints_;
     mutable std::vector<transport::EndpointHandle> opened_client_endpoints_;
+
+    class GraphHost;
+    friend class GraphHost;
+    // Declared last so the graph (and its network elements) is destroyed first.
+    mutable std::mutex graph_mutex_;
+    std::unique_ptr<NodeRuntime> graph_;
+    std::atomic<bool> stepping_{false};
+    std::shared_ptr<GraphHost> graph_host_;
 };
 
 struct StepLoopStats {
@@ -130,11 +158,11 @@ struct StepLoopStats {
     StopReason stop_reason{StopReason::StopRequested};
 };
 
-// Steps the runtime at step_rate_hz on the calling thread until stop_requested
-// is set or the deadline passes. If stepping falls behind, the backlog is
-// dropped rather than replayed in a burst. housekeeping, if set, runs on the
-// same thread about every 100 ms.
-StepLoopStats run_step_loop(NodeRuntime& runtime,
+// Calls step at step_rate_hz on the calling thread until stop_requested is set
+// or the deadline passes. If stepping falls behind, the backlog is dropped
+// rather than replayed in a burst. housekeeping, if set, runs on the same
+// thread about every 100 ms.
+StepLoopStats run_step_loop(const std::function<void()>& step,
                             double step_rate_hz,
                             const std::atomic<bool>& stop_requested,
                             std::optional<std::chrono::steady_clock::time_point> deadline = std::nullopt,

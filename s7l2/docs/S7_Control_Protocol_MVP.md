@@ -213,3 +213,53 @@ Errors MUST NOT disclose private key material, credentials, or sensitive local p
 ## 10. Relationship to Implementation
 
 The C++ runtime is the reference implementation. Existing code contains JSON control handlers for several messages and mTLS configuration, but this document also specifies behavior that is not yet implemented. Conformance must be established with cross-language protocol fixtures and tests before this draft is treated as a stable wire contract.
+
+### 10.1 Implemented behavior (C++ runtime, 2026-10-04)
+
+**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT` and `ABORT_DEPLOYMENT` are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Certificate Policies OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate carries the configured control-node policy OID (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
+
+The authorized Studio is node configuration in the runtime schema file, not deployable:
+
+```json
+"control": {
+  "studio_policy_oid": "2.25.4266950079767543379770189370854073200",
+  "studio_certificate_sha256": "<64 hex digits>"
+}
+```
+
+The OID above is a development placeholder (UUID-derived, under `2.25`) used by the test certificates until S7 policy OIDs are assigned under an enterprise arc.
+
+**Prepare request.**
+
+```json
+{
+  "type": "PREPARE_DEPLOYMENT", "request_id": "...", "protocol_version": 1,
+  "deployment": {
+    "deployment_id": "dep-1",
+    "revision": 1,
+    "base_revision": 0,
+    "configuration": {
+      "project_revision": "<opaque>",
+      "configuration_digest": "sha256:<hex>",
+      "full_network": {},
+      "assigned_fragment": { "name": "...", "elements": [], "connections": [] }
+    },
+    "requires": { "libraries": [], "elements": [], "hardware": [] }
+  }
+}
+```
+
+- `revision` is an integer in [1, 2^53]; `base_revision` is required, in [0, 2^53], and 0 means "no active deployment". A mismatch with the active revision returns `REVISION_CONFLICT`.
+- `configuration_digest` is `"sha256:"` plus the lower-case hex SHA-256 of the RFC 8785 (JCS) canonical JSON of the `configuration` object with its `configuration_digest` member removed. Integers outside ±2^53 cannot be canonicalized and are rejected. Requests are parsed with correctly rounded numbers so that digests agree across implementations. A mismatch returns `INVALID_REQUEST` with the expected digest in `details`.
+- `assigned_fragment` uses the runtime schema-file format (`name`, `elements`, `connections`, optional `exposed_inputs`/`exposed_outputs`). Node settings (`websocket`, `simulation`, `execution`, `control`) are not allowed in it.
+- `requires` is optional; malformed entries return `INVALID_REQUEST` instead of being skipped. Missing libraries, elements or hardware return `prepare_status: "NOT_READY"` with `incompatibilities`.
+- The node then compiles the fragment without running it. A fragment that does not build or validate returns `NOT_READY` with an `INVALID_CONFIGURATION` incompatibility. Elements are constructed at this point, so an element with side effects in its constructor (for example a file sink opening its file) acts at prepare time.
+- A `READY` response carries a 256-bit `prepare_token` from OpenSSL's CSPRNG, valid for 5 minutes. Repeating the same prepare returns the same token; the same deployment and revision with a different digest is `INVALID_REQUEST`.
+
+**Commit.** `COMMIT_DEPLOYMENT {deployment_id, revision, prepare_token}` checks the token in constant time (`PREPARE_TOKEN_INVALID`), its expiry (`PREPARE_EXPIRED`) and that `base_revision` still matches the active revision (`REVISION_CONFLICT`, for example when another preparation on the same base was committed first). It then swaps the compiled graph into the running node at a step boundary; the new graph starts at step 0. If activation fails the response is `INTERNAL_ERROR` and the previous graph keeps running. On success the response reports `state: "active"`, the committed `configuration_digest`, and `execution` (`stepping` or `not_stepping`, whether the node is currently stepping its graph). Repeating a successful commit with the same token returns the same result.
+
+**Abort.** Discards a prepared deployment (token required). Repeating an abort, or aborting a preparation that already expired, failed or was superseded, succeeds. Aborting the active deployment is `INVALID_REQUEST`.
+
+**Status.** `HELLO.status`, `NODE_INFO.state.mode` and `DEPLOYMENTS.state` are `idle` or `active`; `NODE_INFO.state.execution` and `DEPLOYMENTS.execution` report `stepping` / `not_stepping`. `LIST_DEPLOYMENTS` returns `active_revision`, `active_deployment` (revision, project revision, digest, commit time), unexpired `prepared_deployments` (never their tokens) and a bounded `history` of outcomes (`committed`, `aborted`, `expired`, `failed`, `superseded`).
+
+**Not yet implemented:** chunked configuration transfer and size limits, `GET_NETWORK_CONFIGURATION`, persistence of deployment state across node restarts (a restarted node runs its startup schema with active revision 0), and request-ID replay caching.

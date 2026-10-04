@@ -153,10 +153,7 @@ int main(int argc, char** argv) {
         for (const auto& seed : seed_peers) {
             service.add_seed_peer(seed);
         }
-        const auto schema = service.build_schema();
-        const auto schema_instance_uuid = service.create_schema_instance_uuid();
-        auto executable_graph = s7::Compiler::compile(schema, service.runtime_instance_uuid(), schema_instance_uuid);
-        s7::NodeRuntime runtime{std::move(executable_graph)};
+        service.initialize_graph();
 
         std::cout << "s7runtime starter\n";
         std::cout << "schema.file=" << schema_path << '\n';
@@ -196,7 +193,7 @@ int main(int argc, char** argv) {
         if (service.has_simulation()) {
             const auto step_count = service.simulation_step_count();
             for (std::uint64_t step = 0; step < step_count; ++step) {
-                runtime.step();
+                service.step();
             }
             std::cout << "runtime.executed_steps=" << step_count << '\n';
             for (const auto& file : service.output_files()) {
@@ -215,8 +212,11 @@ int main(int argc, char** argv) {
             if (definition.execution.step_rate_hz > 0.0) {
                 std::cout << "runtime.execution=stepping step_rate_hz=" << definition.execution.step_rate_hz << '\n';
                 std::cout.flush();
-                const auto stats = s7::run_step_loop(runtime, definition.execution.step_rate_hz, stop_requested, deadline,
+                service.set_stepping(true);
+                const auto stats = s7::run_step_loop([&service] { service.step(); },
+                                                     definition.execution.step_rate_hz, stop_requested, deadline,
                                                      [&service] { service.report_transport_errors(std::cerr); });
+                service.set_stepping(false);
                 stopped_by_signal = stats.stop_reason == s7::StepLoopStats::StopReason::StopRequested;
                 std::cout << "runtime.execution.steps=" << stats.steps << '\n';
                 std::cout << "runtime.execution.achieved_rate_hz="

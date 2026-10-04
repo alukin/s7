@@ -71,8 +71,8 @@ int main()
 
     s7::transport::BeastRuntimeNetEndpoint server;
     s7::transport::BeastRuntimeNetEndpoint client;
-    server.set_control_request_handler([control](const std::string& request_json) {
-        return control->handle_request_json(request_json);
+    server.set_control_request_handler([control](const s7::transport::ControlPeer& peer, const std::string& request_json) {
+        return control->handle_request_json(peer, request_json);
     });
     server.configure_server(port);
 
@@ -139,91 +139,22 @@ int main()
         assert(found_announced_peer);
     }
 
-    std::string prepare_token;
     {
+        // Configuration changes are refused over plain WebSocket, whatever the JSON claims.
         const auto request = R"json({
           "type":"PREPARE_DEPLOYMENT",
-          "request_id":"prep-ok",
+          "request_id":"prep-plain",
           "protocol_version":1,
-          "deployment":{
-            "deployment_id":"dep-ok",
-            "revision":1,
-            "schema":{"name":"demo","elements":[],"connections":[]},
-            "placement":{
-              "node_uuid":"11111111-2222-3333-4444-555555555555",
-              "assigned_elements":["src"],
-              "requires":{
-                "libraries":[{"library_id":"s7sdr","version":">=1.2.0"}],
-                "elements":["PlutoSource"],
-                "hardware":[{"capability":"hw:plutosdr","min_devices":1}]
-              }
-            },
-            "stream_bindings":[]
-          }
+          "studio":{"node_uuid":"22222222-3333-4444-5555-666666666666","role":"control"},
+          "deployment":{"deployment_id":"dep-plain","revision":1,"base_revision":0}
         })json";
-        const auto response_text = client.request_control_json(request);
-        const auto response = boost::json::parse(response_text).as_object();
-        assert(response.at("type").as_string() == "PREPARE_DEPLOYMENT_RESULT");
-        assert(response.at("prepare_status").as_string() == "READY");
-        prepare_token = std::string(response.at("prepare_token").as_string().c_str());
-        assert(!prepare_token.empty());
-    }
-
-    {
-        const auto response_text = client.request_control_json(R"json({"type":"LIST_DEPLOYMENTS","request_id":"list-before-commit","protocol_version":1})json");
-        const auto response = boost::json::parse(response_text).as_object();
-        assert(response.at("type").as_string() == "DEPLOYMENTS");
-        assert(response.at("state").as_string() == "idle");
-        assert(!response.at("prepared_deployments").as_array().empty());
-    }
-
-    {
-        boost::json::object commit;
-        commit["type"] = "COMMIT_DEPLOYMENT";
-        commit["request_id"] = "commit-1";
-        commit["protocol_version"] = 1;
-        commit["deployment_id"] = "dep-ok";
-        commit["revision"] = 1;
-        commit["prepare_token"] = prepare_token;
-        const auto response_text = client.request_control_json(boost::json::serialize(commit));
-        const auto response = boost::json::parse(response_text).as_object();
-        assert(response.at("type").as_string() == "COMMIT_DEPLOYMENT_RESULT");
-        assert(response.at("committed").as_bool());
-    }
-
-    {
-        const auto response_text = client.request_control_json(R"json({"type":"LIST_DEPLOYMENTS","request_id":"list-after-commit","protocol_version":1})json");
-        const auto response = boost::json::parse(response_text).as_object();
-        assert(response.at("type").as_string() == "DEPLOYMENTS");
-        assert(response.at("state").as_string() == "running");
-        const auto& active = response.at("active_deployment").as_object();
-        assert(active.at("deployment_id").as_string() == "dep-ok");
-    }
-
-    {
-        const auto request = R"json({
-          "type":"PREPARE_DEPLOYMENT",
-          "request_id":"prep-fail",
-          "protocol_version":1,
-          "deployment":{
-            "deployment_id":"dep-fail",
-            "revision":1,
-            "schema":{"name":"demo","elements":[],"connections":[]},
-            "placement":{
-              "node_uuid":"11111111-2222-3333-4444-555555555555",
-              "assigned_elements":["src"],
-              "requires":{
-                "elements":["MissingElement"],
-                "hardware":[{"capability":"hw:not-present"}]
-              }
-            },
-            "stream_bindings":[]
-          }
-        })json";
-        const auto response_text = client.request_control_json(request);
-        const auto response = boost::json::parse(response_text).as_object();
-        assert(response.at("prepare_status").as_string() == "NOT_READY");
-        assert(!response.at("incompatibilities").as_array().empty());
+        for (const auto* type : {"PREPARE_DEPLOYMENT", "COMMIT_DEPLOYMENT", "ABORT_DEPLOYMENT"}) {
+            auto message = boost::json::parse(request).as_object();
+            message["type"] = type;
+            const auto response = boost::json::parse(client.request_control_json(boost::json::serialize(message))).as_object();
+            assert(response.at("type").as_string() == "ERROR");
+            assert(response.at("code").as_string() == "UNAUTHORIZED");
+        }
     }
 
     {
@@ -242,8 +173,8 @@ int main()
 
         s7::transport::BeastRuntimeNetEndpoint tls_server;
         s7::transport::BeastRuntimeNetEndpoint tls_client;
-        tls_server.set_control_request_handler([control](const std::string& request_json) {
-            return control->handle_request_json(request_json);
+        tls_server.set_control_request_handler([control](const s7::transport::ControlPeer& peer, const std::string& request_json) {
+            return control->handle_request_json(peer, request_json);
         });
         tls_server.configure_server(tls_port, tls_cfg);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -332,7 +263,7 @@ int main()
         s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
 
         const std::atomic<bool> never_stop{false};
-        const auto stats = s7::run_step_loop(runtime, 200.0, never_stop,
+        const auto stats = s7::run_step_loop([&runtime] { runtime.step(); }, 200.0, never_stop,
                                              std::chrono::steady_clock::now() + std::chrono::milliseconds(250));
         assert(stats.stop_reason == s7::StepLoopStats::StopReason::Deadline);
         assert(stats.steps == runtime.step_count());
@@ -358,7 +289,7 @@ int main()
             stop.store(true);
         });
         const auto started = std::chrono::steady_clock::now();
-        const auto stopped = s7::run_step_loop(runtime, 1.0, stop);
+        const auto stopped = s7::run_step_loop([&runtime] { runtime.step(); }, 1.0, stop);
         stopper.join();
         assert(stopped.stop_reason == s7::StepLoopStats::StopReason::StopRequested);
         assert(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(500));

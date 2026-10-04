@@ -117,7 +117,7 @@ The format and storage location of this record are not yet standardized. It shou
 ## Open Decisions
 
 - Which service issues S7 certificates, and how initial trust roots are delivered and rotated.
-- Numeric assignment of the S7 Certificate Policies OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods.
+- Numeric assignment of the S7 Certificate Policies OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods. Until then, development and tests use the UUID-derived placeholder `2.25.4266950079767543379770189370854073200` for the control-node role (`tools/generate_test_runtime_certs.sh`).
 - Whether project diagrams and executable schemas are stored as separate files or in one project document.
 - How the Studio maps a Git commit to the exact schema/configuration sent to runtime nodes.
 - Whether and how remote Git hosting is added after the MVP.

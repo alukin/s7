@@ -1,7 +1,9 @@
 #include "s7/runtime_service.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <iostream>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
@@ -278,6 +280,18 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
         definition.simulation.periods = get_u64(simulation_obj, "periods", 20);
         definition.simulation.sample_rate_hz = get_u64(simulation_obj, "sample_rate_hz", 1);
         definition.simulation.frequency_hz = get_f64(simulation_obj, "frequency_hz", 1.0);
+    }
+
+    if (const auto control_it = root.find("control"); control_it != root.end()) {
+        const auto& control_obj = expect_object(control_it->value(), "control");
+        definition.control.studio_policy_oid = expect_string(control_obj, "studio_policy_oid");
+        definition.control.studio_certificate_sha256 = expect_string(control_obj, "studio_certificate_sha256");
+        auto& fingerprint = definition.control.studio_certificate_sha256;
+        std::erase(fingerprint, ':');
+        std::ranges::transform(fingerprint, fingerprint.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        if (fingerprint.size() != 64 || !std::ranges::all_of(fingerprint, [](char ch) { return std::isxdigit(static_cast<unsigned char>(ch)); })) {
+            throw std::invalid_argument("control.studio_certificate_sha256 must be a SHA-256 fingerprint (64 hex digits).");
+        }
     }
 
     if (const auto execution_it = root.find("execution"); execution_it != root.end()) {
@@ -736,6 +750,58 @@ void write_node_uuid_file(const std::filesystem::path& path, const std::string& 
 }
 } // namespace
 
+// Compiles deployed graph fragments and swaps the running graph on commit.
+class RuntimeService::GraphHost final : public DeploymentHost {
+public:
+    explicit GraphHost(RuntimeService& service) : service_(service) {}
+
+    struct StagedGraph final : StagedConfiguration {
+        std::unique_ptr<NodeRuntime> runtime;
+    };
+
+    auto stage(const boost::json::object& assigned_fragment) -> std::unique_ptr<StagedConfiguration> override
+    {
+        // A deployment carries a graph only; node settings stay with the node.
+        for (const auto* key : {"websocket", "simulation", "execution", "control"}) {
+            if (assigned_fragment.contains(key)) {
+                throw std::invalid_argument(std::string{"Assigned fragment must not contain node settings ('"} + key + "').");
+            }
+        }
+        const auto definition = JsonSchemaLoader::load_from_json(assigned_fragment);
+        const auto schema = build_schema_from_definition(definition);
+        auto staged = std::make_unique<StagedGraph>();
+        staged->runtime = std::make_unique<NodeRuntime>(
+            Compiler::compile(*schema, service_.runtime_instance_uuid_, create_schema_instance_uuid()));
+        return staged;
+    }
+
+    void activate(StagedConfiguration& staged) override
+    {
+        auto& graph = dynamic_cast<StagedGraph&>(staged);
+        if (!graph.runtime) {
+            throw std::logic_error("Staged graph was already activated.");
+        }
+        std::unique_ptr<NodeRuntime> previous;
+        {
+            std::lock_guard<std::mutex> lock(service_.graph_mutex_);
+            previous = std::exchange(service_.graph_, std::move(graph.runtime));
+        }
+        // previous is destroyed here, outside the lock.
+    }
+
+    auto execution_state() const -> std::string override
+    {
+        return service_.stepping_.load() ? "stepping" : "not_stepping";
+    }
+
+private:
+    RuntimeService& service_;
+};
+
+RuntimeSchemaDefinition JsonSchemaLoader::load_from_json(const boost::json::value& json) {
+    return parse_schema_definition(json);
+}
+
 RuntimeSchemaDefinition JsonSchemaLoader::load_from_file(const std::string& file_path) {
     std::ifstream in(file_path);
     if (!in) {
@@ -781,9 +847,15 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
             state_dir_,
             identity_cert ? std::optional<std::string>{certificate_node_uuid(*identity_cert)} : std::nullopt);
 
+        graph_host_ = std::make_shared<GraphHost>(*this);
         control_plane_ = std::make_shared<ControlPlaneMvp>(
             build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
-            state_dir_);
+            ControlPlaneOptions{
+                .storage_dir = state_dir_,
+                .authorization = definition_.control,
+                .deployment_host = graph_host_,
+                .log = [](const std::string& line) { std::cerr << line << '\n'; },
+            });
     } catch (...) {
         ::close(state_dir_lock_fd_);
         throw;
@@ -791,12 +863,13 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
         std::weak_ptr<ControlPlaneMvp> weak_control = control_plane_;
-        beast_endpoint->set_control_request_handler([weak_control](const std::string& request_json) {
+        beast_endpoint->set_control_request_handler([weak_control](const transport::ControlPeer& peer,
+                                                                   const std::string& request_json) {
             const auto locked = weak_control.lock();
             if (!locked) {
                 return std::string{"{\"type\":\"ERROR\",\"protocol_version\":1,\"code\":\"INTERNAL_ERROR\",\"message\":\"Control service unavailable\"}"};
             }
-            return locked->handle_request_json(request_json);
+            return locked->handle_request_json(peer, request_json);
         });
     }
     RuntimeNetContext::set_endpoint(network_endpoint_);
@@ -823,6 +896,39 @@ RuntimeService::~RuntimeService()
     if (state_dir_lock_fd_ >= 0) {
         ::close(state_dir_lock_fd_);
     }
+}
+
+void RuntimeService::initialize_graph() {
+    const auto schema = build_schema_from_definition(definition_);
+    auto runtime = std::make_unique<NodeRuntime>(
+        Compiler::compile(*schema, runtime_instance_uuid_, create_schema_instance_uuid()));
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    graph_ = std::move(runtime);
+}
+
+void RuntimeService::step() {
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    if (!graph_) {
+        throw std::logic_error("RuntimeService::step() called before initialize_graph().");
+    }
+    graph_->step();
+}
+
+std::uint64_t RuntimeService::step_count() const {
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    return graph_ ? graph_->step_count() : 0;
+}
+
+double RuntimeService::active_real_output(const std::string& element_id, const std::size_t port) const {
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    if (!graph_) {
+        throw std::logic_error("No active graph.");
+    }
+    return graph_->real_output_of(element_id, port);
+}
+
+void RuntimeService::set_stepping(const bool stepping) {
+    stepping_.store(stepping);
 }
 
 const RuntimeSchemaDefinition& RuntimeService::schema() const {
@@ -928,12 +1034,13 @@ auto RuntimeService::network_endpoint() const -> transport::RuntimeNetEndpointPt
     return network_endpoint_;
 }
 
-auto RuntimeService::handle_control_request_json(const std::string& request_json) -> std::string
+auto RuntimeService::handle_control_request_json(const transport::ControlPeer& peer, const std::string& request_json)
+    -> std::string
 {
     if (!control_plane_) {
         throw std::runtime_error("Control plane is not initialized.");
     }
-    return control_plane_->handle_request_json(request_json);
+    return control_plane_->handle_request_json(peer, request_json);
 }
 
 void RuntimeService::add_seed_peer(const std::string& endpoint)
@@ -1041,7 +1148,7 @@ void RuntimeService::connect_websocket_client() const {
     opened_client_endpoints_.push_back(data_open.handle);
 }
 
-StepLoopStats run_step_loop(NodeRuntime& runtime,
+StepLoopStats run_step_loop(const std::function<void()>& step,
                             const double step_rate_hz,
                             const std::atomic<bool>& stop_requested,
                             const std::optional<std::chrono::steady_clock::time_point> deadline,
@@ -1087,7 +1194,7 @@ StepLoopStats run_step_loop(NodeRuntime& runtime,
             continue;
         }
 
-        runtime.step();
+        step();
         ++stats.steps;
         next_step += period;
         if (clock::now() - next_step > max_lag) {

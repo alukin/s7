@@ -22,6 +22,13 @@
 #include <boost/beast/http/string_body.hpp>
 #include <boost/beast/websocket/stream.hpp>
 
+#include <openssl/evp.h>
+#include <openssl/objects.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
+
 namespace s7::transport {
 namespace {
 
@@ -158,7 +165,73 @@ void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
     return base + std::string(suffix);
 }
 
+[[nodiscard]] auto peer_certificate_from_x509(X509* certificate) -> PeerCertificate
+{
+    PeerCertificate info;
+
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    if (X509_digest(certificate, EVP_sha256(), digest, &digest_len) != 1) {
+        throw std::runtime_error("Failed to compute certificate fingerprint.");
+    }
+    static constexpr char hex[] = "0123456789abcdef";
+    for (unsigned int index = 0; index < digest_len; ++index) {
+        info.fingerprint_sha256.push_back(hex[digest[index] >> 4]);
+        info.fingerprint_sha256.push_back(hex[digest[index] & 0x0F]);
+    }
+
+    const auto names_deleter = [](GENERAL_NAMES* names) { GENERAL_NAMES_free(names); };
+    std::unique_ptr<GENERAL_NAMES, decltype(names_deleter)> names(
+        static_cast<GENERAL_NAMES*>(X509_get_ext_d2i(certificate, NID_subject_alt_name, nullptr, nullptr)),
+        names_deleter);
+    for (int index = 0; names && index < sk_GENERAL_NAME_num(names.get()); ++index) {
+        const GENERAL_NAME* name = sk_GENERAL_NAME_value(names.get(), index);
+        if (name->type == GEN_URI) {
+            const ASN1_IA5STRING* uri = name->d.uniformResourceIdentifier;
+            info.uri_sans.emplace_back(reinterpret_cast<const char*>(ASN1_STRING_get0_data(uri)),
+                                       static_cast<std::size_t>(ASN1_STRING_length(uri)));
+        }
+    }
+
+    const auto policies_deleter = [](CERTIFICATEPOLICIES* policies) { CERTIFICATEPOLICIES_free(policies); };
+    std::unique_ptr<CERTIFICATEPOLICIES, decltype(policies_deleter)> policies(
+        static_cast<CERTIFICATEPOLICIES*>(X509_get_ext_d2i(certificate, NID_certificate_policies, nullptr, nullptr)),
+        policies_deleter);
+    for (int index = 0; policies && index < sk_POLICYINFO_num(policies.get()); ++index) {
+        const POLICYINFO* policy = sk_POLICYINFO_value(policies.get(), index);
+        char oid[128];
+        const int length = OBJ_obj2txt(oid, sizeof(oid), policy->policyid, 1);
+        if (length > 0 && static_cast<std::size_t>(length) < sizeof(oid)) {
+            info.policy_oids.emplace_back(oid, static_cast<std::size_t>(length));
+        }
+    }
+    return info;
+}
+
+// The verified client certificate of a TLS session, if any.
+[[nodiscard]] auto verified_peer_certificate(SSL* ssl) -> std::optional<PeerCertificate>
+{
+    std::unique_ptr<X509, decltype(&X509_free)> certificate(SSL_get1_peer_certificate(ssl), X509_free);
+    if (!certificate || SSL_get_verify_result(ssl) != X509_V_OK) {
+        return std::nullopt;
+    }
+    return peer_certificate_from_x509(certificate.get());
+}
+
 } // namespace
+
+auto inspect_certificate_file(const std::string& pem_path) -> PeerCertificate
+{
+    std::unique_ptr<BIO, decltype(&BIO_free)> bio(BIO_new_file(pem_path.c_str(), "r"), BIO_free);
+    if (!bio) {
+        throw std::runtime_error("Could not open certificate: '" + pem_path + "'.");
+    }
+    std::unique_ptr<X509, decltype(&X509_free)> certificate(PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), X509_free);
+    if (!certificate) {
+        throw std::runtime_error("Could not parse PEM certificate: '" + pem_path + "'.");
+    }
+    return peer_certificate_from_x509(certificate.get());
+}
 
 auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl
 {
@@ -546,7 +619,7 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                 continue;
             }
 
-            auto bind_and_start_reader = [this](const auto& ws, const bool is_data) {
+            auto bind_and_start_reader = [this](const auto& ws, const bool is_data, ControlPeer peer) {
                 std::lock_guard<std::mutex> socket_lock(impl_->socket_mutex);
                 auto& reader = is_data ? impl_->data_read_thread : impl_->control_read_thread;
                 if (is_data) {
@@ -579,7 +652,7 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                     }
                 }
 
-                reader = std::thread([this, ws, is_data] {
+                reader = std::thread([this, ws, is_data, peer = std::move(peer)] {
                     while (!impl_->stop.load()) {
                         flat_buffer read_buffer;
                         boost::system::error_code read_ec;
@@ -598,7 +671,7 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                             std::string response_json;
                             try {
                                 response_json = handler
-                                    ? handler(request_json)
+                                    ? handler(peer, request_json)
                                     : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
                             } catch (const std::exception&) {
                                 response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
@@ -656,7 +729,9 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                     ws->close(websocket::close_code::policy_error, close_ec);
                     continue;
                 }
-                bind_and_start_reader(ws, is_data);
+                bind_and_start_reader(ws, is_data,
+                                      ControlPeer{.tls = true,
+                                                  .certificate = verified_peer_certificate(ws->next_layer().native_handle())});
             } else {
                 flat_buffer buffer;
                 http::request<http::string_body> request;
@@ -678,7 +753,7 @@ void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
                     ws->close(websocket::close_code::policy_error, close_ec);
                     continue;
                 }
-                bind_and_start_reader(ws, is_data);
+                bind_and_start_reader(ws, is_data, ControlPeer{});
             }
         }
     });

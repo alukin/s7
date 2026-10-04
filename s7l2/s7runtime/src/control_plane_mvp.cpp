@@ -4,9 +4,13 @@
 #include <chrono>
 #include <fstream>
 #include <iomanip>
-#include <random>
 #include <sstream>
 #include <stdexcept>
+
+#include <openssl/crypto.h>
+#include <openssl/rand.h>
+
+#include "s7/canonical_json.hpp"
 
 namespace s7 {
 namespace {
@@ -26,9 +30,9 @@ namespace {
     return out.str();
 }
 
-[[nodiscard]] auto plus_minutes_iso8601(const int minutes) -> std::string
+[[nodiscard]] auto plus_seconds_iso8601(const std::chrono::seconds seconds) -> std::string
 {
-    const auto then = std::chrono::system_clock::now() + std::chrono::minutes(minutes);
+    const auto then = std::chrono::system_clock::now() + seconds;
     const std::time_t then_time = std::chrono::system_clock::to_time_t(then);
     std::tm tm{};
 #if defined(_WIN32)
@@ -83,14 +87,69 @@ namespace {
     return 0;
 }
 
+// 256 bits from OpenSSL's CSPRNG (seeded from the operating system).
 [[nodiscard]] auto make_prepare_token() -> std::string
 {
-    std::random_device rd;
-    std::mt19937_64 gen(rd());
-    std::uniform_int_distribution<std::uint64_t> dist;
-    std::ostringstream out;
-    out << "ptok_" << std::hex << dist(gen);
-    return out.str();
+    unsigned char bytes[32];
+    if (RAND_bytes(bytes, sizeof(bytes)) != 1) {
+        throw std::runtime_error("Could not generate a prepare token.");
+    }
+    static constexpr char hex[] = "0123456789abcdef";
+    std::string token = "ptok_";
+    for (const unsigned char byte : bytes) {
+        token.push_back(hex[byte >> 4]);
+        token.push_back(hex[byte & 0x0F]);
+    }
+    return token;
+}
+
+[[nodiscard]] auto tokens_equal(const std::string& left, const std::string& right) -> bool
+{
+    return left.size() == right.size() && CRYPTO_memcmp(left.data(), right.data(), left.size()) == 0;
+}
+
+// Integers in protocol messages must fit the I-JSON safe range.
+constexpr std::uint64_t kMaxSafeInteger = (1ULL << 53);
+
+[[nodiscard]] auto read_revision(const boost::json::object& object, const std::string& key, const bool allow_zero)
+    -> std::optional<std::uint64_t>
+{
+    const auto it = object.find(key);
+    if (it == object.end()) {
+        return std::nullopt;
+    }
+    std::uint64_t value = 0;
+    if (it->value().is_uint64()) {
+        value = it->value().as_uint64();
+    } else if (it->value().is_int64() && it->value().as_int64() >= 0) {
+        value = static_cast<std::uint64_t>(it->value().as_int64());
+    } else {
+        return std::nullopt;
+    }
+    if (value > kMaxSafeInteger || (!allow_zero && value == 0)) {
+        return std::nullopt;
+    }
+    return value;
+}
+
+[[nodiscard]] auto deployment_key(const std::string& deployment_id, const std::uint64_t revision) -> std::string
+{
+    return deployment_id + "#" + std::to_string(revision);
+}
+
+[[nodiscard]] auto make_issue(const std::string& code,
+                              const std::string& scope,
+                              const std::string& target,
+                              const std::string& message,
+                              boost::json::object details = {}) -> boost::json::object
+{
+    boost::json::object issue;
+    issue["code"] = code;
+    issue["scope"] = scope;
+    issue["target"] = target;
+    issue["message"] = message;
+    issue["details"] = std::move(details);
+    return issue;
 }
 
 [[nodiscard]] auto has_string(const std::vector<std::string>& values, const std::string& needle) -> bool
@@ -152,16 +211,12 @@ struct CertificateInfo {
 
 } // namespace
 
-ControlPlaneMvp::ControlPlaneMvp(ControlNodeDescriptor descriptor, std::filesystem::path storage_dir)
+ControlPlaneMvp::ControlPlaneMvp(ControlNodeDescriptor descriptor, ControlPlaneOptions options)
     : descriptor_(std::move(descriptor))
-    , storage_dir_(std::move(storage_dir))
-    , mutex_()
-    , peers_()
-    , prepared_()
-    , active_deployment_id_()
+    , options_(std::move(options))
 {
-    if (!storage_dir_.empty()) {
-        std::filesystem::create_directories(storage_dir_);
+    if (!options_.storage_dir.empty()) {
+        std::filesystem::create_directories(options_.storage_dir);
         load_peers_from_disk();
     }
 }
@@ -184,20 +239,22 @@ void ControlPlaneMvp::add_seed_peer(const std::string& endpoint)
     persist_peers_to_disk();
 }
 
-auto ControlPlaneMvp::handle_request_json(const std::string& request_json) -> std::string
+auto ControlPlaneMvp::handle_request_json(const transport::ControlPeer& peer, const std::string& request_json)
+    -> std::string
 {
     try {
-        const auto parsed = boost::json::parse(request_json);
+        const auto parsed = parse_json_precise(request_json);
         if (!parsed.is_object()) {
             return boost::json::serialize(make_error_response({}, "INVALID_REQUEST", "Request must be a JSON object."));
         }
-        return boost::json::serialize(handle_request_object(parsed.as_object()));
+        return boost::json::serialize(handle_request_object(peer, parsed.as_object()));
     } catch (const std::exception& ex) {
         return boost::json::serialize(make_error_response({}, "INVALID_REQUEST", ex.what()));
     }
 }
 
-auto ControlPlaneMvp::handle_request_object(const boost::json::object& request) -> boost::json::object
+auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, const boost::json::object& request)
+    -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto request_type = as_string(request, "type").value_or("");
@@ -229,25 +286,97 @@ auto ControlPlaneMvp::handle_request_object(const boost::json::object& request) 
     if (request_type == "LIST_DEPLOYMENTS") {
         return handle_list_deployments(request);
     }
-    if (request_type == "PREPARE_DEPLOYMENT") {
-        return handle_prepare_deployment(request);
-    }
-    if (request_type == "COMMIT_DEPLOYMENT") {
-        return handle_commit_deployment(request);
-    }
-    if (request_type == "ABORT_DEPLOYMENT") {
+    if (request_type == "PREPARE_DEPLOYMENT" || request_type == "COMMIT_DEPLOYMENT" || request_type == "ABORT_DEPLOYMENT") {
+        if (auto denied = authorize_mutation(peer, request_id, request_type)) {
+            return std::move(*denied);
+        }
+        if (request_type == "PREPARE_DEPLOYMENT") {
+            return handle_prepare_deployment(request);
+        }
+        if (request_type == "COMMIT_DEPLOYMENT") {
+            return handle_commit_deployment(request);
+        }
         return handle_abort_deployment(request);
     }
 
-    return make_error_response(request_id, "INVALID_REQUEST", "Unsupported control message type: '" + request_type + "'.");
+    return make_error_response(request_id, "UNSUPPORTED_MESSAGE_TYPE", "Unsupported control message type: '" + request_type + "'.");
+}
+
+// Configuration changes are authorized from the TLS session alone: the peer's
+// verified certificate must carry the control-node role policy and be the
+// pinned Studio certificate. Identity claims in the JSON are never consulted.
+auto ControlPlaneMvp::authorize_mutation(const transport::ControlPeer& peer,
+                                         const std::string& request_id,
+                                         const std::string& request_type) const -> std::optional<boost::json::object>
+{
+    const auto fingerprint = peer.certificate ? peer.certificate->fingerprint_sha256 : std::string{};
+    auto deny = [&](const std::string& code, const std::string& message) {
+        if (options_.log) {
+            options_.log("control.denied type=" + request_type + " code=" + code +
+                         " peer_certificate_sha256=" + (fingerprint.empty() ? "none" : fingerprint) +
+                         " reason=\"" + message + "\"");
+        }
+        auto error = make_error_response(request_id, code, message);
+        if (!fingerprint.empty()) {
+            error["details"] = boost::json::object{{"peer_certificate_sha256", fingerprint}};
+        }
+        return error;
+    };
+
+    if (!peer.tls) {
+        return deny("UNAUTHORIZED", "Configuration changes require a mutual-TLS control connection.");
+    }
+    if (!peer.certificate) {
+        return deny("CERTIFICATE_REQUIRED", "Configuration changes require a verified client certificate.");
+    }
+    const auto& authorization = options_.authorization;
+    if (!authorization.configured()) {
+        return deny("UNAUTHORIZED", "No authorized Studio is configured on this node.");
+    }
+    if (!has_string(peer.certificate->policy_oids, authorization.studio_policy_oid)) {
+        return deny("UNAUTHORIZED", "Client certificate does not carry the control-node role policy.");
+    }
+    if (!tokens_equal(fingerprint, authorization.studio_certificate_sha256)) {
+        return deny("UNAUTHORIZED", "Client certificate is not the authorized Studio certificate.");
+    }
+    if (options_.log) {
+        options_.log("control.authorized type=" + request_type + " peer_certificate_sha256=" + fingerprint);
+    }
+    return std::nullopt;
+}
+
+auto ControlPlaneMvp::state_name_locked() const -> std::string
+{
+    return active_ ? "active" : "idle";
+}
+
+void ControlPlaneMvp::expire_prepared_locked(const std::chrono::steady_clock::time_point now)
+{
+    for (auto it = prepared_.begin(); it != prepared_.end();) {
+        if (it->second.expires <= now) {
+            record_outcome_locked(it->second, "expired");
+            it = prepared_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+void ControlPlaneMvp::record_outcome_locked(const PreparedDeployment& prepared, const std::string& outcome)
+{
+    constexpr std::size_t max_history = 64;
+    history_.push_back(DeploymentOutcome{prepared.deployment_id, prepared.revision, outcome});
+    if (history_.size() > max_history) {
+        history_.erase(history_.begin());
+    }
 }
 
 auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> boost::json::object
 {
-    std::string active_deployment_id;
+    std::string state;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        active_deployment_id = active_deployment_id_;
+        state = state_name_locked();
     }
 
     boost::json::object out;
@@ -257,7 +386,7 @@ auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> 
     out["node_uuid"] = descriptor_.node_uuid;
     out["node_name"] = descriptor_.node_name;
     out["runtime_version"] = descriptor_.runtime_version;
-    out["status"] = active_deployment_id.empty() ? "idle" : "running";
+    out["status"] = state;
     out["certificate"] = certificate_object(descriptor_.identity_certificate_common_name.empty()
                                                   ? std::optional<std::string>{}
                                                   : std::optional<std::string>{descriptor_.identity_certificate_common_name},
@@ -269,10 +398,14 @@ auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> 
 
 auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) const -> boost::json::object
 {
-    std::string active_deployment_id;
+    std::string mode;
+    boost::json::value active_deployment = nullptr;
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        active_deployment_id = active_deployment_id_;
+        mode = state_name_locked();
+        if (active_) {
+            active_deployment = active_->deployment_id;
+        }
     }
 
     boost::json::object out;
@@ -354,10 +487,9 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     out["hardware"] = std::move(hardware);
 
     boost::json::object state;
-    state["mode"] = active_deployment_id.empty() ? "idle" : "running";
-    state["active_deployment"] = active_deployment_id.empty()
-        ? boost::json::value(nullptr)
-        : boost::json::value(active_deployment_id);
+    state["mode"] = mode;
+    state["active_deployment"] = active_deployment;
+    state["execution"] = options_.deployment_host ? options_.deployment_host->execution_state() : "not_stepping";
     out["state"] = std::move(state);
 
     return out;
@@ -473,147 +605,181 @@ auto ControlPlaneMvp::handle_peer_announce(const boost::json::object& request) -
 
 auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request) const -> boost::json::object
 {
-    std::string active_deployment_id;
-    std::vector<PreparedDeployment> prepared_snapshot;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        active_deployment_id = active_deployment_id_;
-        prepared_snapshot.reserve(prepared_.size());
-        for (const auto& [_, item] : prepared_) {
-            prepared_snapshot.push_back(item);
-        }
-    }
-
     boost::json::object out;
     out["type"] = "DEPLOYMENTS";
     out["request_id"] = as_string(request, "request_id").value_or("");
     out["protocol_version"] = descriptor_.protocol_version;
-    out["node_uuid"] = descriptor_.node_uuid;
-    out["state"] = active_deployment_id.empty() ? "idle" : "running";
 
-    out["active_deployment"] = active_deployment_id.empty()
-        ? boost::json::value(nullptr)
-        : boost::json::value(boost::json::object{{"deployment_id", active_deployment_id}});
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto now = std::chrono::steady_clock::now();
+    out["state"] = state_name_locked();
+    out["execution"] = options_.deployment_host ? options_.deployment_host->execution_state() : "not_stepping";
+    out["active_revision"] = active_ ? active_->revision : 0;
+    if (active_) {
+        boost::json::object active;
+        active["deployment_id"] = active_->deployment_id;
+        active["revision"] = active_->revision;
+        active["project_revision"] = active_->project_revision;
+        active["configuration_digest"] = active_->configuration_digest;
+        active["committed_at"] = active_->committed_at;
+        out["active_deployment"] = std::move(active);
+    } else {
+        out["active_deployment"] = nullptr;
+    }
 
+    // Prepare tokens are bearer secrets: only the PREPARE_DEPLOYMENT_RESULT carries them.
     boost::json::array prepared;
-    for (const auto& item : prepared_snapshot) {
+    for (const auto& [_, item] : prepared_) {
+        if (item.expires <= now) {
+            continue;
+        }
         boost::json::object entry;
         entry["deployment_id"] = item.deployment_id;
-        entry["prepare_token"] = item.prepare_token;
+        entry["revision"] = item.revision;
+        entry["base_revision"] = item.base_revision;
+        entry["configuration_digest"] = item.configuration_digest;
         entry["prepared_at"] = item.prepared_at;
         entry["expires_at"] = item.expires_at;
         prepared.emplace_back(std::move(entry));
     }
     out["prepared_deployments"] = std::move(prepared);
-    out["history"] = boost::json::array{};
+
+    boost::json::array history;
+    for (const auto& item : history_) {
+        history.emplace_back(boost::json::object{
+            {"deployment_id", item.deployment_id},
+            {"revision", item.revision},
+            {"outcome", item.outcome},
+        });
+    }
+    out["history"] = std::move(history);
     return out;
 }
 
 auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
+    auto invalid = [&request_id](const std::string& message) {
+        return make_error_response(request_id, "INVALID_REQUEST", message);
+    };
+
     const auto deployment_it = request.find("deployment");
     if (deployment_it == request.end() || !deployment_it->value().is_object()) {
-        return make_error_response(request_id, "INVALID_REQUEST", "PREPARE_DEPLOYMENT requires object field 'deployment'.");
+        return invalid("PREPARE_DEPLOYMENT requires object field 'deployment'.");
     }
-
     const auto& deployment = deployment_it->value().as_object();
+
     const auto deployment_id = as_string(deployment, "deployment_id").value_or("");
     if (deployment_id.empty()) {
-        return make_error_response(request_id, "INVALID_REQUEST", "deployment.deployment_id is required.");
+        return invalid("deployment.deployment_id must be a non-empty string.");
+    }
+    const auto revision = read_revision(deployment, "revision", false);
+    if (!revision) {
+        return invalid("deployment.revision must be an integer in [1, 2^53].");
+    }
+    const auto base_revision = read_revision(deployment, "base_revision", true);
+    if (!base_revision) {
+        return invalid("deployment.base_revision must be an integer in [0, 2^53] (0: no active deployment).");
     }
 
-    std::int64_t revision = 1;
-    if (const auto rev_it = deployment.find("revision"); rev_it != deployment.end()) {
-        if (rev_it->value().is_int64()) {
-            revision = rev_it->value().as_int64();
-        } else if (rev_it->value().is_uint64()) {
-            revision = static_cast<std::int64_t>(rev_it->value().as_uint64());
-        } else {
-            return make_error_response(request_id, "INVALID_REQUEST", "deployment.revision must be an integer.");
-        }
+    const auto configuration_it = deployment.find("configuration");
+    if (configuration_it == deployment.end() || !configuration_it->value().is_object()) {
+        return invalid("deployment.configuration must be an object.");
+    }
+    const auto& configuration = configuration_it->value().as_object();
+    const auto project_revision = as_string(configuration, "project_revision").value_or("");
+    if (project_revision.empty()) {
+        return invalid("configuration.project_revision must be a non-empty string.");
+    }
+    const auto claimed_digest = as_string(configuration, "configuration_digest").value_or("");
+    if (claimed_digest.empty()) {
+        return invalid("configuration.configuration_digest must be a non-empty string.");
+    }
+    const auto fragment_it = configuration.find("assigned_fragment");
+    if (fragment_it == configuration.end() || !fragment_it->value().is_object()) {
+        return invalid("configuration.assigned_fragment must be an object.");
+    }
+
+    // The digest covers the configuration object without its digest member.
+    auto digested = configuration;
+    digested.erase("configuration_digest");
+    std::string digest;
+    try {
+        digest = configuration_digest(digested);
+    } catch (const std::exception& ex) {
+        return invalid(std::string{"configuration cannot be canonicalized: "} + ex.what());
+    }
+    if (digest != claimed_digest) {
+        boost::json::object details{{"expected", digest}, {"received", claimed_digest}};
+        auto error = invalid("configuration_digest does not match the configuration content.");
+        error["details"] = std::move(details);
+        return error;
     }
 
     boost::json::array incompatibilities;
-    const auto placement_it = deployment.find("placement");
-    if (placement_it != deployment.end() && placement_it->value().is_object()) {
-        const auto& placement = placement_it->value().as_object();
-        const auto requires_it = placement.find("requires");
-        if (requires_it != placement.end() && requires_it->value().is_object()) {
-            const auto& required_caps = requires_it->value().as_object();
+    if (const auto requires_it = deployment.find("requires"); requires_it != deployment.end()) {
+        if (!requires_it->value().is_object()) {
+            return invalid("deployment.requires must be an object.");
+        }
+        const auto& required_caps = requires_it->value().as_object();
 
-            if (const auto libs_it = required_caps.find("libraries"); libs_it != required_caps.end() && libs_it->value().is_array()) {
-                for (const auto& requirement_value : libs_it->value().as_array()) {
-                    if (!requirement_value.is_object()) {
-                        continue;
-                    }
-                    const auto& requirement = requirement_value.as_object();
-                    const auto required_id = as_string(requirement, "library_id").value_or("");
-                    const auto version_rule = as_string(requirement, "version").value_or("");
+        if (const auto libs_it = required_caps.find("libraries"); libs_it != required_caps.end()) {
+            if (!libs_it->value().is_array()) {
+                return invalid("requires.libraries must be an array.");
+            }
+            for (const auto& requirement_value : libs_it->value().as_array()) {
+                const auto* requirement = requirement_value.if_object();
+                const auto required_id = requirement ? as_string(*requirement, "library_id").value_or("") : "";
+                if (required_id.empty()) {
+                    return invalid("requires.libraries entries must be objects with a non-empty library_id.");
+                }
+                const auto version_rule = as_string(*requirement, "version").value_or("");
+                if (!version_rule.empty() && version_rule.rfind(">=", 0) != 0) {
+                    return invalid("requires.libraries version rules must have the form '>=X.Y.Z'.");
+                }
 
-                    auto found = std::find_if(descriptor_.libraries.begin(), descriptor_.libraries.end(),
-                                              [&required_id](const ControlLibraryInfo& library) { return library.library_id == required_id; });
-                    if (found == descriptor_.libraries.end()) {
-                        boost::json::object issue;
-                        issue["code"] = "MISSING_LIBRARY";
-                        issue["scope"] = "library";
-                        issue["target"] = required_id;
-                        issue["message"] = "Required library is not installed.";
-                        issue["details"] = boost::json::object{};
-                        incompatibilities.emplace_back(std::move(issue));
-                        continue;
-                    }
-                    if (version_rule.rfind(">=", 0) == 0) {
-                        const auto min_version = version_rule.substr(2);
-                        if (compare_versions(found->version, min_version) < 0) {
-                            boost::json::object details;
-                            details["installed"] = found->version;
-                            details["required"] = version_rule;
-                            boost::json::object issue;
-                            issue["code"] = "LIBRARY_VERSION_MISMATCH";
-                            issue["scope"] = "library";
-                            issue["target"] = required_id;
-                            issue["message"] = "Installed library version is lower than required.";
-                            issue["details"] = std::move(details);
-                            incompatibilities.emplace_back(std::move(issue));
-                        }
-                    }
+                const auto found = std::find_if(descriptor_.libraries.begin(), descriptor_.libraries.end(),
+                                                [&required_id](const ControlLibraryInfo& library) { return library.library_id == required_id; });
+                if (found == descriptor_.libraries.end()) {
+                    incompatibilities.emplace_back(make_issue("MISSING_LIBRARY", "library", required_id,
+                                                              "Required library is not installed."));
+                } else if (!version_rule.empty() && compare_versions(found->version, version_rule.substr(2)) < 0) {
+                    incompatibilities.emplace_back(make_issue("LIBRARY_VERSION_MISMATCH", "library", required_id,
+                                                              "Installed library version is lower than required.",
+                                                              {{"installed", found->version}, {"required", version_rule}}));
                 }
             }
+        }
 
-            if (const auto elements_it = required_caps.find("elements"); elements_it != required_caps.end() && elements_it->value().is_array()) {
-                for (const auto& value : elements_it->value().as_array()) {
-                    if (!value.is_string()) {
-                        continue;
-                    }
-                    const auto type_name = std::string(value.as_string().c_str());
-                    if (!has_string(descriptor_.element_types, type_name)) {
-                        boost::json::object issue;
-                        issue["code"] = "MISSING_ELEMENT";
-                        issue["scope"] = "element";
-                        issue["target"] = type_name;
-                        issue["message"] = "Required element type is not available.";
-                        issue["details"] = boost::json::object{};
-                        incompatibilities.emplace_back(std::move(issue));
-                    }
+        if (const auto elements_it = required_caps.find("elements"); elements_it != required_caps.end()) {
+            if (!elements_it->value().is_array()) {
+                return invalid("requires.elements must be an array.");
+            }
+            for (const auto& value : elements_it->value().as_array()) {
+                if (!value.is_string() || value.as_string().empty()) {
+                    return invalid("requires.elements entries must be non-empty strings.");
+                }
+                const auto type_name = std::string(value.as_string().c_str());
+                if (!has_string(descriptor_.element_types, type_name)) {
+                    incompatibilities.emplace_back(make_issue("MISSING_ELEMENT", "element", type_name,
+                                                              "Required element type is not available."));
                 }
             }
+        }
 
-            if (const auto hw_it = required_caps.find("hardware"); hw_it != required_caps.end() && hw_it->value().is_array()) {
-                for (const auto& value : hw_it->value().as_array()) {
-                    if (!value.is_object()) {
-                        continue;
-                    }
-                    const auto capability = as_string(value.as_object(), "capability").value_or("");
-                    if (!capability.empty() && !has_string(descriptor_.hardware_capabilities, capability)) {
-                        boost::json::object issue;
-                        issue["code"] = "HARDWARE_MISSING";
-                        issue["scope"] = "hardware";
-                        issue["target"] = capability;
-                        issue["message"] = "Required hardware capability is missing.";
-                        issue["details"] = boost::json::object{};
-                        incompatibilities.emplace_back(std::move(issue));
-                    }
+        if (const auto hw_it = required_caps.find("hardware"); hw_it != required_caps.end()) {
+            if (!hw_it->value().is_array()) {
+                return invalid("requires.hardware must be an array.");
+            }
+            for (const auto& value : hw_it->value().as_array()) {
+                const auto* entry = value.if_object();
+                const auto capability = entry ? as_string(*entry, "capability").value_or("") : "";
+                if (capability.empty()) {
+                    return invalid("requires.hardware entries must be objects with a non-empty capability.");
+                }
+                if (!has_string(descriptor_.hardware_capabilities, capability)) {
+                    incompatibilities.emplace_back(make_issue("HARDWARE_MISSING", "hardware", capability,
+                                                              "Required hardware capability is missing."));
                 }
             }
         }
@@ -624,45 +790,78 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
     out["request_id"] = request_id;
     out["protocol_version"] = descriptor_.protocol_version;
     out["deployment_id"] = deployment_id;
-    out["revision"] = revision;
+    out["revision"] = *revision;
+    out["configuration_digest"] = digest;
+    out["reservations"] = boost::json::object{{"hardware", boost::json::array{}}, {"streams", boost::json::array{}}};
 
-    if (!incompatibilities.empty()) {
+    auto not_ready = [&out](boost::json::array issues) {
         out["prepare_status"] = "NOT_READY";
         out["prepare_token"] = nullptr;
         out["prepared_at"] = nullptr;
         out["expires_at"] = nullptr;
-        out["reservations"] = boost::json::object{{"hardware", boost::json::array{}}, {"streams", boost::json::array{}}};
-        out["incompatibilities"] = std::move(incompatibilities);
+        out["incompatibilities"] = std::move(issues);
         return out;
-    }
+    };
+    auto ready = [&out](const PreparedDeployment& prepared) {
+        out["prepare_status"] = "READY";
+        out["prepare_token"] = prepared.prepare_token;
+        out["prepared_at"] = prepared.prepared_at;
+        out["expires_at"] = prepared.expires_at;
+        out["incompatibilities"] = boost::json::array{};
+        return out;
+    };
 
-    const auto key = deployment_id + "#" + std::to_string(revision);
-    auto prepared_token = make_prepare_token();
-    auto prepared_at = now_utc_iso8601();
-    auto expires_at = plus_minutes_iso8601(5);
+    const auto key = deployment_key(deployment_id, *revision);
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        auto& prepared = prepared_[key];
-        if (!prepared.prepare_token.empty()) {
-            prepared_token = prepared.prepare_token;
-            prepared_at = prepared.prepared_at;
-            expires_at = prepared.expires_at;
-        } else {
-            prepared.deployment_id = deployment_id;
-            prepared.revision = revision;
-            prepared.prepare_token = prepared_token;
-            prepared.prepared_at = prepared_at;
-            prepared.expires_at = expires_at;
+        expire_prepared_locked(std::chrono::steady_clock::now());
+        const auto active_revision = active_ ? active_->revision : 0;
+        if (*base_revision != active_revision) {
+            auto error = make_error_response(request_id, "REVISION_CONFLICT",
+                                             "base_revision does not match the node's active revision.");
+            error["details"] = boost::json::object{{"active_revision", active_revision}, {"base_revision", *base_revision}};
+            return error;
+        }
+        if (const auto existing = prepared_.find(key); existing != prepared_.end()) {
+            if (existing->second.configuration_digest != digest) {
+                return invalid("This deployment revision is already prepared with a different configuration.");
+            }
+            return ready(existing->second);
         }
     }
 
-    out["prepare_status"] = "READY";
-    out["prepare_token"] = prepared_token;
-    out["prepared_at"] = prepared_at;
-    out["expires_at"] = expires_at;
-    out["reservations"] = boost::json::object{{"hardware", boost::json::array{}}, {"streams", boost::json::array{}}};
-    out["incompatibilities"] = boost::json::array{};
-    return out;
+    if (!incompatibilities.empty()) {
+        return not_ready(std::move(incompatibilities));
+    }
+    if (!options_.deployment_host) {
+        return make_error_response(request_id, "CAPABILITY_MISSING", "This node does not accept deployments.");
+    }
+
+    std::shared_ptr<StagedConfiguration> staged;
+    try {
+        staged = options_.deployment_host->stage(fragment_it->value().as_object());
+    } catch (const std::exception& ex) {
+        boost::json::array issues;
+        issues.emplace_back(make_issue("INVALID_CONFIGURATION", "configuration", deployment_id, ex.what()));
+        return not_ready(std::move(issues));
+    }
+
+    PreparedDeployment prepared;
+    prepared.deployment_id = deployment_id;
+    prepared.revision = *revision;
+    prepared.base_revision = *base_revision;
+    prepared.project_revision = project_revision;
+    prepared.configuration_digest = digest;
+    prepared.prepare_token = make_prepare_token();
+    prepared.prepared_at = now_utc_iso8601();
+    prepared.expires = std::chrono::steady_clock::now() + options_.prepare_ttl;
+    prepared.expires_at = plus_seconds_iso8601(options_.prepare_ttl);
+    prepared.staged = std::move(staged);
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    // A concurrent identical prepare may have won; keep the first token.
+    const auto [it, inserted] = prepared_.try_emplace(key, std::move(prepared));
+    return ready(it->second);
 }
 
 auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& request) -> boost::json::object
@@ -670,38 +869,79 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto deployment_id = as_string(request, "deployment_id").value_or("");
     const auto token = as_string(request, "prepare_token").value_or("");
-    if (deployment_id.empty() || token.empty()) {
-        return make_error_response(request_id, "INVALID_REQUEST", "COMMIT_DEPLOYMENT requires deployment_id and prepare_token.");
+    const auto revision = read_revision(request, "revision", false);
+    if (deployment_id.empty() || token.empty() || !revision) {
+        return make_error_response(request_id, "INVALID_REQUEST",
+                                   "COMMIT_DEPLOYMENT requires deployment_id, revision in [1, 2^53], and prepare_token.");
     }
 
-    std::int64_t revision = 1;
-    if (const auto rev_it = request.find("revision"); rev_it != request.end()) {
-        revision = rev_it->value().is_int64()
-            ? rev_it->value().as_int64()
-            : static_cast<std::int64_t>(rev_it->value().as_uint64());
+    auto committed = [&](const ActiveDeployment& active) {
+        boost::json::object out;
+        out["type"] = "COMMIT_DEPLOYMENT_RESULT";
+        out["request_id"] = request_id;
+        out["protocol_version"] = descriptor_.protocol_version;
+        out["deployment_id"] = active.deployment_id;
+        out["revision"] = active.revision;
+        out["configuration_digest"] = active.configuration_digest;
+        out["committed"] = true;
+        out["state"] = "active";
+        out["execution"] = options_.deployment_host ? options_.deployment_host->execution_state() : "not_stepping";
+        out["committed_at"] = active.committed_at;
+        return out;
+    };
+
+    const auto key = deployment_key(deployment_id, *revision);
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (active_ && active_->deployment_id == deployment_id && active_->revision == *revision &&
+        tokens_equal(active_->prepare_token, token)) {
+        return committed(*active_);
     }
 
-    const auto key = deployment_id + "#" + std::to_string(revision);
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        const auto prepared_it = prepared_.find(key);
-        if (prepared_it == prepared_.end() || prepared_it->second.prepare_token != token) {
-            return make_error_response(request_id, "INVALID_REQUEST", "Unknown or expired prepare_token.");
-        }
-        active_deployment_id_ = deployment_id;
+    const auto prepared_it = prepared_.find(key);
+    if (prepared_it == prepared_.end() || !tokens_equal(prepared_it->second.prepare_token, token)) {
+        const auto expired = std::any_of(history_.begin(), history_.end(), [&](const DeploymentOutcome& item) {
+            return item.deployment_id == deployment_id && item.revision == *revision && item.outcome == "expired";
+        });
+        return expired
+            ? make_error_response(request_id, "PREPARE_EXPIRED", "The prepared deployment has expired.")
+            : make_error_response(request_id, "PREPARE_TOKEN_INVALID", "Unknown deployment or prepare_token.");
+    }
+
+    auto& prepared = prepared_it->second;
+    if (prepared.expires <= std::chrono::steady_clock::now()) {
+        record_outcome_locked(prepared, "expired");
         prepared_.erase(prepared_it);
+        return make_error_response(request_id, "PREPARE_EXPIRED", "The prepared deployment has expired.");
+    }
+    const auto active_revision = active_ ? active_->revision : 0;
+    if (prepared.base_revision != active_revision) {
+        record_outcome_locked(prepared, "superseded");
+        prepared_.erase(prepared_it);
+        return make_error_response(request_id, "REVISION_CONFLICT",
+                                   "Another deployment became active after this one was prepared.");
     }
 
-    boost::json::object out;
-    out["type"] = "COMMIT_DEPLOYMENT_RESULT";
-    out["request_id"] = request_id;
-    out["protocol_version"] = descriptor_.protocol_version;
-    out["deployment_id"] = deployment_id;
-    out["revision"] = revision;
-    out["committed"] = true;
-    out["state"] = "running";
-    out["committed_at"] = now_utc_iso8601();
-    return out;
+    try {
+        options_.deployment_host->activate(*prepared.staged);
+    } catch (const std::exception& ex) {
+        record_outcome_locked(prepared, "failed");
+        prepared_.erase(prepared_it);
+        return make_error_response(request_id, "INTERNAL_ERROR",
+                                   std::string{"Activation failed; the previous configuration remains active: "} + ex.what());
+    }
+
+    active_ = ActiveDeployment{
+        .deployment_id = prepared.deployment_id,
+        .revision = prepared.revision,
+        .project_revision = prepared.project_revision,
+        .configuration_digest = prepared.configuration_digest,
+        .committed_at = now_utc_iso8601(),
+        .prepare_token = prepared.prepare_token,
+    };
+    record_outcome_locked(prepared, "committed");
+    prepared_.erase(prepared_it);
+    return committed(*active_);
 }
 
 auto ControlPlaneMvp::handle_abort_deployment(const boost::json::object& request) -> boost::json::object
@@ -709,42 +949,57 @@ auto ControlPlaneMvp::handle_abort_deployment(const boost::json::object& request
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto deployment_id = as_string(request, "deployment_id").value_or("");
     const auto token = as_string(request, "prepare_token").value_or("");
-    if (deployment_id.empty() || token.empty()) {
-        return make_error_response(request_id, "INVALID_REQUEST", "ABORT_DEPLOYMENT requires deployment_id and prepare_token.");
+    const auto revision = read_revision(request, "revision", false);
+    if (deployment_id.empty() || token.empty() || !revision) {
+        return make_error_response(request_id, "INVALID_REQUEST",
+                                   "ABORT_DEPLOYMENT requires deployment_id, revision in [1, 2^53], and prepare_token.");
     }
 
-    std::int64_t revision = 1;
-    if (const auto rev_it = request.find("revision"); rev_it != request.end()) {
-        revision = rev_it->value().is_int64()
-            ? rev_it->value().as_int64()
-            : static_cast<std::int64_t>(rev_it->value().as_uint64());
-    }
+    const auto key = deployment_key(deployment_id, *revision);
+    std::lock_guard<std::mutex> lock(mutex_);
 
-    const auto key = deployment_id + "#" + std::to_string(revision);
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        const auto prepared_it = prepared_.find(key);
-        if (prepared_it == prepared_.end() || prepared_it->second.prepare_token != token) {
-            return make_error_response(request_id, "INVALID_REQUEST", "Unknown or expired prepare_token.");
+    auto aborted = [&] {
+        boost::json::object out;
+        out["type"] = "ABORT_DEPLOYMENT_RESULT";
+        out["request_id"] = request_id;
+        out["protocol_version"] = descriptor_.protocol_version;
+        out["deployment_id"] = deployment_id;
+        out["revision"] = *revision;
+        out["aborted"] = true;
+        out["state"] = state_name_locked();
+        out["aborted_at"] = now_utc_iso8601();
+        return out;
+    };
+
+    if (const auto prepared_it = prepared_.find(key); prepared_it != prepared_.end()) {
+        if (!tokens_equal(prepared_it->second.prepare_token, token)) {
+            return make_error_response(request_id, "PREPARE_TOKEN_INVALID", "Unknown deployment or prepare_token.");
         }
+        // Aborting an expired preparation discards it just the same.
+        record_outcome_locked(prepared_it->second, "aborted");
         prepared_.erase(prepared_it);
+        return aborted();
     }
 
-    boost::json::object out;
-    out["type"] = "ABORT_DEPLOYMENT_RESULT";
-    out["request_id"] = request_id;
-    out["protocol_version"] = descriptor_.protocol_version;
-    out["deployment_id"] = deployment_id;
-    out["revision"] = revision;
-    out["aborted"] = true;
-    out["state"] = active_deployment_id_.empty() ? "idle" : "running";
-    out["aborted_at"] = now_utc_iso8601();
-    return out;
+    if (active_ && active_->deployment_id == deployment_id && active_->revision == *revision) {
+        return make_error_response(request_id, "INVALID_REQUEST",
+                                   "A committed deployment cannot be aborted; deploy an earlier revision instead.");
+    }
+    // Abort is idempotent: a preparation that was already discarded stays discarded.
+    const auto discarded = std::any_of(history_.begin(), history_.end(), [&](const DeploymentOutcome& item) {
+        return item.deployment_id == deployment_id && item.revision == *revision &&
+               (item.outcome == "aborted" || item.outcome == "expired" || item.outcome == "superseded" ||
+                item.outcome == "failed");
+    });
+    if (discarded) {
+        return aborted();
+    }
+    return make_error_response(request_id, "PREPARE_TOKEN_INVALID", "Unknown deployment or prepare_token.");
 }
 
 void ControlPlaneMvp::load_peers_from_disk()
 {
-    const auto path = storage_dir_ / "peers.json";
+    const auto path = options_.storage_dir / "peers.json";
     if (!std::filesystem::exists(path)) {
         return;
     }
@@ -786,7 +1041,7 @@ void ControlPlaneMvp::load_peers_from_disk()
 
 void ControlPlaneMvp::persist_peers_to_disk() const
 {
-    if (storage_dir_.empty()) {
+    if (options_.storage_dir.empty()) {
         return;
     }
 
@@ -805,7 +1060,7 @@ void ControlPlaneMvp::persist_peers_to_disk() const
         out.emplace_back(std::move(item));
     }
 
-    const auto path = storage_dir_ / "peers.json";
+    const auto path = options_.storage_dir / "peers.json";
     std::ofstream stream(path, std::ios::trunc);
     if (stream) {
         stream << boost::json::serialize(out);
