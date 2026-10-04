@@ -209,6 +209,36 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 3. Define control-plane fault/alarm messages for sequence gaps and malformed packets.
 4. Define protocol negotiation for supported packet versions and extensions; all Section 8 type IDs are mandatory in the MVP profile.
 
+### 12.1 Proposed resolutions (awaiting approval)
+
+These proposals close the four items above. They are not yet decisions; nothing in this section is normative until approved, and no codec for Section 7 is implemented before then.
+
+**1. Stream descriptor.** Each stream is a JSON object in the configuration bundle's `full_network.streams` array, so it is covered by the configuration digest and versioned with the deployment revision:
+
+```json
+{
+  "stream_id": "<UUID, CSPRNG-generated when the stream is created>",
+  "producer": { "node_uuid": "...", "element_instance_uuid": "...", "port": 0 },
+  "consumers": [ { "node_uuid": "...", "element_instance_uuid": "...", "port": 0 } ],
+  "data_type": "F64",
+  "channels": 1,
+  "max_elements_per_packet": 1,
+  "sample_rate": { "numerator": 48000, "denominator": 1 },
+  "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ],
+  "gap_policy": "CONTINUE_WITH_GAP"
+}
+```
+
+`sample_rate` is present only for uniformly sampled blocks. A `clock_domain` names a domain declared by the producing node, not a value: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`. This keeps descriptors stable across restarts while making a clock reset visible.
+
+**2. Crash-delivery guarantee: at most once.** Packets are never replayed. A crash can lose packets but cannot duplicate them.
+- Sender: reserves sequence ranges of 65,536 and persists the reservation end in `<state-dir>/streams/<stream_id>.seq` (write to a temporary file, `fsync`, `rename`, `fsync` the directory) before using the range. After restart it starts at the stored end, so a crash leaves a gap of at most one range.
+- Receiver: persists the last accepted sequence in `<state-dir>/streams/<stream_id>.recv` the same way, at most once per second and on clean shutdown. Because senders never replay, a lagging checkpoint cannot cause duplicates to be accepted; it only bounds duplicate detection after a receiver restart. A missing or unreadable checkpoint for a configured stream is reported as `STREAM_STATE_LOST` and the stream waits for explicit recovery (`FAULT_STREAM` behavior) regardless of its gap policy.
+
+**3. Fault reporting.** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `faulted`, `waiting_recovery`), `last_sequence`, counters (`packets`, `gaps`, `missing_packets`, `duplicates`, `malformed`, `unauthorized`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `DUPLICATE_OR_REGRESSED`, `JOINED_MID_STREAM`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `STREAM_STATE_LOST`. Studio polls it. Pushed events are a later extension. Recovery of a faulted stream is `RECOVER_STREAM {stream_id}` (authorized like a configuration change), which resets the expectation to the next received sequence.
+
+**4. Negotiation: none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support (Section 7). A future version adds negotiation through a new packet version, not through optional behavior in version 1.
+
 ## 13. Relationship to Implementation
 
 The C++ reference transport currently uses a different 54-byte packet layout, a 64-bit stream identifier, a packet-level stream name, and a limited scalar F64 profile. It does not implement the packet format proposed here, persistent sequence behavior, gap handling, or timestamp-role records. The codec MUST NOT be treated as the source of truth. Before interoperability freeze, this candidate must be reviewed and accompanied by byte-exact fixtures for independent C++, Rust, Python, and JVM implementations. A finalized v1 implementation must either implement this format exactly or use a different explicitly versioned format; it MUST NOT silently call the existing layout v1-compatible.

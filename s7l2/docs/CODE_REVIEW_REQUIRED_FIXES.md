@@ -110,7 +110,7 @@ The certificate attribute format and provisioning policy should match the identi
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:500), [transport.cpp](../s7transport/src/transport.cpp:565), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:200).
 
-## P2: Approve a normative stream identity and packet layout before claiming conformance
+## P2: Approve a normative stream identity and packet layout before claiming conformance — awaiting approval
 
 ### Current problem
 
@@ -127,6 +127,8 @@ Also ensure that timestamp roles and their presence are encoded unambiguously; t
 - Independent implementations can encode/decode the same normative packet examples byte-for-byte.
 - Protocol versioning rejects incompatible layouts explicitly.
 - Stream identity remains stable and unique for the configured stream lifetime.
+
+**Progress (2026-10-04):** proposed resolutions for the four open items (stream descriptor serialization and clock-domain handling, at-most-once crash guarantee with sender range reservation and receiver checkpoints, `GET_STREAM_STATUS` fault reporting, no in-band negotiation in the MVP) are in section 12.1 of the wire draft. They need the maintainer's approval; the Section 7 codec is deliberately not implemented until then, and the prototype codec remains in use.
 
 Relevant code: [transport.hpp](../s7transport/include/s7/transport.hpp:1), [transport.cpp](../s7transport/src/transport.cpp:210), [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md:1).
 
@@ -474,7 +476,7 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.
 1. ~~Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.~~ Done 2026-10-04.
 2. ~~Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.~~ Done 2026-10-04 (also the prepare-token item).
-3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients.
+3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients. *Proposals written (wire draft 12.1); awaiting approval before the codec is implemented.*
 4. Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.
 5. Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.
 6. Address signal representation, observation timestamps/types, and plugin build integration.
