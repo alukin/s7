@@ -106,3 +106,9 @@ add_test(NAME s7studio_deployment_diagram
 add_test(NAME s7studio_edit_check
     COMMAND $<TARGET_FILE:s7studio> --edit-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/wire_types_ok.json)
 set_tests_properties(s7studio_edit_check PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+foreach(layout_case wire_types_ok layout_loops)
+    add_test(NAME s7studio_layout_${layout_case}
+        COMMAND $<TARGET_FILE:s7studio> --layout-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/${layout_case}.json)
+    set_tests_properties(s7studio_layout_${layout_case} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+endforeach()

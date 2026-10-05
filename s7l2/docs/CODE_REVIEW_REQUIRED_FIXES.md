@@ -522,7 +522,7 @@ Instantiate each element once per compilation and reuse the instance (or derive 
 
 Relevant code: [validation.cpp](../s7core/src/validation.cpp), [compiler.cpp](../s7core/src/compiler.cpp), [type_inference.cpp](../s7core/src/type_inference.cpp).
 
-## P3: Studio auto-layout routes wires through nodes — found 2026-10-05
+## P3: Studio auto-layout routes wires through nodes — fixed 2026-10-05
 
 ### Current problem
 
@@ -536,6 +536,12 @@ Route each wire from its output connector to its input connector around nodes, w
 
 - Every auto-laid-out wire starts and ends at its connectors and does not cross a node.
 - No two wires of different connections share a QSchematic net.
+
+**Resolution:** a schema without stored positions is laid out in layers: elements in columns by data flow (connections closing a loop do not order the columns), rows ordered by their inputs, and rows as tall as their tallest node. Each output's wire runs on a vertical track of its own in the gap after its column; wires spanning several columns, or going back, use a second track before the target column and a lane of their own below all nodes, so no wire crosses a node and wires of different outputs never touch (gaps widen with their tracks). Fan-out follows QSchematic's model: one wire per connector, further wires of the same output branch off it at a junction, so they form one net, as the same signal should. Nodes are tall enough for their ports, which sit on the 20-unit grid one step apart; Scope ports were 19 units apart and overlapped.
+
+Found on the way and fixed: Studio lost fan-out connections. QSchematic attaches one wire per connector, and the extractor asked each connector for its single wire, so a second wire from the same output (drawn or laid out) was dropped from the schema. Connections now come from wire nets: a wire end belongs to a connector it is attached to or lies on, wires joined at a junction are one net, and a net with one output connects it to every input it reaches. Saved routes that start at a junction reload as branches.
+
+Test: `s7studio --layout-check` (`s7studio_layout_wire_types_ok`, `s7studio_layout_layout_loops`: feedback loop through a Delay, fan-out to three nodes, a wire skipping columns, a three-input Scope): every connection attached at both connectors, no segment inside a node, every QSchematic net carries one output.
 
 ## P3: Smaller correctness issues
 

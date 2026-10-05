@@ -12,6 +12,9 @@
 #include <QString>
 
 #include <algorithm>
+#include <QVector>
+#include <QLineF>
+#include <functional>
 #include <boost/system/error_code.hpp>
 #include <optional>
 #include <string>
@@ -176,53 +179,109 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
         }
     }
 
-    struct WireEndpoints {
-        std::optional<ConnectorEndpointInfo> source;
-        std::optional<ConnectorEndpointInfo> target;
+    // Connections come from wire nets. QSchematic attaches one wire per
+    // connector, so an output feeding several inputs is one wire from the
+    // output with further wires branching off it at junctions. A wire end
+    // belongs to a connector it is attached to, or lies on; wires are in one
+    // net when an end of one lies on the other. A net with one output
+    // connects it to every input the net reaches.
+    const auto wires = scene.items<QSchematic::Items::Wire>();
+    const auto wireManager = scene.wire_manager();
+    struct WireEnds {
+        QSchematic::Items::Wire* wire{};
+        QVector<QPointF> points;
+        std::vector<ConnectorEndpointInfo> outputs;
+        std::vector<ConnectorEndpointInfo> inputs;
     };
-
-    std::unordered_map<const wire_system::wire*, WireEndpoints> wireEndpoints;
-    if (const auto wireManager = scene.wire_manager()) {
+    std::vector<WireEnds> ends;
+    for (const auto& wirePtr : wires) {
+        if (!wirePtr || wirePtr->pointsAbsolute().size() < 2) {
+            continue;
+        }
+        WireEnds entry{wirePtr.get(), wirePtr->pointsAbsolute(), {}, {}};
+        const QPointF first = entry.points.front();
+        const QPointF last = entry.points.back();
         for (const auto& [connector, endpoint] : connectorInfo) {
-            const auto connection = wireManager->attached_wire(connector);
-            if (!connection || !connection->wire) {
-                continue;
+            bool attached = false;
+            if (wireManager) {
+                if (const auto record = wireManager->attached_wire(connector); record && record->wire == wirePtr.get()) {
+                    attached = true;
+                }
             }
+            const auto position = connector->scenePos();
+            const bool atEnd = QLineF(position, first).length() < 1.0 || QLineF(position, last).length() < 1.0;
+            if (attached || atEnd) {
+                (endpoint.isOutput ? entry.outputs : entry.inputs).push_back(endpoint);
+            }
+        }
+        ends.push_back(std::move(entry));
+    }
 
-            auto& endpoints = wireEndpoints[connection->wire];
-            if (endpoint.isOutput) {
-                endpoints.source = endpoint;
-            } else {
-                endpoints.target = endpoint;
+    // Union of wires joined at junctions.
+    std::vector<std::size_t> parent(ends.size());
+    for (std::size_t index = 0; index < parent.size(); ++index) {
+        parent[index] = index;
+    }
+    std::function<std::size_t(std::size_t)> root_of = [&](std::size_t index) {
+        while (parent[index] != index) {
+            index = parent[index] = parent[parent[index]];
+        }
+        return index;
+    };
+    auto onWire = [](const QPointF& point, const QVector<QPointF>& points) {
+        for (int index = 0; index + 1 < points.size(); ++index) {
+            const QLineF segment(points[index], points[index + 1]);
+            const QPointF d = segment.p2() - segment.p1();
+            const double length2 = d.x() * d.x() + d.y() * d.y();
+            const double t = length2 > 0 ? std::clamp(QPointF::dotProduct(point - segment.p1(), d) / length2, 0.0, 1.0) : 0.0;
+            if (QLineF(point, segment.p1() + t * d).length() < 0.5) {
+                return true;
+            }
+        }
+        return false;
+    };
+    for (std::size_t a = 0; a < ends.size(); ++a) {
+        for (std::size_t b = 0; b < ends.size(); ++b) {
+            if (a != b && (onWire(ends[a].points.front(), ends[b].points) || onWire(ends[a].points.back(), ends[b].points))) {
+                parent[root_of(a)] = root_of(b);
+            }
+        }
+    }
+    std::unordered_map<std::size_t, std::vector<ConnectorEndpointInfo>> netOutputs;
+    for (std::size_t index = 0; index < ends.size(); ++index) {
+        auto& outputs = netOutputs[root_of(index)];
+        for (const auto& output : ends[index].outputs) {
+            const bool known = std::any_of(outputs.begin(), outputs.end(), [&](const auto& o) {
+                return o.nodeId == output.nodeId && o.portIndex == output.portIndex;
+            });
+            if (!known) {
+                outputs.push_back(output);
             }
         }
     }
 
-    const auto wires = scene.items<QSchematic::Items::Wire>();
-    for (const auto& wirePtr : wires) {
-        auto wire = wirePtr.get();
-        if (!wire) {
-            continue;
-        }
-
-        const auto endpointsIt = wireEndpoints.find(wire);
-        if (endpointsIt == wireEndpoints.end() || !endpointsIt->second.source || !endpointsIt->second.target) {
-            continue;
-        }
-
-        const auto& source = *endpointsIt->second.source;
-        const auto& target = *endpointsIt->second.target;
-
+    auto addConnection = [&](QSchematic::Items::Wire* wire, const ConnectorEndpointInfo& source, const ConnectorEndpointInfo& target) {
         if (wireSources) {
             wireSources->push_back(WireSource{wire, source.nodeId, source.portIndex, target.nodeId, target.portIndex});
         }
-
         boost::json::object connObj;
         connObj["from_element"] = source.nodeId;
         connObj["from_port"] = source.portIndex;
         connObj["to_element"] = target.nodeId;
         connObj["to_port"] = target.portIndex;
         connectionsArray.push_back(connObj);
+    };
+    for (std::size_t index = 0; index < ends.size(); ++index) {
+        const auto& outputs = netOutputs[root_of(index)];
+        for (const auto& target : ends[index].inputs) {
+            if (outputs.size() == 1) {
+                addConnection(ends[index].wire, outputs.front(), target);
+            } else if (ends[index].outputs.size() == 1) {
+                // Several outputs meet in one net (a drawing error): only the
+                // wire's own ends count.
+                addConnection(ends[index].wire, ends[index].outputs.front(), target);
+            }
+        }
     }
 
     return root;

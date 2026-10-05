@@ -6,11 +6,17 @@
 #include "diagram_editor.hpp"
 #include "deployment_support.hpp"
 #include "scene_serializer.hpp"
+#include "diagram_node_roles.hpp"
+#include "runtime_schema_extractor.hpp"
 
+#include <qschematic/items/node.hpp>
 #include <qschematic/items/wire.hpp>
+#include <qschematic/wire_system/manager.hpp>
+#include <qschematic/wire_system/net.hpp>
 #include <qschematic/scene.hpp>
 
 #include <set>
+#include <unordered_map>
 #include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
@@ -447,6 +453,95 @@ int runEditCheck(int argc, char** argv)
     std::cout << (ok ? "edit check: OK (" : "edit check: FAILED (") << expected.size() << " connections)\n";
     return ok ? 0 : 1;
 }
+
+// --layout-check <schema>: lays a schema without a diagram out and checks the
+// automatic routing: every connection's wire is attached at both connectors,
+// no wire segment passes through a node, and every QSchematic net carries
+// one output (wires of different outputs never touch).
+int runLayoutCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    s7::register_net_elements(registry);
+    std::ifstream in(argv[2]);
+    if (!in) {
+        std::cerr << "cannot read " << argv[2] << '\n';
+        return 2;
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto schema = boost::json::parse(text);
+    s7studio::diagram::DiagramEditor editor;
+    editor.loadRuntimeSchema(schema);
+    auto& scene = *editor.scene();
+
+    bool ok = true;
+    std::vector<s7studio::diagram::WireSource> sources;
+    const auto extracted = s7studio::diagram::RuntimeSchemaExtractor{}.extract(scene, {}, &sources).as_object();
+    const auto expected = schema.as_object().at("connections").as_array().size();
+    if (extracted.at("connections").as_array().size() != expected) {
+        std::cout << "error: " << extracted.at("connections").as_array().size() << " of " << expected
+                  << " connections attached at both connectors\n";
+        std::set<std::string> attached;
+        for (const auto& c : extracted.at("connections").as_array()) {
+            attached.insert(boost::json::serialize(c));
+        }
+        for (const auto& c : schema.as_object().at("connections").as_array()) {
+            if (!attached.contains(boost::json::serialize(c))) {
+                std::cout << "error: not attached: " << boost::json::serialize(c) << "\n";
+            }
+        }
+        ok = false;
+    }
+    std::unordered_map<const void*, std::string> outputOf;
+    for (const auto& source : sources) {
+        outputOf[static_cast<const wire_system::wire*>(source.wire)] = source.element + ":" + std::to_string(source.port);
+        const auto points = source.wire->pointsAbsolute();
+        for (int index = 0; index + 1 < points.size(); ++index) {
+            const QLineF segment(points[index], points[index + 1]);
+            for (const auto& node : scene.items<QSchematic::Items::Node>()) {
+                const auto box = node->sceneBoundingRect().adjusted(2, 2, -2, -2);
+                // Orthogonal segments: sample the segment densely.
+                for (int step = 0; step <= 50; ++step) {
+                    if (box.contains(segment.pointAt(step / 50.0))) {
+                        std::cout << "error: the wire of " << source.element << ":" << source.port << " -> " << source.toElement << ":"
+                                  << source.toPort << " crosses " << node->data(s7studio::diagram::kNodeIdRole).toString().toStdString() << '\n';
+                        ok = false;
+                        step = 51;
+                    }
+                }
+            }
+        }
+    }
+    for (const auto& net : scene.wire_manager()->nets()) {
+        std::set<std::string> outputs;
+        for (const auto& wire : net->wires()) {
+            if (const auto it = outputOf.find(wire.get()); it != outputOf.end()) {
+                outputs.insert(it->second);
+            }
+        }
+        if (outputs.size() > 1) {
+            std::string names;
+            for (const auto& output : outputs) {
+                names += " " + output;
+            }
+            std::cout << "error: one net joins the wires of " << outputs.size() << " outputs:" << names << "\n";
+            ok = false;
+        }
+    }
+    if (const char* png = std::getenv("S7_LAYOUT_PNG")) {
+        const auto bounds = scene.itemsBoundingRect().adjusted(-20, -20, 20, 20);
+        QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
+        image.fill(Qt::white);
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        scene.render(&painter, QRectF(), bounds);
+        painter.end();
+        image.save(QString::fromLocal8Bit(png));
+    }
+    std::cout << (ok ? "layout check: OK (" : "layout check: FAILED (") << expected << " connections)\n";
+    return ok ? 0 : 1;
+}
 } // namespace
 
 int main(int argc, char** argv) try
@@ -468,6 +563,9 @@ int main(int argc, char** argv) try
 
     if (argc == 3 && std::string_view(argv[1]) == "--wire-types") {
         return runWireTypes(argc, argv);
+    }
+    if (argc == 3 && std::string_view(argv[1]) == "--layout-check") {
+        return runLayoutCheck(argc, argv);
     }
     if (argc == 3 && std::string_view(argv[1]) == "--edit-check") {
         return runEditCheck(argc, argv);

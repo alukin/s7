@@ -46,7 +46,8 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 - `schema` is the runtime schema; parameters live there, not in `diagram`.
 - `diagram.nodes` stores positions and titles (and `channel_count` for scopes, `params` for text frames).
 - `diagram.wires` stores routing points in absolute scene coordinates. On load, wire *i* is matched with connection *i* of the schema; endpoints are re-attached to connectors.
-- A plain runtime schema file can also be opened; Studio lays nodes out on a grid.
+- A plain runtime schema file can also be opened; Studio lays it out by data flow (columns from inputs to outputs, each wire on its own tracks between columns, loops and long wires in lanes below the nodes). `s7studio --layout-check <schema>` checks such a layout offscreen.
+- Fan-out: QSchematic attaches one wire per connector, so further wires of an output start on its first wire (a junction). Studio derives connections from these nets.
 - Deployment: each schema element may carry `node` (the node_uuid it runs on); the root keeps `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and `streams` (stream descriptors, so redeployments continue the streams). See `S7_Network_Wire_Protocol_v1.md`, section 12.1, items 1 and 6.
 
 ## Interaction

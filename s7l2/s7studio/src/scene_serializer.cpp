@@ -20,7 +20,13 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <functional>
+#include <map>
+#include <optional>
+#include <set>
 #include <unordered_map>
+
+#include <QLineF>
 #include <vector>
 
 namespace s7studio::diagram {
@@ -200,26 +206,23 @@ auto declaredPortCounts(std::string_view type,
     return {};
 }
 
-auto portOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
+// Connectors snap to the scene grid, so ports are one grid step (or more)
+// apart and a node is tall enough for its ports.
+constexpr double kPortPitch = 20.0;
+
+auto nodeHeightFor(const int inputPorts, const int outputPorts) -> double
 {
-    const int effectivePortCount = std::max(portCount, 1);
-    return (nodeHeight * static_cast<double>(portIndex + 1)) / static_cast<double>(effectivePortCount + 1);
+    const int ports = std::max({inputPorts, outputPorts, 1});
+    return std::max(kDefaultNodeHeight, kPortPitch * static_cast<double>(ports + 1) + 20.0);
 }
 
-auto scopeInputPortOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
+// Ports evenly spaced on the grid and centred on the node.
+auto portOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
 {
-    if (portIndex <= 0 || portCount <= 1) {
-        return nodeHeight / 2.0;
-    }
-
-    constexpr double kMargin = 12.0;
-    const int extraPorts = std::max(1, portCount - 1);
-    const double centerY = nodeHeight / 2.0;
-    const double maxY = std::max(centerY, nodeHeight - kMargin);
-    const double lowerSpan = std::max(0.0, maxY - centerY);
-    const double step = lowerSpan / static_cast<double>(extraPorts);
-    const double y = centerY + (step * static_cast<double>(portIndex));
-    return std::clamp(y, centerY, maxY);
+    const int count = std::max(portCount, 1);
+    const double pitch = std::max(kPortPitch, std::floor(nodeHeight / (count + 1) / kPortPitch) * kPortPitch);
+    const double first = std::round((nodeHeight - pitch * (count - 1)) / 2.0 / kPortPitch) * kPortPitch;
+    return first + pitch * static_cast<double>(portIndex);
 }
 
 auto sortedSceneNodes(const QSchematic::Scene& scene) -> std::vector<std::shared_ptr<QSchematic::Items::Node>>
@@ -265,6 +268,203 @@ void appendOrthogonalWirePath(QSchematic::Items::Wire& wire, const QPointF& star
     wire.append_point(QPointF(midX, endPoint.y()));
     wire.append_point(endPoint);
 }
+
+
+// Layered automatic layout for diagrams without stored positions. Elements
+// are placed in columns by data flow (an element one column right of its
+// inputs; connections that close a loop are left out of the ordering), and
+// every wire runs in tracks of its own between the columns, so wires never
+// cross nodes and wires of different outputs never touch (QSchematic would
+// merge touching wires into one net). Wires that go further than the next
+// column, or back, use a lane of their own below all nodes.
+class LayeredLayout {
+public:
+    static constexpr double kColumnGap = 80.0;
+    static constexpr double kRowGap = 80.0;
+    static constexpr double kTrackStep = 20.0;
+
+    LayeredLayout(const std::vector<std::string>& nodes, const std::vector<ConnectionModel>& connections,
+                  const std::unordered_map<std::string, double>& heights)
+    {
+        std::unordered_map<std::string, std::vector<std::string>> successors;
+        std::unordered_map<std::string, std::size_t> order;
+        for (std::size_t index = 0; index < nodes.size(); ++index) {
+            order[nodes[index]] = index;
+            column_[nodes[index]] = 0;
+        }
+        for (const auto& connection : connections) {
+            if (order.contains(connection.fromElement) && order.contains(connection.toElement)) {
+                successors[connection.fromElement].push_back(connection.toElement);
+            }
+        }
+        // Depth-first search in declaration order; an edge to a node on the
+        // stack closes a loop and does not order the columns.
+        std::unordered_map<std::string, int> state; // 1: on stack, 2: done
+        std::vector<std::string> finished;
+        std::set<std::pair<std::string, std::string>> backEdges;
+        std::function<void(const std::string&)> visit = [&](const std::string& node) {
+            state[node] = 1;
+            for (const auto& next : successors[node]) {
+                if (state[next] == 1) {
+                    backEdges.insert({node, next});
+                } else if (state[next] == 0) {
+                    visit(next);
+                }
+            }
+            state[node] = 2;
+            finished.push_back(node);
+        };
+        for (const auto& node : nodes) {
+            if (state[node] == 0) {
+                visit(node);
+            }
+        }
+        // Longest path over the remaining (acyclic) edges, in topological order.
+        for (auto it = finished.rbegin(); it != finished.rend(); ++it) {
+            for (const auto& next : successors[*it]) {
+                if (!backEdges.contains({*it, next})) {
+                    column_[next] = std::max(column_[next], column_[*it] + 1);
+                }
+            }
+        }
+        // Rows: declaration order within a column, then ordered by the mean
+        // row of the inputs (fewer crossings).
+        std::map<int, std::vector<std::string>> columns;
+        for (const auto& node : nodes) {
+            columns[column_[node]].push_back(node);
+        }
+        std::unordered_map<std::string, std::vector<std::string>> predecessors;
+        for (const auto& connection : connections) {
+            predecessors[connection.toElement].push_back(connection.fromElement);
+        }
+        for (auto& [column, members] : columns) {
+            std::unordered_map<std::string, double> key;
+            for (std::size_t index = 0; index < members.size(); ++index) {
+                double sum = 0.0;
+                int count = 0;
+                for (const auto& from : predecessors[members[index]]) {
+                    if (const auto row = row_.find(from); row != row_.end() && column_[from] < column) {
+                        sum += row->second;
+                        ++count;
+                    }
+                }
+                key[members[index]] = count > 0 ? sum / count : static_cast<double>(index);
+            }
+            std::stable_sort(members.begin(), members.end(), [&](const auto& a, const auto& b) { return key[a] < key[b]; });
+            for (std::size_t index = 0; index < members.size(); ++index) {
+                row_[members[index]] = static_cast<int>(index);
+                rows_ = std::max(rows_, static_cast<int>(index) + 1);
+            }
+            columns_ = std::max(columns_, column + 1);
+        }
+        // Tracks needed in each gap (gap g lies right of column g; gap -1 is
+        // left of the first column), and lanes below the nodes.
+        std::map<int, std::set<std::string>> tracks;
+        int lanes = 0;
+        for (const auto& connection : connections) {
+            if (!order.contains(connection.fromElement) || !order.contains(connection.toElement)) {
+                continue;
+            }
+            const int from = column_[connection.fromElement];
+            const int to = column_[connection.toElement];
+            tracks[from].insert(outputKey(connection));
+            if (to != from + 1) {
+                tracks[to - 1].insert(connectionKey(connection));
+                ++lanes;
+            }
+        }
+        double x = gapWidth(tracks, -1);
+        for (int column = 0; column < columns_; ++column) {
+            columnLeft_.push_back(x);
+            x += kDefaultNodeWidth + gapWidth(tracks, column);
+        }
+        static_cast<void>(lanes);
+        // Rows as tall as their tallest node.
+        std::vector<double> rowHeight(static_cast<std::size_t>(std::max(rows_, 1)), kDefaultNodeHeight);
+        for (const auto& [node, row] : row_) {
+            if (const auto it = heights.find(node); it != heights.end()) {
+                rowHeight[static_cast<std::size_t>(row)] = std::max(rowHeight[static_cast<std::size_t>(row)], it->second);
+            }
+        }
+        double y = 0.0;
+        for (const auto height : rowHeight) {
+            rowTop_.push_back(y);
+            y += height + kRowGap;
+        }
+        bottom_ = y - kRowGap;
+    }
+
+    [[nodiscard]] QPointF position(const std::string& node) const
+    {
+        return {columnLeft_.at(static_cast<std::size_t>(column_.at(node))), rowTop_.at(static_cast<std::size_t>(row_.at(node)))};
+    }
+
+    // The route of a connection between connector positions. The first
+    // wire of an output starts at its connector; further wires of the same
+    // output are branches starting on that wire, at its bend onto the
+    // output's track (QSchematic attaches one wire per connector).
+    struct Route {
+        std::vector<QPointF> points;
+        bool branch{false};
+    };
+    [[nodiscard]] Route route(const ConnectionModel& connection, const QPointF& start, const QPointF& end)
+    {
+        const int from = column_.at(connection.fromElement);
+        const int to = column_.at(connection.toElement);
+        const double first = track(from, outputKey(connection));
+        const bool branch = !trunks_.insert(outputKey(connection)).second;
+        const QPointF junction(first, start.y());
+        std::vector<QPointF> points = branch ? std::vector<QPointF>{junction} : std::vector<QPointF>{start, junction};
+        if (to == from + 1) {
+            if (!branch && std::abs(start.y() - end.y()) < 0.5) {
+                return {{start, end}, false};
+            }
+            points.push_back({first, end.y()});
+        } else {
+            const double second = track(to - 1, connectionKey(connection));
+            const double lane = bottom_ + kTrackStep * static_cast<double>(++lanesUsed_);
+            points.push_back({first, lane});
+            points.push_back({second, lane});
+            points.push_back({second, end.y()});
+        }
+        if (std::abs(points.back().y() - end.y()) > 0.5 || std::abs(points.back().x() - end.x()) > 0.5) {
+            points.push_back(end);
+        }
+        return {std::move(points), branch};
+    }
+
+private:
+    static auto outputKey(const ConnectionModel& c) -> std::string { return c.fromElement + ":" + std::to_string(c.fromPort); }
+    static auto connectionKey(const ConnectionModel& c) -> std::string
+    {
+        return outputKey(c) + "->" + c.toElement + ":" + std::to_string(c.toPort);
+    }
+    static auto gapWidth(const std::map<int, std::set<std::string>>& tracks, const int gap) -> double
+    {
+        const auto it = tracks.find(gap);
+        const auto count = it == tracks.end() ? 0 : it->second.size();
+        return std::max(kColumnGap, kTrackStep * static_cast<double>(count + 1));
+    }
+    // x of the track for `key` in gap g (allocated on first use).
+    auto track(const int gap, const std::string& key) -> double
+    {
+        auto& used = trackIndex_[gap];
+        const auto [it, inserted] = used.emplace(key, used.size());
+        const double gapLeft = gap < 0 ? 0.0 : columnLeft_.at(static_cast<std::size_t>(gap)) + kDefaultNodeWidth;
+        return gapLeft + kTrackStep * static_cast<double>(it->second + 1);
+    }
+
+    std::unordered_map<std::string, int> column_;
+    std::unordered_map<std::string, int> row_;
+    int columns_{0};
+    int rows_{0};
+    std::vector<double> columnLeft_;
+    std::vector<double> rowTop_;
+    double bottom_{0.0};
+    int lanesUsed_{0};
+    std::map<int, std::map<std::string, std::size_t>> trackIndex_;
+    std::set<std::string> trunks_; // outputs whose first wire is placed
+};
 
 void attachWireEndpoints(QSchematic::Scene& scene,
                          const std::shared_ptr<QSchematic::Items::Wire>& wire,
@@ -506,6 +706,23 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         return;
     }
 
+    // Without any stored position the whole diagram is laid out by data flow.
+    const bool autoLayout = std::none_of(nodeOrder.begin(), nodeOrder.end(),
+                                         [&](const std::string& id) { return nodesById.at(id).hasExplicitPosition; });
+    std::optional<LayeredLayout> layered;
+    if (autoLayout) {
+        std::unordered_map<std::string, double> heights;
+        for (const auto& nodeId : nodeOrder) {
+            const auto& model = nodesById.at(nodeId);
+            heights[nodeId] = nodeHeightFor(model.inputPorts, model.type == "Scope" ? 0 : model.outputPorts);
+        }
+        layered.emplace(nodeOrder, connections, heights);
+        for (const auto& nodeId : nodeOrder) {
+            nodesById.at(nodeId).position = layered->position(nodeId);
+            nodesById.at(nodeId).hasExplicitPosition = true;
+        }
+    }
+
     int autoIndex = 0;
     const int autoColumnCount = std::max(1, static_cast<int>(std::ceil(std::sqrt(static_cast<double>(nodeOrder.size())))));
     for (const auto& nodeId : nodeOrder) {
@@ -573,14 +790,14 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             continue;
         }
 
-        node->setSize(kDefaultNodeWidth, kDefaultNodeHeight);
+        const int shownOutputs = model.type == "Scope" ? 0 : std::max(model.outputPorts, 0);
+        const double nodeHeight = nodeHeightFor(std::max(model.inputPorts, 0), shownOutputs);
+        node->setSize(kDefaultNodeWidth, nodeHeight);
 
         const int inputPortCount = std::max(model.inputPorts, 0);
         for (int portIndex = 0; portIndex < inputPortCount; ++portIndex) {
             auto connector = makeStyledConnector();
-            const double y = (model.type == "Scope")
-                ? scopeInputPortOffsetY(kDefaultNodeHeight, portIndex, inputPortCount)
-                : portOffsetY(kDefaultNodeHeight, portIndex, inputPortCount);
+            const double y = portOffsetY(nodeHeight, portIndex, inputPortCount);
             connector->setPos(0.0, y);
             node->addConnector(connector);
             wiring.inputs.push_back(connector);
@@ -589,7 +806,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         const int outputPortCount = model.type == "Scope" ? 0 : std::max(model.outputPorts, 0);
         for (int portIndex = 0; portIndex < outputPortCount; ++portIndex) {
             auto connector = makeStyledConnector();
-            connector->setPos(kDefaultNodeWidth, portOffsetY(kDefaultNodeHeight, portIndex, outputPortCount));
+            connector->setPos(kDefaultNodeWidth, portOffsetY(nodeHeight, portIndex, outputPortCount));
             node->addConnector(connector);
             wiring.outputs.push_back(connector);
         }
@@ -643,19 +860,29 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             } else if (connectionIndex < diagramWireRoutes.size()) {
                 route = &diagramWireRoutes[connectionIndex];
             }
+            // A branch starts on another wire of the same output, not at the
+            // output connector, and is attached at its input end only.
+            bool branch = false;
             if (route && route->size() >= 2) {
-                wire->append_point(startConnector->scenePos());
                 const auto& savedPoints = *route;
+                branch = QLineF(savedPoints.front(), startConnector->scenePos()).length() > 1.0;
+                wire->append_point(branch ? savedPoints.front() : startConnector->scenePos());
                 for (std::size_t pointIndex = 1; pointIndex + 1 < savedPoints.size(); ++pointIndex) {
                     wire->append_point(savedPoints[pointIndex]);
                 }
                 wire->append_point(endConnector->scenePos());
+            } else if (layered) {
+                auto planned = layered->route(connection, startConnector->scenePos(), endConnector->scenePos());
+                branch = planned.branch;
+                for (const auto& point : planned.points) {
+                    wire->append_point(point);
+                }
             } else {
                 appendOrthogonalWirePath(*wire, startConnector->scenePos(), endConnector->scenePos());
             }
 
             if (scene.addWire(wire)) {
-                attachWireEndpoints(scene, wire, startConnector, endConnector);
+                attachWireEndpoints(scene, wire, branch ? nullptr : startConnector, endConnector);
             }
         }
 
