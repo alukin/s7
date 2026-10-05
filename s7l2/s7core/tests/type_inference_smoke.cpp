@@ -309,7 +309,7 @@ void test_convert()
 
     s7::Schema no_mode{"no_mode"};
     add(no_mode, "c", "Convert", {{"from", "I16"}, {"to", "F32"}});
-    expect_error(no_mode, "explicit 'mode'", "Convert requires a mode");
+    expect_error(no_mode, "parameter 'mode' is required", "Convert requires a mode");
 }
 
 static_assert(s7::widens_exactly(SignalType::I8, SignalType::I32));
@@ -371,6 +371,66 @@ void test_accumulator_type()
 
 } // namespace
 
+// Parameters are checked against the element's declared parameters, and
+// omitted ones get their declared defaults.
+void test_parameter_checks()
+{
+    auto& registry = s7::ElementRegistry::instance();
+    if (!registry.find("ParamProbe")) {
+        s7::ElementMetadata metadata;
+        metadata.type_name = "ParamProbe";
+        metadata.output_ports = {{"out", "", s7::SignalType::F64, false}};
+        metadata.parameters = {
+            {"count", "int", "", nullptr, 1.0, 10.0, {}, true},
+            {"gain_db", "real", "", 0.0, -6.0, 6.0, {}, false},
+            {"enabled", "bool", "", true, std::nullopt, std::nullopt, {}, false},
+        };
+        registry.register_element(s7::ElementDescriptor(
+            "ParamProbe", [](const s7::ElementCreationContext&) { return std::make_unique<s7::Constant>(0.0); }, metadata));
+    }
+    auto single = [](const std::string& type, json::object params) {
+        s7::Schema schema{"params"};
+        add(schema, "e", type, std::move(params));
+        return schema;
+    };
+    expect_error(single("Gain", {{"factor", 2}, {"gian", 3}}), "Element 'e' (Gain): unknown parameter 'gian' (known:",
+                 "unknown parameter named");
+    expect_error(single("Gain", {{"overflow", "clamp"}}), "parameter 'overflow' must be one of saturate, wrap", "bad enum value");
+    // A type pin is read when the element is added, and refused there.
+    for (const auto& pin : {json::value(7), json::value("F65")}) {
+        std::string error;
+        try {
+            static_cast<void>(single("Gain", {{"type", pin}}));
+        } catch (const std::invalid_argument& ex) {
+            error = ex.what();
+        }
+        expect(error.find("Element 'e'") != std::string::npos, "bad type pin refused: " + error);
+    }
+    expect_error(single("ParamProbe", {{"count", 0}}), "parameter 'count' must be at least 1", "int below range");
+    expect_error(single("ParamProbe", {{"count", 11}}), "parameter 'count' must be at most 10", "int above range");
+    expect_error(single("ParamProbe", {{"count", 2.5}}), "parameter 'count' must be an integer", "wrong-typed integer");
+    expect_error(single("ParamProbe", {{"count", 2}, {"gain_db", "loud"}}), "parameter 'gain_db' must be a number", "wrong-typed real");
+    expect_error(single("ParamProbe", {{"count", 2}, {"gain_db", 7.5}}), "parameter 'gain_db' must be at most 6", "real above range");
+    expect_error(single("ParamProbe", {{"count", 2}, {"enabled", 1}}), "parameter 'enabled' must be true or false", "wrong-typed bool");
+    expect_error(single("ParamProbe", {}), "parameter 'count' is required", "missing required");
+    expect_error(single("Adder", {{"weights", 2}}), "parameter 'weights' must be an array", "wrong-typed array");
+    // Every problem of one element is reported at once.
+    expect_error(single("Gain", {{"factor", json::object{}}, {"bogus", 1}}), "parameter 'factor' must be a signal value; unknown parameter 'bogus'",
+                 "all problems listed");
+
+    // Declared defaults are applied: a Gain without parameters has factor 1,
+    // an AnalogOscillator its declared amplitude and rates.
+    s7::Schema defaults{"defaults"};
+    add(defaults, "one", "Constant", {{"value", 3.0}});
+    add(defaults, "gain", "Gain");
+    defaults.connect("one", 0, "gain", 0);
+    s7::NodeRuntime runtime{s7::Compiler::compile(defaults)};
+    runtime.step();
+    expect(runtime.real_output_of("gain") == 3.0, "omitted factor defaults to 1");
+    const auto checked = s7::checked_params("osc", s7::ElementRegistry::instance().find("AnalogOscillator")->metadata(), {});
+    expect(checked.at("amplitude").to_number<double>() == 1.0 && checked.contains("sample_rate_hz"), "defaults filled in");
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -382,6 +442,7 @@ try {
     test_integrators();
     test_convert();
     test_accumulator_type();
+    test_parameter_checks();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core type inference smoke: " << ex.what() << '\n';

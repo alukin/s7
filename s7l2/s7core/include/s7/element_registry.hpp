@@ -56,9 +56,17 @@ struct ElementCreationContext {
     [[nodiscard]] bool has_param(const std::string& name) const;
 };
 
+// Checks params against the element's declared parameters (type, range, enum
+// value, required, unknown names) and returns them with declared defaults
+// filled in. Throws std::invalid_argument naming the element and every bad
+// parameter.
+[[nodiscard]] boost::json::object checked_params(const std::string& id, const ElementMetadata& metadata,
+                                                 const boost::json::object& params);
+
 // A schema element created through a registry descriptor with JSON params.
 // Elements with type variables become generic (types inferred; a pin
-// parameter such as "type" fixes one); others are concrete.
+// parameter such as "type" fixes one); others are concrete. The factory
+// receives checked_params(): creating the element reports bad parameters.
 [[nodiscard]] ElementSpec make_element_spec(std::string id,
                                             const ElementDescriptor& descriptor,
                                             boost::json::object params);

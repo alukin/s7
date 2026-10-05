@@ -485,7 +485,7 @@ Run each endpoint's sockets on an `io_context` with asynchronous reads and write
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp).
 
-## P3: Element parameters are neither validated nor defaulted
+## P3: Element parameters are neither validated nor defaulted — fixed 2026-10-05
 
 ### Current problem
 
@@ -500,7 +500,9 @@ Validate params against metadata when an element is created from a descriptor (t
 - Wrong-typed, out-of-range, missing-required, and unknown parameters produce explicit validation errors naming element and parameter.
 - Omitted optional parameters receive their declared defaults.
 
-Relevant code: [element_registry.cpp](../s7core/src/element_registry.cpp:93), [builtin_element_registry.cpp](../s7core/src/builtin_element_registry.cpp).
+**Resolution:** `checked_params()` checks every parameter against `ElementMetadata::parameters` (unknown names, `required`, kind for `int` / `real` / `bool` / `string` / `enum` / `type` / `array` / `value`, `min` / `max`) and fills in declared defaults; `make_element_spec` passes the checked parameters to the factory, so every problem of an element is reported together in validation, naming the element and its type. A bad `type` pin is refused when the element is added, also naming it. All built-in, network and plugin elements and the example schemas pass; `schema_oscillator_gnuplot.json` lost a `NetSink` without consumer (it faulted under the lossless stream semantics). Test: `test_parameter_checks` in `s7core_type_inference_smoke`.
+
+Relevant code: [element_registry.cpp](../s7core/src/element_registry.cpp).
 
 ## P3: Validation and compilation instantiate elements repeatedly
 

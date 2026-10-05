@@ -79,7 +79,14 @@ meta.visual = {"box", "#4CAF50", 100, 50, ""};  // shape, color, width, height, 
 
 Parameter `type` values: `real`, `int`, `string`, `bool`, `enum` (with `enum_values`), `array`.
 
-The registry does **not** validate parameters or apply `default_value`; Studio only uses defaults to pre-fill its parameter dialog. Factories must handle missing parameters themselves (check `has_param` before `get_*`).
+Parameters are checked against these declarations whenever an element is created through `make_element_spec` (`checked_params()`), and the factory receives them with every declared `default_value` filled in. Problems are validation errors naming the element and every bad parameter:
+
+- an undeclared parameter name (so declare every parameter your factory reads);
+- a missing `required` parameter;
+- a value of the wrong kind: `int` (integral number), `real` (number), `bool`, `string`, `enum` (one of `enum_values`), `type` (a signal type name), `array`, or `value` (number, string or array; converted to the element's type by the factory with `signal_value_from_json<T>()`);
+- a number outside `min` / `max`.
+
+Other type names are not checked. A factory can rely on declared parameters being present when they have a default.
 
 Conventional categories and colors used by Studio: `basic` #4CAF50, `filters` #2196F3, `io` #FF9800, `network` #9C27B0 / #5C6BC0, `conversion` #00BCD4, `simulation` #FFEB3B, `spectral` #9C27B0, `sources` #42A5F5, `custom` #795548. Shapes: `box` (processing), `circle` (sources).
 

@@ -164,7 +164,9 @@ private:
                     collect_concrete(spec, element);
                 }
             } catch (const std::exception& ex) {
-                result_.errors.push_back("Element '" + spec.id + "': " + ex.what());
+                const std::string message = ex.what();
+                const auto prefix = "Element '" + spec.id + "'";
+                result_.errors.push_back(message.starts_with(prefix) ? message : prefix + ": " + message);
             }
             index_[spec.id] = elements_.size();
             elements_.push_back(std::move(element));

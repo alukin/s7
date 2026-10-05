@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <string>
 #include <algorithm>
+#include <cmath>
+#include <format>
 #include <limits>
 
 namespace s7 {
@@ -86,15 +88,123 @@ SignalType ElementCreationContext::type(const std::string_view variable) const {
     throw std::invalid_argument("Element '" + metadata.type_name + "' has no type variable '" + std::string(variable) + "'.");
 }
 
+namespace {
+
+auto is_integer(const boost::json::value& value) -> bool
+{
+    if (value.is_int64() || value.is_uint64()) {
+        return true;
+    }
+    return value.is_double() && std::isfinite(value.as_double()) && std::trunc(value.as_double()) == value.as_double();
+}
+
+// Why a value does not fit its declared parameter; empty if it does.
+auto parameter_problem(const ParameterSpec& spec, const boost::json::value& value) -> std::string
+{
+    const auto in_range = [&spec](const double number) -> std::string {
+        if (spec.min_value && number < *spec.min_value) {
+            return std::format("must be at least {}", *spec.min_value);
+        }
+        if (spec.max_value && number > *spec.max_value) {
+            return std::format("must be at most {}", *spec.max_value);
+        }
+        return {};
+    };
+    if (spec.type == "int") {
+        return is_integer(value) ? in_range(value.to_number<double>()) : "must be an integer";
+    }
+    if (spec.type == "real") {
+        return value.is_number() ? in_range(value.to_number<double>()) : "must be a number";
+    }
+    if (spec.type == "bool") {
+        return value.is_bool() ? "" : "must be true or false";
+    }
+    if (spec.type == "string") {
+        return value.is_string() ? "" : "must be a string";
+    }
+    if (spec.type == "enum") {
+        if (!value.is_string()) {
+            return "must be a string";
+        }
+        if (!spec.enum_values.empty() &&
+            std::find(spec.enum_values.begin(), spec.enum_values.end(), std::string_view(value.as_string())) == spec.enum_values.end()) {
+            std::string allowed;
+            for (const auto& option : spec.enum_values) {
+                allowed += (allowed.empty() ? "" : ", ") + option;
+            }
+            return "must be one of " + allowed;
+        }
+        return {};
+    }
+    if (spec.type == "type") {
+        if (!value.is_string()) {
+            return "must be a type name such as \"F64\"";
+        }
+        try {
+            static_cast<void>(parse_signal_type(std::string_view(value.as_string())));
+        } catch (const std::exception& ex) {
+            return ex.what();
+        }
+        return {};
+    }
+    if (spec.type == "array") {
+        return value.is_array() ? "" : "must be an array";
+    }
+    if (spec.type == "value") {
+        // A value of the element's signal type, checked when its type is known.
+        return value.is_number() || value.is_string() || value.is_array() || value.is_bool() ? "" : "must be a signal value";
+    }
+    return {};
+}
+
+} // namespace
+
+boost::json::object checked_params(const std::string& id, const ElementMetadata& metadata, const boost::json::object& params)
+{
+    std::vector<std::string> problems;
+    for (const auto& [name, value] : params) {
+        const auto spec = std::find_if(metadata.parameters.begin(), metadata.parameters.end(),
+                                       [&](const ParameterSpec& candidate) { return candidate.name == name; });
+        if (spec == metadata.parameters.end()) {
+            std::string known;
+            for (const auto& parameter : metadata.parameters) {
+                known += (known.empty() ? "" : ", ") + parameter.name;
+            }
+            problems.push_back("unknown parameter '" + std::string(name) + "'" + (known.empty() ? " (it has none)" : " (known: " + known + ")"));
+        } else if (const auto problem = parameter_problem(*spec, value); !problem.empty()) {
+            problems.push_back("parameter '" + std::string(name) + "' " + problem);
+        }
+    }
+    auto result = params;
+    for (const auto& spec : metadata.parameters) {
+        if (result.contains(spec.name)) {
+            continue;
+        }
+        if (spec.required) {
+            problems.push_back("parameter '" + spec.name + "' is required");
+        } else if (!spec.default_value.is_null()) {
+            result[spec.name] = spec.default_value;
+        }
+    }
+    if (!problems.empty()) {
+        std::string message = "Element '" + id + "' (" + metadata.type_name + "): ";
+        for (std::size_t index = 0; index < problems.size(); ++index) {
+            message += (index == 0 ? "" : "; ") + problems[index];
+        }
+        throw std::invalid_argument(message + ".");
+    }
+    return result;
+}
+
 ElementSpec make_element_spec(std::string id, const ElementDescriptor& descriptor, boost::json::object params) {
     // The spec keeps its own copy: registry storage may move when more
     // elements are registered.
     auto shared = std::make_shared<const ElementDescriptor>(descriptor);
     const auto& metadata = shared->metadata();
     if (metadata.type_variables.empty()) {
-        return ElementSpec{std::move(id),
-                           [shared, params = std::move(params)] {
-                               return shared->create(ElementCreationContext{shared->metadata(), params});
+        return ElementSpec{id,
+                           [shared, id, params = std::move(params)] {
+                               return shared->create(ElementCreationContext{shared->metadata(), checked_params(id, shared->metadata(), params)});
                            },
                            {}};
     }
@@ -126,7 +236,12 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
                 throw std::invalid_argument("Element '" + id + "': parameter '" + variable.pin_parameter +
                                             "' must be a type name such as \"F64\".");
             }
-            resolved.pinned = parse_signal_type(std::string_view(pin->get_string()));
+            try {
+                resolved.pinned = parse_signal_type(std::string_view(pin->get_string()));
+            } catch (const std::invalid_argument& ex) {
+                throw std::invalid_argument("Element '" + id + "' (" + metadata.type_name + "): parameter '" +
+                                            variable.pin_parameter + "': " + ex.what());
+            }
         } else if (!variable.defaults_to.empty()) {
             alias[index] = index_of(variable.defaults_to);
             resolved.allowed = SignalTypeSet::all(); // unused: its ports follow the other variable
@@ -150,12 +265,12 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     for (const auto& port : metadata.output_ports) {
         generic.output_rules.push_back(rule_of(port.type_rule, port.type));
     }
-    generic.create = [shared, alias, params = std::move(params)](const std::span<const SignalType> types) {
+    generic.create = [shared, alias, id, params = std::move(params)](const std::span<const SignalType> types) {
         std::vector<SignalType> effective(types.begin(), types.end());
         for (std::size_t index = 0; index < effective.size(); ++index) {
             effective[index] = types[alias[index]];
         }
-        return shared->create(ElementCreationContext{shared->metadata(), params, effective});
+        return shared->create(ElementCreationContext{shared->metadata(), checked_params(id, shared->metadata(), params), effective});
     };
     return ElementSpec{std::move(id), {}, std::move(generic)};
 }
