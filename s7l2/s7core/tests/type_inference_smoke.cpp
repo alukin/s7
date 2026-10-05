@@ -163,6 +163,58 @@ void test_wide_and_complex_types()
     expect(squared.re == 0 && squared.im == 127, "CI8 product saturates");
 }
 
+void test_integrators()
+{
+    // Rectangle rule on a constant and trapezoid rule on the resulting ramp:
+    // x[n] = n*dt, and the trapezoid rule is exact for linear input: y[n] = (n*dt)^2 / 2.
+    s7::Schema schema{"integrators"};
+    add(schema, "one", "Constant", {{"value", 1}});
+    add(schema, "ramp", "EulerIntegrator", {{"dt", 0.5}});
+    add(schema, "area", "TrapezoidIntegrator", {{"dt", 0.5}});
+    schema.connect("one", 0, "ramp", 0);
+    schema.connect("ramp", 0, "area", 0);
+    s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+    for (int n = 0; n < 6; ++n) {
+        runtime.step();
+        const double t = n * 0.5;
+        expect(runtime.real_output_of("ramp") == t, "Euler ramp at step " + std::to_string(n));
+        expect(runtime.real_output_of("area") == t * t / 2, "trapezoid area at step " + std::to_string(n));
+    }
+
+    // x' = v, v' = -x closed through two EulerIntegrators, no Delay, in F128.
+    // Forward Euler multiplies x^2 + v^2 by exactly (1 + dt^2) per step.
+    s7::Schema ode{"harmonic"};
+    add(ode, "x", "EulerIntegrator", {{"type", "F128"}, {"dt", 0.001}, {"initial_value", 1}});
+    add(ode, "v", "EulerIntegrator", {{"dt", 0.001}});
+    add(ode, "minus", "Gain", {{"factor", -1}});
+    ode.connect("v", 0, "x", 0);
+    ode.connect("x", 0, "minus", 0);
+    ode.connect("minus", 0, "v", 0);
+    s7::NodeRuntime oscillator{s7::Compiler::compile(ode)};
+    constexpr int steps = 1000;
+    for (int n = 0; n <= steps; ++n) {
+        oscillator.step();
+    }
+    const auto x = oscillator.output_of<SignalType::F128>("x");
+    const auto v = oscillator.output_of<SignalType::F128>("v");
+    std::float128_t growth = 1;
+    const auto dt = static_cast<std::float128_t>(0.001); // the parameter's value, as converted
+    for (int n = 0; n < steps; ++n) {
+        growth *= 1 + dt * dt;
+    }
+    const auto error = (x * x + v * v) - growth;
+    expect(error < 1e-28f128 && error > -1e-28f128, "F128 Euler energy growth matches (1 + dt^2)^n");
+    expect(oscillator.output_type_of("minus") == SignalType::F128, "F128 inferred through the loop");
+
+    // A loop closed only through TrapezoidIntegrator has no causal memory.
+    s7::Schema algebraic{"algebraic"};
+    add(algebraic, "y", "TrapezoidIntegrator", {{"dt", 0.1}});
+    add(algebraic, "minus", "Gain", {{"factor", -1}});
+    algebraic.connect("y", 0, "minus", 0);
+    algebraic.connect("minus", 0, "y", 0);
+    expect_error(algebraic, "Cycle detected without causal memory", "trapezoid loop needs causal memory");
+}
+
 } // namespace
 
 int main()
@@ -173,6 +225,7 @@ try {
     test_feedback_loop();
     test_conflicts_and_errors();
     test_wide_and_complex_types();
+    test_integrators();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core type inference smoke: " << ex.what() << '\n';

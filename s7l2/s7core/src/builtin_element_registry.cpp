@@ -91,16 +91,14 @@ signal_storage_t<T> param_value(const ElementCreationContext& ctx, const std::st
     return signal_value_from_json<T>(ctx.params.at(name), parameter_label(ctx, name));
 }
 
-// An array parameter of values of type T; [1, 1] when absent.
+// An array parameter of at least min_size values of type T.
 template <SignalType T>
-std::vector<signal_storage_t<T>> param_values(const ElementCreationContext& ctx, const std::string& name)
+std::vector<signal_storage_t<T>> param_array(const ElementCreationContext& ctx, const std::string& name, const std::size_t min_size)
 {
-    if (!ctx.has_param(name)) {
-        return {SignalOps<T>::one(), SignalOps<T>::one()};
-    }
     const auto* array = ctx.params.at(name).if_array();
-    if (!array || array->size() < 2) {
-        throw std::invalid_argument(parameter_label(ctx, name) + " must be an array of at least two values.");
+    if (!array || array->size() < min_size) {
+        throw std::invalid_argument(parameter_label(ctx, name) + " must be an array of at least " + std::to_string(min_size) +
+                                    " value(s).");
     }
     std::vector<signal_storage_t<T>> values;
     for (std::size_t index = 0; index < array->size(); ++index) {
@@ -109,41 +107,26 @@ std::vector<signal_storage_t<T>> param_values(const ElementCreationContext& ctx,
     return values;
 }
 
+// Per-input weights/factors: [1, 1] when absent, at least two values.
+template <SignalType T>
+std::vector<signal_storage_t<T>> param_values(const ElementCreationContext& ctx, const std::string& name)
+{
+    if (!ctx.has_param(name)) {
+        return {SignalOps<T>::one(), SignalOps<T>::one()};
+    }
+    return param_array<T>(ctx, name, 2);
+}
+
+// Real and complex floating-point types.
+SignalTypeSet floating_types()
+{
+    return SignalTypeSet::where([](const SignalType type) { return signal_type_info(type).is_floating(); });
+}
+
 [[noreturn]] std::unique_ptr<Element> unsupported_type(const ElementCreationContext& ctx)
 {
     throw std::invalid_argument(ctx.metadata.type_name + " does not support type " +
                                 std::string(signal_type_name(ctx.type())) + ".");
-}
-
-auto parseRealArrayParam(const boost::json::object& params,
-                        const char* key,
-                        std::vector<RealValue> fallback) -> std::vector<RealValue>
-{
-    const auto it = params.find(key);
-    if (it == params.end() || !it->value().is_array()) {
-        return fallback;
-    }
-
-    const auto& values = it->value().as_array();
-    if (values.empty()) {
-        return fallback;
-    }
-
-    std::vector<RealValue> parsed;
-    parsed.reserve(values.size());
-    for (const auto& value : values) {
-        if (value.is_double()) {
-            parsed.push_back(value.as_double());
-        } else if (value.is_int64()) {
-            parsed.push_back(static_cast<RealValue>(value.as_int64()));
-        } else if (value.is_uint64()) {
-            parsed.push_back(static_cast<RealValue>(value.as_uint64()));
-        } else {
-            throw std::invalid_argument(std::string("Parameter '") + key + "' must be an array of numbers.");
-        }
-    }
-
-    return parsed;
 }
 
 } // namespace
@@ -254,30 +237,89 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "Integrator",
         [](const ElementCreationContext& ctx) {
-            const double initial_value = ctx.has_param("initial_value") ? ctx.get_real("initial_value") : 0.0;
-            return std::make_unique<Integrator>(initial_value);
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (has_arithmetic(T)) {
+                    return std::make_unique<IntegratorT<T>>(param_value<T>(ctx, "initial_value", {}), overflow_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("Integrator", "Integrator", "Accumulate input", "filters", 1, 1);
-            m.parameters.push_back({"initial_value", "real", "Initial output value", 0.0, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("Integrator", "Integrator (running sum)",
+                                           "Running sum y[n] = y[n-1] + x[n], no time step; see EulerIntegrator / TrapezoidIntegrator",
+                                           "filters", 1, 1, signal_type_sets::arithmetic);
+            m.parameters.push_back({"initial_value", "value", "Initial output value", 0, std::nullopt, std::nullopt, {}, false});
+            add_overflow_parameter(m);
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "EulerIntegrator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_floating()) {
+                    return std::make_unique<EulerIntegratorT<T>>(
+                        param_value<component_signal_type(T)>(ctx, "dt", component_storage_t<T>(1)),
+                        param_value<T>(ctx, "initial_value", {}));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("EulerIntegrator", "Euler Integrator",
+                                           "Forward Euler (rectangle rule): y[n+1] = y[n] + dt*x[n]; causal memory, can close loops",
+                                           "filters", 1, 1, floating_types());
+            m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"initial_value", "value", "y[0]", 0, std::nullopt, std::nullopt, {}, false});
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "TrapezoidIntegrator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_floating()) {
+                    return std::make_unique<TrapezoidIntegratorT<T>>(
+                        param_value<component_signal_type(T)>(ctx, "dt", component_storage_t<T>(1)),
+                        param_value<T>(ctx, "initial_value", {}));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("TrapezoidIntegrator", "Trapezoid Integrator",
+                                           "Trapezoidal rule: y[n] = y[n-1] + dt/2*(x[n] + x[n-1]); direct feedthrough",
+                                           "filters", 1, 1, floating_types());
+            m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"initial_value", "value", "y[0]", 0, std::nullopt, std::nullopt, {}, false});
             return m;
         }()));
 
     registry.register_element(ElementDescriptor(
         "AnalogOscillator",
         [](const ElementCreationContext& ctx) {
-            const double amplitude = ctx.has_param("amplitude") ? ctx.get_real("amplitude") : 1.0;
-            const double frequency_hz = ctx.has_param("frequency_hz") ? ctx.get_real("frequency_hz") : 1.0;
-            const double sample_rate_hz = ctx.has_param("sample_rate_hz") ? ctx.get_real("sample_rate_hz") : 1.0;
-            const double phase = ctx.has_param("phase") ? ctx.get_real("phase") : 0.0;
-            return std::make_unique<AnalogOscillator>(amplitude, frequency_hz, sample_rate_hz, phase);
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    using V = signal_storage_t<T>;
+                    return std::make_unique<AnalogOscillatorT<T>>(param_value<T>(ctx, "amplitude", V(1)),
+                                                                  param_value<T>(ctx, "frequency_hz", V(1)),
+                                                                  param_value<T>(ctx, "sample_rate_hz", V(1)),
+                                                                  param_value<T>(ctx, "phase", V(0)));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("AnalogOscillator", "Analog Oscillator", "Sinusoidal source", "sources", 0, 1);
-            m.parameters.push_back({"amplitude", "real", "Signal amplitude", 1.0, 0.0, std::nullopt, {}, false});
-            m.parameters.push_back({"frequency_hz", "real", "Frequency in Hz", 1.0, 0.0, std::nullopt, {}, false});
-            m.parameters.push_back({"sample_rate_hz", "real", "Sample rate in Hz", 1.0, 0.0, std::nullopt, {}, false});
-            m.parameters.push_back({"phase", "real", "Initial phase", 0.0, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("AnalogOscillator", "Analog Oscillator", "Sinusoidal source, computed in its type",
+                                           "sources", 0, 1, signal_type_sets::floating);
+            m.parameters.push_back({"amplitude", "value", "Signal amplitude", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"frequency_hz", "value", "Frequency in Hz", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"sample_rate_hz", "value", "Sample rate in Hz", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"phase", "value", "Initial phase (radians)", 0, std::nullopt, std::nullopt, {}, false});
             m.visual.shape = "circle";
             m.visual.color = "#42A5F5";
             return m;
@@ -286,12 +328,21 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "FirFilter",
         [](const ElementCreationContext& ctx) {
-            auto taps = parseRealArrayParam(ctx.params, "taps", {1.0});
-            return std::make_unique<FirFilter>(std::move(taps));
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (has_arithmetic(T)) {
+                    auto taps = ctx.has_param("taps") ? param_array<T>(ctx, "taps", 1)
+                                                      : std::vector<signal_storage_t<T>>{SignalOps<T>::one()};
+                    return std::make_unique<FirFilterT<T>>(std::move(taps), overflow_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("FirFilter", "FIR Filter", "Finite impulse response filter", "filters", 1, 1);
-            m.parameters.push_back({"taps", "array", "Filter taps; at least one value", boost::json::array{1.0}, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("FirFilter", "FIR Filter", "Finite impulse response filter", "filters", 1, 1,
+                                           signal_type_sets::arithmetic);
+            m.parameters.push_back({"taps", "array", "Filter taps, of the element's type; at least one", boost::json::array{1}, std::nullopt, std::nullopt, {}, false});
+            add_overflow_parameter(m);
             m.input_ports[0].description = "Input signal sample.";
             m.output_ports[0].description = "Filtered output sample.";
             return m;
@@ -300,75 +351,96 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "IirFilter",
         [](const ElementCreationContext& ctx) {
-            const double b0 = ctx.has_param("b0") ? ctx.get_real("b0") : 1.0;
-            const double b1 = ctx.has_param("b1") ? ctx.get_real("b1") : 0.0;
-            const double a1 = ctx.has_param("a1") ? ctx.get_real("a1") : 0.0;
-            return std::make_unique<IirFilter>(b0, b1, a1);
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_floating()) {
+                    using V = signal_storage_t<T>;
+                    return std::make_unique<IirFilterT<T>>(param_value<T>(ctx, "b0", V(1)), param_value<T>(ctx, "b1", V(0)),
+                                                           param_value<T>(ctx, "a1", V(0)));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("IirFilter", "IIR Filter", "First-order recursive filter", "filters", 1, 1);
-            m.parameters.push_back({"b0", "real", "Feedforward coefficient b0", 1.0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"b1", "real", "Feedforward coefficient b1", 0.0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"a1", "real", "Feedback coefficient a1", 0.0, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("IirFilter", "IIR Filter", "First-order recursive filter", "filters", 1, 1, floating_types());
+            m.parameters.push_back({"b0", "value", "Feedforward coefficient b0", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"b1", "value", "Feedforward coefficient b1", 0, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"a1", "value", "Feedback coefficient a1", 0, std::nullopt, std::nullopt, {}, false});
             m.input_ports[0].description = "Input signal sample.";
             m.output_ports[0].description = "Filtered output sample.";
             return m;
         }()));
 
-
     registry.register_element(ElementDescriptor(
         "ReImToComplex",
-        [](const ElementCreationContext&) {
-            return std::make_unique<ReImToComplex>();
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_complex()) {
+                    return std::make_unique<ReImToComplexT<T>>();
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("ReImToComplex", "Re/Im to Complex", "Combine real and imaginary channels", "conversion", 2, 1);
+            auto m = make_generic_metadata("ReImToComplex", "Re/Im to Complex", "Combine real and imaginary channels", "conversion", 2, 1,
+                                           signal_type_sets::complex_all);
             m.input_ports[0].name = "re";
             m.input_ports[0].description = "Real part.";
-            m.input_ports[0].type = SignalType::F64;
+            m.input_ports[0].type_rule = "component(T)";
             m.input_ports[1].name = "im";
             m.input_ports[1].description = "Imaginary part.";
-            m.input_ports[1].type = SignalType::F64;
+            m.input_ports[1].type_rule = "component(T)";
             m.output_ports[0].description = "Complex output.";
-            m.output_ports[0].type = SignalType::C64;
             return m;
         }()));
 
     registry.register_element(ElementDescriptor(
         "ComplexToReIm",
-        [](const ElementCreationContext&) {
-            return std::make_unique<ComplexToReIm>();
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_complex()) {
+                    return std::make_unique<ComplexToReImT<T>>();
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("ComplexToReIm", "Complex to Re/Im", "Split complex input into real and imaginary channels", "conversion", 1, 2);
-            m.input_ports[0].name = "in";
+            auto m = make_generic_metadata("ComplexToReIm", "Complex to Re/Im", "Split complex input into real and imaginary channels",
+                                           "conversion", 1, 2, signal_type_sets::complex_all);
             m.input_ports[0].description = "Complex input.";
-            m.input_ports[0].type = SignalType::C64;
             m.output_ports[0].name = "re";
             m.output_ports[0].description = "Real output.";
-            m.output_ports[0].type = SignalType::F64;
+            m.output_ports[0].type_rule = "component(T)";
             m.output_ports[1].name = "im";
             m.output_ports[1].description = "Imaginary output.";
-            m.output_ports[1].type = SignalType::F64;
+            m.output_ports[1].type_rule = "component(T)";
             return m;
         }()));
 
     registry.register_element(ElementDescriptor(
         "ComplexToMagnitudePhase",
-        [](const ElementCreationContext&) {
-            return std::make_unique<ComplexToMagnitudePhase>();
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::ComplexFloat) {
+                    return std::make_unique<ComplexToMagnitudePhaseT<T>>();
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("ComplexToMagnitudePhase", "Complex to Magnitude/Phase", "Convert complex input to magnitude and phase", "conversion", 1, 2);
-            m.input_ports[0].name = "in";
+            auto m = make_generic_metadata("ComplexToMagnitudePhase", "Complex to Magnitude/Phase",
+                                           "Magnitude and phase of a complex input, in its component type", "conversion", 1, 2,
+                                           signal_type_sets::complex_floating);
             m.input_ports[0].description = "Complex input.";
-            m.input_ports[0].type = SignalType::C64;
             m.output_ports[0].name = "magnitude";
             m.output_ports[0].description = "Magnitude output.";
-            m.output_ports[0].type = SignalType::F64;
+            m.output_ports[0].type_rule = "component(T)";
             m.output_ports[1].name = "phase";
             m.output_ports[1].description = "Phase output (radians).";
-            m.output_ports[1].type = SignalType::F64;
+            m.output_ports[1].type_rule = "component(T)";
             return m;
         }()));
 

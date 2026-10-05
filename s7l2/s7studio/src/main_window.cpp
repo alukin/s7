@@ -341,7 +341,9 @@ auto elementDescriptionForType(const QString& type) -> QString
     if (type == "Adder") return QStringLiteral("Adder: weighted sum of N inputs.");
     if (type == "Multiply") return QStringLiteral("Multiply: product of N inputs.");
     if (type == "Delay") return QStringLiteral("Delay: outputs previous input sample (stateful).");
-    if (type == "Integrator") return QStringLiteral("Integrator: accumulates input over time.");
+    if (type == "Integrator") return QStringLiteral("Integrator: running sum y[n] = y[n-1] + x[n] (no time step).");
+    if (type == "EulerIntegrator") return QStringLiteral("Euler integrator: rectangle rule y[n+1] = y[n] + dt*x[n]; can close feedback loops.");
+    if (type == "TrapezoidIntegrator") return QStringLiteral("Trapezoid integrator: y[n] = y[n-1] + dt/2*(x[n] + x[n-1]).");
     if (type == "AnalogOscillator") return QStringLiteral("Analog oscillator: sinusoidal source.");
     if (type == "Scope") return QStringLiteral("Scope observer: records selected channels for plotting.");
     if (type == "FirFilter") return QStringLiteral("FIR filter: finite impulse response filter.");

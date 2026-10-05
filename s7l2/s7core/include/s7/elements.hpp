@@ -5,6 +5,8 @@
 #include "s7/signal_values.hpp"
 
 #include <cmath>
+#include <numbers>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -173,27 +175,6 @@ private:
     value_type output_value_;
 };
 
-class Integrator final : public Element {
-public:
-    explicit Integrator(RealValue initial_value = 0.0);
-    void step() override;
-
-private:
-    RealValue output_value_;
-};
-
-class AnalogOscillator final : public Element {
-public:
-    AnalogOscillator(RealValue amplitude, RealValue frequency_hz, RealValue sample_rate_hz, RealValue phase = 0.0);
-    void step() override;
-
-private:
-    RealValue amplitude_;
-    RealValue phase_;
-    RealValue phase_increment_;
-    RealValue output_value_;
-};
-
 using Constant = ConstantT<SignalType::F64>;
 using ComplexConstant = ConstantT<SignalType::C64>;
 
@@ -209,27 +190,302 @@ using ComplexMultiply = MultiplyT<SignalType::C64>;
 using Delay = DelayT<SignalType::F64>;
 using ComplexDelay = DelayT<SignalType::C64>;
 
-class FirFilter final : public Element {
+// Real component type of a type: the type itself for real types, the
+// component of a complex type (C64 -> double).
+template <SignalType Type>
+using component_storage_t = signal_storage_t<component_signal_type(Type)>;
+
+/// Integrator: running sum y[n] = y[n-1] + x[n], without a time step (an
+/// accumulator). Arithmetic types. For numerical integration over time use
+/// EulerIntegrator or TrapezoidIntegrator.
+template <SignalType Type>
+class IntegratorT final : public Element {
 public:
-    explicit FirFilter(std::vector<RealValue> taps);
-    void step() override;
+    using value_type = signal_storage_t<Type>;
+    using Ops = SignalOps<Type>;
+
+    explicit IntegratorT(value_type initial_value = {}, Overflow overflow = Overflow::Saturate)
+        : Element("Integrator", true)
+        , overflow_(overflow)
+        , output_value_(initial_value)
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        output_value_ = Ops::add(output_value_, read_input<value_type>(0), overflow_);
+    }
 
 private:
-    std::vector<RealValue> taps_;
-    std::vector<RealValue> history_;
-    RealValue output_value_;
+    Overflow overflow_;
+    value_type output_value_;
 };
 
-class IirFilter final : public Element {
+/// EulerIntegrator: forward Euler, rectangle rule: y[n+1] = y[n] + dt * x[n],
+/// y[0] = initial_value. The output depends only on earlier inputs, so this is
+/// causal memory: it can close a feedback loop (ODE models) without a Delay.
+/// Floating-point and complex floating-point types.
+template <SignalType Type>
+class EulerIntegratorT final : public Element {
 public:
-    IirFilter(RealValue b0, RealValue b1, RealValue a1);
-    void step() override;
+    using value_type = signal_storage_t<Type>;
+    using step_type = component_storage_t<Type>;
+
+    explicit EulerIntegratorT(step_type dt = step_type(1), value_type initial_value = {})
+        : Element("EulerIntegrator", true, Feedthrough::None)
+        , dt_(dt)
+        , output_value_(initial_value)
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    // output_value_ holds y[n] here; NodeRuntime publishes y[n+1] at the next step.
+    void step() override
+    {
+        output_value_ = output_value_ + read_input<value_type>(0) * dt_;
+    }
 
 private:
-    RealValue b0_, b1_, a1_;
-    RealValue x1_{0.0}, y1_{0.0};
-    RealValue output_value_;
+    step_type dt_;
+    value_type output_value_;
 };
+
+/// TrapezoidIntegrator: trapezoidal rule: y[n] = y[n-1] + dt/2 * (x[n] + x[n-1]),
+/// y[0] = initial_value (the first step only records x[0]). Direct
+/// feedthrough: a feedback loop through it still needs causal memory.
+/// Floating-point and complex floating-point types.
+template <SignalType Type>
+class TrapezoidIntegratorT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using step_type = component_storage_t<Type>;
+
+    explicit TrapezoidIntegratorT(step_type dt = step_type(1), value_type initial_value = {})
+        : Element("TrapezoidIntegrator", true)
+        , half_dt_(dt / step_type(2))
+        , output_value_(initial_value)
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto x = read_input<value_type>(0);
+        if (has_previous_) {
+            output_value_ = output_value_ + (x + previous_input_) * half_dt_;
+        }
+        previous_input_ = x;
+        has_previous_ = true;
+    }
+
+private:
+    step_type half_dt_;
+    value_type output_value_;
+    value_type previous_input_{};
+    bool has_previous_{false};
+};
+
+/// FIR filter: y[n] = sum_k taps[k] * x[n-k]. Arithmetic types.
+template <SignalType Type>
+class FirFilterT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using Ops = SignalOps<Type>;
+
+    explicit FirFilterT(std::vector<value_type> taps, Overflow overflow = Overflow::Saturate)
+        : Element("FirFilter", true)
+        , taps_(std::move(taps))
+        , history_(taps_.size(), value_type{})
+        , overflow_(overflow)
+    {
+        if (taps_.empty()) {
+            throw std::invalid_argument("FirFilter requires at least one tap.");
+        }
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        for (std::size_t index = history_.size() - 1; index > 0; --index) {
+            history_[index] = history_[index - 1];
+        }
+        history_[0] = read_input<value_type>(0);
+        value_type sum = Ops::zero();
+        for (std::size_t index = 0; index < taps_.size(); ++index) {
+            sum = Ops::add(sum, Ops::multiply(taps_[index], history_[index], overflow_), overflow_);
+        }
+        output_value_ = sum;
+    }
+
+private:
+    std::vector<value_type> taps_;
+    std::vector<value_type> history_;
+    Overflow overflow_;
+    value_type output_value_{};
+};
+
+/// First-order IIR filter: y[n] = b0 x[n] + b1 x[n-1] - a1 y[n-1].
+/// Floating-point and complex floating-point types.
+template <SignalType Type>
+class IirFilterT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    IirFilterT(value_type b0, value_type b1, value_type a1)
+        : Element("IirFilter", true)
+        , b0_(b0), b1_(b1), a1_(a1)
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto x = read_input<value_type>(0);
+        const value_type y = b0_ * x + b1_ * x1_ - a1_ * y1_;
+        x1_ = x;
+        y1_ = y;
+        output_value_ = y;
+    }
+
+private:
+    value_type b0_, b1_, a1_;
+    value_type x1_{}, y1_{};
+    value_type output_value_{};
+};
+
+/// Sine source: amplitude * sin(phase), phase advancing by
+/// 2 pi frequency / sample_rate per step, computed in the element's type.
+/// Floating-point types.
+template <SignalType Type>
+class AnalogOscillatorT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    AnalogOscillatorT(value_type amplitude, value_type frequency_hz, value_type sample_rate_hz, value_type phase = {})
+        : Element("AnalogOscillator", true)
+        , amplitude_(amplitude)
+        , phase_(phase)
+    {
+        if (!(sample_rate_hz > value_type(0))) {
+            throw std::invalid_argument("AnalogOscillator requires a positive sample rate.");
+        }
+        phase_increment_ = value_type(2) * std::numbers::pi_v<value_type> * frequency_hz / sample_rate_hz;
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        constexpr auto two_pi = value_type(2) * std::numbers::pi_v<value_type>;
+        output_value_ = amplitude_ * std::sin(phase_);
+        phase_ += phase_increment_;
+        if (phase_ > two_pi || phase_ < -two_pi) {
+            phase_ = std::fmod(phase_, two_pi);
+        }
+    }
+
+private:
+    value_type amplitude_;
+    value_type phase_;
+    value_type phase_increment_{};
+    value_type output_value_{};
+};
+
+/// Joins real and imaginary parts: inputs component(T), output T. Complex types.
+template <SignalType Type>
+class ReImToComplexT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using part_type = component_storage_t<Type>;
+
+    ReImToComplexT() : Element("ReImToComplex")
+    {
+        register_input(0, port_names::re, component_signal_type(Type), nullptr);
+        register_input(1, port_names::im, component_signal_type(Type), nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        output_value_ = value_type{read_input<part_type>(0), read_input<part_type>(1)};
+    }
+
+private:
+    value_type output_value_{};
+};
+
+/// Splits a complex value: input T, outputs component(T). Complex types.
+template <SignalType Type>
+class ComplexToReImT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using part_type = component_storage_t<Type>;
+
+    ComplexToReImT() : Element("ComplexToReIm")
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::re, component_signal_type(Type), &re_);
+        register_output(1, port_names::im, component_signal_type(Type), &im_);
+    }
+
+    void step() override
+    {
+        const auto value = read_input<value_type>(0);
+        if constexpr (signal_type_info(Type).kind == SignalKind::ComplexFloat) {
+            re_ = value.real();
+            im_ = value.imag();
+        } else {
+            re_ = value.re;
+            im_ = value.im;
+        }
+    }
+
+private:
+    part_type re_{};
+    part_type im_{};
+};
+
+/// Magnitude and phase (radians) of a complex value, in its component type.
+/// Complex floating-point types.
+template <SignalType Type>
+class ComplexToMagnitudePhaseT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using part_type = component_storage_t<Type>;
+
+    ComplexToMagnitudePhaseT() : Element("ComplexToMagnitudePhase")
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, "magnitude", component_signal_type(Type), &magnitude_);
+        register_output(1, "phase", component_signal_type(Type), &phase_);
+    }
+
+    void step() override
+    {
+        const auto value = read_input<value_type>(0);
+        magnitude_ = std::abs(value);
+        phase_ = std::arg(value);
+    }
+
+private:
+    part_type magnitude_{};
+    part_type phase_{};
+};
+
+using Integrator = IntegratorT<SignalType::F64>;
+using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
+using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
+using FirFilter = FirFilterT<SignalType::F64>;
+using IirFilter = IirFilterT<SignalType::F64>;
+using AnalogOscillator = AnalogOscillatorT<SignalType::F64>;
+using ReImToComplex = ReImToComplexT<SignalType::C64>;
+using ComplexToReIm = ComplexToReImT<SignalType::C64>;
+using ComplexToMagnitudePhase = ComplexToMagnitudePhaseT<SignalType::C64>;
 
 /// PreviousValue: the F64 unit delay under its own element name.
 class PreviousValue final : public Element {
@@ -239,36 +495,6 @@ public:
 
 private:
     RealValue output_value_;
-};
-
-class ReImToComplex final : public Element {
-public:
-    ReImToComplex();
-    void step() override;
-
-private:
-    ComplexValue output_value_;
-};
-
-class ComplexToReIm final : public Element {
-public:
-    ComplexToReIm();
-    void step() override;
-
-private:
-    RealValue output_re_;
-    RealValue output_im_;
-};
-
-class ComplexToMagnitudePhase final : public Element {
-public:
-    ComplexToMagnitudePhase();
-    void step() override;
-    void bind_inputs(std::span<const InputBinding> bindings) override;
-
-private:
-    RealValue output_magnitude_;
-    RealValue output_phase_;
 };
 
 class Int12ToDouble final : public Element {

@@ -16,6 +16,8 @@ Source: `s7core/include/s7/element.hpp`.
 
 ## Type system (decided 2026-10-05; implementation in progress)
 
+**Integrators.** `Integrator` is a running sum without a time step (an accumulator, all arithmetic types). For integration over model time use `EulerIntegrator` (forward Euler / rectangle rule, y[n+1] = y[n] + dt·x[n]; causal memory, so it can close a feedback loop such as an ODE system without a `Delay`) or `TrapezoidIntegrator` (y[n] = y[n−1] + dt/2·(x[n] + x[n−1]); direct feedthrough, more accurate, needs causal memory elsewhere in a loop). Both take `dt` and `initial_value` and support F16–F128 and C16–C128.
+
 **Writing a generic element.** Write the element as a template over `SignalType` (see `GainT` in `s7/elements.hpp`; `SignalOps<Type>` gives `add`/`multiply`/`one`/`zero` with the `Overflow` rule). In its registration, declare a type variable and port rules in the metadata (`type_variables = {{"T", allowed, "type"}}`, `port.type_rule = "T"`; rules may also be `component(T)` or `complex(T)`), and in the factory dispatch on the resolved type: `visit_signal_type(ctx.type(), [&]<SignalType T>() { ... })`. Convert parameters with `signal_value_from_json<T>()`. Loaders create elements with `make_element_spec(id, descriptor, params)`, which turns the metadata into a `GenericElement` for the resolver.
 
 This section is the target contract; the code is being moved to it (`CODE_REVIEW_REQUIRED_FIXES.md`, signal types item).

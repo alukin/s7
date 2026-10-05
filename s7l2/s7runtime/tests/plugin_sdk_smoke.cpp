@@ -24,13 +24,11 @@ void expect(const bool condition, const std::string& what)
     }
 }
 
-s7::ElementFactory factory_for(const std::string& type, boost::json::object params)
+void add(s7::Schema& schema, const std::string& id, const std::string& type, boost::json::object params)
 {
     const auto* descriptor = s7::ElementRegistry::instance().find(type);
     expect(descriptor != nullptr, "element type registered: " + type);
-    return [descriptor, params = std::move(params)] {
-        return descriptor->create(s7::ElementCreationContext{descriptor->metadata(), params});
-    };
+    schema.add_element(s7::make_element_spec(id, *descriptor, std::move(params)));
 }
 
 } // namespace
@@ -52,10 +50,8 @@ try {
     constexpr double sample_rate = 48000.0;
     constexpr double frequency = 1234.5;
     s7::Schema schema{"third_party_plugin"};
-    schema.add_element("sine", factory_for("AnalogOscillator", {{"amplitude", 0.5}, {"frequency_hz", frequency},
-                                                                  {"sample_rate_hz", sample_rate}}));
-    schema.add_element("fft", factory_for("WindowedFFT", {{"fft_size", 1024}, {"hop_size", 256},
-                                                           {"sample_rate_hz", sample_rate}}));
+    add(schema, "sine", "AnalogOscillator", {{"amplitude", 0.5}, {"frequency_hz", frequency}, {"sample_rate_hz", sample_rate}});
+    add(schema, "fft", "WindowedFFT", {{"fft_size", 1024}, {"hop_size", 256}, {"sample_rate_hz", sample_rate}});
     schema.connect("sine", 0, "fft", 0);
 
     s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
