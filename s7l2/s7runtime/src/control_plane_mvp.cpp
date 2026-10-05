@@ -286,9 +286,16 @@ auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, 
     if (request_type == "LIST_DEPLOYMENTS") {
         return handle_list_deployments(request);
     }
-    if (request_type == "PREPARE_DEPLOYMENT" || request_type == "COMMIT_DEPLOYMENT" || request_type == "ABORT_DEPLOYMENT") {
+    if (request_type == "GET_STREAM_STATUS") {
+        return handle_get_stream_status(request);
+    }
+    if (request_type == "PREPARE_DEPLOYMENT" || request_type == "COMMIT_DEPLOYMENT" || request_type == "ABORT_DEPLOYMENT" ||
+        request_type == "RECOVER_STREAM") {
         if (auto denied = authorize_mutation(peer, request_id, request_type)) {
             return std::move(*denied);
+        }
+        if (request_type == "RECOVER_STREAM") {
+            return handle_recover_stream(request);
         }
         if (request_type == "PREPARE_DEPLOYMENT") {
             return handle_prepare_deployment(request);
@@ -995,6 +1002,61 @@ auto ControlPlaneMvp::handle_abort_deployment(const boost::json::object& request
         return aborted();
     }
     return make_error_response(request_id, "PREPARE_TOKEN_INVALID", "Unknown deployment or prepare_token.");
+}
+
+auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& request) const -> boost::json::object
+{
+    boost::json::object out;
+    out["type"] = "STREAM_STATUS";
+    out["request_id"] = as_string(request, "request_id").value_or("");
+    out["protocol_version"] = descriptor_.protocol_version;
+    boost::json::array streams;
+    if (options_.network) {
+        for (const auto& status : options_.network->stream_statuses()) {
+            streams.emplace_back(boost::json::object{
+                {"stream_id", wire::to_string(status.stream_id)},
+                {"role", status.role == transport::StreamRole::Producer ? "producer" : "consumer"},
+                {"data_type", std::string(signal_type_name(status.type))},
+                {"state", status.state},
+                {"fault", stream::to_string(status.fault)},
+                {"next_sequence", status.next_sequence},
+                {"packets", status.packets},
+                {"elements", status.elements},
+                {"replayed", status.replayed},
+                {"lost_resumes", status.lost_resumes},
+                {"duplicates_discarded", status.duplicates_discarded},
+                {"malformed", status.malformed},
+                {"send_log_depth", status.send_log_depth},
+                {"buffered_elements", status.buffered_elements},
+                {"blocked_ms_total", status.blocked_total.count()},
+            });
+        }
+    }
+    out["streams"] = std::move(streams);
+    return out;
+}
+
+auto ControlPlaneMvp::handle_recover_stream(const boost::json::object& request) -> boost::json::object
+{
+    const auto request_id = as_string(request, "request_id").value_or("");
+    const auto stream_id = as_string(request, "stream_id").value_or("");
+    wire::StreamId id{};
+    try {
+        id = wire::parse_stream_id(stream_id);
+    } catch (const std::exception& ex) {
+        return make_error_response(request_id, "INVALID_REQUEST", ex.what());
+    }
+    const bool recovered = options_.network && options_.network->recover_stream(id);
+    if (recovered && options_.on_stream_recovered) {
+        options_.on_stream_recovered();
+    }
+    boost::json::object out;
+    out["type"] = "RECOVER_STREAM_RESULT";
+    out["request_id"] = request_id;
+    out["protocol_version"] = descriptor_.protocol_version;
+    out["stream_id"] = stream_id;
+    out["recovered"] = recovered;
+    return out;
 }
 
 void ControlPlaneMvp::load_peers_from_disk()

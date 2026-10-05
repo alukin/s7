@@ -211,28 +211,14 @@ int runSmoke()
 
         auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
         s7::RuntimeNetContext::set_endpoint(endpoint);
-        const auto tx = endpoint->open_endpoint({
-            .endpoint_name = "studio-smoke-tx",
-            .stream_name = "studio.demo.in",
-            .allow_publish = true,
-            .allow_receive = false,
-        });
-        assert(tx.ok);
-
-        s7::transport::DataPacket packet;
-        packet.stream_name = "studio.demo.in";
-        packet.sequence = 1;
-        packet.data_type = s7::transport::kPrototypeDataTypeF64;
-        packet.elem_count = 1;
-        packet.t_model_ns = 1;
-        packet.payload = s7::transport::encode_f64_payload(8.5);
-        const auto send = endpoint->publish(tx.handle, packet);
-        assert(send.ok);
+        const auto tx = endpoint->open_producer(s7::net_stream_config("5b3a9f6e-2c4d-4e8a-b1f0-9d8c7b6a5f4e"));
+        const double sent = 8.5;
+        assert(endpoint->publish(tx, &sent, 1).fault == s7::stream::FaultCode::None);
 
         static constexpr std::string_view netSchema = R"json({
             "name": "s7studio_net_smoke",
             "elements": [
-                { "id": "net_in", "type": "NetSource", "params": { "topic": "studio.demo.in" } }
+                { "id": "net_in", "type": "NetSource", "params": { "stream_id": "5b3a9f6e-2c4d-4e8a-b1f0-9d8c7b6a5f4e" } }
             ],
             "connections": []
         })json";

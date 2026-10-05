@@ -1,0 +1,353 @@
+// Streams over real WebSocket connections (BeastRuntimeNetEndpoint): both
+// directions, lossless resume across dropped TCP connections, two consumers
+// with their own mTLS identities, malformed input and the inbound limit.
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
+#include <iostream>
+#include <memory>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <boost/asio.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
+
+#include <s7/transport.hpp>
+
+namespace {
+
+namespace transport = s7::transport;
+namespace stream = s7::stream;
+namespace wire = s7::wire;
+using boost::asio::ip::tcp;
+using std::chrono::milliseconds;
+
+void expect(const bool condition, const std::string& what)
+{
+    if (!condition) {
+        throw std::runtime_error("Check failed: " + what);
+    }
+}
+
+bool wait_for(const std::function<bool()>& condition, const milliseconds timeout = milliseconds(5000))
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (condition()) {
+            return true;
+        }
+        std::this_thread::sleep_for(milliseconds(10));
+    }
+    return condition();
+}
+
+stream::StreamConfig config(const char* id)
+{
+    stream::StreamConfig c;
+    c.stream_id = wire::parse_stream_id(id);
+    c.type = s7::SignalType::F64;
+    c.max_elements_per_packet = 64;
+    c.max_batch_latency = milliseconds(5);
+    c.send_log_max_packets = 256;
+    c.max_block = milliseconds(15000);
+    c.max_wait = milliseconds(15000);
+    return c;
+}
+
+// Publishes 0..count-1 in chunks while the consumer reads them back; checks
+// every value arrives exactly once and in order.
+void transfer(transport::IRuntimeNetEndpoint& producer_endpoint, const transport::StreamHandle producer,
+              const std::vector<std::pair<transport::IRuntimeNetEndpoint*, transport::StreamHandle>>& consumers,
+              const std::size_t count, const std::function<void(std::size_t)>& on_progress = {})
+{
+    constexpr std::size_t kChunk = 100;
+    std::vector<std::thread> readers;
+    std::vector<std::string> failures(consumers.size());
+    for (std::size_t c = 0; c < consumers.size(); ++c) {
+        readers.emplace_back([&, c] {
+            auto [endpoint, handle] = consumers[c];
+            std::vector<double> chunk(kChunk);
+            for (std::size_t base = 0; base < count; base += kChunk) {
+                const auto result = endpoint->receive(handle, chunk.data(), chunk.size());
+                if (result.fault != stream::FaultCode::None || result.received != kChunk) {
+                    failures[c] = "consumer " + std::to_string(c) + " faulted at " + std::to_string(base) + ": " +
+                                  stream::to_string(result.fault);
+                    return;
+                }
+                for (std::size_t i = 0; i < kChunk; ++i) {
+                    if (chunk[i] != static_cast<double>(base + i)) {
+                        failures[c] = "consumer " + std::to_string(c) + " got " + std::to_string(chunk[i]) + " at " +
+                                      std::to_string(base + i);
+                        return;
+                    }
+                }
+            }
+        });
+    }
+    std::vector<double> chunk(kChunk);
+    std::string publish_failure;
+    for (std::size_t base = 0; base < count; base += kChunk) {
+        for (std::size_t i = 0; i < kChunk; ++i) {
+            chunk[i] = static_cast<double>(base + i);
+        }
+        const auto result = producer_endpoint.publish(producer, chunk.data(), chunk.size());
+        if (result.fault != stream::FaultCode::None) {
+            publish_failure = "publish faulted at " + std::to_string(base) + ": " + stream::to_string(result.fault);
+            break;
+        }
+        if (on_progress) {
+            on_progress(base + kChunk);
+        }
+    }
+    for (auto& reader : readers) {
+        reader.join();
+    }
+    expect(publish_failure.empty(), publish_failure);
+    for (const auto& failure : failures) {
+        expect(failure.empty(), failure);
+    }
+}
+
+// A TCP forwarder whose connections the test can cut.
+class SeverableProxy {
+public:
+    explicit SeverableProxy(const std::uint16_t target_port)
+        : acceptor_(io_, tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0))
+        , target_(boost::asio::ip::make_address("127.0.0.1"), target_port)
+    {
+        accept();
+        thread_ = std::thread([this] { io_.run(); });
+    }
+    ~SeverableProxy()
+    {
+        boost::asio::post(io_, [this] {
+            boost::system::error_code ignored;
+            acceptor_.close(ignored);
+            close_all();
+        });
+        work_.reset();
+        thread_.join();
+    }
+    // Drops every forwarded connection (and what is in flight on it).
+    void sever()
+    {
+        boost::asio::post(io_, [this] { close_all(); });
+        ++severed_;
+    }
+    [[nodiscard]] int severed() const { return severed_; }
+    [[nodiscard]] std::uint16_t port() const { return acceptor_.local_endpoint().port(); }
+
+private:
+    struct Session {
+        tcp::socket a;
+        tcp::socket b;
+        std::array<std::uint8_t, 16384> ab{};
+        std::array<std::uint8_t, 16384> ba{};
+        explicit Session(boost::asio::io_context& io) : a(io), b(io) {}
+    };
+
+    void accept()
+    {
+        auto session = std::make_shared<Session>(io_);
+        acceptor_.async_accept(session->a, [this, session](const boost::system::error_code& ec) {
+            if (ec) {
+                return;
+            }
+            session->b.async_connect(target_, [this, session](const boost::system::error_code& connect_ec) {
+                if (connect_ec) {
+                    return;
+                }
+                sessions_.push_back(session);
+                forward(session, session->a, session->b, session->ab);
+                forward(session, session->b, session->a, session->ba);
+            });
+            accept();
+        });
+    }
+
+    template <std::size_t N>
+    void forward(const std::shared_ptr<Session>& session, tcp::socket& from, tcp::socket& to, std::array<std::uint8_t, N>& buffer)
+    {
+        from.async_read_some(boost::asio::buffer(buffer), [this, session, &from, &to, &buffer](const boost::system::error_code& ec, std::size_t n) {
+            if (ec) {
+                close(*session);
+                return;
+            }
+            boost::asio::async_write(to, boost::asio::buffer(buffer, n), [this, session, &from, &to, &buffer](const boost::system::error_code& write_ec, std::size_t) {
+                if (write_ec) {
+                    close(*session);
+                    return;
+                }
+                forward(session, from, to, buffer);
+            });
+        });
+    }
+
+    static void close(Session& session)
+    {
+        boost::system::error_code ignored;
+        session.a.close(ignored);
+        session.b.close(ignored);
+    }
+
+    void close_all()
+    {
+        for (const auto& session : sessions_) {
+            close(*session);
+        }
+        sessions_.clear();
+    }
+
+    boost::asio::io_context io_;
+    std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_{io_.get_executor()};
+    tcp::acceptor acceptor_;
+    tcp::endpoint target_;
+    std::vector<std::shared_ptr<Session>> sessions_;
+    std::thread thread_;
+    std::atomic<int> severed_{0};
+};
+
+void test_both_directions()
+{
+    transport::BeastRuntimeNetEndpoint server;
+    transport::BeastRuntimeNetEndpoint client;
+    const auto port = server.configure_server(0);
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port));
+
+    // server -> client
+    const auto down = config("1b0c4f7e-8d2a-4e6b-9a3c-5f1e2d3c4b5a");
+    const auto down_producer = server.open_producer(down);
+    const auto down_consumer = client.open_consumer(down);
+    transfer(server, down_producer, {{&client, down_consumer}}, 20000);
+
+    // client -> server
+    const auto up = config("2c1d5a8f-9e3b-4f7c-8b4d-6a2f3e4d5c6b");
+    const auto up_consumer = server.open_consumer(up);
+    const auto up_producer = client.open_producer(up);
+    transfer(client, up_producer, {{&server, up_consumer}}, 20000);
+
+    const auto stats = client.stats();
+    expect(stats.data_connections == 1 && stats.control_connections == 1, "client keeps one data and one control connection");
+    for (const auto& status : server.stream_statuses()) {
+        expect(status.fault == stream::FaultCode::None, "no stream faults");
+    }
+}
+
+void test_resume_across_dropped_connections()
+{
+    transport::BeastRuntimeNetEndpoint server;
+    SeverableProxy proxy(server.configure_server(0));
+    transport::BeastRuntimeNetEndpoint client;
+    client.configure_client("ws://127.0.0.1:" + std::to_string(proxy.port()));
+
+    const auto c = config("3d2e6b9a-0f4c-4a8d-9c5e-7b3a4f5e6d7c");
+    const auto producer = server.open_producer(c);
+    const auto consumer = client.open_consumer(c);
+    // Cut the TCP connections three times while data flows; the client
+    // reconnects and RESUMEs, the producer replays from its send log.
+    std::size_t next_cut = 15000;
+    transfer(server, producer, {{&client, consumer}}, 60000, [&](const std::size_t published) {
+        if (published >= next_cut && proxy.severed() < 3) {
+            proxy.sever();
+            next_cut += 15000;
+        }
+    });
+    expect(proxy.severed() == 3, "connections were cut three times");
+    const auto statuses = server.stream_statuses();
+    expect(statuses.size() == 1 && statuses.front().replayed > 0, "the producer replayed after reconnects");
+    expect(statuses.front().fault == stream::FaultCode::None, "no fault across reconnects");
+}
+
+void test_two_mtls_consumers()
+{
+    const auto certs = std::filesystem::path(S7_TEST_CERT_DIR);
+    auto tls = [&](const char* name) {
+        transport::TlsConfig t;
+        t.enabled = true;
+        t.cert_file = (certs / (std::string(name) + ".cert.pem")).string();
+        t.key_file = (certs / (std::string(name) + ".key.pem")).string();
+        t.ca_file = (certs / "s7_root_ca.cert.pem").string();
+        return t;
+    };
+    transport::BeastRuntimeNetEndpoint server;
+    const auto url = "wss://127.0.0.1:" + std::to_string(server.configure_server(0, tls("s7_runtime_node")));
+    // Two consumers with distinct certificates: the producer tracks each one.
+    transport::BeastRuntimeNetEndpoint first;
+    transport::BeastRuntimeNetEndpoint second;
+    first.configure_client(url, tls("s7_runtime_node"));
+    second.configure_client(url, tls("s7_studio"));
+
+    const auto c = config("4e3f7c0b-1a5d-4b9e-8d6f-8c4b5a6f7e8d");
+    const auto producer = server.open_producer(c);
+    const auto a = first.open_consumer(c);
+    const auto b = second.open_consumer(c);
+    transfer(server, producer, {{&first, a}, {&second, b}}, 10000);
+    expect(server.stats().data_connections == 2, "two data connections");
+}
+
+// A minimal WebSocket client for hostile input.
+struct RawClient {
+    boost::asio::io_context io;
+    boost::beast::websocket::stream<tcp::socket> ws{io};
+
+    explicit RawClient(const std::uint16_t port, const char* path = "/data")
+    {
+        ws.next_layer().connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+        ws.handshake("127.0.0.1", path);
+        ws.binary(true);
+    }
+};
+
+void test_malformed_message_closes_connection()
+{
+    transport::BeastRuntimeNetEndpoint server;
+    RawClient raw(server.configure_server(0));
+    const std::vector<std::uint8_t> garbage{0x01, 0x00, 0x05};
+    raw.ws.write(boost::asio::buffer(garbage));
+    boost::beast::flat_buffer buffer;
+    boost::system::error_code ec;
+    raw.ws.read(buffer, ec);
+    expect(static_cast<bool>(ec), "the server closes a connection that sends a malformed message");
+    expect(wait_for([&] { return server.stats().malformed_messages == 1; }), "malformed message counted");
+    const auto errors = server.take_transport_errors();
+    expect(!errors.empty() && errors.front().find("malformed") != std::string::npos, "malformed message reported");
+}
+
+void test_inbound_limit()
+{
+    transport::BeastRuntimeNetEndpoint server(transport::TransportLimits{.max_inbound_connections = 2});
+    const auto port = server.configure_server(0);
+    transport::BeastRuntimeNetEndpoint client;
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port)); // control + data: the limit
+    expect(wait_for([&] { return server.stats().data_connections + server.stats().control_connections == 2; }),
+           "client connections registered");
+    bool rejected = false;
+    try {
+        RawClient extra(port);
+    } catch (const boost::system::system_error&) {
+        rejected = true;
+    }
+    expect(rejected, "a connection beyond the inbound limit is refused");
+    expect(server.stats().connections_rejected == 1, "rejection counted");
+}
+
+} // namespace
+
+int main()
+try {
+    test_both_directions();
+    test_resume_across_dropped_connections();
+    test_two_mtls_consumers();
+    test_malformed_message_closes_connection();
+    test_inbound_limit();
+    return 0;
+} catch (const std::exception& ex) {
+    std::cerr << "s7transport beast stream smoke: " << ex.what() << '\n';
+    return 1;
+}

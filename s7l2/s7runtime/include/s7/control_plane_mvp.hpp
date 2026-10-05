@@ -94,6 +94,8 @@ struct ControlPlaneOptions {
     std::shared_ptr<DeploymentHost> deployment_host; // null: deployments are refused
     std::function<void(const std::string&)> log;     // authorization decisions
     std::chrono::seconds prepare_ttl{std::chrono::minutes(5)};
+    transport::RuntimeNetEndpointPtr network; // streams for GET_STREAM_STATUS / RECOVER_STREAM
+    std::function<void()> on_stream_recovered; // after a successful RECOVER_STREAM
 };
 
 class ControlPlaneMvp {
@@ -163,6 +165,8 @@ private:
     [[nodiscard]] auto handle_prepare_deployment(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_commit_deployment(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_abort_deployment(const boost::json::object& request) -> boost::json::object;
+    [[nodiscard]] auto handle_get_stream_status(const boost::json::object& request) const -> boost::json::object;
+    [[nodiscard]] auto handle_recover_stream(const boost::json::object& request) -> boost::json::object;
 
     void load_peers_from_disk();
     void persist_peers_to_disk() const;

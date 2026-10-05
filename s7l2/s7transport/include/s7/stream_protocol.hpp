@@ -94,6 +94,7 @@ struct ProducerStats {
     std::uint64_t packets{};
     std::uint64_t elements{};
     std::uint64_t replayed{};
+    std::uint64_t lost_resumes{}; // RESUMEs from a position no longer in the log
     std::size_t send_log_depth{};
     std::chrono::milliseconds blocked_total{};
 };
@@ -114,8 +115,10 @@ public:
     bool flush(Clock::time_point now, bool force = false);
     [[nodiscard]] std::optional<Clock::time_point> flush_deadline() const;
 
-    // RESUME from a consumer: start transmitting at next_expected. Faults the
-    // stream (StreamStateLost) if that position is no longer in the log.
+    // RESUME from a consumer: start transmitting at next_expected. A position
+    // older than the log starts at the oldest logged packet (the consumer
+    // faults on the gap); a position beyond next_sequence() faults the stream
+    // (StreamStateLost).
     void resume(const ConsumerKey& consumer, std::uint32_t alias, std::uint64_t next_expected);
     void detach(const ConsumerKey& consumer);
     void acknowledge(const ConsumerKey& consumer, std::uint64_t next_expected);
@@ -124,6 +127,8 @@ public:
     [[nodiscard]] std::optional<std::vector<std::uint8_t>> next_message(const ConsumerKey& consumer);
 
     void fault(FaultCode code);
+    // RECOVER_STREAM: clears the fault; sending resumes.
+    void recover() { fault_ = FaultCode::None; }
     [[nodiscard]] FaultCode fault_code() const { return fault_; }
     [[nodiscard]] bool log_full() const;
     [[nodiscard]] std::uint64_t next_sequence() const { return next_sequence_; }
@@ -158,6 +163,7 @@ private:
     std::uint64_t packets_{};
     std::uint64_t elements_{};
     std::uint64_t replayed_{};
+    std::uint64_t lost_resumes_{};
     std::chrono::milliseconds blocked_total_{};
 };
 
@@ -193,6 +199,9 @@ public:
     [[nodiscard]] std::optional<wire::ControlMessage> ack_due(Clock::time_point now);
 
     void fault(FaultCode code);
+    // RECOVER_STREAM: clears the fault and accepts the next packet received as
+    // the new start (the data lost in the fault stays lost and reported).
+    void recover();
     [[nodiscard]] FaultCode fault_code() const { return fault_; }
     [[nodiscard]] ConsumerStats stats() const;
 
@@ -214,6 +223,7 @@ private:
     std::uint32_t consumed_since_ack_{};
     Clock::time_point last_ack_{};
     FaultCode fault_{FaultCode::None};
+    bool restart_at_next_{false};
     std::uint64_t packets_{};
     std::uint64_t duplicates_{};
     std::uint64_t malformed_{};

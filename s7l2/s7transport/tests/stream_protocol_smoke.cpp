@@ -212,14 +212,25 @@ void test_producer_restart_is_a_gap()
     }
     stream::StreamProducer restarted(config(SignalType::F64, 1, 64), sequences);
     expect(restarted.next_sequence() == stream::kSequenceReservation, "a restarted producer continues beyond its reservation");
-    const auto resume = consumer.resume_message();
-    restarted.resume("consumer", resume.stream_alias, resume.next_expected);
-    expect(restarted.fault_code() == stream::FaultCode::StreamStateLost, "resuming into a restarted producer is state loss");
+    Link link{restarted, consumer};
+    link.connect(); // RESUME from 1, which the restarted producer never had
+    expect(restarted.fault_code() == stream::FaultCode::None, "a lost resume position does not fault the producer");
+    expect(restarted.stats().lost_resumes == 1, "the lost position is counted");
+    const double v = 2;
+    restarted.append(&v, 1, now);
+    link.pump(now);
+    expect(consumer.fault_code() == stream::FaultCode::SequenceGap, "the consumer faults on the gap");
 
-    // A brand-new consumer cannot start at 0 either: those packets are gone.
-    stream::StreamProducer again(config(SignalType::F64, 1, 64), sequences);
-    again.resume("fresh", 1, 0);
-    expect(again.fault_code() == stream::FaultCode::StreamStateLost, "position 0 is gone after a restart");
+    // RECOVER_STREAM on the consumer: it accepts the next packet as its new start.
+    consumer.recover();
+    restarted.append(&v, 1, now);
+    link.pump(now);
+    expect(consumer.fault_code() == stream::FaultCode::None && take_all(consumer) == std::vector<double>{1, 2}, "recovered consumer continues (the value before the restart, then the new start)");
+
+    // A consumer ahead of the producer (sequence state lost) faults the stream.
+    stream::StreamProducer behind(config(SignalType::F64, 1, 64), sequences);
+    behind.resume("ahead", 1, behind.next_sequence() + 10);
+    expect(behind.fault_code() == stream::FaultCode::StreamStateLost, "a resume beyond the producer is state loss");
     std::filesystem::remove_all(dir);
 }
 

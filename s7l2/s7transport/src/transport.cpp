@@ -1,29 +1,35 @@
 #include "s7/transport.hpp"
 
-#include <bit>
 #include <algorithm>
 #include <atomic>
-#include <chrono>
 #include <condition_variable>
-#include <cmath>
 #include <cstring>
-#include <functional>
+#include <deque>
+#include <exception>
+#include <filesystem>
+#include <future>
 #include <iterator>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
-#include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/context.hpp>
-#include <boost/asio/ssl/stream.hpp>
 #include <boost/asio/connect.hpp>
+#include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
-#include <boost/beast/core/buffers_to_string.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/post.hpp>
+#include <boost/asio/ssl/context.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/thread_pool.hpp>
 #include <boost/beast/core/flat_buffer.hpp>
+#include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http/read.hpp>
-#include <boost/beast/ssl.hpp>
 #include <boost/beast/http/string_body.hpp>
-#include <boost/beast/websocket/stream.hpp>
+#include <boost/beast/ssl.hpp>
+#include <boost/beast/websocket.hpp>
+#include <boost/beast/websocket/ssl.hpp>
 
 #include <openssl/evp.h>
 #include <openssl/objects.h>
@@ -34,114 +40,6 @@
 
 namespace s7::transport {
 namespace {
-
-using Tcp = boost::asio::ip::tcp;
-namespace websocket = boost::beast::websocket;
-namespace http = boost::beast::http;
-namespace ssl = boost::asio::ssl;
-using boost::beast::flat_buffer;
-using PlainWs = websocket::stream<Tcp::socket>;
-using TlsWs = websocket::stream<boost::beast::ssl_stream<Tcp::socket>>;
-
-void interrupt_socket_reads(const std::shared_ptr<PlainWs>& socket)
-{
-    if (!socket) {
-        return;
-    }
-    boost::system::error_code ec;
-    static_cast<void>(socket->next_layer().cancel(ec));
-    static_cast<void>(socket->next_layer().shutdown(Tcp::socket::shutdown_both, ec));
-    static_cast<void>(socket->next_layer().close(ec));
-}
-
-void interrupt_socket_reads(const std::shared_ptr<TlsWs>& socket)
-{
-    if (!socket) {
-        return;
-    }
-    boost::system::error_code ec;
-    static_cast<void>(socket->next_layer().next_layer().cancel(ec));
-    static_cast<void>(socket->next_layer().next_layer().shutdown(Tcp::socket::shutdown_both, ec));
-    static_cast<void>(socket->next_layer().next_layer().close(ec));
-}
-
-constexpr std::uint16_t kProtocolVersion = 1;
-constexpr std::size_t kFixedHeaderBytes = 54;
-constexpr std::size_t kMaxPayloadBytes = 256u * 1024u;
-constexpr std::uint16_t kFlagHasSystemTimestamp = 0x0001u;
-constexpr std::size_t kF64Bytes = 8;
-
-void validate_payload_shape(const std::uint16_t data_type, const std::uint32_t elem_count, const std::size_t payload_size)
-{
-    if (data_type != kPrototypeDataTypeF64) {
-        throw std::invalid_argument("Unsupported packet data type: " + std::to_string(data_type));
-    }
-    if (static_cast<std::uint64_t>(elem_count) * kF64Bytes != payload_size) {
-        throw std::invalid_argument("Packet payload size " + std::to_string(payload_size) +
-                                    " does not match element count " + std::to_string(elem_count) + ".");
-    }
-}
-
-void append_u16_be(std::vector<std::uint8_t>& out, const std::uint16_t value)
-{
-    out.push_back(static_cast<std::uint8_t>((value >> 8) & 0xFFu));
-    out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
-}
-
-void append_u32_be(std::vector<std::uint8_t>& out, const std::uint32_t value)
-{
-    for (std::uint32_t shift = 24; shift > 0; shift -= 8) {
-        out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFu));
-    }
-    out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
-}
-
-void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
-{
-    for (std::uint64_t shift = 56; shift > 0; shift -= 8) {
-        out.push_back(static_cast<std::uint8_t>((value >> shift) & 0xFFu));
-    }
-    out.push_back(static_cast<std::uint8_t>(value & 0xFFu));
-}
-
-[[nodiscard]] auto read_u16_be(const std::vector<std::uint8_t>& in, std::size_t& offset) -> std::uint16_t
-{
-    if (offset + 2 > in.size()) {
-        throw std::invalid_argument("Packet underflow while reading u16.");
-    }
-    const auto value = static_cast<std::uint16_t>((static_cast<std::uint16_t>(in[offset]) << 8) |
-                                                  static_cast<std::uint16_t>(in[offset + 1]));
-    offset += 2;
-    return value;
-}
-
-[[nodiscard]] auto read_u32_be(const std::vector<std::uint8_t>& in, std::size_t& offset) -> std::uint32_t
-{
-    if (offset + 4 > in.size()) {
-        throw std::invalid_argument("Packet underflow while reading u32.");
-    }
-
-    std::uint32_t value = 0;
-    for (std::size_t index = 0; index < 4; ++index) {
-        value = static_cast<std::uint32_t>((value << 8) | in[offset + index]);
-    }
-    offset += 4;
-    return value;
-}
-
-[[nodiscard]] auto read_u64_be(const std::vector<std::uint8_t>& in, std::size_t& offset) -> std::uint64_t
-{
-    if (offset + 8 > in.size()) {
-        throw std::invalid_argument("Packet underflow while reading u64.");
-    }
-
-    std::uint64_t value = 0;
-    for (std::size_t index = 0; index < 8; ++index) {
-        value = (value << 8) | static_cast<std::uint64_t>(in[offset + index]);
-    }
-    offset += 8;
-    return value;
-}
 
 [[nodiscard]] auto normalize_ws_base_target(std::string target) -> std::string
 {
@@ -262,444 +160,1073 @@ auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl
     return parsed;
 }
 
-auto encode_f64_payload(const double value) -> std::vector<std::uint8_t>
+// ============================================================================
+// Stream table: the streams of one endpoint and the blocking graph-side API.
+// One mutex guards every StreamProducer / StreamConsumer; the transport's I/O
+// thread and the graph threads both take it, and nothing else touches the
+// stream objects.
+// ============================================================================
+namespace {
+
+using stream::Clock;
+using stream::FaultCode;
+
+struct StreamEntry {
+    StreamHandle handle;
+    StreamRole role{StreamRole::Producer};
+    stream::StreamConfig config;
+    std::unique_ptr<stream::StreamProducer> producer;
+    std::unique_ptr<stream::StreamConsumer> consumer;
+};
+
+std::string stream_key(const wire::StreamId& id)
 {
-    const auto raw = std::bit_cast<std::uint64_t>(value);
-    std::vector<std::uint8_t> payload;
-    payload.reserve(8);
-    append_u64_be(payload, raw);
-    return payload;
+    return std::string(reinterpret_cast<const char*>(id.data()), id.size());
 }
 
-auto decode_f64_payload(const std::vector<std::uint8_t>& payload) -> double
-{
-    if (payload.size() != 8) {
-        throw std::invalid_argument("Expected 8-byte F64 payload.");
-    }
+class StreamTable {
+public:
+    // Called with the lock held after producer data or consumer progress changed,
+    // so the transport can send (posts work; must not block).
+    std::function<void(StreamEntry&)> on_producer_data;
+    std::function<void(StreamEntry&)> on_consumer_opened;
+    // After the graph took elements (lock held): an in-memory consumer acknowledges.
+    std::function<void(StreamEntry&)> on_consumed;
 
-    std::size_t offset = 0;
-    const auto raw = read_u64_be(payload, offset);
-    return std::bit_cast<double>(raw);
-}
+    explicit StreamTable(stream::SequenceStore& sequences) : sequences_(sequences) {}
 
-auto encode_packet_prototype(const DataPacket& packet) -> std::vector<std::uint8_t>
-{
-    if ((packet.flags & static_cast<std::uint16_t>(~kFlagHasSystemTimestamp)) != 0u) {
-        throw std::invalid_argument("Packet contains unsupported prototype flags.");
-    }
-    if (packet.payload.size() > kMaxPayloadBytes) {
-        throw std::invalid_argument("Payload exceeds prototype packet size limit.");
-    }
-    if (packet.stream_name.size() > 0xFFFFu) {
-        throw std::invalid_argument("Stream name exceeds prototype extension encoding limit.");
-    }
-
-    const auto extension_bytes = static_cast<std::size_t>(2u + packet.stream_name.size() + packet.extensions.size());
-    if (extension_bytes > 0xFFFFu) {
-        throw std::invalid_argument("Extension area exceeds prototype format limit.");
-    }
-
-    if (!packet.t_model_ns) {
-        throw std::invalid_argument("Packet has no model timestamp.");
-    }
-    const auto t_model_ns = *packet.t_model_ns;
-
-    const auto has_system_timestamp = packet.t_system_ns.has_value();
-    if ((packet.flags & kFlagHasSystemTimestamp) != 0u && !has_system_timestamp) {
-        throw std::invalid_argument("Packet sets the system timestamp flag without a system timestamp.");
-    }
-    const auto flags = static_cast<std::uint16_t>(packet.flags | (has_system_timestamp ? kFlagHasSystemTimestamp : 0u));
-    const auto elem_count = packet.elem_count != 0
-        ? packet.elem_count
-        : static_cast<std::uint32_t>(packet.payload.size() / kF64Bytes);
-    validate_payload_shape(packet.data_type, elem_count, packet.payload.size());
-
-    std::vector<std::uint8_t> frame;
-    frame.reserve(kFixedHeaderBytes + extension_bytes + packet.payload.size());
-    append_u16_be(frame, kProtocolVersion);
-    append_u16_be(frame, flags);
-    append_u64_be(frame, packet.sequence);
-    append_u64_be(frame, packet.stream_id);
-    append_u32_be(frame, packet.channel_id);
-    append_u16_be(frame, packet.data_type);
-    append_u32_be(frame, elem_count);
-    append_u32_be(frame, static_cast<std::uint32_t>(packet.payload.size()));
-    append_u64_be(frame, t_model_ns);
-    append_u64_be(frame, packet.t_system_ns.value_or(0));
-    append_u16_be(frame, static_cast<std::uint16_t>(extension_bytes));
-    append_u16_be(frame, 0u);
-    append_u16_be(frame, static_cast<std::uint16_t>(packet.stream_name.size()));
-    frame.insert(frame.end(), packet.stream_name.begin(), packet.stream_name.end());
-    frame.insert(frame.end(), packet.extensions.begin(), packet.extensions.end());
-    frame.insert(frame.end(), packet.payload.begin(), packet.payload.end());
-    return frame;
-}
-
-auto decode_packet_prototype(const std::vector<std::uint8_t>& frame) -> DataPacket
-{
-    if (frame.size() < kFixedHeaderBytes) {
-        throw std::invalid_argument("Packet frame shorter than fixed header.");
-    }
-
-    std::size_t offset = 0;
-    const auto version = read_u16_be(frame, offset);
-    if (version != kProtocolVersion) {
-        throw std::invalid_argument("Unsupported packet version: " + std::to_string(version));
-    }
-
-    DataPacket packet;
-    packet.flags = read_u16_be(frame, offset);
-    packet.sequence = read_u64_be(frame, offset);
-    packet.stream_id = read_u64_be(frame, offset);
-    packet.channel_id = read_u32_be(frame, offset);
-    packet.data_type = read_u16_be(frame, offset);
-    packet.elem_count = read_u32_be(frame, offset);
-    const auto payload_size = read_u32_be(frame, offset);
-    packet.t_model_ns = read_u64_be(frame, offset);
-    const auto t_system_ns = read_u64_be(frame, offset);
-    const auto ext_len = read_u16_be(frame, offset);
-    const auto reserved = read_u16_be(frame, offset);
-    if ((packet.flags & static_cast<std::uint16_t>(~kFlagHasSystemTimestamp)) != 0u) {
-        throw std::invalid_argument("Packet contains unsupported prototype flags.");
-    }
-    if (reserved != 0) {
-        throw std::invalid_argument("Packet reserved field must be zero in the prototype format.");
-    }
-    if ((packet.flags & kFlagHasSystemTimestamp) == 0u && t_system_ns != 0u) {
-        throw std::invalid_argument("Packet has a system timestamp value without the presence flag.");
-    }
-
-    if (payload_size > kMaxPayloadBytes) {
-        throw std::invalid_argument("Packet payload exceeds prototype packet size limit.");
-    }
-
-    if (offset > frame.size()) {
-        throw std::invalid_argument("Packet decode offset exceeds frame size.");
-    }
-    const auto remaining = frame.size() - offset;
-    if (static_cast<std::size_t>(ext_len) > remaining) {
-        throw std::invalid_argument("Packet extension length exceeds frame size.");
-    }
-    if (static_cast<std::size_t>(payload_size) > (remaining - static_cast<std::size_t>(ext_len))) {
-        throw std::invalid_argument("Packet payload/extension lengths exceed frame size.");
-    }
-    if (static_cast<std::size_t>(ext_len) + static_cast<std::size_t>(payload_size) != remaining) {
-        throw std::invalid_argument("Packet frame contains trailing bytes after the declared payload.");
-    }
-    validate_payload_shape(packet.data_type, packet.elem_count, payload_size);
-    if (ext_len == 1) {
-        throw std::invalid_argument("Packet extension area is too short for the stream-name length.");
-    }
-
-    const auto extension_end = offset + ext_len;
-    if (ext_len >= 2) {
-        const auto stream_name_len = read_u16_be(frame, offset);
-        if (offset + stream_name_len > extension_end) {
-            throw std::invalid_argument("Packet stream-name extension exceeds extension area.");
+    StreamHandle open(const stream::StreamConfig& config, const StreamRole role)
+    {
+        std::unique_lock lock(mutex);
+        auto& index = role == StreamRole::Producer ? producers_ : consumers_;
+        if (index.contains(stream_key(config.stream_id))) {
+            throw std::invalid_argument("Stream " + wire::to_string(config.stream_id) + " is already open as " +
+                                        (role == StreamRole::Producer ? "producer" : "consumer") + ".");
         }
-        packet.stream_name.assign(frame.begin() + static_cast<std::ptrdiff_t>(offset),
-                                  frame.begin() + static_cast<std::ptrdiff_t>(offset + stream_name_len));
-        offset += stream_name_len;
+        auto entry = std::make_unique<StreamEntry>();
+        entry->handle = StreamHandle{next_handle_++};
+        entry->role = role;
+        entry->config = config;
+        if (role == StreamRole::Producer) {
+            entry->producer = std::make_unique<stream::StreamProducer>(config, sequences_);
+        } else {
+            // The alias is the handle: unique among this endpoint's consumer streams.
+            entry->consumer = std::make_unique<stream::StreamConsumer>(config, static_cast<std::uint32_t>(entry->handle.value));
+        }
+        const auto handle = entry->handle;
+        index[stream_key(config.stream_id)] = handle.value;
+        auto& stored = *entries_.emplace(handle.value, std::move(entry)).first->second;
+        if (role == StreamRole::Consumer && on_consumer_opened) {
+            on_consumer_opened(stored);
+        }
+        if (role == StreamRole::Producer && on_producer_data) {
+            on_producer_data(stored); // apply RESUMEs that arrived before the producer opened
+        }
+        return handle;
     }
-    packet.extensions.assign(frame.begin() + static_cast<std::ptrdiff_t>(offset),
-                             frame.begin() + static_cast<std::ptrdiff_t>(extension_end));
-    offset = extension_end;
-    packet.payload.assign(frame.begin() + static_cast<std::ptrdiff_t>(offset),
-                          frame.begin() + static_cast<std::ptrdiff_t>(offset + payload_size));
-    if ((packet.flags & kFlagHasSystemTimestamp) != 0u) {
-        packet.t_system_ns = t_system_ns;
+
+    void close(const StreamHandle handle)
+    {
+        std::unique_lock lock(mutex);
+        const auto it = entries_.find(handle.value);
+        if (it == entries_.end()) {
+            return;
+        }
+        auto& index = it->second->role == StreamRole::Producer ? producers_ : consumers_;
+        index.erase(stream_key(it->second->config.stream_id));
+        entries_.erase(it);
+        changed.notify_all();
     }
-    return packet;
+
+    PublishResult publish(const StreamHandle handle, const void* elements, const std::size_t count)
+    {
+        std::unique_lock lock(mutex);
+        auto& entry = require(handle, StreamRole::Producer);
+        auto& producer = *entry.producer;
+        const auto element_bytes = signal_type_info(entry.config.type).storage_bytes;
+        const auto* bytes = static_cast<const std::uint8_t*>(elements);
+        std::size_t done = 0;
+        std::optional<Clock::time_point> deadline;
+        while (done < count) {
+            if (producer.fault_code() != FaultCode::None) {
+                return {count, producer.fault_code()}; // a faulted stream drops data; the graph continues
+            }
+            const auto now = Clock::now();
+            done += producer.append(bytes + done * element_bytes, count - done, now);
+            if (on_producer_data) {
+                on_producer_data(entry);
+            }
+            if (done == count) {
+                break;
+            }
+            // Backpressure: wait for acknowledgements, up to max_block.
+            if (!deadline) {
+                deadline = now + entry.config.max_block;
+            }
+            const auto wait_start = Clock::now();
+            const bool room = changed.wait_until(lock, *deadline, [&] {
+                return !entries_.contains(handle.value) || !producer.log_full() || producer.fault_code() != FaultCode::None;
+            });
+            if (!entries_.contains(handle.value)) {
+                return {done, FaultCode::None};
+            }
+            producer.add_blocked_time(std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - wait_start));
+            if (!room) {
+                producer.fault(FaultCode::SendLogOverflow);
+                return {done, FaultCode::SendLogOverflow};
+            }
+        }
+        return {count, FaultCode::None};
+    }
+
+    // `starving` is called (lock held) when a receive has to wait: the in-memory
+    // endpoint flushes partial batches there.
+    ReceiveResult receive(const StreamHandle handle, void* elements, const std::size_t count,
+                          const std::function<void(StreamEntry&)>& starving = {})
+    {
+        std::unique_lock lock(mutex);
+        auto& entry = require(handle, StreamRole::Consumer);
+        auto& consumer = *entry.consumer;
+        const auto element_bytes = signal_type_info(entry.config.type).storage_bytes;
+        auto* bytes = static_cast<std::uint8_t*>(elements);
+        std::size_t taken = 0;
+        const auto deadline = Clock::now() + entry.config.max_wait;
+        while (true) {
+            const auto before = taken;
+            taken += consumer.take(bytes + taken * element_bytes, count - taken);
+            if (taken > before && on_consumed) {
+                on_consumed(entry);
+            }
+            if (taken == count || consumer.fault_code() != FaultCode::None) {
+                break;
+            }
+            if (starving) {
+                starving(entry);
+                taken += consumer.take(bytes + taken * element_bytes, count - taken);
+                if (taken == count) {
+                    break;
+                }
+            }
+            const bool data = changed.wait_until(lock, deadline, [&] {
+                return !entries_.contains(handle.value) || consumer.available() > 0 || consumer.fault_code() != FaultCode::None;
+            });
+            if (!entries_.contains(handle.value)) {
+                return {taken, FaultCode::None};
+            }
+            if (!data) {
+                consumer.fault(FaultCode::Underrun);
+                break;
+            }
+        }
+        return {taken, consumer.fault_code()};
+    }
+
+    [[nodiscard]] std::vector<StreamStatus> statuses() const
+    {
+        std::unique_lock lock(mutex);
+        std::vector<StreamStatus> result;
+        for (const auto& [_, entry] : entries_) {
+            StreamStatus status;
+            status.stream_id = entry->config.stream_id;
+            status.role = entry->role;
+            status.type = entry->config.type;
+            if (entry->producer) {
+                const auto stats = entry->producer->stats();
+                status.fault = entry->producer->fault_code();
+                status.next_sequence = entry->producer->next_sequence();
+                status.packets = stats.packets;
+                status.elements = stats.elements;
+                status.replayed = stats.replayed;
+                status.lost_resumes = stats.lost_resumes;
+                status.send_log_depth = stats.send_log_depth;
+                status.blocked_total = stats.blocked_total;
+                status.state = status.fault != FaultCode::None ? "faulted" : entry->producer->log_full() ? "blocked" : "active";
+            } else {
+                const auto stats = entry->consumer->stats();
+                status.fault = entry->consumer->fault_code();
+                status.next_sequence = stats.next_expected;
+                status.packets = stats.packets;
+                status.duplicates_discarded = stats.duplicates_discarded;
+                status.malformed = stats.malformed;
+                status.buffered_elements = stats.buffered_elements;
+                status.state = status.fault != FaultCode::None ? "faulted" : "active";
+            }
+            result.push_back(std::move(status));
+        }
+        return result;
+    }
+
+    bool recover(const wire::StreamId& id)
+    {
+        std::unique_lock lock(mutex);
+        bool found = false;
+        for (auto* index : {&producers_, &consumers_}) {
+            if (const auto it = index->find(stream_key(id)); it != index->end()) {
+                auto& entry = *entries_.at(it->second);
+                if (entry.producer) {
+                    entry.producer->recover();
+                } else {
+                    entry.consumer->recover();
+                }
+                found = true;
+            }
+        }
+        changed.notify_all();
+        return found;
+    }
+
+    // Lock held by the caller.
+    StreamEntry* find(const StreamHandle handle)
+    {
+        const auto it = entries_.find(handle.value);
+        return it == entries_.end() ? nullptr : it->second.get();
+    }
+    StreamEntry* find_producer(const wire::StreamId& id)
+    {
+        const auto it = producers_.find(stream_key(id));
+        return it == producers_.end() ? nullptr : entries_.at(it->second).get();
+    }
+    StreamEntry* find_consumer(const wire::StreamId& id)
+    {
+        const auto it = consumers_.find(stream_key(id));
+        return it == consumers_.end() ? nullptr : entries_.at(it->second).get();
+    }
+    StreamEntry* find_consumer_by_alias(const std::uint32_t alias)
+    {
+        auto* entry = find(StreamHandle{alias});
+        return entry && entry->role == StreamRole::Consumer ? entry : nullptr;
+    }
+    template <typename F>
+    void for_each(F&& f)
+    {
+        for (auto& [_, entry] : entries_) {
+            f(*entry);
+        }
+    }
+
+    mutable std::mutex mutex;
+    std::condition_variable changed;
+
+private:
+    StreamEntry& require(const StreamHandle handle, const StreamRole role)
+    {
+        const auto it = entries_.find(handle.value);
+        if (it == entries_.end() || it->second->role != role) {
+            throw std::invalid_argument(std::string("Not an open ") + (role == StreamRole::Producer ? "producer" : "consumer") + " stream.");
+        }
+        return *it->second;
+    }
+
+    stream::SequenceStore& sequences_;
+    std::uint64_t next_handle_{1};
+    std::unordered_map<std::uint64_t, std::unique_ptr<StreamEntry>> entries_;
+    std::unordered_map<std::string, std::uint64_t> producers_;
+    std::unordered_map<std::string, std::uint64_t> consumers_;
+};
+
+} // namespace
+
+// ============================================================================
+// In-memory endpoint: producer and consumer of a stream in one process.
+// ============================================================================
+
+struct InMemoryRuntimeNetEndpoint::Impl {
+    stream::MemorySequenceStore sequences;
+    StreamTable table{sequences};
+
+    // Lock held. Moves everything the producer has to the local consumer.
+    void transfer(const wire::StreamId& id)
+    {
+        auto* producer = table.find_producer(id);
+        auto* consumer = table.find_consumer(id);
+        if (!producer || !consumer) {
+            return;
+        }
+        static const std::string key = "local";
+        const auto now = Clock::now();
+        if (!attached.contains(stream_key(id))) {
+            const auto resume = consumer->consumer->resume_message();
+            producer->producer->resume(key, resume.stream_alias, resume.next_expected);
+            attached.insert(stream_key(id));
+        }
+        while (auto message = producer->producer->next_message(key)) {
+            consumer->consumer->on_packet(wire::decode_data_packet(*message), now);
+        }
+        // The local consumer acknowledges whatever the graph has taken.
+        if (const auto ack = consumer->consumer->ack_due(now + stream::kAckInterval)) {
+            producer->producer->acknowledge(key, ack->next_expected);
+        }
+        table.changed.notify_all();
+    }
+
+    std::unordered_set<std::string> attached;
+};
+
+InMemoryRuntimeNetEndpoint::InMemoryRuntimeNetEndpoint() : impl_(std::make_unique<Impl>())
+{
+    auto* impl = impl_.get();
+    impl->table.on_producer_data = [impl](StreamEntry& entry) {
+        // Within one process there is nothing to batch for: seal at once.
+        entry.producer->flush(Clock::now(), true);
+        impl->transfer(entry.config.stream_id);
+    };
+    impl->table.on_consumer_opened = [impl](StreamEntry& entry) { impl->transfer(entry.config.stream_id); };
+    impl->table.on_consumed = [impl](StreamEntry& entry) { impl->transfer(entry.config.stream_id); };
 }
+
+InMemoryRuntimeNetEndpoint::~InMemoryRuntimeNetEndpoint() = default;
 
 auto InMemoryRuntimeNetEndpoint::backend_name() const -> std::string
 {
     return "inmemory";
 }
 
-auto InMemoryRuntimeNetEndpoint::open_endpoint(const EndpointOpenRequest& request) -> EndpointOpenResult
+auto InMemoryRuntimeNetEndpoint::open_producer(const stream::StreamConfig& config) -> StreamHandle
 {
-    if (request.stream_name.empty()) {
-        return EndpointOpenResult{EndpointHandle{}, false, "stream_name must not be empty"};
-    }
+    return impl_->table.open(config, StreamRole::Producer);
+}
 
-    std::lock_guard<std::mutex> lock(mutex_);
+auto InMemoryRuntimeNetEndpoint::open_consumer(const stream::StreamConfig& config) -> StreamHandle
+{
+    return impl_->table.open(config, StreamRole::Consumer);
+}
 
-    const EndpointHandle handle{next_handle_++};
-    endpoints_.emplace(handle.value, EndpointState{
-        .stream_name = request.stream_name,
-        .allow_publish = request.allow_publish,
-        .allow_receive = request.allow_receive,
+void InMemoryRuntimeNetEndpoint::close_stream(const StreamHandle handle)
+{
+    impl_->table.close(handle);
+}
+
+auto InMemoryRuntimeNetEndpoint::publish(const StreamHandle handle, const void* elements, const std::size_t count) -> PublishResult
+{
+    return impl_->table.publish(handle, elements, count);
+}
+
+auto InMemoryRuntimeNetEndpoint::receive(const StreamHandle handle, void* elements, const std::size_t count) -> ReceiveResult
+{
+    auto* impl = impl_.get();
+    return impl->table.receive(handle, elements, count, [impl](StreamEntry& entry) {
+        // A waiting consumer: flush the producer's partial batch now and acknowledge.
+        if (auto* producer = impl->table.find_producer(entry.config.stream_id)) {
+            producer->producer->flush(Clock::now(), true);
+        }
+        impl->transfer(entry.config.stream_id);
     });
-
-    return EndpointOpenResult{handle, true, {}};
 }
 
-void InMemoryRuntimeNetEndpoint::close_endpoint(const EndpointHandle& handle)
+auto InMemoryRuntimeNetEndpoint::stream_statuses() const -> std::vector<StreamStatus>
 {
-    if (!handle.valid()) {
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    endpoints_.erase(handle.value);
+    return impl_->table.statuses();
 }
 
-auto InMemoryRuntimeNetEndpoint::publish(const EndpointHandle& handle, const DataPacket& packet) -> SendResult
+auto InMemoryRuntimeNetEndpoint::recover_stream(const wire::StreamId& stream_id) -> bool
 {
-    if (!handle.valid()) {
-        return SendResult{false, "invalid handle", 0};
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    const auto endpoint_it = endpoints_.find(handle.value);
-    if (endpoint_it == endpoints_.end()) {
-        return SendResult{false, "unknown endpoint handle", 0};
-    }
-    if (!endpoint_it->second.allow_publish) {
-        return SendResult{false, "endpoint is not publish-enabled", 0};
-    }
-
-    auto packet_to_queue = packet;
-    if (packet_to_queue.stream_name.empty()) {
-        packet_to_queue.stream_name = endpoint_it->second.stream_name;
-    }
-    // Round-trip through the codec so in-memory delivery applies the same
-    // validation as a network peer.
-    try {
-        packet_to_queue = decode_packet_prototype(encode_packet_prototype(packet_to_queue));
-    } catch (const std::exception& ex) {
-        return SendResult{false, std::string{"invalid data packet: "} + ex.what(), 0};
-    }
-
-    receive_queues_.push(std::move(packet_to_queue));
-    return SendResult{true, {}, 0};
+    return impl_->table.recover(stream_id);
 }
 
-auto InMemoryRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& packet) -> ReceiveResult
-{
-    if (!handle.valid()) {
-        return ReceiveResult{false, false, "invalid handle"};
-    }
+// ============================================================================
+// WebSocket endpoint: one I/O thread runs every socket operation
+// asynchronously; control requests run on a separate worker thread.
+// ============================================================================
 
-    std::lock_guard<std::mutex> lock(mutex_);
+namespace {
 
-    const auto endpoint_it = endpoints_.find(handle.value);
-    if (endpoint_it == endpoints_.end()) {
-        return ReceiveResult{false, false, "unknown endpoint handle"};
-    }
-    if (!endpoint_it->second.allow_receive) {
-        return ReceiveResult{false, false, "endpoint is not receive-enabled"};
-    }
+using Tcp = boost::asio::ip::tcp;
+namespace websocket = boost::beast::websocket;
+namespace http = boost::beast::http;
+namespace ssl = boost::asio::ssl;
+using PlainWs = websocket::stream<boost::beast::tcp_stream>;
+using TlsWs = websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>>;
+using Bytes = std::vector<std::uint8_t>;
 
-    const auto has_packet = receive_queues_.pop(endpoint_it->second.stream_name, packet);
-    return ReceiveResult{true, has_packet, {}};
-}
+constexpr std::size_t kMaxQueuedWrites = 64; // per connection, before the producer waits for write completions
+constexpr auto kTick = std::chrono::milliseconds(1);
+constexpr auto kReconnectDelay = std::chrono::seconds(1);
 
-auto InMemoryRuntimeNetEndpoint::stats() const -> TransportStats
-{
-    std::lock_guard<std::mutex> lock(mutex_);
-    TransportStats stats;
-    receive_queues_.add_to(stats);
-    return stats;
-}
+} // namespace
 
-void ReceiveQueues::push(DataPacket packet)
-{
-    ++received_;
-    auto it = queues_.find(packet.stream_name);
-    if (it == queues_.end()) {
-        // Drop emptied queues before refusing a new stream.
-        std::erase_if(queues_, [](const auto& entry) { return entry.second.empty(); });
-        if (queues_.size() >= limits_->max_receive_streams) {
-            ++dropped_stream_limit_;
-            return;
-        }
-        it = queues_.emplace(packet.stream_name, std::deque<DataPacket>{}).first;
-    }
-    auto& queue = it->second;
-    if (queue.size() >= limits_->max_receive_queue_packets) {
-        queue.pop_front();
-        ++dropped_queue_full_;
-    }
-    queue.push_back(std::move(packet));
-}
+struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntimeNetEndpoint::Impl> {
+    struct Connection;
+    using ConnectionPtr = std::shared_ptr<Connection>;
 
-auto ReceiveQueues::pop(const std::string& stream_name, DataPacket& packet) -> bool
-{
-    const auto it = queues_.find(stream_name);
-    if (it == queues_.end() || it->second.empty()) {
-        return false;
-    }
-    packet = std::move(it->second.front());
-    it->second.pop_front();
-    return true;
-}
+    // A WebSocket connection (plain or TLS). Every member is used on the I/O
+    // thread only.
+    struct Connection : std::enable_shared_from_this<Connection> {
+        Impl& impl;
+        bool is_data{false};
+        bool outbound{false};
+        std::uint64_t generation{0}; // outbound: the configure_client() call it belongs to
+        ControlPeer peer;
+        stream::ConsumerKey consumer_key{"anonymous"};
+        std::unique_ptr<PlainWs> plain;
+        std::unique_ptr<TlsWs> tls;
+        boost::beast::flat_buffer read_buffer;
+        std::deque<std::pair<std::shared_ptr<const Bytes>, bool>> writes; // bytes, binary
+        bool writing{false};
+        bool closed{false};
+        // Producer side: streams this peer consumes, alias (theirs) -> local handle.
+        std::unordered_map<std::uint32_t, std::uint64_t> producing;
+        std::unordered_map<std::uint64_t, std::uint32_t> producing_alias;
+        // RESUMEs for streams not (yet) produced here.
+        std::unordered_map<std::string, wire::ControlMessage> pending_resumes;
+        // Outbound control: the response to the request in flight.
+        std::shared_ptr<std::promise<std::string>> pending_response;
 
-void ReceiveQueues::add_to(TransportStats& stats) const
-{
-    stats.packets_received += received_;
-    stats.receive_dropped_queue_full += dropped_queue_full_;
-    stats.receive_dropped_stream_limit += dropped_stream_limit_;
-}
+        explicit Connection(Impl& owner) : impl(owner) {}
 
-// One WebSocket connection (inbound or outbound, control or data). A data
-// connection owns a bounded send queue drained by its writer thread; its
-// reader thread queues received packets. An inbound control connection's
-// reader answers requests. Threads never join themselves: closed connections
-// are reaped by the accept thread, configure_client(), or the destructor.
-struct BeastRuntimeNetEndpoint::Connection {
-    bool is_data{false};
-    bool outbound{false};
-    ControlPeer peer;
-    std::shared_ptr<PlainWs> plain;
-    std::shared_ptr<TlsWs> tls;
-
-    std::mutex write_mutex; // one writer at a time (writer thread or control replies)
-    std::mutex queue_mutex;
-    std::condition_variable queue_cv;
-    std::deque<std::shared_ptr<const std::vector<std::uint8_t>>> send_queue;
-    std::atomic<bool> closed{false};
-    std::thread reader;
-    std::thread writer;
-
-    void close()
-    {
-        if (closed.exchange(true)) {
-            queue_cv.notify_all();
-            return;
-        }
-        if (tls) {
-            interrupt_socket_reads(tls);
-        } else {
-            interrupt_socket_reads(plain);
-        }
-        queue_cv.notify_all();
-    }
-
-    void write(const std::string_view bytes, const bool binary, boost::system::error_code& ec)
-    {
-        std::lock_guard<std::mutex> lock(write_mutex);
-        if (tls) {
-            tls->binary(binary);
-            tls->write(boost::asio::buffer(bytes.data(), bytes.size()), ec);
-        } else {
-            plain->binary(binary);
-            plain->write(boost::asio::buffer(bytes.data(), bytes.size()), ec);
-        }
-    }
-
-    auto read(boost::system::error_code& ec) -> std::string
-    {
-        flat_buffer buffer;
-        if (tls) {
-            tls->read(buffer, ec);
-        } else {
-            plain->read(buffer, ec);
-        }
-        return ec ? std::string{} : boost::beast::buffers_to_string(buffer.data());
-    }
-
-    void join()
-    {
-        if (reader.joinable()) {
-            reader.join();
-        }
-        if (writer.joinable()) {
-            writer.join();
-        }
-    }
-};
-
-struct BeastRuntimeNetEndpoint::Impl {
-    std::shared_ptr<boost::asio::io_context> io_context = std::make_shared<boost::asio::io_context>();
-    std::shared_ptr<ssl::context> server_ssl_context;
-    std::shared_ptr<ssl::context> client_ssl_context;
-    bool server_tls_enabled{false};
-    std::mutex lifecycle_mutex;
-    std::unique_ptr<Tcp::acceptor> acceptor;
-    std::thread accept_thread;
-    std::atomic<bool> stop{false};
-    std::optional<std::uint16_t> server_port;
-
-    std::mutex control_handler_mutex;
-    ControlRequestHandler control_request_handler;
-    std::mutex control_request_mutex; // one outbound request/response at a time
-
-    std::mutex connections_mutex;
-    std::vector<std::shared_ptr<Connection>> connections;
-
-    std::atomic<std::uint64_t> connections_rejected{0};
-    std::atomic<std::uint64_t> packets_sent{0};
-    std::atomic<std::uint64_t> send_dropped_no_peer{0};
-    std::atomic<std::uint64_t> send_dropped_queue_full{0};
-
-    // Removes closed connections and returns them for joining outside the lock.
-    auto take_closed_connections() -> std::vector<std::shared_ptr<Connection>>
-    {
-        std::vector<std::shared_ptr<Connection>> closed;
-        std::lock_guard<std::mutex> lock(connections_mutex);
-        std::erase_if(connections, [&closed](const std::shared_ptr<Connection>& connection) {
-            if (connection->closed.load()) {
-                closed.push_back(connection);
-                return true;
+        template <typename F>
+        void with_ws(F&& f)
+        {
+            if (tls) {
+                f(*tls);
+            } else {
+                f(*plain);
             }
-            return false;
+        }
+
+        void start()
+        {
+            with_ws([](auto& ws) {
+                ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::server));
+                ws.read_message_max(wire::kMaxPayloadBytes + 4096);
+            });
+            read();
+        }
+
+        void read()
+        {
+            with_ws([self = shared_from_this()](auto& ws) {
+                ws.async_read(self->read_buffer, [self](const boost::system::error_code& ec, std::size_t) {
+                    self->on_read(ec);
+                });
+            });
+        }
+
+        void on_read(const boost::system::error_code& ec)
+        {
+            if (ec) {
+                close();
+                return;
+            }
+            const auto data = read_buffer.cdata();
+            const std::span<const std::uint8_t> message(static_cast<const std::uint8_t*>(data.data()), data.size());
+            ++impl.messages_received;
+            if (is_data) {
+                impl.on_data_message(*this, message);
+            } else {
+                impl.on_control_message(*this, std::string(reinterpret_cast<const char*>(message.data()), message.size()));
+            }
+            read_buffer.consume(read_buffer.size());
+            if (!closed) {
+                read();
+            }
+        }
+
+        void send(std::shared_ptr<const Bytes> bytes, const bool binary)
+        {
+            if (closed) {
+                return;
+            }
+            writes.emplace_back(std::move(bytes), binary);
+            if (!writing) {
+                write_next();
+            }
+        }
+
+        void write_next()
+        {
+            if (writes.empty() || closed) {
+                writing = false;
+                return;
+            }
+            writing = true;
+            auto [bytes, binary] = writes.front();
+            with_ws([self = shared_from_this(), bytes, binary](auto& ws) {
+                ws.binary(binary);
+                ws.async_write(boost::asio::buffer(*bytes), [self, bytes](const boost::system::error_code& ec, std::size_t) {
+                    if (ec) {
+                        self->close();
+                        return;
+                    }
+                    ++self->impl.messages_sent;
+                    self->writes.pop_front();
+                    self->write_next();
+                    if (self->is_data && self->writes.size() < kMaxQueuedWrites / 2) {
+                        self->impl.pump_connection(*self);
+                    }
+                });
+            });
+        }
+
+        void close()
+        {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            boost::system::error_code ignored;
+            if (tls) {
+                boost::beast::get_lowest_layer(*tls).socket().close(ignored);
+            } else if (plain) {
+                boost::beast::get_lowest_layer(*plain).socket().close(ignored);
+            }
+            if (pending_response) {
+                pending_response->set_exception(std::make_exception_ptr(std::runtime_error("control connection closed")));
+                pending_response.reset();
+            }
+            impl.on_connection_closed(shared_from_this());
+        }
+    };
+
+    explicit Impl(TransportLimits limits, std::string state_dir)
+        : limits(limits)
+        , sequences(state_dir.empty() ? std::unique_ptr<stream::SequenceStore>(std::make_unique<stream::MemorySequenceStore>())
+                                      : std::unique_ptr<stream::SequenceStore>(
+                                            std::make_unique<stream::FileSequenceStore>(std::filesystem::path(state_dir) / "streams")))
+        , table(*sequences)
+    {
+    }
+
+    void start()
+    {
+        auto weak = weak_from_this();
+        table.on_producer_data = [weak](StreamEntry&) {
+            if (const auto self = weak.lock()) {
+                self->schedule_pump();
+            }
+        };
+        table.on_consumer_opened = [weak](StreamEntry& entry) {
+            if (const auto self = weak.lock()) {
+                const auto resume = entry.consumer->resume_message();
+                boost::asio::post(self->io, [self, resume] {
+                    for (const auto& connection : self->connections) {
+                        if (connection->is_data && !connection->closed) {
+                            connection->send(std::make_shared<const Bytes>(to_bytes(resume)), true);
+                        }
+                    }
+                });
+            }
+        };
+        io_thread = std::thread([self = shared_from_this()] { self->io.run(); });
+        schedule_tick();
+    }
+
+    void stop()
+    {
+        boost::asio::post(io, [self = shared_from_this()] {
+            self->stopping = true;
+            boost::system::error_code ignored;
+            if (self->acceptor) {
+                self->acceptor->close(ignored);
+            }
+            self->tick_timer.cancel();
+            for (const auto& connection : std::vector<ConnectionPtr>(self->connections.begin(), self->connections.end())) {
+                connection->close();
+            }
+            self->work.reset();
         });
-        return closed;
+        if (io_thread.joinable()) {
+            io_thread.join();
+        }
+        control_pool.join();
+        table.changed.notify_all();
     }
 
-    void reap_closed_connections()
+    [[nodiscard]] static Bytes to_bytes(const wire::ControlMessage& message)
     {
-        for (const auto& connection : take_closed_connections()) {
-            connection->join();
+        const auto bytes = wire::encode_control_message(message);
+        return Bytes(bytes.begin(), bytes.end());
+    }
+
+    void record_error(std::string error)
+    {
+        std::lock_guard lock(errors_mutex);
+        if (errors.size() == 32) {
+            errors.pop_front();
+        }
+        errors.push_back(std::move(error));
+    }
+
+    // ---- data path (I/O thread) -------------------------------------------
+
+    void on_data_message(Connection& connection, const std::span<const std::uint8_t> message)
+    {
+        try {
+            if (wire::is_control_message(message)) {
+                on_stream_control(connection, wire::decode_control_message(message));
+            } else {
+                on_data_packet(connection, wire::decode_data_packet(message));
+            }
+        } catch (const wire::FormatError& ex) {
+            ++malformed_messages;
+            record_error(std::string("malformed message from peer: ") + ex.what());
+            connection.close(); // the peer reconnects and resumes
         }
     }
 
-    auto open_outbound(const bool is_data) -> std::shared_ptr<Connection>
+    void on_stream_control(Connection& connection, const wire::ControlMessage& message)
     {
-        std::lock_guard<std::mutex> lock(connections_mutex);
-        for (const auto& connection : connections) {
-            if (connection->outbound && connection->is_data == is_data && !connection->closed.load()) {
-                return connection;
+        std::unique_lock lock(table.mutex);
+        if (message.kind == wire::ControlKind::Ack) {
+            const auto it = connection.producing.find(message.stream_alias);
+            if (it != connection.producing.end()) {
+                if (auto* entry = table.find(StreamHandle{it->second})) {
+                    entry->producer->acknowledge(connection.consumer_key, message.next_expected);
+                    table.changed.notify_all();
+                }
+            }
+        } else {
+            const auto next = message.kind == wire::ControlKind::ResumeNoState ? 0 : message.next_expected;
+            auto* entry = table.find_producer(message.stream_id);
+            if (!entry) {
+                // Not produced here (yet): remember it in case the producer opens later.
+                auto pending = message;
+                pending.next_expected = next;
+                connection.pending_resumes[stream_key(message.stream_id)] = pending;
+                return;
+            }
+            attach(connection, *entry, message.stream_alias, next);
+        }
+        lock.unlock();
+        pump_connection(connection);
+    }
+
+    // Lock held.
+    void attach(Connection& connection, StreamEntry& entry, const std::uint32_t alias, const std::uint64_t next)
+    {
+        entry.producer->resume(connection.consumer_key, alias, next);
+        connection.producing[alias] = entry.handle.value;
+        connection.producing_alias[entry.handle.value] = alias;
+        table.changed.notify_all();
+    }
+
+    void on_data_packet(Connection& connection, const wire::DataPacket& packet)
+    {
+        std::lock_guard lock(table.mutex);
+        auto* entry = table.find_consumer_by_alias(packet.stream_alias);
+        if (!entry) {
+            return; // a stream closed meanwhile
+        }
+        entry->consumer->on_packet(packet, Clock::now());
+        consumer_sources[entry->handle.value] = connection.weak_from_this();
+        table.changed.notify_all();
+    }
+
+    void schedule_pump()
+    {
+        boost::asio::post(io, [weak = weak_from_this()] {
+            if (const auto self = weak.lock()) {
+                for (const auto& connection : self->connections) {
+                    if (connection->is_data && !connection->closed) {
+                        self->apply_pending_resumes(*connection);
+                        self->pump_connection(*connection);
+                    }
+                }
+            }
+        });
+    }
+
+    void apply_pending_resumes(Connection& connection)
+    {
+        if (connection.pending_resumes.empty()) {
+            return;
+        }
+        std::lock_guard lock(table.mutex);
+        for (auto it = connection.pending_resumes.begin(); it != connection.pending_resumes.end();) {
+            if (auto* entry = table.find_producer(it->second.stream_id)) {
+                attach(connection, *entry, it->second.stream_alias, it->second.next_expected);
+                it = connection.pending_resumes.erase(it);
+            } else {
+                ++it;
             }
         }
-        return nullptr;
     }
+
+    // Sends the producer streams' next packets to this connection, bounded by
+    // the write queue (the rest follows on write completion).
+    void pump_connection(Connection& connection)
+    {
+        if (connection.closed || !connection.is_data) {
+            return;
+        }
+        std::lock_guard lock(table.mutex);
+        bool progress = true;
+        while (progress && connection.writes.size() < kMaxQueuedWrites) {
+            progress = false;
+            for (const auto& [handle, alias] : connection.producing_alias) {
+                auto* entry = table.find(StreamHandle{handle});
+                if (!entry) {
+                    continue;
+                }
+                if (auto message = entry->producer->next_message(connection.consumer_key)) {
+                    connection.send(std::make_shared<const Bytes>(std::move(*message)), true);
+                    progress = true;
+                }
+            }
+        }
+    }
+
+    void schedule_tick()
+    {
+        tick_timer.expires_after(kTick);
+        tick_timer.async_wait([weak = weak_from_this()](const boost::system::error_code& ec) {
+            const auto self = weak.lock();
+            if (ec || !self || self->stopping) {
+                return;
+            }
+            self->on_tick();
+            self->schedule_tick();
+        });
+    }
+
+    // Flushes due batches and sends due acknowledgements.
+    void on_tick()
+    {
+        const auto now = Clock::now();
+        bool flushed = false;
+        std::vector<std::pair<std::shared_ptr<Connection>, Bytes>> acks;
+        {
+            std::lock_guard lock(table.mutex);
+            table.for_each([&](StreamEntry& entry) {
+                if (entry.producer) {
+                    flushed |= entry.producer->flush(now);
+                } else if (const auto ack = entry.consumer->ack_due(now)) {
+                    if (const auto it = consumer_sources.find(entry.handle.value); it != consumer_sources.end()) {
+                        if (auto connection = it->second.lock()) {
+                            acks.emplace_back(std::move(connection), to_bytes(*ack));
+                        }
+                    }
+                }
+            });
+            if (flushed) {
+                table.changed.notify_all();
+            }
+        }
+        for (auto& [connection, bytes] : acks) {
+            connection->send(std::make_shared<const Bytes>(std::move(bytes)), true);
+        }
+        if (flushed) {
+            for (const auto& connection : connections) {
+                pump_connection(*connection);
+            }
+        }
+    }
+
+    // A new data connection: resume every local consumer stream on it.
+    void on_data_connection(Connection& connection)
+    {
+        std::vector<Bytes> resumes;
+        {
+            std::lock_guard lock(table.mutex);
+            table.for_each([&](StreamEntry& entry) {
+                if (entry.consumer) {
+                    resumes.push_back(to_bytes(entry.consumer->resume_message()));
+                }
+            });
+        }
+        for (auto& bytes : resumes) {
+            connection.send(std::make_shared<const Bytes>(std::move(bytes)), true);
+        }
+    }
+
+    void on_connection_closed(const ConnectionPtr& connection)
+    {
+        {
+            std::lock_guard lock(table.mutex);
+            for (const auto& [handle, _] : connection->producing_alias) {
+                if (auto* entry = table.find(StreamHandle{handle})) {
+                    entry->producer->detach(connection->consumer_key);
+                }
+            }
+        }
+        connections.erase(connection);
+        // A dropped connection of the current client configuration reconnects;
+        // connections replaced by configure_client() do not.
+        if (connection->outbound && !stopping && client_url && connection->generation == client_generation) {
+            schedule_reconnect(client_generation);
+        }
+    }
+
+    // ---- control path -------------------------------------------------------
+
+    void on_control_message(Connection& connection, std::string text)
+    {
+        if (connection.outbound) {
+            if (auto pending = std::exchange(connection.pending_response, nullptr)) {
+                pending->set_value(std::move(text));
+            }
+            return;
+        }
+        ControlRequestHandler handler;
+        {
+            std::lock_guard lock(handler_mutex);
+            handler = control_handler;
+        }
+        boost::asio::post(control_pool, [self = shared_from_this(), connection = connection.shared_from_this(), handler,
+                                         text = std::move(text)] {
+            std::string response;
+            try {
+                response = handler ? handler(connection->peer, text)
+                                   : R"({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})";
+            } catch (...) {
+                response = R"({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})";
+            }
+            boost::asio::post(self->io, [connection, response = std::move(response)] {
+                const auto* begin = reinterpret_cast<const std::uint8_t*>(response.data());
+                connection->send(std::make_shared<const Bytes>(begin, begin + response.size()), false);
+            });
+        });
+    }
+
+    // ---- server -------------------------------------------------------------
+
+    void accept()
+    {
+        acceptor->async_accept([self = shared_from_this()](const boost::system::error_code& ec, Tcp::socket socket) {
+            if (self->stopping || ec == boost::asio::error::operation_aborted) {
+                return;
+            }
+            if (ec) {
+                self->record_error("accept failed: " + ec.message());
+                self->accept();
+                return;
+            }
+            std::size_t inbound = 0;
+            for (const auto& connection : self->connections) {
+                inbound += connection->outbound ? 0 : 1;
+            }
+            if (inbound >= self->limits.max_inbound_connections) {
+                ++self->connections_rejected;
+                boost::system::error_code ignored;
+                socket.close(ignored);
+            } else {
+                self->handshake_inbound(std::move(socket));
+            }
+            self->accept();
+        });
+    }
+
+    void handshake_inbound(Tcp::socket socket)
+    {
+        auto connection = std::make_shared<Connection>(*this);
+        auto request = std::make_shared<http::request<http::string_body>>();
+        auto buffer = std::make_shared<boost::beast::flat_buffer>();
+        auto finish = [self = shared_from_this(), connection, request](const boost::system::error_code& ec) {
+            if (ec || self->stopping) {
+                return;
+            }
+            const auto target = std::string(request->target());
+            if (!target.ends_with("/data") && !target.ends_with("/control")) {
+                connection->with_ws([](auto& ws) {
+                    ws.async_close(websocket::close_code::policy_error, [](const boost::system::error_code&) {});
+                });
+                return;
+            }
+            connection->is_data = target.ends_with("/data");
+            self->register_connection(connection);
+        };
+        if (server_tls) {
+            connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(std::move(socket)), *server_tls);
+            boost::beast::get_lowest_layer(*connection->tls).expires_after(std::chrono::seconds(10));
+            connection->tls->next_layer().async_handshake(
+                ssl::stream_base::server, [self = shared_from_this(), connection, request, buffer, finish](const boost::system::error_code& ec) {
+                    if (ec) {
+                        return;
+                    }
+                    connection->peer = ControlPeer{true, verified_peer_certificate(connection->tls->next_layer().native_handle())};
+                    http::async_read(connection->tls->next_layer(), *buffer, *request,
+                                     [connection, request, buffer, finish](const boost::system::error_code& read_ec, std::size_t) {
+                                         if (read_ec) {
+                                             return;
+                                         }
+                                         boost::beast::get_lowest_layer(*connection->tls).expires_never();
+                                         connection->tls->async_accept(*request, finish);
+                                     });
+                });
+        } else {
+            connection->plain = std::make_unique<PlainWs>(boost::beast::tcp_stream(std::move(socket)));
+            boost::beast::get_lowest_layer(*connection->plain).expires_after(std::chrono::seconds(10));
+            http::async_read(connection->plain->next_layer(), *buffer, *request,
+                             [connection, request, buffer, finish](const boost::system::error_code& ec, std::size_t) {
+                                 if (ec) {
+                                     return;
+                                 }
+                                 boost::beast::get_lowest_layer(*connection->plain).expires_never();
+                                 connection->plain->async_accept(*request, finish);
+                             });
+        }
+    }
+
+    void register_connection(const ConnectionPtr& connection)
+    {
+        if (connection->peer.certificate) {
+            connection->consumer_key = connection->peer.certificate->fingerprint_sha256;
+        }
+        connections.insert(connection);
+        connection->start();
+        if (connection->is_data) {
+            on_data_connection(*connection);
+        }
+    }
+
+    // ---- client -------------------------------------------------------------
+
+    // Connects /control and /data to the configured URL; reports through `done`.
+    void connect_outbound(const std::uint64_t generation, std::function<void(std::exception_ptr)> done)
+    {
+        auto pending = std::make_shared<int>(2);
+        auto failure = std::make_shared<std::exception_ptr>();
+        auto complete = [done, pending, failure](std::exception_ptr error) {
+            if (error && !*failure) {
+                *failure = error;
+            }
+            if (--*pending == 0 && done) {
+                done(*failure);
+            }
+        };
+        for (const bool is_data : {false, true}) {
+            connect_one(generation, is_data, complete);
+        }
+    }
+
+    void connect_one(const std::uint64_t generation, const bool is_data, std::function<void(std::exception_ptr)> complete)
+    {
+        const auto url = *client_url;
+        auto connection = std::make_shared<Connection>(*this);
+        connection->outbound = true;
+        connection->is_data = is_data;
+        connection->generation = generation;
+        const auto target = ws_target_for_path(url, is_data ? "/data" : "/control");
+        const auto host = url.host + ":" + url.port;
+        auto fail = [complete](const boost::system::error_code& ec, const char* stage) {
+            complete(std::make_exception_ptr(std::runtime_error(std::string("connect failed (") + stage + "): " + ec.message())));
+        };
+        auto resolver = std::make_shared<Tcp::resolver>(io);
+        resolver->async_resolve(url.host, url.port, [self = shared_from_this(), resolver, connection, generation, target, host, complete, fail](
+                                                        const boost::system::error_code& ec, Tcp::resolver::results_type results) {
+            if (ec) {
+                return fail(ec, "resolve");
+            }
+            auto on_ws = [self, connection, generation, complete, fail](const boost::system::error_code& ws_ec) {
+                if (ws_ec) {
+                    return fail(ws_ec, "websocket handshake");
+                }
+                if (generation != self->client_generation || self->stopping) {
+                    connection->close();
+                    return complete(nullptr);
+                }
+                if (connection->tls) {
+                    connection->peer = ControlPeer{true, verified_peer_certificate(connection->tls->next_layer().native_handle())};
+                }
+                self->register_connection(connection);
+                complete(nullptr);
+            };
+            if (self->client_tls) {
+                connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(self->io), *self->client_tls);
+                auto& tcp = boost::beast::get_lowest_layer(*connection->tls);
+                tcp.expires_after(std::chrono::seconds(10));
+                tcp.async_connect(results, [connection, target, host, on_ws, fail](const boost::system::error_code& c_ec, const auto&) {
+                    if (c_ec) {
+                        return fail(c_ec, "tcp connect");
+                    }
+                    connection->tls->next_layer().async_handshake(ssl::stream_base::client, [connection, target, host, on_ws, fail](const boost::system::error_code& h_ec) {
+                        if (h_ec) {
+                            return fail(h_ec, "tls handshake");
+                        }
+                        boost::beast::get_lowest_layer(*connection->tls).expires_never();
+                        connection->tls->async_handshake(host, target, on_ws);
+                    });
+                });
+            } else {
+                connection->plain = std::make_unique<PlainWs>(boost::beast::tcp_stream(self->io));
+                auto& tcp = boost::beast::get_lowest_layer(*connection->plain);
+                tcp.expires_after(std::chrono::seconds(10));
+                tcp.async_connect(results, [connection, target, host, on_ws, fail](const boost::system::error_code& c_ec, const auto&) {
+                    if (c_ec) {
+                        return fail(c_ec, "tcp connect");
+                    }
+                    boost::beast::get_lowest_layer(*connection->plain).expires_never();
+                    connection->plain->async_handshake(host, target, on_ws);
+                });
+            }
+        });
+    }
+
+    void schedule_reconnect(const std::uint64_t generation)
+    {
+        if (reconnect_scheduled) {
+            return;
+        }
+        reconnect_scheduled = true;
+        auto timer = std::make_shared<boost::asio::steady_timer>(io, kReconnectDelay);
+        timer->async_wait([self = shared_from_this(), timer, generation](const boost::system::error_code& ec) {
+            self->reconnect_scheduled = false;
+            if (ec || self->stopping || generation != self->client_generation) {
+                return;
+            }
+            // Drop the surviving half (if any) and reconnect both channels.
+            for (const auto& connection : std::vector<ConnectionPtr>(self->connections.begin(), self->connections.end())) {
+                if (connection->outbound) {
+                    connection->close();
+                }
+            }
+            self->connect_outbound(generation, [self, generation](const std::exception_ptr& error) {
+                if (error) {
+                    self->schedule_reconnect(generation);
+                }
+            });
+        });
+    }
+
+    template <typename F>
+    auto run_on_io(F&& f) -> decltype(f())
+    {
+        using R = decltype(f());
+        std::packaged_task<R()> task(std::forward<F>(f));
+        auto future = task.get_future();
+        boost::asio::post(io, [&task] { task(); });
+        return future.get();
+    }
+
+    TransportLimits limits;
+    boost::asio::io_context io;
+    std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work{io.get_executor()};
+    boost::asio::thread_pool control_pool{1};
+    std::thread io_thread;
+    boost::asio::steady_timer tick_timer{io};
+    std::unique_ptr<stream::SequenceStore> sequences;
+    StreamTable table;
+
+    // I/O thread only:
+    bool stopping{false};
+    std::optional<Tcp::acceptor> acceptor;
+    std::shared_ptr<ssl::context> server_tls;
+    std::shared_ptr<ssl::context> client_tls;
+    std::optional<ParsedWebSocketUrl> client_url;
+    std::uint64_t client_generation{0};
+    bool reconnect_scheduled{false};
+    std::unordered_set<ConnectionPtr> connections;
+    std::unordered_map<std::uint64_t, std::weak_ptr<Connection>> consumer_sources; // consumer handle -> data source (lock: table.mutex)
+
+    std::mutex handler_mutex;
+    ControlRequestHandler control_handler;
+    std::mutex request_mutex; // one outbound control request at a time
+    std::mutex errors_mutex;
+    std::deque<std::string> errors;
+    std::atomic<std::uint64_t> connections_rejected{0};
+    std::atomic<std::uint64_t> messages_sent{0};
+    std::atomic<std::uint64_t> messages_received{0};
+    std::atomic<std::uint64_t> malformed_messages{0};
 };
 
-BeastRuntimeNetEndpoint::BeastRuntimeNetEndpoint(TransportLimits limits)
-    : limits_(limits)
-    , impl_(std::make_unique<Impl>())
+BeastRuntimeNetEndpoint::BeastRuntimeNetEndpoint(TransportLimits limits, std::string state_dir)
+    : impl_(std::make_shared<Impl>(limits, std::move(state_dir)))
 {
+    impl_->start();
 }
 
 BeastRuntimeNetEndpoint::~BeastRuntimeNetEndpoint()
 {
-    impl_->stop = true;
-    {
-        std::lock_guard<std::mutex> lock(impl_->lifecycle_mutex);
-        if (impl_->acceptor) {
-            boost::system::error_code ec;
-            impl_->acceptor->close(ec);
-        }
-    }
-    if (impl_->accept_thread.joinable()) {
-        impl_->accept_thread.join();
-    }
-
-    std::vector<std::shared_ptr<Connection>> connections;
-    {
-        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
-        connections.swap(impl_->connections);
-    }
-    for (const auto& connection : connections) {
-        connection->close();
-    }
-    for (const auto& connection : connections) {
-        connection->join();
-    }
+    impl_->stop();
 }
 
 auto BeastRuntimeNetEndpoint::backend_name() const -> std::string
@@ -707,448 +1234,174 @@ auto BeastRuntimeNetEndpoint::backend_name() const -> std::string
     return "beast";
 }
 
-void BeastRuntimeNetEndpoint::set_control_request_handler(ControlRequestHandler handler)
+auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls) -> std::uint16_t
 {
-    std::lock_guard<std::mutex> lock(impl_->control_handler_mutex);
-    impl_->control_request_handler = std::move(handler);
-}
-
-void BeastRuntimeNetEndpoint::handle_data_frame(const std::string& bytes, Connection& connection)
-{
-    const std::vector<std::uint8_t> frame(bytes.begin(), bytes.end());
-    DataPacket packet;
-    try {
-        packet = decode_packet_prototype(frame);
-    } catch (const std::exception& ex) {
-        // A malformed frame closes only this peer's connection.
-        record_transport_error(std::string{"invalid data packet: "} + ex.what());
-        connection.close();
-        return;
-    }
-    std::lock_guard<std::mutex> lock(mutex_);
-    receive_queues_.push(std::move(packet));
-}
-
-void BeastRuntimeNetEndpoint::start_connection(const std::shared_ptr<Connection>& connection)
-{
-    auto* conn = connection.get();
-    if (connection->is_data) {
-        connection->reader = std::thread([this, conn] {
-            while (!impl_->stop.load() && !conn->closed.load()) {
-                boost::system::error_code ec;
-                const auto bytes = conn->read(ec);
-                if (ec) {
-                    break;
-                }
-                handle_data_frame(bytes, *conn);
-            }
-            conn->close();
-        });
-        connection->writer = std::thread([this, conn] {
-            while (true) {
-                std::shared_ptr<const std::vector<std::uint8_t>> frame;
-                {
-                    std::unique_lock<std::mutex> lock(conn->queue_mutex);
-                    conn->queue_cv.wait(lock, [conn] { return conn->closed.load() || !conn->send_queue.empty(); });
-                    if (conn->closed.load()) {
-                        return;
-                    }
-                    frame = std::move(conn->send_queue.front());
-                    conn->send_queue.pop_front();
-                }
-                boost::system::error_code ec;
-                conn->write({reinterpret_cast<const char*>(frame->data()), frame->size()}, true, ec);
-                if (ec) {
-                    conn->close();
-                    return;
-                }
-                impl_->packets_sent.fetch_add(1);
-            }
-        });
-    } else if (!connection->outbound) {
-        connection->reader = std::thread([this, conn] {
-            while (!impl_->stop.load() && !conn->closed.load()) {
-                boost::system::error_code ec;
-                const auto request_json = conn->read(ec);
-                if (ec) {
-                    break;
-                }
-                ControlRequestHandler handler;
-                {
-                    std::lock_guard<std::mutex> lock(impl_->control_handler_mutex);
-                    handler = impl_->control_request_handler;
-                }
-                std::string response_json;
-                try {
-                    response_json = handler
-                        ? handler(conn->peer, request_json)
-                        : std::string{R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})json"};
-                } catch (...) {
-                    response_json = R"json({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})json";
-                }
-                conn->write(response_json, false, ec);
-                if (ec) {
-                    break;
-                }
-            }
-            conn->close();
-        });
-    }
-
-    std::lock_guard<std::mutex> lock(impl_->connections_mutex);
-    impl_->connections.push_back(connection);
-}
-
-void BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls)
-{
-    if (port == 0) {
-        throw std::invalid_argument("BeastRuntimeNetEndpoint server port must not be 0.");
-    }
-
-    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
-    if (impl_->server_port == port && impl_->accept_thread.joinable()) {
-        return;
-    }
-    if (impl_->accept_thread.joinable()) {
-        throw std::logic_error("BeastRuntimeNetEndpoint server is already listening on another port.");
-    }
-
-    impl_->server_port = port;
-    impl_->server_tls_enabled = tls.enabled;
+    std::shared_ptr<ssl::context> context;
     if (tls.enabled) {
         if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
             throw std::invalid_argument("TLS server requires cert_file, key_file, and ca_file.");
         }
-        impl_->server_ssl_context = std::make_shared<ssl::context>(ssl::context::tls_server);
-        impl_->server_ssl_context->set_options(ssl::context::default_workarounds | ssl::context::no_sslv2 | ssl::context::single_dh_use);
-        impl_->server_ssl_context->use_certificate_chain_file(tls.cert_file);
-        impl_->server_ssl_context->use_private_key_file(tls.key_file, ssl::context::pem);
-        impl_->server_ssl_context->load_verify_file(tls.ca_file);
-        impl_->server_ssl_context->set_verify_mode(tls.require_client_cert
-            ? (ssl::verify_peer | ssl::verify_fail_if_no_peer_cert)
-            : ssl::verify_peer);
+        context = std::make_shared<ssl::context>(ssl::context::tls_server);
+        context->set_options(ssl::context::default_workarounds | ssl::context::no_sslv2 | ssl::context::single_dh_use);
+        context->use_certificate_chain_file(tls.cert_file);
+        context->use_private_key_file(tls.key_file, ssl::context::pem);
+        context->load_verify_file(tls.ca_file);
+        context->set_verify_mode(tls.require_client_cert ? (ssl::verify_peer | ssl::verify_fail_if_no_peer_cert) : ssl::verify_peer);
     }
-    impl_->acceptor = std::make_unique<Tcp::acceptor>(*impl_->io_context, Tcp::endpoint(Tcp::v4(), port));
-    impl_->acceptor->non_blocking(true);
-    impl_->accept_thread = std::thread([this] {
-        while (!impl_->stop.load()) {
-            impl_->reap_closed_connections();
-
-            Tcp::socket socket(*impl_->io_context);
-            boost::system::error_code ec;
-            impl_->acceptor->accept(socket, ec);
-            if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                continue;
+    return impl_->run_on_io([&]() -> std::uint16_t {
+        if (impl_->acceptor) {
+            const auto listening = impl_->acceptor->local_endpoint().port();
+            if (port == 0 || listening == port) {
+                return listening;
             }
-            if (ec == boost::asio::error::operation_aborted || ec == boost::asio::error::bad_descriptor) {
-                break;
-            }
-            if (ec) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                continue;
-            }
-            socket.non_blocking(false, ec);
-
-            std::size_t inbound = 0;
-            {
-                std::lock_guard<std::mutex> lock(impl_->connections_mutex);
-                inbound = static_cast<std::size_t>(std::count_if(
-                    impl_->connections.begin(), impl_->connections.end(),
-                    [](const auto& connection) { return !connection->outbound && !connection->closed.load(); }));
-            }
-            if (inbound >= limits_.max_inbound_connections) {
-                impl_->connections_rejected.fetch_add(1);
-                socket.close(ec);
-                continue;
-            }
-
-            auto connection = std::make_shared<Connection>();
-            std::string target;
-            if (impl_->server_tls_enabled) {
-                auto ws = std::make_shared<TlsWs>(std::move(socket), *impl_->server_ssl_context);
-                ws->next_layer().handshake(ssl::stream_base::server, ec);
-                if (ec) {
-                    continue;
-                }
-                flat_buffer buffer;
-                http::request<http::string_body> request;
-                http::read(ws->next_layer(), buffer, request, ec);
-                if (ec) {
-                    continue;
-                }
-                ws->accept(request, ec);
-                if (ec) {
-                    continue;
-                }
-                target = std::string(request.target());
-                connection->peer = ControlPeer{.tls = true,
-                                               .certificate = verified_peer_certificate(ws->next_layer().native_handle())};
-                connection->tls = std::move(ws);
-            } else {
-                flat_buffer buffer;
-                http::request<http::string_body> request;
-                http::read(socket, buffer, request, ec);
-                if (ec) {
-                    continue;
-                }
-                auto ws = std::make_shared<PlainWs>(std::move(socket));
-                ws->accept(request, ec);
-                if (ec) {
-                    continue;
-                }
-                target = std::string(request.target());
-                connection->plain = std::move(ws);
-            }
-
-            const auto is_data = target.ends_with("/data");
-            if (!is_data && !target.ends_with("/control")) {
-                boost::system::error_code close_ec;
-                if (connection->tls) {
-                    connection->tls->close(websocket::close_code::policy_error, close_ec);
-                } else {
-                    connection->plain->close(websocket::close_code::policy_error, close_ec);
-                }
-                continue;
-            }
-            connection->is_data = is_data;
-            start_connection(connection);
+            throw std::logic_error("BeastRuntimeNetEndpoint server is already listening on another port.");
         }
+        impl_->server_tls = context;
+        Tcp::acceptor acceptor(impl_->io);
+        const Tcp::endpoint endpoint(Tcp::v4(), port);
+        acceptor.open(endpoint.protocol());
+        acceptor.set_option(Tcp::acceptor::reuse_address(true));
+        acceptor.bind(endpoint);
+        acceptor.listen();
+        impl_->acceptor.emplace(std::move(acceptor));
+        impl_->accept();
+        return impl_->acceptor->local_endpoint().port();
     });
 }
 
 void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls)
 {
     const auto parsed = parse_ws_url(url);
-    std::lock_guard<std::mutex> lifecycle_lock(impl_->lifecycle_mutex);
-
-    const auto tls_enabled = parsed.secure || tls.enabled;
-    if (tls_enabled) {
+    std::shared_ptr<ssl::context> context;
+    if (parsed.secure || tls.enabled) {
         if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
             throw std::invalid_argument("TLS client requires cert_file, key_file, and ca_file.");
         }
-        impl_->client_ssl_context = std::make_shared<ssl::context>(ssl::context::tls_client);
-        impl_->client_ssl_context->set_default_verify_paths();
-        impl_->client_ssl_context->use_certificate_chain_file(tls.cert_file);
-        impl_->client_ssl_context->use_private_key_file(tls.key_file, ssl::context::pem);
-        impl_->client_ssl_context->load_verify_file(tls.ca_file);
-        impl_->client_ssl_context->set_verify_mode(ssl::verify_peer);
+        context = std::make_shared<ssl::context>(ssl::context::tls_client);
+        context->set_default_verify_paths();
+        context->use_certificate_chain_file(tls.cert_file);
+        context->use_private_key_file(tls.key_file, ssl::context::pem);
+        context->load_verify_file(tls.ca_file);
+        context->set_verify_mode(ssl::verify_peer);
     }
-
-    // Reconnect: close the previous outbound connections first.
-    {
-        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
-        for (const auto& connection : impl_->connections) {
+    auto result = std::make_shared<std::promise<void>>();
+    auto future = result->get_future();
+    boost::asio::post(impl_->io, [impl = impl_, parsed, context, result] {
+        // Replace the previous outbound connections.
+        ++impl->client_generation;
+        for (const auto& connection : std::vector<Impl::ConnectionPtr>(impl->connections.begin(), impl->connections.end())) {
             if (connection->outbound) {
                 connection->close();
             }
         }
-    }
-    impl_->reap_closed_connections();
+        impl->client_url = parsed;
+        impl->client_tls = context;
+        impl->connect_outbound(impl->client_generation, [result](const std::exception_ptr& error) {
+            if (error) {
+                result->set_exception(error);
+            } else {
+                result->set_value();
+            }
+        });
+    });
+    future.get();
+}
 
-    auto connect = [&](const std::string_view suffix, const bool is_data) {
-        Tcp::resolver resolver(*impl_->io_context);
-        const auto results = resolver.resolve(parsed.host, parsed.port);
-        const auto target = ws_target_for_path(parsed, suffix);
-        auto connection = std::make_shared<Connection>();
-        connection->is_data = is_data;
-        connection->outbound = true;
-        if (tls_enabled) {
-            auto ws = std::make_shared<TlsWs>(*impl_->io_context, *impl_->client_ssl_context);
-            boost::asio::connect(ws->next_layer().next_layer(), results.begin(), results.end());
-            ws->next_layer().handshake(ssl::stream_base::client);
-            ws->handshake(parsed.host + ":" + parsed.port, target);
-            connection->tls = std::move(ws);
-        } else {
-            auto ws = std::make_shared<PlainWs>(*impl_->io_context);
-            boost::asio::connect(ws->next_layer(), results.begin(), results.end());
-            ws->handshake(parsed.host + ":" + parsed.port, target);
-            connection->plain = std::move(ws);
-        }
-        start_connection(connection);
-    };
-    connect("/control", false);
-    connect("/data", true);
+void BeastRuntimeNetEndpoint::set_control_request_handler(ControlRequestHandler handler)
+{
+    std::lock_guard lock(impl_->handler_mutex);
+    impl_->control_handler = std::move(handler);
 }
 
 auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_json) -> std::string
 {
-    const auto connection = impl_->open_outbound(false);
-    if (!connection) {
-        throw std::runtime_error("control channel is not connected");
-    }
-
-    std::lock_guard<std::mutex> call_lock(impl_->control_request_mutex);
-    const websocket::stream_base::timeout timeout{std::chrono::seconds(5), std::chrono::seconds(5), false};
-    if (connection->tls) {
-        connection->tls->set_option(timeout);
-    } else {
-        connection->plain->set_option(timeout);
-    }
-    boost::system::error_code ec;
-    connection->write(request_json, false, ec);
-    if (ec) {
-        connection->close();
-        throw std::runtime_error("control write failed: " + ec.message());
-    }
-    auto response = connection->read(ec);
-    if (ec) {
-        connection->close();
-        throw std::runtime_error("control read failed: " + ec.message());
-    }
-    return response;
-}
-
-auto BeastRuntimeNetEndpoint::open_endpoint(const EndpointOpenRequest& request) -> EndpointOpenResult
-{
-    if (request.stream_name.empty()) {
-        return EndpointOpenResult{EndpointHandle{}, false, "stream_name must not be empty"};
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    const EndpointHandle handle{next_handle_++};
-    endpoints_.emplace(handle.value, EndpointState{
-        .stream_name = request.stream_name,
-        .allow_publish = request.allow_publish,
-        .allow_receive = request.allow_receive,
+    std::lock_guard serialize(impl_->request_mutex);
+    auto response = std::make_shared<std::promise<std::string>>();
+    auto future = response->get_future();
+    boost::asio::post(impl_->io, [impl = impl_, response, request_json] {
+        for (const auto& connection : impl->connections) {
+            if (connection->outbound && !connection->is_data && !connection->closed) {
+                connection->pending_response = response;
+                const auto* begin = reinterpret_cast<const std::uint8_t*>(request_json.data());
+                connection->send(std::make_shared<const Bytes>(begin, begin + request_json.size()), false);
+                return;
+            }
+        }
+        response->set_exception(std::make_exception_ptr(std::runtime_error("control channel is not connected")));
     });
-    return EndpointOpenResult{handle, true, {}};
+    if (future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+        throw std::runtime_error("control request timed out");
+    }
+    return future.get();
 }
 
-void BeastRuntimeNetEndpoint::close_endpoint(const EndpointHandle& handle)
+auto BeastRuntimeNetEndpoint::open_producer(const stream::StreamConfig& config) -> StreamHandle
 {
-    if (!handle.valid()) {
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(mutex_);
-    endpoints_.erase(handle.value);
+    return impl_->table.open(config, StreamRole::Producer);
 }
 
-// Queues the packet for every connected data peer without blocking. Streams
-// are not yet routed per peer: that needs the stream descriptors of the
-// committed configuration (wire draft section 12.1); receivers keep only the
-// streams they queue within their limits.
-auto BeastRuntimeNetEndpoint::publish(const EndpointHandle& handle, const DataPacket& packet) -> SendResult
+auto BeastRuntimeNetEndpoint::open_consumer(const stream::StreamConfig& config) -> StreamHandle
 {
-    if (!handle.valid()) {
-        return SendResult{false, "invalid handle", 0};
-    }
-
-    std::string stream_name;
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        const auto endpoint_it = endpoints_.find(handle.value);
-        if (endpoint_it == endpoints_.end()) {
-            return SendResult{false, "unknown endpoint handle", 0};
-        }
-        if (!endpoint_it->second.allow_publish) {
-            return SendResult{false, "endpoint is not publish-enabled", 0};
-        }
-        stream_name = endpoint_it->second.stream_name;
-    }
-
-    auto packet_to_send = packet;
-    if (packet_to_send.stream_name.empty()) {
-        packet_to_send.stream_name = stream_name;
-    }
-    std::shared_ptr<const std::vector<std::uint8_t>> frame;
-    try {
-        frame = std::make_shared<const std::vector<std::uint8_t>>(encode_packet_prototype(packet_to_send));
-    } catch (const std::exception& ex) {
-        return SendResult{false, std::string{"invalid data packet: "} + ex.what(), 0};
-    }
-
-    std::vector<std::shared_ptr<Connection>> peers;
-    {
-        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
-        for (const auto& connection : impl_->connections) {
-            if (connection->is_data && !connection->closed.load()) {
-                peers.push_back(connection);
-            }
-        }
-    }
-    if (peers.empty()) {
-        impl_->send_dropped_no_peer.fetch_add(1);
-        return SendResult{true, {}, 0, false};
-    }
-
-    std::size_t deepest = 0;
-    for (const auto& peer : peers) {
-        {
-            std::lock_guard<std::mutex> lock(peer->queue_mutex);
-            if (peer->send_queue.size() >= limits_.max_send_queue_packets) {
-                peer->send_queue.pop_front();
-                impl_->send_dropped_queue_full.fetch_add(1);
-            }
-            peer->send_queue.push_back(frame);
-            deepest = std::max(deepest, peer->send_queue.size());
-        }
-        peer->queue_cv.notify_one();
-    }
-    return SendResult{true, {}, deepest, true};
+    return impl_->table.open(config, StreamRole::Consumer);
 }
 
-auto BeastRuntimeNetEndpoint::receive(const EndpointHandle& handle, DataPacket& packet) -> ReceiveResult
+void BeastRuntimeNetEndpoint::close_stream(const StreamHandle handle)
 {
-    if (!handle.valid()) {
-        return ReceiveResult{false, false, "invalid handle"};
-    }
+    impl_->table.close(handle);
+}
 
-    std::lock_guard<std::mutex> lock(mutex_);
-    const auto endpoint_it = endpoints_.find(handle.value);
-    if (endpoint_it == endpoints_.end()) {
-        return ReceiveResult{false, false, "unknown endpoint handle"};
-    }
-    if (!endpoint_it->second.allow_receive) {
-        return ReceiveResult{false, false, "endpoint is not receive-enabled"};
-    }
-    const auto has_packet = receive_queues_.pop(endpoint_it->second.stream_name, packet);
-    return ReceiveResult{true, has_packet, {}};
+auto BeastRuntimeNetEndpoint::publish(const StreamHandle handle, const void* elements, const std::size_t count) -> PublishResult
+{
+    return impl_->table.publish(handle, elements, count);
+}
+
+auto BeastRuntimeNetEndpoint::receive(const StreamHandle handle, void* elements, const std::size_t count) -> ReceiveResult
+{
+    return impl_->table.receive(handle, elements, count);
+}
+
+auto BeastRuntimeNetEndpoint::stream_statuses() const -> std::vector<StreamStatus>
+{
+    return impl_->table.statuses();
+}
+
+auto BeastRuntimeNetEndpoint::recover_stream(const wire::StreamId& stream_id) -> bool
+{
+    const bool found = impl_->table.recover(stream_id);
+    std::lock_guard lock(impl_->table.mutex);
+    impl_->table.for_each([&](StreamEntry& entry) {
+        if (entry.producer && entry.config.stream_id == stream_id) {
+            impl_->table.on_producer_data(entry);
+        }
+    });
+    return found;
+}
+
+auto BeastRuntimeNetEndpoint::take_transport_errors() -> std::vector<std::string>
+{
+    std::lock_guard lock(impl_->errors_mutex);
+    std::vector<std::string> result(std::make_move_iterator(impl_->errors.begin()), std::make_move_iterator(impl_->errors.end()));
+    impl_->errors.clear();
+    return result;
 }
 
 auto BeastRuntimeNetEndpoint::stats() const -> TransportStats
 {
     TransportStats stats;
-    {
-        std::lock_guard<std::mutex> lock(impl_->connections_mutex);
+    impl_->run_on_io([&] {
         for (const auto& connection : impl_->connections) {
-            if (connection->closed.load()) {
-                continue;
-            }
             if (connection->is_data) {
                 ++stats.data_connections;
             } else {
                 ++stats.control_connections;
             }
         }
-    }
+    });
     stats.connections_rejected = impl_->connections_rejected.load();
-    stats.packets_sent = impl_->packets_sent.load();
-    stats.send_dropped_no_peer = impl_->send_dropped_no_peer.load();
-    stats.send_dropped_queue_full = impl_->send_dropped_queue_full.load();
-    std::lock_guard<std::mutex> lock(mutex_);
-    receive_queues_.add_to(stats);
+    stats.messages_sent = impl_->messages_sent.load();
+    stats.messages_received = impl_->messages_received.load();
+    stats.malformed_messages = impl_->malformed_messages.load();
     return stats;
-}
-
-void BeastRuntimeNetEndpoint::record_transport_error(std::string error)
-{
-    constexpr std::size_t max_recorded_errors = 32;
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (transport_errors_.size() == max_recorded_errors) {
-        transport_errors_.pop_front();
-    }
-    transport_errors_.push_back(std::move(error));
-}
-
-auto BeastRuntimeNetEndpoint::take_transport_errors() -> std::vector<std::string>
-{
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::vector<std::string> errors(std::make_move_iterator(transport_errors_.begin()),
-                                    std::make_move_iterator(transport_errors_.end()));
-    transport_errors_.clear();
-    return errors;
 }
 
 } // namespace s7::transport

@@ -1,6 +1,8 @@
 #include "s7/net.hpp"
 
+#include <chrono>
 #include <mutex>
+#include <string_view>
 #include <stdexcept>
 #include <utility>
 
@@ -24,36 +26,46 @@ auto make_net_metadata(const std::string& type_name,
     metadata.version = "1.0.0";
     metadata.tags = {"network", "transport", "distributed"};
     metadata.visual = {"box", "#5C6BC0", 140, 56, ""};
-    metadata.parameters.push_back({
-        "topic",
-        "string",
-        "Logical network stream/topic name.",
-        type_name == "NetSink" ? boost::json::value("net.out") : boost::json::value("net.in"),
-        std::nullopt,
-        std::nullopt,
-        {},
-        true,
-    });
-
+    metadata.type_variables.push_back({"T", signal_type_sets::all.types(), "type"});
+    metadata.parameters = {
+        {"type", "type", "Pins the stream's type (otherwise inferred)", nullptr, std::nullopt, std::nullopt, {}, false},
+        {"stream_id", "string", "Stream UUID; the same on both ends", nullptr, std::nullopt, std::nullopt, {}, true},
+        {"max_elements_per_packet", "int", "Batch size", 1024, 1, std::nullopt, {}, false},
+        {"max_batch_latency_ms", "int", "Longest wait before a partial batch is sent", 10, 0, std::nullopt, {}, false},
+        {"send_log_max_packets", "int", "Unacknowledged packets kept for replay", 4096, 1, std::nullopt, {}, false},
+        {"max_block_ms", "int", "Longest publish wait on a full send log before the stream faults", 2000, 0, std::nullopt, {}, false},
+        {"max_wait_ms", "int", "Longest receive wait for data before the stream faults (underrun)", 2000, 0, std::nullopt, {}, false},
+    };
     for (int i = 0; i < input_count; ++i) {
-        PortSpec port;
-        port.name = i == 0 ? "in" : "in" + std::to_string(i);
-        port.description = "Networked scalar input.";
-        port.type = SignalType::F64;
-        port.optional = false;
-        metadata.input_ports.push_back(std::move(port));
+        metadata.input_ports.push_back({i == 0 ? "in" : "in" + std::to_string(i), "Value to publish", SignalType::F64, false, "T"});
     }
-
     for (int i = 0; i < output_count; ++i) {
-        PortSpec port;
-        port.name = i == 0 ? "out" : "out" + std::to_string(i);
-        port.description = "Networked scalar output.";
-        port.type = SignalType::F64;
-        port.optional = false;
-        metadata.output_ports.push_back(std::move(port));
+        metadata.output_ports.push_back({i == 0 ? "out" : "out" + std::to_string(i), "Received value", SignalType::F64, false, "T"});
     }
-
     return metadata;
+}
+
+stream::StreamConfig config_from_params(const ElementCreationContext& ctx)
+{
+    if (!ctx.has_param("stream_id")) {
+        throw std::invalid_argument(ctx.metadata.type_name + " needs a 'stream_id' (UUID).");
+    }
+    auto config = net_stream_config(ctx.get_string("stream_id"));
+    config.type = ctx.type();
+    auto positive = [&](const char* name, const std::int64_t fallback) {
+        const auto value = ctx.has_param(name) ? ctx.get_int(name) : fallback;
+        if (value < 0 || (value == 0 && std::string_view(name) != "max_batch_latency_ms" &&
+                          std::string_view(name) != "max_block_ms" && std::string_view(name) != "max_wait_ms")) {
+            throw std::invalid_argument(ctx.metadata.type_name + " parameter '" + name + "' is out of range.");
+        }
+        return value;
+    };
+    config.max_elements_per_packet = static_cast<std::uint32_t>(positive("max_elements_per_packet", config.max_elements_per_packet));
+    config.max_batch_latency = std::chrono::milliseconds(positive("max_batch_latency_ms", config.max_batch_latency.count()));
+    config.send_log_max_packets = static_cast<std::uint32_t>(positive("send_log_max_packets", config.send_log_max_packets));
+    config.max_block = std::chrono::milliseconds(positive("max_block_ms", config.max_block.count()));
+    config.max_wait = std::chrono::milliseconds(positive("max_wait_ms", config.max_wait.count()));
+    return config;
 }
 
 } // namespace
@@ -74,159 +86,46 @@ const std::vector<NetworkBoundary>& NetTopology::boundaries() const {
     return boundaries_;
 }
 
-NetSink::NetSink(std::string topic)
-    : Element("NetSink")
-    , topic_(std::move(topic))
-    , endpoint_(nullptr)
-    , endpoint_handle_{}
-    , sequence_(0)
+stream::StreamConfig net_stream_config(const std::string& stream_id)
 {
-    register_input(0, port_names::in, SignalType::F64, nullptr);
+    stream::StreamConfig config;
+    config.stream_id = wire::parse_stream_id(stream_id);
+    return config;
 }
 
-NetSink::~NetSink()
+NetStreamElement::NetStreamElement(const std::string_view type_name, stream::StreamConfig config, const transport::StreamRole role)
+    : Element(type_name, true)
+    , config_(std::move(config))
+    , role_(role)
 {
-    if (endpoint_ && endpoint_handle_.valid()) {
-        endpoint_->close_endpoint(endpoint_handle_);
+}
+
+NetStreamElement::~NetStreamElement()
+{
+    if (endpoint_ && handle_.valid()) {
+        endpoint_->close_stream(handle_);
     }
 }
 
-void NetSink::ensure_endpoint()
+bool NetStreamElement::ensure_stream()
 {
-    if (endpoint_ && endpoint_handle_.valid()) {
-        return;
+    if (handle_.valid()) {
+        return true;
     }
-
     if (!endpoint_) {
         endpoint_ = RuntimeNetContext::endpoint();
     }
-
-    if (topic_.empty()) {
-        throw std::invalid_argument("NetSink topic must not be empty.");
-    }
-
     if (!endpoint_) {
-        return;
+        return false;
     }
-
-    const auto open_result = endpoint_->open_endpoint({
-        .endpoint_name = "NetSink:" + topic_,
-        .stream_name = topic_,
-        .allow_publish = true,
-        .allow_receive = false,
-    });
-    if (!open_result.ok) {
-        throw std::runtime_error("NetSink failed to open endpoint for topic '" + topic_ + "': " + open_result.error);
-    }
-
-    endpoint_handle_ = open_result.handle;
+    handle_ = role_ == transport::StreamRole::Producer ? endpoint_->open_producer(config_) : endpoint_->open_consumer(config_);
+    return true;
 }
 
-void NetSink::step() {
-    const auto value = read_input<RealValue>(0);
-    ensure_endpoint();
-
-    if (!endpoint_ || !endpoint_handle_.valid()) {
-        return;
-    }
-
-    transport::DataPacket packet;
-    packet.stream_name = topic_;
-    packet.sequence = sequence_++;
-    packet.data_type = transport::kPrototypeDataTypeF64;
-    packet.elem_count = 1;
-    // Placeholder model time: one second per packet, starting at zero (see the
-    // review item on observation time semantics).
-    packet.t_model_ns = packet.sequence * 1'000'000'000ULL;
-    packet.payload = transport::encode_f64_payload(value);
-
-    const auto send_result = endpoint_->publish(endpoint_handle_, packet);
-    if (!send_result.ok) {
-        throw std::runtime_error("NetSink failed to publish packet for topic '" + topic_ + "': " + send_result.error);
-    }
-    if (!send_result.delivered) {
-        ++dropped_count_;
-    }
-}
-
-const std::string& NetSink::topic() const {
-    return topic_;
-}
-
-std::uint64_t NetSink::dropped_count() const {
-    return dropped_count_;
-}
-
-NetSource::NetSource(std::string topic)
-    : Element("NetSource")
-    , topic_(std::move(topic))
-    , endpoint_(nullptr)
-    , endpoint_handle_{}
-    , output_value_(0.0)
+void NetStreamElement::raise_fault(const stream::FaultCode code) const
 {
-    register_output(0, port_names::out, SignalType::F64, &output_value_);
-}
-
-NetSource::~NetSource()
-{
-    if (endpoint_ && endpoint_handle_.valid()) {
-        endpoint_->close_endpoint(endpoint_handle_);
-    }
-}
-
-void NetSource::ensure_endpoint()
-{
-    if (endpoint_ && endpoint_handle_.valid()) {
-        return;
-    }
-
-    if (!endpoint_) {
-        endpoint_ = RuntimeNetContext::endpoint();
-    }
-
-    if (topic_.empty()) {
-        throw std::invalid_argument("NetSource topic must not be empty.");
-    }
-
-    if (!endpoint_) {
-        return;
-    }
-
-    const auto open_result = endpoint_->open_endpoint({
-        .endpoint_name = "NetSource:" + topic_,
-        .stream_name = topic_,
-        .allow_publish = false,
-        .allow_receive = true,
-    });
-    if (!open_result.ok) {
-        throw std::runtime_error("NetSource failed to open endpoint for topic '" + topic_ + "': " + open_result.error);
-    }
-
-    endpoint_handle_ = open_result.handle;
-}
-
-void NetSource::step()
-{
-    ensure_endpoint();
-    if (!endpoint_ || !endpoint_handle_.valid()) {
-        return;
-    }
-
-    transport::DataPacket packet;
-    const auto receive_result = endpoint_->receive(endpoint_handle_, packet);
-    if (!receive_result.ok) {
-        throw std::runtime_error("NetSource failed to receive packet for topic '" + topic_ + "': " + receive_result.error);
-    }
-    if (!receive_result.has_packet) {
-        return;
-    }
-
-    output_value_ = transport::decode_f64_payload(packet.payload);
-}
-
-const std::string& NetSource::topic() const
-{
-    return topic_;
+    throw std::runtime_error(std::string(type_name()) + " stream " + wire::to_string(config_.stream_id) + " faulted: " +
+                             stream::to_string(code) + ".");
 }
 
 void RuntimeNetContext::set_endpoint(transport::RuntimeNetEndpointPtr endpoint)
@@ -247,20 +146,24 @@ void register_net_elements(ElementRegistry& registry)
         registry.register_element(ElementDescriptor(
             "NetSink",
             [](const ElementCreationContext& ctx) {
-                const auto topic = ctx.has_param("topic") ? ctx.get_string("topic") : std::string{"net.out"};
-                return std::make_unique<NetSink>(topic);
+                const auto config = config_from_params(ctx);
+                return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                    return std::make_unique<NetSinkT<T>>(config);
+                });
             },
-            make_net_metadata("NetSink", "Net Sink", "Publish scalar samples to a runtime transport stream.", 1, 0)));
+            make_net_metadata("NetSink", "Net Sink", "Publishes its input to a lossless network stream.", 1, 0)));
     }
 
     if (registry.find("NetSource") == nullptr) {
         registry.register_element(ElementDescriptor(
             "NetSource",
             [](const ElementCreationContext& ctx) {
-                const auto topic = ctx.has_param("topic") ? ctx.get_string("topic") : std::string{"net.in"};
-                return std::make_unique<NetSource>(topic);
+                const auto config = config_from_params(ctx);
+                return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                    return std::make_unique<NetSourceT<T>>(config);
+                });
             },
-            make_net_metadata("NetSource", "Net Source", "Receive scalar samples from a runtime transport stream.", 0, 1)));
+            make_net_metadata("NetSource", "Net Source", "Outputs the values of a lossless network stream.", 0, 1)));
     }
 }
 

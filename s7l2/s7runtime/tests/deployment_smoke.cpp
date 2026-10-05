@@ -459,6 +459,48 @@ void test_runtime_deployment_over_mtls()
 
 } // namespace
 
+void test_stream_status_and_recovery()
+{
+    auto network = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+    int recoveries = 0;
+    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{},
+                                s7::ControlPlaneOptions{.authorization = studio_authorization(),
+                                                        .network = network,
+                                                        .on_stream_recovered = [&recoveries] { ++recoveries; }}};
+    s7::stream::StreamConfig config;
+    config.stream_id = s7::wire::parse_stream_id("5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a");
+    config.max_wait = std::chrono::milliseconds(20);
+    const auto consumer = network->open_consumer(config);
+    double value = 0;
+    expect(network->receive(consumer, &value, 1).fault == s7::stream::FaultCode::Underrun, "consumer starves");
+
+    const json::object status_request{{"type", "GET_STREAM_STATUS"}, {"request_id", "st-1"}, {"protocol_version", 1}};
+    auto status = Client(control, ControlPeer{}).send(status_request);
+    expect(status.at("type").as_string() == "STREAM_STATUS", "stream status is read-only");
+    const auto& stream = status.at("streams").as_array().at(0).as_object();
+    expect(stream.at("stream_id").as_string() == "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a" &&
+               stream.at("role").as_string() == "consumer" && stream.at("data_type").as_string() == "F64" &&
+               stream.at("state").as_string() == "faulted" && stream.at("fault").as_string() == "UNDERRUN",
+           "faulted stream reported: " + json::serialize(stream));
+
+    json::object recover{{"type", "RECOVER_STREAM"}, {"request_id", "rec-1"}, {"protocol_version", 1},
+                         {"stream_id", "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a"}};
+    expect_error(Client(control, ControlPeer{}).send(recover), "UNAUTHORIZED", "recovery needs Studio authority");
+    expect(recoveries == 0, "refused recovery does not resume stepping");
+    const auto recovered = Client(control, verified_peer("s7_studio.cert.pem")).send(recover);
+    expect(recovered.at("type").as_string() == "RECOVER_STREAM_RESULT" && recovered.at("recovered").as_bool(),
+           "Studio recovers the stream");
+    expect(recoveries == 1, "recovery resumes stepping");
+    status = Client(control, ControlPeer{}).send(status_request);
+    expect(status.at("streams").as_array().at(0).as_object().at("state").as_string() == "active", "stream active again");
+
+    recover["stream_id"] = "00000000-0000-4000-8000-000000000000";
+    expect(!Client(control, verified_peer("s7_studio.cert.pem")).send(recover).at("recovered").as_bool(), "unknown stream");
+    expect(recoveries == 1, "nothing recovered, nothing resumed");
+    recover["stream_id"] = "not-a-uuid";
+    expect_error(Client(control, verified_peer("s7_studio.cert.pem")).send(recover), "INVALID_REQUEST", "malformed stream id");
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -466,6 +508,7 @@ try {
     test_authorization();
     test_deployment_lifecycle();
     test_prepare_expiry();
+    test_stream_status_and_recovery();
     test_runtime_deployment_over_mtls();
     return 0;
 } catch (const std::exception& ex) {

@@ -213,15 +213,44 @@ int main(int argc, char** argv) {
                 std::cout << "runtime.execution=stepping step_rate_hz=" << definition.execution.step_rate_hz << '\n';
                 std::cout.flush();
                 service.set_stepping(true);
-                const auto stats = s7::run_step_loop([&service] { service.step(); },
-                                                     definition.execution.step_rate_hz, stop_requested, deadline,
-                                                     [&service] { service.report_transport_errors(std::cerr); });
-                service.set_stepping(false);
-                stopped_by_signal = stats.stop_reason == s7::StepLoopStats::StopReason::StopRequested;
-                std::cout << "runtime.execution.steps=" << stats.steps << '\n';
+                std::uint64_t steps = 0;
+                double elapsed_seconds = 0.0;
+                for (;;) {
+                    try {
+                        const auto stats = s7::run_step_loop([&service] { service.step(); },
+                                                             definition.execution.step_rate_hz, stop_requested, deadline,
+                                                             [&service] { service.report_transport_errors(std::cerr); });
+                        steps += stats.steps;
+                        elapsed_seconds += stats.elapsed_seconds;
+                        stopped_by_signal = stats.stop_reason == s7::StepLoopStats::StopReason::StopRequested;
+                        break;
+                    } catch (const std::exception& ex) {
+                        // A step failed (e.g. a stream fault): stop stepping, keep serving
+                        // the control plane so the fault can be inspected, and resume
+                        // after a RECOVER_STREAM.
+                        service.set_stepping(false);
+                        const auto recoveries = service.stream_recoveries();
+                        std::cout << "runtime.execution.stopped=error\n";
+                        std::cerr << "runtime.execution.error=" << ex.what() << '\n';
+                        std::cout.flush();
+                        while (!stop_requested.load() && !(deadline && std::chrono::steady_clock::now() >= *deadline) &&
+                               service.stream_recoveries() == recoveries) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                            service.report_transport_errors(std::cerr);
+                        }
+                        if (service.stream_recoveries() == recoveries) {
+                            stopped_by_signal = stop_requested.load();
+                            break;
+                        }
+                        std::cout << "runtime.execution=resumed\n";
+                        std::cout.flush();
+                        service.set_stepping(true);
+                    }
+                }
+                std::cout << "runtime.execution.steps=" << service.step_count() << '\n';
                 std::cout << "runtime.execution.achieved_rate_hz="
-                          << (stats.elapsed_seconds > 0.0 ? static_cast<double>(stats.steps) / stats.elapsed_seconds : 0.0)
-                          << '\n';
+                          << (elapsed_seconds > 0.0 ? static_cast<double>(steps) / elapsed_seconds : 0.0) << '\n';
+                service.set_stepping(false);
             } else {
                 std::cout << "runtime.execution=idle (set execution.step_rate_hz or --step-rate to step the graph)\n";
                 std::cout.flush();

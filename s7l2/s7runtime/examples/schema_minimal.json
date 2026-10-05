@@ -12,7 +12,7 @@
       "id": "sink",
       "type": "NetSink",
       "params": {
-        "topic": "demo.out"
+        "stream_id": "3f2b8c1d-6e4a-4b7f-9a2c-1d5e8f7a6b3c"
       }
     }
   ],

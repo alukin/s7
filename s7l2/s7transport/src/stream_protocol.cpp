@@ -175,16 +175,28 @@ void StreamProducer::seal()
 void StreamProducer::resume(const ConsumerKey& consumer, const std::uint32_t alias, const std::uint64_t next_expected)
 {
     const auto oldest = log_.empty() ? next_sequence_ : log_.front().sequence;
-    if (next_expected > next_sequence_ || next_expected < oldest) {
+    auto start = next_expected;
+    if (next_expected < oldest) {
+        // Packets the consumer needs are gone (producer restart, or trimmed
+        // before it joined). The loss is that consumer's: it continues from
+        // the oldest packet still logged, sees the gap and faults; other
+        // consumers are unaffected.
+        ++lost_resumes_;
+        start = oldest;
+    } else if (next_expected > next_sequence_) {
+        // The consumer is ahead of anything this producer assigned: its
+        // sequence state was lost (e.g. a wiped state directory). Sending
+        // would look like duplicates to the consumer, so the stream faults.
+        ++lost_resumes_;
         fault(FaultCode::StreamStateLost);
-        return;
+        start = next_sequence_;
     }
     auto& entry = consumers_[consumer];
     entry.alias = alias;
-    entry.next_to_send = next_expected;
-    entry.acknowledged = std::max(entry.acknowledged, next_expected);
+    entry.next_to_send = start;
+    entry.acknowledged = std::max(entry.acknowledged, start);
     entry.attached = true;
-    replayed_ += next_sequence_ - next_expected;
+    replayed_ += next_sequence_ - start;
     trim();
 }
 
@@ -249,7 +261,7 @@ void StreamProducer::fault(const FaultCode code)
 
 ProducerStats StreamProducer::stats() const
 {
-    return ProducerStats{packets_, elements_, replayed_, log_.size(), blocked_total_};
+    return ProducerStats{packets_, elements_, replayed_, lost_resumes_, log_.size(), blocked_total_};
 }
 
 // ---- consumer --------------------------------------------------------------
@@ -273,6 +285,12 @@ void StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     if (packet.type != config_.type) {
         fault(FaultCode::TypeMismatch);
         return;
+    }
+    if (restart_at_next_) {
+        restart_at_next_ = false;
+        next_expected_ = packet.sequence;
+        consumed_up_to_ = std::max(consumed_up_to_, packet.sequence);
+        acked_up_to_ = std::max(acked_up_to_, packet.sequence);
     }
     if (packet.sequence < next_expected_) {
         ++duplicates_;
@@ -342,6 +360,12 @@ void StreamConsumer::fault(const FaultCode code)
     if (fault_ == FaultCode::None) {
         fault_ = code;
     }
+}
+
+void StreamConsumer::recover()
+{
+    fault_ = FaultCode::None;
+    restart_at_next_ = true;
 }
 
 ConsumerStats StreamConsumer::stats() const

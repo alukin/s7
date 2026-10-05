@@ -762,15 +762,7 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
     , runtime_instance_uuid_()
     , control_plane_(nullptr)
     , network_endpoint_(nullptr)
-    , opened_server_endpoints_()
-    , opened_client_endpoints_()
 {
-    if (definition_.server.enabled || definition_.client.enabled) {
-        network_endpoint_ = std::make_shared<s7::transport::BeastRuntimeNetEndpoint>();
-    } else {
-        network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
-    }
-
     if (state_dir_.empty()) {
         throw std::invalid_argument("RuntimeService requires a node state directory.");
     }
@@ -778,6 +770,13 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
     state_dir_lock_fd_ = lock_state_dir(state_dir_);
 
     try {
+        // Producer sequence reservations live in the node state directory.
+        if (definition_.server.enabled || definition_.client.enabled) {
+            network_endpoint_ = std::make_shared<s7::transport::BeastRuntimeNetEndpoint>(transport::TransportLimits{}, state_dir_.string());
+        } else {
+            network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        }
+
         const auto identity_cert = select_identity_certificate(definition_);
         runtime_instance_uuid_ = load_or_create_node_uuid(
             state_dir_,
@@ -791,6 +790,8 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
                 .authorization = definition_.control,
                 .deployment_host = graph_host_,
                 .log = [](const std::string& line) { std::cerr << line << '\n'; },
+                .network = network_endpoint_,
+                .on_stream_recovered = [this] { ++stream_recoveries_; },
             });
     } catch (...) {
         ::close(state_dir_lock_fd_);
@@ -813,16 +814,11 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
 
 RuntimeService::~RuntimeService()
 {
-    if (network_endpoint_) {
-        for (const auto& handle : opened_server_endpoints_) {
-            network_endpoint_->close_endpoint(handle);
-        }
-        for (const auto& handle : opened_client_endpoints_) {
-            network_endpoint_->close_endpoint(handle);
-        }
+    {
+        // The graph's network elements close their streams before the endpoint goes.
+        std::lock_guard<std::mutex> lock(graph_mutex_);
+        graph_.reset();
     }
-    opened_server_endpoints_.clear();
-    opened_client_endpoints_.clear();
 
     // Only clear global runtime endpoint context if it still points to this service's endpoint.
     if (RuntimeNetContext::endpoint() == network_endpoint_) {
@@ -971,12 +967,15 @@ void RuntimeService::report_transport_stats(std::ostream& out) const {
     out << "runtime.transport.data_connections=" << stats.data_connections << '\n'
         << "runtime.transport.control_connections=" << stats.control_connections << '\n'
         << "runtime.transport.connections_rejected=" << stats.connections_rejected << '\n'
-        << "runtime.transport.packets_sent=" << stats.packets_sent << '\n'
-        << "runtime.transport.send_dropped_no_peer=" << stats.send_dropped_no_peer << '\n'
-        << "runtime.transport.send_dropped_queue_full=" << stats.send_dropped_queue_full << '\n'
-        << "runtime.transport.packets_received=" << stats.packets_received << '\n'
-        << "runtime.transport.receive_dropped_queue_full=" << stats.receive_dropped_queue_full << '\n'
-        << "runtime.transport.receive_dropped_stream_limit=" << stats.receive_dropped_stream_limit << '\n';
+        << "runtime.transport.messages_sent=" << stats.messages_sent << '\n'
+        << "runtime.transport.messages_received=" << stats.messages_received << '\n'
+        << "runtime.transport.malformed_messages=" << stats.malformed_messages << '\n';
+    for (const auto& status : network_endpoint_->stream_statuses()) {
+        out << "runtime.stream." << wire::to_string(status.stream_id) << '='
+            << (status.role == transport::StreamRole::Producer ? "producer" : "consumer") << ' ' << signal_type_name(status.type)
+            << " state=" << status.state << " fault=" << stream::to_string(status.fault) << " packets=" << status.packets
+            << " next_sequence=" << status.next_sequence << '\n';
+    }
 }
 
 const std::string& RuntimeService::runtime_instance_uuid() const {
@@ -1012,97 +1011,24 @@ void RuntimeService::start_websocket_server() const {
     if (!definition_.server.enabled) {
         return;
     }
-
     if (definition_.server.port == 0) {
         throw std::invalid_argument("WebSocket server is enabled but port is 0.");
     }
-
-    if (!network_endpoint_) {
-        throw std::runtime_error("Runtime transport endpoint is not configured.");
-    }
-
-    if (!opened_server_endpoints_.empty()) {
-        return;
-    }
-
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
         beast_endpoint->configure_server(definition_.server.port, definition_.server.tls);
     }
-
-    const auto control_stream = "server:" + std::to_string(definition_.server.port) + ":/control";
-    const auto data_stream = "server:" + std::to_string(definition_.server.port) + ":/data";
-
-    const auto control_open = network_endpoint_->open_endpoint({
-        .endpoint_name = "server/control",
-        .stream_name = control_stream,
-        .allow_publish = true,
-        .allow_receive = true,
-    });
-    if (!control_open.ok) {
-        throw std::runtime_error("Failed to start control endpoint: " + control_open.error);
-    }
-
-    const auto data_open = network_endpoint_->open_endpoint({
-        .endpoint_name = "server/data",
-        .stream_name = data_stream,
-        .allow_publish = true,
-        .allow_receive = true,
-    });
-    if (!data_open.ok) {
-        network_endpoint_->close_endpoint(control_open.handle);
-        throw std::runtime_error("Failed to start data endpoint: " + data_open.error);
-    }
-
-    opened_server_endpoints_.push_back(control_open.handle);
-    opened_server_endpoints_.push_back(data_open.handle);
 }
 
 void RuntimeService::connect_websocket_client() const {
     if (!definition_.client.enabled) {
         return;
     }
-
     if (definition_.client.url.empty()) {
         throw std::invalid_argument("WebSocket client is enabled but URL is empty.");
     }
-
-    if (!network_endpoint_) {
-        throw std::runtime_error("Runtime transport endpoint is not configured.");
-    }
-
-    if (!opened_client_endpoints_.empty()) {
-        return;
-    }
-
-    const auto parsed_url = s7::transport::parse_ws_url(definition_.client.url);
-
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
         beast_endpoint->configure_client(definition_.client.url, definition_.client.tls);
     }
-
-    const auto control_open = network_endpoint_->open_endpoint({
-        .endpoint_name = "client/control",
-        .stream_name = "client:" + parsed_url.host + ":" + parsed_url.port + parsed_url.target + ":/control",
-        .allow_publish = true,
-        .allow_receive = true,
-    });
-    if (!control_open.ok) {
-        throw std::runtime_error("Failed to connect control endpoint: " + control_open.error);
-    }
-
-    const auto data_open = network_endpoint_->open_endpoint({
-        .endpoint_name = "client/data",
-        .stream_name = "client:" + parsed_url.host + ":" + parsed_url.port + parsed_url.target + ":/data",
-        .allow_publish = true,
-        .allow_receive = true,
-    });
-    if (!data_open.ok) {
-        network_endpoint_->close_endpoint(control_open.handle);
-        throw std::runtime_error("Failed to connect data endpoint: " + data_open.error);
-    }
-
-    opened_client_endpoints_.push_back(control_open.handle);
-    opened_client_endpoints_.push_back(data_open.handle);
 }
 
 StepLoopStats run_step_loop(const std::function<void()>& step,

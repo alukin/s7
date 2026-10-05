@@ -99,8 +99,6 @@ s7_enable_project_warnings(s7noise)
 s7_enable_project_warnings(s7runtime)
 s7_enable_project_warnings(s7ctl)
 s7_enable_project_warnings(s7io_smoke)
-s7_enable_project_warnings(s7transport_smoke)
-s7_enable_project_warnings(s7transport_reconnect_smoke)
 s7_enable_project_warnings(s7runtime_control_smoke)
 s7_enable_project_warnings(s7studio)
 s7_enable_project_warnings(s7spectral)
@@ -118,8 +116,6 @@ set(S7_ALL_TARGETS
 	s7runtime
 	s7ctl
 	s7io_smoke
-	s7transport_smoke
-	s7transport_reconnect_smoke
 	s7runtime_control_smoke
 )
 

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <boost/json.hpp>
 
@@ -248,17 +250,12 @@ int main()
         // A served node steps Constant -> NetSink at the configured rate, and a peer receives the packets.
         auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
         s7::RuntimeNetContext::set_endpoint(endpoint);
-        const auto receiver = endpoint->open_endpoint({
-            .endpoint_name = "peer",
-            .stream_name = "step.loop",
-            .allow_publish = false,
-            .allow_receive = true,
-        });
-        assert(receiver.ok);
+        const auto config = s7::net_stream_config("6f1c2e1a-0b7d-4c56-9a0e-1f2d3c4b5a69");
+        const auto receiver = endpoint->open_consumer(config);
 
         s7::Schema schema{"step_loop"};
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.0); });
-        schema.add_element("sink", [] { return std::make_unique<s7::NetSink>("step.loop"); });
+        schema.add_element("sink", [config] { return std::make_unique<s7::NetSink>(config); });
         schema.connect("source", 0, "sink", 0);
         s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
 
@@ -269,18 +266,14 @@ int main()
         assert(stats.steps == runtime.step_count());
         assert(stats.steps >= 25 && stats.steps <= 60);
 
-        std::uint64_t received = 0;
-        s7::transport::DataPacket packet;
-        while (true) {
-            const auto result = endpoint->receive(receiver.handle, packet);
-            assert(result.ok);
-            if (!result.has_packet) {
-                break;
-            }
-            assert(s7::transport::decode_f64_payload(packet.payload) == 7.0);
-            ++received;
+        // Every published value arrives exactly once.
+        std::vector<double> values(stats.steps);
+        const auto result = endpoint->receive(receiver, values.data(), values.size());
+        assert(result.fault == s7::stream::FaultCode::None && result.received == stats.steps);
+        assert(std::ranges::all_of(values, [](double v) { return v == 7.0; }));
+        for (const auto& status : endpoint->stream_statuses()) {
+            assert(status.buffered_elements == 0);
         }
-        assert(received == stats.steps);
 
         // A stop request ends the loop promptly even at a low step rate.
         std::atomic<bool> stop{false};
@@ -295,7 +288,7 @@ int main()
         assert(std::chrono::steady_clock::now() - started < std::chrono::milliseconds(500));
         assert(stopped.steps == 1);
 
-        endpoint->close_endpoint(receiver.handle);
+        endpoint->close_stream(receiver);
         s7::RuntimeNetContext::set_endpoint(nullptr);
     }
 

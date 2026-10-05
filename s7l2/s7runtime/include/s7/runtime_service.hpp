@@ -117,6 +117,9 @@ public:
     [[nodiscard]] double active_real_output(const std::string& element_id, std::size_t port = 0) const;
     // Reported to the control plane as the execution state of the active graph.
     void set_stepping(bool stepping);
+    // Successful RECOVER_STREAM requests so far; a step loop stopped by a
+    // stream fault resumes when this changes.
+    [[nodiscard]] std::uint64_t stream_recoveries() const { return stream_recoveries_.load(); }
     [[nodiscard]] const std::string& runtime_instance_uuid() const;
     [[nodiscard]] static std::string create_schema_instance_uuid();
     [[nodiscard]] auto network_endpoint() const -> transport::RuntimeNetEndpointPtr;
@@ -140,8 +143,6 @@ private:
     std::string runtime_instance_uuid_;
     std::shared_ptr<ControlPlaneMvp> control_plane_;
     transport::RuntimeNetEndpointPtr network_endpoint_;
-    mutable std::vector<transport::EndpointHandle> opened_server_endpoints_;
-    mutable std::vector<transport::EndpointHandle> opened_client_endpoints_;
 
     class GraphHost;
     friend class GraphHost;
@@ -149,6 +150,7 @@ private:
     mutable std::mutex graph_mutex_;
     std::unique_ptr<NodeRuntime> graph_;
     std::atomic<bool> stepping_{false};
+    std::atomic<std::uint64_t> stream_recoveries_{0};
     std::shared_ptr<GraphHost> graph_host_;
 };
 

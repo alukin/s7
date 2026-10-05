@@ -1,144 +1,145 @@
-#include <cassert>
 #include <chrono>
-#include <complex>
-#include <cstdint>
-#include <exception>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <thread>
+#include <vector>
 
 #include "s7/net.hpp"
 
-int main() try
+namespace {
+
+using s7::SignalType;
+namespace json = boost::json;
+
+void expect(const bool condition, const std::string& what)
 {
-    {
-        auto& registry = s7::ElementRegistry::instance();
-        s7::register_net_elements(registry);
-
-        const auto* netSinkDescriptor = registry.find("NetSink");
-        const auto* netSourceDescriptor = registry.find("NetSource");
-        if (!netSinkDescriptor || !netSourceDescriptor) {
-            throw std::runtime_error("Network elements were not registered in the element registry.");
-        }
-        assert(netSinkDescriptor->metadata().category == "network");
-        assert(netSourceDescriptor->metadata().category == "network");
+    if (!condition) {
+        throw std::runtime_error("Check failed: " + what);
     }
-
-    {
-        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
-        s7::RuntimeNetContext::set_endpoint(endpoint);
-
-        const auto rx = endpoint->open_endpoint({
-            .endpoint_name = "net-smoke-rx",
-            .stream_name = "demo.out",
-            .allow_publish = false,
-            .allow_receive = true,
-        });
-        if (!rx.ok) {
-            throw std::runtime_error("Failed to open test receive endpoint: " + rx.error);
-        }
-
-        s7::Schema schema{"transport_net_sink"};
-        schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.25); });
-        schema.add_element("sink", [] { return std::make_unique<s7::NetSink>("demo.out"); });
-        schema.connect("source", 0, "sink", 0);
-
-        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
-        runtime.step();
-
-        s7::transport::DataPacket packet;
-        const auto receive = endpoint->receive(rx.handle, packet);
-        if (!receive.ok || !receive.has_packet) {
-            throw std::runtime_error("NetSink did not publish a packet through runtime endpoint.");
-        }
-
-        assert(packet.stream_name == "demo.out");
-        assert(packet.sequence == 0);
-        const auto decoded_value = s7::transport::decode_f64_payload(packet.payload);
-        if (std::abs(decoded_value - 7.25) >= 1e-12) {
-            throw std::runtime_error("NetSink payload value mismatch.");
-        }
-
-        s7::RuntimeNetContext::set_endpoint(nullptr);
-    }
-
-    {
-        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
-        s7::RuntimeNetContext::set_endpoint(endpoint);
-
-        const auto tx = endpoint->open_endpoint({
-            .endpoint_name = "net-smoke-tx",
-            .stream_name = "demo.in",
-            .allow_publish = true,
-            .allow_receive = false,
-        });
-        if (!tx.ok) {
-            throw std::runtime_error("Failed to open test publish endpoint: " + tx.error);
-        }
-
-        s7::transport::DataPacket packet;
-        packet.stream_name = "demo.in";
-        packet.sequence = 1;
-        packet.data_type = s7::transport::kPrototypeDataTypeF64;
-        packet.elem_count = 1;
-        packet.t_model_ns = 1;
-        packet.payload = s7::transport::encode_f64_payload(5.5);
-        const auto send = endpoint->publish(tx.handle, packet);
-        if (!send.ok) {
-            throw std::runtime_error("Failed to seed NetSource packet: " + send.error);
-        }
-
-        s7::Schema schema{"transport_net_source"};
-        schema.add_element("source", [] { return std::make_unique<s7::NetSource>("demo.in"); });
-
-        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
-        runtime.step();
-        assert(std::abs(runtime.real_output_of("source") - 5.5) < 1e-12);
-
-        s7::RuntimeNetContext::set_endpoint(nullptr);
-    }
-
-    {
-        s7::Schema sink_schema{"net_sink_empty_topic"};
-        sink_schema.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
-        sink_schema.add_element("sink", [] { return std::make_unique<s7::NetSink>(""); });
-        sink_schema.connect("source", 0, "sink", 0);
-
-        s7::NodeRuntime runtime{s7::Compiler::compile(sink_schema)};
-        bool threw = false;
-        try {
-            runtime.step();
-        } catch (const std::invalid_argument&) {
-            threw = true;
-        }
-        if (!threw) {
-            throw std::runtime_error("Expected NetSink with empty topic to fail fast.");
-        }
-    }
-
-    {
-        s7::Schema source_schema{"net_source_empty_topic"};
-        source_schema.add_element("source", [] { return std::make_unique<s7::NetSource>(""); });
-
-        s7::NodeRuntime runtime{s7::Compiler::compile(source_schema)};
-        bool threw = false;
-        try {
-            runtime.step();
-        } catch (const std::invalid_argument&) {
-            threw = true;
-        }
-        if (!threw) {
-            throw std::runtime_error("Expected NetSource with empty topic to fail fast.");
-        }
-    }
-
-    return 0;
-} catch (const std::exception& ex) {
-    std::cerr << "s7net smoke: fatal error: " << ex.what() << '\n';
-    return 1;
-} catch (...) {
-    std::cerr << "s7net smoke: unknown fatal error\n";
-    return 1;
 }
 
+void add(s7::Schema& schema, const std::string& id, const std::string& type, json::object params = {})
+{
+    const auto* descriptor = s7::ElementRegistry::instance().find(type);
+    expect(descriptor != nullptr, "registered: " + type);
+    schema.add_element(s7::make_element_spec(id, *descriptor, std::move(params)));
+}
+
+constexpr const char* kStream = "8a5e7c3b-1d2f-4a6b-9c8d-7e6f5a4b3c2d";
+
+} // namespace
+
+int main()
+try {
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    s7::register_net_elements(registry);
+    expect(registry.find("NetSink")->metadata().category == "network", "network category");
+    expect(!registry.find("NetSource")->metadata().type_variables.empty(), "network elements are generic");
+
+    {
+        // NetSink publishes every step's value to the stream.
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+        const auto config = s7::net_stream_config(kStream);
+        const auto consumer = endpoint->open_consumer(config);
+
+        s7::Schema schema{"sink"};
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.25); });
+        schema.add_element("sink", [config] { return std::make_unique<s7::NetSink>(config); });
+        schema.connect("source", 0, "sink", 0);
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        for (int n = 0; n < 3; ++n) {
+            runtime.step();
+        }
+        std::vector<double> values(3);
+        const auto result = endpoint->receive(consumer, values.data(), values.size());
+        expect(result.received == 3 && values == std::vector<double>{7.25, 7.25, 7.25}, "NetSink values arrive");
+        s7::RuntimeNetContext::set_endpoint(nullptr);
+    }
+
+    {
+        // Typed graph to graph: the stream type is inferred on both ends (I16).
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+
+        s7::Schema producer{"producer"};
+        add(producer, "x", "Constant", {{"type", "I16"}, {"value", -1234}});
+        add(producer, "out", "NetSink", {{"stream_id", kStream}, {"max_elements_per_packet", 4}});
+        producer.connect("x", 0, "out", 0);
+
+        s7::Schema consumer{"consumer"};
+        add(consumer, "in", "NetSource", {{"stream_id", kStream}});
+        add(consumer, "double_it", "Gain", {{"type", "I16"}, {"factor", 2}});
+        consumer.connect("in", 0, "double_it", 0);
+
+        s7::NodeRuntime sending{s7::Compiler::compile(producer)};
+        s7::NodeRuntime receiving{s7::Compiler::compile(consumer)};
+        for (int n = 0; n < 5; ++n) {
+            sending.step();
+            receiving.step(); // waits for the partial batch, which is flushed for it
+            expect(receiving.output_of<SignalType::I16>("in") == -1234, "I16 value received");
+            expect(receiving.output_of<SignalType::I16>("double_it") == -2468, "received value used downstream");
+        }
+        expect(receiving.output_type_of("in") == SignalType::I16, "NetSource type inferred from downstream");
+        s7::RuntimeNetContext::set_endpoint(nullptr);
+    }
+
+    {
+        // A consumer waits for the producer, which publishes later from another thread.
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+        auto config = s7::net_stream_config(kStream);
+        const auto producer = endpoint->open_producer(config);
+        s7::Schema schema{"waiting"};
+        schema.add_element("in", [config] { return std::make_unique<s7::NetSource>(config); });
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        std::thread later([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            const double value = 42.0;
+            static_cast<void>(endpoint->publish(producer, &value, 1));
+        });
+        try {
+            runtime.step();
+        } catch (...) {
+            later.join();
+            throw;
+        }
+        later.join();
+        expect(runtime.real_output_of("in") == 42.0, "NetSource waits for data instead of inventing a value");
+        s7::RuntimeNetContext::set_endpoint(nullptr);
+    }
+
+    {
+        // No data within max_wait: the stream faults and the step throws (no invented value).
+        auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+        s7::RuntimeNetContext::set_endpoint(endpoint);
+        s7::Schema schema{"starved"};
+        add(schema, "in", "NetSource", {{"stream_id", kStream}, {"max_wait_ms", 30}});
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        std::string error;
+        try {
+            runtime.step();
+        } catch (const std::runtime_error& ex) {
+            error = ex.what();
+        }
+        expect(error.find("UNDERRUN") != std::string::npos, "underrun faults the step: " + error);
+        expect(endpoint->stream_statuses().front().state == "faulted", "stream status shows the fault");
+        s7::RuntimeNetContext::set_endpoint(nullptr);
+    }
+
+    {
+        s7::Schema schema{"no_id"};
+        add(schema, "out", "NetSink");
+        add(schema, "x", "Constant");
+        schema.connect("x", 0, "out", 0);
+        const auto errors = s7::Validator::validate(schema).errors;
+        expect(!errors.empty() && errors.front().find("stream_id") != std::string::npos, "stream_id is required");
+    }
+    return 0;
+} catch (const std::exception& ex) {
+    std::cerr << "s7net smoke: " << ex.what() << '\n';
+    return 1;
+}
