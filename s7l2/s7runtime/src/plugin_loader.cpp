@@ -2,6 +2,7 @@
 #include "s7/element_registry.hpp"
 #include "s7/element_plugin.hpp"
 
+#include <algorithm>
 #include <dlfcn.h>
 #include <boost/json.hpp>
 
@@ -305,12 +306,33 @@ bool PluginLoader::load_plugin(
     }
     auto register_func = reinterpret_cast<S7RegisterElementsFunc>(register_symbol);
 
-    // Register elements
+    // Register elements. Registration is all or nothing: on failure, the
+    // types it added are removed before the library is unloaded, so no
+    // descriptor keeps code from an unloaded library.
+    const auto before = registry.element_types();
+    auto added_types = [&] {
+        std::vector<std::string> added;
+        for (const auto& type : registry.element_types()) {
+            if (std::ranges::find(before, type) == before.end()) {
+                added.push_back(type);
+            }
+        }
+        return added;
+    };
     try {
         register_func(&registry);
-    } catch (const std::exception& e) {
-        std::cerr << "Plugin " << plugin_path << " registration failed: "
-                  << e.what() << "\n";
+    } catch (...) {
+        std::string reason = "unknown exception";
+        try {
+            throw;
+        } catch (const std::exception& e) {
+            reason = e.what();
+        } catch (...) {
+        }
+        const auto added = added_types();
+        registry.unregister(added);
+        std::cerr << "Plugin " << plugin_path << " registration failed: " << reason << " (" << added.size()
+                  << " partial registrations removed)\n";
         dlclose(handle);
         return false;
     }
@@ -321,6 +343,8 @@ bool PluginLoader::load_plugin(
     LoadedPlugin loaded;
     loaded.info = std::move(info);
     loaded.handle = handle;
+    loaded.registry = &registry;
+    loaded.registered_types = added_types();
     loaded_plugins_.push_back(std::move(loaded));
 
     std::cout << "  Successfully loaded " << loaded_plugins_.back().info.elements.size() << " elements\n";
@@ -346,6 +370,9 @@ std::vector<PluginLoader::LoadedPluginInfo> PluginLoader::loaded_plugin_info() c
 
 void PluginLoader::unload_all() {
     for (auto& plugin : loaded_plugins_) {
+        if (plugin.registry) {
+            plugin.registry->unregister(plugin.registered_types);
+        }
         if (plugin.handle) {
             dlclose(plugin.handle);
             plugin.handle = nullptr;

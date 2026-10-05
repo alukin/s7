@@ -52,11 +52,18 @@ public:
     // Get the full loaded plugin metadata.
     [[nodiscard]] std::vector<LoadedPluginInfo> loaded_plugin_info() const;
 
+    // Removes every plugin's element types from the registry it registered
+    // into, then unloads the libraries. Elements created from them must be
+    // destroyed first. (The destructor keeps libraries loaded.)
+    void unload_all();
+
 private:
     struct LoadedPlugin {
         LoadedPlugin() : info{}, handle(nullptr) {}
         LoadedPluginInfo info;
         void* handle;  // dlopen handle
+        ElementRegistry* registry{nullptr};
+        std::vector<std::string> registered_types; // what its registration added
     };
 
     std::vector<std::filesystem::path> search_paths_;
@@ -71,8 +78,6 @@ private:
         const std::filesystem::path& dir
     );
 
-    // Unload all plugins
-    void unload_all();
 };
 
 } // namespace s7

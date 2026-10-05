@@ -88,6 +88,10 @@ public:
     // Get element count
     [[nodiscard]] size_t element_count() const;
 
+    // Removes these element types (unknown names are ignored). Pointers from
+    // find() and all_descriptors() are invalidated.
+    void unregister(const std::vector<std::string>& type_names);
+
     // Clear all registrations (for testing)
     void clear();
 

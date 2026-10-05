@@ -105,3 +105,21 @@ set_tests_properties(s7spectral_sdk_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}"
 )
+
+# Transactional plugin registration.
+add_library(s7_test_plugin MODULE tests/test_plugin.cpp)
+target_link_libraries(s7_test_plugin PRIVATE s7core)
+add_library(s7_test_plugin_failing MODULE tests/test_plugin.cpp)
+target_link_libraries(s7_test_plugin_failing PRIVATE s7core)
+target_compile_definitions(s7_test_plugin_failing PRIVATE S7_TEST_PLUGIN_FAIL)
+add_executable(s7runtime_plugin_loader_smoke
+    tests/plugin_loader_smoke.cpp
+    src/plugin_loader.cpp
+)
+target_include_directories(s7runtime_plugin_loader_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(s7runtime_plugin_loader_smoke PRIVATE s7core Boost::json ${CMAKE_DL_LIBS})
+target_compile_definitions(s7runtime_plugin_loader_smoke PRIVATE
+    S7_TEST_PLUGIN="$<TARGET_FILE:s7_test_plugin>"
+    S7_FAILING_PLUGIN="$<TARGET_FILE:s7_test_plugin_failing>")
+add_dependencies(s7runtime_plugin_loader_smoke s7_test_plugin s7_test_plugin_failing)
+add_test(NAME s7runtime_plugin_loader_smoke COMMAND s7runtime_plugin_loader_smoke)

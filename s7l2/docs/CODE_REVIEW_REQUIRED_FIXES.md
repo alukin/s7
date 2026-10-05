@@ -404,7 +404,7 @@ Define the runtime execution loop for served nodes: continuous stepping (free-ru
 
 Relevant code: [main.cpp](../s7runtime/src/main.cpp:157).
 
-## P2: Plugin unload after partial registration leaves dangling factories — partly fixed 2026-10-05
+## P2: Plugin unload after partial registration leaves dangling factories — fixed 2026-10-05
 
 ### Current problem
 
@@ -419,7 +419,7 @@ Make registration transactional: register into a staging registry or remove the 
 - A plugin that fails midway leaves no descriptors from that plugin in the registry and the process keeps running.
 - Host and plugins resolve registry/element symbols from one shared `s7core`.
 
-**Progress:** `s7core` is a shared library used by the host and all plugins (second criterion). Transactional registration on failure is still open.
+**Resolution:** `s7core` is a shared library used by the host and all plugins (second criterion). Registration is all or nothing: the loader records the element types a plugin's `s7_register_elements` added, and if it throws (any exception) removes them with the new `ElementRegistry::unregister()` before `dlclose()`. `PluginLoader::unload_all()` (now public) likewise unregisters each plugin's types before unloading it; the destructor still keeps libraries loaded. Test: `s7runtime_plugin_loader_smoke` loads an in-tree plugin built twice, once failing on a duplicate type after registering an element (no trace remains, the built-in it collided with stays) and once succeeding (its element runs, and unloading removes exactly its types); clean under ASan.
 
 Relevant code: [plugin_loader.cpp](../s7runtime/src/plugin_loader.cpp:308), [s7core/CMakeLists.txt](../s7core/CMakeLists.txt:4), [s7noise/CMakeLists.txt](../s7noise/CMakeLists.txt:23).
 

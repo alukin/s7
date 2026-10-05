@@ -242,6 +242,16 @@ size_t ElementRegistry::element_count() const {
     return descriptors_.size();
 }
 
+void ElementRegistry::unregister(const std::vector<std::string>& type_names) {
+    std::erase_if(descriptors_, [&](const ElementDescriptor& descriptor) {
+        return std::ranges::find(type_names, descriptor.type_name()) != type_names.end();
+    });
+    name_to_index_.clear();
+    for (size_t index = 0; index < descriptors_.size(); ++index) {
+        name_to_index_[descriptors_[index].type_name()] = index;
+    }
+}
+
 void ElementRegistry::clear() {
     descriptors_.clear();
     name_to_index_.clear();
