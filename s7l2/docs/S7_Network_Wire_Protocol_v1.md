@@ -1,7 +1,7 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
 **Status:** Candidate wire-format draft; not yet a conformance standard.
-**Draft revision:** 0.4
+**Draft revision:** 0.5
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
 
@@ -88,89 +88,88 @@ For block data, a timestamp role describes the first logical sample in the packe
 
 ## 7. Binary Packet Format
 
-Each WebSocket binary message contains one packet. All multi-byte header fields and numeric payload values use network byte order (big-endian). The packet begins with this fixed 48-byte header:
+Each WebSocket binary message contains one message. All multi-byte header fields and numeric payload values are **little-endian**: it is the native layout of common hosts (x86-64, ARM) and of most sample sources (SDR I/Q buffers, sound devices, ADC/DSP boards), so payloads move between devices and the wire without byte swapping. Data packets begin with this fixed 16-byte header; the payload starts 8-byte aligned:
 
 | Offset | Size | Field | Meaning |
 |---:|---:|---|---|
-| 0 | 4 | `magic` | ASCII `S7DP` |
-| 4 | 1 | `version` | Packet format version; `1` in this draft |
-| 5 | 1 | `flags` | Reserved; MUST be zero in this draft |
-| 6 | 2 | `header_length` | Total header bytes, including extensions; at least 48 |
-| 8 | 16 | `stream_id` | Stream UUID bytes in RFC 4122 network order |
-| 24 | 8 | `sequence` | Per-stream packet sequence number |
-| 32 | 4 | `channel_id` | Channel within the configured stream; zero if not multiplexed |
-| 36 | 2 | `data_type` | Numeric identifier from Section 8 |
-| 38 | 4 | `element_count` | Number of logical values in payload; complex values count as one each |
-| 42 | 4 | `payload_length` | Payload size in bytes |
-| 46 | 2 | `reserved` | MUST be zero in version 1 |
+| 0 | 1 | `version` | Packet format version; `1` in this draft |
+| 1 | 1 | `flags` | Bit 0: header extensions present. Other bits MUST be zero |
+| 2 | 2 | `data_type` | Wire type from Section 8; MUST equal the stream descriptor's type |
+| 4 | 4 | `stream_alias` | Per-connection alias bound to a 128-bit `stream_id` by `RESUME` (Section 12.1, item 2) |
+| 8 | 8 | `sequence` | Per-stream packet sequence number |
 
 The message layout is:
 
 ```text
-fixed header (48 bytes)
-header extensions (header_length - 48 bytes)
-payload (payload_length bytes)
+fixed header (16 bytes)
+header extensions (only if flags bit 0: u16 total_extension_length, then TLV records, padded with zero bytes to a multiple of 8)
+payload
 ```
 
-The total WebSocket message length MUST equal `header_length + payload_length`. `payload_length` MUST NOT exceed 256 KiB in this draft. Receivers MUST reject truncated messages, unsupported versions, nonzero reserved bits/fields, invalid lengths, unknown mandatory extensions, and payload lengths inconsistent with the data type and element count.
+Fields that the committed stream descriptor fixes are not repeated per packet: the payload length is the remainder of the WebSocket message, and the element count follows from it and the wire type (Section 8). A receiver MUST reject a packet whose `data_type` differs from the descriptor's wire type, a payload that is not a whole number of elements, a payload larger than the descriptor's `max_elements_per_packet` allows, an unknown `stream_alias`, unsupported versions, nonzero reserved flag bits, and unknown critical extensions. There is no implicit type conversion anywhere on the data path: a type change is an explicit `Convert` element in the graph.
 
 Header extensions use this TLV form:
 
 ```text
-type: u16 big-endian
-length: u16 big-endian
+type: u16
+length: u16
 value: length bytes
 ```
 
 Bit 15 of `type` marks a critical extension. Unknown critical extensions MUST be rejected; unknown noncritical extensions MUST be ignored. An extension MUST NOT appear more than once unless that extension explicitly allows repetition.
 
+**Batching.** A producer packs up to `max_elements_per_packet` consecutive elements into one packet and sends a partial packet when the oldest unsent element has waited `max_batch_latency_ms` (default 10 ms). Both are set on the network boundary element (`NetSink`) and recorded in the stream descriptor.
+
 ### 7.1 Timestamp records
 
-Extension type `0x8001` is the critical `TIMESTAMPS` extension. Its value is:
+Uniformly sampled streams carry no per-packet timestamps. Delivery is lossless and ordered, so the consumer counts elements: the element with cumulative index `n` has time `origin + n / sample_rate` in each declared timestamp role, with the origin and rational sample rate from the stream descriptor.
+
+Irregular streams, and streams whose descriptor requires explicit timestamps, carry extension type `0x8001`, the critical `TIMESTAMPS` extension:
 
 ```text
 record_count: u8
 records: record_count repetitions of:
     role: u8
-    timestamp_ns: i64 big-endian, two's complement
+    timestamp_ns: i64, two's complement
 ```
 
-Role IDs are `1 = MODEL_TIME`, `2 = SOURCE_TIME`, and `3 = PROCESSING_TIME`. Records MUST be ordered by ascending role ID, MUST NOT repeat a role, and the value length MUST equal `1 + 9 * record_count`. An unknown role ID MUST be rejected. Clock-domain identifiers and timestamp origins are declared in the committed stream/node configuration and are not repeated per packet. A receiver MUST verify that the roles present match the stream descriptor.
+Role IDs are `1 = MODEL_TIME`, `2 = SOURCE_TIME`, and `3 = PROCESSING_TIME`. Records MUST be ordered by ascending role ID, MUST NOT repeat a role, and the value length MUST equal `1 + 9 * record_count`. An unknown role ID MUST be rejected. A timestamp describes the first element of the packet. Clock-domain identifiers and timestamp origins are declared in the committed stream/node configuration and are not repeated per packet. A receiver MUST verify that the roles present match the stream descriptor.
 
 ## 8. Numeric Data Types
 
-The MVP supports fixed-width integers and IEEE 754 interchange binary floating-point values. The following IDs are proposed normative v1 IDs; implementations MUST NOT transmit language-specific object layouts.
+Every port of a graph has exactly one of these types, and a stream's wire type is the type of the producing port. Values are carried with no implicit conversion or canonicalization. Integer values use two's complement for signed and plain binary for unsigned types; IEEE values use their interchange bit patterns (NaNs, infinities and signed zero are preserved). All multi-byte values are little-endian.
 
-Integer values use two's-complement representation for signed types and unsigned representation for unsigned types. IEEE values use their IEEE 754 interchange bit patterns. Multi-byte values are big-endian.
-
-The initial catalog includes:
-
-| ID | Name | Width | Payload representation |
+| ID | Name | Bits per element | Payload representation |
 |---:|---|---:|---|
-| `0x0001` | `I8` | 8 | Two's-complement signed integer |
+| `0x0001` | `I8` | 8 | Signed integer |
 | `0x0002` | `U8` | 8 | Unsigned integer |
-| `0x0003` | `I12` | 12 | Packed two's-complement signed integer |
-| `0x0004` | `U12` | 12 | Packed unsigned integer |
-| `0x0005` | `I16` | 16 | Two's-complement signed integer, big-endian |
-| `0x0006` | `U16` | 16 | Unsigned integer, big-endian |
-| `0x0007` | `I32` | 32 | Two's-complement signed integer, big-endian |
-| `0x0008` | `U32` | 32 | Unsigned integer, big-endian |
-| `0x0009` | `I64` | 64 | Two's-complement signed integer, big-endian |
-| `0x000A` | `U64` | 64 | Unsigned integer, big-endian |
-| `0x000B` | `I128` | 128 | Two's-complement signed integer, big-endian |
-| `0x000C` | `U128` | 128 | Unsigned integer, big-endian |
-| `0x000D` | `F16` | 16 | IEEE 754 binary16 interchange bits, big-endian |
-| `0x000E` | `F32` | 32 | IEEE 754 binary32 interchange bits, big-endian |
-| `0x000F` | `F64` | 64 | IEEE 754 binary64 interchange bits, big-endian |
-| `0x0010` | `F128` | 128 | IEEE 754 binary128 interchange bits, big-endian |
-| `0x0101` | `C16` | 32 | Pair of F16 values: real then imaginary |
-| `0x0102` | `C32` | 64 | Pair of F32 values: real then imaginary |
-| `0x0103` | `C64` | 128 | Pair of F64 values: real then imaginary |
-| `0x0104` | `C128` | 256 | Pair of F128 values: real then imaginary |
+| `0x0003` | `I12` | 12 | Packed signed integer (see below) |
+| `0x0004` | `U12` | 12 | Packed unsigned integer (see below) |
+| `0x0005` | `I16` | 16 | Signed integer |
+| `0x0006` | `U16` | 16 | Unsigned integer |
+| `0x0007` | `I32` | 32 | Signed integer |
+| `0x0008` | `U32` | 32 | Unsigned integer |
+| `0x0009` | `I64` | 64 | Signed integer |
+| `0x000A` | `U64` | 64 | Unsigned integer |
+| `0x000B` | `I128` | 128 | Signed integer |
+| `0x000C` | `U128` | 128 | Unsigned integer |
+| `0x000D` | `F16` | 16 | IEEE 754 binary16 |
+| `0x000E` | `F32` | 32 | IEEE 754 binary32 |
+| `0x000F` | `F64` | 64 | IEEE 754 binary64 |
+| `0x0010` | `F128` | 128 | IEEE 754 binary128 |
+| `0x0101` | `C16` | 32 | Pair of F16: real, imaginary |
+| `0x0102` | `C32` | 64 | Pair of F32: real, imaginary |
+| `0x0103` | `C64` | 128 | Pair of F64: real, imaginary |
+| `0x0104` | `C128` | 256 | Pair of F128: real, imaginary |
+| `0x0201` | `CI8` | 16 | Pair of I8: in-phase, quadrature |
+| `0x0202` | `CU8` | 16 | Pair of U8: in-phase, quadrature (offset binary, as delivered by RTL-SDR) |
+| `0x0203` | `CI16` | 32 | Pair of I16: in-phase, quadrature |
 
-For `I12` and `U12`, values are packed most-significant bit first, with no padding between values. If the final value leaves unused low-order bits in the final byte, those bits MUST be zero. Signed `I12` uses two's-complement range `-2048..2047`; `U12` uses range `0..4095`. All other multi-byte values use network byte order (big-endian). `element_count` counts logical values; for complex types, it counts complex pairs, not individual real/imaginary components. Payload length MUST equal the encoded size implied by `data_type` and `element_count`.
+Complex integer types exist so that raw SDR I/Q samples travel at their native width: converting 8-bit I/Q to floating point before the wire would multiply the data rate by 4 to 8.
 
-IEEE NaNs, infinities, and signed zero are transported as their interchange bit patterns without canonicalization. All listed representations are mandatory for MVP transport. A runtime that cannot perform arithmetic for a type MUST still preserve and transport it, and MUST reject graph execution that requires unsupported arithmetic. Capability negotiation is defined by the control protocol.
+**12-bit packing.** Two consecutive 12-bit values occupy three bytes as one little-endian 24-bit word: the first value in bits 0–11, the second in bits 12–23. An odd final value occupies two bytes, in bits 0–11 of a little-endian 16-bit word with bits 12–15 zero. The element count of a payload of `b` bytes is therefore `floor(8b / 12)`.
+
+**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 support MUST NOT be assigned F128, C128, I128 or U128 streams. The C++ reference runtime supports all listed types (C++26, GCC: `std::float16_t`, `std::float128_t`, `__int128`).
 
 ## 9. Validation and Fault Behavior
 
@@ -205,9 +204,9 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 
 ### 12.1 Resolutions
 
-Items 2 and 5 were decided on 2026-10-05. Items 1, 3 and 4 are proposals awaiting approval. No codec for Section 7 is implemented before all are settled.
+Items 1, 2, 5 and 6 were decided on 2026-10-05 (item 1 as proposed). Items 3 and 4 are proposals awaiting approval.
 
-**1. Stream descriptor (proposal).** Each stream is a JSON object in the configuration bundle's `full_network.streams` array, so it is covered by the configuration digest and versioned with the deployment revision. It is derived from an explicit network connection of the schema:
+**1. Stream descriptor (decided 2026-10-05).** Each stream is a JSON object in the deployed diagram's `streams` array, so it is covered by the configuration digest and versioned with the deployment revision. It is derived from a connection between elements placed on different nodes (Section 12.1, item 6), and Studio stores its `stream_id` in the diagram so that it survives redeployments:
 
 ```json
 {
@@ -216,14 +215,15 @@ Items 2 and 5 were decided on 2026-10-05. Items 1, 3 and 4 are proposals awaitin
   "consumers": [ { "node_uuid": "...", "element_instance_uuid": "...", "port": 0 } ],
   "data_type": "F64",
   "channels": 1,
-  "max_elements_per_packet": 1,
+  "max_elements_per_packet": 1024,
+  "max_batch_latency_ms": 10,
   "sample_rate": { "numerator": 48000, "denominator": 1 },
   "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ],
   "send_log": { "max_packets": 4096, "max_block_ms": 2000 }
 }
 ```
 
-`sample_rate` is present only for uniformly sampled blocks. A `clock_domain` names a domain declared by the producing node: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`.
+`data_type` is the exact wire type (Section 8) and equals the producing and consuming ports' type. `max_elements_per_packet` and `max_batch_latency_ms` come from the network boundary element. `sample_rate` is present only for uniformly sampled streams; without it, packets carry explicit timestamps (Section 7.1). A `clock_domain` names a domain declared by the producing node: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`.
 
 **2. Delivery: lossless across connection loss (decided 2026-10-05).**
 - *Guarantee:* while both processes run, each packet reaches the consumer graph exactly once, in order, across disconnects and reconnects. Process crashes are detected and fault the stream; they are not recovered in the MVP.
@@ -232,14 +232,16 @@ Items 2 and 5 were decided on 2026-10-05. Items 1, 3 and 4 are proposals awaitin
 - *Acknowledgement:* the consumer sends a cumulative `ACK {stream_id, next_expected}` after delivering packets to its graph, at least every 64 packets or 50 ms while data arrives. The producer frees the acknowledged packets.
 - *Resume:* after every (re)connect the consumer sends `RESUME {stream_id, next_expected}` for each stream it consumes from that peer; the producer replays from its log and continues. If `next_expected` is older than the oldest logged packet, or newer than the next sequence the producer will assign, the stream faults with `STREAM_STATE_LOST`. A restarted consumer has no expectation and sends `RESUME_NO_STATE`, which also faults the stream.
 - *Producer restart:* sequence-range reservation (Section 4) makes the restart visible as a gap, which faults the stream.
-- *Wire form:* acknowledgements travel on the same `/data` connection, consumer to producer, as a 32-byte message distinguished by its magic: `magic "S7DA"` (4), `version` (1), `kind` (1: `ACK`, 2: `RESUME`, 3: `RESUME_NO_STATE`), `reserved` (2, zero), `stream_id` (16), `next_expected` (8), big-endian.
+- *Wire form:* acknowledgements travel on the same `/data` connection, consumer to producer, as 32-byte little-endian messages. They are distinguished from data packets by `version = 0x80 | 1`: `version` (1), `kind` (1: `ACK`, 2: `RESUME`, 3: `RESUME_NO_STATE`), `reserved` (2, zero), `stream_alias` (4), `next_expected` (8), `stream_id` (16; zero in `ACK`). `RESUME` binds the alias to the `stream_id` for that connection.
 
 **3. Fault reporting (proposal).** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `blocked`, `faulted`), `next_expected` / `next_sequence`, send-log depth, counters (`packets`, `replayed`, `duplicates_discarded`, `malformed`, `unauthorized`, `blocked_ms_total`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `SEND_LOG_OVERFLOW`, `STREAM_STATE_LOST`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `SOURCE_OVERFLOW`. Studio polls it; pushed events are a later extension. `RECOVER_STREAM {stream_id}` (authorized like a configuration change) restarts a faulted stream with a new sequence expectation; the data lost in the fault stays lost and stays reported.
 
 **4. Negotiation (proposal): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support.
 
+**6. Deployment unit and placement (decided 2026-10-05).** Studio deploys the diagram itself (`.s7diagram`, including layout), not an extracted schema; each node extracts its part of the graph and keeps the whole diagram, so Studio can request the deployed diagram (`GET_NETWORK_CONFIGURATION`) and display it. Every element carries a `node` placement attribute. A node runs the elements placed on it; each connection between elements on different nodes becomes a stream with its own descriptor. The diagram format will be extended with whatever further deployment data is needed.
+
 **5. Routing (decided 2026-10-05).** A stream follows the explicit network connection in the schema: the producer node sends it only on its connection to each configured consumer node, identified by the authenticated peer certificate, and a consumer accepts it only from the configured producer. Nodes do not relay streams in the MVP. Relaying through intermediate nodes may be needed later for unstable networks; to keep that possible, `stream_id`, sequence numbers and acknowledgements are end-to-end between producer and consumer, and packets carry no hop-specific fields.
 
 ## 13. Relationship to Implementation
 
-The C++ reference transport currently uses a different 54-byte packet layout, a 64-bit stream identifier, a packet-level stream name, and a limited scalar F64 profile. It does not implement the packet format proposed here, persistent sequence behavior, gap handling, or timestamp-role records. The codec MUST NOT be treated as the source of truth. Before interoperability freeze, this candidate must be reviewed and accompanied by byte-exact fixtures for independent C++, Rust, Python, and JVM implementations. A finalized v1 implementation must either implement this format exactly or use a different explicitly versioned format; it MUST NOT silently call the existing layout v1-compatible.
+The C++ reference transport currently uses a different 54-byte big-endian prototype layout, a 64-bit stream identifier, a packet-level stream name, and a scalar F64 profile. It does not yet implement the packet format of Section 7, acknowledgements and replay, sequence-range reservation, or timestamp-role records. The codec MUST NOT be treated as the source of truth. Before interoperability freeze, this candidate must be reviewed and accompanied by byte-exact fixtures for independent C++, Rust, Python, and JVM implementations. A finalized v1 implementation must either implement this format exactly or use a different explicitly versioned format; it MUST NOT silently call the existing layout v1-compatible.

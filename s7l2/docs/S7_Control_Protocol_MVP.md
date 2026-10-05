@@ -41,7 +41,7 @@ Runtime-node identity uses the SAN URI form:
 spiffe://s7/node/<node_uuid>
 ```
 
-The control Studio certificate MUST carry a CA-issued X.509 Certificate Policies entry for the S7 control-node role. Each network's trust configuration MUST identify the exact policy OID it accepts and the single authorized Studio certificate identity (certificate fingerprint or an equivalent pinned key identity). A second Studio certificate is not authorized until an operator updates that configuration. Certificate rotation requires an explicit trust-configuration update. A valid runtime-node certificate alone does not authorize configuration changes.
+The control Studio certificate MUST carry the S7 control-node key purpose in its X.509 v3 Extended Key Usage extension, next to `clientAuth`. (Decided 2026-10-05: the role is a permitted key use, so Extended Key Usage expresses it; Certificate Policies describes issuance policy and the subject only names the certificate.) Each network's trust configuration MUST identify the exact key-purpose OID it accepts and the single authorized Studio certificate identity (certificate fingerprint or an equivalent pinned key identity). A second Studio certificate is not authorized until an operator updates that configuration. Certificate rotation requires an explicit trust-configuration update. A valid runtime-node certificate alone does not authorize configuration changes.
 
 Plain WebSocket is not trusted membership and MUST NOT be used to authorize configuration changes.
 
@@ -227,7 +227,7 @@ The authorized Studio is node configuration in the runtime schema file, not depl
 }
 ```
 
-The OID above is a development placeholder (UUID-derived, under `2.25`) used by the test certificates until S7 policy OIDs are assigned under an enterprise arc.
+The OID above is a development placeholder (UUID-derived, under `2.25`) used by the test certificates until S7 OIDs are assigned under an enterprise arc. **Pending change:** the implementation still reads this OID from Certificate Policies; it moves to Extended Key Usage (and `studio_policy_oid` becomes `studio_key_purpose_oid`) per section 2.
 
 **Prepare request.**
 

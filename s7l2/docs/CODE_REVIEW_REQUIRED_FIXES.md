@@ -130,6 +130,8 @@ Also ensure that timestamp roles and their presence are encoded unambiguously; t
 
 **Progress:** decided 2026-10-05 (wire draft 0.4, section 12.1): data must not be lost. While both processes run, delivery is exactly-once and in order across connection loss, using an in-memory send log, cumulative `ACK`, `RESUME` and replay; a full send log blocks the producer up to a configured limit, then faults the stream; process crashes fault the stream (no recovery in the MVP); every gap is a fault (no gap policy). Streams follow the schema's explicit network connections directly from producer to consumer; no relaying in the MVP, but the format stays end-to-end so relays can be added. Still awaiting approval: stream descriptor serialization (item 1), fault reporting (item 3), negotiation (item 4). The Section 7 codec is not implemented until those are settled.
 
+Also decided 2026-10-05 (wire draft 0.5): every port and stream has one exact wire type with no implicit conversion; the type set is I8–I128, U8–U128 (including I12/U12), F16, F32, F64, F128, C16–C128, and complex integers CI8, CU8, CI16 for native SDR I/Q; a 16-byte little-endian header carries version, flags, `data_type`, a per-connection `stream_alias` and `sequence`; element count follows from the message length; uniformly sampled streams carry no per-packet timestamps; batching up to `max_elements_per_packet` with `max_batch_latency_ms` (default 10 ms), both configured on the network boundary element. The stream descriptor (item 1) is approved as proposed. Studio deploys diagrams with per-element `node` placement (item 6). Still open: fault reporting (item 3) and negotiation (item 4).
+
 **Consequence for the current transport:** the drop-oldest send and receive queues from the multiple-peer item are wrong for data streams under this guarantee. With the new codec they become the send log (block, then fault) and receive-side delivery without dropping; fan-out to every connected peer becomes per-connection routing to the configured consumers.
 
 Relevant code: [transport.hpp](../s7transport/include/s7/transport.hpp:1), [transport.cpp](../s7transport/src/transport.cpp:210), [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md:1).
@@ -264,7 +266,7 @@ Generate tokens from an operating-system cryptographic random source or an estab
 
 Relevant code: [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:86), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:691).
 
-## P3: Align signal types with their portable representation — fixed 2026-10-04
+## P3: Align signal types with their portable representation — superseded 2026-10-05
 
 ### Current problem
 
@@ -278,6 +280,8 @@ Specify whether integer signal values are stored and computed as their declared 
 
 - Every declared type has defined width, signedness, range, conversion, overflow, and serialization behavior.
 - A value round-trips between C++, Python, Rust, and JVM implementations without changing its meaning.
+
+**Superseded (2026-10-05):** 32/64/128-bit integers and F16/F32/F128 are required, so integers can no longer live in a `double`. The runtime moves to typed storage per port (C++26 on GCC: `std::float16_t`, `std::float128_t`, `__int128`), every type of wire draft section 8 becomes a `SignalType`, and conversions are explicit through one `Convert` element (`from`, `to`, `mode`: value or normalized, `rounding`, `overflow` all explicit). Windows is not an MVP target. The interim rule below stays until that lands.
 
 **Resolution:** the canonical-representation option: integer types (all ≤ 16 bits) are stored as a `double` that must hold an exact in-range integer. `signal_type_info()` defines width, signedness, range and candidate wire type id per type; `quantize_to_signal_type()` defines conversion (round half to even, saturate, NaN → 0) and `is_valid_signal_value()` the invariant. `DoubleToInt12` cast to `int16_t` before clamping (undefined for large inputs) and scaled by 2047 while `Int12ToDouble` divided by 2048; both now use Q11 (× / ÷ 2048) with the defined quantization. The table is in `ELEMENT_DEV_GUIDE.md`; `core_smoke` covers ranges, rounding, saturation, NaN and the INT12 round trip. Cross-language round trips need the wire codec (step 3).
 

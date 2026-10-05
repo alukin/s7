@@ -119,9 +119,9 @@ Transport and runtime must enforce:
 
 - TLS 1.3 + mutual TLS
 - node identity in SAN URI: `spiffe://s7/node/<uuid>`
-- role classification in X.509 Certificate Policies OIDs:
-  - runtime-node policy
-  - control-node policy
+- role classification in X.509 v3 Extended Key Usage, with S7 key-purpose OIDs next to `serverAuth`/`clientAuth`:
+  - runtime-node purpose
+  - control-node purpose (Studio)
 - signed trusted-CA manifest JSON plus detached signature file (`.sig`), verified against primary CA
 
 Only `control-node` role may perform control mutations.

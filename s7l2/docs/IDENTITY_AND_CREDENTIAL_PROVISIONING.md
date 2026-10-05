@@ -39,7 +39,7 @@ spiffe://s7/node/<node_uuid>
 
 The certificate identity is authoritative. Any `node_uuid` reported in a control-plane message must agree with the authenticated certificate identity. This follows the binding described in `REMOTE_NODE_INFO_AND_DEPLOYMENT.md`.
 
-The MVP has one configured control Studio. Its certificate carries a CA-issued X.509 Certificate Policies entry for the S7 control-node role. Each runtime trust configuration pins the accepted policy OID and the authorized Studio identity; adding or rotating the authorized Studio requires an explicit trust-configuration update. Multiple Studio nodes, master handover, and coordination between Studio operators are future work.
+The MVP has one configured control Studio. Its certificate carries the S7 control-node key purpose in its X.509 v3 Extended Key Usage extension (next to `clientAuth`). Each runtime trust configuration pins the accepted key-purpose OID and the authorized Studio identity; adding or rotating the authorized Studio requires an explicit trust-configuration update. Multiple Studio nodes, master handover, and coordination between Studio operators are future work.
 
 ## Provisioning Workflow
 
@@ -117,7 +117,7 @@ The format and storage location of this record are not yet standardized. It shou
 ## Open Decisions
 
 - Which service issues S7 certificates, and how initial trust roots are delivered and rotated.
-- Numeric assignment of the S7 Certificate Policies OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods. Until then, development and tests use the UUID-derived placeholder `2.25.4266950079767543379770189370854073200` for the control-node role (`tools/generate_test_runtime_certs.sh`).
+- Numeric assignment of the S7 key-purpose OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods. Until then, development and tests use the UUID-derived placeholder `2.25.4266950079767543379770189370854073200` for the control-node role (`tools/generate_test_runtime_certs.sh`).
 - Whether project diagrams and executable schemas are stored as separate files or in one project document.
 - How the Studio maps a Git commit to the exact schema/configuration sent to runtime nodes.
 - Whether and how remote Git hosting is added after the MVP.
