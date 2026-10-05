@@ -40,6 +40,8 @@ using StreamId = std::array<std::uint8_t, 16>; // RFC 4122 byte order
 
 [[nodiscard]] StreamId parse_stream_id(const std::string& uuid);
 [[nodiscard]] std::string to_string(const StreamId& id);
+// A new random (version 4) UUID from OpenSSL's CSPRNG.
+[[nodiscard]] StreamId random_stream_id();
 
 enum class TimestampRole : std::uint8_t {
     ModelTime = 1,

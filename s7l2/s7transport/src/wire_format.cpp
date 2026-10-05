@@ -8,6 +8,8 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
+#include <openssl/rand.h>
+
 namespace s7::wire {
 namespace {
 
@@ -117,6 +119,17 @@ std::string to_string(const StreamId& id)
     boost::uuids::uuid uuid{};
     std::copy(id.begin(), id.end(), uuid.begin());
     return boost::uuids::to_string(uuid);
+}
+
+StreamId random_stream_id()
+{
+    StreamId id{};
+    if (RAND_bytes(id.data(), static_cast<int>(id.size())) != 1) {
+        throw std::runtime_error("Could not generate a stream id.");
+    }
+    id[6] = static_cast<std::uint8_t>((id[6] & 0x0F) | 0x40); // version 4
+    id[8] = static_cast<std::uint8_t>((id[8] & 0x3F) | 0x80); // RFC 4122 variant
+    return id;
 }
 
 std::size_t payload_bytes(const SignalType type, const std::size_t count)

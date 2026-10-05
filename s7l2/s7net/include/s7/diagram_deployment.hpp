@@ -1,0 +1,104 @@
+#ifndef S7NET_INCLUDE_S7_DIAGRAM_DEPLOYMENT_HPP
+#define S7NET_INCLUDE_S7_DIAGRAM_DEPLOYMENT_HPP
+
+// Deploying one diagram across nodes (S7_Network_Wire_Protocol_v1.md,
+// section 12.1, items 1 and 6).
+//
+// Every element of the diagram's schema carries a `node` attribute (a
+// node_uuid listed in the diagram's `runtime_nodes`). A connection between
+// elements on different nodes is carried by a stream; the diagram's
+// `streams` array describes each one. Studio assigns the streams before
+// deploying (assign_streams); every node receives the whole diagram and runs
+// its own part of it (extract_node_schema), with a NetSink / NetSource in
+// place of each stream end.
+//
+//   "runtime_nodes": [ { "node_uuid": "...", "name": "node-a", "endpoint": "ws://host:9002" } ],
+//   "streams": [ {
+//       "stream_id": "<uuid>",
+//       "producer": { "node_uuid": "...", "element": "osc", "port": 0 },
+//       "consumers": [ { "node_uuid": "...", "element": "gain", "port": 0 } ],
+//       "data_type": "F64",
+//       "max_elements_per_packet": 1024, "max_batch_latency_ms": 10,
+//       "send_log": { "max_packets": 4096, "max_block_ms": 2000 },
+//       "max_wait_ms": 2000
+//   } ]
+
+#include <cstddef>
+#include <functional>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <boost/json.hpp>
+
+#include "s7/signal_types.hpp"
+#include "s7/stream_protocol.hpp"
+
+namespace s7::deployment {
+
+struct RuntimeNode {
+    std::string node_uuid;
+    std::string name;
+    std::string endpoint; // ws:// or wss:// URL other nodes connect to
+};
+
+struct StreamEndpoint {
+    std::string node_uuid;
+    std::string element;
+    std::size_t port{};
+
+    bool operator==(const StreamEndpoint&) const = default;
+};
+
+struct StreamDescriptor {
+    wire::StreamId stream_id{};
+    StreamEndpoint producer;
+    std::vector<StreamEndpoint> consumers;
+    SignalType data_type{SignalType::F64};
+    std::uint32_t max_elements_per_packet{1024};
+    std::uint32_t max_batch_latency_ms{10};
+    std::uint32_t send_log_max_packets{4096};
+    std::uint32_t max_block_ms{2000};
+    std::uint32_t max_wait_ms{2000};
+};
+
+[[nodiscard]] auto parse_runtime_nodes(const boost::json::object& diagram) -> std::vector<RuntimeNode>;
+// Throws std::invalid_argument on a malformed descriptor.
+[[nodiscard]] auto parse_streams(const boost::json::object& diagram) -> std::vector<StreamDescriptor>;
+[[nodiscard]] auto to_json(const StreamDescriptor& stream) -> boost::json::object;
+
+// The diagram's runtime schema (its `schema` object; a bare schema is
+// accepted too).
+[[nodiscard]] auto diagram_schema(const boost::json::object& diagram) -> const boost::json::object&;
+
+// The nodes elements are placed on, in order of first appearance.
+[[nodiscard]] auto placed_nodes(const boost::json::object& diagram) -> std::vector<std::string>;
+
+// Output port types of an element of the diagram's schema (from type
+// inference over the whole schema); nothing if unknown.
+using OutputTypeLookup = std::function<std::optional<SignalType>(const std::string& element, std::size_t port)>;
+
+// Studio, before deploying: checks placement (every element on a listed
+// node) and rewrites `streams` to cover exactly the connections between
+// nodes, one stream per producing output port. A stream keeps its id and
+// settings while its producer stays on the same node with the same type,
+// so redeployments continue it; otherwise it gets a new random id.
+// Returns the problems found (the diagram is unchanged if any).
+[[nodiscard]] auto assign_streams(boost::json::object& diagram, const OutputTypeLookup& output_type) -> std::vector<std::string>;
+
+// A node: its part of the diagram as a runtime schema. Elements placed on
+// the node and the connections between them are kept; each stream the node
+// produces gets a NetSink fed from the producing port, each stream it
+// consumes a NetSource feeding the consuming ports, both pinned to the
+// stream's type. Throws std::invalid_argument if a connection crosses nodes
+// without a stream, or the diagram is otherwise inconsistent.
+[[nodiscard]] auto extract_node_schema(const boost::json::object& diagram, std::string_view node_uuid) -> boost::json::object;
+
+// The endpoints of the nodes producing the streams this node consumes: the
+// data peers it connects to.
+[[nodiscard]] auto producer_endpoints(const boost::json::object& diagram, std::string_view node_uuid) -> std::vector<std::string>;
+
+} // namespace s7::deployment
+
+#endif // S7NET_INCLUDE_S7_DIAGRAM_DEPLOYMENT_HPP
