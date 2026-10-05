@@ -20,7 +20,7 @@ struct ParameterSpec {
     std::optional<double> min_value;        // For numeric types
     std::optional<double> max_value;        // For numeric types
     std::vector<std::string> enum_values;   // For enum type
-    bool required;                          // Must be provided?
+    bool required{false};                          // Must be provided?
 };
 
 // Port specification
@@ -28,7 +28,7 @@ struct PortSpec {
     std::string name;                       // Port name
     std::string description;                // Description
     SignalType type = SignalType::F64;      // Used when type_rule is empty
-    bool optional;                          // Can be omitted?
+    bool optional{false};                          // Can be omitted?
     // Empty: the port has the fixed `type`. Otherwise a rule over the element's
     // type variables: "T", "component(T)" or "complex(T)".
     std::string type_rule{};
@@ -49,16 +49,16 @@ struct TypeVariableSpec {
 struct VisualHints {
     std::string shape;                      // "box", "circle", "triangle", "diamond"
     std::string color;                      // Hex color "#RRGGBB"
-    int max_width;                          // Suggested width
-    int max_height;                         // Suggested height
+    int max_width{0};                          // Suggested width
+    int max_height{0};                         // Suggested height
     std::string icon_name;                  // Icon identifier
 };
 
 // Variadic input specification
 struct VariadicInputSpec {
-    bool enabled;                           // Element supports variadic inputs?
-    std::size_t min_count;                  // Minimum inputs
-    std::size_t max_count;                  // Maximum inputs
+    bool enabled{false};                           // Element supports variadic inputs?
+    std::size_t min_count{0};                  // Minimum inputs
+    std::size_t max_count{0};                  // Maximum inputs
     std::string port_name_template;         // "in_{index}" for naming
     SignalType signal_type = SignalType::F64;
     std::string type_rule{};                // as PortSpec::type_rule
