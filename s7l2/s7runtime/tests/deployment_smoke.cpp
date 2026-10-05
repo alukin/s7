@@ -401,10 +401,9 @@ void test_prepare_expiry()
 // End to end: a runtime node over mTLS, deployed by the pinned Studio.
 void test_runtime_deployment_over_mtls()
 {
-    constexpr std::uint16_t port = 38411;
     auto definition = s7::JsonSchemaLoader::load_from_json(constant_gain_fragment(1.0));
     definition.server.enabled = true;
-    definition.server.port = port;
+    definition.server.port = 0; // a free port
     definition.server.tls = {.enabled = true,
                              .cert_file = cert_path("s7_runtime_node.cert.pem"),
                              .key_file = cert_path("s7_runtime_node.key.pem"),
@@ -416,12 +415,11 @@ void test_runtime_deployment_over_mtls()
     {
         s7::RuntimeService service{definition, state_dir};
         service.initialize_graph();
-        service.start_websocket_server();
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        const auto port = service.start_websocket_server();
         service.step();
         expect(service.active_real_output("gain") == 1.0, "initial graph runs");
 
-        auto client_for = [](const std::string& name, const std::string& ca) {
+        auto client_for = [port](const std::string& name, const std::string& ca) {
             auto client = std::make_unique<s7::transport::BeastRuntimeNetEndpoint>();
             client->configure_client("wss://127.0.0.1:" + std::to_string(port),
                                      {.enabled = true,

@@ -39,7 +39,6 @@ std::filesystem::path make_temp_state_dir(const std::string& label)
 
 int main()
 {
-    constexpr std::uint16_t port = 38393;
 
     s7::ControlNodeDescriptor descriptor;
     descriptor.node_uuid = "11111111-2222-3333-4444-555555555555";
@@ -76,10 +75,10 @@ int main()
     server.set_control_request_handler([control](const s7::transport::ControlPeer& peer, const std::string& request_json) {
         return control->handle_request_json(peer, request_json);
     });
-    server.configure_server(port);
+    const auto port = server.configure_server(0);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    client.configure_client("ws://127.0.0.1:38393");
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port));
 
     {
         const auto response_text = client.request_control_json(R"json({"type":"HELLO","request_id":"hello-1","protocol_version":1})json");
@@ -165,7 +164,6 @@ int main()
         assert(std::filesystem::exists(cert_dir / "s7_runtime_node.cert.pem"));
         assert(std::filesystem::exists(cert_dir / "s7_runtime_node.key.pem"));
 
-        constexpr std::uint16_t tls_port = 38394;
         s7::transport::TlsConfig tls_cfg;
         tls_cfg.enabled = true;
         tls_cfg.cert_file = (cert_dir / "s7_runtime_node.cert.pem").string();
@@ -178,9 +176,9 @@ int main()
         tls_server.set_control_request_handler([control](const s7::transport::ControlPeer& peer, const std::string& request_json) {
             return control->handle_request_json(peer, request_json);
         });
-        tls_server.configure_server(tls_port, tls_cfg);
+        const auto tls_port = tls_server.configure_server(0, tls_cfg);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        tls_client.configure_client("wss://127.0.0.1:38394", tls_cfg);
+        tls_client.configure_client("wss://127.0.0.1:" + std::to_string(tls_port), tls_cfg);
 
         const auto response_text = tls_client.request_control_json(R"json({"type":"HELLO","request_id":"hello-tls","protocol_version":1})json");
         const auto response = boost::json::parse(response_text).as_object();
@@ -192,7 +190,7 @@ int main()
         s7::RuntimeSchemaDefinition definition;
         definition.name = "identity-test";
         definition.server.enabled = true;
-        definition.server.port = 38401;
+        definition.server.port = 0;
         definition.server.tls.enabled = true;
         definition.server.tls.cert_file = (cert_dir / "s7_runtime_node.cert.pem").string();
         definition.server.tls.key_file = (cert_dir / "s7_runtime_node.key.pem").string();

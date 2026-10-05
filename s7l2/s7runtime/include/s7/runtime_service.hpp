@@ -136,7 +136,9 @@ public:
     void report_transport_stats(std::ostream& out) const;
     void print_summary(std::ostream& out) const;
 
-    void start_websocket_server() const;
+    // Port 0 lets the system choose. Returns the port listened on (0 if the
+    // server is not enabled).
+    std::uint16_t start_websocket_server() const;
     void connect_websocket_client() const;
 
 private:

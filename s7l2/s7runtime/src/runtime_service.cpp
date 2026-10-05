@@ -1022,16 +1022,14 @@ void RuntimeService::add_seed_peer(const std::string& endpoint)
     control_plane_->add_seed_peer(endpoint);
 }
 
-void RuntimeService::start_websocket_server() const {
+std::uint16_t RuntimeService::start_websocket_server() const {
     if (!definition_.server.enabled) {
-        return;
-    }
-    if (definition_.server.port == 0) {
-        throw std::invalid_argument("WebSocket server is enabled but port is 0.");
+        return 0;
     }
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        beast_endpoint->configure_server(definition_.server.port, definition_.server.tls, definition_.server.bind_address);
+        return beast_endpoint->configure_server(definition_.server.port, definition_.server.tls, definition_.server.bind_address);
     }
+    return 0;
 }
 
 void RuntimeService::connect_websocket_client() const {
