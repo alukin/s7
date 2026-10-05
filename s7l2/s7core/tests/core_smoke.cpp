@@ -210,7 +210,7 @@ int main() try
         previousValue->step();
         assert(s7::bound_value<s7::SignalType::F64>(previousValue->outputs()[0]) == 9.0);
 
-        auto integrator = std::make_unique<s7::Integrator>(1.5);
+        auto integrator = std::make_unique<s7::Accumulator>(1.5);
         assert(integrator->has_state());
         assert(!integrator->has_causal_memory());
         const s7::RealValue intIn1{2.0};
@@ -457,7 +457,7 @@ int main() try
         // Stateful-to-stateful chains run in topological order within one step.
         s7::Schema schema{"stateful_chain"};
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(2.0); });
-        schema.add_element("integrator", [] { return std::make_unique<s7::Integrator>(0.0); });
+        schema.add_element("integrator", [] { return std::make_unique<s7::Accumulator>(0.0); });
         schema.add_element("iir", [] { return std::make_unique<s7::IirFilter>(1.0, 0.0, 0.0); });
         schema.connect("source", 0, "integrator", 0);
         schema.connect("integrator", 0, "iir", 0);
@@ -475,7 +475,7 @@ int main() try
         for (const bool reversed : {false, true}) {
             s7::Schema schema{"unit_delays"};
             std::vector<std::pair<std::string, s7::ElementFactory>> elements{
-                {"source", [] { return std::make_unique<s7::Integrator>(0.0); }},
+                {"source", [] { return std::make_unique<s7::Accumulator>(0.0); }},
                 {"unit", [] { return std::make_unique<s7::Constant>(1.0); }},
                 {"delay", [] { return std::make_unique<s7::Delay>(-1.0); }},
                 {"previous", [] { return std::make_unique<s7::PreviousValue>(-2.0); }},
@@ -508,14 +508,14 @@ int main() try
 
     {
         // A loop closed only through elements with direct feedthrough is rejected.
-        for (const auto* type : {"FirFilter", "Integrator"}) {
+        for (const auto* type : {"FirFilter", "Accumulator"}) {
             s7::Schema schema{"stateful_loop_without_memory"};
             schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
             schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
             if (std::string_view{type} == "FirFilter") {
                 schema.add_element("state", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{0.5}); });
             } else {
-                schema.add_element("state", [] { return std::make_unique<s7::Integrator>(0.0); });
+                schema.add_element("state", [] { return std::make_unique<s7::Accumulator>(0.0); });
             }
             schema.connect("unit", 0, "sum", 0);
             schema.connect("state", 0, "sum", 1);
@@ -535,7 +535,7 @@ int main() try
         // Wrapping a graph in a nested schema does not change its trace.
         auto buildChain = [](s7::Schema& schema) {
             schema.add_element("fir", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{0.5, 0.5}); });
-            schema.add_element("integrator", [] { return std::make_unique<s7::Integrator>(0.0); });
+            schema.add_element("integrator", [] { return std::make_unique<s7::Accumulator>(0.0); });
             schema.add_element("delay", [] { return std::make_unique<s7::Delay>(0.0); });
             schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
             schema.connect("fir", 0, "integrator", 0);

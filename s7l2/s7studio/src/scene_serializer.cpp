@@ -147,7 +147,7 @@ auto declaredPortCounts(std::string_view type,
 
     if (type == "Gain" ||
         type == "Delay" ||
-        type == "Integrator" ||
+        type == "Accumulator" ||
         type == "FirFilter" ||
         type == "IirFilter" ||
         type == "PreviousValue" ||

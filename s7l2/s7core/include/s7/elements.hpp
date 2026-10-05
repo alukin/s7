@@ -213,19 +213,19 @@ using ComplexDelay = DelayT<SignalType::C64>;
 template <SignalType Type>
 using component_storage_t = signal_storage_t<component_signal_type(Type)>;
 
-/// Integrator: running sum y[n] = y[n-1] + x[n], without a time step (an
+/// Accumulator: running sum y[n] = y[n-1] + x[n], without a time step (an
 /// accumulator), in the accumulator type Acc (default: the input type).
 /// Arithmetic types. For numerical integration over time use
 /// EulerIntegrator or TrapezoidIntegrator.
 template <SignalType Type, SignalType Acc = Type>
-class IntegratorT final : public Element {
+class AccumulatorT final : public Element {
 public:
     using input_type = signal_storage_t<Type>;
     using value_type = signal_storage_t<Acc>;
     using Ops = SignalOps<Acc>;
 
-    explicit IntegratorT(value_type initial_value = {}, Overflow overflow = Overflow::Saturate)
-        : Element("Integrator", true)
+    explicit AccumulatorT(value_type initial_value = {}, Overflow overflow = Overflow::Saturate)
+        : Element("Accumulator", true)
         , overflow_(overflow)
         , output_value_(initial_value)
     {
@@ -500,7 +500,7 @@ private:
     part_type phase_{};
 };
 
-using Integrator = IntegratorT<SignalType::F64>;
+using Accumulator = AccumulatorT<SignalType::F64>;
 using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
 using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
 using FirFilter = FirFilterT<SignalType::F64>;

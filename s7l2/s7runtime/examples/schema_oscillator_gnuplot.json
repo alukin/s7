@@ -32,14 +32,14 @@
     },
     {
       "id": "x",
-      "type": "Integrator",
+      "type": "Accumulator",
       "params": {
         "initial_value": 1.0
       }
     },
     {
       "id": "y",
-      "type": "Integrator",
+      "type": "Accumulator",
       "params": {
         "initial_value": 0.0
       }

@@ -345,10 +345,10 @@ void test_accumulator_type()
         }
     }
 
-    // Integrator over I8 samples accumulating in I64; Adder of I16 inputs in F32.
+    // Accumulator over I8 samples accumulating in I64; Adder of I16 inputs in F32.
     s7::Schema schema{"accumulate"};
     add(schema, "step", "Constant", {{"type", "I8"}, {"value", 100}});
-    add(schema, "total", "Integrator", {{"accumulator_type", "I64"}});
+    add(schema, "total", "Accumulator", {{"accumulator_type", "I64"}});
     add(schema, "a", "Constant", {{"type", "I16"}, {"value", 3}});
     add(schema, "b", "Constant", {{"type", "I16"}, {"value", 4}});
     add(schema, "mix", "Adder", {{"accumulator_type", "F32"}, {"weights", json::array{0.5, 0.25}}});
@@ -364,7 +364,7 @@ void test_accumulator_type()
 
     s7::Schema narrow{"narrow"};
     add(narrow, "x", "Constant", {{"type", "I16"}});
-    add(narrow, "sum", "Integrator", {{"accumulator_type", "I8"}});
+    add(narrow, "sum", "Accumulator", {{"accumulator_type", "I8"}});
     narrow.connect("x", 0, "sum", 0);
     expect_error(narrow, "cannot hold every I16 value exactly", "too narrow accumulator is refused");
 }

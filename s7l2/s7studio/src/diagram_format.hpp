@@ -87,7 +87,7 @@ namespace s7studio::diagram {
 // - Diagram.wires: routing info (list of absolute scene-coordinate points for wire paths)
 // - Positions are in absolute scene coordinates (mm)
 // - Wire points are stored in absolute scene coordinates so moved wires reload with stable endpoint attachments
-// - Type names match s7::Element types: Constant, Adder, Multiply, Delay, Integrator, etc.
+// - Type names match s7::Element types: Constant, Adder, Multiply, Delay, Accumulator, etc.
 // - Parameters are element-type-specific (stored in schema, not diagram)
 
 } // namespace s7studio::diagram

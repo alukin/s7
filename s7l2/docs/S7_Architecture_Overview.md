@@ -302,15 +302,19 @@ Adder → Delay → Adder
 
 Valid:
 
-Integrator → Gain → Delay → Integrator
+Accumulator → Gain → Delay → Accumulator
+
+Valid (forward Euler integration is causal memory):
+
+EulerIntegrator → Gain → EulerIntegrator
 
 Invalid:
 
 Adder → Gain → Adder
 
-Invalid (an Integrator keeps state but has direct feedthrough, so it is not causal memory):
+Invalid (an Accumulator or TrapezoidIntegrator keeps state but has direct feedthrough, so it is not causal memory):
 
-Integrator → Gain → Integrator
+Accumulator → Gain → Accumulator
 
 The precise definition of causal memory is part of the formal model.
 

@@ -67,7 +67,7 @@ template <SignalType Type>
 }
 
 /// Whether an element's outputs in a step depend on its inputs in the same step.
-/// Direct: outputs are computed from current inputs (Gain, FirFilter, Integrator).
+/// Direct: outputs are computed from current inputs (Gain, FirFilter, Accumulator).
 /// None: outputs depend only on earlier steps (Delay, PreviousValue). Only these
 /// elements may close a feedback loop.
 enum class Feedthrough : std::uint8_t {

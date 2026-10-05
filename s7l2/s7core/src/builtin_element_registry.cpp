@@ -257,14 +257,14 @@ void register_builtin_elements(ElementRegistry& registry)
     }
 
     registry.register_element(ElementDescriptor(
-        "Integrator",
+        "Accumulator",
         [](const ElementCreationContext& ctx) {
             return make_accumulating(ctx, [&]<SignalType T, SignalType A>() -> std::unique_ptr<Element> {
-                return std::make_unique<IntegratorT<T, A>>(param_value<A>(ctx, "initial_value", {}), overflow_param(ctx));
+                return std::make_unique<AccumulatorT<T, A>>(param_value<A>(ctx, "initial_value", {}), overflow_param(ctx));
             });
         },
         [] {
-            auto m = make_generic_metadata("Integrator", "Integrator (running sum)",
+            auto m = make_generic_metadata("Accumulator", "Accumulator (running sum)",
                                            "Running sum y[n] = y[n-1] + x[n], no time step; see EulerIntegrator / TrapezoidIntegrator",
                                            "filters", 1, 1, signal_type_sets::arithmetic);
             m.parameters.push_back({"initial_value", "value", "Initial output value", 0, std::nullopt, std::nullopt, {}, false});

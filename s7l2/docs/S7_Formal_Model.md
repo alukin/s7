@@ -293,7 +293,7 @@ Examples:
 - Delay
 - PreviousValue
 
-Keeping State does not make an Element causal memory. An Integrator (y[n] = y[n-1] + x[n]) or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit Delay.
+Keeping State does not make an Element causal memory. An Accumulator (y[n] = y[n-1] + x[n]), a TrapezoidIntegrator or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit causal-memory Element. A forward-Euler integrator (EulerIntegrator, y[n+1] = y[n] + dt·x[n]) is causal memory.
 
 A nested Schema has direct feedthrough. It adds no delay beyond the Elements it contains, and it cannot close an outer cycle even if it contains causal memory internally.
 
