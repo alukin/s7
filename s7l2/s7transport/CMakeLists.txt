@@ -1,6 +1,7 @@
 
 add_library(s7transport STATIC
     src/transport.cpp
+    src/wire_format.cpp
 )
 
 target_include_directories(s7transport PUBLIC
@@ -9,6 +10,7 @@ target_include_directories(s7transport PUBLIC
 )
 
 target_link_libraries(s7transport PUBLIC
+    s7core
     Boost::system
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -39,7 +41,13 @@ add_executable(s7transport_multipeer_smoke
 
 target_link_libraries(s7transport_multipeer_smoke PRIVATE s7transport)
 
+add_executable(s7transport_wire_format_smoke tests/wire_format_smoke.cpp)
+target_link_libraries(s7transport_wire_format_smoke PRIVATE s7transport)
+target_compile_definitions(s7transport_wire_format_smoke PRIVATE
+    S7_WIRE_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wire_v1.json")
+
 add_test(NAME s7transport_smoke COMMAND s7transport_smoke)
+add_test(NAME s7transport_wire_format_smoke COMMAND s7transport_wire_format_smoke)
 add_test(NAME s7transport_multipeer_smoke COMMAND s7transport_multipeer_smoke)
 add_test(NAME s7transport_validation_smoke COMMAND s7transport_validation_smoke)
 add_test(NAME s7transport_reconnect_smoke COMMAND s7transport_reconnect_smoke)

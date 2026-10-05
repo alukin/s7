@@ -1,0 +1,353 @@
+{
+  "format": "S7 data stream wire format v1 (S7_Network_Wire_Protocol_v1.md)",
+  "generator": "tools/gen_wire_fixtures.py",
+  "data": [
+    {
+      "name": "f64_scalar",
+      "type": "F64",
+      "stream_alias": 7,
+      "sequence": 0,
+      "values": [
+        1.5
+      ],
+      "timestamps": [],
+      "hex": "01000f00070000000000000000000000000000000000f83f"
+    },
+    {
+      "name": "i16_block",
+      "type": "I16",
+      "stream_alias": 1,
+      "sequence": 42,
+      "values": [
+        -2,
+        1000,
+        -32768
+      ],
+      "timestamps": [],
+      "hex": "01000500010000002a00000000000000feffe8030080"
+    },
+    {
+      "name": "i12_packed_odd",
+      "type": "I12",
+      "stream_alias": 2,
+      "sequence": 1,
+      "values": [
+        -1,
+        2047,
+        -2048
+      ],
+      "timestamps": [],
+      "hex": "01000300020000000100000000000000ffff7f0008"
+    },
+    {
+      "name": "u12_pair",
+      "type": "U12",
+      "stream_alias": 2,
+      "sequence": 2,
+      "values": [
+        2748,
+        291
+      ],
+      "timestamps": [],
+      "hex": "01000400020000000200000000000000bc3a12"
+    },
+    {
+      "name": "u32_values",
+      "type": "U32",
+      "stream_alias": 3,
+      "sequence": 5,
+      "values": [
+        0,
+        4294967295
+      ],
+      "timestamps": [],
+      "hex": "0100080003000000050000000000000000000000ffffffff"
+    },
+    {
+      "name": "i64_value",
+      "type": "I64",
+      "stream_alias": 3,
+      "sequence": 6,
+      "values": [
+        -9223372036854775808
+      ],
+      "timestamps": [],
+      "hex": "010009000300000006000000000000000000000000000080"
+    },
+    {
+      "name": "f16_values",
+      "type": "F16",
+      "stream_alias": 4,
+      "sequence": 3,
+      "values": [
+        1.0,
+        -0.5
+      ],
+      "timestamps": [],
+      "hex": "01000d00040000000300000000000000003c00b8"
+    },
+    {
+      "name": "f32_with_timestamps",
+      "type": "F32",
+      "stream_alias": 5,
+      "sequence": 10,
+      "values": [
+        3.25
+      ],
+      "timestamps": [
+        {
+          "role": "SOURCE_TIME",
+          "ns": -5
+        },
+        {
+          "role": "MODEL_TIME",
+          "ns": 0
+        }
+      ],
+      "hex": "01010e00050000000a000000000000001700018013000201000000000000000002fbffffffffffffff0000000000000000005040"
+    },
+    {
+      "name": "f128_values",
+      "type": "F128",
+      "stream_alias": 6,
+      "sequence": 4,
+      "values": [
+        1.0,
+        3.0,
+        -0.25
+      ],
+      "timestamps": [],
+      "hex": "010010000600000004000000000000000000000000000000000000000000ff3f000000000000000000000000008000400000000000000000000000000000fdbf"
+    },
+    {
+      "name": "i128_values",
+      "type": "I128",
+      "stream_alias": 6,
+      "sequence": 5,
+      "values": [
+        "-1",
+        "1267650600228229401496703205376"
+      ],
+      "timestamps": [],
+      "hex": "01000b00060000000500000000000000ffffffffffffffffffffffffffffffff00000000000000000000000010000000"
+    },
+    {
+      "name": "u128_max",
+      "type": "U128",
+      "stream_alias": 6,
+      "sequence": 6,
+      "values": [
+        "340282366920938463463374607431768211455"
+      ],
+      "timestamps": [],
+      "hex": "01000c00060000000600000000000000ffffffffffffffffffffffffffffffff"
+    },
+    {
+      "name": "c64_value",
+      "type": "C64",
+      "stream_alias": 8,
+      "sequence": 1,
+      "values": [
+        [
+          1.0,
+          -2.0
+        ]
+      ],
+      "timestamps": [],
+      "hex": "01000301080000000100000000000000000000000000f03f00000000000000c0"
+    },
+    {
+      "name": "c16_value",
+      "type": "C16",
+      "stream_alias": 8,
+      "sequence": 2,
+      "values": [
+        [
+          0.5,
+          2.0
+        ]
+      ],
+      "timestamps": [],
+      "hex": "0100010108000000020000000000000000380040"
+    },
+    {
+      "name": "ci8_iq",
+      "type": "CI8",
+      "stream_alias": 9,
+      "sequence": 100,
+      "values": [
+        [
+          1,
+          -1
+        ],
+        [
+          127,
+          -128
+        ]
+      ],
+      "timestamps": [],
+      "hex": "0100010209000000640000000000000001ff7f80"
+    },
+    {
+      "name": "cu8_iq",
+      "type": "CU8",
+      "stream_alias": 9,
+      "sequence": 101,
+      "values": [
+        [
+          128,
+          128
+        ],
+        [
+          0,
+          255
+        ]
+      ],
+      "timestamps": [],
+      "hex": "01000202090000006500000000000000808000ff"
+    },
+    {
+      "name": "ci16_iq",
+      "type": "CI16",
+      "stream_alias": 9,
+      "sequence": 102,
+      "values": [
+        [
+          -300,
+          300
+        ]
+      ],
+      "timestamps": [],
+      "hex": "01000302090000006600000000000000d4fe2c01"
+    },
+    {
+      "name": "ci128_value",
+      "type": "CI128",
+      "stream_alias": 9,
+      "sequence": 103,
+      "values": [
+        [
+          "-2",
+          "1329227995784915872903807060280344576"
+        ]
+      ],
+      "timestamps": [],
+      "hex": "01000602090000006700000000000000feffffffffffffffffffffffffffffff00000000000000000000000000000001"
+    }
+  ],
+  "data_ignoring_extensions": [
+    {
+      "name": "noncritical_extension_ignored",
+      "type": "F64",
+      "stream_alias": 1,
+      "sequence": 1,
+      "values": [
+        1.0
+      ],
+      "hex": "01010f000100000001000000000000000400420000000000000000000000f03f"
+    }
+  ],
+  "control": [
+    {
+      "name": "ack",
+      "kind": 1,
+      "stream_alias": 7,
+      "next_expected": 12,
+      "stream_id": null,
+      "hex": "81010000070000000c0000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "resume",
+      "kind": 2,
+      "stream_alias": 7,
+      "next_expected": 0,
+      "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+      "hex": "810200000700000000000000000000000335c8e1a3ab4e8c8b17dc8170f5e370"
+    },
+    {
+      "name": "resume_no_state",
+      "kind": 3,
+      "stream_alias": 9,
+      "next_expected": 0,
+      "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+      "hex": "810300000900000000000000000000000335c8e1a3ab4e8c8b17dc8170f5e370"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "too_short",
+      "hex": "01000f000100000001000000000000",
+      "reason": "message shorter than the 16-byte header"
+    },
+    {
+      "name": "bad_version",
+      "hex": "02000f00010000000100000000000000000000000000f03f",
+      "reason": "unsupported version"
+    },
+    {
+      "name": "reserved_flags",
+      "hex": "01020f00010000000100000000000000000000000000f03f",
+      "reason": "reserved flag bits"
+    },
+    {
+      "name": "unknown_type",
+      "hex": "01009909010000000100000000000000000000000000f03f",
+      "reason": "unknown data type"
+    },
+    {
+      "name": "partial_value",
+      "hex": "01000f00010000000100000000000000000000000000f0",
+      "reason": "payload not a whole number of values"
+    },
+    {
+      "name": "empty_payload",
+      "hex": "01000f00010000000100000000000000",
+      "reason": "empty payload"
+    },
+    {
+      "name": "i12_bad_length",
+      "hex": "0100030001000000010000000000000001000000",
+      "reason": "4 bytes is not a 12-bit payload length"
+    },
+    {
+      "name": "i12_unused_bits",
+      "hex": "010003000100000001000000000000000110",
+      "reason": "unused bits of the odd 12-bit value"
+    },
+    {
+      "name": "complex_half",
+      "hex": "0100010201000000010000000000000001",
+      "reason": "incomplete complex value"
+    },
+    {
+      "name": "ext_padding_not_zero",
+      "hex": "01010e0001000000010000000000000017000180130002010100000000000000020200000000000000010000000000000000803f",
+      "reason": "extension padding not zero"
+    },
+    {
+      "name": "unknown_critical_ext",
+      "hex": "01010f000100000001000000000000000400998000000000000000000000f03f",
+      "reason": "unknown critical extension"
+    },
+    {
+      "name": "roles_not_ascending",
+      "hex": "01010f000100000001000000000000001700018013000202000000000000000001000000000000000000000000000000000000000000f03f",
+      "reason": "timestamp roles not ascending"
+    },
+    {
+      "name": "control_reserved",
+      "hex": "8101010001000000010000000000000000000000000000000000000000000000",
+      "reason": "control reserved field"
+    },
+    {
+      "name": "control_bad_kind",
+      "hex": "8104000001000000010000000000000000000000000000000000000000000000",
+      "reason": "unknown control kind"
+    },
+    {
+      "name": "control_short",
+      "hex": "81010000010000000100000000000000000000000000000000000000000000",
+      "reason": "control message length"
+    }
+  ]
+}

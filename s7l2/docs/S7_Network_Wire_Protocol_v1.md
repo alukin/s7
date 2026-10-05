@@ -1,7 +1,7 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
 **Status:** Approved MVP contract (2026-10-05). Not yet frozen for interoperability: byte-exact fixtures and the C++ implementation are pending (Section 12).
-**Draft revision:** 0.5
+**Draft revision:** 0.6
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
 
@@ -102,11 +102,15 @@ The message layout is:
 
 ```text
 fixed header (16 bytes)
-header extensions (only if flags bit 0: u16 total_extension_length, then TLV records, padded with zero bytes to a multiple of 8)
+header extensions (only if flags bit 0)
 payload
 ```
 
-Fields that the committed stream descriptor fixes are not repeated per packet: the payload length is the remainder of the WebSocket message, and the element count follows from it and the wire type (Section 8). A receiver MUST reject a packet whose `data_type` differs from the descriptor's wire type, a payload that is not a whole number of elements, a payload larger than the descriptor's `max_elements_per_packet` allows, an unknown `stream_alias`, unsupported versions, nonzero reserved flag bits, and unknown critical extensions. There is no implicit type conversion anywhere on the data path: a type change is an explicit `Convert` element in the graph.
+The extension area, present only when flags bit 0 is set, is a u16 giving the total length in bytes of the TLV records that follow, then those records, then zero bytes so that the area's length (including the u16) is a multiple of 8. The payload therefore starts 8-byte aligned. Non-zero padding is rejected.
+
+Values are encoded explicitly as little-endian, never by copying host memory, so an implementation on a big-endian host produces the same bytes.
+
+Fields that the committed stream descriptor fixes are not repeated per packet: the payload length is the remainder of the WebSocket message, and the element count follows from it and the wire type (Section 8). A receiver MUST reject a packet whose `data_type` differs from the descriptor's wire type, an empty payload, a payload that is not a whole number of elements, a payload larger than the descriptor's `max_elements_per_packet` allows, an unknown `stream_alias`, unsupported versions, nonzero reserved flag bits, and unknown critical extensions. There is no implicit type conversion anywhere on the data path: a type change is an explicit `Convert` element in the graph.
 
 Header extensions use this TLV form:
 
@@ -170,7 +174,7 @@ Every port of a graph has exactly one of these types, and a stream's wire type i
 
 Complex integer types exist so that raw SDR I/Q samples travel at their native width (converting 8-bit I/Q to floating point before the wire would multiply the data rate by 4 to 8), so that hardware integer arithmetic can be simulated exactly, and, for CI32–CI128, so that integer processing such as correlation can run without saturation.
 
-**12-bit packing.** Two consecutive 12-bit values occupy three bytes as one little-endian 24-bit word: the first value in bits 0–11, the second in bits 12–23. An odd final value occupies two bytes, in bits 0–11 of a little-endian 16-bit word with bits 12–15 zero. The element count of a payload of `b` bytes is therefore `floor(8b / 12)`.
+**12-bit packing.** Two consecutive 12-bit values occupy three bytes as one little-endian 24-bit word: the first value in bits 0–11, the second in bits 12–23. An odd final value occupies two bytes, in bits 0–11 of a little-endian 16-bit word with bits 12–15 zero. A payload of `b` bytes is valid only if `b mod 3` is 0 or 2; it holds `2(b div 3)` values, plus one if `b mod 3` is 2. The unused top 4 bits of an odd final value MUST be zero.
 
 **Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 or 128-bit integer support MUST NOT be assigned F128, C128, I128, U128 or CI128 streams. The C++ reference runtime supports all listed types (C++26, GCC: `std::float16_t`, `std::float128_t`, `__int128`).
 
@@ -200,7 +204,7 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 
 ## 12. Remaining Work Before Interoperability Freeze
 
-1. Byte-exact fixtures (packets, acknowledgement messages, descriptors) shared by the C++, Rust, Python and JVM implementations.
+1. Byte-exact fixtures shared by all implementations. Packets and stream control messages: `s7transport/tests/fixtures/wire_v1.json`, written by the independent Python reference encoder `tools/gen_wire_fixtures.py` and checked by the C++ codec (`s7transport_wire_format_smoke`). Descriptor fixtures remain to be added.
 2. The C++ reference implementation of Sections 7, 8 and 12.1.
 3. The durable format of the producer's sequence-range reservation.
 4. Exact JSON schemas for `GET_STREAM_STATUS`, `RECOVER_STREAM` and the `NODE_INFO` additions (`clock_domains`, `data_protocol`).
