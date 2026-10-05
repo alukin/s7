@@ -4,11 +4,15 @@
 #include <boost/json.hpp>
 #include <QString>
 
+#include <vector>
+
 namespace QSchematic {
 class Scene;
 }
 
 namespace s7studio::diagram {
+
+struct WireSource;
 
 struct SerializationOptions {
     QString schemaName;
@@ -31,7 +35,10 @@ public:
                      QSchematic::Scene& scene) const;
 
 private:
-    [[nodiscard]] auto extractDiagramLayout(const QSchematic::Scene& scene) const -> boost::json::object;
+    // Node positions, and the route of every connected wire (with the
+    // connection it belongs to) in the order of `connected`.
+    [[nodiscard]] auto extractDiagramLayout(const QSchematic::Scene& scene, const std::vector<WireSource>& connected) const
+        -> boost::json::object;
 };
 
 } // namespace s7studio::diagram

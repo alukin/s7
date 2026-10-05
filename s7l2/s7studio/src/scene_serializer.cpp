@@ -330,8 +330,9 @@ auto SceneSerializer::serialize(const QSchematic::Scene& scene,
     
     if (options.includeDiagram) {
         RuntimeSchemaExtractor extractor;
-        doc.runtimeSchema = extractor.extract(scene, options);
-        doc.diagram = extractDiagramLayout(scene);
+        std::vector<WireSource> connected;
+        doc.runtimeSchema = extractor.extract(scene, options, &connected);
+        doc.diagram = extractDiagramLayout(scene, connected);
     }
     
     return doc;
@@ -348,6 +349,11 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
     std::vector<std::string> nodeOrder;
     std::vector<ConnectionModel> connections;
     std::vector<std::vector<QPointF>> diagramWireRoutes;
+    // Routes that name their connection: "from:port->to:port" -> points.
+    std::unordered_map<std::string, std::vector<QPointF>> keyedWireRoutes;
+    auto routeKey = [](const std::string& from, int fromPort, const std::string& to, int toPort) {
+        return from + ":" + std::to_string(fromPort) + "->" + to + ":" + std::to_string(toPort);
+    };
 
     if (document.runtimeSchema.is_object()) {
         const auto& schemaObject = document.runtimeSchema.as_object();
@@ -485,6 +491,12 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             }
 
             if (points.size() >= 2) {
+                if (json_utils::findObjectValue(wireObject, "from_element") && json_utils::findObjectValue(wireObject, "to_element")) {
+                    keyedWireRoutes[routeKey(json_utils::stringValue(wireObject, "from_element", ""),
+                                             json_utils::intValue(wireObject, "from_port", 0),
+                                             json_utils::stringValue(wireObject, "to_element", ""),
+                                             json_utils::intValue(wireObject, "to_port", 0))] = points;
+                }
                 diagramWireRoutes.push_back(std::move(points));
             }
         }
@@ -621,9 +633,19 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             }
 
             auto wire = std::make_shared<QSchematic::Items::Wire>();
-            if (connectionIndex < diagramWireRoutes.size() && diagramWireRoutes[connectionIndex].size() >= 2) {
+            // Routes are matched by their connection; files without
+            // connection names in routes fall back to the route's position.
+            const std::vector<QPointF>* route = nullptr;
+            if (!keyedWireRoutes.empty()) {
+                const auto it = keyedWireRoutes.find(
+                    routeKey(connection.fromElement, connection.fromPort, connection.toElement, connection.toPort));
+                route = it != keyedWireRoutes.end() ? &it->second : nullptr;
+            } else if (connectionIndex < diagramWireRoutes.size()) {
+                route = &diagramWireRoutes[connectionIndex];
+            }
+            if (route && route->size() >= 2) {
                 wire->append_point(startConnector->scenePos());
-                const auto& savedPoints = diagramWireRoutes[connectionIndex];
+                const auto& savedPoints = *route;
                 for (std::size_t pointIndex = 1; pointIndex + 1 < savedPoints.size(); ++pointIndex) {
                     wire->append_point(savedPoints[pointIndex]);
                 }
@@ -663,7 +685,8 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
 }
 
 
-auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene) const -> boost::json::object {
+auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene, const std::vector<WireSource>& connected) const
+    -> boost::json::object {
     boost::json::object diagram;
     diagram["version"] = 1;
     diagram["nodes"] = boost::json::array();
@@ -710,33 +733,29 @@ auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene) const
         diagramNodes.push_back(nodeObj);
     }
     
-    // Add wires with routing points
-    const auto wires = scene.items<QSchematic::Items::Wire>();
+    // Routes of the connected wires; each names its connection, so a route
+    // can never be attached to another connection (wires that connect
+    // nothing are not part of the schema and are not saved).
     int wireIndex = 0;
-    
-    for (const auto& wirePtr : wires) {
-        auto wire = wirePtr.get();
-        if (!wire) continue;
-        
+    for (const auto& source : connected) {
+        if (!source.wire) {
+            continue;
+        }
         boost::json::object wireObj;
         wireObj["id"] = "wire_" + std::to_string(wireIndex++);
-        
-        // Extract routing points
-        wireObj["points"] = boost::json::array();
-        auto& points = wireObj["points"].as_array();
-        
-        // Get wire points in absolute scene coordinates so endpoint attachments can be restored reliably.
-        const auto& pathPoints = wire->pointsAbsolute();
-        for (const auto& point : pathPoints) {
-            boost::json::object pointObj;
-            pointObj["x"] = point.x();
-            pointObj["y"] = point.y();
-            points.push_back(pointObj);
+        wireObj["from_element"] = source.element;
+        wireObj["from_port"] = source.port;
+        wireObj["to_element"] = source.toElement;
+        wireObj["to_port"] = source.toPort;
+        // Absolute scene coordinates, so endpoint attachments can be restored reliably.
+        boost::json::array points;
+        for (const auto& point : source.wire->pointsAbsolute()) {
+            points.push_back(boost::json::object{{"x", point.x()}, {"y", point.y()}});
         }
-        
-        diagramWires.push_back(wireObj);
+        wireObj["points"] = std::move(points);
+        diagramWires.push_back(std::move(wireObj));
     }
-    
+
     return diagram;
 }
 

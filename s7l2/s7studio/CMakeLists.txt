@@ -102,3 +102,7 @@ add_test(NAME s7studio_wire_types
 
 add_test(NAME s7studio_deployment_diagram
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/deployment_diagram_test.sh $<TARGET_FILE:s7studio> ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+add_test(NAME s7studio_edit_check
+    COMMAND $<TARGET_FILE:s7studio> --edit-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/wire_types_ok.json)
+set_tests_properties(s7studio_edit_check PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

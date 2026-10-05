@@ -907,22 +907,13 @@ void MainWindow::buildUi()
 
 void MainWindow::onElementRequested(const QString& elementType, const QString& /*displayName*/)
 {
-    if (elementType.isEmpty()) {
+    if (elementType.isEmpty() || !diagramEditor_ || !diagramEditor_->scene()) {
         return;
     }
-
-    if (!runtimeSchema_.is_object()) {
-        runtimeSchema_ = boost::json::object{
-            {"name", "untitled"},
-            {"elements", boost::json::array{}},
-            {"connections", boost::json::array{}}
-        };
-    }
-
+    auto* scene = diagramEditor_->scene();
+    // Start from the scene as it is now (wires drawn since the last load included).
+    auto document = syncSchemaFromScene();
     auto& root = runtimeSchema_.as_object();
-    if (!root.contains("elements") || !root.at("elements").is_array()) {
-        root["elements"] = boost::json::array{};
-    }
 
     const QString elementId = nextElementId(runtimeSchema_, elementType);
     const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
@@ -938,50 +929,28 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
         elementObj["schema"] = *schemaDefinition;
     }
     root["elements"].as_array().push_back(elementObj);
+    document.runtimeSchema = runtimeSchema_;
 
-    if (diagramEditor_) {
-        if (auto* scene = diagramEditor_->scene()) {
-            diagram::SerializationOptions options;
-            options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-            options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
-            const auto pageLayout = diagramEditor_->pageLayout();
-            options.sheetOrientation = pageLayout.orientation;
-            options.sheetWidthMm = pageLayout.widthMm;
-            options.sheetHeightMm = pageLayout.heightMm;
-
-            diagram::SceneSerializer serializer;
-            auto document = serializer.serialize(*scene, options);
-            document.runtimeSchema = runtimeSchema_;
-
-            if (!document.diagram.contains("nodes") || !document.diagram.at("nodes").is_array()) {
-                document.diagram["nodes"] = boost::json::array{};
-            }
-
-            const auto position = suggestedNewNodePosition(*scene);
-            boost::json::object positionJson;
-            positionJson["x"] = position.x();
-            positionJson["y"] = position.y();
-
-            boost::json::object nodeJson;
-            nodeJson["id"] = elementId.toStdString();
-            nodeJson["type"] = elementType.toStdString();
-            nodeJson["name"] = elementId.toStdString();
-            nodeJson["position"] = positionJson;
-            if (schemaDefinition) {
-                nodeJson["schema"] = *schemaDefinition;
-            }
-            if (elementType == QStringLiteral("Scope")) {
-                nodeJson["channel_count"] = 1;
-            }
-            document.diagram["nodes"].as_array().push_back(nodeJson);
-
-            diagramEditor_->loadDocument(document);
-        } else {
-            diagramEditor_->loadRuntimeSchema(runtimeSchema_);
-        }
-        syncPageActions();
+    if (!document.diagram.contains("nodes") || !document.diagram.at("nodes").is_array()) {
+        document.diagram["nodes"] = boost::json::array{};
     }
+    const auto position = suggestedNewNodePosition(*scene);
+    boost::json::object nodeJson;
+    nodeJson["id"] = elementId.toStdString();
+    nodeJson["type"] = elementType.toStdString();
+    nodeJson["name"] = elementId.toStdString();
+    nodeJson["position"] = boost::json::object{{"x", position.x()}, {"y", position.y()}};
+    if (schemaDefinition) {
+        nodeJson["schema"] = *schemaDefinition;
+    }
+    if (elementType == QStringLiteral("Scope")) {
+        nodeJson["channel_count"] = 1;
+    }
+    document.diagram["nodes"].as_array().push_back(nodeJson);
 
+    diagramEditor_->loadDocument(document);
+    syncPageActions();
+    refreshPlacementLabels();
     appendLog(QStringLiteral("[studio] added element %1 (%2)").arg(elementId, elementType));
 }
 
@@ -1225,19 +1194,11 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         if ((elementType == QStringLiteral("Adder") ||
              elementType == QStringLiteral("Multiply") ||
              elementType == QStringLiteral("Scope")) && diagramEditor_) {
-            if (auto* scene = diagramEditor_->scene()) {
-                diagram::SerializationOptions options;
-                options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-                options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
-                const auto pageLayout = diagramEditor_->pageLayout();
-                options.sheetOrientation = pageLayout.orientation;
-                options.sheetWidthMm = pageLayout.widthMm;
-                options.sheetHeightMm = pageLayout.heightMm;
-
-                diagram::SceneSerializer serializer;
-                auto document = serializer.serialize(*scene, options);
-                document.runtimeSchema = runtimeSchema_;
-                diagramEditor_->loadDocument(document);
+            if (diagramEditor_->scene()) {
+                // The scene already carries the new parameters; rebuild it
+                // from itself so its wires stay.
+                diagramEditor_->loadDocument(syncSchemaFromScene());
+                refreshPlacementLabels();
             } else {
                 diagramEditor_->loadRuntimeSchema(runtimeSchema_);
             }
@@ -1802,17 +1763,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
 
     const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
     if (diagramEditor_ && diagramEditor_->scene()) {
-        diagram::SerializationOptions options;
-        options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-        options.dt = dtSeconds;
-        const auto pageLayout = diagramEditor_->pageLayout();
-        options.sheetOrientation = pageLayout.orientation;
-        options.sheetWidthMm = pageLayout.widthMm;
-        options.sheetHeightMm = pageLayout.heightMm;
-
-        diagram::SceneSerializer serializer;
-        const auto document = serializer.serialize(*diagramEditor_->scene(), options);
-        runtimeSchema_ = document.runtimeSchema;
+        static_cast<void>(syncSchemaFromScene());
         updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
     }
 
@@ -1834,22 +1785,13 @@ void MainWindow::applyDiscretizationFrequency(const double frequencyHz)
     }
 
     if (diagramEditor_ && diagramEditor_->scene()) {
-        diagram::SerializationOptions options;
-        options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-        options.dt = dtSeconds;
-        const auto pageLayout = diagramEditor_->pageLayout();
-        options.sheetOrientation = pageLayout.orientation;
-        options.sheetWidthMm = pageLayout.widthMm;
-        options.sheetHeightMm = pageLayout.heightMm;
-
-        diagram::SceneSerializer serializer;
-        auto document = serializer.serialize(*diagramEditor_->scene(), options);
-        runtimeSchema_ = document.runtimeSchema;
+        auto document = syncSchemaFromScene();
         updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
         document.runtimeSchema = runtimeSchema_;
         diagramEditor_->loadDocument(document);
         syncPageActions();
         syncTextFrameStyleControls();
+        refreshPlacementLabels();
         return;
     }
 
@@ -2162,18 +2104,7 @@ void MainWindow::saveSchemaLibrary()
         return;
     }
 
-    diagram::SerializationOptions options;
-    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("schema_library_element"));
-    options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
-    if (diagramEditor_) {
-        const auto pageLayout = diagramEditor_->pageLayout();
-        options.sheetOrientation = pageLayout.orientation;
-        options.sheetWidthMm = pageLayout.widthMm;
-        options.sheetHeightMm = pageLayout.heightMm;
-    }
-
-    diagram::SceneSerializer serializer;
-    const auto document = serializer.serialize(*diagramEditor_->scene(), options);
+    auto document = syncSchemaFromScene();
     const auto schemaJson = document.runtimeSchema;
     if (!schemaJson.is_object()) {
         QMessageBox::critical(this,
@@ -2315,18 +2246,7 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
         return false;
     }
 
-    diagram::SerializationOptions options;
-    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("s7studio_diagram"));
-    options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
-    if (diagramEditor_) {
-        const auto pageLayout = diagramEditor_->pageLayout();
-        options.sheetOrientation = pageLayout.orientation;
-        options.sheetWidthMm = pageLayout.widthMm;
-        options.sheetHeightMm = pageLayout.heightMm;
-    }
-
-    diagram::SceneSerializer serializer;
-    auto document = serializer.serialize(*diagramEditor_->scene(), options);
+    auto document = syncSchemaFromScene();
     document.runtimeNodes = deploymentRuntimeNodes_;
     document.streams = deploymentStreams_;
 
@@ -2358,16 +2278,33 @@ void MainWindow::fitDiagramToView()
     }
 }
 
-auto MainWindow::currentDocument() const -> boost::json::value
+auto MainWindow::serializeScene() const -> diagram::DiagramDocument
 {
     diagram::SerializationOptions options;
-    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("s7studio_diagram"));
+    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
     options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
     const auto pageLayout = diagramEditor_->pageLayout();
     options.sheetOrientation = pageLayout.orientation;
     options.sheetWidthMm = pageLayout.widthMm;
     options.sheetHeightMm = pageLayout.heightMm;
-    auto document = diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+    return diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+}
+
+auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
+{
+    auto document = serializeScene();
+    auto schema = runtimeSchema_.is_object() ? runtimeSchema_.as_object() : boost::json::object{{"name", "untitled"}};
+    const auto& fromScene = document.runtimeSchema.as_object();
+    schema["elements"] = fromScene.contains("elements") ? fromScene.at("elements") : boost::json::array{};
+    schema["connections"] = fromScene.contains("connections") ? fromScene.at("connections") : boost::json::array{};
+    runtimeSchema_ = schema;
+    document.runtimeSchema = std::move(schema);
+    return document;
+}
+
+auto MainWindow::currentDocument() const -> boost::json::value
+{
+    auto document = serializeScene();
     document.runtimeNodes = deploymentRuntimeNodes_;
     document.streams = deploymentStreams_;
     return document.toJson();

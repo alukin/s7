@@ -423,7 +423,7 @@ Make registration transactional: register into a staging registry or remove the 
 
 Relevant code: [plugin_loader.cpp](../s7runtime/src/plugin_loader.cpp:308), [s7core/CMakeLists.txt](../s7core/CMakeLists.txt:4), [s7noise/CMakeLists.txt](../s7noise/CMakeLists.txt:23).
 
-## P2: Studio rebuilds the scene from a stale schema and can drop drawn wires
+## P2: Studio rebuilds the scene from a stale schema and can drop drawn wires — fixed 2026-10-05
 
 ### Current problem
 
@@ -438,7 +438,9 @@ Make the scene (or one model object) the single source of truth: serialize the s
 - Draw a wire, add an element from the library: the wire remains and the runtime schema contains the connection.
 - Draw a wire, edit Adder weights: existing wires remain attached to the right ports.
 
-Relevant code: [main_window.cpp](../s7studio/src/main_window.cpp:937), [main_window.cpp](../s7studio/src/main_window.cpp:1182).
+**Resolution:** reproduced (adding an element to a scene with five drawn connections kept three). The scene is now the source of truth: `MainWindow::syncSchemaFromScene()` takes elements and connections from the scene and keeps the other schema fields (name, exposed ports) from `runtimeSchema_`; adding an element, editing `Adder` / `Multiply` / `Scope` parameters, changing the discretization, running, saving and saving a library all go through it. Wire routes no longer depend on order: only connected wires are saved, each route names its connection (`from_element`, `from_port`, `to_element`, `to_port`) and is matched by it on load (files without these fall back to the position). Test: `s7studio_edit_check` (offscreen, through the real main window: stale stored schema, a wire that connects nothing, adding an element, save and reload); it fails on the previous code. Editing through the parameter dialog is covered by the same rebuild path but not driven by the test (modal dialog).
+
+Relevant code: [main_window.cpp](../s7studio/src/main_window.cpp), [scene_serializer.cpp](../s7studio/src/scene_serializer.cpp).
 
 ## P2: Trust is inferred from URL scheme and peers are not verified
 

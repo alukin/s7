@@ -6,6 +6,11 @@
 #include "diagram_editor.hpp"
 #include "deployment_support.hpp"
 #include "scene_serializer.hpp"
+
+#include <qschematic/items/wire.hpp>
+#include <qschematic/scene.hpp>
+
+#include <set>
 #include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
@@ -368,6 +373,80 @@ int runDeploymentDiagram(int argc, char** argv)
     std::ofstream(argv[3]) << boost::json::serialize(diagram) << '\n';
     return errors.empty() ? 0 : 1;
 }
+
+// --edit-check <diagram>: the scene is the source of truth. Loads the diagram
+// into the editor of a main window whose stored schema does not know it (as
+// after drawing wires), adds a wire that connects nothing, adds an element
+// through the Element Library slot, and checks that every connection
+// survives, then that a save/reload round trip keeps connections and routes.
+int runEditCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    std::ifstream in(argv[2]);
+    if (!in) {
+        std::cerr << "cannot read " << argv[2] << '\n';
+        return 2;
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto document = s7studio::diagram::DiagramDocument::fromJson(boost::json::parse(text));
+
+    s7studio::MainWindow window;
+    auto* editor = window.findChild<s7studio::diagram::DiagramEditor*>();
+    if (!editor) {
+        std::cerr << "no diagram editor\n";
+        return 2;
+    }
+    editor->loadDocument(document);
+    auto connections = [](QSchematic::Scene& scene) {
+        const auto schema = s7studio::diagram::SceneSerializer{}.serialize(scene, {}).runtimeSchema.as_object();
+        std::set<std::string> result;
+        for (const auto& c : schema.at("connections").as_array()) {
+            result.insert(boost::json::serialize(c));
+        }
+        return std::make_pair(result, schema.at("elements").as_array().size());
+    };
+    const auto [expected, element_count] = connections(*editor->scene());
+
+    auto dangling = std::make_shared<QSchematic::Items::Wire>();
+    dangling->append_point(QPointF(-500, -500));
+    dangling->append_point(QPointF(-400, -500));
+    editor->scene()->addWire(dangling);
+
+    QMetaObject::invokeMethod(&window, "onElementRequested", Qt::DirectConnection, Q_ARG(QString, QStringLiteral("Gain")),
+                              Q_ARG(QString, QStringLiteral("Gain")));
+    const auto [after, after_count] = connections(*editor->scene());
+    bool ok = true;
+    if (after != expected) {
+        std::cout << "error: adding an element changed the connections (" << expected.size() << " -> " << after.size() << ")\n";
+        ok = false;
+    }
+    if (after_count != element_count + 1) {
+        std::cout << "error: expected " << element_count + 1 << " elements, got " << after_count << '\n';
+        ok = false;
+    }
+
+    // Save and reload: routes belong to their connections.
+    const auto saved = s7studio::diagram::SceneSerializer{}.serialize(*editor->scene(), {});
+    const auto& wires = saved.diagram.at("wires").as_array();
+    if (wires.size() != expected.size()) {
+        std::cout << "error: " << wires.size() << " routes saved for " << expected.size() << " connections\n";
+        ok = false;
+    }
+    for (const auto& wire : wires) {
+        if (!wire.as_object().contains("from_element") || !wire.as_object().contains("to_element")) {
+            std::cout << "error: a route does not name its connection\n";
+            ok = false;
+        }
+    }
+    s7studio::diagram::DiagramEditor reloaded;
+    reloaded.loadDocument(s7studio::diagram::DiagramDocument::fromJson(saved.toJson()));
+    if (connections(*reloaded.scene()).first != expected) {
+        std::cout << "error: connections changed across save and reload\n";
+        ok = false;
+    }
+    std::cout << (ok ? "edit check: OK (" : "edit check: FAILED (") << expected.size() << " connections)\n";
+    return ok ? 0 : 1;
+}
 } // namespace
 
 int main(int argc, char** argv) try
@@ -389,6 +468,9 @@ int main(int argc, char** argv) try
 
     if (argc == 3 && std::string_view(argv[1]) == "--wire-types") {
         return runWireTypes(argc, argv);
+    }
+    if (argc == 3 && std::string_view(argv[1]) == "--edit-check") {
+        return runEditCheck(argc, argv);
     }
     if (argc == 4 && std::string_view(argv[1]) == "--deployment-diagram") {
         return runDeploymentDiagram(argc, argv);

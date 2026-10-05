@@ -214,7 +214,7 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
         const auto& target = *endpointsIt->second.target;
 
         if (wireSources) {
-            wireSources->push_back(WireSource{wire, source.nodeId, source.portIndex});
+            wireSources->push_back(WireSource{wire, source.nodeId, source.portIndex, target.nodeId, target.portIndex});
         }
 
         boost::json::object connObj;

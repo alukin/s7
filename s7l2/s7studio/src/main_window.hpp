@@ -1,6 +1,7 @@
 #pragma once
 
 #include "local_schema_runner.hpp"
+#include "diagram_document.hpp"
 #include "model_run_controller.hpp"
 
 #include <QHash>
@@ -131,6 +132,11 @@ private:
 protected:
     void closeEvent(QCloseEvent* event) override;
     [[nodiscard]] auto currentDocument() const -> boost::json::value;
+    // The scene serialized as a document; elements and connections come from
+    // the scene (the source of truth), the rest of the schema from runtimeSchema_,
+    // which is updated to match.
+    [[nodiscard]] auto syncSchemaFromScene() -> diagram::DiagramDocument;
+    [[nodiscard]] auto serializeScene() const -> diagram::DiagramDocument;
     void refreshPlacementLabels();
     // Runs work off the UI thread (one at a time); `done` runs on the UI thread.
     auto startNetworkTask(std::function<std::function<void()>()> work) -> bool;
