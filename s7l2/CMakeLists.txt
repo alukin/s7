@@ -13,7 +13,9 @@ if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSI
 endif()
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# GNU mode: libstdc++ treats __int128 as an integer type (traits, numeric_limits)
+# only with GNU extensions enabled.
+set(CMAKE_CXX_EXTENSIONS ON)
 
 function(s7_enable_project_warnings target_name)
 	if (NOT TARGET ${target_name})
@@ -90,6 +92,7 @@ s7_enable_project_warnings(s7transport)
 s7_enable_project_warnings(s7net)
 s7_enable_project_warnings(s7observe)
 s7_enable_project_warnings(s7core_smoke)
+s7_enable_project_warnings(s7core_signal_types_smoke)
 s7_enable_project_warnings(s7observe_smoke)
 s7_enable_project_warnings(s7net_smoke)
 s7_enable_project_warnings(s7noise)

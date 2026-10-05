@@ -67,3 +67,14 @@ target_link_libraries(s7core_smoke PRIVATE s7core)
 
 add_test(NAME s7core_smoke COMMAND s7core_smoke)
 
+add_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
+target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)
+add_test(NAME s7core_signal_types_smoke COMMAND s7core_signal_types_smoke)
+
+# Plugins may build in strict ISO mode: the type headers must work there too.
+add_executable(s7core_signal_types_strict_smoke tests/signal_types_smoke.cpp)
+target_include_directories(s7core_signal_types_strict_smoke PRIVATE include)
+set_target_properties(s7core_signal_types_strict_smoke PROPERTIES CXX_EXTENSIONS OFF)
+target_compile_options(s7core_signal_types_strict_smoke PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME s7core_signal_types_strict_smoke COMMAND s7core_signal_types_strict_smoke)
+
