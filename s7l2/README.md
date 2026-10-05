@@ -12,7 +12,7 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 |---|---|
 | `s7core/` | Element model, built-in elements, schema (incl. nested schemas with exposed ports), validation, compiler, `NodeRuntime`, element registry and metadata, schema-library loader |
 | `s7io/` | File source/sink elements (compact binary, gnuplot text) |
-| `s7transport/` | Transport abstraction: in-memory backend and Boost.Beast WebSocket/TLS backend (prototype packet codec) |
+| `s7transport/` | Transport abstraction: in-memory backend and Boost.Beast WebSocket/TLS backend, wire format v1 and lossless stream protocol |
 | `s7net/` | `NetSink` / `NetSource` elements bound to the runtime transport endpoint |
 | `s7observe/` | Read-only output sampling (`ObservationService`) |
 | `s7runtime/` | Headless runtime executable: JSON schema loader, plugin loader, node identity, control-plane MVP |

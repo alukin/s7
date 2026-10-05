@@ -2,7 +2,7 @@
 
 ## Status
 
-Evolving architecture proposal. The current implementation is a prototype and does not yet meet every contract described here.
+Evolving architecture proposal. The data plane (wire format v1, lossless streams over WebSocket / mTLS) is implemented; other parts described here are not yet.
 
 This document defines module boundaries and runtime transport responsibilities for distributed S7 execution.
 
@@ -160,8 +160,8 @@ Data-plane candidate baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_W
 - timestamps are described by explicit stream roles (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) and clock domains
 - model time is simulation time; it is not inferred from wall-clock time
 - variable-length packets with max payload `256 KiB`
-- big-endian numeric encoding on wire
+- little-endian numeric encoding on wire, written explicitly (never by copying host memory)
 
 Observation is local to a runtime node. Studio Scope may observe outputs in its local runtime, including outputs of configured network-source elements after packets cross an explicit graph boundary. The observation API does not probe remote nodes and does not bypass the data protocol.
 
-The candidate wire draft now requires support for all listed numeric types and all timestamp roles, with each stream declaring which timestamp roles occur on its packets. Non-model clocks have configured domains and must change domain ID when restart continuity cannot be guaranteed. Control drafts define canonical JSON SHA-256 digests, bounded chunked bundle transfer, one CA-policy-authorized Studio identity, and status/retry recovery for partial commits. Packet layout, exact message JSON schemas, multi-peer routing details, durable sequence record formats, and the crash delivery guarantee remain open. Neither protocol draft is yet a conformance standard.
+The candidate wire draft now requires support for all listed numeric types and all timestamp roles, with each stream declaring which timestamp roles occur on its packets. Non-model clocks have configured domains and must change domain ID when restart continuity cannot be guaranteed. Control drafts define canonical JSON SHA-256 digests, bounded chunked bundle transfer, one CA-policy-authorized Studio identity, and status/retry recovery for partial commits. The packet layout, lossless delivery while both processes run (send log, ACK, RESUME), direct producer-to-consumer routing and durable sequence reservations are decided and implemented (wire draft sections 7, 8 and 12.1); a process crash faults the stream and is not recovered in the MVP. Neither protocol draft is yet a conformance standard.

@@ -3,16 +3,16 @@
   "elements": [
     {
       "id": "source",
-      "type": "Constant",
+      "type": "NetSource",
       "params": {
-        "value": 2.0
+        "stream_id": "3f2b8c1d-6e4a-4b7f-9a2c-1d5e8f7a6b3c"
       }
     },
     {
-      "id": "sink",
-      "type": "NetSink",
+      "id": "doubled",
+      "type": "Gain",
       "params": {
-        "topic": "demo.out.2"
+        "factor": 2.0
       }
     }
   ],
@@ -20,7 +20,7 @@
     {
       "from_element": "source",
       "from_port": 0,
-      "to_element": "sink",
+      "to_element": "doubled",
       "to_port": 0
     }
   ],
@@ -30,7 +30,7 @@
       "port": 9003
     },
     "client": {
-      "enabled": false,
+      "enabled": true,
       "url": "ws://127.0.0.1:9002/runtime"
     }
   },

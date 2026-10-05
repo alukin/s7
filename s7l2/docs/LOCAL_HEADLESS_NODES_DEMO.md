@@ -13,7 +13,9 @@ cmake --build build --parallel
 
 Each node needs its own state directory (`--state-dir`). The runtime locks the directory, so a second runtime pointed at the same directory exits with an error instead of sharing the identity and peer cache.
 
-Terminal A (server port 9002 from `schema_minimal.json`):
+Node A (`schema_minimal.json`, server port 9002) produces a stream through a `NetSink`; node B (`schema_minimal_node2.json`, server port 9003) connects to A as a client and consumes that stream through a `NetSource` (matched by `stream_id`). Start A first: a client exits if its first connection attempt fails.
+
+Terminal A:
 
 ```bash
 ./build/s7runtime/s7runtime \
@@ -24,7 +26,7 @@ Terminal A (server port 9002 from `schema_minimal.json`):
   --serve-forever
 ```
 
-Terminal B (server port 9003 from `schema_minimal_node2.json`):
+Terminal B:
 
 ```bash
 ./build/s7runtime/s7runtime \
@@ -35,7 +37,9 @@ Terminal B (server port 9003 from `schema_minimal_node2.json`):
   --serve-forever
 ```
 
-Both example schemas set `"execution": { "step_rate_hz": 10 }`, so each node steps its graph 10 times per second while serving and its `NetSink` publishes to a connected peer; packets published while no peer is connected are dropped. Use `--step-rate <hz>` to override the rate (`0` serves the control plane without stepping). Ctrl+C stops the node and prints `runtime.execution.steps`, `runtime.execution.achieved_rate_hz` and the transport counters (`runtime.transport.*`: connections, packets sent/received, queue drops). A node accepts many peers at once and sends each published packet to every connected data peer.
+Both schemas set `"execution": { "step_rate_hz": 10 }`, so each node steps its graph 10 times per second while serving; `--step-rate <hz>` overrides it (`0` serves the control plane without stepping). The stream is lossless: A keeps what it sent until B acknowledges it, so B, started later, first receives everything A produced before it connected, and a dropped connection is re-established and resumed. A's `NetSink` blocks when its send log is full (B gone for long), and B's `NetSource` waits for data; either side faults after its configured limit (2 s by default). A faulted step stops stepping (`runtime.execution.stopped=error`) while the node keeps serving; `GET_STREAM_STATUS` shows the fault and `RECOVER_STREAM` (mTLS Studio only) clears it and resumes stepping.
+
+Ctrl+C stops a node and prints `runtime.execution.steps`, `runtime.execution.achieved_rate_hz`, the transport counters (`runtime.transport.*`) and one `runtime.stream.<stream_id>` line per stream (role, type, state, fault, packets, sequence).
 
 ## 3) Open Studio and discover nodes
 

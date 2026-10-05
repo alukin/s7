@@ -18,7 +18,7 @@ Identifiers used to address nodes, running schemas, elements, and data streams i
 | `schema_instance_uuid` | One compiled instance of a schema | Random UUIDv4 per compilation |
 | element instance UUID | One element inside one schema instance | UUIDv5 with `schema_instance_uuid` as namespace and the element id as name (`s7core/src/compiler.cpp`) |
 | element id | Human-readable, unique within its schema | Schema JSON `id` |
-| `stream_id` | One logical cross-node data stream | Assigned in the committed configuration (128-bit in the wire draft; the prototype uses a topic name) |
+| `stream_id` | One logical cross-node data stream | A UUID set as the `stream_id` parameter of the `NetSink` / `NetSource` pair; carried as 128 bits in RESUME, bound to a 32-bit connection-local alias in data packets |
 
 `NodeRuntime` resolves both directions: `element_instance_uuid_of(id)` and `element_id_of_instance_uuid(uuid)`; output accessors exist for both forms.
 
@@ -34,6 +34,6 @@ With a TLS certificate, `node_uuid` is taken from the SAN URI `spiffe://s7/node/
 
 ## Cross-node streams
 
-A schema assigned to one node publishes through `NetSink` and the receiving node's schema consumes through `NetSource`. In the current prototype both sides are matched by the `topic` parameter, which becomes the packet stream name. The wire-protocol draft replaces topic names with a configured 128-bit `stream_id` bound to an authenticated producer node (`S7_Network_Wire_Protocol_v1.md`).
+A schema assigned to one node publishes through `NetSink` and the receiving node's schema consumes through `NetSource`. Both sides are matched by their `stream_id` parameter (`S7_Net_Element_Contract.md`, `S7_Network_Wire_Protocol_v1.md`). A stream flows directly over the connection between the producing and the consuming node; relaying through other nodes is not in the MVP.
 
 Placement of elements on nodes is a deployment concern (placement manifest in `REMOTE_NODE_INFO_AND_DEPLOYMENT.md`); a schema is the unit of deployment (ADR-004).

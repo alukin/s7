@@ -2,137 +2,81 @@
 
 ## Status
 
-Draft v1 contract for `s7net` element abstractions and runtime integration.
+Implemented MVP contract for the `s7net` boundary elements (`s7net/include/s7/net.hpp`) and the runtime endpoint they use (`s7transport/include/s7/transport.hpp`). The data protocol is [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md).
 
 ---
 
 ## Purpose
 
-Define `s7net` as an element library with transport-agnostic base classes and runtime-service integration points.
+`NetSink` and `NetSource` are the explicit network boundary of a graph: a `NetSink` on one node and a `NetSource` on another carry one typed stream, matched by `stream_id`.
 
-Design rule:
+Design rules:
 
-- `s7net` elements do not own transport backends directly.
-- `s7net` elements consume runtime network service abstractions.
-- `s7net` may depend on transport contracts exposed by `s7transport`, while backend implementations remain outside `s7net`.
-
----
-
-## Base Abstractions
-
-## `NetSink`
-
-Intent:
-
-- abstract output boundary element that publishes element outputs to a network/service target
-
-Constraints:
-
-- transport-agnostic
-- no direct socket/session ownership in base class
-- no assumptions specific to inter-runtime protocol
-
-## `NetSource`
-
-Intent:
-
-- abstract input boundary element that receives network/service inputs into graph ports
-
-Constraints:
-
-- transport-agnostic
-- no direct socket/session ownership in base class
-- no assumptions specific to inter-runtime protocol
+- the elements do not own sockets or sessions; they use the process's `IRuntimeNetEndpoint` (set through `RuntimeNetContext`), which the runtime service creates;
+- a stream has exactly one wire type; nothing converts implicitly (use `Convert` before a `NetSink` or after a `NetSource`);
+- no sample is dropped or invented: a stream that cannot keep its guarantee faults, and the step fails.
 
 ---
 
-## Recommended Class Layering
+## Elements
 
-- `NetSink` / `NetSource` (abstract bases, generic semantics)
-- `RuntimeNetSink` / `RuntimeNetSource` (runtime-service-backed inter-runtime elements)
-- external adapters (system/protocol-specific):
-  - examples: `PipeWireSinkElement`, `MqttSourceElement` (names illustrative)
+Both elements are generic over the stream type `T` (all signal types). The type is inferred from the connected ports like any generic element, or pinned with `type`.
 
-This preserves reuse of the base abstractions across multiple integration domains.
+| Parameter | Default | Meaning |
+|---|---|---|
+| `stream_id` | (required) | UUID of the stream; the producer's `NetSink` and the consumer's `NetSource` use the same value |
+| `max_elements_per_packet` | 1024 | Batch size limit |
+| `max_batch_latency_ms` | 10 | A partial batch is sent after this delay |
+| `send_log_max_packets` | 4096 | Producer: packets kept until every consumer acknowledged them |
+| `max_block_ms` | 2000 | Producer: how long a step may block on a full send log before the stream faults (`SEND_LOG_OVERFLOW`) |
+| `max_wait_ms` | 2000 | Consumer: how long a step may wait for data before the stream faults (`UNDERRUN`) |
 
-External/system adapters remain in `s7net` for v1.
+`NetSink` publishes its input value each step. `NetSource` outputs the next received value each step, waiting for it if necessary. The stream (handle) is opened lazily on the first step.
 
 ---
 
-## Runtime Service Dependency
-
-`RuntimeNetSink`/`RuntimeNetSource` should depend on a narrow runtime-facing service interface.
-
-Suggested element-facing view:
+## Endpoint interface
 
 ```cpp
 class IRuntimeNetEndpoint {
 public:
-    virtual ~IRuntimeNetEndpoint() = default;
-
-    virtual EndpointHandle open_endpoint(const EndpointOpenRequest&) = 0;
-    virtual void close_endpoint(const EndpointHandle&) = 0;
-
-    virtual SendResult publish(const EndpointHandle&, const DataPacket&) = 0;
-    virtual ReceiveResult receive(const EndpointHandle&, DataPacket&) = 0;
+    virtual auto open_producer(const stream::StreamConfig&) -> StreamHandle = 0;
+    virtual auto open_consumer(const stream::StreamConfig&) -> StreamHandle = 0;
+    virtual void close_stream(StreamHandle) = 0;
+    virtual auto publish(StreamHandle, const void* elements, std::size_t count) -> PublishResult = 0;
+    virtual auto receive(StreamHandle, void* elements, std::size_t count) -> ReceiveResult = 0;
+    virtual auto stream_statuses() const -> std::vector<StreamStatus> = 0;
+    virtual auto recover_stream(const wire::StreamId&) -> bool = 0;
+    // ...
 };
 ```
 
-`IRuntimeNetEndpoint` is provided by `s7runtime`, implemented via `s7transport`.
+Elements are host storage of the stream type (`signal_storage_t<T>`). Implementations:
+
+- `InMemoryRuntimeNetEndpoint`: producer and consumer in one process (tests, Studio's local runtime);
+- `BeastRuntimeNetEndpoint`: WebSocket / TLS (mTLS) connections, one `/data` and one `/control` connection per peer pair, all I/O on one Asio thread.
 
 ---
 
-## Element-Side Semantics
+## Delivery semantics
 
-## `NetSink` behavior contract
+- Exactly once and in order per stream while both processes run, across dropped connections: the producer keeps sent packets in its send log until the consumer acknowledges them, and a reconnecting consumer RESUMEs from the next sequence it expects.
+- A consumer is identified by its peer certificate fingerprint over mTLS, or as one anonymous consumer over plain WebSocket; a disconnected consumer keeps its place in the send log.
+- A process restart loses stream state. A restarted producer continues beyond its sequence reservation, so its consumers fault with `SEQUENCE_GAP`; a consumer whose resume position is no longer in the send log continues from the oldest logged packet and faults on that gap, without affecting other consumers.
+- A full send log is backpressure: `publish` blocks, up to `max_block_ms`.
 
-- consumes one or more input channels
-- serializes/batches according to configured format profile
-- delegates delivery to runtime service
-- respects runtime backpressure and window updates
-- does not silently drop samples
+## Faults
 
-## `NetSource` behavior contract
+| Code | Cause |
+|---|---|
+| `SEQUENCE_GAP` | Packets missing (e.g. producer restart) |
+| `SEND_LOG_OVERFLOW` | Backpressure longer than `max_block_ms` |
+| `STREAM_STATE_LOST` | Producer: a consumer resumed beyond anything this producer assigned (its sequence state was lost) |
+| `MALFORMED_PACKET` | A packet could not be decoded |
+| `TYPE_MISMATCH` | A packet's type differs from the stream type |
+| `UNDERRUN` | No data within `max_wait_ms` |
 
-- obtains packets from runtime service
-- reconstructs typed output values
-- enforces expected ordering and timestamp constraints
-- emits explicit fault state on protocol violations
-
----
-
-## Configuration Surface
-
-Keep base config generic:
-
-- endpoint logical name
-- stream/channel identifiers
-- type profile
-- timestamp mode
-- buffering hints
-
-Keep transport-specific options in runtime or specialized derived elements, not in abstract bases.
-
----
-
-## Error Model
-
-Element-level errors should map to runtime/network faults consistently.
-
-Categories:
-
-- `AUTHORIZATION_ERROR`
-- `TYPE_MISMATCH`
-- `RESOURCE_EXHAUSTED`
-- `ORDERING_VIOLATION`
-- `TRANSPORT_UNAVAILABLE`
-
-Elements should expose fault status without mutating unrelated graph semantics.
-
-Priority policy alignment:
-
-- control traffic > element-connection data > observation traffic
-- observation-related element flows must be treated as lower priority than functional graph data flows
+A faulted stream makes its element's step throw (`<type> stream <id> faulted: <CODE>.`); the runtime stops stepping and keeps serving the control plane. Studio reads stream state with `GET_STREAM_STATUS` and clears a fault with `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md`). After recovery a consumer accepts the next packet it receives as its new start; data lost in the fault stays lost and reported.
 
 ---
 
@@ -141,12 +85,5 @@ Priority policy alignment:
 This contract aligns with:
 
 - explicit network boundary principle (`S7_Architecture_Overview.md`)
-- distributed addressing and routing (`DISTRIBUTED_ADDRESSING.md`)
+- distributed addressing (`DISTRIBUTED_ADDRESSING.md`)
 - runtime orchestration (`S7_Runtime_Architecture.md`)
-
----
-
-## Open Questions
-
-No unresolved contract questions remain for v1 baseline in this document.
-

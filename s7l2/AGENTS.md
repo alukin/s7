@@ -15,7 +15,7 @@
 - `s7net/`: network boundary elements and websocket/server-client scaffolding.
 - `s7ctl/`: CLI control/tooling module (currently minimal smoke-test scaffold).
 - `s7studio/`: Qt UI client (guarded by `S7_BUILD_STUDIO`).
-- `s7transport/`: transport backends (in-memory, Beast WebSocket/TLS) and prototype packet codec.
+- `s7transport/`: transport backends (in-memory, Beast WebSocket/TLS), wire format v1 and the lossless stream protocol.
 - `s7tests/`: reserved for whole-system tests; module smoke tests live in `<module>/tests/`.
 - Docs map: `docs/INDEX.md`; known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
 

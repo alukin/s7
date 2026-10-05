@@ -14,10 +14,9 @@ The project is a work in progress. These items are prioritized by their effect o
 ## Progress
 
 - **Implemented and tested (2026-10-04):** only causal-memory elements (`Feedthrough::None`: `Delay`, `PreviousValue`) are deferred; their outputs are staged and published at the start of the next step. Stateful elements with direct feedthrough run in topological order with stateless ones. See the resolved "Every stateful element delays its output by one step" item.
-- **Implemented and tested (2026-10-04):** the transport prototype requires a model timestamp (zero is valid), validates frame length, flags, reserved field, timestamp presence, data type and payload size, and reports reader-thread decode failures through `take_transport_errors()` instead of `receive()`. In-memory delivery round-trips packets through the same codec. Covered by `s7transport_validation_smoke`. Its codec API is named `*_prototype` to distinguish it from the candidate wire format.
-- **Wire format remains under review:** [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md) now describes candidate draft 0.3, explicitly not a conformance standard. Decisions recorded: every listed numeric type and all timestamp roles are mandatory capabilities; each stream declares the roles carried per packet; both ends persist sequence state; non-model clock domains are configured and must change when continuity across restart is not guaranteed. The exact crash delivery guarantee, descriptor serialization, fault messages, and conformance fixtures remain open. The candidate still does not match the prototype codec.
+- **Implemented and tested (2026-10-05):** wire format v1 ([S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md), approved MVP contract) replaces the prototype codec, which is removed. Data streams are lossless while both processes run (send log, ACK, RESUME, replay; block then fault), typed with every signal type, and routed directly from producer to consumer by `stream_id`. The WebSocket transport is asynchronous on one I/O thread per endpoint and runs clean under ThreadSanitizer. Fault reporting: `GET_STREAM_STATUS` / `RECOVER_STREAM`.
 - **Control draft updated:** canonical JSON digesting uses RFC 8785 JCS plus SHA-256; configuration bundles have bounded direct/chunked transfer; one CA-policy-authorized Studio is configured; partial commits are reconciled through status queries and idempotent retries. Exact message schemas, diagram/schema representation, retention, and request replay cache policy remain open.
-- **Implemented and tested (2026-10-04):** the transport keeps multiple simultaneous peers with bounded, observable send and receive queues (see the multiple-peer item). Publishing with no connected data peer drops the packet and reports `SendResult::delivered == false` (counted by `NetSink::dropped_count()` and transport stats). Per-peer stream routing waits for the stream descriptors of wire draft section 12.1.
+- **Implemented and tested (2026-10-04, reworked 2026-10-05):** the transport keeps multiple simultaneous peers (see the multiple-peer item). Nothing is dropped: a producer keeps packets until each consumer acknowledged them.
 - The review also confirmed that observation is local to one runtime node. Remote-origin values can be observed after entering the local graph through explicit network source/sink elements; observation does not bypass network boundaries. Scope queue and recording bounds remain open work.
 
 ## P1: Fix data packet validation and receive failure handling — implemented and tested
@@ -41,7 +40,9 @@ Network reader threads called the packet decoder without handling its exceptions
 
 **Progress:** exact frame length, supported flags, reserved field, timestamp/flag consistency, data type (prototype supports scalar F64 only, code `kPrototypeDataTypeF64`), element count versus payload size, extension layout, and reader-thread exception handling are implemented. Policy: a malformed frame is reported as a connection-level error and closes that peer's connection; the endpoint keeps serving and accepts new peers. Errors are not tied to a stream, so they are returned by `IRuntimeNetEndpoint::take_transport_errors()` (bounded to 32, oldest dropped) rather than by `receive()`; `NetSource` therefore no longer fails a runtime step because of another peer's bad frame. `s7runtime` prints them as `runtime.transport.error=` while serving. Protocol-version behavior is "reject anything but version 1". Tests: `s7transport_validation_smoke` rejects 16 malformed-frame variants (truncated, oversized, unsupported version/flags/type, invalid lengths, trailing bytes, count mismatch), rejects 6 invalid packets at encode time, and checks over WebSocket that a malformed frame is reported and closes only that connection while a new peer's packets are still delivered. Manually verified: a stepping `s7runtime` node kept stepping after receiving a malformed frame and logged the error. Mapping errors to control-plane fault messages waits for the wire/control drafts.
 
-Relevant code: [transport.cpp](../s7transport/src/transport.cpp:256), [transport.cpp](../s7transport/src/transport.cpp:556).
+**Superseded 2026-10-05:** the same rules hold for the wire format v1 decoder (`wire::decode_data_packet` / `decode_control_message`, `wire::FormatError`): exact length, version, flags, reserved bytes, extension layout and padding, type, element size and unused 12-bit bits are checked against the byte-exact fixtures of `s7transport_wire_format_smoke`. A malformed message closes that connection (the peer reconnects and resumes) and is reported through `take_transport_errors()` and the `malformed_messages` counter (`s7transport_beast_stream_smoke`).
+
+Relevant code: [wire_format.cpp](../s7transport/src/wire_format.cpp), [transport.cpp](../s7transport/src/transport.cpp).
 
 ## P1: Make stateful graph updates independent of declaration order — implemented and tested
 
@@ -83,7 +84,9 @@ Timestamp presence MUST be represented separately from timestamp value. A presen
 
 **Progress:** `DataPacket::t_model_ns` is the only model-time field (the redundant `double t_model` was removed) and is required: the encoder rejects a packet without it, and zero is valid. `s7transport_validation_smoke` round-trips model time zero and system time zero, rejects a missing model timestamp (codec and in-memory publish), and delivers a first packet with sequence 0 and model time 0 over WebSocket. `NetSink` sets `t_model_ns = sequence × 1 s` as a placeholder until the observation-time item defines model time.
 
-Relevant code: [net.cpp](../s7net/src/net.cpp:133), [transport.cpp](../s7transport/src/transport.cpp:224).
+**Superseded 2026-10-05:** uniformly sampled streams carry no per-packet timestamp in wire format v1 (model time follows from the sequence and the step rate); the optional TIMESTAMPS record (TLV 0x8001) distinguishes presence from value, so zero is valid. Producing timestamp records on the data path is not implemented yet.
+
+Relevant code: [wire_format.hpp](../s7transport/include/s7/wire_format.hpp), [net.cpp](../s7net/src/net.cpp).
 
 ## P1: Enforce control authorization using the authenticated peer — fixed 2026-10-04
 
@@ -110,7 +113,7 @@ The certificate attribute format and provisioning policy should match the identi
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:500), [transport.cpp](../s7transport/src/transport.cpp:565), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:200).
 
-## P2: Approve a normative stream identity and packet layout before claiming conformance — approved 2026-10-05; implementation pending
+## P2: Approve a normative stream identity and packet layout before claiming conformance — approved and implemented 2026-10-05
 
 ### Current problem
 
@@ -132,11 +135,11 @@ Also ensure that timestamp roles and their presence are encoded unambiguously; t
 
 Also decided 2026-10-05 (wire draft 0.5): every port and stream has one exact wire type with no implicit conversion; the type set is I8–I128, U8–U128 (including I12/U12), F16, F32, F64, F128, C16–C128, and complex integers CI8, CU8, CI16 for native SDR I/Q; a 16-byte little-endian header carries version, flags, `data_type`, a per-connection `stream_alias` and `sequence`; element count follows from the message length; uniformly sampled streams carry no per-packet timestamps; batching up to `max_elements_per_packet` with `max_batch_latency_ms` (default 10 ms), both configured on the network boundary element. The stream descriptor (item 1) is approved as proposed. Studio deploys diagrams with per-element `node` placement (item 6). Fault reporting (item 3) and negotiation (item 4) approved as proposed the same day; the draft is the approved MVP contract. Remaining: C++ implementation and cross-language fixtures.
 
-**Consequence for the current transport:** the drop-oldest send and receive queues from the multiple-peer item are wrong for data streams under this guarantee. With the new codec they become the send log (block, then fault) and receive-side delivery without dropping; fan-out to every connected peer becomes per-connection routing to the configured consumers.
+**Implementation (2026-10-05):** `wire_format.hpp` (packets, control messages, 12-bit packing; byte-exact fixtures from an independent Python encoder), `stream_protocol.hpp` (batching, send log, ACK, RESUME, per-consumer positions, durable sequence reservations; soak test with random reconnects), the asynchronous `BeastRuntimeNetEndpoint` and typed generic `NetSink` / `NetSource` with a required `stream_id`. The drop-oldest queues and the fan-out to every peer are gone. Tests: `s7transport_wire_format_smoke`, `s7transport_stream_protocol_smoke`, `s7transport_beast_stream_smoke` (both directions; 60,000 values exactly once through three cut TCP connections; two mTLS consumers; malformed input; inbound limit), `s7net_smoke`, and the two-node demo. Remaining: timestamp records on the data path, `UNAUTHORIZED_PRODUCER` (binding a stream to its authenticated producer), `NODE_INFO.data_protocol`, and fixtures for other languages.
 
-Relevant code: [transport.hpp](../s7transport/include/s7/transport.hpp:1), [transport.cpp](../s7transport/src/transport.cpp:210), [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md:1).
+Relevant code: [wire_format.hpp](../s7transport/include/s7/wire_format.hpp), [stream_protocol.hpp](../s7transport/include/s7/stream_protocol.hpp), [transport.cpp](../s7transport/src/transport.cpp), [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md).
 
-## P2: Implement multiple-peer endpoint behavior — fixed 2026-10-04 (routing by stream descriptor pending)
+## P2: Implement multiple-peer endpoint behavior — fixed 2026-10-04, routing by stream 2026-10-05
 
 ### Current problem
 
@@ -156,9 +159,9 @@ Define bounded queue/backpressure behavior as part of endpoint operation. A prod
 
 **Resolution:** `BeastRuntimeNetEndpoint` keeps a list of independent connections instead of one data and one control socket. A server accepts up to `TransportLimits::max_inbound_connections` (default 64); further connections are refused and counted, never replacing an existing peer. Each data connection has a bounded send queue (default 1024 packets) drained by its own writer thread, so `publish()` never blocks the step loop; a full queue drops its oldest packet. Receive queues are bounded per stream (default 1024, oldest dropped) and in the number of distinct streams (default 256); the in-memory endpoint uses the same queues. `stats()` reports connections, rejections, packets sent/received and every drop counter; `s7runtime` prints them when it stops serving. `configure_client()` still replaces only this endpoint's own outbound connections (reconnect). Tests: `s7transport_multipeer_smoke` (two peers coexist in both directions and on control, fan-out, inbound limit, receive queue and stream limits, a stalled peer cannot block `publish()`, no-peer drops, in-memory bound); manually, one node fed two receiver nodes at once.
 
-Not done: packets are still fanned out to every connected data peer and selected by stream name at the receiver. Delivery "only to the intended stream/peer" and binding a stream to its authenticated producer need the stream descriptors of the committed configuration (wire draft section 12.1, awaiting approval).
+**Reworked 2026-10-05:** the bounded drop-oldest queues are replaced by the lossless stream protocol. A packet goes only to the connections whose consumer RESUMEd that `stream_id`; each connection has at most 64 queued writes, after which the producer waits for write completions and its send log fills (backpressure, then `SEND_LOG_OVERFLOW`). The inbound connection limit stays. Binding a stream to its authenticated producer (`UNAUTHORIZED_PRODUCER`) is still open.
 
-Relevant code: [transport.cpp](../s7transport/src/transport.cpp:523), [transport.cpp](../s7transport/src/transport.cpp:587).
+Relevant code: [transport.cpp](../s7transport/src/transport.cpp).
 
 ## P2: Make deployment readiness and commit reflect actual runtime state — fixed 2026-10-04
 
@@ -454,7 +457,7 @@ Trust state is derived from verified certificate identity: chain valid, SAN `spi
 
 Relevant code: [headless_nodes_panel.cpp](../s7studio/src/headless_nodes_panel.cpp:400), [transport.cpp](../s7transport/src/transport.cpp:520), [transport.cpp](../s7transport/src/transport.cpp:699).
 
-## P2: Transport threads share blocking sockets — found 2026-10-04
+## P2: Transport threads share blocking sockets — fixed 2026-10-05
 
 ### Current problem
 
@@ -468,6 +471,8 @@ Run each endpoint's sockets on an `io_context` with asynchronous reads and write
 
 - The transport, runtime and Studio network tests run clean under ThreadSanitizer.
 - mTLS data connections never perform concurrent reads and writes on one SSL stream.
+
+**Resolution:** each `BeastRuntimeNetEndpoint` runs every socket operation asynchronously on one I/O thread (accept, TLS and HTTP handshakes with a 10 s timeout, reads, a per-connection write queue, reconnect timers); the graph-side `publish` / `receive` calls use a mutex-protected stream table, and control requests run on a separate worker so a slow handler does not stall I/O. All 18 tests pass under ThreadSanitizer with no reports (transport, net, runtime and Studio), and under AddressSanitizer/UBSan.
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp).
 
@@ -521,19 +526,20 @@ Route each wire from its output connector to its input connector around nodes, w
 
 ## P3: Smaller correctness issues
 
-- `NetSink` sets `data_type = 0x000C`, which the prototype codec treats as F64 but the wire draft assigns to `U128` (F64 is `0x000F`). Align when the draft codec is implemented. [net.cpp](../s7net/src/net.cpp:136)
+- ~~`NetSink` sets `data_type = 0x000C`, which the prototype codec treats as F64 but the wire draft assigns to `U128`.~~ Fixed 2026-10-05: the wire type is the stream's signal type (`SignalType` values are the wire ids).
 - `PinkNoiseGenerator` is described as Voss-McCartney but outputs the mean of the last 7 white samples (low-pass noise, not 1/f). [noise_elements.cpp](../s7noise/src/noise_elements.cpp:53)
 - `s7studio/src/local_runtime.hpp` is an unused duplicate of `local_runtime_v2.hpp`; `examples/*.cpp` are not built; `s7ctl` is a placeholder. Remove or wire into the build.
 - `ControlPlaneMvp::handle_abort_deployment` reads `active_deployment_id_` after releasing the mutex. [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:747)
-- The WebSocket server performs TLS and HTTP handshakes on the accept thread; one slow client blocks all new connections and can block shutdown. [transport.cpp](../s7transport/src/transport.cpp:629)
+- ~~The WebSocket server performs TLS and HTTP handshakes on the accept thread.~~ Fixed 2026-10-05: handshakes are asynchronous with a 10 s timeout.
+- Tests bind fixed ports inside the Linux ephemeral range (32768–60999), so a parallel test's outgoing connection can occupy one (`bind: Address already in use`). `configure_server(0)` now picks a free port and returns it; `s7transport_beast_stream_smoke` uses it, `s7runtime_control_smoke` and `s7runtime_deployment_smoke` still use fixed ports.
 
 ## Suggested order
 
 0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.
 1. ~~Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.~~ Done 2026-10-04.
 2. ~~Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.~~ Done 2026-10-04 (also the prepare-token item).
-3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients. *Contract approved 2026-10-05 (wire draft 0.5); implementation pending.*
-4. ~~Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.~~ Done 2026-10-04, except routing by stream descriptor (needs step 3 approval). Follow-up: make the transport's socket threading safe (new P2 finding above).
+3. ~~Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients.~~ Approved and implemented 2026-10-05 (lossless streams, async transport, stream status and recovery). Other-language fixtures remain.
+4. ~~Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.~~ Done 2026-10-04; routing by stream and safe socket threading 2026-10-05.
 5. ~~Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.~~ Done 2026-10-04.
 6. ~~Address signal representation, observation timestamps/types, and plugin build integration.~~ Done 2026-10-04 (spectral plugin isolated, not integrated).
 

@@ -214,9 +214,9 @@ Errors MUST NOT disclose private key material, credentials, or sensitive local p
 
 The C++ runtime is the reference implementation. Existing code contains JSON control handlers for several messages and mTLS configuration, but this document also specifies behavior that is not yet implemented. Conformance must be established with cross-language protocol fixtures and tests before this draft is treated as a stable wire contract.
 
-### 10.1 Implemented behavior (C++ runtime, 2026-10-04)
+### 10.1 Implemented behavior (C++ runtime, 2026-10-05)
 
-**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT` and `ABORT_DEPLOYMENT` are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Extended Key Usage OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate's Extended Key Usage contains the configured control-node key purpose (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
+**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT`, `ABORT_DEPLOYMENT` and `RECOVER_STREAM` are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Extended Key Usage OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate's Extended Key Usage contains the configured control-node key purpose (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
 
 The authorized Studio is node configuration in the runtime schema file, not deployable:
 
@@ -261,5 +261,26 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 **Abort.** Discards a prepared deployment (token required). Repeating an abort, or aborting a preparation that already expired, failed or was superseded, succeeds. Aborting the active deployment is `INVALID_REQUEST`.
 
 **Status.** `HELLO.status`, `NODE_INFO.state.mode` and `DEPLOYMENTS.state` are `idle` or `active`; `NODE_INFO.state.execution` and `DEPLOYMENTS.execution` report `stepping` / `not_stepping`. `LIST_DEPLOYMENTS` returns `active_revision`, `active_deployment` (revision, project revision, digest, commit time), unexpired `prepared_deployments` (never their tokens) and a bounded `history` of outcomes (`committed`, `aborted`, `expired`, `failed`, `superseded`).
+
+**Stream status.** `GET_STREAM_STATUS` (read-only) returns `STREAM_STATUS` with one entry per data stream of the node:
+
+```json
+{
+  "type": "STREAM_STATUS", "request_id": "...", "protocol_version": 1,
+  "streams": [
+    {
+      "stream_id": "3f2b8c1d-6e4a-4b7f-9a2c-1d5e8f7a6b3c", "role": "producer", "data_type": "F64",
+      "state": "active", "fault": "NONE", "next_sequence": 120,
+      "packets": 120, "elements": 120, "replayed": 10, "lost_resumes": 0,
+      "duplicates_discarded": 0, "malformed": 0,
+      "send_log_depth": 4, "buffered_elements": 0, "blocked_ms_total": 0
+    }
+  ]
+}
+```
+
+`state` is `active`, `blocked` (a producer waiting on a full send log) or `faulted`; `fault` is `NONE` or a fault code of `S7_Net_Element_Contract.md`. `next_sequence` is the next sequence a producer assigns, or the next a consumer expects.
+
+**Stream recovery.** `RECOVER_STREAM {stream_id}` is authorized like a deployment mutation. It clears the stream's fault and returns `RECOVER_STREAM_RESULT {stream_id, recovered}` (`recovered: false` if the node has no such stream; `INVALID_REQUEST` for a malformed id). A recovered consumer accepts the next packet it receives as its new start; the data lost in the fault stays lost and stays counted. A runtime whose stepping stopped because a step failed (for example on a stream fault) resumes stepping after a successful recovery.
 
 **Not yet implemented:** chunked configuration transfer and size limits, `GET_NETWORK_CONFIGURATION`, persistence of deployment state across node restarts (a restarted node runs its startup schema with active revision 0), and request-ID replay caching.
