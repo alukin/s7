@@ -24,6 +24,19 @@ Source: `s7core/include/s7/element.hpp`.
 - The `Element` constructor takes `has_state` (informational: the element keeps internal state) and `Feedthrough` (default `Feedthrough::Direct`). Elements with direct feedthrough, stateful or not, run in topological order and their outputs are visible downstream in the same step: `Constant → FirFilter([1]) → Gain` yields the constant at step 1.
 - `Feedthrough::None` marks the element as causal memory (`Delay`, `PreviousValue`). Its `step()` writes the output for the *next* step from the current inputs. The runtime steps causal-memory elements after the others, keeps their published outputs unchanged until the step ends, and publishes the new outputs at the start of the next step. Cycles in a graph are valid only if they contain at least one causal-memory element; a stateful element with direct feedthrough (`Integrator`, filters, nested `Schema`) does not break a cycle.
 
+## Type system (decided 2026-10-05; implementation in progress)
+
+This section is the target contract; the code is being moved to it (`CODE_REVIEW_REQUIRED_FIXES.md`, signal types item).
+
+- **Types.** Every port has exactly one type from the wire-format catalog (`S7_Network_Wire_Protocol_v1.md` section 8): I8–I128, U8–U128 (with I12/U12), F16, F32, F64, F128, complex floats C16–C128, and complex integers CI8, CU8, CI16, CI32, CI64, CI128. Each is stored as its native C++ type (C++26 on GCC: `std::float16_t`, `std::float128_t`, `__int128`; complex integers as a pair of the integer type). Nothing converts implicitly.
+- **Generic elements, static polymorphism.** An element is written once as a template (`GainT<T>`) and instantiated for each type it supports; the registry holds one entry (`Gain`) and selects the instance through a compile-time dispatch table. There is no per-sample virtual call or type switch.
+- **Type rules instead of types.** An element declares rules such as "all ports have one type T" (`Gain`, `Adder`, `Multiply`, `Delay`), "output is the real type matching the complex input" (`ComplexToMagnitude`), or a fixed type (device sources, `NetSource` from its stream descriptor). It also declares the set of types it supports.
+- **Type inference.** Before compilation, a unification pass gives every port a type: connections make types equal, fixed types and pinned `type` parameters seed them, and inference runs in both directions (a `Constant` feeding an I16 `Adder` becomes I16). A conflict, or a type outside an element's supported set, is a validation error naming the element. A connected part of the graph with no determining type defaults to F64. Studio shows the resolved type on each wire. Any element may pin its type with an explicit `type` parameter.
+- **Explicit conversion.** A type change is one `Convert` element: `from`, `to`, `mode` (`value`: keep the numeric value; `normalized`: fixed-point scaling, integer codes ↔ [-1, 1)), `rounding` (`half_even`, `toward_zero`) and `overflow` (`saturate`, `fault`), all stated explicitly. Widening conversions that are exact still go through `Convert`.
+- **Integer overflow.** Integer arithmetic elements have an `overflow` parameter: `saturate` (default) or `wrap` (two's complement), so hardware behavior can be simulated exactly.
+- **Accumulator type.** Accumulating elements (FIR, Integrator, correlators, and `Adder`/`Multiply` when combining inputs) take an optional `accumulator_type`. By default it is the port type. When set, inputs are widened exactly inside the element, arithmetic runs in the accumulator type with that element's `overflow` rule, and the output port has the accumulator type (for example `FIR(accumulator_type: CI32)` on CI8 input outputs CI32). Narrowing back is always an explicit `Convert`.
+- **Complex unsigned.** CU8 (RTL-SDR offset binary) is transport and `Convert` only; it has no arithmetic.
+
 ## Minimal element
 
 ```cpp

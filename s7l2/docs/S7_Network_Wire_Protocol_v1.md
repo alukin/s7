@@ -164,12 +164,15 @@ Every port of a graph has exactly one of these types, and a stream's wire type i
 | `0x0201` | `CI8` | 16 | Pair of I8: in-phase, quadrature |
 | `0x0202` | `CU8` | 16 | Pair of U8: in-phase, quadrature (offset binary, as delivered by RTL-SDR) |
 | `0x0203` | `CI16` | 32 | Pair of I16: in-phase, quadrature |
+| `0x0204` | `CI32` | 64 | Pair of I32: in-phase, quadrature |
+| `0x0205` | `CI64` | 128 | Pair of I64: in-phase, quadrature |
+| `0x0206` | `CI128` | 256 | Pair of I128: in-phase, quadrature |
 
-Complex integer types exist so that raw SDR I/Q samples travel at their native width: converting 8-bit I/Q to floating point before the wire would multiply the data rate by 4 to 8.
+Complex integer types exist so that raw SDR I/Q samples travel at their native width (converting 8-bit I/Q to floating point before the wire would multiply the data rate by 4 to 8), so that hardware integer arithmetic can be simulated exactly, and, for CI32–CI128, so that integer processing such as correlation can run without saturation.
 
 **12-bit packing.** Two consecutive 12-bit values occupy three bytes as one little-endian 24-bit word: the first value in bits 0–11, the second in bits 12–23. An odd final value occupies two bytes, in bits 0–11 of a little-endian 16-bit word with bits 12–15 zero. The element count of a payload of `b` bytes is therefore `floor(8b / 12)`.
 
-**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 support MUST NOT be assigned F128, C128, I128 or U128 streams. The C++ reference runtime supports all listed types (C++26, GCC: `std::float16_t`, `std::float128_t`, `__int128`).
+**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 or 128-bit integer support MUST NOT be assigned F128, C128, I128, U128 or CI128 streams. The C++ reference runtime supports all listed types (C++26, GCC: `std::float16_t`, `std::float128_t`, `__int128`).
 
 ## 9. Validation and Fault Behavior
 
