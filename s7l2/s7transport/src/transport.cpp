@@ -360,6 +360,7 @@ public:
                                                                : "active";
             } else {
                 const auto stats = entry->consumer->stats();
+                status.elements = stats.elements;
                 status.fault = entry->consumer->fault_code();
                 status.next_sequence = stats.next_expected;
                 status.packets = stats.packets;

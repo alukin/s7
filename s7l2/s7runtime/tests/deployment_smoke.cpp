@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <map>
 #include <optional>
 #include <random>
 #include <stdexcept>
@@ -15,6 +16,8 @@
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/canonical_json.hpp>
+#include <s7/deployment_client.hpp>
+#include <s7/net.hpp>
 #include <s7/control_plane_mvp.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/runtime_service.hpp>
@@ -72,16 +75,35 @@ json::object constant_gain_fragment(const double value)
     return fragment;
 }
 
+// The node the test control planes run as (also the SAN of s7_runtime_node.cert.pem).
+constexpr const char* kNodeUuid = "11111111-2222-3333-4444-555555555555";
+
+// A diagram with every element of the fragment placed on `node_uuid`.
+json::object diagram_on_node(const json::object& fragment, const std::string& node_uuid = kNodeUuid)
+{
+    auto schema = fragment;
+    if (auto* elements = schema.if_contains("elements"); elements && elements->is_array()) {
+        for (auto& element : elements->as_array()) {
+            element.as_object()["node"] = node_uuid;
+        }
+    }
+    return json::object{
+        {"document_kind", "s7.diagram"},
+        {"runtime_nodes", json::array{json::object{{"node_uuid", node_uuid}, {"name", "test"}, {"endpoint", ""}}}},
+        {"schema", std::move(schema)},
+    };
+}
+
 json::object prepare_request(const std::string& deployment_id,
                              const std::uint64_t revision,
                              const std::uint64_t base_revision,
                              const json::object& fragment,
-                             const std::optional<json::object>& required_caps = std::nullopt)
+                             const std::optional<json::object>& required_caps = std::nullopt,
+                             const std::string& node_uuid = kNodeUuid)
 {
     json::object configuration{
         {"project_revision", "git:" + deployment_id + "-" + std::to_string(revision)},
-        {"full_network", json::object{}},
-        {"assigned_fragment", fragment},
+        {"diagram", diagram_on_node(fragment, node_uuid)},
     };
     configuration["configuration_digest"] = s7::configuration_digest(configuration);
 
@@ -139,9 +161,9 @@ public:
         double value{};
     };
 
-    auto stage(const json::object& fragment) -> std::unique_ptr<s7::StagedConfiguration> override
+    auto stage(const json::object& fragment, const std::vector<std::string>&) -> std::unique_ptr<s7::StagedConfiguration> override
     {
-        if (fragment.contains("broken")) {
+        if (fragment.at("elements").as_array()[0].as_object().at("params").as_object().contains("broken")) {
             throw std::invalid_argument("fragment is broken");
         }
         auto staged = std::make_unique<Staged>();
@@ -214,7 +236,7 @@ void test_authorization()
 {
     auto host = std::make_shared<FakeHost>();
     std::vector<std::string> log;
-    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = "11111111-2222-3333-4444-555555555555"},
+    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{
                                     .authorization = studio_authorization(),
                                     .deployment_host = host,
@@ -233,7 +255,7 @@ void test_authorization()
     expect(node_response.at("details").as_object().contains("peer_certificate_sha256"), "denial names the peer certificate");
 
     // A certificate with the Studio role but not the pinned one is refused.
-    s7::ControlPlaneMvp other_pin{s7::ControlNodeDescriptor{},
+    s7::ControlPlaneMvp other_pin{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                   s7::ControlPlaneOptions{
                                       .authorization = {.studio_key_purpose_oid = kStudioKeyPurposeOid,
                                                         .studio_certificate_sha256 = std::string(64, 'a')},
@@ -242,7 +264,7 @@ void test_authorization()
     expect_error(Client(other_pin, verified_peer("s7_studio.cert.pem")).send(request), "UNAUTHORIZED", "unpinned Studio");
 
     // A node without configured Studio authorization accepts no changes.
-    s7::ControlPlaneMvp unconfigured{s7::ControlNodeDescriptor{}, s7::ControlPlaneOptions{.deployment_host = host}};
+    s7::ControlPlaneMvp unconfigured{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid}, s7::ControlPlaneOptions{.deployment_host = host}};
     expect_error(Client(unconfigured, verified_peer("s7_studio.cert.pem")).send(request), "UNAUTHORIZED", "no Studio configured");
 
     const auto ok = Client(control, verified_peer("s7_studio.cert.pem")).send(request);
@@ -263,7 +285,7 @@ void test_deployment_lifecycle()
 {
     auto host = std::make_shared<FakeHost>();
     s7::ControlPlaneMvp control{
-        s7::ControlNodeDescriptor{.element_types = {"Constant", "Gain"}},
+        s7::ControlNodeDescriptor{.node_uuid = kNodeUuid, .element_types = {"Constant", "Gain"}},
         s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host}};
     Client studio(control, verified_peer("s7_studio.cert.pem"));
 
@@ -296,7 +318,7 @@ void test_deployment_lifecycle()
     expect(missing.at("incompatibilities").as_array()[0].as_object().at("code").as_string() == "MISSING_ELEMENT", "issue code");
 
     auto broken = constant_gain_fragment(2.0);
-    broken["broken"] = true;
+    broken["elements"].as_array()[0].as_object()["params"].as_object()["broken"] = true;
     const auto invalid = studio.send(prepare_request("dep-broken", 1, 0, broken));
     expect(invalid.at("prepare_status").as_string() == "NOT_READY", "stage failure is NOT_READY");
     expect(invalid.at("incompatibilities").as_array()[0].as_object().at("code").as_string() == "INVALID_CONFIGURATION",
@@ -364,7 +386,7 @@ void test_deployment_lifecycle()
 void test_prepare_expiry()
 {
     auto host = std::make_shared<FakeHost>();
-    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{},
+    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{.authorization = studio_authorization(),
                                                         .deployment_host = host,
                                                         .prepare_ttl = std::chrono::seconds(0)}};
@@ -435,11 +457,10 @@ void test_runtime_deployment_over_mtls()
         service.step();
         expect(service.active_real_output("gain") == 1.0, "prepared graph is not active yet");
 
-        // Node settings cannot be deployed.
-        auto with_settings = constant_gain_fragment(7.0);
-        with_settings["control"] = json::object{};
-        const auto settings = send(*studio_client, prepare_request("dep-settings", 1, 0, with_settings));
-        expect(settings.at("prepare_status").as_string() == "NOT_READY", "fragment with node settings is NOT_READY");
+        // A diagram with nothing placed on this node is not for it.
+        const auto elsewhere = send(*studio_client, prepare_request("dep-elsewhere", 1, 0, constant_gain_fragment(7.0), std::nullopt,
+                                                                    "99999999-0000-4000-8000-000000000000"));
+        expect(elsewhere.at("prepare_status").as_string() == "NOT_READY", "a diagram without this node is NOT_READY");
 
         // A graph that does not compile is NOT_READY and changes nothing.
         auto unknown = constant_gain_fragment(7.0);
@@ -463,7 +484,7 @@ void test_stream_status_and_recovery()
 {
     auto network = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     int recoveries = 0;
-    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{},
+    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{.authorization = studio_authorization(),
                                                         .network = network,
                                                         .on_stream_recovered = [&recoveries] { ++recoveries; }}};
@@ -501,6 +522,112 @@ void test_stream_status_and_recovery()
     expect_error(Client(control, verified_peer("s7_studio.cert.pem")).send(recover), "INVALID_REQUEST", "malformed stream id");
 }
 
+// Records what it is given to run; fails staging on request.
+class RecordingHost final : public s7::DeploymentHost {
+public:
+    struct Staged final : s7::StagedConfiguration {
+        json::object schema;
+        std::vector<std::string> peers;
+    };
+    auto stage(const json::object& schema, const std::vector<std::string>& peers) -> std::unique_ptr<s7::StagedConfiguration> override
+    {
+        if (fail) {
+            throw std::invalid_argument("device busy");
+        }
+        auto staged = std::make_unique<Staged>();
+        staged->schema = schema;
+        staged->peers = peers;
+        return staged;
+    }
+    void activate(s7::StagedConfiguration& staged) override
+    {
+        active = dynamic_cast<Staged&>(staged).schema;
+        peers = dynamic_cast<Staged&>(staged).peers;
+    }
+    auto execution_state() const -> std::string override { return "not_stepping"; }
+
+    bool fail{false};
+    std::optional<json::object> active;
+    std::vector<std::string> peers;
+};
+
+void test_deploy_client()
+{
+    constexpr const char* kOther = "33333333-4444-5555-6666-777777777777";
+    auto host_a = std::make_shared<RecordingHost>();
+    auto host_b = std::make_shared<RecordingHost>();
+    s7::ControlPlaneMvp node_a{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+                               s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_a}};
+    s7::ControlPlaneMvp node_b{s7::ControlNodeDescriptor{.node_uuid = kOther},
+                               s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_b}};
+    std::map<std::string, s7::ControlPlaneMvp*> by_endpoint{{"wss://a", &node_a}, {"wss://b", &node_b}};
+    auto request = [&](const s7::deployment::RuntimeNode& node, const json::object& message) {
+        return Client(*by_endpoint.at(node.endpoint), verified_peer("s7_studio.cert.pem")).send(message);
+    };
+
+    auto diagram = json::parse(R"json({
+        "document_kind": "s7.diagram",
+        "runtime_nodes": [
+            { "node_uuid": "11111111-2222-3333-4444-555555555555", "endpoint": "wss://a" },
+            { "node_uuid": "33333333-4444-5555-6666-777777777777", "endpoint": "wss://b" }
+        ],
+        "schema": {
+            "name": "pair",
+            "elements": [
+                { "id": "source", "type": "Constant", "params": { "value": 4.0 }, "node": "11111111-2222-3333-4444-555555555555" },
+                { "id": "gain", "type": "Gain", "params": { "factor": 2.0 }, "node": "33333333-4444-5555-6666-777777777777" }
+            ],
+            "connections": [ { "from_element": "source", "from_port": 0, "to_element": "gain", "to_port": 0 } ]
+        }
+    })json").as_object();
+    const auto types = s7::deployment::infer_output_types(diagram);
+
+    // A node that cannot run its part: nothing is committed, the other preparation is aborted.
+    host_b->fail = true;
+    auto failed = s7::deployment::deploy_diagram(diagram, types, request);
+    expect(!failed.committed && failed.nodes.size() == 2, "deployment fails as a whole");
+    expect(failed.nodes[0].status == "ready" && failed.nodes[1].status == "not_ready" &&
+               failed.nodes[1].message.find("device busy") != std::string::npos,
+           "per-node outcome reported: " + failed.nodes[1].message);
+    expect(!host_a->active && !host_b->active, "nothing activated");
+    const json::object list{{"type", "LIST_DEPLOYMENTS"}, {"request_id", "l"}, {"protocol_version", 1}};
+    const auto history = Client(node_a, ControlPeer{}).send(list);
+    expect(history.at("prepared_deployments").as_array().empty() &&
+               history.at("history").as_array().back().as_object().at("outcome").as_string() == "aborted",
+           "the ready node's preparation was aborted");
+
+    host_b->fail = false;
+    const auto deployed = s7::deployment::deploy_diagram(diagram, types, request);
+    expect(deployed.committed && deployed.revision == 1, "deployed to both nodes");
+    expect(host_a->active && host_b->active, "both nodes run their part");
+    expect(host_b->peers == std::vector<std::string>{"wss://a"}, "the consumer connects to the producer");
+    const auto& b_elements = host_b->active->at("elements").as_array();
+    expect(b_elements.size() == 2 && b_elements[1].as_object().at("type").as_string() == "NetSource", "B consumes a stream");
+
+    const json::object get{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "g"}, {"protocol_version", 1}};
+    const auto configuration = Client(node_b, ControlPeer{}).send(get);
+    expect(configuration.at("type").as_string() == "NETWORK_CONFIGURATION" && configuration.at("revision").to_number<std::uint64_t>() == 1 &&
+               configuration.at("diagram").as_object().at("streams") == deployed.diagram.at("streams") &&
+               configuration.at("configuration_digest").as_string() == deployed.configuration_digest,
+           "the node returns the deployed diagram");
+
+    // The next deployment builds on both nodes' active revision and keeps the stream.
+    auto next = deployed.diagram;
+    next["schema"].as_object()["elements"].as_array()[1].as_object()["params"].as_object()["factor"] = 3.0;
+    const auto again = s7::deployment::deploy_diagram(next, types, request);
+    expect(again.committed && again.revision == 2, "redeployed at revision 2");
+    expect(again.diagram.at("streams") == deployed.diagram.at("streams"), "the stream keeps its id");
+    auto old_revision = get;
+    old_revision["revision"] = 1;
+    expect_error(Client(node_b, ControlPeer{}).send(old_revision), "REVISION_NOT_FOUND", "only the active revision is retained");
+
+    // An endpoint answering as another node is refused before anything is prepared.
+    by_endpoint["wss://b"] = &node_a;
+    const auto wrong = s7::deployment::deploy_diagram(again.diagram, types, request);
+    expect(!wrong.committed && !wrong.errors.empty() && wrong.errors.front().find("not 33333333") != std::string::npos,
+           "node identity checked: " + (wrong.errors.empty() ? std::string() : wrong.errors.front()));
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -509,6 +636,8 @@ try {
     test_deployment_lifecycle();
     test_prepare_expiry();
     test_stream_status_and_recovery();
+    s7::register_net_elements(s7::ElementRegistry::instance());
+    test_deploy_client();
     test_runtime_deployment_over_mtls();
     return 0;
 } catch (const std::exception& ex) {

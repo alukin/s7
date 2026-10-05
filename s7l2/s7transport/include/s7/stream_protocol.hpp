@@ -169,6 +169,7 @@ private:
 
 struct ConsumerStats {
     std::uint64_t packets{};
+    std::uint64_t elements{}; // delivered to the graph
     std::uint64_t duplicates_discarded{};
     std::uint64_t malformed{};
     std::uint64_t next_expected{};
@@ -225,6 +226,7 @@ private:
     FaultCode fault_{FaultCode::None};
     bool restart_at_next_{false};
     std::uint64_t packets_{};
+    std::uint64_t elements_{};
     std::uint64_t duplicates_{};
     std::uint64_t malformed_{};
 };

@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# Deploys one diagram across two s7runtime nodes over mTLS with s7ctl, checks
+# that node B computes from node A's stream, then redeploys a changed diagram
+# and checks that the stream continues without a fault.
+#
+# Usage: test_two_node_deployment.sh <build dir> <source dir>
+set -euo pipefail
+
+BUILD="$1"
+SRC="$2"
+CERTS="$SRC/s7runtime/examples/certs"
+RUNTIME="$BUILD/s7runtime/s7runtime"
+CTL="$BUILD/s7ctl/s7ctl"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/s7-two-node.XXXXXX")"
+PIDS=()
+cleanup() {
+  for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+  wait 2>/dev/null || true
+  rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+# Ports below the Linux ephemeral range, so outgoing connections cannot hold them.
+PORT_A=$((20000 + RANDOM % 5000))
+PORT_B=$((PORT_A + 1))
+NODE_A="11111111-2222-3333-4444-555555555555"
+NODE_B="33333333-4444-5555-6666-777777777777"
+OID="2.25.4266950079767543379770189370854073200"
+STUDIO_FP="$(openssl x509 -in "$CERTS/s7_studio.cert.pem" -noout -fingerprint -sha256 | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')"
+TLS=(--cert "$CERTS/s7_studio.cert.pem" --key "$CERTS/s7_studio.key.pem" --ca "$CERTS/s7_root_ca.cert.pem")
+
+# node_config <cert name> <port>: a node's startup schema (an idle graph).
+node_config() {
+  cat <<EOF
+{
+  "name": "idle",
+  "elements": [ { "id": "idle", "type": "Constant", "params": { "value": 0 } } ],
+  "connections": [],
+  "websocket": { "server": { "enabled": true, "port": $2, "tls": {
+    "enabled": true, "cert_file": "$CERTS/$1.cert.pem", "key_file": "$CERTS/$1.key.pem",
+    "ca_file": "$CERTS/s7_root_ca.cert.pem", "require_client_cert": true } } },
+  "control": { "studio_key_purpose_oid": "$OID", "studio_certificate_sha256": "$STUDIO_FP" },
+  "execution": { "step_rate_hz": 50 }
+}
+EOF
+}
+node_config s7_runtime_node "$PORT_A" > "$WORK/a.json"
+node_config s7_runtime_node_b "$PORT_B" > "$WORK/b.json"
+
+# source (A) -> double (A) -> scale (B) -> out (B)
+diagram() {
+  cat <<EOF
+{
+  "document_kind": "s7.diagram",
+  "runtime_nodes": [
+    { "node_uuid": "$NODE_A", "name": "a", "endpoint": "wss://127.0.0.1:$PORT_A" },
+    { "node_uuid": "$NODE_B", "name": "b", "endpoint": "wss://127.0.0.1:$PORT_B" }
+  ],
+  "schema": {
+    "name": "two_nodes",
+    "elements": [
+      { "id": "source", "type": "Constant", "params": { "type": "I32", "value": 21 }, "node": "$NODE_A" },
+      { "id": "double", "type": "Gain", "params": { "factor": 2 }, "node": "$NODE_A" },
+      { "id": "scale", "type": "Gain", "params": { "factor": $1 }, "node": "$NODE_B" },
+      { "id": "out", "type": "Gain", "params": { "factor": 1 }, "node": "$NODE_B" }
+    ],
+    "connections": [
+      { "from_element": "source", "from_port": 0, "to_element": "double", "to_port": 0 },
+      { "from_element": "double", "from_port": 0, "to_element": "scale", "to_port": 0 },
+      { "from_element": "scale", "from_port": 0, "to_element": "out", "to_port": 0 }
+    ]
+  }
+}
+EOF
+}
+diagram 10 > "$WORK/diagram.json"
+
+"$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a.log" 2>&1 &
+PIDS+=($!)
+"$RUNTIME" --schema "$WORK/b.json" --state-dir "$WORK/state-b" --serve-seconds 60 > "$WORK/b.log" 2>&1 &
+PIDS+=($!)
+for port in "$PORT_A" "$PORT_B"; do
+  for _ in $(seq 50); do (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break; sleep 0.1; done
+done
+
+fail() { echo "FAIL: $*"; echo "--- node A"; cat "$WORK/a.log"; echo "--- node B"; cat "$WORK/b.log"; exit 1; }
+
+# 1) Deploy; keep the diagram with its streams for the next deployment.
+"$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" || fail "first deployment"
+sleep 1
+
+# json_check <file> <python expression over `r`>
+json_check() { python3 -c "import json,sys; r=json.load(open(sys.argv[1])); sys.exit(0 if ($2) else 1)" "$1"; }
+
+"$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b.json"
+json_check "$WORK/streams-b.json" \
+  "len(r['streams'])==1 and r['streams'][0]['role']=='consumer' and r['streams'][0]['data_type']=='I32' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>10" \
+  || fail "node B consumes the I32 stream: $(cat "$WORK/streams-b.json")"
+STREAM_ID="$(python3 -c "import json; print(json.load(open('$WORK/streams-b.json'))['streams'][0]['stream_id'])")"
+
+"$CTL" config "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/config-b.json"
+json_check "$WORK/config-b.json" \
+  "r['type']=='NETWORK_CONFIGURATION' and r['revision']==1 and r['diagram']['streams'][0]['stream_id']=='$STREAM_ID' and any(e['type']=='NetSource' for e in r['node_schema']['elements']) and not any(e['id']=='double' for e in r['node_schema']['elements'])" \
+  || fail "node B returns the deployed diagram and its part: $(cat "$WORK/config-b.json")"
+
+# 2) Redeploy a change on both nodes: the same stream continues.
+python3 - "$WORK/deployed.json" <<'EOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+for e in d["schema"]["elements"]:
+    if e["id"] == "scale":
+        e["params"]["factor"] = 100
+json.dump(d, open(sys.argv[1], "w"))
+EOF
+BEFORE="$(python3 -c "import json; print(json.load(open('$WORK/streams-b.json'))['streams'][0]['elements'])")"
+"$CTL" deploy "$WORK/deployed.json" "${TLS[@]}" || fail "redeployment"
+sleep 1
+"$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b2.json"
+json_check "$WORK/streams-b2.json" \
+  "len(r['streams'])==1 and r['streams'][0]['stream_id']=='$STREAM_ID' and r['streams'][0]['state']=='active' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>$BEFORE" \
+  || fail "the stream continues across the redeployment: $(cat "$WORK/streams-b2.json")"
+"$CTL" streams "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/streams-a.json"
+json_check "$WORK/streams-a.json" \
+  "r['streams'][0]['role']=='producer' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['lost_resumes']==0" \
+  || fail "the producer has no fault: $(cat "$WORK/streams-a.json")"
+"$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a.json"
+json_check "$WORK/config-a.json" "r['revision']==2" || fail "node A runs revision 2"
+
+grep -q "runtime.execution.stopped=error" "$WORK/a.log" "$WORK/b.log" && fail "a node stopped stepping"
+
+echo "two-node deployment: OK (stream $STREAM_ID)"

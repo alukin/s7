@@ -9,6 +9,7 @@ ROOT_CERT="$OUT_DIR/s7_root_ca.cert.pem"
 SERIAL="$OUT_DIR/s7_root_ca.cert.srl"
 
 NODE_UUID="11111111-2222-3333-4444-555555555555"
+NODE_B_UUID="33333333-4444-5555-6666-777777777777"
 STUDIO_UUID="22222222-3333-4444-5555-666666666666"
 
 # Development placeholder for the S7 control-node (Studio) key purpose, carried
@@ -44,6 +45,13 @@ keyUsage=digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth,clientAuth
 subjectAltName=URI:spiffe://s7/node/$NODE_UUID"
 
+# Second runtime node, for multi-node deployment tests.
+issue s7_runtime_node_b "/C=US/ST=Test/L=Test/O=S7/OU=Runtime/CN=s7-runtime-node-b" \
+"basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth,clientAuth
+subjectAltName=URI:spiffe://s7/node/$NODE_B_UUID"
+
 # Control Studio: carries the control-node key purpose.
 issue s7_studio "/C=US/ST=Test/L=Test/O=S7/OU=Studio/CN=s7-studio" \
 "basicConstraints=CA:FALSE
@@ -64,7 +72,7 @@ extendedKeyUsage=clientAuth,$STUDIO_KEY_PURPOSE_OID
 subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID" \
   "$UNTRUSTED_CERT" "$UNTRUSTED_KEY" "$OUT_DIR/s7_untrusted_ca.cert.srl"
 
-openssl verify -CAfile "$ROOT_CERT" "$OUT_DIR/s7_runtime_node.cert.pem" "$OUT_DIR/s7_studio.cert.pem"
+openssl verify -CAfile "$ROOT_CERT" "$OUT_DIR/s7_runtime_node.cert.pem" "$OUT_DIR/s7_runtime_node_b.cert.pem" "$OUT_DIR/s7_studio.cert.pem"
 
 echo "Studio certificate SHA-256 fingerprint:"
 openssl x509 -in "$OUT_DIR/s7_studio.cert.pem" -noout -fingerprint -sha256 | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f'

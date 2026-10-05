@@ -332,6 +332,7 @@ std::size_t StreamConsumer::take(void* out, const std::size_t max_count)
         front.consumed += chunk;
         taken += chunk;
         buffered_elements_ -= chunk;
+        elements_ += chunk;
         if (front.consumed == front.elements) {
             consumed_up_to_ = front.sequence + 1;
             ++consumed_since_ack_;
@@ -370,7 +371,7 @@ void StreamConsumer::recover()
 
 ConsumerStats StreamConsumer::stats() const
 {
-    return ConsumerStats{packets_, duplicates_, malformed_, next_expected_, buffered_elements_};
+    return ConsumerStats{packets_, elements_, duplicates_, malformed_, next_expected_, buffered_elements_};
 }
 
 } // namespace s7::stream

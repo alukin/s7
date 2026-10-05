@@ -693,21 +693,24 @@ public:
 
     struct StagedGraph final : StagedConfiguration {
         std::unique_ptr<NodeRuntime> runtime;
+        std::vector<std::string> data_peers;
     };
 
-    auto stage(const boost::json::object& assigned_fragment) -> std::unique_ptr<StagedConfiguration> override
+    auto stage(const boost::json::object& node_schema, const std::vector<std::string>& data_peers)
+        -> std::unique_ptr<StagedConfiguration> override
     {
         // A deployment carries a graph only; node settings stay with the node.
         for (const auto* key : {"websocket", "simulation", "execution", "control"}) {
-            if (assigned_fragment.contains(key)) {
-                throw std::invalid_argument(std::string{"Assigned fragment must not contain node settings ('"} + key + "').");
+            if (node_schema.contains(key)) {
+                throw std::invalid_argument(std::string{"A deployed graph must not contain node settings ('"} + key + "').");
             }
         }
-        const auto definition = JsonSchemaLoader::load_from_json(assigned_fragment);
+        const auto definition = JsonSchemaLoader::load_from_json(node_schema);
         const auto schema = build_schema_from_definition(definition);
         auto staged = std::make_unique<StagedGraph>();
         staged->runtime = std::make_unique<NodeRuntime>(
             Compiler::compile(*schema, service_.runtime_instance_uuid_, create_schema_instance_uuid()));
+        staged->data_peers = data_peers;
         return staged;
     }
 
@@ -717,12 +720,18 @@ public:
         if (!graph.runtime) {
             throw std::logic_error("Staged graph was already activated.");
         }
-        std::unique_ptr<NodeRuntime> previous;
         {
+            // The previous graph is destroyed under the lock: its network
+            // elements release their streams before the new graph's first
+            // step opens them again (and continues them).
             std::lock_guard<std::mutex> lock(service_.graph_mutex_);
-            previous = std::exchange(service_.graph_, std::move(graph.runtime));
+            auto previous = std::exchange(service_.graph_, std::move(graph.runtime));
+            previous.reset();
         }
-        // previous is destroyed here, outside the lock.
+        if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(service_.network_endpoint_)) {
+            const auto& definition = service_.definition_;
+            beast->set_data_peers(graph.data_peers, definition.client.tls.enabled ? definition.client.tls : definition.server.tls);
+        }
     }
 
     auto execution_state() const -> std::string override

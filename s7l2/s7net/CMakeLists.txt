@@ -2,6 +2,8 @@
 add_library(s7net STATIC
     src/net.cpp
     src/diagram_deployment.cpp
+    src/canonical_json.cpp
+    src/deployment_client.cpp
 )
 
 target_include_directories(s7net PUBLIC
@@ -9,7 +11,7 @@ target_include_directories(s7net PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(s7net PUBLIC s7core s7io s7transport)
+target_link_libraries(s7net PUBLIC s7core s7io s7transport PRIVATE OpenSSL::Crypto)
 
 add_executable(s7net_smoke
     tests/net_smoke.cpp

@@ -1,7 +1,6 @@
 
 add_executable(s7runtime
     src/main.cpp
-    src/canonical_json.cpp
     src/runtime_service.cpp
     src/control_plane_mvp.cpp
     src/plugin_loader.cpp
@@ -31,7 +30,6 @@ target_link_libraries(s7runtime PRIVATE
 
 add_executable(s7runtime_control_smoke
     tests/control_plane_smoke.cpp
-    src/canonical_json.cpp
     src/control_plane_mvp.cpp
     src/runtime_service.cpp
 )
@@ -62,7 +60,6 @@ add_test(NAME s7runtime_control_smoke COMMAND s7runtime_control_smoke)
 
 add_executable(s7runtime_deployment_smoke
     tests/deployment_smoke.cpp
-    src/canonical_json.cpp
     src/control_plane_mvp.cpp
     src/runtime_service.cpp
 )

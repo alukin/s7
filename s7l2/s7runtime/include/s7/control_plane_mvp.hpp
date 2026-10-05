@@ -75,9 +75,11 @@ class DeploymentHost {
 public:
     virtual ~DeploymentHost() = default;
 
-    // Validates and compiles the assigned fragment without activating it.
-    // Throws std::exception describing why the configuration is invalid.
-    [[nodiscard]] virtual auto stage(const boost::json::object& assigned_fragment)
+    // Validates and compiles this node's part of the deployed diagram without
+    // activating it. data_peers are the endpoints of the nodes producing the
+    // streams it consumes. Throws std::exception describing why the
+    // configuration is invalid.
+    [[nodiscard]] virtual auto stage(const boost::json::object& node_schema, const std::vector<std::string>& data_peers)
         -> std::unique_ptr<StagedConfiguration> = 0;
 
     // Makes the staged configuration the running graph. On failure throws and
@@ -132,6 +134,8 @@ private:
         std::string expires_at;
         std::chrono::steady_clock::time_point expires;
         std::shared_ptr<StagedConfiguration> staged;
+        boost::json::object diagram;     // as deployed
+        boost::json::object node_schema; // this node's part of it
     };
 
     struct ActiveDeployment {
@@ -141,6 +145,8 @@ private:
         std::string configuration_digest;
         std::string committed_at;
         std::string prepare_token; // makes a repeated commit idempotent
+        boost::json::object diagram;
+        boost::json::object node_schema;
     };
 
     struct DeploymentOutcome {
@@ -166,6 +172,7 @@ private:
     [[nodiscard]] auto handle_commit_deployment(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_abort_deployment(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_get_stream_status(const boost::json::object& request) const -> boost::json::object;
+    [[nodiscard]] auto handle_get_network_configuration(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_recover_stream(const boost::json::object& request) -> boost::json::object;
 
     void load_peers_from_disk();

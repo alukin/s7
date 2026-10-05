@@ -11,6 +11,7 @@
 #include <openssl/rand.h>
 
 #include "s7/canonical_json.hpp"
+#include "s7/diagram_deployment.hpp"
 
 namespace s7 {
 namespace {
@@ -285,6 +286,9 @@ auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, 
     }
     if (request_type == "LIST_DEPLOYMENTS") {
         return handle_list_deployments(request);
+    }
+    if (request_type == "GET_NETWORK_CONFIGURATION") {
+        return handle_get_network_configuration(request);
     }
     if (request_type == "GET_STREAM_STATUS") {
         return handle_get_stream_status(request);
@@ -702,10 +706,11 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
     if (claimed_digest.empty()) {
         return invalid("configuration.configuration_digest must be a non-empty string.");
     }
-    const auto fragment_it = configuration.find("assigned_fragment");
-    if (fragment_it == configuration.end() || !fragment_it->value().is_object()) {
-        return invalid("configuration.assigned_fragment must be an object.");
+    const auto diagram_it = configuration.find("diagram");
+    if (diagram_it == configuration.end() || !diagram_it->value().is_object()) {
+        return invalid("configuration.diagram must be an object.");
     }
+    const auto& diagram = diagram_it->value().as_object();
 
     // The digest covers the configuration object without its digest member.
     auto digested = configuration;
@@ -844,9 +849,16 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
         return make_error_response(request_id, "CAPABILITY_MISSING", "This node does not accept deployments.");
     }
 
+    // This node runs its own part of the diagram.
     std::shared_ptr<StagedConfiguration> staged;
+    boost::json::object node_schema;
     try {
-        staged = options_.deployment_host->stage(fragment_it->value().as_object());
+        const auto placed = deployment::placed_nodes(diagram);
+        if (std::ranges::find(placed, descriptor_.node_uuid) == placed.end()) {
+            throw std::invalid_argument("No element of the diagram is placed on this node (" + descriptor_.node_uuid + ").");
+        }
+        node_schema = deployment::extract_node_schema(diagram, descriptor_.node_uuid);
+        staged = options_.deployment_host->stage(node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid));
     } catch (const std::exception& ex) {
         boost::json::array issues;
         issues.emplace_back(make_issue("INVALID_CONFIGURATION", "configuration", deployment_id, ex.what()));
@@ -864,6 +876,8 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
     prepared.expires = std::chrono::steady_clock::now() + options_.prepare_ttl;
     prepared.expires_at = plus_seconds_iso8601(options_.prepare_ttl);
     prepared.staged = std::move(staged);
+    prepared.diagram = diagram;
+    prepared.node_schema = std::move(node_schema);
 
     std::lock_guard<std::mutex> lock(mutex_);
     // A concurrent identical prepare may have won; keep the first token.
@@ -945,6 +959,8 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
         .configuration_digest = prepared.configuration_digest,
         .committed_at = now_utc_iso8601(),
         .prepare_token = prepared.prepare_token,
+        .diagram = std::move(prepared.diagram),
+        .node_schema = std::move(prepared.node_schema),
     };
     record_outcome_locked(prepared, "committed");
     prepared_.erase(prepared_it);
@@ -1033,6 +1049,39 @@ auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& reques
         }
     }
     out["streams"] = std::move(streams);
+    return out;
+}
+
+auto ControlPlaneMvp::handle_get_network_configuration(const boost::json::object& request) const -> boost::json::object
+{
+    const auto request_id = as_string(request, "request_id").value_or("");
+    std::optional<std::uint64_t> requested;
+    if (request.contains("revision")) {
+        requested = read_revision(request, "revision", false);
+        if (!requested) {
+            return make_error_response(request_id, "INVALID_REQUEST", "revision must be an integer in [1, 2^53].");
+        }
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    // Only the active configuration is retained.
+    if (!active_ || (requested && *requested != active_->revision)) {
+        auto error = make_error_response(request_id, "REVISION_NOT_FOUND",
+                                         active_ ? "Only the active revision is retained." : "No configuration has been committed.");
+        error["details"] = boost::json::object{{"active_revision", active_ ? active_->revision : 0}};
+        return error;
+    }
+    boost::json::object out;
+    out["type"] = "NETWORK_CONFIGURATION";
+    out["request_id"] = request_id;
+    out["protocol_version"] = descriptor_.protocol_version;
+    out["node_uuid"] = descriptor_.node_uuid;
+    out["deployment_id"] = active_->deployment_id;
+    out["revision"] = active_->revision;
+    out["project_revision"] = active_->project_revision;
+    out["configuration_digest"] = active_->configuration_digest;
+    out["committed_at"] = active_->committed_at;
+    out["diagram"] = active_->diagram;
+    out["node_schema"] = active_->node_schema;
     return out;
 }
 
