@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -337,6 +338,115 @@ void test_inbound_limit()
     expect(server.stats().connections_rejected == 1, "rejection counted");
 }
 
+// A redeployed graph closes its stream and the new graph opens it again: the
+// stream continues where it was, on both ends.
+void test_reopen_continues_stream()
+{
+    transport::BeastRuntimeNetEndpoint server;
+    const auto port = server.configure_server(0);
+    transport::BeastRuntimeNetEndpoint client;
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port));
+    const auto c = config("6a5b9e2d-3c7f-4d1a-8f0b-0e6d7c8b9a0f");
+
+    auto producer = server.open_producer(c);
+    auto consumer = client.open_consumer(c);
+    std::vector<double> values(200);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        values[i] = static_cast<double>(i);
+    }
+    expect(server.publish(producer, values.data(), 100).fault == stream::FaultCode::None, "first half published");
+    std::vector<double> got(50);
+    expect(client.receive(consumer, got.data(), got.size()).received == 50, "first values received");
+
+    // Both graphs are replaced; 50 values are still buffered at the consumer.
+    server.close_stream(producer);
+    client.close_stream(consumer);
+    expect(server.stream_statuses().front().state == "closed", "a closed stream is reported");
+    const auto previous = producer;
+    producer = server.open_producer(c);
+    expect(producer.value == previous.value, "reopening continues the same stream");
+    bool opened_twice = false;
+    try {
+        static_cast<void>(server.open_producer(c));
+    } catch (const std::invalid_argument&) {
+        opened_twice = true;
+    }
+    expect(opened_twice, "an open stream cannot be opened twice");
+    consumer = client.open_consumer(c);
+    expect(server.publish(producer, values.data() + 100, 100).fault == stream::FaultCode::None, "second half published");
+    std::vector<double> rest(150);
+    expect(client.receive(consumer, rest.data(), rest.size()).received == 150, "the rest received");
+    got.insert(got.end(), rest.begin(), rest.end());
+    expect(got == values, "values continue across reopening, none lost or repeated");
+}
+
+// Two nodes consuming from each other have two connections (each one's
+// client connection and the other's data peer connection); every consumer
+// still receives over exactly one of them, in order.
+void test_mutual_streams_over_two_connections()
+{
+    transport::BeastRuntimeNetEndpoint a;
+    transport::BeastRuntimeNetEndpoint b;
+    const auto port_a = a.configure_server(0);
+    const auto port_b = b.configure_server(0);
+    b.configure_client("ws://127.0.0.1:" + std::to_string(port_a));
+    a.set_data_peers({"ws://127.0.0.1:" + std::to_string(port_b)});
+    expect(wait_for([&] { return a.stats().data_connections == 2 && b.stats().data_connections == 2; }),
+           "two data connections between the nodes");
+
+    const auto x = config("7b6c0f3e-4d8a-4e2b-9a1c-1f7e8d9c0b1a");
+    const auto y = config("8c7d1a4f-5e9b-4f3c-8b2d-2a8f9e0d1c2b");
+    const auto x_producer = a.open_producer(x);
+    const auto x_consumer = b.open_consumer(x);
+    const auto y_producer = b.open_producer(y);
+    const auto y_consumer = a.open_consumer(y);
+    std::exception_ptr other_failure;
+    std::thread other([&] {
+        try {
+            transfer(b, y_producer, {{&a, y_consumer}}, 20000);
+        } catch (...) {
+            other_failure = std::current_exception();
+        }
+    });
+    try {
+        transfer(a, x_producer, {{&b, x_consumer}}, 20000);
+    } catch (...) {
+        other.join();
+        throw;
+    }
+    other.join();
+    if (other_failure) {
+        std::rethrow_exception(other_failure);
+    }
+    for (const auto* endpoint : {&a, &b}) {
+        for (const auto& status : endpoint->stream_statuses()) {
+            expect(status.fault == stream::FaultCode::None, "no faults with two connections");
+            expect(status.duplicates_discarded < 2000, "the stream is not sent on both connections");
+        }
+    }
+}
+
+// A data peer that is down when configured is connected once it comes up.
+void test_data_peer_retried()
+{
+    std::uint16_t port = 0;
+    {
+        transport::BeastRuntimeNetEndpoint probe;
+        port = probe.configure_server(0); // a free port, released again
+    }
+    transport::BeastRuntimeNetEndpoint consumer_node;
+    consumer_node.set_data_peers({"ws://127.0.0.1:" + std::to_string(port)});
+    const auto c = config("9d8e2b5a-6f0c-4a4d-8c3e-3b9a0f1e2d3c");
+    const auto consumer = consumer_node.open_consumer(c);
+    std::this_thread::sleep_for(milliseconds(300));
+    transport::BeastRuntimeNetEndpoint producer_node;
+    producer_node.configure_server(port);
+    const auto producer = producer_node.open_producer(c);
+    transfer(producer_node, producer, {{&consumer_node, consumer}}, 1000);
+    consumer_node.set_data_peers({});
+    expect(wait_for([&] { return consumer_node.stats().data_connections == 0; }), "a removed data peer is disconnected");
+}
+
 } // namespace
 
 int main()
@@ -346,6 +456,9 @@ try {
     test_two_mtls_consumers();
     test_malformed_message_closes_connection();
     test_inbound_limit();
+    test_reopen_continues_stream();
+    test_mutual_streams_over_two_connections();
+    test_data_peer_retried();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport beast stream smoke: " << ex.what() << '\n';

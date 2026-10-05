@@ -70,7 +70,7 @@ struct StreamStatus {
     wire::StreamId stream_id{};
     StreamRole role{StreamRole::Producer};
     SignalType type{SignalType::F64};
-    std::string state; // "active", "blocked", "faulted"
+    std::string state; // "active", "blocked", "faulted", "closed" (no element owns it)
     stream::FaultCode fault{stream::FaultCode::None};
     std::uint64_t next_sequence{}; // producer: next to assign; consumer: next expected
     std::uint64_t packets{};
@@ -113,7 +113,10 @@ public:
 
     [[nodiscard]] virtual auto backend_name() const -> std::string = 0;
 
-    // A stream id may have one producer and one consumer per endpoint.
+    // A stream id may have one producer and one consumer per endpoint, each
+    // open at most once at a time. A closed stream keeps its state: opening
+    // it again with the same type continues it without loss (a redeployed
+    // graph takes over the stream); another type starts it anew.
     virtual auto open_producer(const stream::StreamConfig& config) -> StreamHandle = 0;
     virtual auto open_consumer(const stream::StreamConfig& config) -> StreamHandle = 0;
     virtual void close_stream(StreamHandle handle) = 0;
@@ -175,6 +178,11 @@ public:
     // re-established with backoff and its streams resume. Throws if the first
     // connection attempt fails.
     void configure_client(const std::string& url, const TlsConfig& tls = {});
+    // Keeps a /data connection to each of these peers (in addition to the
+    // client connection), connecting new ones and closing those no longer
+    // listed. A peer that cannot be reached is retried with backoff; this
+    // call does not wait for connections.
+    void set_data_peers(const std::vector<std::string>& urls, const TlsConfig& tls = {});
 
     void set_control_request_handler(ControlRequestHandler handler);
     [[nodiscard]] auto request_control_json(const std::string& request_json) -> std::string;

@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <future>
 #include <iterator>
+#include <map>
 #include <mutex>
 #include <stdexcept>
 #include <thread>
@@ -177,6 +178,7 @@ struct StreamEntry {
     stream::StreamConfig config;
     std::unique_ptr<stream::StreamProducer> producer;
     std::unique_ptr<stream::StreamConsumer> consumer;
+    bool open{true}; // owned by an element; a closed stream keeps its state
 };
 
 std::string stream_key(const wire::StreamId& id)
@@ -195,13 +197,27 @@ public:
 
     explicit StreamTable(stream::SequenceStore& sequences) : sequences_(sequences) {}
 
+    // Reopening a closed stream of the same type continues it (a redeployed
+    // graph takes over the stream without loss); another type starts anew.
     StreamHandle open(const stream::StreamConfig& config, const StreamRole role)
     {
         std::unique_lock lock(mutex);
         auto& index = role == StreamRole::Producer ? producers_ : consumers_;
-        if (index.contains(stream_key(config.stream_id))) {
-            throw std::invalid_argument("Stream " + wire::to_string(config.stream_id) + " is already open as " +
-                                        (role == StreamRole::Producer ? "producer" : "consumer") + ".");
+        if (const auto it = index.find(stream_key(config.stream_id)); it != index.end()) {
+            auto& existing = *entries_.at(it->second);
+            if (existing.open) {
+                throw std::invalid_argument("Stream " + wire::to_string(config.stream_id) + " is already open as " +
+                                            (role == StreamRole::Producer ? "producer" : "consumer") + ".");
+            }
+            if (existing.config.type == config.type) {
+                existing.open = true;
+                existing.config.max_block = config.max_block;
+                existing.config.max_wait = config.max_wait;
+                changed.notify_all();
+                return existing.handle;
+            }
+            entries_.erase(it->second);
+            index.erase(it);
         }
         auto entry = std::make_unique<StreamEntry>();
         entry->handle = StreamHandle{next_handle_++};
@@ -232,9 +248,7 @@ public:
         if (it == entries_.end()) {
             return;
         }
-        auto& index = it->second->role == StreamRole::Producer ? producers_ : consumers_;
-        index.erase(stream_key(it->second->config.stream_id));
-        entries_.erase(it);
+        it->second->open = false;
         changed.notify_all();
     }
 
@@ -340,7 +354,10 @@ public:
                 status.lost_resumes = stats.lost_resumes;
                 status.send_log_depth = stats.send_log_depth;
                 status.blocked_total = stats.blocked_total;
-                status.state = status.fault != FaultCode::None ? "faulted" : entry->producer->log_full() ? "blocked" : "active";
+                status.state = status.fault != FaultCode::None ? "faulted"
+                               : !entry->open                  ? "closed"
+                               : entry->producer->log_full()   ? "blocked"
+                                                               : "active";
             } else {
                 const auto stats = entry->consumer->stats();
                 status.fault = entry->consumer->fault_code();
@@ -349,7 +366,7 @@ public:
                 status.duplicates_discarded = stats.duplicates_discarded;
                 status.malformed = stats.malformed;
                 status.buffered_elements = stats.buffered_elements;
-                status.state = status.fault != FaultCode::None ? "faulted" : "active";
+                status.state = status.fault != FaultCode::None ? "faulted" : entry->open ? "active" : "closed";
             }
             result.push_back(std::move(status));
         }
@@ -547,6 +564,7 @@ constexpr auto kReconnectDelay = std::chrono::seconds(1);
 struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntimeNetEndpoint::Impl> {
     struct Connection;
     using ConnectionPtr = std::shared_ptr<Connection>;
+    struct Link;
 
     // A WebSocket connection (plain or TLS). Every member is used on the I/O
     // thread only.
@@ -554,7 +572,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         Impl& impl;
         bool is_data{false};
         bool outbound{false};
-        std::uint64_t generation{0}; // outbound: the configure_client() call it belongs to
+        std::shared_ptr<Link> link; // outbound: the link it belongs to
         ControlPeer peer;
         stream::ConsumerKey consumer_key{"anonymous"};
         std::unique_ptr<PlainWs> plain;
@@ -790,9 +808,21 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         pump_connection(connection);
     }
 
-    // Lock held.
+    // Lock held. A consumer receives a stream through one connection: when
+    // its RESUME arrives on another connection (two connections between the
+    // same nodes, or a reconnect before the old connection noticed it was
+    // gone), the latest RESUME wins, so packets are never sent on two
+    // connections at once and cannot overtake each other.
     void attach(Connection& connection, StreamEntry& entry, const std::uint32_t alias, const std::uint64_t next)
     {
+        auto& route = routes[{entry.handle.value, connection.consumer_key}];
+        if (const auto previous = route.lock(); previous && previous.get() != &connection) {
+            if (const auto it = previous->producing_alias.find(entry.handle.value); it != previous->producing_alias.end()) {
+                previous->producing.erase(it->second);
+                previous->producing_alias.erase(it);
+            }
+        }
+        route = connection.weak_from_this();
         entry.producer->resume(connection.consumer_key, alias, next);
         connection.producing[alias] = entry.handle.value;
         connection.producing_alias[entry.handle.value] = alias;
@@ -933,16 +963,20 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         {
             std::lock_guard lock(table.mutex);
             for (const auto& [handle, _] : connection->producing_alias) {
-                if (auto* entry = table.find(StreamHandle{handle})) {
-                    entry->producer->detach(connection->consumer_key);
+                const auto route = routes.find({handle, connection->consumer_key});
+                if (route != routes.end() && route->second.lock() == connection) {
+                    routes.erase(route);
+                    if (auto* entry = table.find(StreamHandle{handle})) {
+                        entry->producer->detach(connection->consumer_key);
+                    }
                 }
             }
         }
         connections.erase(connection);
         // A dropped connection of the current client configuration reconnects;
         // connections replaced by configure_client() do not.
-        if (connection->outbound && !stopping && client_url && connection->generation == client_generation) {
-            schedule_reconnect(client_generation);
+        if (connection->outbound && connection->link && current(connection->link)) {
+            schedule_reconnect(connection->link);
         }
     }
 
@@ -1070,10 +1104,53 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
 
     // ---- client -------------------------------------------------------------
 
-    // Connects /control and /data to the configured URL; reports through `done`.
-    void connect_outbound(const std::uint64_t generation, std::function<void(std::exception_ptr)> done)
+    // An outbound peer kept connected: the control client (/control and
+    // /data) or a data peer (/data only). Replacing or removing a link bumps
+    // nothing in place: the old Link object is dropped, so its connections
+    // and pending reconnects see they are no longer current.
+    struct Link {
+        std::string key; // kClientLink or "data:" + url
+        ParsedWebSocketUrl url;
+        std::shared_ptr<ssl::context> tls;
+        bool control{false};
+        bool reconnect_scheduled{false};
+    };
+    using LinkPtr = std::shared_ptr<Link>;
+    static constexpr const char* kClientLink = "client";
+
+    [[nodiscard]] bool current(const LinkPtr& link) const
     {
-        auto pending = std::make_shared<int>(2);
+        const auto it = links.find(link->key);
+        return !stopping && it != links.end() && it->second == link;
+    }
+
+    void add_link(const LinkPtr& link, std::function<void(std::exception_ptr)> done)
+    {
+        remove_link(link->key);
+        links[link->key] = link;
+        connect_link(link, std::move(done));
+    }
+
+    void remove_link(const std::string& key)
+    {
+        const auto it = links.find(key);
+        if (it == links.end()) {
+            return;
+        }
+        const auto link = it->second;
+        links.erase(it);
+        for (const auto& connection : std::vector<ConnectionPtr>(connections.begin(), connections.end())) {
+            if (connection->link == link) {
+                connection->close();
+            }
+        }
+    }
+
+    // Connects the link's channels; reports through `done` once all finished.
+    void connect_link(const LinkPtr& link, std::function<void(std::exception_ptr)> done)
+    {
+        const std::vector<bool> channels = link->control ? std::vector<bool>{false, true} : std::vector<bool>{true};
+        auto pending = std::make_shared<std::size_t>(channels.size());
         auto failure = std::make_shared<std::exception_ptr>();
         auto complete = [done, pending, failure](std::exception_ptr error) {
             if (error && !*failure) {
@@ -1083,34 +1160,34 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 done(*failure);
             }
         };
-        for (const bool is_data : {false, true}) {
-            connect_one(generation, is_data, complete);
+        for (const bool is_data : channels) {
+            connect_one(link, is_data, complete);
         }
     }
 
-    void connect_one(const std::uint64_t generation, const bool is_data, std::function<void(std::exception_ptr)> complete)
+    void connect_one(const LinkPtr& link, const bool is_data, std::function<void(std::exception_ptr)> complete)
     {
-        const auto url = *client_url;
+        const auto& url = link->url;
         auto connection = std::make_shared<Connection>(*this);
         connection->outbound = true;
         connection->is_data = is_data;
-        connection->generation = generation;
+        connection->link = link;
         const auto target = ws_target_for_path(url, is_data ? "/data" : "/control");
         const auto host = url.host + ":" + url.port;
         auto fail = [complete](const boost::system::error_code& ec, const char* stage) {
             complete(std::make_exception_ptr(std::runtime_error(std::string("connect failed (") + stage + "): " + ec.message())));
         };
         auto resolver = std::make_shared<Tcp::resolver>(io);
-        resolver->async_resolve(url.host, url.port, [self = shared_from_this(), resolver, connection, generation, target, host, complete, fail](
+        resolver->async_resolve(url.host, url.port, [self = shared_from_this(), resolver, connection, link, target, host, complete, fail](
                                                         const boost::system::error_code& ec, Tcp::resolver::results_type results) {
             if (ec) {
                 return fail(ec, "resolve");
             }
-            auto on_ws = [self, connection, generation, complete, fail](const boost::system::error_code& ws_ec) {
+            auto on_ws = [self, connection, link, complete, fail](const boost::system::error_code& ws_ec) {
                 if (ws_ec) {
                     return fail(ws_ec, "websocket handshake");
                 }
-                if (generation != self->client_generation || self->stopping) {
+                if (!self->current(link)) {
                     connection->close();
                     return complete(nullptr);
                 }
@@ -1120,8 +1197,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 self->register_connection(connection);
                 complete(nullptr);
             };
-            if (self->client_tls) {
-                connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(self->io), *self->client_tls);
+            if (link->tls) {
+                connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(self->io), *link->tls);
                 auto& tcp = boost::beast::get_lowest_layer(*connection->tls);
                 tcp.expires_after(std::chrono::seconds(10));
                 tcp.async_connect(results, [connection, target, host, on_ws, fail](const boost::system::error_code& c_ec, const auto&) {
@@ -1151,27 +1228,27 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         });
     }
 
-    void schedule_reconnect(const std::uint64_t generation)
+    void schedule_reconnect(const LinkPtr& link)
     {
-        if (reconnect_scheduled) {
+        if (link->reconnect_scheduled || !current(link)) {
             return;
         }
-        reconnect_scheduled = true;
+        link->reconnect_scheduled = true;
         auto timer = std::make_shared<boost::asio::steady_timer>(io, kReconnectDelay);
-        timer->async_wait([self = shared_from_this(), timer, generation](const boost::system::error_code& ec) {
-            self->reconnect_scheduled = false;
-            if (ec || self->stopping || generation != self->client_generation) {
+        timer->async_wait([self = shared_from_this(), timer, link](const boost::system::error_code& ec) {
+            link->reconnect_scheduled = false;
+            if (ec || !self->current(link)) {
                 return;
             }
-            // Drop the surviving half (if any) and reconnect both channels.
+            // Drop the surviving channel (if any) and reconnect all of them.
             for (const auto& connection : std::vector<ConnectionPtr>(self->connections.begin(), self->connections.end())) {
-                if (connection->outbound) {
+                if (connection->link == link) {
                     connection->close();
                 }
             }
-            self->connect_outbound(generation, [self, generation](const std::exception_ptr& error) {
+            self->connect_link(link, [self, link](const std::exception_ptr& error) {
                 if (error) {
-                    self->schedule_reconnect(generation);
+                    self->schedule_reconnect(link);
                 }
             });
         });
@@ -1200,12 +1277,11 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     bool stopping{false};
     std::optional<Tcp::acceptor> acceptor;
     std::shared_ptr<ssl::context> server_tls;
-    std::shared_ptr<ssl::context> client_tls;
-    std::optional<ParsedWebSocketUrl> client_url;
-    std::uint64_t client_generation{0};
-    bool reconnect_scheduled{false};
+    std::unordered_map<std::string, LinkPtr> links;
     std::unordered_set<ConnectionPtr> connections;
     std::unordered_map<std::uint64_t, std::weak_ptr<Connection>> consumer_sources; // consumer handle -> data source (lock: table.mutex)
+    // (producer handle, consumer key) -> the connection the consumer receives on (lock: table.mutex).
+    std::map<std::pair<std::uint64_t, stream::ConsumerKey>, std::weak_ptr<Connection>> routes;
 
     std::mutex handler_mutex;
     ControlRequestHandler control_handler;
@@ -1269,35 +1345,40 @@ auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
     });
 }
 
+namespace {
+
+auto make_client_tls(const ParsedWebSocketUrl& url, const TlsConfig& tls) -> std::shared_ptr<ssl::context>
+{
+    if (!url.secure && !tls.enabled) {
+        return nullptr;
+    }
+    if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
+        throw std::invalid_argument("TLS client requires cert_file, key_file, and ca_file.");
+    }
+    auto context = std::make_shared<ssl::context>(ssl::context::tls_client);
+    context->set_default_verify_paths();
+    context->use_certificate_chain_file(tls.cert_file);
+    context->use_private_key_file(tls.key_file, ssl::context::pem);
+    context->load_verify_file(tls.ca_file);
+    context->set_verify_mode(ssl::verify_peer);
+    return context;
+}
+
+} // namespace
+
 void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls)
 {
-    const auto parsed = parse_ws_url(url);
-    std::shared_ptr<ssl::context> context;
-    if (parsed.secure || tls.enabled) {
-        if (tls.cert_file.empty() || tls.key_file.empty() || tls.ca_file.empty()) {
-            throw std::invalid_argument("TLS client requires cert_file, key_file, and ca_file.");
-        }
-        context = std::make_shared<ssl::context>(ssl::context::tls_client);
-        context->set_default_verify_paths();
-        context->use_certificate_chain_file(tls.cert_file);
-        context->use_private_key_file(tls.key_file, ssl::context::pem);
-        context->load_verify_file(tls.ca_file);
-        context->set_verify_mode(ssl::verify_peer);
-    }
+    auto link = std::make_shared<Impl::Link>();
+    link->key = Impl::kClientLink;
+    link->url = parse_ws_url(url);
+    link->tls = make_client_tls(link->url, tls);
+    link->control = true;
     auto result = std::make_shared<std::promise<void>>();
     auto future = result->get_future();
-    boost::asio::post(impl_->io, [impl = impl_, parsed, context, result] {
-        // Replace the previous outbound connections.
-        ++impl->client_generation;
-        for (const auto& connection : std::vector<Impl::ConnectionPtr>(impl->connections.begin(), impl->connections.end())) {
-            if (connection->outbound) {
-                connection->close();
-            }
-        }
-        impl->client_url = parsed;
-        impl->client_tls = context;
-        impl->connect_outbound(impl->client_generation, [result](const std::exception_ptr& error) {
+    boost::asio::post(impl_->io, [impl = impl_, link, result] {
+        impl->add_link(link, [impl, link, result](const std::exception_ptr& error) {
             if (error) {
+                impl->remove_link(link->key);
                 result->set_exception(error);
             } else {
                 result->set_value();
@@ -1305,6 +1386,41 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
         });
     });
     future.get();
+}
+
+void BeastRuntimeNetEndpoint::set_data_peers(const std::vector<std::string>& urls, const TlsConfig& tls)
+{
+    std::vector<std::shared_ptr<Impl::Link>> wanted;
+    for (const auto& url : urls) {
+        auto link = std::make_shared<Impl::Link>();
+        link->key = "data:" + url;
+        link->url = parse_ws_url(url);
+        link->tls = make_client_tls(link->url, tls);
+        wanted.push_back(std::move(link));
+    }
+    impl_->run_on_io([&] {
+        std::vector<std::string> obsolete;
+        for (const auto& [key, _] : impl_->links) {
+            const bool keep = std::ranges::any_of(wanted, [&](const auto& link) { return link->key == key; });
+            if (key != Impl::kClientLink && !keep) {
+                obsolete.push_back(key);
+            }
+        }
+        for (const auto& key : obsolete) {
+            impl_->remove_link(key);
+        }
+        for (const auto& link : wanted) {
+            if (impl_->links.contains(link->key)) {
+                continue; // already connected (or reconnecting)
+            }
+            impl_->links[link->key] = link;
+            impl_->connect_link(link, [impl = impl_, link](const std::exception_ptr& error) {
+                if (error) {
+                    impl->schedule_reconnect(link);
+                }
+            });
+        }
+    });
 }
 
 void BeastRuntimeNetEndpoint::set_control_request_handler(ControlRequestHandler handler)
@@ -1320,7 +1436,7 @@ auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_js
     auto future = response->get_future();
     boost::asio::post(impl_->io, [impl = impl_, response, request_json] {
         for (const auto& connection : impl->connections) {
-            if (connection->outbound && !connection->is_data && !connection->closed) {
+            if (connection->link && connection->link->key == Impl::kClientLink && !connection->is_data && !connection->closed) {
                 connection->pending_response = response;
                 const auto* begin = reinterpret_cast<const std::uint8_t*>(request_json.data());
                 connection->send(std::make_shared<const Bytes>(begin, begin + request_json.size()), false);
