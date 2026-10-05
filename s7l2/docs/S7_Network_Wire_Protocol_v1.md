@@ -1,6 +1,6 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
-**Status:** Candidate wire-format draft; not yet a conformance standard.
+**Status:** Approved MVP contract (2026-10-05). Not yet frozen for interoperability: byte-exact fixtures and the C++ implementation are pending (Section 12).
 **Draft revision:** 0.5
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
@@ -195,16 +195,16 @@ The fixed header version identifies incompatible framing changes. Additive optio
 
 Implementations SHOULD reject unsupported types and extensions explicitly rather than reinterpret them. The control protocol's stream descriptor advertises data types, timestamp profiles, send-log limits, and protocol versions supported by each participant.
 
-## 12. Items Requiring Review Before Interoperability Freeze
+## 12. Remaining Work Before Interoperability Freeze
 
-1. Define the stream descriptor's exact serialization and the point at which its timestamp domains are updated after a source/runtime restart.
-2. Specify the delivery guarantee, acknowledgement and resume behavior (decided, see 12.1 item 2) and the durable format of the producer's sequence-range reservation.
-3. Define control-plane fault/alarm messages for sequence gaps and malformed packets.
-4. Define protocol negotiation for supported packet versions and extensions; all Section 8 type IDs are mandatory in the MVP profile.
+1. Byte-exact fixtures (packets, acknowledgement messages, descriptors) shared by the C++, Rust, Python and JVM implementations.
+2. The C++ reference implementation of Sections 7, 8 and 12.1.
+3. The durable format of the producer's sequence-range reservation.
+4. Exact JSON schemas for `GET_STREAM_STATUS`, `RECOVER_STREAM` and the `NODE_INFO` additions (`clock_domains`, `data_protocol`).
 
 ### 12.1 Resolutions
 
-Items 1, 2, 5 and 6 were decided on 2026-10-05 (item 1 as proposed). Items 3 and 4 are proposals awaiting approval.
+All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
 
 **1. Stream descriptor (decided 2026-10-05).** Each stream is a JSON object in the deployed diagram's `streams` array, so it is covered by the configuration digest and versioned with the deployment revision. It is derived from a connection between elements placed on different nodes (Section 12.1, item 6), and Studio stores its `stream_id` in the diagram so that it survives redeployments:
 
@@ -234,9 +234,9 @@ Items 1, 2, 5 and 6 were decided on 2026-10-05 (item 1 as proposed). Items 3 and
 - *Producer restart:* sequence-range reservation (Section 4) makes the restart visible as a gap, which faults the stream.
 - *Wire form:* acknowledgements travel on the same `/data` connection, consumer to producer, as 32-byte little-endian messages. They are distinguished from data packets by `version = 0x80 | 1`: `version` (1), `kind` (1: `ACK`, 2: `RESUME`, 3: `RESUME_NO_STATE`), `reserved` (2, zero), `stream_alias` (4), `next_expected` (8), `stream_id` (16; zero in `ACK`). `RESUME` binds the alias to the `stream_id` for that connection.
 
-**3. Fault reporting (proposal).** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `blocked`, `faulted`), `next_expected` / `next_sequence`, send-log depth, counters (`packets`, `replayed`, `duplicates_discarded`, `malformed`, `unauthorized`, `blocked_ms_total`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `SEND_LOG_OVERFLOW`, `STREAM_STATE_LOST`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `SOURCE_OVERFLOW`. Studio polls it; pushed events are a later extension. `RECOVER_STREAM {stream_id}` (authorized like a configuration change) restarts a faulted stream with a new sequence expectation; the data lost in the fault stays lost and stays reported.
+**3. Fault reporting (decided 2026-10-05).** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `blocked`, `faulted`), `next_expected` / `next_sequence`, send-log depth, counters (`packets`, `replayed`, `duplicates_discarded`, `malformed`, `unauthorized`, `blocked_ms_total`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `SEND_LOG_OVERFLOW`, `STREAM_STATE_LOST`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `SOURCE_OVERFLOW`. Studio polls it; pushed events are a later extension. `RECOVER_STREAM {stream_id}` (authorized like a configuration change) restarts a faulted stream with a new sequence expectation; the data lost in the fault stays lost and stays reported.
 
-**4. Negotiation (proposal): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support.
+**4. Negotiation (decided 2026-10-05): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support.
 
 **6. Deployment unit and placement (decided 2026-10-05).** Studio deploys the diagram itself (`.s7diagram`, including layout), not an extracted schema; each node extracts its part of the graph and keeps the whole diagram, so Studio can request the deployed diagram (`GET_NETWORK_CONFIGURATION`) and display it. Every element carries a `node` placement attribute. A node runs the elements placed on it; each connection between elements on different nodes becomes a stream with its own descriptor. The diagram format will be extended with whatever further deployment data is needed.
 

@@ -110,7 +110,7 @@ The certificate attribute format and provisioning policy should match the identi
 
 Relevant code: [transport.cpp](../s7transport/src/transport.cpp:500), [transport.cpp](../s7transport/src/transport.cpp:565), [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:200).
 
-## P2: Approve a normative stream identity and packet layout before claiming conformance — awaiting approval
+## P2: Approve a normative stream identity and packet layout before claiming conformance — approved 2026-10-05; implementation pending
 
 ### Current problem
 
@@ -130,7 +130,7 @@ Also ensure that timestamp roles and their presence are encoded unambiguously; t
 
 **Progress:** decided 2026-10-05 (wire draft 0.4, section 12.1): data must not be lost. While both processes run, delivery is exactly-once and in order across connection loss, using an in-memory send log, cumulative `ACK`, `RESUME` and replay; a full send log blocks the producer up to a configured limit, then faults the stream; process crashes fault the stream (no recovery in the MVP); every gap is a fault (no gap policy). Streams follow the schema's explicit network connections directly from producer to consumer; no relaying in the MVP, but the format stays end-to-end so relays can be added. Still awaiting approval: stream descriptor serialization (item 1), fault reporting (item 3), negotiation (item 4). The Section 7 codec is not implemented until those are settled.
 
-Also decided 2026-10-05 (wire draft 0.5): every port and stream has one exact wire type with no implicit conversion; the type set is I8–I128, U8–U128 (including I12/U12), F16, F32, F64, F128, C16–C128, and complex integers CI8, CU8, CI16 for native SDR I/Q; a 16-byte little-endian header carries version, flags, `data_type`, a per-connection `stream_alias` and `sequence`; element count follows from the message length; uniformly sampled streams carry no per-packet timestamps; batching up to `max_elements_per_packet` with `max_batch_latency_ms` (default 10 ms), both configured on the network boundary element. The stream descriptor (item 1) is approved as proposed. Studio deploys diagrams with per-element `node` placement (item 6). Still open: fault reporting (item 3) and negotiation (item 4).
+Also decided 2026-10-05 (wire draft 0.5): every port and stream has one exact wire type with no implicit conversion; the type set is I8–I128, U8–U128 (including I12/U12), F16, F32, F64, F128, C16–C128, and complex integers CI8, CU8, CI16 for native SDR I/Q; a 16-byte little-endian header carries version, flags, `data_type`, a per-connection `stream_alias` and `sequence`; element count follows from the message length; uniformly sampled streams carry no per-packet timestamps; batching up to `max_elements_per_packet` with `max_batch_latency_ms` (default 10 ms), both configured on the network boundary element. The stream descriptor (item 1) is approved as proposed. Studio deploys diagrams with per-element `node` placement (item 6). Fault reporting (item 3) and negotiation (item 4) approved as proposed the same day; the draft is the approved MVP contract. Remaining: C++ implementation and cross-language fixtures.
 
 **Consequence for the current transport:** the drop-oldest send and receive queues from the multiple-peer item are wrong for data streams under this guarantee. With the new codec they become the send log (block, then fault) and receive-side delivery without dropping; fan-out to every connected peer becomes per-connection routing to the configured consumers.
 
@@ -513,7 +513,7 @@ Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp
 0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.
 1. ~~Add tests for snapshot-then-commit stateful behavior, model time zero, malformed frame rejection, and receive failure handling.~~ Done 2026-10-04.
 2. ~~Enforce control authorization against the authenticated TLS peer and clarify deployment prepare/commit behavior.~~ Done 2026-10-04 (also the prepare-token item).
-3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients. *Proposals written (wire draft 12.1); awaiting approval before the codec is implemented.*
+3. Resolve candidate wire-format questions, approve the normative contract, then implement and test its codec before writing other-language clients. *Contract approved 2026-10-05 (wire draft 0.5); implementation pending.*
 4. ~~Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.~~ Done 2026-10-04, except routing by stream descriptor (needs step 3 approval). Follow-up: make the transport's socket threading safe (new P2 finding above).
 5. ~~Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.~~ Done 2026-10-04.
 6. ~~Address signal representation, observation timestamps/types, and plugin build integration.~~ Done 2026-10-04 (spectral plugin isolated, not integrated).
