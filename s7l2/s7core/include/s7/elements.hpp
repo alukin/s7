@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_ELEMENTS_HPP
 
 #include "s7/element.hpp"
+#include "s7/convert.hpp"
 #include "s7/signal_values.hpp"
 
 #include <cmath>
@@ -66,6 +67,18 @@ private:
     value_type output_value_{};
 };
 
+// Exact widening of a value into an accumulator type (see widens_exactly()).
+template <SignalType From, SignalType To>
+[[nodiscard]] constexpr signal_storage_t<To> widen(const signal_storage_t<From>& value)
+{
+    static_assert(widens_exactly(From, To), "accumulator type must hold every input value exactly");
+    if constexpr (From == To) {
+        return value;
+    } else {
+        return convert_value<From, To>(value, ConvertOptions{});
+    }
+}
+
 namespace detail {
 
 [[nodiscard]] inline std::string sum_port_name(const std::size_t index)
@@ -81,12 +94,14 @@ namespace detail {
 
 } // namespace detail
 
-/// Adder: weighted sum of N inputs (N = weights.size(), at least 2). Arithmetic types.
-template <SignalType Type>
+/// Adder: weighted sum of N inputs (N = weights.size(), at least 2), computed
+/// in the accumulator type Acc (default: the input type). Arithmetic types.
+template <SignalType Type, SignalType Acc = Type>
 class AdderT final : public Element {
 public:
-    using value_type = signal_storage_t<Type>;
-    using Ops = SignalOps<Type>;
+    using input_type = signal_storage_t<Type>;
+    using value_type = signal_storage_t<Acc>;
+    using Ops = SignalOps<Acc>;
 
     explicit AdderT(std::vector<value_type> weights = {Ops::one(), Ops::one()},
                     Overflow overflow = Overflow::Saturate)
@@ -97,14 +112,15 @@ public:
         for (std::size_t index = 0; index < weights_.size(); ++index) {
             register_input(index, detail::sum_port_name(index), Type, nullptr);
         }
-        register_output(0, port_names::out, Type, &output_value_);
+        register_output(0, port_names::out, Acc, &output_value_);
     }
 
     void step() override
     {
         value_type sum = Ops::zero();
         for (std::size_t index = 0; index < weights_.size(); ++index) {
-            sum = Ops::add(sum, Ops::multiply(read_input<value_type>(index), weights_[index], overflow_), overflow_);
+            const auto x = widen<Type, Acc>(read_input<input_type>(index));
+            sum = Ops::add(sum, Ops::multiply(x, weights_[index], overflow_), overflow_);
         }
         output_value_ = sum;
     }
@@ -115,12 +131,14 @@ private:
     value_type output_value_{};
 };
 
-/// Multiply: product of N inputs, each scaled by its factor. Arithmetic types.
-template <SignalType Type>
+/// Multiply: product of N inputs, each scaled by its factor, computed in the
+/// accumulator type Acc (default: the input type). Arithmetic types.
+template <SignalType Type, SignalType Acc = Type>
 class MultiplyT final : public Element {
 public:
-    using value_type = signal_storage_t<Type>;
-    using Ops = SignalOps<Type>;
+    using input_type = signal_storage_t<Type>;
+    using value_type = signal_storage_t<Acc>;
+    using Ops = SignalOps<Acc>;
 
     explicit MultiplyT(std::vector<value_type> factors = {Ops::one(), Ops::one()},
                        Overflow overflow = Overflow::Saturate)
@@ -131,15 +149,15 @@ public:
         for (std::size_t index = 0; index < factors_.size(); ++index) {
             register_input(index, detail::sum_port_name(index), Type, nullptr);
         }
-        register_output(0, port_names::out, Type, &output_value_);
+        register_output(0, port_names::out, Acc, &output_value_);
     }
 
     void step() override
     {
         value_type product = Ops::one();
         for (std::size_t index = 0; index < factors_.size(); ++index) {
-            product = Ops::multiply(product, Ops::multiply(read_input<value_type>(index), factors_[index], overflow_),
-                                    overflow_);
+            const auto x = widen<Type, Acc>(read_input<input_type>(index));
+            product = Ops::multiply(product, Ops::multiply(x, factors_[index], overflow_), overflow_);
         }
         output_value_ = product;
     }
@@ -196,13 +214,15 @@ template <SignalType Type>
 using component_storage_t = signal_storage_t<component_signal_type(Type)>;
 
 /// Integrator: running sum y[n] = y[n-1] + x[n], without a time step (an
-/// accumulator). Arithmetic types. For numerical integration over time use
+/// accumulator), in the accumulator type Acc (default: the input type).
+/// Arithmetic types. For numerical integration over time use
 /// EulerIntegrator or TrapezoidIntegrator.
-template <SignalType Type>
+template <SignalType Type, SignalType Acc = Type>
 class IntegratorT final : public Element {
 public:
-    using value_type = signal_storage_t<Type>;
-    using Ops = SignalOps<Type>;
+    using input_type = signal_storage_t<Type>;
+    using value_type = signal_storage_t<Acc>;
+    using Ops = SignalOps<Acc>;
 
     explicit IntegratorT(value_type initial_value = {}, Overflow overflow = Overflow::Saturate)
         : Element("Integrator", true)
@@ -210,12 +230,12 @@ public:
         , output_value_(initial_value)
     {
         register_input(0, port_names::in, Type, nullptr);
-        register_output(0, port_names::out, Type, &output_value_);
+        register_output(0, port_names::out, Acc, &output_value_);
     }
 
     void step() override
     {
-        output_value_ = Ops::add(output_value_, read_input<value_type>(0), overflow_);
+        output_value_ = Ops::add(output_value_, widen<Type, Acc>(read_input<input_type>(0)), overflow_);
     }
 
 private:
@@ -289,12 +309,15 @@ private:
     bool has_previous_{false};
 };
 
-/// FIR filter: y[n] = sum_k taps[k] * x[n-k]. Arithmetic types.
-template <SignalType Type>
+/// FIR filter: y[n] = sum_k taps[k] * x[n-k], computed in the accumulator type
+/// Acc (default: the input type), as a hardware MAC with a wide accumulator.
+/// Arithmetic types.
+template <SignalType Type, SignalType Acc = Type>
 class FirFilterT final : public Element {
 public:
-    using value_type = signal_storage_t<Type>;
-    using Ops = SignalOps<Type>;
+    using input_type = signal_storage_t<Type>;
+    using value_type = signal_storage_t<Acc>;
+    using Ops = SignalOps<Acc>;
 
     explicit FirFilterT(std::vector<value_type> taps, Overflow overflow = Overflow::Saturate)
         : Element("FirFilter", true)
@@ -306,7 +329,7 @@ public:
             throw std::invalid_argument("FirFilter requires at least one tap.");
         }
         register_input(0, port_names::in, Type, nullptr);
-        register_output(0, port_names::out, Type, &output_value_);
+        register_output(0, port_names::out, Acc, &output_value_);
     }
 
     void step() override
@@ -314,7 +337,7 @@ public:
         for (std::size_t index = history_.size() - 1; index > 0; --index) {
             history_[index] = history_[index - 1];
         }
-        history_[0] = read_input<value_type>(0);
+        history_[0] = widen<Type, Acc>(read_input<input_type>(0));
         value_type sum = Ops::zero();
         for (std::size_t index = 0; index < taps_.size(); ++index) {
             sum = Ops::add(sum, Ops::multiply(taps_[index], history_[index], overflow_), overflow_);

@@ -208,10 +208,34 @@ private:
             element.domains.push_back(domain);
             probe_types.push_back(domain.contains(SignalType::F64) ? SignalType::F64 : domain.types().front());
         }
-        // The probe gives the actual port count (variadic elements).
-        const auto probe = generic.create(probe_types);
+        // The probe gives the actual port count (variadic elements). If the
+        // default probe types are invalid together (an accumulator pinned to
+        // I32 cannot take F64 input), try each type of each variable.
+        std::unique_ptr<Element> probe;
+        std::string first_error;
+        auto try_probe = [&](const std::vector<SignalType>& types) {
+            try {
+                probe = generic.create(types);
+            } catch (const std::exception& ex) {
+                if (first_error.empty()) {
+                    first_error = ex.what();
+                }
+            }
+            return probe != nullptr;
+        };
+        if (!try_probe(probe_types)) {
+            for (std::size_t var = 0; var < element.domains.size() && !probe; ++var) {
+                for (const auto type : element.domains[var].types()) {
+                    auto types = probe_types;
+                    types[var] = type;
+                    if (try_probe(types)) {
+                        break;
+                    }
+                }
+            }
+        }
         if (!probe) {
-            throw std::invalid_argument("element factory returned null.");
+            throw std::invalid_argument(first_error.empty() ? "element factory returned null." : first_error);
         }
         auto rule_for = [](const std::vector<PortTypeRule>& rules, const std::size_t port, const char* kind) {
             if (rules.empty()) {

@@ -40,6 +40,9 @@ struct TypeVariableSpec {
     std::string name;                       // "T"
     std::vector<SignalType> allowed;        // types the element supports
     std::string pin_parameter{"type"};      // parameter that pins the type, e.g. "type": "I16"
+    // If set and the variable is not pinned, it is the same type as this
+    // other variable (an accumulator_type defaults to the input type).
+    std::string defaults_to{};
 };
 
 // Visual representation hints

@@ -312,6 +312,63 @@ void test_convert()
     expect_error(no_mode, "explicit 'mode'", "Convert requires a mode");
 }
 
+static_assert(s7::widens_exactly(SignalType::I8, SignalType::I32));
+static_assert(s7::widens_exactly(SignalType::U16, SignalType::I32) && !s7::widens_exactly(SignalType::U16, SignalType::I16));
+static_assert(s7::widens_exactly(SignalType::I16, SignalType::F32) && !s7::widens_exactly(SignalType::I32, SignalType::F32));
+static_assert(s7::widens_exactly(SignalType::I64, SignalType::F128) && !s7::widens_exactly(SignalType::I64, SignalType::F64));
+static_assert(s7::widens_exactly(SignalType::CI8, SignalType::CI32) && !s7::widens_exactly(SignalType::CI8, SignalType::I32));
+static_assert(!s7::widens_exactly(SignalType::F64, SignalType::I64) && !s7::widens_exactly(SignalType::CU8, SignalType::CI16));
+
+void test_accumulator_type()
+{
+    // A hardware-style FIR: CI8 samples, CI32 accumulator. Without it, CI8 saturates.
+    for (const bool wide : {false, true}) {
+        s7::Schema schema{"fir"};
+        add(schema, "iq", "Constant", {{"type", "CI8"}, {"value", json::array{100, 100}}});
+        json::object fir{{"taps", json::array{1, 1, 1}}};
+        if (wide) {
+            fir["accumulator_type"] = "CI32";
+        }
+        add(schema, "fir", "FirFilter", fir);
+        schema.connect("iq", 0, "fir", 0);
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        for (int n = 0; n < 3; ++n) {
+            runtime.step();
+        }
+        if (wide) {
+            expect(runtime.output_type_of("fir") == SignalType::CI32, "FIR output has the accumulator type");
+            const auto y = runtime.output_of<SignalType::CI32>("fir");
+            expect(y.re == 300 && y.im == 300, "CI32 accumulator holds the sum");
+        } else {
+            const auto y = runtime.output_of<SignalType::CI8>("fir");
+            expect(y.re == 127 && y.im == 127, "CI8 accumulator saturates");
+        }
+    }
+
+    // Integrator over I8 samples accumulating in I64; Adder of I16 inputs in F32.
+    s7::Schema schema{"accumulate"};
+    add(schema, "step", "Constant", {{"type", "I8"}, {"value", 100}});
+    add(schema, "total", "Integrator", {{"accumulator_type", "I64"}});
+    add(schema, "a", "Constant", {{"type", "I16"}, {"value", 3}});
+    add(schema, "b", "Constant", {{"type", "I16"}, {"value", 4}});
+    add(schema, "mix", "Adder", {{"accumulator_type", "F32"}, {"weights", json::array{0.5, 0.25}}});
+    schema.connect("step", 0, "total", 0);
+    schema.connect("a", 0, "mix", 0);
+    schema.connect("b", 0, "mix", 1);
+    s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+    for (int n = 0; n < 10; ++n) {
+        runtime.step();
+    }
+    expect(runtime.output_of<SignalType::I64>("total") == 1000, "I8 summed in I64");
+    expect(runtime.output_of<SignalType::F32>("mix") == 2.5f, "I16 summed in F32 with F32 weights");
+
+    s7::Schema narrow{"narrow"};
+    add(narrow, "x", "Constant", {{"type", "I16"}});
+    add(narrow, "sum", "Integrator", {{"accumulator_type", "I8"}});
+    narrow.connect("x", 0, "sum", 0);
+    expect_error(narrow, "cannot hold every I16 value exactly", "too narrow accumulator is refused");
+}
+
 } // namespace
 
 int main()
@@ -324,6 +381,7 @@ try {
     test_wide_and_complex_types();
     test_integrators();
     test_convert();
+    test_accumulator_type();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core type inference smoke: " << ex.what() << '\n';

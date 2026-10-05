@@ -58,6 +58,47 @@ struct SignalOps {
     }
 };
 
+// Whether every value of From is exactly representable in To (used for an
+// element's accumulator_type). Real -> complex and CU8 never widen.
+[[nodiscard]] constexpr bool widens_exactly(const SignalType from, const SignalType to)
+{
+    if (from == to) {
+        return true;
+    }
+    const auto f = signal_type_info(from);
+    const auto t = signal_type_info(to);
+    if (f.is_complex() != t.is_complex() || f.kind == SignalKind::ComplexUnsigned || t.kind == SignalKind::ComplexUnsigned) {
+        return false;
+    }
+    const auto fc = signal_type_info(component_signal_type(from));
+    const auto tc = signal_type_info(component_signal_type(to));
+    const auto mantissa_digits = [](const unsigned bits) -> unsigned {
+        switch (bits) {
+            case 16: return 11;
+            case 32: return 24;
+            case 64: return 53;
+            default: return 113;
+        }
+    };
+    const bool f_int = fc.is_integer();
+    const bool t_int = tc.is_integer();
+    const bool f_signed = fc.kind == SignalKind::SignedInteger;
+    const bool t_signed = tc.kind == SignalKind::SignedInteger;
+    if (f_int && t_int) {
+        if (f_signed) {
+            return t_signed && tc.component_bits >= fc.component_bits;
+        }
+        return t_signed ? tc.component_bits > fc.component_bits : tc.component_bits >= fc.component_bits;
+    }
+    if (f_int) {
+        return mantissa_digits(tc.component_bits) >= (f_signed ? fc.component_bits - 1 : fc.component_bits);
+    }
+    if (t_int) {
+        return false;
+    }
+    return tc.component_bits >= fc.component_bits;
+}
+
 // Whether a type has arithmetic (everything except CU8).
 [[nodiscard]] constexpr bool has_arithmetic(const SignalType type)
 {

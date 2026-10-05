@@ -100,9 +100,23 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     }
 
     std::vector<std::string> names;
-    GenericElement generic;
     for (const auto& variable : metadata.type_variables) {
         names.push_back(variable.name);
+    }
+    auto index_of = [&names, &id](const std::string& name) {
+        const auto it = std::find(names.begin(), names.end(), name);
+        if (it == names.end()) {
+            throw std::invalid_argument("Element '" + id + "': unknown type variable '" + name + "'.");
+        }
+        return static_cast<std::size_t>(it - names.begin());
+    };
+    // An unpinned variable with defaults_to is an alias: its ports use the
+    // other variable, and the factory receives that variable's type for it.
+    std::vector<std::size_t> alias(names.size());
+    GenericElement generic;
+    for (std::size_t index = 0; index < metadata.type_variables.size(); ++index) {
+        const auto& variable = metadata.type_variables[index];
+        alias[index] = index;
         TypeVariable resolved{variable.name, {}, std::nullopt};
         for (const auto type : variable.allowed) {
             resolved.allowed.insert(type);
@@ -113,11 +127,19 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
                                             "' must be a type name such as \"F64\".");
             }
             resolved.pinned = parse_signal_type(std::string_view(pin->get_string()));
+        } else if (!variable.defaults_to.empty()) {
+            alias[index] = index_of(variable.defaults_to);
+            resolved.allowed = SignalTypeSet::all(); // unused: its ports follow the other variable
         }
         generic.variables.push_back(std::move(resolved));
     }
-    auto rule_of = [&names](const std::string& rule, const SignalType fixed) {
-        return rule.empty() ? PortTypeRule::of_fixed(fixed) : PortTypeRule::parse(rule, names);
+    auto rule_of = [&names, &alias](const std::string& rule, const SignalType fixed) {
+        if (rule.empty()) {
+            return PortTypeRule::of_fixed(fixed);
+        }
+        auto parsed = PortTypeRule::parse(rule, names);
+        parsed.variable = alias[parsed.variable];
+        return parsed;
     };
     for (const auto& port : metadata.input_ports) {
         generic.input_rules.push_back(rule_of(port.type_rule, port.type));
@@ -128,8 +150,12 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     for (const auto& port : metadata.output_ports) {
         generic.output_rules.push_back(rule_of(port.type_rule, port.type));
     }
-    generic.create = [shared, params = std::move(params)](const std::span<const SignalType> types) {
-        return shared->create(ElementCreationContext{shared->metadata(), params, types});
+    generic.create = [shared, alias, params = std::move(params)](const std::span<const SignalType> types) {
+        std::vector<SignalType> effective(types.begin(), types.end());
+        for (std::size_t index = 0; index < effective.size(); ++index) {
+            effective[index] = types[alias[index]];
+        }
+        return shared->create(ElementCreationContext{shared->metadata(), params, effective});
     };
     return ElementSpec{std::move(id), {}, std::move(generic)};
 }

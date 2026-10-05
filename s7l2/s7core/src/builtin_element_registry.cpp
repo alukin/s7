@@ -124,6 +124,33 @@ SignalTypeSet floating_types()
     return SignalTypeSet::where([](const SignalType type) { return signal_type_info(type).is_floating(); });
 }
 
+// Accumulating elements: input type T and accumulator type A (A defaults to T).
+void add_accumulator_variable(ElementMetadata& metadata)
+{
+    metadata.type_variables.push_back({"A", signal_type_sets::arithmetic.types(), "accumulator_type", "T"});
+    for (auto& port : metadata.output_ports) {
+        port.type_rule = "A";
+    }
+    metadata.parameters.push_back({"accumulator_type", "type",
+                                   "Type of the arithmetic and the output; must hold every input value exactly (default: the input type)",
+                                   nullptr, std::nullopt, std::nullopt, {}, false});
+}
+
+template <typename Make>
+std::unique_ptr<Element> make_accumulating(const ElementCreationContext& ctx, Make&& make)
+{
+    return visit_signal_type(ctx.type("T"), [&]<SignalType T>() -> std::unique_ptr<Element> {
+        return visit_signal_type(ctx.type("A"), [&]<SignalType A>() -> std::unique_ptr<Element> {
+            if constexpr (has_arithmetic(T) && has_arithmetic(A) && widens_exactly(T, A)) {
+                return make.template operator()<T, A>();
+            } else {
+                throw std::invalid_argument(ctx.metadata.type_name + ": accumulator_type " + std::string(signal_type_name(A)) +
+                                            " cannot hold every " + std::string(signal_type_name(T)) + " value exactly.");
+            }
+        });
+    });
+}
+
 [[noreturn]] std::unique_ptr<Element> unsupported_type(const ElementCreationContext& ctx)
 {
     throw std::invalid_argument(ctx.metadata.type_name + " does not support type " +
@@ -175,12 +202,8 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "Adder",
         [](const ElementCreationContext& ctx) {
-            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
-                if constexpr (has_arithmetic(T)) {
-                    return std::make_unique<AdderT<T>>(param_values<T>(ctx, "weights"), overflow_param(ctx));
-                } else {
-                    return unsupported_type(ctx);
-                }
+            return make_accumulating(ctx, [&]<SignalType T, SignalType A>() -> std::unique_ptr<Element> {
+                return std::make_unique<AdderT<T, A>>(param_values<A>(ctx, "weights"), overflow_param(ctx));
             });
         },
         [] {
@@ -193,18 +216,15 @@ void register_builtin_elements(ElementRegistry& registry)
             m.input_ports[1].description = "Summation input 1 (weighted by weights[1]).";
             m.output_ports[0].description = "Weighted sum output.";
             m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T"};
+            add_accumulator_variable(m);
             return m;
         }()));
 
     registry.register_element(ElementDescriptor(
         "Multiply",
         [](const ElementCreationContext& ctx) {
-            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
-                if constexpr (has_arithmetic(T)) {
-                    return std::make_unique<MultiplyT<T>>(param_values<T>(ctx, "factors"), overflow_param(ctx));
-                } else {
-                    return unsupported_type(ctx);
-                }
+            return make_accumulating(ctx, [&]<SignalType T, SignalType A>() -> std::unique_ptr<Element> {
+                return std::make_unique<MultiplyT<T, A>>(param_values<A>(ctx, "factors"), overflow_param(ctx));
             });
         },
         [] {
@@ -217,6 +237,7 @@ void register_builtin_elements(ElementRegistry& registry)
             m.input_ports[1].description = "Multiplier input 1 (scaled by factors[1]).";
             m.output_ports[0].description = "Product output.";
             m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T"};
+            add_accumulator_variable(m);
             return m;
         }()));
 
@@ -238,12 +259,8 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "Integrator",
         [](const ElementCreationContext& ctx) {
-            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
-                if constexpr (has_arithmetic(T)) {
-                    return std::make_unique<IntegratorT<T>>(param_value<T>(ctx, "initial_value", {}), overflow_param(ctx));
-                } else {
-                    return unsupported_type(ctx);
-                }
+            return make_accumulating(ctx, [&]<SignalType T, SignalType A>() -> std::unique_ptr<Element> {
+                return std::make_unique<IntegratorT<T, A>>(param_value<A>(ctx, "initial_value", {}), overflow_param(ctx));
             });
         },
         [] {
@@ -252,6 +269,7 @@ void register_builtin_elements(ElementRegistry& registry)
                                            "filters", 1, 1, signal_type_sets::arithmetic);
             m.parameters.push_back({"initial_value", "value", "Initial output value", 0, std::nullopt, std::nullopt, {}, false});
             add_overflow_parameter(m);
+            add_accumulator_variable(m);
             return m;
         }()));
 
@@ -329,14 +347,10 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "FirFilter",
         [](const ElementCreationContext& ctx) {
-            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
-                if constexpr (has_arithmetic(T)) {
-                    auto taps = ctx.has_param("taps") ? param_array<T>(ctx, "taps", 1)
-                                                      : std::vector<signal_storage_t<T>>{SignalOps<T>::one()};
-                    return std::make_unique<FirFilterT<T>>(std::move(taps), overflow_param(ctx));
-                } else {
-                    return unsupported_type(ctx);
-                }
+            return make_accumulating(ctx, [&]<SignalType T, SignalType A>() -> std::unique_ptr<Element> {
+                auto taps = ctx.has_param("taps") ? param_array<A>(ctx, "taps", 1)
+                                                  : std::vector<signal_storage_t<A>>{SignalOps<A>::one()};
+                return std::make_unique<FirFilterT<T, A>>(std::move(taps), overflow_param(ctx));
             });
         },
         [] {
@@ -346,6 +360,7 @@ void register_builtin_elements(ElementRegistry& registry)
             add_overflow_parameter(m);
             m.input_ports[0].description = "Input signal sample.";
             m.output_ports[0].description = "Filtered output sample.";
+            add_accumulator_variable(m);
             return m;
         }()));
 
