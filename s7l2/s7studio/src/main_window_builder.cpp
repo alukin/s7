@@ -40,6 +40,8 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.resumeAction = new QAction("Resume", window);
     actions.stopAction = new QAction("Stop", window);
     actions.resetAction = new QAction("Reset", window);
+    actions.deployAction = new QAction("Deploy to Nodes...", window);
+    actions.openDeployedAction = new QAction("Open Deployed Diagram...", window);
 
     actions.openAction->setIcon(window->style()->standardIcon(QStyle::SP_DialogOpenButton));
     actions.saveAction->setIcon(window->style()->standardIcon(QStyle::SP_DialogSaveButton));
@@ -78,6 +80,9 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     runMenu->addAction(actions.stopAction);
     runMenu->addSeparator();
     runMenu->addAction(actions.resetAction);
+    runMenu->addSeparator();
+    runMenu->addAction(actions.deployAction);
+    runMenu->addAction(actions.openDeployedAction);
 
     auto* fileToolBar = window->addToolBar("File");
     fileToolBar->addAction(actions.openAction);

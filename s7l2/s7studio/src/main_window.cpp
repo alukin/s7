@@ -1,5 +1,6 @@
 #include "main_window.hpp"
 
+#include "deployment_support.hpp"
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
 #include "diagram_node_roles.hpp"
@@ -29,6 +30,7 @@
 #include <QColorDialog>
 #include <QCoreApplication>
 #include <QDialog>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
@@ -64,6 +66,8 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <s7/deployment_client.hpp>
 
 #include <algorithm>
 #include <boost/system/error_code.hpp>
@@ -599,6 +603,9 @@ MainWindow::MainWindow(QWidget* parent)
 MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
+    if (networkTask_.joinable()) {
+        networkTask_.join(); // bounded by the control request timeouts
+    }
     if (diagramEditor_ && diagramEditor_->scene()) {
         disconnect(diagramEditor_->scene(), nullptr, this, nullptr);
     }
@@ -640,6 +647,8 @@ void MainWindow::buildActions()
     resumeAction_ = actions.resumeAction;
     stopAction_ = actions.stopAction;
     resetAction_ = actions.resetAction;
+    deployAction_ = actions.deployAction;
+    openDeployedAction_ = actions.openDeployedAction;
 
     zoomInAction_ = new QAction("Zoom In", this);
     zoomOutAction_ = new QAction("Zoom Out", this);
@@ -729,6 +738,8 @@ void MainWindow::buildActions()
         configureRun(true);
     });
     connect(runParametersAction_, &QAction::triggered, this, &MainWindow::openRunParametersDialog);
+    connect(deployAction_, &QAction::triggered, this, &MainWindow::deployToNodes);
+    connect(openDeployedAction_, &QAction::triggered, this, &MainWindow::openDeployedDiagram);
     connect(pauseAction_, &QAction::triggered, this, [this] { controller_->pause(); });
     connect(resumeAction_, &QAction::triggered, this, [this] { controller_->resume(); });
     connect(stopAction_, &QAction::triggered, this, [this] { controller_->stop(); });
@@ -777,6 +788,8 @@ void MainWindow::buildUi()
     actions.resumeAction = resumeAction_;
     actions.stopAction = stopAction_;
     actions.resetAction = resetAction_;
+    actions.deployAction = deployAction_;
+    actions.openDeployedAction = openDeployedAction_;
 
     ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
 
@@ -1082,6 +1095,30 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     descriptionLabel->setMinimumHeight(48);
     form->addRow(QStringLiteral("Description"), descriptionLabel);
 
+    // Placement: the runtime node this element runs on when the diagram is deployed.
+    QString currentPlacement;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        for (const auto& node : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
+            if (node && node->data(diagram::kNodeIdRole).toString() == elementId) {
+                currentPlacement = node->data(diagram::kNodePlacementRole).toString();
+                break;
+            }
+        }
+    }
+    auto* nodeCombo = new QComboBox(&dialog);
+    nodeCombo->addItem(QStringLiteral("(not placed)"), QString());
+    if (headlessNodesPanel_) {
+        for (const auto& known : headlessNodesPanel_->knownNodes()) {
+            nodeCombo->addItem(QStringLiteral("%1  %2  (%3)").arg(known.nodeName, known.endpoint, known.nodeUuid.left(8)), known.nodeUuid);
+        }
+    }
+    if (!currentPlacement.isEmpty() && nodeCombo->findData(currentPlacement) < 0) {
+        nodeCombo->addItem(currentPlacement, currentPlacement);
+    }
+    nodeCombo->setCurrentIndex(std::max(0, nodeCombo->findData(currentPlacement)));
+    nodeCombo->setToolTip(QStringLiteral("Runtime node this element runs on when the diagram is deployed (nodes from the Headless Nodes dock)."));
+    form->addRow(QStringLiteral("Node"), nodeCombo);
+
     if (descriptor) {
         const auto& metadata = descriptor->metadata();
         auto* inputsLabel = new QLabel(portListSummary(metadata.input_ports), &dialog);
@@ -1153,6 +1190,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
                 }
 
                 nodePtr->setData(diagram::kNodeParamsRole, encodedParams);
+                nodePtr->setData(diagram::kNodePlacementRole, nodeCombo->currentData().toString());
                 if (elementType == QStringLiteral("Scope")) {
                     const int updatedChannels = std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount));
                     nodePtr->setData(diagram::kNodeChannelCountRole, updatedChannels);
@@ -1168,6 +1206,21 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         if (auto* schemaParams = findElementParamsObject(runtimeSchema_, elementId)) {
             *schemaParams = paramsObject;
         }
+        if (runtimeSchema_.is_object()) {
+            if (auto* elements = runtimeSchema_.as_object().if_contains("elements"); elements && elements->is_array()) {
+                for (auto& element : elements->as_array()) {
+                    if (element.is_object() && json_utils::stringValue(element.as_object(), "id", "") == elementId.toStdString()) {
+                        const auto placement = nodeCombo->currentData().toString();
+                        if (placement.isEmpty()) {
+                            element.as_object().erase("node");
+                        } else {
+                            element.as_object()["node"] = placement.toStdString();
+                        }
+                    }
+                }
+            }
+        }
+        refreshPlacementLabels();
 
         if ((elementType == QStringLiteral("Adder") ||
              elementType == QStringLiteral("Multiply") ||
@@ -1886,11 +1939,14 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
     clearScopeSamples();
 
     runtimeSchema_ = schemaJson;
+    deploymentRuntimeNodes_.clear();
+    deploymentStreams_.clear();
 
     if (diagramEditor_) {
         diagramEditor_->loadRuntimeSchema(runtimeSchema_);
         syncPageActions();
         syncTextFrameStyleControls();
+        refreshPlacementLabels();
     }
 
     const auto name = schemaDisplayName(runtimeSchema_, sourceLabel);
@@ -1906,6 +1962,8 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
 
     const auto document = diagram::DiagramDocument::fromJson(diagramJson);
     runtimeSchema_ = document.runtimeSchema;
+    deploymentRuntimeNodes_ = document.runtimeNodes;
+    deploymentStreams_ = document.streams;
 
     if (dtSpin_ && document.dt > 0.0) {
         const QSignalBlocker blocker(dtSpin_);
@@ -1917,6 +1975,7 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
         diagramEditor_->loadDocument(document);
         syncPageActions();
         syncTextFrameStyleControls();
+        refreshPlacementLabels();
     }
 
     const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
@@ -1949,6 +2008,8 @@ void MainWindow::closeCurrentDiagram()
         {"connections", boost::json::array{}}
     };
     currentDiagramPath_.clear();
+    deploymentRuntimeNodes_.clear();
+    deploymentStreams_.clear();
 
     if (diagramEditor_) {
         diagramEditor_->clearDiagram();
@@ -2266,6 +2327,8 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
 
     diagram::SceneSerializer serializer;
     auto document = serializer.serialize(*diagramEditor_->scene(), options);
+    document.runtimeNodes = deploymentRuntimeNodes_;
+    document.streams = deploymentStreams_;
 
     const auto payload = document.toJson();
     const auto json = boost::json::serialize(payload);
@@ -2293,6 +2356,195 @@ void MainWindow::fitDiagramToView()
     if (diagramEditor_) {
         diagramEditor_->fitPageInView();
     }
+}
+
+auto MainWindow::currentDocument() const -> boost::json::value
+{
+    diagram::SerializationOptions options;
+    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("s7studio_diagram"));
+    options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+    const auto pageLayout = diagramEditor_->pageLayout();
+    options.sheetOrientation = pageLayout.orientation;
+    options.sheetWidthMm = pageLayout.widthMm;
+    options.sheetHeightMm = pageLayout.heightMm;
+    auto document = diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+    document.runtimeNodes = deploymentRuntimeNodes_;
+    document.streams = deploymentStreams_;
+    return document.toJson();
+}
+
+void MainWindow::refreshPlacementLabels()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        return;
+    }
+    QMap<QString, QString> names;
+    for (const auto& value : deploymentRuntimeNodes_) {
+        if (value.is_object()) {
+            const auto& node = value.as_object();
+            names[QString::fromStdString(json_utils::stringValue(node, "node_uuid", ""))] =
+                QString::fromStdString(json_utils::stringValue(node, "name", ""));
+        }
+    }
+    if (headlessNodesPanel_) {
+        for (const auto& known : headlessNodesPanel_->knownNodes()) {
+            names[known.nodeUuid] = known.nodeName;
+        }
+    }
+    diagram::updatePlacementLabels(*diagramEditor_->scene(), names);
+}
+
+auto MainWindow::startNetworkTask(std::function<std::function<void()>()> work) -> bool
+{
+    if (networkTaskRunning_) {
+        QMessageBox::information(this, QStringLiteral("Busy"), QStringLiteral("A deployment request is still running."));
+        return false;
+    }
+    if (networkTask_.joinable()) {
+        networkTask_.join();
+    }
+    networkTaskRunning_ = true;
+    deployAction_->setEnabled(false);
+    openDeployedAction_->setEnabled(false);
+    networkTask_ = std::thread([this, work = std::move(work)] {
+        auto done = work();
+        QMetaObject::invokeMethod(this, [this, done = std::move(done)] {
+            networkTaskRunning_ = false;
+            deployAction_->setEnabled(true);
+            openDeployedAction_->setEnabled(true);
+            if (!shuttingDown_) {
+                done();
+            }
+        }, Qt::QueuedConnection);
+    });
+    return true;
+}
+
+void MainWindow::deployToNodes()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene() || !headlessNodesPanel_) {
+        return;
+    }
+    QMap<QString, diagram::NodeAddress> known;
+    for (const auto& node : headlessNodesPanel_->knownNodes()) {
+        known[node.nodeUuid] = diagram::NodeAddress{node.nodeName, node.endpoint};
+    }
+    boost::json::object deployment;
+    s7::deployment::OutputTypeLookup types;
+    try {
+        deployment = diagram::deploymentDiagram(diagram::DiagramDocument::fromJson(currentDocument()), known);
+        if (s7::deployment::placed_nodes(deployment).empty()) {
+            QMessageBox::information(this, QStringLiteral("Deploy"),
+                                     QStringLiteral("No element is placed on a node. Choose a node in each element's properties "
+                                                    "(nodes come from the Headless Nodes dock)."));
+            return;
+        }
+        types = diagram::studioOutputTypes(deployment);
+    } catch (const std::exception& ex) {
+        QMessageBox::warning(this, QStringLiteral("Deploy"), QStringLiteral("The diagram cannot be deployed: %1").arg(ex.what()));
+        return;
+    }
+    const auto tls = headlessNodesPanel_->clientTls();
+    if (!tls.enabled) {
+        QMessageBox::warning(this, QStringLiteral("Deploy"),
+                             QStringLiteral("Deployments need the Studio certificate: set CA, certificate and key in the Headless Nodes dock."));
+        return;
+    }
+    appendLog(QStringLiteral("[deploy] deploying to %1 node(s)...").arg(s7::deployment::placed_nodes(deployment).size()));
+    startNetworkTask([this, deployment, types, tls]() -> std::function<void()> {
+        s7::deployment::DeployResult result;
+        try {
+            s7::deployment::BeastControlRequester requester(tls);
+            result = s7::deployment::deploy_diagram(deployment, types, [&](const auto& node, const auto& message) {
+                return requester(node, message);
+            });
+        } catch (const std::exception& ex) {
+            result.errors.push_back(ex.what());
+        }
+        return [this, result = std::move(result)] {
+            QStringList lines;
+            for (const auto& node : result.nodes) {
+                lines << QStringLiteral("%1 %2: %3%4")
+                             .arg(QString::fromStdString(node.node_uuid).left(8), QString::fromStdString(node.endpoint),
+                                  QString::fromStdString(node.status),
+                                  node.message.empty() ? QString() : QStringLiteral(" — ") + QString::fromStdString(node.message));
+            }
+            for (const auto& error : result.errors) {
+                appendLog(QStringLiteral("[deploy] error: %1").arg(QString::fromStdString(error)));
+            }
+            for (const auto& line : lines) {
+                appendLog(QStringLiteral("[deploy] ") + line);
+            }
+            if (!result.diagram.empty()) {
+                // Keep the streams so the next deployment continues them.
+                deploymentStreams_ = result.diagram.at("streams").as_array();
+                deploymentRuntimeNodes_ = result.diagram.at("runtime_nodes").as_array();
+                refreshPlacementLabels();
+            }
+            if (result.committed) {
+                appendLog(QStringLiteral("[deploy] committed %1 revision %2")
+                              .arg(QString::fromStdString(result.deployment_id))
+                              .arg(result.revision));
+                statusBar()->showMessage(QStringLiteral("Deployed revision %1 to %2 node(s)").arg(result.revision).arg(result.nodes.size()),
+                                         8000);
+            } else {
+                QMessageBox::warning(this, QStringLiteral("Deployment failed"),
+                                     QStringLiteral("Nothing was committed.\n\n%1\n%2")
+                                         .arg(lines.join('\n'),
+                                              result.errors.empty() ? QString() : QString::fromStdString(result.errors.front())));
+            }
+        };
+    });
+}
+
+void MainWindow::openDeployedDiagram()
+{
+    if (!headlessNodesPanel_) {
+        return;
+    }
+    const auto nodes = headlessNodesPanel_->knownNodes();
+    if (nodes.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
+                                 QStringLiteral("No node is known yet. Add a seed in the Headless Nodes dock and refresh."));
+        return;
+    }
+    QStringList labels;
+    for (const auto& node : nodes) {
+        labels << QStringLiteral("%1  %2  (%3)").arg(node.nodeName, node.endpoint, node.nodeUuid.left(8));
+    }
+    bool accepted = false;
+    const auto chosen = QInputDialog::getItem(this, QStringLiteral("Open Deployed Diagram"), QStringLiteral("Node"), labels, 0, false, &accepted);
+    if (!accepted) {
+        return;
+    }
+    const auto node = nodes.at(static_cast<int>(labels.indexOf(chosen)));
+    const auto tls = headlessNodesPanel_->clientTls();
+    startNetworkTask([this, node, tls]() -> std::function<void()> {
+        boost::json::object response;
+        QString error;
+        try {
+            s7::deployment::BeastControlRequester requester(tls);
+            response = requester(s7::deployment::RuntimeNode{node.nodeUuid.toStdString(), {}, node.endpoint.toStdString()},
+                                 boost::json::object{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "studio-config"}, {"protocol_version", 1}});
+        } catch (const std::exception& ex) {
+            error = QString::fromUtf8(ex.what());
+        }
+        return [this, node, response = std::move(response), error] {
+            if (error.isEmpty() && json_utils::stringValue(response, "type", "") != "NETWORK_CONFIGURATION") {
+                QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
+                                         QStringLiteral("%1 has no deployed diagram: %2")
+                                             .arg(node.nodeName, QString::fromStdString(json_utils::stringValue(response, "message", ""))));
+                return;
+            }
+            if (!error.isEmpty() || !response.contains("diagram")) {
+                QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QStringLiteral("Request failed: %1").arg(error));
+                return;
+            }
+            const auto revision = response.at("revision").to_number<std::uint64_t>();
+            loadDiagramJson(response.at("diagram"), QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision));
+            currentDiagramPath_.clear();
+        };
+    });
 }
 
 } // namespace s7studio

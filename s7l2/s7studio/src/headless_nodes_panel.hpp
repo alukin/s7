@@ -4,7 +4,10 @@
 #include <QMutex>
 #include <QSet>
 #include <QString>
+#include <QVector>
 #include <QWidget>
+
+#include <s7/transport.hpp>
 
 class QCheckBox;
 class QLineEdit;
@@ -23,6 +26,17 @@ class HeadlessNodesPanel : public QWidget
 
 public:
     explicit HeadlessNodesPanel(QWidget* parent = nullptr);
+
+    struct KnownNode {
+        QString nodeUuid;
+        QString nodeName;
+        QString endpoint;
+        QString trustState;
+    };
+    // Discovered nodes with a known node_uuid, sorted by name.
+    [[nodiscard]] auto knownNodes() const -> QVector<KnownNode>;
+    // The client certificate configured in the panel (enabled if a certificate is set).
+    [[nodiscard]] auto clientTls() const -> s7::transport::TlsConfig;
 
 signals:
     void nodeActivated(const QString& endpoint, const QString& nodeUuid, const QString& nodeName);

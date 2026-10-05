@@ -33,6 +33,8 @@ struct MainWindowActions {
     QAction* resumeAction = nullptr;
     QAction* stopAction = nullptr;
     QAction* resetAction = nullptr;
+    QAction* deployAction = nullptr;
+    QAction* openDeployedAction = nullptr;
 };
 
 struct MainWindowWidgets {

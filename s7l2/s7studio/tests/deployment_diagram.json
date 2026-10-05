@@ -1,0 +1,16 @@
+{
+  "id": "split_demo",
+  "document_kind": "s7.diagram",
+  "runtime_nodes": [
+    { "node_uuid": "11111111-2222-3333-4444-555555555555", "name": "a", "endpoint": "wss://127.0.0.1:9002" },
+    { "node_uuid": "33333333-4444-5555-6666-777777777777", "name": "b", "endpoint": "wss://127.0.0.1:9003" }
+  ],
+  "schema": {
+    "name": "split_demo",
+    "elements": [
+      { "id": "src", "type": "Constant", "params": { "type": "I16", "value": 3 }, "node": "11111111-2222-3333-4444-555555555555" },
+      { "id": "gain", "type": "Gain", "params": { "factor": 2 }, "node": "33333333-4444-5555-6666-777777777777" }
+    ],
+    "connections": [ { "from_element": "src", "from_port": 0, "to_element": "gain", "to_port": 0 } ]
+  }
+}

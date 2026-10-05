@@ -4,6 +4,8 @@
 #include "main_window.hpp"
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
+#include "deployment_support.hpp"
+#include "scene_serializer.hpp"
 #include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
@@ -313,6 +315,59 @@ int runWireTypes(int argc, char** argv)
     return 0;
 }
 
+
+// --deployment-diagram <diagram> <out>: loads the diagram into an (offscreen)
+// editor, serializes it back as Studio saves it, assigns its streams as
+// "Deploy to Nodes" does, and writes the result (placement and streams
+// included). Prints "error: ..." lines for placement problems.
+int runDeploymentDiagram(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    s7::register_net_elements(registry);
+
+    std::ifstream in(argv[2]);
+    if (!in) {
+        std::cerr << "cannot read " << argv[2] << '\n';
+        return 2;
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto loaded = s7studio::diagram::DiagramDocument::fromJson(boost::json::parse(text));
+
+    s7studio::diagram::DiagramEditor editor;
+    editor.loadDocument(loaded);
+    s7studio::diagram::SerializationOptions options;
+    options.schemaName = loaded.id;
+    auto document = s7studio::diagram::SceneSerializer{}.serialize(*editor.scene(), options);
+    document.runtimeNodes = loaded.runtimeNodes;
+    document.streams = loaded.streams;
+
+    auto diagram = s7studio::diagram::deploymentDiagram(document, {});
+    // Optional picture with the placement labels, for checking the rendering.
+    if (const char* png = std::getenv("S7_DEPLOYMENT_PNG")) {
+        QMap<QString, QString> names;
+        for (const auto& node : s7::deployment::parse_runtime_nodes(diagram)) {
+            names[QString::fromStdString(node.node_uuid)] = QString::fromStdString(node.name);
+        }
+        s7studio::diagram::updatePlacementLabels(*editor.scene(), names);
+        auto* scene = editor.scene();
+        const auto bounds = scene->itemsBoundingRect().adjusted(-20, -20, 20, 20);
+        QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
+        image.fill(Qt::white);
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        scene->render(&painter, QRectF(), bounds);
+        painter.end();
+        image.save(QString::fromLocal8Bit(png));
+    }
+    const auto errors = s7::deployment::assign_streams(diagram, s7studio::diagram::studioOutputTypes(diagram));
+    for (const auto& error : errors) {
+        std::cout << "error: " << error << '\n';
+    }
+    std::ofstream(argv[3]) << boost::json::serialize(diagram) << '\n';
+    return errors.empty() ? 0 : 1;
+}
 } // namespace
 
 int main(int argc, char** argv) try
@@ -334,6 +389,9 @@ int main(int argc, char** argv) try
 
     if (argc == 3 && std::string_view(argv[1]) == "--wire-types") {
         return runWireTypes(argc, argv);
+    }
+    if (argc == 4 && std::string_view(argv[1]) == "--deployment-diagram") {
+        return runDeploymentDiagram(argc, argv);
     }
 
     QApplication app(argc, argv);

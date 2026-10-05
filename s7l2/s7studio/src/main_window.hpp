@@ -12,6 +12,8 @@
 
 #include <cstdint>
 #include <memory>
+#include <functional>
+#include <thread>
 
 class QAction;
 class QActionGroup;
@@ -94,6 +96,8 @@ private slots:
     void setSelectedTextFrameFont(const QFont& font);
     void setSelectedTextFrameFontSize(int pointSize);
     void syncTextFrameStyleControls();
+    void deployToNodes();
+    void openDeployedDiagram();
 
 private:
     void buildUi();
@@ -126,9 +130,18 @@ private:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    [[nodiscard]] auto currentDocument() const -> boost::json::value;
+    void refreshPlacementLabels();
+    // Runs work off the UI thread (one at a time); `done` runs on the UI thread.
+    auto startNetworkTask(std::function<std::function<void()>()> work) -> bool;
 
 private:
     boost::json::value runtimeSchema_;
+    // Deployment data of the open diagram (`runtime_nodes`, `streams`).
+    boost::json::array deploymentRuntimeNodes_;
+    boost::json::array deploymentStreams_;
+    std::thread networkTask_;
+    bool networkTaskRunning_ = false;
     LocalSchemaRunner* runner_ = nullptr;
     std::unique_ptr<ui::ModelRunController> controller_;
 
@@ -147,6 +160,8 @@ private:
     QAction* resumeAction_ = nullptr;
     QAction* stopAction_ = nullptr;
     QAction* resetAction_ = nullptr;
+    QAction* deployAction_ = nullptr;
+    QAction* openDeployedAction_ = nullptr;
     QAction* zoomInAction_ = nullptr;
     QAction* zoomOutAction_ = nullptr;
     QAction* resetZoomAction_ = nullptr;

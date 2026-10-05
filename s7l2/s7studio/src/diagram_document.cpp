@@ -62,6 +62,12 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
     if (auto it = root.find("diagram"); it != root.end() && it->value().is_object()) {
         doc.diagram = it->value().as_object();
     }
+    if (auto it = root.find("runtime_nodes"); it != root.end() && it->value().is_array()) {
+        doc.runtimeNodes = it->value().as_array();
+    }
+    if (auto it = root.find("streams"); it != root.end() && it->value().is_array()) {
+        doc.streams = it->value().as_array();
+    }
     
     // Store the runtime schema (or reconstruct from diagram if needed)
     if (auto it = root.find("schema"); it != root.end()) {
@@ -90,6 +96,12 @@ auto DiagramDocument::toJson() const -> boost::json::value {
     
     if (!diagram.empty()) {
         root["diagram"] = diagram;
+    }
+    if (!runtimeNodes.empty()) {
+        root["runtime_nodes"] = runtimeNodes;
+    }
+    if (!streams.empty()) {
+        root["streams"] = streams;
     }
     
     return root;

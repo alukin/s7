@@ -27,6 +27,10 @@ struct DiagramDocument {
     DiagramPageLayout pageLayout;
     boost::json::value runtimeSchema;  // The embedded runtime schema (elements + connections)
     boost::json::object diagram;       // Visual layout: nodes (positions, names), wires (routing points)
+    // Deployment (s7/diagram_deployment.hpp): the nodes elements are placed on
+    // and the streams between them, kept so redeployments continue them.
+    boost::json::array runtimeNodes;
+    boost::json::array streams;
 
     static auto fromJson(const boost::json::value& json) -> DiagramDocument;
     auto toJson() const -> boost::json::value;

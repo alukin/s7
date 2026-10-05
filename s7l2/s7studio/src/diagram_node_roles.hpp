@@ -17,6 +17,8 @@ constexpr int kTextFrameLineColorRole = Qt::UserRole + 108;
 constexpr int kTextFrameFillColorRole = Qt::UserRole + 109;
 constexpr int kTextFrameFontFamilyRole = Qt::UserRole + 110;
 constexpr int kTextFrameFontSizeRole = Qt::UserRole + 111;
+// node_uuid of the runtime node the element is placed on (empty: not placed).
+constexpr int kNodePlacementRole = Qt::UserRole + 112;
 
 } // namespace s7studio::diagram
 

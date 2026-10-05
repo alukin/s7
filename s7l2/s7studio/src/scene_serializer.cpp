@@ -43,6 +43,7 @@ struct NodeModel {
     int inputPorts = 0;
     int outputPorts = 0;
     int channelCount = 1;
+    QString placement; // node_uuid
 };
 
 struct ConnectionModel {
@@ -362,6 +363,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
                 NodeModel model;
                 model.id = json_utils::stringValue(element, "id", "element_" + std::to_string(elementIndex++));
                 model.type = json_utils::stringValue(element, "type", "Element");
+                if (const auto* placement = json_utils::findObjectValue(element, "node"); placement && placement->is_string()) {
+                    model.placement = QString::fromStdString(std::string(placement->as_string()));
+                }
                 if (const auto* paramsValue = json_utils::findObjectValue(element, "params"); paramsValue && paramsValue->is_object()) {
                     model.params = paramsValue->as_object();
                 }
@@ -540,6 +544,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
             label->setPos(10.0, 8.0);
 
             node->setData(kNodeIdRole, QString::fromStdString(model.id));
+        node->setData(kNodePlacementRole, model.placement);
             node->setData(kNodeTypeRole, QStringLiteral("TextFrame"));
             node->setData(kNodeTitleRole, model.title);
             node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(params)));
@@ -583,6 +588,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document,
         label->setPos(10.0, 10.0);
 
         node->setData(kNodeIdRole, QString::fromStdString(model.id));
+        node->setData(kNodePlacementRole, model.placement);
         node->setData(kNodeTypeRole, QString::fromStdString(model.type));
         node->setData(kNodeTitleRole, model.title);
         node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(model.params)));

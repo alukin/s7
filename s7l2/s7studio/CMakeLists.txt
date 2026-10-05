@@ -47,6 +47,8 @@ add_executable(s7studio
     src/runtime_schema_extractor.hpp
     src/runtime_schema_extractor.cpp
     src/wire_type_labels.cpp
+    src/deployment_support.cpp
+    src/deployment_support.hpp
     src/wire_type_labels.hpp
     ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp
     src/diagram_format.hpp
@@ -97,3 +99,6 @@ endif()
 add_test(NAME s7studio_smoke COMMAND s7studio --smoke)
 add_test(NAME s7studio_wire_types
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/wire_types_test.sh $<TARGET_FILE:s7studio> ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+add_test(NAME s7studio_deployment_diagram
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/deployment_diagram_test.sh $<TARGET_FILE:s7studio> ${CMAKE_CURRENT_SOURCE_DIR}/tests)

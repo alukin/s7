@@ -156,6 +156,9 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
         elementObj["id"] = nodeId;
         elementObj["type"] = storedType.isEmpty() ? "Element" : storedType.toStdString();
         elementObj["params"] = params;
+        if (const auto placement = node->data(kNodePlacementRole).toString(); !placement.isEmpty()) {
+            elementObj["node"] = placement.toStdString();
+        }
         const auto nestedSchema = parseNestedSchemaFromNode(*node);
         if (nestedSchema.is_object()) {
             elementObj["schema"] = nestedSchema;

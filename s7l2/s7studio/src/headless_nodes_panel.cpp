@@ -725,6 +725,28 @@ auto HeadlessNodesPanel::normalizeEndpoint(const QString& raw) -> QString
     return QStringLiteral("ws://") + value;
 }
 
+auto HeadlessNodesPanel::knownNodes() const -> QVector<KnownNode>
+{
+    QVector<KnownNode> result;
+    QMutexLocker locker(&refreshMutex_);
+    for (const auto& node : nodes_) {
+        if (!node.nodeUuid.isEmpty() && !node.endpoint.isEmpty()) {
+            result.push_back(KnownNode{node.nodeUuid, node.nodeName, node.endpoint, node.trustState});
+        }
+    }
+    std::sort(result.begin(), result.end(), [](const KnownNode& a, const KnownNode& b) {
+        return a.nodeName == b.nodeName ? a.nodeUuid < b.nodeUuid : a.nodeName < b.nodeName;
+    });
+    return result;
+}
+
+auto HeadlessNodesPanel::clientTls() const -> s7::transport::TlsConfig
+{
+    const auto cert = certFileEdit_ ? certFileEdit_->text().trimmed() : QString();
+    return tlsConfigForRequest(caFileEdit_ ? caFileEdit_->text().trimmed() : QString(), cert,
+                               keyFileEdit_ ? keyFileEdit_->text().trimmed() : QString(), !cert.isEmpty());
+}
+
 } // namespace s7studio::ui
 
 
