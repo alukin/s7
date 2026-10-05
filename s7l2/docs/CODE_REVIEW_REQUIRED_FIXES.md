@@ -546,7 +546,7 @@ Test: `s7studio --layout-check` (`s7studio_layout_wire_types_ok`, `s7studio_layo
 ## P3: Smaller correctness issues
 
 - ~~`NetSink` sets `data_type = 0x000C`, which the prototype codec treats as F64 but the wire draft assigns to `U128`.~~ Fixed 2026-10-05: the wire type is the stream's signal type (`SignalType` values are the wire ids).
-- `PinkNoiseGenerator` is described as Voss-McCartney but outputs the mean of the last 7 white samples (low-pass noise, not 1/f). [noise_elements.cpp](../s7noise/src/noise_elements.cpp:53)
+- ~~`PinkNoiseGenerator` is described as Voss-McCartney but outputs the mean of the last 7 white samples (low-pass noise, not 1/f).~~ Fixed 2026-10-05: Voss-McCartney (Gardner) with 16 rows; `s7noise_smoke` measures -3.1 dB per octave for pink and a flat spectrum for white noise, and their levels.
 - `s7studio/src/local_runtime.hpp` is an unused duplicate of `local_runtime_v2.hpp`; `examples/*.cpp` are not built; ~~`s7ctl` is a placeholder~~ (now the deployment CLI, 2026-10-05). Remove or wire into the build.
 - ~~`ControlPlaneMvp::handle_abort_deployment` reads `active_deployment_id_` after releasing the mutex.~~ Already fixed by the deployment rework: the handler runs under the mutex and `active_deployment_id_` no longer exists; every reader of `active_` holds the lock (checked 2026-10-05).
 - ~~The WebSocket server performs TLS and HTTP handshakes on the accept thread.~~ Fixed 2026-10-05: handshakes are asynchronous with a 10 s timeout.

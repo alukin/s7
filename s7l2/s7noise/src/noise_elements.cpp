@@ -1,4 +1,6 @@
 #include "s7noise/noise_elements.hpp"
+#include <bit>
+#include <cmath>
 #include <random>
 #include <stdexcept>
 
@@ -33,17 +35,15 @@ void WhiteNoiseGenerator::step() {
 PinkNoiseGenerator::PinkNoiseGenerator(double amplitude, uint32_t seed)
     : s7::Element("PinkNoiseGenerator", true),
       rng_(seed == 0 ? std::random_device{}() : seed),
-      white_dist_(0.0, amplitude),
-      pink_index_(0),
+      scale_(amplitude / std::sqrt(static_cast<double>(kRows + 1))),
       output_value_(0.0)
 {
     if (amplitude < 0.0) {
         throw std::invalid_argument("Amplitude must be non-negative");
     }
-
-    // Initialize pink noise state
-    for (int i = 0; i < 7; ++i) {
-        pink_[i] = 0.0;
+    for (auto& row : rows_) {
+        row = white_dist_(rng_);
+        sum_ += row;
     }
 
     // Register output port
@@ -51,21 +51,23 @@ PinkNoiseGenerator::PinkNoiseGenerator(double amplitude, uint32_t seed)
 }
 
 void PinkNoiseGenerator::step() {
-    // Generate white noise sample
-    double white = white_dist_(rng_);
-
-    // Update pink noise using Voss-McCartney algorithm
-    pink_[pink_index_] = white;
-    pink_index_ = (pink_index_ + 1) % 7;
-
-    // Sum of the array gives pink noise
-    // Divide by 7 to normalize amplitude
-    double pink = 0.0;
-    for (int i = 0; i < 7; ++i) {
-        pink += pink_[i];
+    // Renew the row given by the number of trailing zeros of the counter:
+    // row k changes every 2^(k+1) samples (counter 0 renews nothing).
+    ++counter_;
+    const int row = std::countr_zero(counter_);
+    if (row < kRows) {
+        const double fresh = white_dist_(rng_);
+        sum_ += fresh - rows_[row];
+        rows_[row] = fresh;
     }
-
-    output_value_ = pink / 7.0;
+    if ((counter_ & 0xFFFF) == 0) {
+        // Re-sum now and then so rounding in the running sum cannot drift.
+        sum_ = 0.0;
+        for (const auto value : rows_) {
+            sum_ += value;
+        }
+    }
+    output_value_ = scale_ * (sum_ + white_dist_(rng_));
 }
 
 } // namespace s7noise

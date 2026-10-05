@@ -26,10 +26,15 @@ private:
     double output_value_;
 };
 
-// Pink noise generator (1/f noise)
-// Uses Voss-McCartney algorithm for efficiency
+// Pink noise generator (1/f noise, -3 dB per octave) by the Voss-McCartney
+// algorithm (Gardner's form): kRows white values, where row k is renewed
+// every 2^(k+1) samples, plus a fresh white value each sample. Their sum has
+// a 1/f spectrum over about kRows octaves. amplitude is the output's
+// standard deviation.
 class PinkNoiseGenerator : public s7::Element {
 public:
+    static constexpr int kRows = 16;
+
     explicit PinkNoiseGenerator(
         double amplitude = 1.0,
         uint32_t seed = 0
@@ -39,15 +44,14 @@ public:
 
 private:
     std::mt19937 rng_;
-    std::normal_distribution<double> white_dist_;
+    std::normal_distribution<double> white_dist_{0.0, 1.0};
+    double scale_;
 
-    // Voss-McCartney state
-    double pink_[7];
-    int pink_index_;
+    double rows_[kRows]{};
+    double sum_{0.0};
+    std::uint64_t counter_{0};
 
     double output_value_;
-
-    void update_pink();
 };
 
 } // namespace s7noise

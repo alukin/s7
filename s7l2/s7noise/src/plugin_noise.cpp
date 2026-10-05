@@ -73,7 +73,7 @@ s7::ElementMetadata create_pink_noise_metadata() {
     s7::ElementMetadata meta;
     meta.type_name = "PinkNoiseGenerator";
     meta.display_name = "Pink Noise";
-    meta.description = "Generates pink noise (1/f noise) using Voss-McCartney algorithm";
+    meta.description = "Pink noise (1/f, -3 dB per octave over 16 octaves), Voss-McCartney algorithm";
     meta.category = "simulation";
     meta.version = "1.0.0";
     meta.tags = {"noise", "source", "stateful", "random", "pink"};
