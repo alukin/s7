@@ -1,219 +1,103 @@
 #include "s7spectral/fft_element.hpp"
+
+#include <cmath>
+#include <numeric>
 #include <stdexcept>
-#include <cstring>
-#include <chrono>
 
 namespace s7spectral {
 
-WindowedFFT::WindowedFFT(
-    uint32_t fft_size,
-    uint32_t hop_size,
-    float sample_rate_hz,
-    WindowType window_type
-)
-    : s7::Element("WindowedFFT", true),
-      fft_size_(fft_size),
-      hop_size_(hop_size),
-      sample_rate_hz_(sample_rate_hz),
-      window_(fft_size, window_type),
-      frame_ready_(false),
-      frame_counter_(0),
-      input_value_(0.0)
+WindowedFFT::WindowedFFT(const std::uint32_t fft_size,
+                         const std::uint32_t hop_size,
+                         const double sample_rate_hz,
+                         const WindowType window_type)
+    : s7::Element("WindowedFFT", true)
+    , fft_size_(fft_size)
+    , hop_size_(hop_size)
+    , sample_rate_hz_(sample_rate_hz)
+    , window_(fft_size, window_type)
+    , window_sum_(std::accumulate(window_.coefficients().begin(), window_.coefficients().end(), 0.0))
 {
-    // Validate parameters
-    if (fft_size == 0 || (fft_size & (fft_size - 1)) != 0) {
-        throw std::invalid_argument("FFT size must be power of 2");
+    if (fft_size < 4 || (fft_size & (fft_size - 1)) != 0) {
+        throw std::invalid_argument("WindowedFFT fft_size must be a power of 2 and at least 4.");
     }
     if (hop_size == 0 || hop_size > fft_size) {
-        throw std::invalid_argument("hop_size must be > 0 and <= fft_size");
+        throw std::invalid_argument("WindowedFFT hop_size must be in [1, fft_size].");
     }
-    if (sample_rate_hz <= 0.0f) {
-        throw std::invalid_argument("sample_rate_hz must be positive");
-    }
-
-    // Allocate FFTW buffers
-    fft_out_ = fftwf_alloc_complex(fft_size);
-    if (!fft_out_) {
-        throw std::runtime_error("Failed to allocate FFTW output buffer");
+    if (!(sample_rate_hz > 0.0)) {
+        throw std::invalid_argument("WindowedFFT sample_rate_hz must be positive.");
     }
 
-    // Create FFTW plan for real-to-complex FFT
-    std::vector<float> dummy_input(fft_size);
-    fft_plan_ = fftwf_plan_dft_r2c_1d(
-        fft_size,
-        dummy_input.data(),
-        fft_out_,
-        FFTW_MEASURE
-    );
-
-    if (!fft_plan_) {
+    fft_in_ = fftwf_alloc_real(fft_size);
+    fft_out_ = fftwf_alloc_complex(fft_size / 2 + 1);
+    if (fft_in_ && fft_out_) {
+        plan_ = fftwf_plan_dft_r2c_1d(static_cast<int>(fft_size), fft_in_, fft_out_, FFTW_ESTIMATE);
+    }
+    if (!plan_) {
+        fftwf_free(fft_in_);
         fftwf_free(fft_out_);
-        throw std::runtime_error("Failed to create FFTW plan");
+        throw std::runtime_error("WindowedFFT could not create its FFTW plan.");
     }
 
-    // Allocate working buffer
-    fft_input_.resize(fft_size, 0.0f);
-
-    // Initialize spectral frame
-    latest_frame_.bins.resize(fft_size / 2 + 1);
-    latest_frame_.metadata.fft_size = fft_size;
-    latest_frame_.metadata.sample_rate_hz = sample_rate_hz;
-    latest_frame_.metadata.hop_size = hop_size;
-    latest_frame_.metadata.window_type =
-        (s7::SpectralFrame::Metadata::WindowType)window_type;
-    latest_frame_.metadata.freq_resolution_hz =
-        sample_rate_hz / fft_size;
-    latest_frame_.metadata.nyquist_hz = sample_rate_hz / 2.0f;
-
-    // Register ports
     register_input(0, "in", s7::SignalType::DOUBLE, nullptr);
+    register_output(0, "peak_frequency_hz", s7::SignalType::DOUBLE, &peak_frequency_hz_);
+    register_output(1, "peak_amplitude", s7::SignalType::DOUBLE, &peak_amplitude_);
 }
 
-WindowedFFT::~WindowedFFT() {
-    if (fft_plan_) {
-        fftwf_destroy_plan(fft_plan_);
-    }
-    if (fft_out_) {
-        fftwf_free(fft_out_);
-    }
-}
-
-void WindowedFFT::step() {
-    frame_ready_ = false;
-
-    // Read input sample
-    input_value_ = read_input<double>(0);
-
-    // Add to circular buffer
-    input_buffer_.push_back(static_cast<float>(input_value_));
-
-    // Keep buffer at max size
-    if (input_buffer_.size() > fft_size_) {
-        input_buffer_.pop_front();
-    }
-
-    // Check if we have enough samples for a new frame
-    if (input_buffer_.size() < fft_size_) {
-        return;
-    }
-
-    // We have a full window - compute FFT
-    // Copy window from buffer, skipping the oldest samples
-    size_t start_idx = input_buffer_.size() - fft_size_;
-    for (size_t i = 0; i < fft_size_; ++i) {
-        fft_input_[i] = input_buffer_[start_idx + i];
-    }
-
-    // Apply window function
-    window_.apply(fft_input_.data(), fft_size_);
-
-    // Execute FFT
-    fftwf_execute_dft_r2c(
-        fft_plan_,
-        fft_input_.data(),
-        fft_out_
-    );
-
-    // Copy results to spectral frame
-    size_t num_bins = fft_size_ / 2 + 1;
-    for (size_t i = 0; i < num_bins; ++i) {
-        latest_frame_.bins[i] = std::complex<float>(
-            fft_out_[i][0],
-            fft_out_[i][1]
-        );
-    }
-
-    // Update metadata
-    latest_frame_.metadata.timestamp = std::chrono::system_clock::now();
-    latest_frame_.metadata.frame_number = frame_counter_++;
-
-    frame_ready_ = true;
-
-    // Remove old samples (overlap processing)
-    for (uint32_t i = 0; i < hop_size_ && !input_buffer_.empty(); ++i) {
-        input_buffer_.pop_front();
-    }
-}
-
-void WindowedFFT::reset() {
-    input_buffer_.clear();
-    frame_ready_ = false;
-    frame_counter_ = 0;
-    std::fill(fft_input_.begin(), fft_input_.end(), 0.0f);
-}
-
-// ============================================================================
-// MagnitudeSpectrum Implementation
-// ============================================================================
-
-MagnitudeSpectrum::MagnitudeSpectrum()
-    : s7::Element("MagnitudeSpectrum", false)
+WindowedFFT::~WindowedFFT()
 {
-    // Register ports
-    register_input(0, "frame", s7::SignalType::DOUBLE, nullptr);
+    fftwf_destroy_plan(plan_);
+    fftwf_free(fft_in_);
+    fftwf_free(fft_out_);
 }
 
-MagnitudeSpectrum::~MagnitudeSpectrum() = default;
-
-void MagnitudeSpectrum::bind_inputs(std::span<const s7::InputBinding> bindings) {
-    // Type-erased binding for SpectralFrame
-    // Not using the standard binding mechanism since we have complex data
-    s7::Element::bind_inputs(bindings);
-}
-
-void MagnitudeSpectrum::step() {
-    // In practice, this would receive spectral frame data
-    // For now, it's a placeholder for magnitude computation
-    output_frame_.bins.resize(input_frame_.bins.size());
-
-    for (size_t i = 0; i < input_frame_.bins.size(); ++i) {
-        // Compute magnitude
-        float mag = std::abs(input_frame_.bins[i]);
-        output_frame_.bins[i] = std::complex<float>(mag, 0.0f);
-    }
-
-    output_frame_.metadata = input_frame_.metadata;
-}
-
-// ============================================================================
-// PowerSpectrumDB Implementation
-// ============================================================================
-
-PowerSpectrumDB::PowerSpectrumDB(float reference, float floor_db)
-    : s7::Element("PowerSpectrumDB", false),
-      reference_(reference),
-      floor_db_(floor_db)
+void WindowedFFT::step()
 {
-    register_input(0, "frame", s7::SignalType::DOUBLE, nullptr);
+    history_.push_back(static_cast<float>(read_input<double>(0)));
+    if (history_.size() > fft_size_) {
+        history_.pop_front();
+    }
+    ++samples_since_frame_;
+    if (history_.size() == fft_size_ && samples_since_frame_ >= hop_size_) {
+        samples_since_frame_ = 0;
+        compute_fft();
+    }
 }
 
-PowerSpectrumDB::~PowerSpectrumDB() = default;
+void WindowedFFT::compute_fft()
+{
+    std::copy(history_.begin(), history_.end(), fft_in_);
+    window_.apply(fft_in_, fft_size_);
+    fftwf_execute(plan_);
 
-void PowerSpectrumDB::bind_inputs(std::span<const s7::InputBinding> bindings) {
-    s7::Element::bind_inputs(bindings);
-}
+    const std::size_t bins = fft_size_ / 2 + 1;
+    auto magnitude = [this](const std::size_t bin) {
+        return std::hypot(static_cast<double>(fft_out_[bin][0]), static_cast<double>(fft_out_[bin][1]));
+    };
 
-void PowerSpectrumDB::step() {
-    output_frame_.bins.resize(input_frame_.bins.size());
-
-    for (size_t i = 0; i < input_frame_.bins.size(); ++i) {
-        float mag = std::abs(input_frame_.bins[i]);
-
-        float db;
-        if (mag < 1e-10f) {
-            db = floor_db_;
-        } else {
-            db = 20.0f * std::log10(mag / reference_);
-            if (db < floor_db_) {
-                db = floor_db_;
-            }
+    // Strongest bin, excluding DC.
+    std::size_t peak = 1;
+    for (std::size_t bin = 2; bin < bins; ++bin) {
+        if (magnitude(bin) > magnitude(peak)) {
+            peak = bin;
         }
-
-        output_frame_.bins[i] = std::complex<float>(db, 0.0f);
     }
 
-    output_frame_.metadata = input_frame_.metadata;
+    // Parabolic interpolation on the log magnitudes of the neighbours.
+    double offset = 0.0;
+    if (peak + 1 < bins) {
+        const double left = std::log(magnitude(peak - 1) + 1e-30);
+        const double centre = std::log(magnitude(peak) + 1e-30);
+        const double right = std::log(magnitude(peak + 1) + 1e-30);
+        const double denominator = left - 2.0 * centre + right;
+        if (denominator < 0.0) {
+            offset = 0.5 * (left - right) / denominator;
+        }
+    }
+
+    peak_frequency_hz_ = (static_cast<double>(peak) + offset) * sample_rate_hz_ / fft_size_;
+    // A sine of amplitude A gives |X| ~ A * sum(w) / 2 at its bin (less the
+    // window's scalloping loss when it falls between bins).
+    peak_amplitude_ = 2.0 * magnitude(peak) / window_sum_;
 }
 
 } // namespace s7spectral
-

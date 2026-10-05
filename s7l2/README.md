@@ -17,7 +17,7 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 | `s7observe/` | Read-only output sampling (`ObservationService`) |
 | `s7runtime/` | Headless runtime executable: JSON schema loader, plugin loader, node identity, control-plane MVP |
 | `s7noise/` | Example plugin: white and pink noise sources |
-| `s7spectral/` | FFT plugin: experimental, deliberately excluded from the build; it does not compile and needs block/frame signal types that the runtime does not have yet |
+| `s7spectral/` | Reference third-party plugin (FFT), built out of tree against the installed SDK by `ctest -R s7spectral_sdk_smoke` |
 | `s7studio/` | Qt6 Studio: diagram editor, element library, local embedded runtime with Scope windows, headless node discovery |
 | `s7ctl/` | CLI placeholder |
 | `s7tests/` | Reserved for whole-system tests; module smoke tests live in `<module>/tests/` |

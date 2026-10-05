@@ -1,178 +1,114 @@
 #include "s7spectral/fft_element.hpp"
 #include "s7spectral/spectral_window.hpp"
-#include "s7/element_registry.hpp"
+
+#include "s7/element_metadata.hpp"
 #include "s7/element_plugin.hpp"
+#include "s7/element_registry.hpp"
 
 #include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
 
-// ============================================================================
-// Plugin Information
-// ============================================================================
+// s7spectral is built out of tree against the installed S7 SDK
+// (find_package(s7core)); it is the reference third-party plugin.
 
 static const S7PluginInfo plugin_info{
     .api_version = S7_PLUGIN_API_VERSION,
-    .element_count = 3,
+    .element_count = 1,
     .plugin_name = "s7spectral",
     .plugin_version = "1.0.0",
-    .author = "S7 Project"
+    .author = "S7 Project",
 };
+
+static const char plugin_manifest_json[] = R"json(
+{
+  "api_version": 1,
+  "plugin_name": "s7spectral",
+  "plugin_version": "1.0.0",
+  "author": "S7 Project",
+  "description": "Spectral analysis elements (FFTW); reference out-of-tree plugin.",
+  "element_count": 1,
+  "elements": ["WindowedFFT"]
+}
+)json";
 
 extern "C" {
 
-const S7PluginInfo* s7_plugin_query() {
+const S7PluginInfo* s7_plugin_query()
+{
     return &plugin_info;
 }
 
-} // extern "C"
+const char* s7_plugin_manifest_json()
+{
+    return plugin_manifest_json;
+}
 
-// ============================================================================
-// Element Metadata and Registration
-// ============================================================================
+} // extern "C"
 
 namespace {
 
-// WindowedFFT metadata
-s7::ElementMetadata create_windowed_fft_metadata() {
+s7::ElementMetadata windowed_fft_metadata()
+{
     s7::ElementMetadata meta;
     meta.type_name = "WindowedFFT";
     meta.display_name = "Windowed FFT";
-    meta.description = "Real-to-complex FFT with sliding window for spectral analysis";
+    meta.description = "Sliding windowed FFT: dominant frequency and its amplitude";
     meta.category = "spectral";
     meta.version = "1.0.0";
-    meta.tags = {"fft", "spectral", "waterfall", "stateful", "fftw3"};
+    meta.tags = {"fft", "spectral", "stateful", "fftw3"};
 
-    meta.input_ports.push_back({
-        "in", "Input signal", s7::SignalType::DOUBLE, false
-    });
-
-    // Note: Output is SpectralFrame, not standard signal type
-    meta.output_ports.push_back({
-        "spectrum", "Spectral frame (complex FFT bins)", s7::SignalType::DOUBLE, false
-    });
+    meta.input_ports.push_back({"in", "Input signal", s7::SignalType::DOUBLE, false});
+    meta.output_ports.push_back({"peak_frequency_hz", "Dominant frequency (Hz)", s7::SignalType::DOUBLE, false});
+    meta.output_ports.push_back({"peak_amplitude", "Amplitude of the dominant component", s7::SignalType::DOUBLE, false});
 
     meta.parameters = {
-        {"fft_size", "int", "FFT window size (power of 2)", 1024, 64, 65536, true},
-        {"hop_size", "int", "Samples between windows", 512, 1, 65536, true},
-        {"sample_rate_hz", "real", "Sample rate in Hz", 44100.0, 1.0, 1e6, true},
-        {"window_type", "enum", "Window function", "HANN",
-         {"RECTANGULAR", "HANN", "HAMMING", "BLACKMAN", "BLACKMAN_HARRIS", "NUTTALL"},
-         true}
+        {"fft_size", "int", "FFT window size (power of 2)", 1024, 4, 65536, {}, false},
+        {"hop_size", "int", "Samples between transforms", 512, 1, 65536, {}, false},
+        {"sample_rate_hz", "real", "Sample rate in Hz", 44100.0, 1e-3, 1e12, {}, false},
+        {"window_type", "enum", "Window function", "HANN", std::nullopt, std::nullopt,
+         {"RECTANGULAR", "HANN", "HAMMING", "BLACKMAN", "BLACKMAN_HARRIS", "NUTTALL"}, false},
     };
 
     meta.visual = {"box", "#9C27B0", 120, 50, "waveform"};
     return meta;
 }
 
-// MagnitudeSpectrum metadata
-s7::ElementMetadata create_magnitude_spectrum_metadata() {
-    s7::ElementMetadata meta;
-    meta.type_name = "MagnitudeSpectrum";
-    meta.display_name = "Magnitude Spectrum";
-    meta.description = "Extract magnitude from complex FFT bins";
-    meta.category = "spectral";
-    meta.version = "1.0.0";
-    meta.tags = {"spectral", "magnitude", "conversion"};
-
-    meta.input_ports.push_back({
-        "frame", "Complex spectral frame", s7::SignalType::DOUBLE, false
-    });
-
-    meta.output_ports.push_back({
-        "magnitude", "Magnitude values", s7::SignalType::DOUBLE, false
-    });
-
-    meta.visual = {"box", "#9C27B0", 100, 50, "waveform"};
-    return meta;
+s7spectral::WindowType window_type_from_name(const std::string& name)
+{
+    using s7spectral::WindowType;
+    if (name == "RECTANGULAR") return WindowType::RECTANGULAR;
+    if (name == "HANN") return WindowType::HANN;
+    if (name == "HAMMING") return WindowType::HAMMING;
+    if (name == "BLACKMAN") return WindowType::BLACKMAN;
+    if (name == "BLACKMAN_HARRIS") return WindowType::BLACKMAN_HARRIS;
+    if (name == "NUTTALL") return WindowType::NUTTALL;
+    throw std::invalid_argument("WindowedFFT: unknown window_type '" + name + "'.");
 }
 
-// PowerSpectrumDB metadata
-s7::ElementMetadata create_power_spectrum_db_metadata() {
-    s7::ElementMetadata meta;
-    meta.type_name = "PowerSpectrumDB";
-    meta.display_name = "Power Spectrum (dB)";
-    meta.description = "Convert magnitude spectrum to dB scale with floor";
-    meta.category = "spectral";
-    meta.version = "1.0.0";
-    meta.tags = {"spectral", "dB", "power", "conversion"};
-
-    meta.input_ports.push_back({
-        "magnitude", "Magnitude spectrum", s7::SignalType::DOUBLE, false
-    });
-
-    meta.output_ports.push_back({
-        "power_db", "Power in dB scale", s7::SignalType::DOUBLE, false
-    });
-
-    meta.parameters = {
-        {"reference", "real", "Reference level for dB calculation", 1.0, 0.0001, 1000.0, false},
-        {"floor_db", "real", "Minimum dB floor", -200.0, -300.0, 0.0, false}
-    };
-
-    meta.visual = {"box", "#9C27B0", 120, 50, "waveform"};
-    return meta;
-}
-
-} // anonymous namespace
-
-// ============================================================================
-// Plugin Registration
-// ============================================================================
+} // namespace
 
 extern "C" {
 
-void s7_register_elements(void* registry_ptr) {
+void s7_register_elements(void* registry_ptr)
+{
     auto* registry = static_cast<s7::ElementRegistry*>(registry_ptr);
-
-    // Register WindowedFFT
     registry->register_element(s7::ElementDescriptor(
         "WindowedFFT",
         [](const s7::ElementCreationContext& ctx) {
-            uint32_t fft_size = static_cast<uint32_t>(ctx.get_int("fft_size"));
-            uint32_t hop_size = static_cast<uint32_t>(ctx.get_int("hop_size"));
-            float sample_rate_hz = static_cast<float>(ctx.get_real("sample_rate_hz"));
-
-            std::string window_name = ctx.get_string("window_type");
-            s7spectral::WindowType window_type = s7spectral::WindowType::HANN;
-
-            if (window_name == "RECTANGULAR") {
-                window_type = s7spectral::WindowType::RECTANGULAR;
-            } else if (window_name == "HAMMING") {
-                window_type = s7spectral::WindowType::HAMMING;
-            } else if (window_name == "BLACKMAN") {
-                window_type = s7spectral::WindowType::BLACKMAN;
-            } else if (window_name == "BLACKMAN_HARRIS") {
-                window_type = s7spectral::WindowType::BLACKMAN_HARRIS;
-            } else if (window_name == "NUTTALL") {
-                window_type = s7spectral::WindowType::NUTTALL;
+            const auto fft_size = ctx.has_param("fft_size") ? ctx.get_int("fft_size") : 1024;
+            const auto hop_size = ctx.has_param("hop_size") ? ctx.get_int("hop_size") : 512;
+            if (fft_size <= 0 || hop_size <= 0) {
+                throw std::invalid_argument("WindowedFFT: fft_size and hop_size must be positive.");
             }
-
             return std::make_unique<s7spectral::WindowedFFT>(
-                fft_size, hop_size, sample_rate_hz, window_type
-            );
+                static_cast<std::uint32_t>(fft_size),
+                static_cast<std::uint32_t>(hop_size),
+                ctx.has_param("sample_rate_hz") ? ctx.get_real("sample_rate_hz") : 44100.0,
+                window_type_from_name(ctx.has_param("window_type") ? ctx.get_string("window_type") : "HANN"));
         },
-        create_windowed_fft_metadata()
-    ));
-
-    // Register MagnitudeSpectrum
-    registry->register_element(s7::ElementDescriptor(
-        "MagnitudeSpectrum",
-        [](const s7::ElementCreationContext& ctx) {
-            return std::make_unique<s7spectral::MagnitudeSpectrum>();
-        },
-        create_magnitude_spectrum_metadata()
-    ));
-
-    // Register PowerSpectrumDB
-    registry->register_element(s7::ElementDescriptor(
-        "PowerSpectrumDB",
-        [](const s7::ElementCreationContext& ctx) {
-            float reference = static_cast<float>(ctx.get_real("reference"));
-            float floor_db = static_cast<float>(ctx.get_real("floor_db"));
-            return std::make_unique<s7spectral::PowerSpectrumDB>(reference, floor_db);
-        },
-        create_power_spectrum_db_metadata()
-    ));
+        windowed_fft_metadata()));
 }
 
 } // extern "C"
-

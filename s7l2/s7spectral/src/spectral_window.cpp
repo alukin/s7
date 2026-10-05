@@ -5,7 +5,7 @@
 namespace s7spectral {
 
 SpectralWindow::SpectralWindow(size_t size, WindowType type)
-    : type_(type), normalization_(1.0f)
+    : normalization_(1.0f), type_(type)
 {
     coefficients_.resize(size);
 

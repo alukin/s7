@@ -287,7 +287,7 @@ Specify whether integer signal values are stored and computed as their declared 
 
 Relevant code: [element.hpp](../s7core/include/s7/element.hpp:29), [element.hpp](../s7core/include/s7/element.hpp:82).
 
-## P3: Integrate or clearly isolate the spectral plugin build — isolated 2026-10-04
+## P3: Integrate or clearly isolate the spectral plugin build — fixed 2026-10-05
 
 ### Current problem
 
@@ -310,7 +310,9 @@ Either integrate `s7spectral` as an optional top-level target with its FFTW depe
 - The supported build instructions reliably produce the advertised plugin, or clearly state that it is an independently built optional component.
 - Plugin discovery paths match the chosen install output.
 
-**Resolution:** isolated rather than integrated: the plugin cannot work until the runtime has block/frame signal types (a `SpectralFrame` port type), so fixing its compile errors would only ship elements without usable ports. The top-level README, AGENTS.md and the plugin README state that it is experimental and deliberately excluded from the build. Integration is future work together with block signal types.
+**Resolution (2026-10-05):** the plugin's role is the reference third-party plugin. `s7core` is now a shared library installed with its headers and an exported CMake package (`s7sdk` component, `find_package(s7core)`); `s7spectral` builds out of tree against it, with FFTW found through pkg-config. It compiles, provides a working `WindowedFFT` (dominant frequency and amplitude as scalar outputs; the FFTW plan now runs on FFTW-allocated buffers), and `MagnitudeSpectrum`/`PowerSpectrumDB` were removed until frame types exist. `ctest -R s7spectral_sdk_smoke` installs the SDK, builds the plugin, loads it with `PluginLoader` and checks the measured frequency.
+
+*Earlier (2026-10-04):* isolated rather than integrated: the plugin cannot work until the runtime has block/frame signal types (a `SpectralFrame` port type), so fixing its compile errors would only ship elements without usable ports. The top-level README, AGENTS.md and the plugin README state that it is experimental and deliberately excluded from the build. Integration is future work together with block signal types.
 
 Relevant code: [CMakeLists.txt](../CMakeLists.txt:51), [s7spectral/CMakeLists.txt](../s7spectral/CMakeLists.txt:7), [plugin_spectral.cpp](../s7spectral/src/plugin_spectral.cpp:53), [fft_element.cpp](../s7spectral/src/fft_element.cpp:69).
 
@@ -399,7 +401,7 @@ Define the runtime execution loop for served nodes: continuous stepping (free-ru
 
 Relevant code: [main.cpp](../s7runtime/src/main.cpp:157).
 
-## P2: Plugin unload after partial registration leaves dangling factories
+## P2: Plugin unload after partial registration leaves dangling factories — partly fixed 2026-10-05
 
 ### Current problem
 
@@ -413,6 +415,8 @@ Make registration transactional: register into a staging registry or remove the 
 
 - A plugin that fails midway leaves no descriptors from that plugin in the registry and the process keeps running.
 - Host and plugins resolve registry/element symbols from one shared `s7core`.
+
+**Progress:** `s7core` is a shared library used by the host and all plugins (second criterion). Transactional registration on failure is still open.
 
 Relevant code: [plugin_loader.cpp](../s7runtime/src/plugin_loader.cpp:308), [s7core/CMakeLists.txt](../s7core/CMakeLists.txt:4), [s7noise/CMakeLists.txt](../s7noise/CMakeLists.txt:23).
 

@@ -67,6 +67,25 @@ extern "C" void s7_register_elements(void* registry_ptr) {
 
 In-tree plugins are added with `add_subdirectory` and link `s7core`; see `s7noise/CMakeLists.txt`. Plugins install to `lib/s7/plugins`.
 
+## Third-party plugins (SDK)
+
+`s7core` is a shared library, so the host and every plugin use one copy of the registry and element code. It is installed with its headers and a CMake package as the `s7sdk` component:
+
+```bash
+cmake --install build --component s7sdk --prefix /opt/s7-sdk
+```
+
+An external plugin then uses `find_package(s7core)` and links `s7::s7core`:
+
+```cmake
+find_package(s7core 0.1 REQUIRED)
+add_library(myplugin MODULE src/plugin.cpp)
+target_link_libraries(myplugin PRIVATE s7::s7core)
+set_target_properties(myplugin PROPERTIES PREFIX "lib")   # libs7*.so is not required for explicit loading
+```
+
+`s7spectral/` is the reference third-party plugin: it is kept out of the main build and is built against the installed SDK by `ctest -R s7spectral_sdk_smoke` (`tools/test_third_party_plugin.sh`), which then loads it with `PluginLoader` and checks that its `WindowedFFT` element measures a sine correctly. The test is skipped when `fftw3f` is not installed.
+
 ## Discovery and loading
 
 Loader: `s7runtime/src/plugin_loader.cpp` (also compiled into `s7studio`).

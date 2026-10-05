@@ -10,7 +10,7 @@
 - `s7runtime/`: CLI/service wiring, JSON schema loading, execution loop (`s7runtime/src/main.cpp`).
 - `s7observe/`: read-only probing/sampling API around runtime (`s7observe/include/s7/observe.hpp`).
 - `s7noise/`: plugin-loaded noise elements (e.g., white/pink noise generators).
-- `s7spectral/`: experimental spectral-analysis plugin; excluded from the build until block/frame signal types exist (do not wire it into CMake as-is).
+- `s7spectral/`: reference third-party plugin, built out of tree against the installed SDK (`find_package(s7core)`) by `ctest -R s7spectral_sdk_smoke`; keep it out of the main build.
 - `s7io/`: file source/sink elements (compact binary, gnuplot text); future hardware I/O.
 - `s7net/`: network boundary elements and websocket/server-client scaffolding.
 - `s7ctl/`: CLI control/tooling module (currently minimal smoke-test scaffold).
