@@ -215,7 +215,7 @@ void register_builtin_elements(ElementRegistry& registry)
             m.input_ports[1].name = "rhs";
             m.input_ports[1].description = "Summation input 1 (weighted by weights[1]).";
             m.output_ports[0].description = "Weighted sum output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T"};
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T", "weights"};
             add_accumulator_variable(m);
             return m;
         }()));
@@ -236,7 +236,7 @@ void register_builtin_elements(ElementRegistry& registry)
             m.input_ports[1].name = "rhs";
             m.input_ports[1].description = "Multiplier input 1 (scaled by factors[1]).";
             m.output_ports[0].description = "Product output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T"};
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T", "factors"};
             add_accumulator_variable(m);
             return m;
         }()));

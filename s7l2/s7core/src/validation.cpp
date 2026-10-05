@@ -15,59 +15,18 @@ struct PrototypeInfo {
 };
 
 using PrototypeMap = std::unordered_map<std::string, PrototypeInfo>;
-// Element factories with resolved types, by element id.
-using FactoryMap = std::unordered_map<std::string, ElementFactory>;
 using AdjacencyMap = std::unordered_map<std::string, std::vector<std::string>>;
 
-struct PrototypeCatalog {
+// Elements by id, each created once for the whole check.
+using InstanceMap = std::unordered_map<std::string, const Element*>;
+
+PrototypeMap prototypes_of(const InstanceMap& instances) {
     PrototypeMap prototypes;
-    std::vector<std::string> errors;
-};
-
-std::unique_ptr<Element> make_element(const ElementSpec& spec, const FactoryMap& factories) {
-    const auto it = factories.find(spec.id);
-    if (it == factories.end() || !it->second) {
-        throw std::invalid_argument("Element '" + spec.id + "' has no factory.");
+    for (const auto& [id, element] : instances) {
+        prototypes.emplace(id, PrototypeInfo{element->input_count(), element->output_count(), element->has_causal_memory()});
     }
-
-    auto element = it->second();
-    if (!element) {
-        throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
-    }
-
-    return element;
+    return prototypes;
 }
-
-class PrototypeCatalogBuilder {
-public:
-    static PrototypeCatalog build(const Schema& schema, const FactoryMap& factories) {
-        PrototypeCatalog catalog;
-
-        for (const auto& spec : schema.elements()) {
-            if (spec.id.empty()) {
-                catalog.errors.emplace_back("Schema contains an element with an empty id.");
-                continue;
-            }
-
-            if (catalog.prototypes.contains(spec.id)) {
-                catalog.errors.emplace_back("Duplicate element id: '" + spec.id + "'.");
-                continue;
-            }
-
-            try {
-                auto element = make_element(spec, factories);
-                catalog.prototypes.emplace(spec.id,
-                                           PrototypeInfo{element->input_count(),
-                                                         element->output_count(),
-                                                         element->has_causal_memory()});
-            } catch (const std::exception& ex) {
-                catalog.errors.emplace_back(ex.what());
-            }
-        }
-
-        return catalog;
-    }
-};
 
 class GraphAlgorithms {
 public:
@@ -175,7 +134,7 @@ class ConnectionRulesValidator {
 public:
     static void validate(const Schema& schema,
                          const PrototypeMap& prototypes,
-                         const FactoryMap& factories,
+                         const InstanceMap& instances,
                          std::vector<std::string>& errors) {
         std::unordered_map<std::string, std::vector<int>> input_connection_count;
         for (const auto& [id, info] : prototypes) {
@@ -206,7 +165,7 @@ public:
                 continue;
             }
 
-            validate_port_types(connection, schema, factories, errors);
+            validate_port_types(connection, instances, errors);
 
             input_connection_count[connection.to_element][connection.to_port] += 1;
         }
@@ -224,25 +183,14 @@ public:
 
 private:
     static void validate_port_types(const Connection& connection,
-                                    const Schema& schema,
-                                    const FactoryMap& factories,
+                                    const InstanceMap& instances,
                                     std::vector<std::string>& errors) {
-        auto find_element_spec = [&schema](const std::string& id) -> const ElementSpec* {
-            for (const auto& spec : schema.elements()) {
-                if (spec.id == id) return &spec;
-            }
-            return nullptr;
-        };
+        const auto from_element = instances.find(connection.from_element);
+        const auto to_element = instances.find(connection.to_element);
+        if (from_element == instances.end() || to_element == instances.end()) return;
 
-        const auto* from_spec = find_element_spec(connection.from_element);
-        const auto* to_spec = find_element_spec(connection.to_element);
-        if (!from_spec || !to_spec) return;
-
-        auto from_element = make_element(*from_spec, factories);
-        auto to_element = make_element(*to_spec, factories);
-
-        auto from_outputs = from_element->output_ports();
-        auto to_inputs = to_element->input_ports();
+        const auto from_outputs = from_element->second->output_ports();
+        const auto to_inputs = to_element->second->input_ports();
 
         if (connection.from_port >= from_outputs.size() || connection.to_port >= to_inputs.size()) {
             return;
@@ -294,31 +242,58 @@ public:
 
 } // namespace
 
-ValidationResult Validator::validate(const Schema& schema) {
-    ValidationResult result;
+namespace detail {
+
+CheckedSchema check_schema(const Schema& schema) {
+    CheckedSchema checked;
     // Generic elements get their types first; the checks below then see
     // concrete elements only.
     auto resolved = TypeResolver::resolve(schema);
     if (!resolved.ok()) {
-        result.errors = std::move(resolved.errors);
-        return result;
+        checked.errors = std::move(resolved.errors);
+        return checked;
     }
-    FactoryMap factories;
+
+    // Every element is created once: the instance type inference already
+    // made (concrete elements), or by its resolved factory.
+    InstanceMap instances;
+    checked.elements.resize(schema.elements().size());
     for (std::size_t index = 0; index < schema.elements().size(); ++index) {
-        factories.emplace(schema.elements()[index].id, std::move(resolved.factories[index]));
+        const auto& spec = schema.elements()[index];
+        if (spec.id.empty()) {
+            checked.errors.emplace_back("Schema contains an element with an empty id.");
+            continue;
+        }
+        if (instances.contains(spec.id)) {
+            checked.errors.emplace_back("Duplicate element id: '" + spec.id + "'.");
+            continue;
+        }
+        try {
+            auto element = index < resolved.instances.size() && resolved.instances[index] ? std::move(resolved.instances[index])
+                                                                                         : resolved.factories[index]();
+            if (!element) {
+                throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
+            }
+            instances.emplace(spec.id, element.get());
+            checked.elements[index] = std::move(element);
+        } catch (const std::exception& ex) {
+            checked.errors.emplace_back(ex.what());
+        }
     }
 
-    auto catalog = PrototypeCatalogBuilder::build(schema, factories);
-    result.errors = std::move(catalog.errors);
-
-    ConnectionRulesValidator::validate(schema, catalog.prototypes, factories, result.errors);
-
-    if (!result.ok()) {
-        return result;
+    const auto prototypes = prototypes_of(instances);
+    ConnectionRulesValidator::validate(schema, prototypes, instances, checked.errors);
+    if (checked.errors.empty()) {
+        CycleRulesValidator::validate(schema, prototypes, checked.errors);
     }
+    return checked;
+}
 
-    CycleRulesValidator::validate(schema, catalog.prototypes, result.errors);
+} // namespace detail
 
+ValidationResult Validator::validate(const Schema& schema) {
+    ValidationResult result;
+    result.errors = detail::check_schema(schema).errors;
     return result;
 }
 

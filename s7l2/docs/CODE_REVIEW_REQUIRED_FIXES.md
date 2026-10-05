@@ -504,7 +504,7 @@ Validate params against metadata when an element is created from a descriptor (t
 
 Relevant code: [element_registry.cpp](../s7core/src/element_registry.cpp).
 
-## P3: Validation and compilation instantiate elements repeatedly
+## P3: Validation and compilation instantiate elements repeatedly — fixed 2026-10-05
 
 ### Current problem
 
@@ -518,7 +518,9 @@ Instantiate each element once per compilation and reuse the instance (or derive 
 
 - Each element factory is invoked exactly once per `Compiler::compile`.
 
-Relevant code: [validation.cpp](../s7core/src/validation.cpp:222), [compiler.cpp](../s7core/src/compiler.cpp:144).
+**Resolution:** reproduced: a concrete element's factory ran 6 times per `Compiler::compile`. Now validation and compilation share `detail::check_schema()`, which creates every element once and checks prototypes, connections and port types on those instances; the compiler builds the graph from them. Type inference no longer creates generic elements to count their ports: the count comes from the metadata (`VariadicInputSpec::count_parameter`, e.g. Adder's `weights`), and a concrete element's probe (needed to learn its ports) is kept in `ResolvedTypes::instances` and reused. An element whose ports cannot be known otherwise (a variadic generic element without `count_parameter`) is still probed. Test: `test_single_instantiation` in `s7core_type_inference_smoke` (concrete, generic and variadic elements: one call each per compile and per validation).
+
+Relevant code: [validation.cpp](../s7core/src/validation.cpp), [compiler.cpp](../s7core/src/compiler.cpp), [type_inference.cpp](../s7core/src/type_inference.cpp).
 
 ## P3: Studio auto-layout routes wires through nodes — found 2026-10-05
 

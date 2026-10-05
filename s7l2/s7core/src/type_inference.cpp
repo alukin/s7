@@ -106,6 +106,7 @@ struct ElementTypes {
     std::vector<SignalTypeSet> domains;          // per type variable
     std::vector<PortTypeRule> inputs;            // per actual port
     std::vector<PortTypeRule> outputs;
+    std::unique_ptr<Element> probe; // concrete elements: the instance their ports came from
 };
 
 std::string port_label(const std::string& element, const char* direction, const std::size_t port)
@@ -178,7 +179,7 @@ private:
         if (!spec.factory) {
             throw std::invalid_argument("element has no factory.");
         }
-        const auto probe = spec.factory();
+        auto probe = spec.factory();
         if (!probe) {
             throw std::invalid_argument("element factory returned null.");
         }
@@ -188,6 +189,7 @@ private:
         for (const auto& port : probe->output_ports()) {
             element.outputs.push_back(PortTypeRule::of_fixed(port.type));
         }
+        element.probe = std::move(probe);
     }
 
     void collect_generic(const ElementSpec& spec, ElementTypes& element)
@@ -209,6 +211,21 @@ private:
             }
             element.domains.push_back(domain);
             probe_types.push_back(domain.contains(SignalType::F64) ? SignalType::F64 : domain.types().front());
+        }
+        auto rule_for = [](const std::vector<PortTypeRule>& rules, const std::size_t port, const char* kind) {
+            if (rules.empty()) {
+                throw std::invalid_argument(std::string("generic element has ") + kind + " ports but no " + kind + " type rules.");
+            }
+            return rules[std::min(port, rules.size() - 1)];
+        };
+        if (generic.input_count) {
+            // Ports known from the metadata: the element is created only once,
+            // with its resolved types.
+            for (std::size_t port = 0; port < *generic.input_count; ++port) {
+                element.inputs.push_back(rule_for(generic.input_rules, port, "input"));
+            }
+            element.outputs = generic.output_rules;
+            return;
         }
         // The probe gives the actual port count (variadic elements). If the
         // default probe types are invalid together (an accumulator pinned to
@@ -239,12 +256,6 @@ private:
         if (!probe) {
             throw std::invalid_argument(first_error.empty() ? "element factory returned null." : first_error);
         }
-        auto rule_for = [](const std::vector<PortTypeRule>& rules, const std::size_t port, const char* kind) {
-            if (rules.empty()) {
-                throw std::invalid_argument(std::string("generic element has ") + kind + " ports but no " + kind + " type rules.");
-            }
-            return rules[std::min(port, rules.size() - 1)];
-        };
         for (std::size_t port = 0; port < probe->input_count(); ++port) {
             element.inputs.push_back(rule_for(generic.input_rules, port, "input"));
         }
@@ -312,7 +323,8 @@ private:
 
     void build_factories()
     {
-        for (const auto& element : elements_) {
+        for (auto& element : elements_) {
+            result_.instances.push_back(std::move(element.probe));
             std::vector<SignalType> types;
             for (const auto& domain : element.domains) {
                 types.push_back(*domain.single());

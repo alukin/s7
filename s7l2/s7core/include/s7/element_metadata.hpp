@@ -62,6 +62,10 @@ struct VariadicInputSpec {
     std::string port_name_template;         // "in_{index}" for naming
     SignalType signal_type = SignalType::F64;
     std::string type_rule{};                // as PortSpec::type_rule
+    // The array parameter whose length is the input count (e.g. Adder's
+    // "weights"); lets tools and type inference know the ports without
+    // creating the element.
+    std::string count_parameter{};
 };
 
 // Complete element metadata

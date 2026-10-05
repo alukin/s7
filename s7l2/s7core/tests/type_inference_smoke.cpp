@@ -431,6 +431,49 @@ void test_parameter_checks()
     expect(checked.at("amplitude").to_number<double>() == 1.0 && checked.contains("sample_rate_hz"), "defaults filled in");
 }
 
+// Validation and compilation create every element exactly once.
+void test_single_instantiation()
+{
+    static int concrete_calls = 0;
+    static int generic_calls = 0;
+    auto& registry = s7::ElementRegistry::instance();
+    if (!registry.find("CountingGain")) {
+        auto metadata = registry.find("Gain")->metadata();
+        metadata.type_name = "CountingGain";
+        const auto* gain = registry.find("Gain");
+        registry.register_element(s7::ElementDescriptor(
+            "CountingGain",
+            [gain](const s7::ElementCreationContext& ctx) {
+                ++generic_calls;
+                return gain->create(s7::ElementCreationContext{gain->metadata(), ctx.params, ctx.types});
+            },
+            metadata));
+    }
+    concrete_calls = 0;
+    generic_calls = 0;
+    s7::Schema schema{"once"};
+    schema.add_element("source", [] {
+        ++concrete_calls;
+        return std::make_unique<s7::Constant>(2.0);
+    });
+    add(schema, "gain", "CountingGain", {{"factor", 3}});
+    add(schema, "sum", "Adder", {{"weights", json::array{1, 1, 1}}});
+    schema.connect("source", 0, "gain", 0);
+    schema.connect("gain", 0, "sum", 0);
+    schema.connect("source", 0, "sum", 1);
+    schema.connect("gain", 0, "sum", 2);
+    s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+    expect(concrete_calls == 1, "concrete factory called once per compile, got " + std::to_string(concrete_calls));
+    expect(generic_calls == 1, "generic factory called once per compile, got " + std::to_string(generic_calls));
+    runtime.step();
+    expect(runtime.real_output_of("sum") == 14.0, "the graph built from the single instances runs");
+
+    concrete_calls = 0;
+    generic_calls = 0;
+    expect(s7::Validator::validate(schema).ok(), "valid");
+    expect(concrete_calls == 1 && generic_calls == 1, "validation alone creates each element once");
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -443,6 +486,7 @@ try {
     test_convert();
     test_accumulator_type();
     test_parameter_checks();
+    test_single_instantiation();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core type inference smoke: " << ex.what() << '\n';

@@ -135,6 +135,9 @@ struct GenericElement {
     std::vector<TypeVariable> variables;
     std::vector<PortTypeRule> input_rules;
     std::vector<PortTypeRule> output_rules;
+    // Number of input ports if known without creating the element (output
+    // ports follow output_rules); otherwise type inference creates a probe.
+    std::optional<std::size_t> input_count;
     // Creates the element for the resolved variable types (one per variable).
     std::function<std::unique_ptr<Element>(std::span<const SignalType>)> create;
 };
@@ -145,6 +148,10 @@ struct ResolvedTypes {
     std::vector<std::vector<SignalType>> variables;
     // Per schema element: factory producing the element with resolved types.
     std::vector<ElementFactory> factories;
+    // Per schema element: an instance created while resolving (concrete
+    // elements are created once to learn their ports), or null. Using it
+    // instead of calling the factory again keeps every factory to one call.
+    std::vector<std::unique_ptr<Element>> instances;
     std::vector<std::string> errors;
 
     [[nodiscard]] bool ok() const { return errors.empty(); }

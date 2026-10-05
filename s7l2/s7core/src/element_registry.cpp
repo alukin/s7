@@ -265,6 +265,21 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     for (const auto& port : metadata.output_ports) {
         generic.output_rules.push_back(rule_of(port.type_rule, port.type));
     }
+    // The port count without creating the element: fixed, or the length of
+    // the parameter that sets it.
+    if (!metadata.variadic_inputs.enabled) {
+        generic.input_count = metadata.input_ports.size();
+    } else if (const auto& count = metadata.variadic_inputs.count_parameter; !count.empty()) {
+        const boost::json::value* sizing = params.if_contains(count);
+        if (!sizing) {
+            const auto spec = std::find_if(metadata.parameters.begin(), metadata.parameters.end(),
+                                           [&](const ParameterSpec& parameter) { return parameter.name == count; });
+            sizing = spec != metadata.parameters.end() ? &spec->default_value : nullptr;
+        }
+        if (sizing && sizing->is_array()) {
+            generic.input_count = sizing->as_array().size();
+        }
+    }
     generic.create = [shared, alias, id, params = std::move(params)](const std::span<const SignalType> types) {
         std::vector<SignalType> effective(types.begin(), types.end());
         for (std::size_t index = 0; index < effective.size(); ++index) {

@@ -24,19 +24,6 @@ struct PrototypeInfo {
 
 using PrototypeMap = std::unordered_map<std::string, PrototypeInfo>;
 
-std::unique_ptr<Element> make_element(const ElementSpec& spec, const ElementFactory& factory) {
-    if (!factory) {
-        throw std::invalid_argument("Element '" + spec.id + "' has no factory.");
-    }
-
-    auto element = factory();
-    if (!element) {
-        throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
-    }
-
-    return element;
-}
-
 std::string join_errors(const std::vector<std::string>& errors) {
     std::ostringstream builder;
     for (std::size_t i = 0; i < errors.size(); ++i) {
@@ -132,9 +119,10 @@ ExecutableGraph Compiler::compile(const Schema& schema) {
 ExecutableGraph Compiler::compile(const Schema& schema,
                                   std::string runtime_instance_uuid,
                                   std::string schema_instance_uuid) {
-    const auto validation = Validator::validate(schema);
-    if (!validation.ok()) {
-        throw std::invalid_argument("Schema validation failed:\n" + join_errors(validation.errors));
+    // Validation creates every element once; the graph is built from them.
+    auto checked = detail::check_schema(schema);
+    if (!checked.errors.empty()) {
+        throw std::invalid_argument("Schema validation failed:\n" + join_errors(checked.errors));
     }
 
     ExecutableGraph executable_graph;
@@ -142,11 +130,10 @@ ExecutableGraph Compiler::compile(const Schema& schema,
     executable_graph.runtime_instance_uuid = validated_or_generated_uuid(runtime_instance_uuid);
     executable_graph.schema_instance_uuid = validated_or_generated_uuid(schema_instance_uuid);
 
-    auto resolved = TypeResolver::resolve(schema); // valid: validation passed
     PrototypeMap prototypes;
     for (std::size_t index = 0; index < schema.elements().size(); ++index) {
         const auto& spec = schema.elements()[index];
-        auto element = make_element(spec, resolved.factories[index]);
+        auto element = std::move(checked.elements[index]);
         const auto element_instance_uuid = element_instance_uuid_for(executable_graph.schema_instance_uuid, spec.id);
         if (executable_graph.instance_uuid_to_id.contains(element_instance_uuid)) {
             throw std::invalid_argument("Duplicate generated element instance UUID for element id: '" + spec.id + "'.");

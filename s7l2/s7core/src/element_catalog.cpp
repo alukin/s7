@@ -184,6 +184,9 @@ boost::json::value ElementCatalogService::to_json() const
             variadic["max_count"] = static_cast<std::uint64_t>(metadata.variadic_inputs.max_count);
             variadic["port_name_template"] = metadata.variadic_inputs.port_name_template;
             variadic["signal_type"] = std::string(signal_type_name(metadata.variadic_inputs.signal_type));
+            if (!metadata.variadic_inputs.count_parameter.empty()) {
+                variadic["count_parameter"] = metadata.variadic_inputs.count_parameter;
+            }
             element["variadic_inputs"] = variadic;
         }
 

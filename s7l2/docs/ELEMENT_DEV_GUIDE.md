@@ -56,7 +56,7 @@ private:
 
 Generic elements that work on both real and complex values are written as templates (`ConstantT<T>`, `GainT<T>`, `AdderT<T>`, `MultiplyT<T>`, `DelayT<T>` in `elements.hpp`) with aliases such as `Gain` / `ComplexGain`.
 
-Variable input count is expressed through parameters: `Adder` takes `weights` and `Multiply` takes `factors`, and the number of input ports equals the array length. `ElementMetadata::variadic_inputs` documents this for tools.
+Variable input count is expressed through parameters: `Adder` takes `weights` and `Multiply` takes `factors`, and the number of input ports equals the array length. `ElementMetadata::variadic_inputs` documents this for tools; set its `count_parameter` to that array parameter, so tools and type inference know the ports without creating the element. A factory runs once per compilation (validation reuses the instances), so side effects in constructors happen once.
 
 ## Metadata
 
