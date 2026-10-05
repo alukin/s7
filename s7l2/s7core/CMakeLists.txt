@@ -12,6 +12,7 @@ add_library(s7core SHARED
     src/element_catalog.cpp
     src/builtin_element_registry.cpp
     src/type_inference.cpp
+    src/convert.cpp
 )
 
 set_target_properties(s7core PROPERTIES

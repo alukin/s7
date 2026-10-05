@@ -1,4 +1,7 @@
 #include <algorithm>
+#include <cmath>
+#include <complex>
+#include <limits>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -215,6 +218,100 @@ void test_integrators()
     expect_error(algebraic, "Cycle detected without causal memory", "trapezoid loop needs causal memory");
 }
 
+template <SignalType From, SignalType To>
+s7::signal_storage_t<To> convert(const s7::signal_storage_t<From>& value, s7::ConvertMode mode = s7::ConvertMode::Value,
+                                 s7::ConvertRounding rounding = s7::ConvertRounding::HalfEven,
+                                 s7::ConvertOverflow overflow = s7::ConvertOverflow::Saturate)
+{
+    return s7::convert_value<From, To>(value, s7::ConvertOptions{mode, rounding, overflow});
+}
+
+template <typename F>
+bool throws(F&& f)
+{
+    try {
+        f();
+    } catch (const std::exception&) {
+        return true;
+    }
+    return false;
+}
+
+void test_convert()
+{
+    using M = s7::ConvertMode;
+    using R = s7::ConvertRounding;
+    using O = s7::ConvertOverflow;
+
+    // value mode, integer range rules
+    expect(convert<SignalType::U16, SignalType::I16>(40000) == 32767, "U16 -> I16 saturates");
+    expect(throws([] { (void)convert<SignalType::U16, SignalType::I16>(40000, M::Value, R::HalfEven, O::Fault); }),
+           "U16 -> I16 can fault");
+    expect(convert<SignalType::U128, SignalType::I128>(s7::kUint128Max) == s7::kInt128Max, "U128 max -> I128 saturates");
+    expect(convert<SignalType::I128, SignalType::U128>(-1) == 0, "I128 -1 -> U128 saturates to 0");
+    expect(convert<SignalType::I32, SignalType::I12>(-5000) == -2048, "I32 -> I12 saturates at 12 bits");
+
+    // value mode, float -> integer rounding and special values
+    expect(convert<SignalType::F64, SignalType::I32>(2.5) == 2 && convert<SignalType::F64, SignalType::I32>(-2.5) == -2,
+           "half even");
+    expect(convert<SignalType::F64, SignalType::I32>(2.9, M::Value, R::TowardZero) == 2, "toward zero");
+    expect(convert<SignalType::F64, SignalType::I8>(std::nan("")) == 0, "NaN -> 0 when saturating");
+    expect(throws([] { (void)convert<SignalType::F64, SignalType::I8>(std::nan(""), M::Value, R::HalfEven, O::Fault); }),
+           "NaN faults");
+    expect(convert<SignalType::F64, SignalType::U8>(1e300) == 255, "large value saturates");
+    expect(convert<SignalType::F128, SignalType::I128>(std::ldexp(1.0f128, 100)) == (static_cast<s7::int128_t>(1) << 100),
+           "F128 -> I128 exact");
+    expect(convert<SignalType::I128, SignalType::F128>(static_cast<s7::int128_t>(1) << 100) == std::ldexp(1.0f128, 100),
+           "I128 -> F128 exact");
+
+    // float narrowing overflow
+    expect(convert<SignalType::F64, SignalType::F32>(1e300) == std::numeric_limits<float>::max(), "F64 -> F32 saturates");
+    expect(convert<SignalType::F64, SignalType::F16>(1e6) == std::numeric_limits<std::float16_t>::max(), "F64 -> F16 saturates");
+    expect(throws([] { (void)convert<SignalType::F64, SignalType::F32>(1e300, M::Value, R::HalfEven, O::Fault); }),
+           "float overflow can fault");
+
+    // normalized mode
+    expect(convert<SignalType::I16, SignalType::F32>(16384, M::Normalized) == 0.5f, "I16 code -> F32");
+    expect(convert<SignalType::F32, SignalType::I8>(0.5f, M::Normalized) == 64, "F32 -> I8 code");
+    expect(convert<SignalType::F64, SignalType::I8>(1.0, M::Normalized) == 127, "1.0 saturates to max code");
+    expect(convert<SignalType::I16, SignalType::I8>(16384, M::Normalized) == 64, "I16 -> I8 rescales");
+    expect(convert<SignalType::I16, SignalType::I8>(16512, M::Normalized) == 64, "I16 -> I8 rounds half to even");
+    expect(convert<SignalType::I8, SignalType::I16>(-128, M::Normalized) == -32768, "I8 -> I16 rescales");
+    expect(convert<SignalType::U8, SignalType::F64>(255, M::Normalized) == 255.0 / 256.0, "unsigned codes are unipolar");
+    expect(throws([] { (void)convert<SignalType::U8, SignalType::I8>(1, M::Normalized); }),
+           "signed <-> unsigned normalized is refused");
+
+    // complex, component-wise; CU8 is offset binary
+    using CU8 = s7::signal_storage_t<SignalType::CU8>;
+    using CI8 = s7::signal_storage_t<SignalType::CI8>;
+    expect(convert<SignalType::CU8, SignalType::CI8>(CU8{128, 0}, M::Normalized) == CI8{0, -128}, "CU8 -> CI8 offset binary");
+    const auto iq = convert<SignalType::CU8, SignalType::C32>(CU8{255, 0}, M::Normalized);
+    expect(iq.real() == 127.0f / 128.0f && iq.imag() == -1.0f, "CU8 -> C32 normalized");
+    using CI16 = s7::signal_storage_t<SignalType::CI16>;
+    expect(convert<SignalType::CI16, SignalType::C64>(CI16{300, -5}) == std::complex<double>{300, -5}, "CI16 -> C64 value");
+    expect(convert<SignalType::C64, SignalType::CI8>(std::complex<double>{1.5, 2.5}) == CI8{2, 2}, "C64 -> CI8 rounds");
+    expect(throws([] { (void)s7::make_convert(SignalType::F64, SignalType::C64, {}); }), "real -> complex is refused");
+
+    // In a graph: CI8 I/Q widened to CI32 so the product does not saturate;
+    // the Convert's output type is inferred from the pinned Multiply.
+    s7::Schema widen{"widen"};
+    add(widen, "sample", "Constant", {{"type", "CI8"}, {"value", json::array{100, 100}}});
+    add(widen, "wide", "Convert", {{"mode", "value"}});
+    add(widen, "square", "Multiply", {{"type", "CI32"}});
+    widen.connect("sample", 0, "wide", 0);
+    widen.connect("wide", 0, "square", 0);
+    widen.connect("wide", 0, "square", 1);
+    s7::NodeRuntime runtime{s7::Compiler::compile(widen)};
+    runtime.step();
+    const auto squared = runtime.output_of<SignalType::CI32>("square");
+    expect(squared.re == 0 && squared.im == 20000, "widened CI32 product is exact");
+    expect(runtime.output_type_of("wide") == SignalType::CI32, "Convert output type inferred");
+
+    s7::Schema no_mode{"no_mode"};
+    add(no_mode, "c", "Convert", {{"from", "I16"}, {"to", "F32"}});
+    expect_error(no_mode, "explicit 'mode'", "Convert requires a mode");
+}
+
 } // namespace
 
 int main()
@@ -226,6 +323,7 @@ try {
     test_conflicts_and_errors();
     test_wide_and_complex_types();
     test_integrators();
+    test_convert();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core type inference smoke: " << ex.what() << '\n';

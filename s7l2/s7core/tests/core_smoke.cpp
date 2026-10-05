@@ -167,16 +167,17 @@ int main() try
     }
 
     {
-        auto int12ToDouble = std::make_unique<s7::Int12ToDouble>();
+        const s7::ConvertOptions normalized{s7::ConvertMode::Normalized};
+        auto int12ToDouble = std::make_unique<s7::ConvertT<s7::SignalType::I12, s7::SignalType::F64>>(normalized);
         assert(int12ToDouble->input_count() == 1);
         assert(int12ToDouble->input_ports()[0].type == s7::SignalType::I12);
         assert(int12ToDouble->output_ports()[0].type == s7::SignalType::F64);
 
-        auto doubleToInt12 = std::make_unique<s7::DoubleToInt12>();
+        auto doubleToInt12 = std::make_unique<s7::ConvertT<s7::SignalType::F64, s7::SignalType::I12>>(normalized);
         assert(doubleToInt12->input_ports()[0].type == s7::SignalType::F64);
         assert(doubleToInt12->output_ports()[0].type == s7::SignalType::I12);
 
-        // INT12 conversion: Q11 scaling, round half to even, saturation.
+        // Normalized INT12 conversion: Q11 scaling, round half to even, saturation.
         const std::vector<std::pair<double, std::int16_t>> int12Cases{
             {0.0, 0}, {0.5, 1024}, {-1.0, -2048}, {1.0, 2047}, {100.0, 2047}, {-100.0, -2048},
             {0.5 / 2048.0, 0}, {1.5 / 2048.0, 2}, {-2.5 / 2048.0, -2}, {std::nan(""), 0},

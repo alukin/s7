@@ -52,7 +52,7 @@ int main() try
     {
         s7::Schema typed{"typed"};
         typed.add_element("x", [] { return std::make_unique<s7::Constant>(0.75); });
-        typed.add_element("q", [] { return std::make_unique<s7::DoubleToInt12>(); });
+        typed.add_element("q", [] { return std::make_unique<s7::ConvertT<s7::SignalType::F64, s7::SignalType::I12>>(s7::ConvertOptions{s7::ConvertMode::Normalized}); });
         typed.connect("x", 0, "q", 0);
         s7::NodeRuntime typedRuntime{s7::Compiler::compile(typed)};
         typedRuntime.step();

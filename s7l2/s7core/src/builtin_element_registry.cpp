@@ -1,5 +1,6 @@
 #include "s7/builtin_element_registry.hpp"
 
+#include "s7/convert.hpp"
 #include "s7/elements.hpp"
 #include "s7/signal_values.hpp"
 #include "s7/type_inference.hpp"
@@ -445,32 +446,34 @@ void register_builtin_elements(ElementRegistry& registry)
         }()));
 
     registry.register_element(ElementDescriptor(
-        "Int12ToDouble",
-        [](const ElementCreationContext&) {
-            return std::make_unique<Int12ToDouble>();
+        "Convert",
+        [](const ElementCreationContext& ctx) {
+            if (!ctx.has_param("mode")) {
+                throw std::invalid_argument("Convert needs an explicit 'mode': 'value' or 'normalized'.");
+            }
+            ConvertOptions options;
+            options.mode = convert_mode_from_name(ctx.get_string("mode"));
+            if (ctx.has_param("rounding")) {
+                options.rounding = convert_rounding_from_name(ctx.get_string("rounding"));
+            }
+            if (ctx.has_param("overflow")) {
+                options.overflow = convert_overflow_from_name(ctx.get_string("overflow"));
+            }
+            return make_convert(ctx.type("from"), ctx.type("to"), options);
         },
         [] {
-            auto m = make_simple_metadata("Int12ToDouble", "Int12 to Double", "Convert INT12 code to DOUBLE (code / 2048)", "conversion", 1, 1);
-            m.input_ports[0].name = "in";
-            m.input_ports[0].description = "INT12 input sample.";
-            m.input_ports[0].type = SignalType::I12;
-            m.output_ports[0].description = "Converted DOUBLE output.";
-            m.output_ports[0].type = SignalType::F64;
-            return m;
-        }()));
-
-    registry.register_element(ElementDescriptor(
-        "DoubleToInt12",
-        [](const ElementCreationContext&) {
-            return std::make_unique<DoubleToInt12>();
-        },
-        [] {
-            auto m = make_simple_metadata("DoubleToInt12", "Double to Int12", "Quantize DOUBLE to INT12 (x * 2048, round half to even, saturate)", "conversion", 1, 1);
-            m.input_ports[0].name = "in";
-            m.input_ports[0].description = "DOUBLE input sample.";
-            m.input_ports[0].type = SignalType::F64;
-            m.output_ports[0].description = "Converted INT12 output.";
-            m.output_ports[0].type = SignalType::I12;
+            auto m = make_simple_metadata("Convert", "Convert",
+                                          "Explicit type conversion (value or normalized), with stated rounding and overflow",
+                                          "conversion", 1, 1);
+            m.type_variables.push_back({"from", signal_type_sets::all.types(), "from"});
+            m.type_variables.push_back({"to", signal_type_sets::all.types(), "to"});
+            m.input_ports[0].type_rule = "from";
+            m.output_ports[0].type_rule = "to";
+            m.parameters.push_back({"from", "type", "Input type (otherwise inferred)", nullptr, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"to", "type", "Output type (otherwise inferred)", nullptr, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"mode", "enum", "value: keep the number; normalized: fixed-point scaling", "value", std::nullopt, std::nullopt, {"value", "normalized"}, true});
+            m.parameters.push_back({"rounding", "enum", "Rounding of inexact results", "half_even", std::nullopt, std::nullopt, {"half_even", "toward_zero"}, false});
+            m.parameters.push_back({"overflow", "enum", "Out-of-range values", "saturate", std::nullopt, std::nullopt, {"saturate", "fault"}, false});
             return m;
         }()));
 }

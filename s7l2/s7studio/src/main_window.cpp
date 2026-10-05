@@ -351,8 +351,7 @@ auto elementDescriptionForType(const QString& type) -> QString
     if (type == "PreviousValue") return QStringLiteral("PreviousValue: unit-delay output element.");
     if (type == "ReImToComplex") return QStringLiteral("ReImToComplex: combines real/imaginary inputs.");
     if (type == "ComplexToReIm") return QStringLiteral("ComplexToReIm: splits complex input into real and imaginary outputs.");
-    if (type == "Int12ToDouble") return QStringLiteral("Int12ToDouble: converts 12-bit integer signal to double.");
-    if (type == "DoubleToInt12") return QStringLiteral("DoubleToInt12: converts double signal to 12-bit integer range.");
+    if (type == "Convert") return QStringLiteral("Convert: explicit type conversion (mode value or normalized, rounding, overflow).");
     if (type == "ComplexToMagnitudePhase") return QStringLiteral("ComplexToMagnitudePhase: outputs magnitude and phase.");
     return QStringLiteral("No built-in description available for this element type.");
 }

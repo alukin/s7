@@ -497,24 +497,6 @@ private:
     RealValue output_value_;
 };
 
-class Int12ToDouble final : public Element {
-public:
-    Int12ToDouble();
-    void step() override;
-
-private:
-    RealValue output_value_;
-};
-
-class DoubleToInt12 final : public Element {
-public:
-    DoubleToInt12();
-    void step() override;
-
-private:
-    signal_storage_t<SignalType::I12> output_value_;
-};
-
 } // namespace s7
 
 #endif // S7CORE_INCLUDE_S7_ELEMENTS_HPP

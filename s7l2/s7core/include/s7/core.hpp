@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_CORE_HPP
 
 #include "s7/compiler.hpp"
+#include "s7/convert.hpp"
 #include "s7/builtin_element_registry.hpp"
 #include "s7/element_catalog.hpp"
 #include "s7/element_metadata.hpp"

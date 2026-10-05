@@ -151,8 +151,7 @@ auto declaredPortCounts(std::string_view type,
         type == "FirFilter" ||
         type == "IirFilter" ||
         type == "PreviousValue" ||
-        type == "Int12ToDouble" ||
-        type == "DoubleToInt12") {
+        type == "Convert") {
         return {1, 1};
     }
 
