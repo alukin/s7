@@ -1,5 +1,3 @@
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Shared, so that the host and every plugin use one copy of the registry and
 # element code.

@@ -10,7 +10,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(s7spectral VERSION 1.0.0 LANGUAGES CXX)
 
-find_package(s7core 0.1 REQUIRED)
+find_package(s7core 0.1 REQUIRED) # brings cxx_std_26 through s7::s7core
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW3F REQUIRED IMPORTED_TARGET fftw3f)
 

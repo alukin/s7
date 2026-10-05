@@ -5,7 +5,13 @@ if (POLICY CMP0167)
 	cmake_policy(SET CMP0167 NEW)
 endif()
 
-set(CMAKE_CXX_STANDARD 20)
+# C++26 on GCC: the type system needs std::float16_t, std::float128_t and
+# __int128 (Clang's library support for <stdfloat> is missing). A Windows port
+# would use MinGW-w64 (GCC).
+if (NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 15)
+	message(FATAL_ERROR "S7 requires GCC 15 or newer (found ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}).")
+endif()
+set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
