@@ -117,13 +117,12 @@ The node validates the bundle, fragment, local capabilities, and `base_revision`
   "configuration": {
     "project_revision": "<opaque-immutable-revision>",
     "configuration_digest": "<digest>",
-    "full_network": {},
-    "assigned_fragment": {}
+    "diagram": {}
   }
 }
 ```
 
-The two objects above are placeholders for the selected schema/configuration representation; this protocol does not standardize the schema format. A direct bundle MAY be sent in one request up to the receiver's advertised `max_configuration_bytes`. Larger bundles MUST use the chunked transfer messages below. The absolute MVP limit is 256 MiB per configuration bundle and 1 MiB per chunk. A receiver MUST reject a bundle exceeding either its advertised limit or the absolute limit before allocating its full declared size.
+`diagram` is the whole deployed diagram (`S7_Network_Wire_Protocol_v1.md`, section 12.1, item 6). Each node finds its part of it through the elements' `node` placement; that part is its assigned fragment. A direct bundle MAY be sent in one request up to the receiver's advertised `max_configuration_bytes`. Larger bundles MUST use the chunked transfer messages below. The absolute MVP limit is 256 MiB per configuration bundle and 1 MiB per chunk. A receiver MUST reject a bundle exceeding either its advertised limit or the absolute limit before allocating its full declared size.
 
 Chunk transfer uses `BEGIN_CONFIGURATION_TRANSFER`, `CONFIGURATION_CHUNK`, and `END_CONFIGURATION_TRANSFER` requests. Each chunk carries a transfer ID, zero-based chunk index, byte offset, and base64url-encoded bytes. Chunks MUST be contiguous and ordered; receivers reject overlaps, missing indices, inconsistent offsets, excess size, and digest mismatch. The receiver MUST stage the complete bundle and verify its canonical digest before it can become a prepared deployment. Repeated chunks with identical transfer ID/index/content are idempotent; conflicting repeats fail the transfer.
 
@@ -241,8 +240,7 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
     "configuration": {
       "project_revision": "<opaque>",
       "configuration_digest": "sha256:<hex>",
-      "full_network": {},
-      "assigned_fragment": { "name": "...", "elements": [], "connections": [] }
+      "diagram": { "runtime_nodes": [], "schema": { "name": "...", "elements": [], "connections": [] }, "streams": [] }
     },
     "requires": { "libraries": [], "elements": [], "hardware": [] }
   }
@@ -251,7 +249,7 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 - `revision` is an integer in [1, 2^53]; `base_revision` is required, in [0, 2^53], and 0 means "no active deployment". A mismatch with the active revision returns `REVISION_CONFLICT`.
 - `configuration_digest` is `"sha256:"` plus the lower-case hex SHA-256 of the RFC 8785 (JCS) canonical JSON of the `configuration` object with its `configuration_digest` member removed. Integers outside ±2^53 cannot be canonicalized and are rejected. Requests are parsed with correctly rounded numbers so that digests agree across implementations. A mismatch returns `INVALID_REQUEST` with the expected digest in `details`.
-- `assigned_fragment` uses the runtime schema-file format (`name`, `elements`, `connections`, optional `exposed_inputs`/`exposed_outputs`). Node settings (`websocket`, `simulation`, `execution`, `control`) are not allowed in it.
+- `diagram` is a Studio diagram document; its `schema` uses the runtime schema-file format with a `node` (node_uuid) on every element. The node runs the elements placed on its own `node_uuid` plus a `NetSink` / `NetSource` per stream end; node settings in the schema (`websocket`, `simulation`, `execution`, `control`) are ignored. A diagram with nothing placed on the node, or with a connection between nodes that has no stream, returns `NOT_READY` (`INVALID_CONFIGURATION`). On commit the node connects to the producers of the streams it consumes.
 - `requires` is optional; malformed entries return `INVALID_REQUEST` instead of being skipped. Missing libraries, elements or hardware return `prepare_status: "NOT_READY"` with `incompatibilities`.
 - The node then compiles the fragment without running it. A fragment that does not build or validate returns `NOT_READY` with an `INVALID_CONFIGURATION` incompatibility. Elements are constructed at this point, so an element with side effects in its constructor (for example a file sink opening its file) acts at prepare time.
 - A `READY` response carries a 256-bit `prepare_token` from OpenSSL's CSPRNG, valid for 5 minutes. Repeating the same prepare returns the same token; the same deployment and revision with a different digest is `INVALID_REQUEST`.
@@ -283,4 +281,8 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 **Stream recovery.** `RECOVER_STREAM {stream_id}` is authorized like a deployment mutation. It clears the stream's fault and returns `RECOVER_STREAM_RESULT {stream_id, recovered}` (`recovered: false` if the node has no such stream; `INVALID_REQUEST` for a malformed id). A recovered consumer accepts the next packet it receives as its new start; the data lost in the fault stays lost and stays counted. A runtime whose stepping stopped because a step failed (for example on a stream fault) resumes stepping after a successful recovery.
 
-**Not yet implemented:** chunked configuration transfer and size limits, `GET_NETWORK_CONFIGURATION`, persistence of deployment state across node restarts (a restarted node runs its startup schema with active revision 0), and request-ID replay caching.
+**Network configuration.** `GET_NETWORK_CONFIGURATION {revision?}` (read-only) returns `NETWORK_CONFIGURATION` with `node_uuid`, `deployment_id`, `revision`, `project_revision`, `configuration_digest`, `committed_at`, the deployed `diagram` and this node's part of it as `node_schema`. Only the active revision is retained: no committed configuration, or another `revision`, is `REVISION_NOT_FOUND`.
+
+**Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
+
+**Not yet implemented:** chunked configuration transfer and size limits, persistence of deployment state across node restarts (a restarted node runs its startup schema with active revision 0), and request-ID replay caching.

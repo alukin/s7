@@ -218,17 +218,19 @@ All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
 ```json
 {
   "stream_id": "<UUID, CSPRNG-generated when the stream is created>",
-  "producer": { "node_uuid": "...", "element_instance_uuid": "...", "port": 0 },
-  "consumers": [ { "node_uuid": "...", "element_instance_uuid": "...", "port": 0 } ],
+  "producer": { "node_uuid": "...", "element": "<element id in the diagram>", "port": 0 },
+  "consumers": [ { "node_uuid": "...", "element": "...", "port": 0 } ],
   "data_type": "F64",
-  "channels": 1,
   "max_elements_per_packet": 1024,
   "max_batch_latency_ms": 10,
+  "send_log": { "max_packets": 4096, "max_block_ms": 2000 },
+  "max_wait_ms": 2000,
   "sample_rate": { "numerator": 48000, "denominator": 1 },
-  "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ],
-  "send_log": { "max_packets": 4096, "max_block_ms": 2000 }
+  "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ]
 }
 ```
+
+There is one stream per producing output port with consumers on other nodes (a fan-out to several nodes is one stream with several consumers). The implementation (`s7net/include/s7/diagram_deployment.hpp`) reads and writes every member above except `sample_rate` and `timestamps`, which are not implemented yet. A stream keeps its `stream_id` and settings while its producer stays on the same node with the same type; otherwise Studio assigns a new id.
 
 `data_type` is the exact wire type (Section 8) and equals the producing and consuming ports' type. `max_elements_per_packet` and `max_batch_latency_ms` come from the network boundary element. `sample_rate` is present only for uniformly sampled streams; without it, packets carry explicit timestamps (Section 7.1). A `clock_domain` names a domain declared by the producing node: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`.
 
@@ -248,6 +250,8 @@ All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
 **4. Negotiation (decided 2026-10-05): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support.
 
 **6. Deployment unit and placement (decided 2026-10-05).** Studio deploys the diagram itself (`.s7diagram`, including layout), not an extracted schema; each node extracts its part of the graph and keeps the whole diagram, so Studio can request the deployed diagram (`GET_NETWORK_CONFIGURATION`) and display it. Every element carries a `node` placement attribute. A node runs the elements placed on it; each connection between elements on different nodes becomes a stream with its own descriptor. The diagram format will be extended with whatever further deployment data is needed.
+
+*Implemented 2026-10-05.* The diagram lists the nodes in `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and the streams in `streams`. Every node receives the whole diagram in `PREPARE_DEPLOYMENT` and runs its part: its elements and their local connections, with a `NetSink` (producer end) or `NetSource` (consumer end), pinned to the stream type, for each stream. A consumer node connects a `/data` connection to each producer node's endpoint. A redeployment that keeps a stream continues it without loss, because a node keeps a stream's state while its graph is replaced. Over plain WebSocket all consumers share one anonymous identity, so a stream consumed by more than one node needs mTLS.
 
 **5. Routing (decided 2026-10-05).** A stream follows the explicit network connection in the schema: the producer node sends it only on its connection to each configured consumer node, identified by the authenticated peer certificate, and a consumer accepts it only from the configured producer. Nodes do not relay streams in the MVP. Relaying through intermediate nodes may be needed later for unstable networks; to keep that possible, `stream_id`, sequence numbers and acknowledgements are end-to-end between producer and consumer, and packets carry no hop-specific fields.
 

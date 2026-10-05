@@ -67,6 +67,19 @@ Enable `websocket.server.tls` in the schema with `cert_file`, `key_file`, and `c
 
 Deployments (`PREPARE_DEPLOYMENT` / `COMMIT_DEPLOYMENT` / `ABORT_DEPLOYMENT`) are accepted only over mTLS from the Studio certificate pinned in the node's `control` block; see `s7runtime/examples/certs/README.md` and `S7_Control_Protocol_MVP.md` section 10.1. Plain `ws://` nodes refuse them.
 
-## 5) Stop nodes
+## 5) Deploy one diagram across two nodes (mTLS)
+
+Deployments need mTLS and the pinned Studio certificate. `tools/test_two_node_deployment.sh build .` runs the whole sequence: it starts two nodes with `s7_runtime_node` and `s7_runtime_node_b` (startup schemas with `websocket.server.tls` and a `control` block pinning `s7_studio`), deploys a diagram whose elements are placed on both, and redeploys a change. By hand:
+
+```bash
+TLS="--cert s7runtime/examples/certs/s7_studio.cert.pem --key s7runtime/examples/certs/s7_studio.key.pem --ca s7runtime/examples/certs/s7_root_ca.cert.pem"
+./build/s7ctl/s7ctl deploy my_diagram.s7diagram $TLS --write my_diagram.deployed.s7diagram
+./build/s7ctl/s7ctl streams wss://127.0.0.1:9002 $TLS     # GET_STREAM_STATUS
+./build/s7ctl/s7ctl config  wss://127.0.0.1:9003 $TLS     # the deployed diagram and the node's part
+```
+
+In the diagram every schema element has `"node": "<node_uuid>"`, and `runtime_nodes` gives each node's endpoint. Deploy again from the `--write` output, so the streams keep their ids and continue. In Studio: place elements with the Node field of the element properties (nodes from the Headless Nodes dock), set the Studio certificate in the dock, then use Run > Deploy to Nodes...; Run > Open Deployed Diagram... shows what a node runs.
+
+## 6) Stop nodes
 
 Press `Ctrl+C` in each runtime terminal.

@@ -47,12 +47,17 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 - `diagram.nodes` stores positions and titles (and `channel_count` for scopes, `params` for text frames).
 - `diagram.wires` stores routing points in absolute scene coordinates. On load, wire *i* is matched with connection *i* of the schema; endpoints are re-attached to connectors.
 - A plain runtime schema file can also be opened; Studio lays nodes out on a grid.
+- Deployment: each schema element may carry `node` (the node_uuid it runs on); the root keeps `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and `streams` (stream descriptors, so redeployments continue the streams). See `S7_Network_Wire_Protocol_v1.md`, section 12.1, items 1 and 6.
 
 ## Interaction
 
 - Normal mode: select/move; Wire Draw mode (`Ctrl+W`): click a connector, intermediate points, then a target connector.
 - Double-click a node: element properties dialog (ports, parameter specs, editable parameter JSON); `Scope` opens its plot window; `TextFrame` edits text.
 - Element Library dock: double-click adds a node; schema libraries can be loaded and saved from the File menu.
+- Placement: the element properties dialog has a Node field listing the nodes found in the Headless Nodes dock; placed elements show `@ <node>` under them.
+- Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes dock (the Studio certificate pinned by the nodes). It runs off the UI thread and logs each node's outcome; nothing is committed unless every node is ready.
+- Run > Open Deployed Diagram...: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
+- `s7studio --deployment-diagram <in> <out>` (offscreen) writes the diagram as Studio would deploy it, with streams assigned; used by `s7studio_deployment_diagram`.
 
 ## Known gaps
 

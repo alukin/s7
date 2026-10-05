@@ -36,4 +36,4 @@ With a TLS certificate, `node_uuid` is taken from the SAN URI `spiffe://s7/node/
 
 A schema assigned to one node publishes through `NetSink` and the receiving node's schema consumes through `NetSource`. Both sides are matched by their `stream_id` parameter (`S7_Net_Element_Contract.md`, `S7_Network_Wire_Protocol_v1.md`). A stream flows directly over the connection between the producing and the consuming node; relaying through other nodes is not in the MVP.
 
-Placement of elements on nodes is a deployment concern (placement manifest in `REMOTE_NODE_INFO_AND_DEPLOYMENT.md`); a schema is the unit of deployment (ADR-004).
+Placement of elements on nodes is part of the diagram: each element has a `node` attribute, and the diagram is the unit of deployment (wire draft section 12.1, item 6). Each node runs its part; Studio creates the streams for connections between nodes, so a diagram needs no explicit `NetSink` / `NetSource` for them.

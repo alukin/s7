@@ -528,7 +528,7 @@ Route each wire from its output connector to its input connector around nodes, w
 
 - ~~`NetSink` sets `data_type = 0x000C`, which the prototype codec treats as F64 but the wire draft assigns to `U128`.~~ Fixed 2026-10-05: the wire type is the stream's signal type (`SignalType` values are the wire ids).
 - `PinkNoiseGenerator` is described as Voss-McCartney but outputs the mean of the last 7 white samples (low-pass noise, not 1/f). [noise_elements.cpp](../s7noise/src/noise_elements.cpp:53)
-- `s7studio/src/local_runtime.hpp` is an unused duplicate of `local_runtime_v2.hpp`; `examples/*.cpp` are not built; `s7ctl` is a placeholder. Remove or wire into the build.
+- `s7studio/src/local_runtime.hpp` is an unused duplicate of `local_runtime_v2.hpp`; `examples/*.cpp` are not built; ~~`s7ctl` is a placeholder~~ (now the deployment CLI, 2026-10-05). Remove or wire into the build.
 - `ControlPlaneMvp::handle_abort_deployment` reads `active_deployment_id_` after releasing the mutex. [control_plane_mvp.cpp](../s7runtime/src/control_plane_mvp.cpp:747)
 - ~~The WebSocket server performs TLS and HTTP handshakes on the accept thread.~~ Fixed 2026-10-05: handshakes are asynchronous with a 10 s timeout.
 - Tests bind fixed ports inside the Linux ephemeral range (32768–60999), so a parallel test's outgoing connection can occupy one (`bind: Address already in use`). `configure_server(0)` now picks a free port and returns it; `s7transport_beast_stream_smoke` uses it, `s7runtime_control_smoke` and `s7runtime_deployment_smoke` still use fixed ports.
@@ -542,5 +542,7 @@ Route each wire from its output connector to its input connector around nodes, w
 4. ~~Implement multiple-peer routing, bounded per-peer queues/backpressure, and deployment success semantics.~~ Done 2026-10-04; routing by stream and safe socket threading 2026-10-05.
 5. ~~Define safe observation snapshots and bound Scope delivery/recording before using it with high-rate runtimes.~~ Done 2026-10-04.
 6. ~~Address signal representation, observation timestamps/types, and plugin build integration.~~ Done 2026-10-04 (spectral plugin isolated, not integrated).
+
+7. Diagram deployment (wire draft section 12.1, item 6): done 2026-10-05. Elements are placed on nodes in the diagram; Studio and `s7ctl` deploy the diagram to every placed node (prepare all, commit only if all are ready); nodes run their part, connect to their producers, continue streams across redeployments, and return the deployed diagram through `GET_NETWORK_CONFIGURATION`. Tested by `s7net_diagram_deployment_smoke`, the deployment client in `s7runtime_deployment_smoke`, `s7studio_deployment_diagram` and the two-process mTLS test `s7_two_node_deployment`.
 
 This order addresses immediate correctness and trust boundaries first, then stabilizes contracts needed by heterogeneous nodes.
