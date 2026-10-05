@@ -2,6 +2,9 @@
 #include "local_schema_runner.hpp"
 #include "scope_sample_mailbox.hpp"
 #include "main_window.hpp"
+#include "diagram_document.hpp"
+#include "diagram_editor.hpp"
+#include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_registry.hpp>
@@ -9,6 +12,9 @@
 #include <s7/transport.hpp>
 
 #include <QApplication>
+#include <qschematic/scene.hpp>
+#include <QImage>
+#include <QPainter>
 
 #include <boost/json.hpp>
 #include <boost/system/error_code.hpp>
@@ -23,9 +29,11 @@
 #include <exception>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <cstring>
+#include <cstdlib>
 #include <utility>
 
 #if defined(__linux__)
@@ -273,6 +281,52 @@ int runSmoke()
     }
 }
 
+// --wire-types <diagram or schema JSON>: lays the diagram out in an (offscreen)
+// editor, resolves its types like the wire labels do, and prints one
+// "element:port=TYPE" line per wire, plus "error: ..." on a type error.
+int runWireTypes(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    s7::register_net_elements(registry);
+
+    std::ifstream in(argv[2]);
+    if (!in) {
+        std::cerr << "cannot read " << argv[2] << '\n';
+        return 2;
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto json = boost::json::parse(text);
+
+    s7studio::diagram::DiagramEditor editor;
+    if (json.as_object().contains("diagram")) {
+        editor.loadDocument(s7studio::diagram::DiagramDocument::fromJson(json));
+    } else {
+        editor.loadRuntimeSchema(json);
+    }
+    QString error;
+    for (const auto& label : s7studio::diagram::updateWireTypeLabels(*editor.scene(), &error)) {
+        std::cout << label.element.toStdString() << ':' << label.port << '=' << label.type.toStdString() << '\n';
+    }
+    if (!error.isEmpty()) {
+        std::cout << "error: " << error.toStdString() << '\n';
+    }
+    // Optional picture of the labelled diagram, for checking the rendering.
+    if (const char* png = std::getenv("S7_WIRE_TYPES_PNG")) {
+        auto* scene = editor.scene();
+        const auto bounds = scene->itemsBoundingRect().adjusted(-20, -20, 20, 20);
+        QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
+        image.fill(Qt::white);
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        scene->render(&painter, QRectF(), bounds);
+        painter.end();
+        image.save(QString::fromLocal8Bit(png));
+    }
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) try
@@ -290,6 +344,10 @@ int main(int argc, char** argv) try
 
     if (hasArg(argc, argv, "--smoke")) {
         return runSmoke();
+    }
+
+    if (argc == 3 && std::string_view(argv[1]) == "--wire-types") {
+        return runWireTypes(argc, argv);
     }
 
     QApplication app(argc, argv);

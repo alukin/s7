@@ -65,6 +65,7 @@ private slots:
     void onScopeNodeDoubleClicked(const QString& scopeId, int channelCount);
     void onElementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
     void onScopeSamplesAvailable();
+    void refreshWireTypeLabels();
     void openDocumentFile();
     void closeCurrentDiagram();
     void saveDocument();
@@ -184,6 +185,8 @@ private:
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
     QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
     std::uint64_t scopeSamplesDropped_ = 0;
+    class QTimer* wireTypeTimer_ = nullptr;
+    QString lastWireTypeError_;
     qint64 lastScopeDropLogMs_ = 0;
     QActionGroup* paperSizeGroup_ = nullptr;
     QActionGroup* pageOrientationGroup_ = nullptr;

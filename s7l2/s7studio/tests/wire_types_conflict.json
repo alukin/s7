@@ -1,0 +1,12 @@
+{
+  "name": "wire_types_conflict",
+  "elements": [
+    { "id": "a", "type": "Constant", "params": { "type": "I16" } },
+    { "id": "b", "type": "Constant", "params": { "type": "F32" } },
+    { "id": "sum", "type": "Adder" }
+  ],
+  "connections": [
+    { "from_element": "a", "from_port": 0, "to_element": "sum", "to_port": 0 },
+    { "from_element": "b", "from_port": 0, "to_element": "sum", "to_port": 1 }
+  ]
+}

@@ -46,6 +46,8 @@ add_executable(s7studio
     src/scene_serializer.cpp
     src/runtime_schema_extractor.hpp
     src/runtime_schema_extractor.cpp
+    src/wire_type_labels.cpp
+    src/wire_type_labels.hpp
     ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp
     src/diagram_format.hpp
     src/diagram_editor.hpp
@@ -93,3 +95,5 @@ if (TARGET s7noise)
 endif()
 
 add_test(NAME s7studio_smoke COMMAND s7studio --smoke)
+add_test(NAME s7studio_wire_types
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/wire_types_test.sh $<TARGET_FILE:s7studio> ${CMAKE_CURRENT_SOURCE_DIR}/tests)

@@ -114,7 +114,8 @@ auto parseNestedSchemaFromNode(const QSchematic::Items::Node& node) -> boost::js
 } // namespace
 
 auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
-                                     const SerializationOptions& options) const -> boost::json::value
+                                     const SerializationOptions& options,
+                                     std::vector<WireSource>* wireSources) const -> boost::json::value
 {
     boost::json::object root;
     root["name"] = options.schemaName.toStdString();
@@ -208,6 +209,10 @@ auto RuntimeSchemaExtractor::extract(const QSchematic::Scene& scene,
 
         const auto& source = *endpointsIt->second.source;
         const auto& target = *endpointsIt->second.target;
+
+        if (wireSources) {
+            wireSources->push_back(WireSource{wire, source.nodeId, source.portIndex});
+        }
 
         boost::json::object connObj;
         connObj["from_element"] = source.nodeId;

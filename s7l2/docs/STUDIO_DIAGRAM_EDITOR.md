@@ -8,7 +8,8 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 |---|---|
 | `s7studio/src/diagram_editor.*` | Widget hosting the QSchematic `Scene`/`View`, page frame (mm-based sheet), rulers, zoom; emits node double-click signals |
 | `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ QSchematic scene; creates nodes, connectors, and wires |
-| `s7studio/src/runtime_schema_extractor.*` | Scene → runtime schema JSON (`elements`, `connections`) |
+| `s7studio/src/runtime_schema_extractor.*` | Scene → runtime schema JSON (`elements`, `connections`), optionally the source of every wire |
+| `s7studio/src/wire_type_labels.*` | Resolves the scene's types and labels each wire with its type (child text items, not saved); `s7studio --wire-types <file>` prints them, `S7_WIRE_TYPES_PNG=<png>` renders the result |
 | `s7studio/src/diagram_document.*`, `diagram_format.hpp` | Diagram file model and format description |
 | `s7studio/src/element_picker_panel.*` | Element Library dock built from `ElementCatalogService`; double-click emits `elementRequested` |
 | `s7studio/src/main_window.cpp` | Wiring: add element, parameter dialog, run, save/load, schema libraries |
@@ -19,7 +20,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 
 - Each scene node stores its schema identity in `QGraphicsItem` data roles (`diagram_node_roles.hpp`): id, type, title, params (JSON string), nested schema (JSON string), scope channel count, and text-frame styling.
 - Input connectors are on the left edge, outputs on the right. The extractor derives port indices from connector geometry (left/right of node center, then sorted by y). Port counts come from built-in rules, element metadata, nested-schema `exposed_inputs`/`exposed_outputs`, and connections in the loaded schema.
-- `Scope` is a Studio-only observer element (implemented in `local_runtime_v2.hpp`) with `channel_count` inputs. `TextFrame` nodes are diagram-only and are omitted from the runtime schema.
+- `Scope` is a Studio-only observer element (implemented in `local_runtime_v2.hpp`) with `channel_count` inputs, each of any real type (inferred per channel). `TextFrame` nodes are diagram-only and are omitted from the runtime schema.
 - Running a diagram serializes the current scene to schema JSON, fills `sample_rate_hz` / `dt` parameters from the run configuration, and passes it to `LocalSchemaRunner`.
 
 ## Diagram file format (`.s7diagram`)

@@ -9,6 +9,9 @@
 #include <boost/json.hpp>
 
 #include <algorithm>
+#include <span>
+#include <cstring>
+#include <array>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -22,31 +25,58 @@ inline s7::Schema buildSchema(const boost::json::value& schemaJson);
 
 namespace detail {
 
+// Studio observer: one channel per input, any real type (displayed with
+// ObservationSample::to_display_double()). Each output mirrors its input so
+// the runner can sample it.
 class ScopeElement final : public s7::Element
 {
 public:
-    explicit ScopeElement(std::size_t channelCount)
+    explicit ScopeElement(std::vector<s7::SignalType> channelTypes)
         : s7::Element("Scope")
-        , outputs_(std::max<std::size_t>(1, channelCount), 0.0)
+        , channels_(channelTypes.size())
     {
-        const std::size_t effectiveChannelCount = outputs_.size();
-        for (std::size_t channel = 0; channel < effectiveChannelCount; ++channel) {
+        for (std::size_t channel = 0; channel < channels_.size(); ++channel) {
+            channels_[channel].bytes = s7::signal_type_info(channelTypes[channel]).storage_bytes;
             const std::string portName = "ch" + std::to_string(channel);
-            register_input(channel, portName, s7::SignalType::F64, nullptr);
-            register_output(channel, portName, s7::SignalType::F64, &outputs_[channel]);
+            register_input(channel, portName, channelTypes[channel], nullptr);
+            register_output(channel, portName, channelTypes[channel], channels_[channel].value.data());
         }
+    }
+
+    explicit ScopeElement(std::size_t channelCount)
+        : ScopeElement(std::vector<s7::SignalType>(std::max<std::size_t>(1, channelCount), s7::SignalType::F64))
+    {
     }
 
     void step() override
     {
-        for (std::size_t channel = 0; channel < outputs_.size(); ++channel) {
-            outputs_[channel] = read_input<s7::RealValue>(channel);
+        for (std::size_t channel = 0; channel < channels_.size(); ++channel) {
+            std::memcpy(channels_[channel].value.data(), input_binding(channel), channels_[channel].bytes);
         }
     }
 
 private:
-    std::vector<s7::RealValue> outputs_;
+    struct Channel {
+        alignas(16) std::array<std::byte, 32> value{};
+        std::size_t bytes{};
+    };
+    std::vector<Channel> channels_;
 };
+
+// A Scope whose channel types are inferred: one type variable per channel.
+inline s7::GenericElement makeScopeElement(const std::size_t channelCount)
+{
+    s7::GenericElement scope;
+    for (std::size_t channel = 0; channel < std::max<std::size_t>(1, channelCount); ++channel) {
+        scope.variables.push_back({"ch" + std::to_string(channel), s7::signal_type_sets::real, std::nullopt});
+        scope.input_rules.push_back(s7::PortTypeRule::of_variable(channel));
+        scope.output_rules.push_back(s7::PortTypeRule::of_variable(channel));
+    }
+    scope.create = [](std::span<const s7::SignalType> types) {
+        return std::make_unique<ScopeElement>(std::vector<s7::SignalType>(types.begin(), types.end()));
+    };
+    return scope;
+}
 
 inline const boost::json::object& expectObject(const boost::json::value& value, std::string_view name)
 {
@@ -205,7 +235,7 @@ inline void addElementFromJson(s7::Schema& schema, const boost::json::object& el
     // Handle Scope element (special case for s7studio)
     if (type == "Scope") {
         const std::size_t channelCount = std::max<std::size_t>(1, getSizeT(params, "channel_count", 1));
-        schema.add_element(id, [channelCount] { return std::make_unique<ScopeElement>(channelCount); });
+        schema.add_element(id, makeScopeElement(channelCount));
         return;
     }
 
@@ -285,9 +315,9 @@ inline std::vector<std::string> collectSamples(const s7::Schema& schema, const s
         std::ostringstream out;
         out << element.id << '[' << sample.port << "]=";
         if (sample.is_complex()) {
-            out << sample.as_complex();
+            out << '<' << s7::signal_type_name(sample.type) << '>';
         } else {
-            out << sample.as_real();
+            out << sample.to_display_double();
         }
         lines.push_back(out.str());
     }

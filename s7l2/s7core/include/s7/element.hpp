@@ -134,6 +134,11 @@ protected:
         : type_name_(type_name), has_state_(has_state), feedthrough_(feedthrough)
     {}
 
+    // Address of an input's bound value (for type-generic elements).
+    [[nodiscard]] InputBinding input_binding(std::size_t idx) const {
+        return input_bindings_[idx];
+    }
+
     // Read input value - FAST! No checks (validated at compile time)
     template <typename T>
     [[nodiscard]] T read_input(std::size_t idx) const {

@@ -17,11 +17,13 @@
 #include <s7/schema_library.hpp>
 
 #include "s7/plugin_loader.hpp"
+#include "wire_type_labels.hpp"
 
 #include <qschematic/items/node.hpp>
 #include <qschematic/scene.hpp>
 
 #include <QDateTime>
+#include <QTimer>
 #include <QAction>
 #include <QActionGroup>
 #include <QColorDialog>
@@ -1321,6 +1323,32 @@ void MainWindow::connectSceneSignals()
     connect(diagramEditor_->scene(), &QGraphicsScene::selectionChanged,
             this, &MainWindow::syncTextFrameStyleControls,
             Qt::UniqueConnection);
+
+    // Wire labels show resolved types; re-resolve shortly after the diagram changes.
+    if (!wireTypeTimer_) {
+        wireTypeTimer_ = new QTimer(this);
+        wireTypeTimer_->setSingleShot(true);
+        wireTypeTimer_->setInterval(300);
+        connect(wireTypeTimer_, &QTimer::timeout, this, &MainWindow::refreshWireTypeLabels);
+    }
+    connect(diagramEditor_->scene(), &QGraphicsScene::changed, wireTypeTimer_, qOverload<>(&QTimer::start),
+            Qt::UniqueConnection);
+    wireTypeTimer_->start();
+}
+
+void MainWindow::refreshWireTypeLabels()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        return;
+    }
+    QString error;
+    static_cast<void>(diagram::updateWireTypeLabels(*diagramEditor_->scene(), &error));
+    if (error != lastWireTypeError_) {
+        lastWireTypeError_ = error;
+        if (!error.isEmpty()) {
+            appendLog(QStringLiteral("[studio] types: %1").arg(error));
+        }
+    }
 }
 
 void MainWindow::addTextFrame()

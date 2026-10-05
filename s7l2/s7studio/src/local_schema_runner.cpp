@@ -223,7 +223,7 @@ void LocalSchemaRunner::emitScopeSamples()
                                                          static_cast<int>(channel),
                                                          static_cast<long>(sample.step),
                                                          timeSeconds,
-                                                         sample.as_real()});
+                                                         sample.to_display_double()});
             } catch (const std::exception& ex) {
                 // Other channels keep rendering; report each unreadable channel once per run.
                 const auto key = scope.id + "#" + std::to_string(channel);
