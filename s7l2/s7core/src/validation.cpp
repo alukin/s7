@@ -247,18 +247,11 @@ private:
         const auto from_type = from_outputs[connection.from_port].type;
         const auto to_type = to_inputs[connection.to_port].type;
 
+        // There is no implicit conversion: a type change is an explicit Convert element.
         if (from_type == to_type) {
             return;
         }
 
-        if (is_runtime_convertible(from_type, to_type)) {
-            warnings.emplace_back("Implicit runtime conversion: '" + connection.from_element + "' output port " +
-                                  std::to_string(connection.from_port) + " (type " +
-                                  std::string{signal_type_name(from_type)} + ") -> '" + connection.to_element +
-                                  "' input port " + std::to_string(connection.to_port) + " (type " +
-                                  std::string{signal_type_name(to_type)} + ").");
-            return;
-        }
 
         errors.emplace_back("Port type mismatch: '" + connection.from_element + "' output port " +
                             std::to_string(connection.from_port) + " (type " +

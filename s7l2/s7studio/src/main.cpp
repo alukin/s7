@@ -136,10 +136,10 @@ int runSmoke()
                             { "from_element": "g1", "from_port": 0, "to_element": "g2", "to_port": 0 }
                         ],
                         "exposed_inputs": [
-                            { "name": "in", "type": "DOUBLE", "element": "g1", "port": 0 }
+                            { "name": "in", "type": "F64", "element": "g1", "port": 0 }
                         ],
                         "exposed_outputs": [
-                            { "name": "out", "type": "DOUBLE", "element": "g2", "port": 0 }
+                            { "name": "out", "type": "F64", "element": "g2", "port": 0 }
                         ]
                     }
                 },

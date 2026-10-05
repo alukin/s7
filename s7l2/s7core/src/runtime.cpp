@@ -1,5 +1,6 @@
 #include "s7/core.hpp"
 
+#include <cstring>
 #include <stdexcept>
 
 namespace s7 {
@@ -15,7 +16,7 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
         for (const auto& port : ports) {
             memory_outputs_.push_back(MemoryOutput{
                 .value_ptr = port.value_ptr,
-                .type = port.type,
+                .bytes = signal_type_info(port.type).storage_bytes,
             });
         }
         memory_output_ranges_.push_back(MemoryOutputRange{begin, memory_outputs_.size()});
@@ -44,11 +45,7 @@ void NodeRuntime::step() {
     stepping_thread_.store(std::this_thread::get_id());
     if (memory_outputs_staged_) {
         for (auto& output : memory_outputs_) {
-            if (is_complex_signal_type(output.type)) {
-                *static_cast<ComplexValue*>(output.value_ptr) = output.staged_complex;
-            } else {
-                *static_cast<RealValue*>(output.value_ptr) = output.staged_real;
-            }
+            std::memcpy(output.value_ptr, output.staged.data(), output.bytes);
         }
         memory_outputs_staged_ = false;
     }
@@ -64,11 +61,7 @@ void NodeRuntime::step() {
         const auto range = memory_output_ranges_[element_index];
         for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
             auto& output = memory_outputs_[output_index];
-            if (is_complex_signal_type(output.type)) {
-                output.snapshot_complex = *static_cast<const ComplexValue*>(output.value_ptr);
-            } else {
-                output.snapshot_real = *static_cast<const RealValue*>(output.value_ptr);
-            }
+            std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
         }
 
         try {
@@ -76,24 +69,15 @@ void NodeRuntime::step() {
         } catch (...) {
             for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
                 auto& output = memory_outputs_[output_index];
-                if (is_complex_signal_type(output.type)) {
-                    *static_cast<ComplexValue*>(output.value_ptr) = output.snapshot_complex;
-                } else {
-                    *static_cast<RealValue*>(output.value_ptr) = output.snapshot_real;
-                }
+                std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
             }
             throw;
         }
 
         for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
             auto& output = memory_outputs_[output_index];
-            if (is_complex_signal_type(output.type)) {
-                output.staged_complex = *static_cast<const ComplexValue*>(output.value_ptr);
-                *static_cast<ComplexValue*>(output.value_ptr) = output.snapshot_complex;
-            } else {
-                output.staged_real = *static_cast<const RealValue*>(output.value_ptr);
-                *static_cast<RealValue*>(output.value_ptr) = output.snapshot_real;
-            }
+            std::memcpy(output.staged.data(), output.value_ptr, output.bytes);
+            std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
         }
     }
     memory_outputs_staged_ = !memory_outputs_.empty();
@@ -157,13 +141,17 @@ SignalType NodeRuntime::output_type_of_instance_uuid(const std::string& element_
     return output_type_of(element_id_of_instance_uuid(element_instance_uuid), port);
 }
 
-RealValue NodeRuntime::real_output_of(const std::string& element_id, std::size_t port) const {
-    const auto output = output_binding_of(element_id, port);
-    if (is_complex_signal_type(output_type_of(element_id, port))) {
-        throw std::invalid_argument("Requested real output from COMPLEX port of '" + element_id + "'.");
+void NodeRuntime::require_output_type(const std::string& element_id, const std::size_t port, const SignalType expected) const {
+    const auto actual = output_type_of(element_id, port);
+    if (actual != expected) {
+        throw std::invalid_argument("Output " + std::to_string(port) + " of '" + element_id + "' has type " +
+                                    std::string(signal_type_name(actual)) + ", not " +
+                                    std::string(signal_type_name(expected)) + ".");
     }
+}
 
-    return *static_cast<const RealValue*>(output);
+RealValue NodeRuntime::real_output_of(const std::string& element_id, std::size_t port) const {
+    return output_of<SignalType::F64>(element_id, port);
 }
 
 RealValue NodeRuntime::real_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port) const {
@@ -171,7 +159,7 @@ RealValue NodeRuntime::real_output_of_instance_uuid(const std::string& element_i
 }
 
 ComplexValue NodeRuntime::complex_output_of(const std::string& element_id, std::size_t port) const {
-    return bound_value<SignalType::COMPLEX>(output_binding_of(element_id, port));
+    return output_of<SignalType::C64>(element_id, port);
 }
 
 ComplexValue NodeRuntime::complex_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port) const {

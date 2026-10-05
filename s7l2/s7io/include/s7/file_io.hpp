@@ -24,14 +24,14 @@ struct SignalTraits;
 
 template <>
 struct SignalTraits<RealValue> {
-    static constexpr SignalType type = SignalType::DOUBLE;
-    static constexpr std::string_view name = "DOUBLE";
+    static constexpr SignalType type = SignalType::F64;
+    static constexpr std::string_view name = signal_type_name(SignalType::F64);
 };
 
 template <>
 struct SignalTraits<ComplexValue> {
-    static constexpr SignalType type = SignalType::COMPLEX;
-    static constexpr std::string_view name = "COMPLEX";
+    static constexpr SignalType type = SignalType::C64;
+    static constexpr std::string_view name = signal_type_name(SignalType::C64);
 };
 
 template <typename T>
@@ -104,10 +104,13 @@ public:
         constexpr std::array<char, 4> magic{'S', '7', 'B', '1'};
         out.write(magic.data(), static_cast<std::streamsize>(magic.size()));
 
-        const auto version = std::uint8_t{1};
-        const auto type = static_cast<std::uint8_t>(detail::SignalTraits<T>::type);
+        // Version 2: the signal type is its 16-bit wire type id, little-endian.
+        const auto version = std::uint8_t{2};
+        const auto type = static_cast<std::uint16_t>(detail::SignalTraits<T>::type);
+        const std::array<std::uint8_t, 2> type_bytes{static_cast<std::uint8_t>(type & 0xFFu),
+                                                     static_cast<std::uint8_t>(type >> 8)};
         out.write(reinterpret_cast<const char*>(&version), sizeof(version));
-        out.write(reinterpret_cast<const char*>(&type), sizeof(type));
+        out.write(reinterpret_cast<const char*>(type_bytes.data()), type_bytes.size());
 
         if (!out) {
             detail::throw_bad_format("failed to write compact binary header");
@@ -123,16 +126,17 @@ public:
         }
 
         std::uint8_t version{};
-        std::uint8_t type{};
+        std::array<std::uint8_t, 2> type_bytes{};
         in.read(reinterpret_cast<char*>(&version), sizeof(version));
-        in.read(reinterpret_cast<char*>(&type), sizeof(type));
+        in.read(reinterpret_cast<char*>(type_bytes.data()), type_bytes.size());
         if (!in) {
             detail::throw_bad_format("truncated compact binary header");
         }
-        if (version != 1) {
+        if (version != 2) {
             detail::throw_bad_format("unsupported compact binary version");
         }
-        if (type != static_cast<std::uint8_t>(detail::SignalTraits<T>::type)) {
+        const auto type = static_cast<std::uint16_t>(type_bytes[0] | (type_bytes[1] << 8));
+        if (type != static_cast<std::uint16_t>(detail::SignalTraits<T>::type)) {
             detail::throw_bad_format("signal type does not match compact binary file");
         }
     }

@@ -91,7 +91,7 @@ boost::json::value make_schema_library_json()
             "exposed_inputs": [
               {
                 "name": "in",
-                "type": "DOUBLE",
+                "type": "F64",
                 "element": "gain",
                 "port": 0
               }
@@ -99,7 +99,7 @@ boost::json::value make_schema_library_json()
             "exposed_outputs": [
               {
                 "name": "out",
-                "type": "DOUBLE",
+                "type": "F64",
                 "element": "gain",
                 "port": 0
               }
@@ -118,12 +118,12 @@ int main() try
     {
         auto constant = std::make_unique<s7::Constant>(1.0);
         assert(constant->output_ports().size() == 1);
-        assert(constant->output_ports()[0].type == s7::SignalType::DOUBLE);
+        assert(constant->output_ports()[0].type == s7::SignalType::F64);
         assert(constant->output_ports()[0].name == "out");
 
         auto gain = std::make_unique<s7::Gain>(2.0);
         assert(gain->input_ports().size() == 1);
-        assert(gain->input_ports()[0].type == s7::SignalType::DOUBLE);
+        assert(gain->input_ports()[0].type == s7::SignalType::F64);
         assert(gain->input_ports()[0].name == "in");
 
         auto adder = std::make_unique<s7::Adder>();
@@ -143,139 +143,127 @@ int main() try
         assert(multiply4.input_ports()[1].name == "rhs");
         assert(multiply4.input_ports()[2].name == "in2");
         assert(multiply4.input_ports()[3].name == "in3");
-        assert(adder->input_ports()[0].type == s7::SignalType::DOUBLE);
-        assert(adder->input_ports()[1].type == s7::SignalType::DOUBLE);
+        assert(adder->input_ports()[0].type == s7::SignalType::F64);
+        assert(adder->input_ports()[1].type == s7::SignalType::F64);
 
         auto weightedAdder = std::make_unique<s7::Adder>(std::vector<double>{1.0, 1.0, 2.4});
         assert(weightedAdder->input_ports().size() == 3);
-        assert(weightedAdder->input_ports()[2].type == s7::SignalType::DOUBLE);
+        assert(weightedAdder->input_ports()[2].type == s7::SignalType::F64);
 
         auto multiply = std::make_unique<s7::Multiply>();
         assert(multiply->input_ports().size() == 2);
-        assert(multiply->input_ports()[0].type == s7::SignalType::DOUBLE);
-        assert(multiply->input_ports()[1].type == s7::SignalType::DOUBLE);
+        assert(multiply->input_ports()[0].type == s7::SignalType::F64);
+        assert(multiply->input_ports()[1].type == s7::SignalType::F64);
 
         auto variadicMultiply = std::make_unique<s7::Multiply>(std::vector<double>{1.0, 0.5, 2.0});
         assert(variadicMultiply->input_ports().size() == 3);
-        assert(variadicMultiply->input_ports()[2].type == s7::SignalType::DOUBLE);
+        assert(variadicMultiply->input_ports()[2].type == s7::SignalType::F64);
 
         auto analog = std::make_unique<s7::AnalogOscillator>(1.0, 1.0, 1000.0);
         assert(analog->has_state());
         assert(!analog->has_causal_memory());
         assert(analog->output_ports().size() == 1);
-        assert(analog->output_ports()[0].type == s7::SignalType::DOUBLE);
+        assert(analog->output_ports()[0].type == s7::SignalType::F64);
     }
 
     {
         auto int12ToDouble = std::make_unique<s7::Int12ToDouble>();
         assert(int12ToDouble->input_count() == 1);
-        assert(int12ToDouble->input_ports()[0].type == s7::SignalType::INT12);
-        assert(int12ToDouble->output_ports()[0].type == s7::SignalType::DOUBLE);
+        assert(int12ToDouble->input_ports()[0].type == s7::SignalType::I12);
+        assert(int12ToDouble->output_ports()[0].type == s7::SignalType::F64);
 
         auto doubleToInt12 = std::make_unique<s7::DoubleToInt12>();
-        assert(doubleToInt12->input_ports()[0].type == s7::SignalType::DOUBLE);
-        assert(doubleToInt12->output_ports()[0].type == s7::SignalType::INT12);
+        assert(doubleToInt12->input_ports()[0].type == s7::SignalType::F64);
+        assert(doubleToInt12->output_ports()[0].type == s7::SignalType::I12);
 
         // INT12 conversion: Q11 scaling, round half to even, saturation.
-        const std::vector<std::pair<double, double>> int12Cases{
-            {0.0, 0.0}, {0.5, 1024.0}, {-1.0, -2048.0}, {1.0, 2047.0}, {100.0, 2047.0}, {-100.0, -2048.0},
-            {0.5 / 2048.0, 0.0}, {1.5 / 2048.0, 2.0}, {-2.5 / 2048.0, -2.0}, {std::nan(""), 0.0},
+        const std::vector<std::pair<double, std::int16_t>> int12Cases{
+            {0.0, 0}, {0.5, 1024}, {-1.0, -2048}, {1.0, 2047}, {100.0, 2047}, {-100.0, -2048},
+            {0.5 / 2048.0, 0}, {1.5 / 2048.0, 2}, {-2.5 / 2048.0, -2}, {std::nan(""), 0},
         };
         for (const auto& [input, expected] : int12Cases) {
-            const std::array<s7::InputBinding, 1> binding{s7::bind_input<s7::SignalType::DOUBLE>(input)};
+            const std::array<s7::InputBinding, 1> binding{s7::bind_input<s7::SignalType::F64>(input)};
             doubleToInt12->bind_inputs({binding.data(), binding.size()});
             doubleToInt12->step();
-            const auto code = s7::bound_value<s7::SignalType::DOUBLE>(doubleToInt12->outputs()[0]);
+            const auto code = s7::bound_value<s7::SignalType::I12>(doubleToInt12->outputs()[0]);
             assert(code == expected);
-            assert(s7::is_valid_signal_value(s7::SignalType::INT12, code));
 
-            const std::array<s7::InputBinding, 1> back{s7::bind_input<s7::SignalType::INT12>(code)};
+            const std::array<s7::InputBinding, 1> back{s7::bind_input<s7::SignalType::I12>(code)};
             int12ToDouble->bind_inputs({back.data(), back.size()});
             int12ToDouble->step();
-            assert(s7::bound_value<s7::SignalType::DOUBLE>(int12ToDouble->outputs()[0]) == code / 2048.0);
+            assert(s7::bound_value<s7::SignalType::F64>(int12ToDouble->outputs()[0]) == code / 2048.0);
         }
-
-        // Every integer type has a defined range, quantization and wire id.
-        assert(s7::signal_type_info(s7::SignalType::UINT8).max_value == 255.0);
-        assert(s7::signal_type_info(s7::SignalType::INT16).min_value == -32768.0);
-        assert(s7::signal_type_info(s7::SignalType::DOUBLE).wire_type_id == 0x000F);
-        assert(s7::quantize_to_signal_type(s7::SignalType::UINT8, -3.0) == 0.0);
-        assert(s7::quantize_to_signal_type(s7::SignalType::UINT16, 70000.0) == 65535.0);
-        assert(s7::quantize_to_signal_type(s7::SignalType::INT8, 2.5) == 2.0);
-        assert(s7::quantize_to_signal_type(s7::SignalType::DOUBLE, 2.5) == 2.5);
-        assert(!s7::is_valid_signal_value(s7::SignalType::UINT12, 4096.0));
-        assert(!s7::is_valid_signal_value(s7::SignalType::INT8, 1.5));
 
         // Standalone step() writes the next-step output; NodeRuntime defers its publication.
         auto previousValue = std::make_unique<s7::PreviousValue>(3.5);
         assert(previousValue->has_causal_memory());
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 3.5);
+        assert(s7::bound_value<s7::SignalType::F64>(previousValue->outputs()[0]) == 3.5);
         const s7::RealValue pvIn1{8.0};
         const s7::RealValue pvIn2{9.0};
-        const std::array<s7::InputBinding, 1> pvInputs1{s7::bind_input<s7::SignalType::DOUBLE>(pvIn1)};
-        const std::array<s7::InputBinding, 1> pvInputs2{s7::bind_input<s7::SignalType::DOUBLE>(pvIn2)};
+        const std::array<s7::InputBinding, 1> pvInputs1{s7::bind_input<s7::SignalType::F64>(pvIn1)};
+        const std::array<s7::InputBinding, 1> pvInputs2{s7::bind_input<s7::SignalType::F64>(pvIn2)};
         previousValue->bind_inputs({pvInputs1.data(), pvInputs1.size()});
         previousValue->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 8.0);
+        assert(s7::bound_value<s7::SignalType::F64>(previousValue->outputs()[0]) == 8.0);
         previousValue->bind_inputs({pvInputs2.data(), pvInputs2.size()});
         previousValue->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(previousValue->outputs()[0]) == 9.0);
+        assert(s7::bound_value<s7::SignalType::F64>(previousValue->outputs()[0]) == 9.0);
 
         auto integrator = std::make_unique<s7::Integrator>(1.5);
         assert(integrator->has_state());
         assert(!integrator->has_causal_memory());
         const s7::RealValue intIn1{2.0};
         const s7::RealValue intIn2{-0.5};
-        const std::array<s7::InputBinding, 1> intInputs1{s7::bind_input<s7::SignalType::DOUBLE>(intIn1)};
-        const std::array<s7::InputBinding, 1> intInputs2{s7::bind_input<s7::SignalType::DOUBLE>(intIn2)};
+        const std::array<s7::InputBinding, 1> intInputs1{s7::bind_input<s7::SignalType::F64>(intIn1)};
+        const std::array<s7::InputBinding, 1> intInputs2{s7::bind_input<s7::SignalType::F64>(intIn2)};
         integrator->bind_inputs({intInputs1.data(), intInputs1.size()});
         integrator->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(integrator->outputs()[0]) == 3.5);
+        assert(s7::bound_value<s7::SignalType::F64>(integrator->outputs()[0]) == 3.5);
         integrator->bind_inputs({intInputs2.data(), intInputs2.size()});
         integrator->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(integrator->outputs()[0]) == 3.0);
+        assert(s7::bound_value<s7::SignalType::F64>(integrator->outputs()[0]) == 3.0);
 
         auto complexToMagPhase = std::make_unique<s7::ComplexToMagnitudePhase>();
-        assert(complexToMagPhase->input_ports()[0].type == s7::SignalType::COMPLEX);
+        assert(complexToMagPhase->input_ports()[0].type == s7::SignalType::C64);
         assert(complexToMagPhase->output_count() == 2);
         assert(complexToMagPhase->output_ports()[0].name == "magnitude");
         assert(complexToMagPhase->output_ports()[1].name == "phase");
         const s7::ComplexValue mpIn{3.0, 4.0};
-        const std::array<s7::InputBinding, 1> mpInputs{s7::bind_input<s7::SignalType::COMPLEX>(mpIn)};
+        const std::array<s7::InputBinding, 1> mpInputs{s7::bind_input<s7::SignalType::C64>(mpIn)};
         complexToMagPhase->bind_inputs({mpInputs.data(), mpInputs.size()});
         complexToMagPhase->step();
         const auto magPhase = complexToMagPhase->outputs();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(magPhase[0]) == 5.0);
-        assert(std::abs(s7::bound_value<s7::SignalType::DOUBLE>(magPhase[1]) - std::atan2(4.0, 3.0)) < 1e-12);
+        assert(s7::bound_value<s7::SignalType::F64>(magPhase[0]) == 5.0);
+        assert(std::abs(s7::bound_value<s7::SignalType::F64>(magPhase[1]) - std::atan2(4.0, 3.0)) < 1e-12);
 
         auto fir = std::make_unique<s7::FirFilter>(std::vector<double>{0.5, 0.5});
         const s7::RealValue firIn1{2.0};
         const s7::RealValue firIn2{4.0};
-        const std::array<s7::InputBinding, 1> firInputs1{s7::bind_input<s7::SignalType::DOUBLE>(firIn1)};
-        const std::array<s7::InputBinding, 1> firInputs2{s7::bind_input<s7::SignalType::DOUBLE>(firIn2)};
+        const std::array<s7::InputBinding, 1> firInputs1{s7::bind_input<s7::SignalType::F64>(firIn1)};
+        const std::array<s7::InputBinding, 1> firInputs2{s7::bind_input<s7::SignalType::F64>(firIn2)};
         fir->bind_inputs({firInputs1.data(), firInputs1.size()});
         fir->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(fir->outputs()[0]) == 1.0);
+        assert(s7::bound_value<s7::SignalType::F64>(fir->outputs()[0]) == 1.0);
         fir->bind_inputs({firInputs2.data(), firInputs2.size()});
         fir->step();
-        assert(s7::bound_value<s7::SignalType::DOUBLE>(fir->outputs()[0]) == 3.0);
+        assert(s7::bound_value<s7::SignalType::F64>(fir->outputs()[0]) == 3.0);
 
         auto iir = std::make_unique<s7::IirFilter>(1.0, 0.0, 0.5);
         const s7::RealValue iirIn{1.0};
-        const std::array<s7::InputBinding, 1> iirInputs{s7::bind_input<s7::SignalType::DOUBLE>(iirIn)};
+        const std::array<s7::InputBinding, 1> iirInputs{s7::bind_input<s7::SignalType::F64>(iirIn)};
         iir->bind_inputs({iirInputs.data(), iirInputs.size()});
         iir->step();
-        assert(std::abs(s7::bound_value<s7::SignalType::DOUBLE>(iir->outputs()[0]) - 1.0) < 1e-12);
+        assert(std::abs(s7::bound_value<s7::SignalType::F64>(iir->outputs()[0]) - 1.0) < 1e-12);
         iir->step();
-        assert(std::abs(s7::bound_value<s7::SignalType::DOUBLE>(iir->outputs()[0]) - 0.5) < 1e-12);
+        assert(std::abs(s7::bound_value<s7::SignalType::F64>(iir->outputs()[0]) - 0.5) < 1e-12);
     }
 
     {
         auto makeComposite = [] {
             auto schema = std::make_unique<s7::Schema>("composite_gain");
             schema->add_element("inner_gain", [] { return std::make_unique<s7::Gain>(2.5); });
-            schema->expose_input("in", s7::SignalType::DOUBLE, "inner_gain", 0);
-            schema->expose_output("out", s7::SignalType::DOUBLE, "inner_gain", 0);
+            schema->expose_input("in", s7::SignalType::F64, "inner_gain", 0);
+            schema->expose_output("out", s7::SignalType::F64, "inner_gain", 0);
             return schema;
         };
         {
@@ -303,8 +291,8 @@ int main() try
             inner->add_element("g1", [] { return std::make_unique<s7::Gain>(2.0); });
             inner->add_element("g2", [] { return std::make_unique<s7::Gain>(5.0); });
             inner->connect("g1", 0, "g2", 0);
-            inner->expose_input("in", s7::SignalType::DOUBLE, "g1", 0);
-            inner->expose_output("out", s7::SignalType::DOUBLE, "g2", 0);
+            inner->expose_input("in", s7::SignalType::F64, "g1", 0);
+            inner->expose_output("out", s7::SignalType::F64, "g2", 0);
             return inner;
         });
         root.connect("source", 0, "nested", 0);
@@ -320,8 +308,8 @@ int main() try
         outer.add_element("broken_nested", [] {
             auto inner = std::make_unique<s7::Schema>("broken");
             inner->add_element("g", [] { return std::make_unique<s7::Gain>(2.0); });
-            inner->expose_input("in", s7::SignalType::DOUBLE, "g", 0);
-            inner->expose_output("out", s7::SignalType::DOUBLE, "missing", 0);
+            inner->expose_input("in", s7::SignalType::F64, "g", 0);
+            inner->expose_output("out", s7::SignalType::F64, "missing", 0);
             return inner;
         });
         outer.connect("source", 0, "broken_nested", 0);
@@ -564,8 +552,8 @@ int main() try
         wrapped.add_element("nested", [buildChain] {
             auto inner = std::make_unique<s7::Schema>("chain");
             buildChain(*inner);
-            inner->expose_input("in", s7::SignalType::DOUBLE, "fir", 0);
-            inner->expose_output("out", s7::SignalType::DOUBLE, "sum", 0);
+            inner->expose_input("in", s7::SignalType::F64, "fir", 0);
+            inner->expose_output("out", s7::SignalType::F64, "sum", 0);
             return inner;
         });
         wrapped.connect("source", 0, "nested", 0);
@@ -637,7 +625,7 @@ int main() try
             "exposed_inputs": [
                 {
                     "name": "in",
-                    "type": "DOUBLE",
+                    "type": "F64",
                     "element": "gain",
                     "port": 0
                 }
@@ -645,7 +633,7 @@ int main() try
             "exposed_outputs": [
                 {
                     "name": "out",
-                    "type": "DOUBLE",
+                    "type": "F64",
                     "element": "gain",
                     "port": 0
                 }

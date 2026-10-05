@@ -50,9 +50,9 @@ int main() {
     complex_constant->step();
 
     std::cout << "  Real constant output: "
-              << s7::bound_value<s7::SignalType::DOUBLE>(real_constant->outputs()[0]) << std::endl;
+              << s7::bound_value<s7::SignalType::F64>(real_constant->outputs()[0]) << std::endl;
 
-    auto c_out = s7::bound_value<s7::SignalType::COMPLEX>(complex_constant->outputs()[0]);
+    auto c_out = s7::bound_value<s7::SignalType::C64>(complex_constant->outputs()[0]);
     std::cout << "  Complex constant output: "
               << c_out.real() << " + " << c_out.imag() << "i" << std::endl;
 

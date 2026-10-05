@@ -27,7 +27,7 @@ struct ParameterSpec {
 struct PortSpec {
     std::string name;                       // Port name
     std::string description;                // Description
-    SignalType type = SignalType::DOUBLE;
+    SignalType type = SignalType::F64;
     bool optional;                          // Can be omitted?
 };
 
@@ -46,7 +46,7 @@ struct VariadicInputSpec {
     std::size_t min_count;                  // Minimum inputs
     std::size_t max_count;                  // Maximum inputs
     std::string port_name_template;         // "in_{index}" for naming
-    SignalType signal_type = SignalType::DOUBLE;
+    SignalType signal_type = SignalType::F64;
 };
 
 // Complete element metadata

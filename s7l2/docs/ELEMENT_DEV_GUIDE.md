@@ -7,20 +7,10 @@ How to write an S7 element, describe it with metadata, and register it. For pack
 Source: `s7core/include/s7/element.hpp`.
 
 - An element **owns its output storage** as member variables. Ports are lightweight `Port{index, name, type, value_ptr}` records pointing at that storage. There is no separate output buffer in the base class.
-- Ports are registered in the constructor with `register_input(index, name, type, nullptr)` and `register_output(index, name, type, &member)`. Port types are fixed per element type; conversion between signal types is done by explicit converter elements, never implicitly (a type mismatch is a validation error).
+- Ports are registered in the constructor with `register_input(index, name, type, nullptr)` and `register_output(index, name, type, &member)`. Port types are fixed per element instance; conversion between signal types is done by explicit converter elements, never implicitly (a type mismatch is a validation error).
 - `Port::name` is a `std::string` owned by the port; `register_input/register_output` copy the name, so any string (including a local one) may be passed.
 - `step()` reads inputs with `read_input<T>(index)` and assigns outputs directly. `read_input` performs no checks; bindings are validated once when the compiler calls `bind_inputs()`.
-- Value storage: `SignalType::COMPLEX` uses `std::complex<double>`; every other `SignalType` is stored as `double`. For the integer types that `double` must always hold an exact integer within the type's range (all are at most 16 bits, so the value is exact). Convert real values with `quantize_to_signal_type()` (round half to even, saturate, NaN → 0) and check with `is_valid_signal_value()`; `signal_type_info()` gives the contract below.
-
-  | SignalType | Meaning | Range | Wire type id |
-  |---|---|---|---|
-  | `DOUBLE` | IEEE 754 binary64 | — | `0x000F` (F64) |
-  | `COMPLEX` | two binary64: real, imaginary | — | `0x0103` (C64) |
-  | `INT8` / `UINT8` | 8-bit two's complement / unsigned | −128..127 / 0..255 | `0x0001` / `0x0002` |
-  | `INT12` / `UINT12` | 12-bit two's complement / unsigned | −2048..2047 / 0..4095 | `0x0003` / `0x0004` |
-  | `INT16` / `UINT16` | 16-bit two's complement / unsigned | −32768..32767 / 0..65535 | `0x0005` / `0x0006` |
-
-  Wire ids are those of the candidate wire format (section 8), whose encodings are big-endian and, for 12-bit types, packed. `DoubleToInt12` / `Int12ToDouble` use Q11 fixed point (code = x × 2048).
+- Value storage: every `SignalType` is stored as its native C++ type, `signal_storage_t<Type>` (`s7/signal_types.hpp`): `double` for F64, `std::complex<double>` for C64, `std::int16_t` for I16 and I12 (restricted to the 12-bit range), `std::float128_t` for F128, `s7::ComplexInt<std::int16_t>` for CI16, and so on. The enumerator value of each `SignalType` is its wire type id. `signal_type_info()` gives kind, component width, storage size and name; `visit_signal_type()` turns a runtime type into a template argument; `IntegerRange<Type>` gives integer bounds; `s7/signal_arithmetic.hpp` provides integer and complex-integer arithmetic with an explicit `Overflow` rule. Read and write values with the port's exact storage type: `read_input<signal_storage_t<SignalType::I16>>(0)`. `DoubleToInt12` / `Int12ToDouble` use Q11 fixed point (code = x × 2048) until the general `Convert` element replaces them.
 - The `Element` constructor takes `has_state` (informational: the element keeps internal state) and `Feedthrough` (default `Feedthrough::Direct`). Elements with direct feedthrough, stateful or not, run in topological order and their outputs are visible downstream in the same step: `Constant → FirFilter([1]) → Gain` yields the constant at step 1.
 - `Feedthrough::None` marks the element as causal memory (`Delay`, `PreviousValue`). Its `step()` writes the output for the *next* step from the current inputs. The runtime steps causal-memory elements after the others, keeps their published outputs unchanged until the step ends, and publishes the new outputs at the start of the next step. Cycles in a graph are valid only if they contain at least one causal-memory element; a stateful element with direct feedthrough (`Integrator`, filters, nested `Schema`) does not break a cycle.
 
@@ -47,8 +37,8 @@ public:
     LinearTransform(double scale, double offset)
         : s7::Element("LinearTransform"), scale_(scale), offset_(offset)
     {
-        register_input(0, s7::port_names::in, s7::SignalType::DOUBLE, nullptr);
-        register_output(0, s7::port_names::out, s7::SignalType::DOUBLE, &output_);
+        register_input(0, s7::port_names::in, s7::SignalType::F64, nullptr);
+        register_output(0, s7::port_names::out, s7::SignalType::F64, &output_);
     }
 
     void step() override { output_ = read_input<double>(0) * scale_ + offset_; }
@@ -75,8 +65,8 @@ meta.display_name = "Linear Transform";
 meta.description = "y = x * scale + offset";
 meta.category = "basic";
 meta.version = "1.0.0";
-meta.input_ports.push_back({"in", "Input signal", s7::SignalType::DOUBLE, false});
-meta.output_ports.push_back({"out", "Output signal", s7::SignalType::DOUBLE, false});
+meta.input_ports.push_back({"in", "Input signal", s7::SignalType::F64, false});
+meta.output_ports.push_back({"out", "Output signal", s7::SignalType::F64, false});
 // ParameterSpec fields: name, type, description, default_value, min, max, enum_values, required
 meta.parameters.push_back({"scale", "real", "Multiplication factor", 1.0, std::nullopt, std::nullopt, {}, false});
 meta.parameters.push_back({"offset", "real", "Additive offset", 0.0, std::nullopt, std::nullopt, {}, false});
@@ -133,10 +123,10 @@ Each module keeps its smoke tests in `<module>/tests/` and registers them with `
 
 ```cpp
 const double in = 5.0;
-const std::array<s7::InputBinding, 1> bindings{s7::bind_input<s7::SignalType::DOUBLE>(in)};
+const std::array<s7::InputBinding, 1> bindings{s7::bind_input<s7::SignalType::F64>(in)};
 element.bind_inputs(bindings);
 element.step();
-assert(s7::bound_value<s7::SignalType::DOUBLE>(element.outputs()[0]) == 11.5);
+assert(s7::bound_value<s7::SignalType::F64>(element.outputs()[0]) == 11.5);
 ```
 
 ## Troubleshooting

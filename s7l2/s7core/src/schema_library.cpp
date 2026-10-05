@@ -119,15 +119,7 @@ auto non_negative_index(const boost::json::object& object, std::string_view fiel
 
 auto signal_type_from_string(const std::string& type) -> SignalType
 {
-    if (type == "DOUBLE") return SignalType::DOUBLE;
-    if (type == "COMPLEX") return SignalType::COMPLEX;
-    if (type == "INT8") return SignalType::INT8;
-    if (type == "UINT8") return SignalType::UINT8;
-    if (type == "INT12") return SignalType::INT12;
-    if (type == "UINT12") return SignalType::UINT12;
-    if (type == "INT16") return SignalType::INT16;
-    if (type == "UINT16") return SignalType::UINT16;
-    throw std::invalid_argument("Unknown signal type: '" + type + "'.");
+    return parse_signal_type(type);
 }
 
 auto parse_port_bindings(const boost::json::object& root, const std::string& field) -> std::vector<SchemaPortBinding>
@@ -145,7 +137,7 @@ auto parse_port_bindings(const boost::json::object& root, const std::string& fie
         const auto& binding_object = expect_object(item, field);
         SchemaPortBinding binding;
         binding.name = string_value(binding_object, "name");
-        binding.type = string_value(binding_object, "type", "DOUBLE");
+        binding.type = string_value(binding_object, "type", "F64");
         binding.element = string_value(binding_object, "element");
         binding.port = non_negative_index(binding_object, "port");
         bindings.push_back(std::move(binding));

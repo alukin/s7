@@ -31,8 +31,8 @@ auto main() -> int try {
 
         const s7::RealValue first{1.25};
         const s7::RealValue second{-3.5};
-        const std::array<s7::InputBinding, 1> first_binding{s7::bind_input<s7::SignalType::DOUBLE>(first)};
-        const std::array<s7::InputBinding, 1> second_binding{s7::bind_input<s7::SignalType::DOUBLE>(second)};
+        const std::array<s7::InputBinding, 1> first_binding{s7::bind_input<s7::SignalType::F64>(first)};
+        const std::array<s7::InputBinding, 1> second_binding{s7::bind_input<s7::SignalType::F64>(second)};
 
         {
             s7::io::RealCompactBinaryFileSink sink(path);
@@ -45,9 +45,9 @@ auto main() -> int try {
         {
             s7::io::RealCompactBinaryFileSource source(path);
             source.step();
-            assert(s7::bound_value<s7::SignalType::DOUBLE>(source.outputs()[0]) == first);
+            assert(s7::bound_value<s7::SignalType::F64>(source.outputs()[0]) == first);
             source.step();
-            assert(s7::bound_value<s7::SignalType::DOUBLE>(source.outputs()[0]) == second);
+            assert(s7::bound_value<s7::SignalType::F64>(source.outputs()[0]) == second);
         }
 
         remove_if_exists(path);
@@ -59,8 +59,8 @@ auto main() -> int try {
 
         const s7::ComplexValue first{3.0, 4.0};
         const s7::ComplexValue second{-1.5, 0.25};
-        const std::array<s7::InputBinding, 1> first_binding{s7::bind_input<s7::SignalType::COMPLEX>(first)};
-        const std::array<s7::InputBinding, 1> second_binding{s7::bind_input<s7::SignalType::COMPLEX>(second)};
+        const std::array<s7::InputBinding, 1> first_binding{s7::bind_input<s7::SignalType::C64>(first)};
+        const std::array<s7::InputBinding, 1> second_binding{s7::bind_input<s7::SignalType::C64>(second)};
 
         {
             s7::io::ComplexGnuplotFileSink sink(path);
@@ -73,9 +73,9 @@ auto main() -> int try {
         {
             s7::io::ComplexGnuplotFileSource source(path);
             source.step();
-            assert(s7::bound_value<s7::SignalType::COMPLEX>(source.outputs()[0]) == first);
+            assert(s7::bound_value<s7::SignalType::C64>(source.outputs()[0]) == first);
             source.step();
-            assert(s7::bound_value<s7::SignalType::COMPLEX>(source.outputs()[0]) == second);
+            assert(s7::bound_value<s7::SignalType::C64>(source.outputs()[0]) == second);
         }
 
         remove_if_exists(path);

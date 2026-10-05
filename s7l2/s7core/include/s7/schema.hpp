@@ -58,20 +58,20 @@ public:
 private:
     struct ExposedInput {
         std::string name;
-        SignalType type{SignalType::DOUBLE};
+        SignalType type{SignalType::F64};
         std::string to_element;
         std::size_t to_port{};
     };
 
     struct ExposedOutput {
         std::string name;
-        SignalType type{SignalType::DOUBLE};
+        SignalType type{SignalType::F64};
         std::string from_element;
         std::size_t from_port{};
     };
 
     struct ExposedOutputValue {
-        SignalType type{SignalType::DOUBLE};
+        SignalType type{SignalType::F64};
         RealValue scalar{};
         ComplexValue complex{};
     };

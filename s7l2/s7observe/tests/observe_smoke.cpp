@@ -48,7 +48,7 @@ int main() try
     assert(samples[0].as_real() == 1.0);
     assert(samples[1].as_real() == 2.0);
 
-    // Integer-typed outputs are exposed as exact integers.
+    // Outputs keep their exact type; reading them as another type is refused.
     {
         s7::Schema typed{"typed"};
         typed.add_element("x", [] { return std::make_unique<s7::Constant>(0.75); });
@@ -57,11 +57,12 @@ int main() try
         s7::NodeRuntime typedRuntime{s7::Compiler::compile(typed)};
         typedRuntime.step();
         const auto sample = s7::ObservationService{typedRuntime}.sample_output("q");
-        assert(sample.type == s7::SignalType::INT12);
-        assert(sample.as_integer() == 1536);
+        assert(sample.type == s7::SignalType::I12);
+        assert(sample.as<s7::SignalType::I12>() == 1536);
+        assert(sample.to_display_double() == 1536.0);
         bool rejected = false;
         try {
-            static_cast<void>(s7::ObservationService{runtime}.sample_output("sum").as_integer());
+            static_cast<void>(sample.as_real());
         } catch (const std::invalid_argument&) {
             rejected = true;
         }

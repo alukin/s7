@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <stdexcept>
+#include <string>
 #include <stdfloat>
 #include <string_view>
 #include <type_traits>
@@ -169,6 +171,20 @@ constexpr decltype(auto) visit_signal_type(const SignalType type, F&& f)
         }
     }
     return std::nullopt;
+}
+
+// Parses a type name ("F64", "CI16", ...); throws std::invalid_argument otherwise.
+[[nodiscard]] inline SignalType parse_signal_type(const std::string_view name)
+{
+    if (const auto type = signal_type_from_name(name)) {
+        return *type;
+    }
+    std::string known;
+    for (const auto type : kAllSignalTypes) {
+        known += known.empty() ? "" : ", ";
+        known += signal_type_name(type);
+    }
+    throw std::invalid_argument("Unknown signal type '" + std::string(name) + "' (known: " + known + ").");
 }
 
 [[nodiscard]] constexpr std::optional<SignalType> signal_type_from_wire_id(const std::uint16_t id)

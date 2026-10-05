@@ -1,7 +1,9 @@
 #ifndef S7OBSERVE_INCLUDE_S7_OBSERVE_HPP
 #define S7OBSERVE_INCLUDE_S7_OBSERVE_HPP
 
+#include <array>
 #include <cstddef>
+#include <cstring>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -25,42 +27,35 @@ struct ProbePoint {
 // timestamps: those belong to data-stream packets (wire protocol section 6)
 // and become observable only through network elements that expose them.
 //
-// Type: `type` is the port's SignalType. DOUBLE and the integer types are read
-// with as_real() (integer types hold exact integers, see signal_type_info()) or
-// as_integer(); COMPLEX with as_complex().
+// Type: `type` is the port's SignalType and the value is kept in its native
+// storage. Read it exactly with as<Type>() (as_real() / as_complex() for F64 /
+// C64). to_display_double() is an explicit, lossy conversion for display only.
 struct ObservationSample {
     std::size_t step{};
     std::optional<std::int64_t> model_time_ns;
     std::string element_id;
     std::size_t port{};
-    SignalType type{SignalType::DOUBLE};
-    RealValue real_value{};
-    ComplexValue complex_value{};
+    SignalType type{SignalType::F64};
+    std::array<std::byte, 32> storage{}; // the value's bytes, signal_type_info(type).storage_bytes long
 
-    [[nodiscard]] bool is_complex() const {
-        return is_complex_signal_type(type);
-    }
-
-    [[nodiscard]] RealValue as_real() const {
-        if (is_complex()) {
-            throw std::invalid_argument("ObservationSample does not contain a real-domain value.");
+    template <SignalType Type>
+    [[nodiscard]] signal_storage_t<Type> as() const {
+        if (type != Type) {
+            throw std::invalid_argument("ObservationSample has type " + std::string(signal_type_name(type)) +
+                                        ", not " + std::string(signal_type_name(Type)) + ".");
         }
-        return real_value;
+        signal_storage_t<Type> value{};
+        std::memcpy(&value, storage.data(), sizeof(value));
+        return value;
     }
 
-    [[nodiscard]] std::int64_t as_integer() const {
-        if (!signal_type_info(type).is_integer) {
-            throw std::invalid_argument("ObservationSample does not contain an integer value.");
-        }
-        return static_cast<std::int64_t>(real_value);
-    }
+    [[nodiscard]] RealValue as_real() const { return as<SignalType::F64>(); }
+    [[nodiscard]] ComplexValue as_complex() const { return as<SignalType::C64>(); }
+    [[nodiscard]] bool is_complex() const { return is_complex_signal_type(type); }
 
-    [[nodiscard]] ComplexValue as_complex() const {
-        if (!is_complex()) {
-            throw std::invalid_argument("ObservationSample does not contain a complex value.");
-        }
-        return complex_value;
-    }
+    // Any real (non-complex) value as a double, for plots and logs. Rounds
+    // values that a double cannot hold exactly (64/128-bit integers, F128).
+    [[nodiscard]] double to_display_double() const;
 };
 
 // Values of several outputs taken between two steps: every sample belongs to

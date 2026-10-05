@@ -32,8 +32,8 @@ public:
         const std::size_t effectiveChannelCount = outputs_.size();
         for (std::size_t channel = 0; channel < effectiveChannelCount; ++channel) {
             const std::string portName = "ch" + std::to_string(channel);
-            register_input(channel, portName, s7::SignalType::DOUBLE, nullptr);
-            register_output(channel, portName, s7::SignalType::DOUBLE, &outputs_[channel]);
+            register_input(channel, portName, s7::SignalType::F64, nullptr);
+            register_output(channel, portName, s7::SignalType::F64, &outputs_[channel]);
         }
     }
 
@@ -113,19 +113,7 @@ inline std::size_t getSizeT(const boost::json::object& object, std::string_view 
 
 inline s7::SignalType signalTypeFromString(std::string_view value)
 {
-    if (value == "DOUBLE" || value == "double") {
-        return s7::SignalType::DOUBLE;
-    }
-    if (value == "COMPLEX" || value == "complex") {
-        return s7::SignalType::COMPLEX;
-    }
-    if (value == "INT8") return s7::SignalType::INT8;
-    if (value == "UINT8") return s7::SignalType::UINT8;
-    if (value == "INT12") return s7::SignalType::INT12;
-    if (value == "UINT12") return s7::SignalType::UINT12;
-    if (value == "INT16") return s7::SignalType::INT16;
-    if (value == "UINT16") return s7::SignalType::UINT16;
-    throw std::invalid_argument("Unsupported signal type string: '" + std::string(value) + "'.");
+    return s7::parse_signal_type(value);
 }
 
 struct SchemaPortBinding {

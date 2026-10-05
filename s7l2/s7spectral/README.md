@@ -6,7 +6,7 @@ The reference **third-party plugin**: it is built out of tree against the instal
 
 | Element | Inputs | Outputs | Parameters (defaults) |
 |---|---|---|---|
-| `WindowedFFT` | `in` (DOUBLE) | `peak_frequency_hz`, `peak_amplitude` (DOUBLE) | `fft_size` 1024 (power of 2), `hop_size` 512, `sample_rate_hz` 44100, `window_type` HANN (RECTANGULAR, HANN, HAMMING, BLACKMAN, BLACKMAN_HARRIS, NUTTALL) |
+| `WindowedFFT` | `in` (F64) | `peak_frequency_hz`, `peak_amplitude` (F64) | `fft_size` 1024 (power of 2), `hop_size` 512, `sample_rate_hz` 44100, `window_type` HANN (RECTANGULAR, HANN, HAMMING, BLACKMAN, BLACKMAN_HARRIS, NUTTALL) |
 
 Every `hop_size` samples, once `fft_size` samples are buffered, `WindowedFFT` transforms the latest window (FFTW, single precision) and outputs the dominant frequency, refined by parabolic interpolation between bins, and the amplitude at the peak bin. The amplitude is subject to the window's scalloping loss (up to about 15% for HANN when the frequency falls between bins). Outputs that carry the whole spectrum wait for block/frame signal types in the runtime.
 

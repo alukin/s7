@@ -18,9 +18,9 @@ template <typename T>
 constexpr SignalType signal_type_for()
 {
     if constexpr (std::is_same_v<T, ComplexValue>) {
-        return SignalType::COMPLEX;
+        return SignalType::C64;
     } else {
-        return SignalType::DOUBLE;
+        return SignalType::F64;
     }
 }
 
@@ -279,7 +279,7 @@ public:
     void step() override;
 
 private:
-    RealValue output_value_;
+    signal_storage_t<SignalType::I12> output_value_;
 };
 
 } // namespace s7

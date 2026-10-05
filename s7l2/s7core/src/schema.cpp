@@ -17,7 +17,7 @@ struct ExposedInputState {
     {
     }
 
-    SignalType type{SignalType::DOUBLE};
+    SignalType type{SignalType::F64};
     RealValue scalar{};
     ComplexValue complex{};
 };
@@ -36,7 +36,7 @@ public:
         register_output(0,
                         port_names::out,
                         type_,
-                        type_ == SignalType::COMPLEX
+                        type_ == SignalType::C64
                             ? static_cast<void*>(&state_->complex)
                             : static_cast<void*>(&state_->scalar));
     }
@@ -77,7 +77,7 @@ void Schema::step() {
     for (std::size_t index = 0; index < exposed_inputs_.size(); ++index) {
         const auto& input = exposed_inputs_[index];
         const auto& state = std::static_pointer_cast<ExposedInputState>(exposed_input_states_[index]);
-        if (input.type == SignalType::COMPLEX) {
+        if (input.type == SignalType::C64) {
             state->complex = read_input<ComplexValue>(index);
         } else {
             state->scalar = read_input<RealValue>(index);
@@ -89,7 +89,7 @@ void Schema::step() {
     for (std::size_t index = 0; index < exposed_outputs_.size(); ++index) {
         const auto& output = exposed_outputs_[index];
         auto& value = exposed_output_values_[index];
-        if (output.type == SignalType::COMPLEX) {
+        if (output.type == SignalType::C64) {
             value.complex = compiled_runtime_->complex_output_of(output.from_element, output.from_port);
         } else {
             value.scalar = compiled_runtime_->real_output_of(output.from_element, output.from_port);
@@ -153,7 +153,7 @@ void Schema::expose_output(std::string name,
     register_output(portIndex,
                     exposed_outputs_.back().name,
                     type,
-                    type == SignalType::COMPLEX
+                    type == SignalType::C64
                         ? static_cast<void*>(&storage.complex)
                         : static_cast<void*>(&storage.scalar));
     invalidate_compiled_runtime();

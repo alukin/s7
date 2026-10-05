@@ -28,7 +28,7 @@ ElementMetadata make_simple_metadata(
         PortSpec port;
         port.name = i == 0 ? "in" : "in" + std::to_string(i);
         port.description = "Input";
-        port.type = SignalType::DOUBLE;
+        port.type = SignalType::F64;
         port.optional = false;
         metadata.input_ports.push_back(port);
     }
@@ -37,7 +37,7 @@ ElementMetadata make_simple_metadata(
         PortSpec port;
         port.name = i == 0 ? "out" : "out" + std::to_string(i);
         port.description = "Output";
-        port.type = SignalType::DOUBLE;
+        port.type = SignalType::F64;
         port.optional = false;
         metadata.output_ports.push_back(port);
     }
@@ -125,7 +125,7 @@ void register_builtin_elements(ElementRegistry& registry)
             m.input_ports[1].name = "rhs";
             m.input_ports[1].description = "Summation input 1 (weighted by weights[1]).";
             m.output_ports[0].description = "Weighted sum output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::DOUBLE};
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64};
             return m;
         }()));
 
@@ -143,7 +143,7 @@ void register_builtin_elements(ElementRegistry& registry)
             m.input_ports[1].name = "rhs";
             m.input_ports[1].description = "Multiplier input 1 (scaled by factors[1]).";
             m.output_ports[0].description = "Product output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::DOUBLE};
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64};
             return m;
         }()));
 
@@ -246,12 +246,12 @@ void register_builtin_elements(ElementRegistry& registry)
             auto m = make_simple_metadata("ReImToComplex", "Re/Im to Complex", "Combine real and imaginary channels", "conversion", 2, 1);
             m.input_ports[0].name = "re";
             m.input_ports[0].description = "Real part.";
-            m.input_ports[0].type = SignalType::DOUBLE;
+            m.input_ports[0].type = SignalType::F64;
             m.input_ports[1].name = "im";
             m.input_ports[1].description = "Imaginary part.";
-            m.input_ports[1].type = SignalType::DOUBLE;
+            m.input_ports[1].type = SignalType::F64;
             m.output_ports[0].description = "Complex output.";
-            m.output_ports[0].type = SignalType::COMPLEX;
+            m.output_ports[0].type = SignalType::C64;
             return m;
         }()));
 
@@ -264,13 +264,13 @@ void register_builtin_elements(ElementRegistry& registry)
             auto m = make_simple_metadata("ComplexToReIm", "Complex to Re/Im", "Split complex input into real and imaginary channels", "conversion", 1, 2);
             m.input_ports[0].name = "in";
             m.input_ports[0].description = "Complex input.";
-            m.input_ports[0].type = SignalType::COMPLEX;
+            m.input_ports[0].type = SignalType::C64;
             m.output_ports[0].name = "re";
             m.output_ports[0].description = "Real output.";
-            m.output_ports[0].type = SignalType::DOUBLE;
+            m.output_ports[0].type = SignalType::F64;
             m.output_ports[1].name = "im";
             m.output_ports[1].description = "Imaginary output.";
-            m.output_ports[1].type = SignalType::DOUBLE;
+            m.output_ports[1].type = SignalType::F64;
             return m;
         }()));
 
@@ -283,13 +283,13 @@ void register_builtin_elements(ElementRegistry& registry)
             auto m = make_simple_metadata("ComplexToMagnitudePhase", "Complex to Magnitude/Phase", "Convert complex input to magnitude and phase", "conversion", 1, 2);
             m.input_ports[0].name = "in";
             m.input_ports[0].description = "Complex input.";
-            m.input_ports[0].type = SignalType::COMPLEX;
+            m.input_ports[0].type = SignalType::C64;
             m.output_ports[0].name = "magnitude";
             m.output_ports[0].description = "Magnitude output.";
-            m.output_ports[0].type = SignalType::DOUBLE;
+            m.output_ports[0].type = SignalType::F64;
             m.output_ports[1].name = "phase";
             m.output_ports[1].description = "Phase output (radians).";
-            m.output_ports[1].type = SignalType::DOUBLE;
+            m.output_ports[1].type = SignalType::F64;
             return m;
         }()));
 
@@ -302,9 +302,9 @@ void register_builtin_elements(ElementRegistry& registry)
             auto m = make_simple_metadata("Int12ToDouble", "Int12 to Double", "Convert INT12 code to DOUBLE (code / 2048)", "conversion", 1, 1);
             m.input_ports[0].name = "in";
             m.input_ports[0].description = "INT12 input sample.";
-            m.input_ports[0].type = SignalType::INT12;
+            m.input_ports[0].type = SignalType::I12;
             m.output_ports[0].description = "Converted DOUBLE output.";
-            m.output_ports[0].type = SignalType::DOUBLE;
+            m.output_ports[0].type = SignalType::F64;
             return m;
         }()));
 
@@ -317,9 +317,9 @@ void register_builtin_elements(ElementRegistry& registry)
             auto m = make_simple_metadata("DoubleToInt12", "Double to Int12", "Quantize DOUBLE to INT12 (x * 2048, round half to even, saturate)", "conversion", 1, 1);
             m.input_ports[0].name = "in";
             m.input_ports[0].description = "DOUBLE input sample.";
-            m.input_ports[0].type = SignalType::DOUBLE;
+            m.input_ports[0].type = SignalType::F64;
             m.output_ports[0].description = "Converted INT12 output.";
-            m.output_ports[0].type = SignalType::INT12;
+            m.output_ports[0].type = SignalType::I12;
             return m;
         }()));
 }

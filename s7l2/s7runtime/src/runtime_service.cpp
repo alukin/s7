@@ -65,19 +65,7 @@ std::string expect_string(const boost::json::object& object, const std::string_v
 
 auto signal_type_from_string(const std::string_view value) -> SignalType
 {
-    if (value == "DOUBLE" || value == "double") {
-        return SignalType::DOUBLE;
-    }
-    if (value == "COMPLEX" || value == "complex") {
-        return SignalType::COMPLEX;
-    }
-    if (value == "INT8") return SignalType::INT8;
-    if (value == "UINT8") return SignalType::UINT8;
-    if (value == "INT12") return SignalType::INT12;
-    if (value == "UINT12") return SignalType::UINT12;
-    if (value == "INT16") return SignalType::INT16;
-    if (value == "UINT16") return SignalType::UINT16;
-    throw std::invalid_argument("Unsupported signal type string: '" + std::string(value) + "'.");
+    return parse_signal_type(value);
 }
 
 auto parse_schema_port_bindings(const boost::json::object& root, const std::string_view field_name)

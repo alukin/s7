@@ -38,9 +38,9 @@ WindowedFFT::WindowedFFT(const std::uint32_t fft_size,
         throw std::runtime_error("WindowedFFT could not create its FFTW plan.");
     }
 
-    register_input(0, "in", s7::SignalType::DOUBLE, nullptr);
-    register_output(0, "peak_frequency_hz", s7::SignalType::DOUBLE, &peak_frequency_hz_);
-    register_output(1, "peak_amplitude", s7::SignalType::DOUBLE, &peak_amplitude_);
+    register_input(0, "in", s7::SignalType::F64, nullptr);
+    register_output(0, "peak_frequency_hz", s7::SignalType::F64, &peak_frequency_hz_);
+    register_output(1, "peak_amplitude", s7::SignalType::F64, &peak_amplitude_);
 }
 
 WindowedFFT::~WindowedFFT()

@@ -39,7 +39,7 @@ auto make_net_metadata(const std::string& type_name,
         PortSpec port;
         port.name = i == 0 ? "in" : "in" + std::to_string(i);
         port.description = "Networked scalar input.";
-        port.type = SignalType::DOUBLE;
+        port.type = SignalType::F64;
         port.optional = false;
         metadata.input_ports.push_back(std::move(port));
     }
@@ -48,7 +48,7 @@ auto make_net_metadata(const std::string& type_name,
         PortSpec port;
         port.name = i == 0 ? "out" : "out" + std::to_string(i);
         port.description = "Networked scalar output.";
-        port.type = SignalType::DOUBLE;
+        port.type = SignalType::F64;
         port.optional = false;
         metadata.output_ports.push_back(std::move(port));
     }
@@ -81,7 +81,7 @@ NetSink::NetSink(std::string topic)
     , endpoint_handle_{}
     , sequence_(0)
 {
-    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
+    register_input(0, port_names::in, SignalType::F64, nullptr);
 }
 
 NetSink::~NetSink()
@@ -164,7 +164,7 @@ NetSource::NetSource(std::string topic)
     , endpoint_handle_{}
     , output_value_(0.0)
 {
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 NetSource::~NetSource()

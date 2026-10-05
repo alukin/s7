@@ -57,7 +57,7 @@ s7::ElementMetadata create_white_noise_metadata() {
     meta.tags = {"noise", "source", "stateful", "random"};
 
     meta.output_ports.push_back({
-        "out", "White noise output", s7::SignalType::DOUBLE, false
+        "out", "White noise output", s7::SignalType::F64, false
     });
 
     meta.parameters = {
@@ -79,7 +79,7 @@ s7::ElementMetadata create_pink_noise_metadata() {
     meta.tags = {"noise", "source", "stateful", "random", "pink"};
 
     meta.output_ports.push_back({
-        "out", "Pink noise output", s7::SignalType::DOUBLE, false
+        "out", "Pink noise output", s7::SignalType::F64, false
     });
 
     meta.parameters = {

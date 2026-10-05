@@ -23,7 +23,7 @@
         "exposed_inputs": [
           {
             "name": "in",
-            "type": "DOUBLE",
+            "type": "F64",
             "element": "gain",
             "port": 0
           }
@@ -31,7 +31,7 @@
         "exposed_outputs": [
           {
             "name": "out",
-            "type": "DOUBLE",
+            "type": "F64",
             "element": "gain",
             "port": 0
           }
@@ -59,7 +59,7 @@
         "exposed_inputs": [
           {
             "name": "in",
-            "type": "DOUBLE",
+            "type": "F64",
             "element": "gain",
             "port": 0
           }
@@ -67,7 +67,7 @@
         "exposed_outputs": [
           {
             "name": "out",
-            "type": "DOUBLE",
+            "type": "F64",
             "element": "gain",
             "port": 0
           }

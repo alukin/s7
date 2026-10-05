@@ -3,6 +3,7 @@
 
 #include "s7/graph.hpp"
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +35,16 @@ public:
     [[nodiscard]] const std::string& element_id_of_instance_uuid(const std::string& element_instance_uuid) const;
     [[nodiscard]] SignalType output_type_of(const std::string& element_id, std::size_t port = 0) const;
     [[nodiscard]] SignalType output_type_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
+    // Typed output read; throws std::invalid_argument if the port has another type.
+    template <SignalType Type>
+    [[nodiscard]] signal_storage_t<Type> output_of(const std::string& element_id, std::size_t port = 0) const
+    {
+        require_output_type(element_id, port, Type);
+        return *static_cast<const signal_storage_t<Type>*>(output_binding_of(element_id, port));
+    }
+    // Address of an output's storage, valid between steps on the stepping thread.
+    [[nodiscard]] OutputBinding output_binding_of(const std::string& element_id, std::size_t port) const;
+    // F64 / C64 shorthands for output_of<F64> / output_of<C64>.
     [[nodiscard]] RealValue real_output_of(const std::string& element_id, std::size_t port = 0) const;
     [[nodiscard]] RealValue real_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
     [[nodiscard]] ComplexValue complex_output_of(const std::string& element_id, std::size_t port = 0) const;
@@ -44,13 +55,12 @@ private:
     // Output of a causal-memory element. Its step() writes the next step's
     // value; the runtime stages it and publishes it at the start of the next
     // step, so all outputs read after step() belong to the same step.
+    // Raw copies of the output's storage (at most 32 bytes: CI128/C128).
     struct MemoryOutput {
         void* value_ptr{};
-        SignalType type{SignalType::DOUBLE};
-        RealValue snapshot_real{};
-        RealValue staged_real{};
-        ComplexValue snapshot_complex{};
-        ComplexValue staged_complex{};
+        std::size_t bytes{};
+        std::array<std::byte, 32> snapshot{};
+        std::array<std::byte, 32> staged{};
     };
 
     struct MemoryOutputRange {
@@ -58,7 +68,7 @@ private:
         std::size_t end{};
     };
 
-    [[nodiscard]] OutputBinding output_binding_of(const std::string& element_id, std::size_t port) const;
+    void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
     ExecutableGraph graph_;
     std::vector<MemoryOutput> memory_outputs_;

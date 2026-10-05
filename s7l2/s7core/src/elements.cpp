@@ -1,5 +1,6 @@
 #include "s7/elements.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <numbers>
@@ -19,8 +20,8 @@ FirFilter::FirFilter(std::vector<RealValue> taps)
     if (taps_.empty()) {
         throw std::invalid_argument("FirFilter requires at least one tap.");
     }
-    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_input(0, port_names::in, SignalType::F64, nullptr);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 void FirFilter::step() {
@@ -44,8 +45,8 @@ IirFilter::IirFilter(RealValue b0, RealValue b1, RealValue a1)
       x1_(0.0), y1_(0.0),
       output_value_(0.0)
 {
-    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_input(0, port_names::in, SignalType::F64, nullptr);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 void IirFilter::step() {
@@ -61,8 +62,8 @@ PreviousValue::PreviousValue(RealValue initial_value)
     : Element("PreviousValue", true, Feedthrough::None),
       output_value_(initial_value)
 {
-    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_input(0, port_names::in, SignalType::F64, nullptr);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 void PreviousValue::step() {
@@ -74,8 +75,8 @@ Integrator::Integrator(RealValue initial_value)
     : Element("Integrator", true),
       output_value_(initial_value)
 {
-    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_input(0, port_names::in, SignalType::F64, nullptr);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 void Integrator::step() {
@@ -93,7 +94,7 @@ AnalogOscillator::AnalogOscillator(RealValue amplitude, RealValue frequency_hz, 
         throw std::invalid_argument("AnalogOscillator requires a positive sample rate.");
     }
     phase_increment_ = (2.0 * std::numbers::pi * frequency_hz) / sample_rate_hz;
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 void AnalogOscillator::step() {
@@ -118,9 +119,9 @@ ReImToComplex::ReImToComplex()
     : Element("ReImToComplex"),
       output_value_{0.0, 0.0}
 {
-    register_input(0, port_names::re, SignalType::DOUBLE, nullptr);
-    register_input(1, port_names::im, SignalType::DOUBLE, nullptr);
-    register_output(0, port_names::out, SignalType::COMPLEX, &output_value_);
+    register_input(0, port_names::re, SignalType::F64, nullptr);
+    register_input(1, port_names::im, SignalType::F64, nullptr);
+    register_output(0, port_names::out, SignalType::C64, &output_value_);
 }
 
 void ReImToComplex::step() {
@@ -134,9 +135,9 @@ ComplexToReIm::ComplexToReIm()
       output_re_(0.0),
       output_im_(0.0)
 {
-    register_input(0, port_names::in, SignalType::COMPLEX, nullptr);
-    register_output(0, port_names::re, SignalType::DOUBLE, &output_re_);
-    register_output(1, port_names::im, SignalType::DOUBLE, &output_im_);
+    register_input(0, port_names::in, SignalType::C64, nullptr);
+    register_output(0, port_names::re, SignalType::F64, &output_re_);
+    register_output(1, port_names::im, SignalType::F64, &output_im_);
 }
 
 void ComplexToReIm::step() {
@@ -149,26 +150,30 @@ Int12ToDouble::Int12ToDouble()
     : Element("Int12ToDouble"),
       output_value_(0.0)
 {
-    register_input(0, port_names::in, SignalType::INT12, nullptr);
-    register_output(0, port_names::out, SignalType::DOUBLE, &output_value_);
+    register_input(0, port_names::in, SignalType::I12, nullptr);
+    register_output(0, port_names::out, SignalType::F64, &output_value_);
 }
 
 // INT12 <-> DOUBLE use Q11 fixed point: code / 2048, so [-2048, 2047] maps
 // to [-1.0, 1 - 2^-11].
 void Int12ToDouble::step() {
-    output_value_ = read_input<RealValue>(0) / 2048.0;
+    output_value_ = static_cast<RealValue>(read_input<signal_storage_t<SignalType::I12>>(0)) / 2048.0;
 }
 
 DoubleToInt12::DoubleToInt12()
     : Element("DoubleToInt12"),
       output_value_(0.0)
 {
-    register_input(0, port_names::in, SignalType::DOUBLE, nullptr);
-    register_output(0, port_names::out, SignalType::INT12, &output_value_);
+    register_input(0, port_names::in, SignalType::F64, nullptr);
+    register_output(0, port_names::out, SignalType::I12, &output_value_);
 }
 
 void DoubleToInt12::step() {
-    output_value_ = quantize_to_signal_type(SignalType::INT12, read_input<RealValue>(0) * 2048.0);
+    // Round half to even (default rounding mode), saturate, NaN -> 0.
+    const auto scaled = read_input<RealValue>(0) * 2048.0;
+    constexpr auto lo = static_cast<RealValue>(IntegerRange<SignalType::I12>::min);
+    constexpr auto hi = static_cast<RealValue>(IntegerRange<SignalType::I12>::max);
+    output_value_ = std::isnan(scaled) ? 0 : static_cast<signal_storage_t<SignalType::I12>>(std::clamp(std::nearbyint(scaled), lo, hi));
 }
 
 ComplexToMagnitudePhase::ComplexToMagnitudePhase()
@@ -176,9 +181,9 @@ ComplexToMagnitudePhase::ComplexToMagnitudePhase()
       output_magnitude_(0.0),
       output_phase_(0.0)
 {
-    register_input(0, port_names::in, SignalType::COMPLEX, nullptr);
-    register_output(0, "magnitude", SignalType::DOUBLE, &output_magnitude_);
-    register_output(1, "phase", SignalType::DOUBLE, &output_phase_);
+    register_input(0, port_names::in, SignalType::C64, nullptr);
+    register_output(0, "magnitude", SignalType::F64, &output_magnitude_);
+    register_output(1, "phase", SignalType::F64, &output_phase_);
 }
 
 void ComplexToMagnitudePhase::bind_inputs(std::span<const InputBinding> bindings) {

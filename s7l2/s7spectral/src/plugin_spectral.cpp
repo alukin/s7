@@ -59,9 +59,9 @@ s7::ElementMetadata windowed_fft_metadata()
     meta.version = "1.0.0";
     meta.tags = {"fft", "spectral", "stateful", "fftw3"};
 
-    meta.input_ports.push_back({"in", "Input signal", s7::SignalType::DOUBLE, false});
-    meta.output_ports.push_back({"peak_frequency_hz", "Dominant frequency (Hz)", s7::SignalType::DOUBLE, false});
-    meta.output_ports.push_back({"peak_amplitude", "Amplitude of the dominant component", s7::SignalType::DOUBLE, false});
+    meta.input_ports.push_back({"in", "Input signal", s7::SignalType::F64, false});
+    meta.output_ports.push_back({"peak_frequency_hz", "Dominant frequency (Hz)", s7::SignalType::F64, false});
+    meta.output_ports.push_back({"peak_amplitude", "Amplitude of the dominant component", s7::SignalType::F64, false});
 
     meta.parameters = {
         {"fft_size", "int", "FFT window size (power of 2)", 1024, 4, 65536, {}, false},

@@ -45,10 +45,10 @@ Each element entry contains:
         ],
         "connections": [],
         "exposed_inputs": [
-          { "name": "in", "type": "DOUBLE", "element": "gain", "port": 0 }
+          { "name": "in", "type": "F64", "element": "gain", "port": 0 }
         ],
         "exposed_outputs": [
-          { "name": "out", "type": "DOUBLE", "element": "gain", "port": 0 }
+          { "name": "out", "type": "F64", "element": "gain", "port": 0 }
         ]
       }
     }

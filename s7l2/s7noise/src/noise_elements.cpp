@@ -19,7 +19,7 @@ WhiteNoiseGenerator::WhiteNoiseGenerator(double amplitude, uint32_t seed)
     }
 
     // Register output port
-    register_output(0, "out", s7::SignalType::DOUBLE, &output_value_);
+    register_output(0, "out", s7::SignalType::F64, &output_value_);
 }
 
 void WhiteNoiseGenerator::step() {
@@ -47,7 +47,7 @@ PinkNoiseGenerator::PinkNoiseGenerator(double amplitude, uint32_t seed)
     }
 
     // Register output port
-    register_output(0, "out", s7::SignalType::DOUBLE, &output_value_);
+    register_output(0, "out", s7::SignalType::F64, &output_value_);
 }
 
 void PinkNoiseGenerator::step() {

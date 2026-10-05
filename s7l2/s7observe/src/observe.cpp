@@ -1,8 +1,23 @@
 #include "s7/observe.hpp"
 
+#include <cstring>
 #include <thread>
 
 namespace s7 {
+
+double ObservationSample::to_display_double() const {
+    if (is_complex()) {
+        throw std::invalid_argument("A complex " + std::string(signal_type_name(type)) +
+                                    " value has no single display value.");
+    }
+    return visit_signal_type(type, [this]<SignalType T>() -> double {
+        if constexpr (signal_type_info(T).is_complex()) {
+            return 0.0; // excluded above
+        } else {
+            return static_cast<double>(as<T>());
+        }
+    });
+}
 
 ObservationService::ObservationService(const NodeRuntime& runtime) : runtime_(&runtime) {}
 
@@ -20,13 +35,8 @@ ObservationSample ObservationService::read(const std::string& element_id, const 
     sample.element_id = element_id;
     sample.port = port;
     sample.type = runtime_->output_type_of(element_id, port);
-
-    if (sample.is_complex()) {
-        sample.complex_value = runtime_->complex_output_of(element_id, port);
-    } else {
-        sample.real_value = runtime_->real_output_of(element_id, port);
-    }
-
+    std::memcpy(sample.storage.data(), runtime_->output_binding_of(element_id, port),
+                signal_type_info(sample.type).storage_bytes);
     return sample;
 }
 
