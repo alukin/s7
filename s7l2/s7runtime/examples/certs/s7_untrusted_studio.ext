@@ -1,5 +1,4 @@
 basicConstraints=CA:FALSE
 keyUsage=digitalSignature,keyEncipherment
-extendedKeyUsage=clientAuth
+extendedKeyUsage=clientAuth,2.25.4266950079767543379770189370854073200
 subjectAltName=URI:spiffe://s7/node/22222222-3333-4444-5555-666666666666
-certificatePolicies=2.25.4266950079767543379770189370854073200

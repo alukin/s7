@@ -80,7 +80,7 @@ ctest --test-dir build -R s7io_smoke
 - The project is pre-MVP with no deployments: breaking changes to APIs, formats, and protocols are allowed; do not add compatibility shims.
 - Prefer explicit errors around schema/type mismatches over silent coercion.
 - Tests must not write under `$HOME`: give `RuntimeService` a temporary state directory.
-- Control mutations are authorized only from the transport's `ControlPeer` (verified certificate, role policy OID, pinned fingerprint); never add authorization based on JSON fields. Implemented control behavior is summarized in `docs/S7_Control_Protocol_MVP.md` section 10.1.
+- Control mutations are authorized only from the transport's `ControlPeer` (verified certificate, control-node key purpose in Extended Key Usage, pinned fingerprint); never add authorization based on JSON fields. Implemented control behavior is summarized in `docs/S7_Control_Protocol_MVP.md` section 10.1.
 - Preserve public namespace and API surface conventions (`namespace s7`, public headers under `s7core/include/s7/`).
 - Before any edit in `external/`, stop and confirm explicit user approval; otherwise, do not change vendored sources.
 

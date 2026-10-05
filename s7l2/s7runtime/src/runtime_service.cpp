@@ -284,7 +284,7 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
 
     if (const auto control_it = root.find("control"); control_it != root.end()) {
         const auto& control_obj = expect_object(control_it->value(), "control");
-        definition.control.studio_policy_oid = expect_string(control_obj, "studio_policy_oid");
+        definition.control.studio_key_purpose_oid = expect_string(control_obj, "studio_key_purpose_oid");
         definition.control.studio_certificate_sha256 = expect_string(control_obj, "studio_certificate_sha256");
         auto& fingerprint = definition.control.studio_certificate_sha256;
         std::erase(fingerprint, ':');

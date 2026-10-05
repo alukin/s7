@@ -51,15 +51,15 @@ struct ControlNodeDescriptor {
 };
 
 // The single Studio allowed to change this node's configuration: its client
-// certificate must carry the control-node role policy and match the pinned
-// fingerprint. Unconfigured means no peer may change configuration.
+// certificate must carry the control-node key purpose (Extended Key Usage)
+// and match the pinned fingerprint. Unconfigured means no peer may change configuration.
 struct ControlAuthorization {
-    std::string studio_policy_oid;
+    std::string studio_key_purpose_oid;
     std::string studio_certificate_sha256;
 
     [[nodiscard]] auto configured() const -> bool
     {
-        return !studio_policy_oid.empty() && !studio_certificate_sha256.empty();
+        return !studio_key_purpose_oid.empty() && !studio_certificate_sha256.empty();
     }
 };
 

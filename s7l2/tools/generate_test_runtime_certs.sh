@@ -11,10 +11,11 @@ SERIAL="$OUT_DIR/s7_root_ca.cert.srl"
 NODE_UUID="11111111-2222-3333-4444-555555555555"
 STUDIO_UUID="22222222-3333-4444-5555-666666666666"
 
-# Development placeholder for the S7 control-node (Studio) role policy OID:
-# a UUID-derived OID under 2.25 (ITU-T X.667), pending assignment of S7 OIDs
-# under an enterprise arc. Keep in sync with S7_DEV_STUDIO_POLICY_OID users.
-STUDIO_POLICY_OID="2.25.4266950079767543379770189370854073200"
+# Development placeholder for the S7 control-node (Studio) key purpose, carried
+# in Extended Key Usage: a UUID-derived OID under 2.25 (ITU-T X.667), pending
+# assignment of S7 OIDs under an enterprise arc. Keep in sync with
+# kStudioKeyPurposeOid in s7runtime/tests/deployment_smoke.cpp.
+STUDIO_KEY_PURPOSE_OID="2.25.4266950079767543379770189370854073200"
 
 openssl genrsa -out "$ROOT_KEY" 4096
 openssl req -x509 -new -nodes -key "$ROOT_KEY" -sha256 -days 3650 \
@@ -43,13 +44,12 @@ keyUsage=digitalSignature,keyEncipherment
 extendedKeyUsage=serverAuth,clientAuth
 subjectAltName=URI:spiffe://s7/node/$NODE_UUID"
 
-# Control Studio: carries the control-node role policy.
+# Control Studio: carries the control-node key purpose.
 issue s7_studio "/C=US/ST=Test/L=Test/O=S7/OU=Studio/CN=s7-studio" \
 "basicConstraints=CA:FALSE
 keyUsage=digitalSignature,keyEncipherment
-extendedKeyUsage=clientAuth
-subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID
-certificatePolicies=$STUDIO_POLICY_OID"
+extendedKeyUsage=clientAuth,$STUDIO_KEY_PURPOSE_OID
+subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID"
 
 # Untrusted CA and a Studio-role certificate it signed, for negative tests.
 UNTRUSTED_KEY="$OUT_DIR/s7_untrusted_ca.key.pem"
@@ -60,9 +60,8 @@ openssl req -x509 -new -nodes -key "$UNTRUSTED_KEY" -sha256 -days 3650 \
 issue s7_untrusted_studio "/C=US/ST=Test/L=Test/O=Elsewhere/CN=s7-studio" \
 "basicConstraints=CA:FALSE
 keyUsage=digitalSignature,keyEncipherment
-extendedKeyUsage=clientAuth
-subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID
-certificatePolicies=$STUDIO_POLICY_OID" \
+extendedKeyUsage=clientAuth,$STUDIO_KEY_PURPOSE_OID
+subjectAltName=URI:spiffe://s7/node/$STUDIO_UUID" \
   "$UNTRUSTED_CERT" "$UNTRUSTED_KEY" "$OUT_DIR/s7_untrusted_ca.cert.srl"
 
 openssl verify -CAfile "$ROOT_CERT" "$OUT_DIR/s7_runtime_node.cert.pem" "$OUT_DIR/s7_studio.cert.pem"

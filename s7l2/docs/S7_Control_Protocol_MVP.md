@@ -216,18 +216,18 @@ The C++ runtime is the reference implementation. Existing code contains JSON con
 
 ### 10.1 Implemented behavior (C++ runtime, 2026-10-04)
 
-**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT` and `ABORT_DEPLOYMENT` are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Certificate Policies OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate carries the configured control-node policy OID (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
+**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT` and `ABORT_DEPLOYMENT` are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Extended Key Usage OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate's Extended Key Usage contains the configured control-node key purpose (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
 
 The authorized Studio is node configuration in the runtime schema file, not deployable:
 
 ```json
 "control": {
-  "studio_policy_oid": "2.25.4266950079767543379770189370854073200",
+  "studio_key_purpose_oid": "2.25.4266950079767543379770189370854073200",
   "studio_certificate_sha256": "<64 hex digits>"
 }
 ```
 
-The OID above is a development placeholder (UUID-derived, under `2.25`) used by the test certificates until S7 OIDs are assigned under an enterprise arc. **Pending change:** the implementation still reads this OID from Certificate Policies; it moves to Extended Key Usage (and `studio_policy_oid` becomes `studio_key_purpose_oid`) per section 2.
+The OID above is a development placeholder (UUID-derived, under `2.25`) used by the test certificates until S7 OIDs are assigned under an enterprise arc.
 
 **Prepare request.**
 

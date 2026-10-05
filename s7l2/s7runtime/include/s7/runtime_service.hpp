@@ -79,7 +79,7 @@ struct RuntimeSchemaDefinition {
     WebSocketClientConfig client;
     SimulationConfig simulation;
     ExecutionConfig execution;
-    // Node settings, not deployable: "control": { "studio_policy_oid": "...",
+    // Node settings, not deployable: "control": { "studio_key_purpose_oid": "...",
     // "studio_certificate_sha256": "<hex>" } names the authorized Studio.
     ControlAuthorization control;
 };

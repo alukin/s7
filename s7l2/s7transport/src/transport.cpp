@@ -196,16 +196,15 @@ void append_u64_be(std::vector<std::uint8_t>& out, const std::uint64_t value)
         }
     }
 
-    const auto policies_deleter = [](CERTIFICATEPOLICIES* policies) { CERTIFICATEPOLICIES_free(policies); };
-    std::unique_ptr<CERTIFICATEPOLICIES, decltype(policies_deleter)> policies(
-        static_cast<CERTIFICATEPOLICIES*>(X509_get_ext_d2i(certificate, NID_certificate_policies, nullptr, nullptr)),
-        policies_deleter);
-    for (int index = 0; policies && index < sk_POLICYINFO_num(policies.get()); ++index) {
-        const POLICYINFO* policy = sk_POLICYINFO_value(policies.get(), index);
+    const auto usages_deleter = [](EXTENDED_KEY_USAGE* usages) { EXTENDED_KEY_USAGE_free(usages); };
+    std::unique_ptr<EXTENDED_KEY_USAGE, decltype(usages_deleter)> usages(
+        static_cast<EXTENDED_KEY_USAGE*>(X509_get_ext_d2i(certificate, NID_ext_key_usage, nullptr, nullptr)),
+        usages_deleter);
+    for (int index = 0; usages && index < sk_ASN1_OBJECT_num(usages.get()); ++index) {
         char oid[128];
-        const int length = OBJ_obj2txt(oid, sizeof(oid), policy->policyid, 1);
+        const int length = OBJ_obj2txt(oid, sizeof(oid), sk_ASN1_OBJECT_value(usages.get(), index), 1);
         if (length > 0 && static_cast<std::size_t>(length) < sizeof(oid)) {
-            info.policy_oids.emplace_back(oid, static_cast<std::size_t>(length));
+            info.key_purpose_oids.emplace_back(oid, static_cast<std::size_t>(length));
         }
     }
     return info;

@@ -30,7 +30,7 @@ namespace json = boost::json;
 using s7::transport::ControlPeer;
 
 // Development placeholder for the control-node role (see tools/generate_test_runtime_certs.sh).
-constexpr const char* kStudioPolicyOid = "2.25.4266950079767543379770189370854073200";
+constexpr const char* kStudioKeyPurposeOid = "2.25.4266950079767543379770189370854073200";
 
 std::string cert_path(const std::string& name)
 {
@@ -53,7 +53,7 @@ ControlPeer verified_peer(const std::string& certificate_name)
 s7::ControlAuthorization studio_authorization()
 {
     return s7::ControlAuthorization{
-        .studio_policy_oid = kStudioPolicyOid,
+        .studio_key_purpose_oid = kStudioKeyPurposeOid,
         .studio_certificate_sha256 = s7::transport::inspect_certificate_file(cert_path("s7_studio.cert.pem")).fingerprint_sha256,
     };
 }
@@ -235,7 +235,7 @@ void test_authorization()
     // A certificate with the Studio role but not the pinned one is refused.
     s7::ControlPlaneMvp other_pin{s7::ControlNodeDescriptor{},
                                   s7::ControlPlaneOptions{
-                                      .authorization = {.studio_policy_oid = kStudioPolicyOid,
+                                      .authorization = {.studio_key_purpose_oid = kStudioKeyPurposeOid,
                                                         .studio_certificate_sha256 = std::string(64, 'a')},
                                       .deployment_host = host,
                                   }};

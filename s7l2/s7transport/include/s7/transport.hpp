@@ -60,7 +60,7 @@ struct DataPacket {
 struct PeerCertificate {
     std::string fingerprint_sha256; // lower-case hex of the DER encoding
     std::vector<std::string> uri_sans;
-    std::vector<std::string> policy_oids; // Certificate Policies, dotted form
+    std::vector<std::string> key_purpose_oids; // Extended Key Usage, dotted form
 };
 
 // The authenticated peer of a control connection, as established by the

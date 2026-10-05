@@ -303,7 +303,7 @@ auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, 
 }
 
 // Configuration changes are authorized from the TLS session alone: the peer's
-// verified certificate must carry the control-node role policy and be the
+// verified certificate must carry the control-node key purpose and be the
 // pinned Studio certificate. Identity claims in the JSON are never consulted.
 auto ControlPlaneMvp::authorize_mutation(const transport::ControlPeer& peer,
                                          const std::string& request_id,
@@ -333,8 +333,8 @@ auto ControlPlaneMvp::authorize_mutation(const transport::ControlPeer& peer,
     if (!authorization.configured()) {
         return deny("UNAUTHORIZED", "No authorized Studio is configured on this node.");
     }
-    if (!has_string(peer.certificate->policy_oids, authorization.studio_policy_oid)) {
-        return deny("UNAUTHORIZED", "Client certificate does not carry the control-node role policy.");
+    if (!has_string(peer.certificate->key_purpose_oids, authorization.studio_key_purpose_oid)) {
+        return deny("UNAUTHORIZED", "Client certificate does not carry the control-node key purpose.");
     }
     if (!tokens_equal(fingerprint, authorization.studio_certificate_sha256)) {
         return deny("UNAUTHORIZED", "Client certificate is not the authorized Studio certificate.");
