@@ -13,6 +13,9 @@
 #include "s7/schema_library.hpp"
 #include "s7/runtime.hpp"
 #include "s7/schema.hpp"
+#include "s7/signal_arithmetic.hpp"
+#include "s7/signal_types.hpp"
+#include "s7/type_inference.hpp"
 #include "s7/spectral_types.hpp"
 #include "s7/validation.hpp"
 

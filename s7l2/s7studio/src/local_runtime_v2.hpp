@@ -175,14 +175,7 @@ inline void addElementFromRegistry(s7::Schema& schema,
         throw std::invalid_argument("Unknown element type: '" + type + "'");
     }
 
-    schema.add_element(id, [descriptor, params] {
-        const s7::ElementCreationContext ctx{descriptor->metadata(), params};
-        auto element = descriptor->create(ctx);
-        if (!element) {
-            throw std::invalid_argument("Failed to create element from descriptor");
-        }
-        return element;
-    });
+    schema.add_element(s7::make_element_spec(id, *descriptor, params));
 }
 
 inline void addNestedSchemaElement(s7::Schema& schema,

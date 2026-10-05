@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_SCHEMA_HPP
 
 #include "s7/element.hpp"
+#include "s7/type_inference.hpp"
 
 #include <cstddef>
 #include <deque>
@@ -20,9 +21,12 @@ struct Connection {
     std::size_t to_port{};
 };
 
+// An element of a schema: either concrete (factory) or generic, with its
+// port types resolved by inference (generic.create set).
 struct ElementSpec {
     std::string id;
     ElementFactory factory;
+    GenericElement generic;
 };
 
 class Schema : public Element {
@@ -38,6 +42,8 @@ public:
     void step() override;
 
     void add_element(std::string id, ElementFactory factory);
+    void add_element(std::string id, GenericElement element);
+    void add_element(ElementSpec spec);
     void connect(std::string from_element,
                  std::size_t from_port,
                  std::string to_element,

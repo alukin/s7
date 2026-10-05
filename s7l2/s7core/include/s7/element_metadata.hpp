@@ -27,8 +27,19 @@ struct ParameterSpec {
 struct PortSpec {
     std::string name;                       // Port name
     std::string description;                // Description
-    SignalType type = SignalType::F64;
+    SignalType type = SignalType::F64;      // Used when type_rule is empty
     bool optional;                          // Can be omitted?
+    // Empty: the port has the fixed `type`. Otherwise a rule over the element's
+    // type variables: "T", "component(T)" or "complex(T)".
+    std::string type_rule{};
+};
+
+// A type variable of a generic element; port types refer to it by name and
+// type inference resolves it (ELEMENT_DEV_GUIDE.md, "Type system").
+struct TypeVariableSpec {
+    std::string name;                       // "T"
+    std::vector<SignalType> allowed;        // types the element supports
+    std::string pin_parameter{"type"};      // parameter that pins the type, e.g. "type": "I16"
 };
 
 // Visual representation hints
@@ -47,6 +58,7 @@ struct VariadicInputSpec {
     std::size_t max_count;                  // Maximum inputs
     std::string port_name_template;         // "in_{index}" for naming
     SignalType signal_type = SignalType::F64;
+    std::string type_rule{};                // as PortSpec::type_rule
 };
 
 // Complete element metadata
@@ -61,6 +73,7 @@ struct ElementMetadata {
     std::vector<PortSpec> input_ports;      // Input specifications
     std::vector<PortSpec> output_ports;     // Output specifications
     std::vector<ParameterSpec> parameters;  // Tunable parameters
+    std::vector<TypeVariableSpec> type_variables; // Empty: all port types fixed
 
     VisualHints visual;                     // For diagram rendering
     VariadicInputSpec variadic_inputs;      // If element supports variadic inputs

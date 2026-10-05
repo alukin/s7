@@ -1,4 +1,5 @@
 #include "s7/core.hpp"
+#include "s7/type_inference.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -14,6 +15,8 @@ struct PrototypeInfo {
 };
 
 using PrototypeMap = std::unordered_map<std::string, PrototypeInfo>;
+// Element factories with resolved types, by element id.
+using FactoryMap = std::unordered_map<std::string, ElementFactory>;
 using AdjacencyMap = std::unordered_map<std::string, std::vector<std::string>>;
 
 struct PrototypeCatalog {
@@ -21,12 +24,13 @@ struct PrototypeCatalog {
     std::vector<std::string> errors;
 };
 
-std::unique_ptr<Element> make_element(const ElementSpec& spec) {
-    if (!spec.factory) {
+std::unique_ptr<Element> make_element(const ElementSpec& spec, const FactoryMap& factories) {
+    const auto it = factories.find(spec.id);
+    if (it == factories.end() || !it->second) {
         throw std::invalid_argument("Element '" + spec.id + "' has no factory.");
     }
 
-    auto element = spec.factory();
+    auto element = it->second();
     if (!element) {
         throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
     }
@@ -36,7 +40,7 @@ std::unique_ptr<Element> make_element(const ElementSpec& spec) {
 
 class PrototypeCatalogBuilder {
 public:
-    static PrototypeCatalog build(const Schema& schema) {
+    static PrototypeCatalog build(const Schema& schema, const FactoryMap& factories) {
         PrototypeCatalog catalog;
 
         for (const auto& spec : schema.elements()) {
@@ -51,7 +55,7 @@ public:
             }
 
             try {
-                auto element = make_element(spec);
+                auto element = make_element(spec, factories);
                 catalog.prototypes.emplace(spec.id,
                                            PrototypeInfo{element->input_count(),
                                                          element->output_count(),
@@ -171,8 +175,8 @@ class ConnectionRulesValidator {
 public:
     static void validate(const Schema& schema,
                          const PrototypeMap& prototypes,
-                         std::vector<std::string>& errors,
-                         std::vector<std::string>& warnings) {
+                         const FactoryMap& factories,
+                         std::vector<std::string>& errors) {
         std::unordered_map<std::string, std::vector<int>> input_connection_count;
         for (const auto& [id, info] : prototypes) {
             input_connection_count.emplace(id, std::vector<int>(info.input_count, 0));
@@ -202,7 +206,7 @@ public:
                 continue;
             }
 
-            validate_port_types(connection, schema, errors, warnings);
+            validate_port_types(connection, schema, factories, errors);
 
             input_connection_count[connection.to_element][connection.to_port] += 1;
         }
@@ -221,8 +225,8 @@ public:
 private:
     static void validate_port_types(const Connection& connection,
                                     const Schema& schema,
-                                    std::vector<std::string>& errors,
-                                    std::vector<std::string>& warnings) {
+                                    const FactoryMap& factories,
+                                    std::vector<std::string>& errors) {
         auto find_element_spec = [&schema](const std::string& id) -> const ElementSpec* {
             for (const auto& spec : schema.elements()) {
                 if (spec.id == id) return &spec;
@@ -234,8 +238,8 @@ private:
         const auto* to_spec = find_element_spec(connection.to_element);
         if (!from_spec || !to_spec) return;
 
-        auto from_element = make_element(*from_spec);
-        auto to_element = make_element(*to_spec);
+        auto from_element = make_element(*from_spec, factories);
+        auto to_element = make_element(*to_spec, factories);
 
         auto from_outputs = from_element->output_ports();
         auto to_inputs = to_element->input_ports();
@@ -292,10 +296,22 @@ public:
 
 ValidationResult Validator::validate(const Schema& schema) {
     ValidationResult result;
-    auto catalog = PrototypeCatalogBuilder::build(schema);
+    // Generic elements get their types first; the checks below then see
+    // concrete elements only.
+    auto resolved = TypeResolver::resolve(schema);
+    if (!resolved.ok()) {
+        result.errors = std::move(resolved.errors);
+        return result;
+    }
+    FactoryMap factories;
+    for (std::size_t index = 0; index < schema.elements().size(); ++index) {
+        factories.emplace(schema.elements()[index].id, std::move(resolved.factories[index]));
+    }
+
+    auto catalog = PrototypeCatalogBuilder::build(schema, factories);
     result.errors = std::move(catalog.errors);
 
-    ConnectionRulesValidator::validate(schema, catalog.prototypes, result.errors, result.warnings);
+    ConnectionRulesValidator::validate(schema, catalog.prototypes, factories, result.errors);
 
     if (!result.ok()) {
         return result;

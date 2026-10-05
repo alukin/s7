@@ -114,7 +114,12 @@ boost::json::value ElementCatalogService::to_json() const
             boost::json::object portJson;
             portJson["name"] = port.name;
             portJson["description"] = port.description;
-            portJson["type"] = std::string(signal_type_name(port.type));
+            // A generic port has a type rule ("T", "component(T)", ...) instead of a fixed type.
+            if (port.type_rule.empty()) {
+                portJson["type"] = std::string(signal_type_name(port.type));
+            } else {
+                portJson["type_rule"] = port.type_rule;
+            }
             portJson["optional"] = port.optional;
             inputPorts.push_back(portJson);
         }
@@ -125,11 +130,27 @@ boost::json::value ElementCatalogService::to_json() const
             boost::json::object portJson;
             portJson["name"] = port.name;
             portJson["description"] = port.description;
-            portJson["type"] = std::string(signal_type_name(port.type));
+            // A generic port has a type rule ("T", "component(T)", ...) instead of a fixed type.
+            if (port.type_rule.empty()) {
+                portJson["type"] = std::string(signal_type_name(port.type));
+            } else {
+                portJson["type_rule"] = port.type_rule;
+            }
             portJson["optional"] = port.optional;
             outputPorts.push_back(portJson);
         }
         element["output_ports"] = outputPorts;
+
+        boost::json::array typeVariables;
+        for (const auto& variable : metadata.type_variables) {
+            boost::json::array allowed;
+            for (const auto type : variable.allowed) {
+                allowed.emplace_back(std::string(signal_type_name(type)));
+            }
+            typeVariables.push_back(boost::json::object{
+                {"name", variable.name}, {"allowed", std::move(allowed)}, {"pin_parameter", variable.pin_parameter}});
+        }
+        element["type_variables"] = typeVariables;
 
         boost::json::array parameters;
         for (const auto& parameter : metadata.parameters) {

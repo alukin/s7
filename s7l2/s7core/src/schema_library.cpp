@@ -198,14 +198,7 @@ auto build_schema_from_object(const boost::json::object& root, const ElementRegi
             throw std::invalid_argument("Unsupported element type in schema library payload: '" + type + "'.");
         }
 
-        schema.add_element(id, [descriptor, params] {
-            const ElementCreationContext ctx{descriptor->metadata(), params};
-            auto element_ptr = descriptor->create(ctx);
-            if (!element_ptr) {
-                throw std::runtime_error("Failed to create element from schema library payload.");
-            }
-            return element_ptr;
-        });
+        schema.add_element(make_element_spec(id, *descriptor, params));
     }
 
     const auto& connections = expect_array(root, "connections");

@@ -1,5 +1,7 @@
 #include "s7/element_registry.hpp"
+#include <memory>
 #include <stdexcept>
+#include <string>
 #include <algorithm>
 #include <limits>
 
@@ -70,6 +72,66 @@ std::string ElementCreationContext::get_string(const std::string& name) const {
 
 bool ElementCreationContext::has_param(const std::string& name) const {
     return params.find(name) != params.end();
+}
+
+SignalType ElementCreationContext::type(const std::string_view variable) const {
+    for (std::size_t index = 0; index < metadata.type_variables.size(); ++index) {
+        if (metadata.type_variables[index].name == variable) {
+            if (index >= types.size()) {
+                throw std::logic_error("Element '" + metadata.type_name + "' was created without resolved types.");
+            }
+            return types[index];
+        }
+    }
+    throw std::invalid_argument("Element '" + metadata.type_name + "' has no type variable '" + std::string(variable) + "'.");
+}
+
+ElementSpec make_element_spec(std::string id, const ElementDescriptor& descriptor, boost::json::object params) {
+    // The spec keeps its own copy: registry storage may move when more
+    // elements are registered.
+    auto shared = std::make_shared<const ElementDescriptor>(descriptor);
+    const auto& metadata = shared->metadata();
+    if (metadata.type_variables.empty()) {
+        return ElementSpec{std::move(id),
+                           [shared, params = std::move(params)] {
+                               return shared->create(ElementCreationContext{shared->metadata(), params});
+                           },
+                           {}};
+    }
+
+    std::vector<std::string> names;
+    GenericElement generic;
+    for (const auto& variable : metadata.type_variables) {
+        names.push_back(variable.name);
+        TypeVariable resolved{variable.name, {}, std::nullopt};
+        for (const auto type : variable.allowed) {
+            resolved.allowed.insert(type);
+        }
+        if (const auto* pin = params.if_contains(variable.pin_parameter)) {
+            if (!pin->is_string()) {
+                throw std::invalid_argument("Element '" + id + "': parameter '" + variable.pin_parameter +
+                                            "' must be a type name such as \"F64\".");
+            }
+            resolved.pinned = parse_signal_type(std::string_view(pin->get_string()));
+        }
+        generic.variables.push_back(std::move(resolved));
+    }
+    auto rule_of = [&names](const std::string& rule, const SignalType fixed) {
+        return rule.empty() ? PortTypeRule::of_fixed(fixed) : PortTypeRule::parse(rule, names);
+    };
+    for (const auto& port : metadata.input_ports) {
+        generic.input_rules.push_back(rule_of(port.type_rule, port.type));
+    }
+    if (metadata.variadic_inputs.enabled) {
+        generic.input_rules.push_back(rule_of(metadata.variadic_inputs.type_rule, metadata.variadic_inputs.signal_type));
+    }
+    for (const auto& port : metadata.output_ports) {
+        generic.output_rules.push_back(rule_of(port.type_rule, port.type));
+    }
+    generic.create = [shared, params = std::move(params)](const std::span<const SignalType> types) {
+        return shared->create(ElementCreationContext{shared->metadata(), params, types});
+    };
+    return ElementSpec{std::move(id), {}, std::move(generic)};
 }
 
 // ============================================================================

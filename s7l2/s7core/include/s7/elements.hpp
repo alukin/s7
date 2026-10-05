@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_ELEMENTS_HPP
 
 #include "s7/element.hpp"
+#include "s7/signal_values.hpp"
 
 #include <cmath>
 #include <string>
@@ -12,159 +13,164 @@
 namespace s7 {
 
 // ============================================================================
-// Helper to determine SignalType from C++ type
+// Generic elements: one template per element, instantiated per SignalType
+// (ELEMENT_DEV_GUIDE.md, "Type system"). Integer arithmetic applies the
+// element's Overflow rule; floating-point arithmetic is IEEE 754.
 // ============================================================================
-template <typename T>
-constexpr SignalType signal_type_for()
-{
-    if constexpr (std::is_same_v<T, ComplexValue>) {
-        return SignalType::C64;
-    } else {
-        return SignalType::F64;
-    }
-}
 
-// ============================================================================
-// Templated signal processing elements
-// Element owns storage, ports reference it
-// ============================================================================
-/// Constant source: 0 inputs, 1 output of type T
-template <typename T>
+/// Constant source: 0 inputs, 1 output of type Type. Any type.
+template <SignalType Type>
 class ConstantT final : public Element {
 public:
-    explicit ConstantT(T value)
+    using value_type = signal_storage_t<Type>;
+
+    explicit ConstantT(value_type value = {})
         : Element("Constant")
         , output_value_(value)
     {
-        register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
+        register_output(0, port_names::out, Type, &output_value_);
     }
 
-    void step() override
-    {
-        // Output already holds the constant value.
-    }
+    void step() override {}
 
 private:
-    T output_value_;
+    value_type output_value_;
 };
 
-/// Gain (amplifier): 1 input, 1 output of type T
-template <typename T>
+/// Gain: out = factor * in. Arithmetic types.
+template <SignalType Type>
 class GainT final : public Element {
 public:
-    explicit GainT(T factor)
+    using value_type = signal_storage_t<Type>;
+    using Ops = SignalOps<Type>;
+
+    explicit GainT(value_type factor = Ops::one(), Overflow overflow = Overflow::Saturate)
         : Element("Gain")
         , factor_(factor)
-        , output_value_{}
+        , overflow_(overflow)
     {
-        register_input(0, port_names::in, signal_type_for<T>(), nullptr);
-        register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
     }
 
     void step() override
     {
-        output_value_ = read_input<T>(0) * factor_;
+        output_value_ = Ops::multiply(read_input<value_type>(0), factor_, overflow_);
     }
 
 private:
-    T factor_;
-    T output_value_;
+    value_type factor_;
+    Overflow overflow_;
+    value_type output_value_{};
 };
 
-/// Adder: weighted sum of N inputs, 1 output of type T
-template <typename T>
+namespace detail {
+
+[[nodiscard]] inline std::string sum_port_name(const std::size_t index)
+{
+    if (index == 0) {
+        return std::string(port_names::lhs);
+    }
+    if (index == 1) {
+        return std::string(port_names::rhs);
+    }
+    return "in" + std::to_string(index);
+}
+
+} // namespace detail
+
+/// Adder: weighted sum of N inputs (N = weights.size(), at least 2). Arithmetic types.
+template <SignalType Type>
 class AdderT final : public Element {
 public:
-    explicit AdderT(std::vector<RealValue> weights = {1.0, 1.0})
+    using value_type = signal_storage_t<Type>;
+    using Ops = SignalOps<Type>;
+
+    explicit AdderT(std::vector<value_type> weights = {Ops::one(), Ops::one()},
+                    Overflow overflow = Overflow::Saturate)
         : Element("Adder")
-        , weights_(weights.empty() ? std::vector<RealValue>{1.0, 1.0} : std::move(weights))
-        , output_value_{}
+        , weights_(weights.empty() ? std::vector<value_type>{Ops::one(), Ops::one()} : std::move(weights))
+        , overflow_(overflow)
     {
         for (std::size_t index = 0; index < weights_.size(); ++index) {
-            std::string port_name;
-            if (index == 0) {
-                port_name = port_names::lhs;
-            } else if (index == 1) {
-                port_name = port_names::rhs;
-            } else {
-                port_name = "in" + std::to_string(index);
-            }
-            register_input(index, port_name, signal_type_for<T>(), nullptr);
+            register_input(index, detail::sum_port_name(index), Type, nullptr);
         }
-        register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
+        register_output(0, port_names::out, Type, &output_value_);
     }
 
     void step() override
     {
-        T weighted_sum{};
+        value_type sum = Ops::zero();
         for (std::size_t index = 0; index < weights_.size(); ++index) {
-            weighted_sum += read_input<T>(index) * weights_[index];
+            sum = Ops::add(sum, Ops::multiply(read_input<value_type>(index), weights_[index], overflow_), overflow_);
         }
-        output_value_ = weighted_sum;
+        output_value_ = sum;
     }
 
 private:
-    std::vector<RealValue> weights_;
-    T output_value_;
+    std::vector<value_type> weights_;
+    Overflow overflow_;
+    value_type output_value_{};
 };
 
-/// Multiplier: product of N inputs with optional per-input factors, 1 output of type T
-template <typename T>
+/// Multiply: product of N inputs, each scaled by its factor. Arithmetic types.
+template <SignalType Type>
 class MultiplyT final : public Element {
 public:
-    explicit MultiplyT(std::vector<RealValue> factors = {1.0, 1.0})
+    using value_type = signal_storage_t<Type>;
+    using Ops = SignalOps<Type>;
+
+    explicit MultiplyT(std::vector<value_type> factors = {Ops::one(), Ops::one()},
+                       Overflow overflow = Overflow::Saturate)
         : Element("Multiply")
-        , factors_(factors.empty() ? std::vector<RealValue>{1.0, 1.0} : std::move(factors))
-        , output_value_{}
+        , factors_(factors.empty() ? std::vector<value_type>{Ops::one(), Ops::one()} : std::move(factors))
+        , overflow_(overflow)
     {
         for (std::size_t index = 0; index < factors_.size(); ++index) {
-            std::string port_name;
-            if (index == 0) {
-                port_name = port_names::lhs;
-            } else if (index == 1) {
-                port_name = port_names::rhs;
-            } else {
-                port_name = "in" + std::to_string(index);
-            }
-            register_input(index, port_name, signal_type_for<T>(), nullptr);
+            register_input(index, detail::sum_port_name(index), Type, nullptr);
         }
-        register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
+        register_output(0, port_names::out, Type, &output_value_);
     }
 
     void step() override
     {
-        T product = static_cast<T>(1.0);
+        value_type product = Ops::one();
         for (std::size_t index = 0; index < factors_.size(); ++index) {
-            product *= read_input<T>(index) * factors_[index];
+            product = Ops::multiply(product, Ops::multiply(read_input<value_type>(index), factors_[index], overflow_),
+                                    overflow_);
         }
         output_value_ = product;
     }
 
 private:
-    std::vector<RealValue> factors_;
-    T output_value_;
+    std::vector<value_type> factors_;
+    Overflow overflow_;
+    value_type output_value_{};
 };
 
-/// Delay (z^-1): 1 input, 1 output of type T, causal memory (no direct feedthrough)
-template <typename T>
+/// Unit delay (z^-1), causal memory. Any type. "Delay" and "PreviousValue"
+/// are the same element under two names.
+template <SignalType Type>
 class DelayT final : public Element {
 public:
-    explicit DelayT(T initial_value = T{})
-        : Element("Delay", true, Feedthrough::None)
+    using value_type = signal_storage_t<Type>;
+
+    explicit DelayT(value_type initial_value = {}, std::string_view type_name = "Delay")
+        : Element(type_name, true, Feedthrough::None)
         , output_value_(initial_value)
     {
-        register_input(0, port_names::in, signal_type_for<T>(), nullptr);
-        register_output(0, port_names::out, signal_type_for<T>(), &output_value_);
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
     }
 
     // Writes the next step's output; NodeRuntime publishes it after the step.
     void step() override
     {
-        output_value_ = read_input<T>(0);
+        output_value_ = read_input<value_type>(0);
     }
 
 private:
-    T output_value_;
+    value_type output_value_;
 };
 
 class Integrator final : public Element {
@@ -188,20 +194,20 @@ private:
     RealValue output_value_;
 };
 
-using Constant = ConstantT<RealValue>;
-using ComplexConstant = ConstantT<ComplexValue>;
+using Constant = ConstantT<SignalType::F64>;
+using ComplexConstant = ConstantT<SignalType::C64>;
 
-using Gain = GainT<RealValue>;
-using ComplexGain = GainT<ComplexValue>;
+using Gain = GainT<SignalType::F64>;
+using ComplexGain = GainT<SignalType::C64>;
 
-using Adder = AdderT<RealValue>;
-using ComplexAdder = AdderT<ComplexValue>;
+using Adder = AdderT<SignalType::F64>;
+using ComplexAdder = AdderT<SignalType::C64>;
 
-using Multiply = MultiplyT<RealValue>;
-using ComplexMultiply = MultiplyT<ComplexValue>;
+using Multiply = MultiplyT<SignalType::F64>;
+using ComplexMultiply = MultiplyT<SignalType::C64>;
 
-using Delay = DelayT<RealValue>;
-using ComplexDelay = DelayT<ComplexValue>;
+using Delay = DelayT<SignalType::F64>;
+using ComplexDelay = DelayT<SignalType::C64>;
 
 class FirFilter final : public Element {
 public:
@@ -225,6 +231,7 @@ private:
     RealValue output_value_;
 };
 
+/// PreviousValue: the F64 unit delay under its own element name.
 class PreviousValue final : public Element {
 public:
     explicit PreviousValue(RealValue initial_value = 0.0);

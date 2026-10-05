@@ -310,65 +310,13 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
             continue;
         }
 
-        // Prefer registry-backed construction to support dynamically loaded plugins.
+        // Registry elements: built-ins, network elements and plugins (generic ones get inferred types).
         if (const auto* descriptor = registry.find(element.type)) {
-            schema->add_element(element.id, [descriptor, params] {
-                const s7::ElementCreationContext local_ctx{descriptor->metadata(), params};
-                return descriptor->create(local_ctx);
-            });
+            schema->add_element(s7::make_element_spec(element.id, *descriptor, params));
             continue;
         }
 
-        if (element.type == "Constant") {
-            const auto value = get_f64(params, "value", 0.0);
-            schema->add_element(element.id, [value] { return std::make_unique<s7::Constant>(value); });
-            continue;
-        }
-
-        if (element.type == "Integrator") {
-            const auto initial_value = get_f64(params, "initial_value", 0.0);
-            schema->add_element(element.id, [initial_value] { return std::make_unique<s7::Integrator>(initial_value); });
-            continue;
-        }
-
-        if (element.type == "Adder") {
-            schema->add_element(element.id, [] { return std::make_unique<s7::Adder>(); });
-            continue;
-        }
-
-        if (element.type == "Multiply") {
-            schema->add_element(element.id, [] { return std::make_unique<s7::Multiply>(); });
-            continue;
-        }
-
-        if (element.type == "AnalogOscillator") {
-            const auto amplitude = get_f64(params, "amplitude", 1.0);
-            const auto frequency_hz = get_f64(params, "frequency_hz", definition.simulation.frequency_hz);
-            const auto sample_rate_hz = get_f64(params, "sample_rate_hz",
-                                                static_cast<double>(definition.simulation.sample_rate_hz));
-            const auto phase = get_f64(params, "phase", 0.0);
-            schema->add_element(element.id, [amplitude, frequency_hz, sample_rate_hz, phase] {
-                return std::make_unique<s7::AnalogOscillator>(amplitude, frequency_hz, sample_rate_hz, phase);
-            });
-            continue;
-        }
-
-        if (element.type == "NetSink") {
-            const auto topic = expect_string(params, "topic");
-            schema->add_element(element.id, [topic]() -> std::unique_ptr<s7::Element> {
-                return std::make_unique<s7::NetSink>(topic);
-            });
-            continue;
-        }
-
-        if (element.type == "NetSource") {
-            const auto topic = expect_string(params, "topic");
-            schema->add_element(element.id, [topic]() -> std::unique_ptr<s7::Element> {
-                return std::make_unique<s7::NetSource>(topic);
-            });
-            continue;
-        }
-
+        // File I/O elements are not in the registry yet.
         if (element.type == "RealGnuplotFileSink") {
             const auto file_path = std::filesystem::path(expect_string(params, "file_path"));
             schema->add_element(element.id, [file_path] {

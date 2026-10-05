@@ -1,4 +1,5 @@
 #include "s7/core.hpp"
+#include "s7/type_inference.hpp"
 
 #include <queue>
 #include <sstream>
@@ -23,12 +24,12 @@ struct PrototypeInfo {
 
 using PrototypeMap = std::unordered_map<std::string, PrototypeInfo>;
 
-std::unique_ptr<Element> make_element(const ElementSpec& spec) {
-    if (!spec.factory) {
+std::unique_ptr<Element> make_element(const ElementSpec& spec, const ElementFactory& factory) {
+    if (!factory) {
         throw std::invalid_argument("Element '" + spec.id + "' has no factory.");
     }
 
-    auto element = spec.factory();
+    auto element = factory();
     if (!element) {
         throw std::invalid_argument("Element factory for '" + spec.id + "' returned null.");
     }
@@ -141,9 +142,11 @@ ExecutableGraph Compiler::compile(const Schema& schema,
     executable_graph.runtime_instance_uuid = validated_or_generated_uuid(runtime_instance_uuid);
     executable_graph.schema_instance_uuid = validated_or_generated_uuid(schema_instance_uuid);
 
+    auto resolved = TypeResolver::resolve(schema); // valid: validation passed
     PrototypeMap prototypes;
-    for (const auto& spec : schema.elements()) {
-        auto element = make_element(spec);
+    for (std::size_t index = 0; index < schema.elements().size(); ++index) {
+        const auto& spec = schema.elements()[index];
+        auto element = make_element(spec, resolved.factories[index]);
         const auto element_instance_uuid = element_instance_uuid_for(executable_graph.schema_instance_uuid, spec.id);
         if (executable_graph.instance_uuid_to_id.contains(element_instance_uuid)) {
             throw std::invalid_argument("Duplicate generated element instance UUID for element id: '" + spec.id + "'.");

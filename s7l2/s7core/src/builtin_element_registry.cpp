@@ -1,6 +1,8 @@
 #include "s7/builtin_element_registry.hpp"
 
 #include "s7/elements.hpp"
+#include "s7/signal_values.hpp"
+#include "s7/type_inference.hpp"
 
 #include <stdexcept>
 #include <utility>
@@ -43,6 +45,74 @@ ElementMetadata make_simple_metadata(
     }
 
     return metadata;
+}
+
+ElementMetadata make_generic_metadata(const std::string& type_name,
+                                      const std::string& display_name,
+                                      const std::string& description,
+                                      const std::string& category,
+                                      const int input_count,
+                                      const int output_count,
+                                      const SignalTypeSet allowed)
+{
+    auto metadata = make_simple_metadata(type_name, display_name, description, category, input_count, output_count);
+    metadata.type_variables.push_back({"T", allowed.types(), "type"});
+    for (auto& port : metadata.input_ports) {
+        port.type_rule = "T";
+    }
+    for (auto& port : metadata.output_ports) {
+        port.type_rule = "T";
+    }
+    metadata.parameters.push_back({"type", "type", "Pins the element's type (otherwise inferred from connections)", nullptr, std::nullopt, std::nullopt, {}, false});
+    return metadata;
+}
+
+void add_overflow_parameter(ElementMetadata& metadata)
+{
+    metadata.parameters.push_back({"overflow", "enum", "Integer overflow rule", "saturate", std::nullopt, std::nullopt, {"saturate", "wrap"}, false});
+}
+
+Overflow overflow_param(const ElementCreationContext& ctx)
+{
+    return ctx.has_param("overflow") ? overflow_from_name(ctx.get_string("overflow")) : Overflow::Saturate;
+}
+
+std::string parameter_label(const ElementCreationContext& ctx, const std::string& name)
+{
+    return ctx.metadata.type_name + " parameter '" + name + "'";
+}
+
+template <SignalType T>
+signal_storage_t<T> param_value(const ElementCreationContext& ctx, const std::string& name, const signal_storage_t<T>& fallback)
+{
+    if (!ctx.has_param(name)) {
+        return fallback;
+    }
+    return signal_value_from_json<T>(ctx.params.at(name), parameter_label(ctx, name));
+}
+
+// An array parameter of values of type T; [1, 1] when absent.
+template <SignalType T>
+std::vector<signal_storage_t<T>> param_values(const ElementCreationContext& ctx, const std::string& name)
+{
+    if (!ctx.has_param(name)) {
+        return {SignalOps<T>::one(), SignalOps<T>::one()};
+    }
+    const auto* array = ctx.params.at(name).if_array();
+    if (!array || array->size() < 2) {
+        throw std::invalid_argument(parameter_label(ctx, name) + " must be an array of at least two values.");
+    }
+    std::vector<signal_storage_t<T>> values;
+    for (std::size_t index = 0; index < array->size(); ++index) {
+        values.push_back(signal_value_from_json<T>((*array)[index], parameter_label(ctx, name) + "[" + std::to_string(index) + "]"));
+    }
+    return values;
+}
+
+[[noreturn]] std::unique_ptr<Element> unsupported_type(const ElementCreationContext& ctx)
+{
+    throw std::invalid_argument(ctx.metadata.type_name + " does not support type " +
+                                std::string(signal_type_name(ctx.type())) + ".");
 }
 
 auto parseRealArrayParam(const boost::json::object& params,
@@ -88,12 +158,13 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "Constant",
         [](const ElementCreationContext& ctx) {
-            const double value = ctx.has_param("value") ? ctx.get_real("value") : 0.0;
-            return std::make_unique<Constant>(value);
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                return std::make_unique<ConstantT<T>>(param_value<T>(ctx, "value", signal_storage_t<T>{}));
+            });
         },
         [] {
-            auto m = make_simple_metadata("Constant", "Constant", "Constant source", "basic", 0, 1);
-            m.parameters.push_back({"value", "real", "Constant output value", 0.0, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("Constant", "Constant", "Constant source", "basic", 0, 1, signal_type_sets::all);
+            m.parameters.push_back({"value", "value", "Output value (exact for integer types; [re, im] for complex)", 0, std::nullopt, std::nullopt, {}, false});
             m.visual.shape = "circle";
             m.visual.color = "#66BB6A";
             return m;
@@ -102,62 +173,83 @@ void register_builtin_elements(ElementRegistry& registry)
     registry.register_element(ElementDescriptor(
         "Gain",
         [](const ElementCreationContext& ctx) {
-            const double factor = ctx.has_param("factor") ? ctx.get_real("factor") : 1.0;
-            return std::make_unique<Gain>(factor);
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (has_arithmetic(T)) {
+                    return std::make_unique<GainT<T>>(param_value<T>(ctx, "factor", SignalOps<T>::one()), overflow_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("Gain", "Gain", "Multiply input by factor", "basic", 1, 1);
-            m.parameters.push_back({"factor", "real", "Gain factor", 1.0, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("Gain", "Gain", "Multiply input by factor", "basic", 1, 1, signal_type_sets::arithmetic);
+            m.parameters.push_back({"factor", "value", "Gain factor, of the element's type", 1, std::nullopt, std::nullopt, {}, false});
+            add_overflow_parameter(m);
             return m;
         }()));
 
     registry.register_element(ElementDescriptor(
         "Adder",
         [](const ElementCreationContext& ctx) {
-            auto weights = parseRealArrayParam(ctx.params, "weights", {1.0, 1.0});
-            return std::make_unique<Adder>(std::move(weights));
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (has_arithmetic(T)) {
+                    return std::make_unique<AdderT<T>>(param_values<T>(ctx, "weights"), overflow_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("Adder", "Adder", "Weighted sum of N inputs", "basic", 2, 1);
-            m.parameters.push_back({"weights", "array", "Per-input weights; input count follows this array length", boost::json::array{1.0, 1.0}, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("Adder", "Adder", "Weighted sum of N inputs", "basic", 2, 1, signal_type_sets::arithmetic);
+            m.parameters.push_back({"weights", "array", "Per-input weights; input count follows this array length", boost::json::array{1, 1}, std::nullopt, std::nullopt, {}, false});
+            add_overflow_parameter(m);
             m.input_ports[0].name = "lhs";
             m.input_ports[0].description = "Summation input 0 (weighted by weights[0]).";
             m.input_ports[1].name = "rhs";
             m.input_ports[1].description = "Summation input 1 (weighted by weights[1]).";
             m.output_ports[0].description = "Weighted sum output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64};
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T"};
             return m;
         }()));
 
     registry.register_element(ElementDescriptor(
         "Multiply",
         [](const ElementCreationContext& ctx) {
-            auto factors = parseRealArrayParam(ctx.params, "factors", {1.0, 1.0});
-            return std::make_unique<Multiply>(std::move(factors));
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (has_arithmetic(T)) {
+                    return std::make_unique<MultiplyT<T>>(param_values<T>(ctx, "factors"), overflow_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
         },
         [] {
-            auto m = make_simple_metadata("Multiply", "Multiply", "Product of N inputs", "basic", 2, 1);
-            m.parameters.push_back({"factors", "array", "Per-input factors; input count follows this array length", boost::json::array{1.0, 1.0}, std::nullopt, std::nullopt, {}, false});
+            auto m = make_generic_metadata("Multiply", "Multiply", "Product of N inputs", "basic", 2, 1, signal_type_sets::arithmetic);
+            m.parameters.push_back({"factors", "array", "Per-input factors; input count follows this array length", boost::json::array{1, 1}, std::nullopt, std::nullopt, {}, false});
+            add_overflow_parameter(m);
             m.input_ports[0].name = "lhs";
             m.input_ports[0].description = "Multiplier input 0 (scaled by factors[0]).";
             m.input_ports[1].name = "rhs";
             m.input_ports[1].description = "Multiplier input 1 (scaled by factors[1]).";
             m.output_ports[0].description = "Product output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64};
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T"};
             return m;
         }()));
 
-    registry.register_element(ElementDescriptor(
-        "Delay",
-        [](const ElementCreationContext& ctx) {
-            const double initial_value = ctx.has_param("initial_value") ? ctx.get_real("initial_value") : 0.0;
-            return std::make_unique<Delay>(initial_value);
-        },
-        [] {
-            auto m = make_simple_metadata("Delay", "Delay", "Unit delay", "filters", 1, 1);
-            m.parameters.push_back({"initial_value", "real", "Initial output value", 0.0, std::nullopt, std::nullopt, {}, false});
-            return m;
-        }()));
+    for (const auto* name : {"Delay", "PreviousValue"}) {
+        registry.register_element(ElementDescriptor(
+            name,
+            [name](const ElementCreationContext& ctx) {
+                return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                    return std::make_unique<DelayT<T>>(param_value<T>(ctx, "initial_value", signal_storage_t<T>{}), name);
+                });
+            },
+            [name] {
+                auto m = make_generic_metadata(name, name, "Unit delay: outputs the previous input", "filters", 1, 1, signal_type_sets::all);
+                m.parameters.push_back({"initial_value", "value", "Output before the first input", 0, std::nullopt, std::nullopt, {}, false});
+                return m;
+            }()));
+    }
 
     registry.register_element(ElementDescriptor(
         "Integrator",
@@ -223,19 +315,6 @@ void register_builtin_elements(ElementRegistry& registry)
             return m;
         }()));
 
-    registry.register_element(ElementDescriptor(
-        "PreviousValue",
-        [](const ElementCreationContext& ctx) {
-            const double initial_value = ctx.has_param("initial_value") ? ctx.get_real("initial_value") : 0.0;
-            return std::make_unique<PreviousValue>(initial_value);
-        },
-        [] {
-            auto m = make_simple_metadata("PreviousValue", "Previous Value", "Unit-delay previous sample output", "filters", 1, 1);
-            m.parameters.push_back({"initial_value", "real", "Initial previous value", 0.0, std::nullopt, std::nullopt, {}, false});
-            m.input_ports[0].description = "Current input sample.";
-            m.output_ports[0].description = "Previous input sample.";
-            return m;
-        }()));
 
     registry.register_element(ElementDescriptor(
         "ReImToComplex",

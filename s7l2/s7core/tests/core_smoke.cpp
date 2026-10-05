@@ -416,7 +416,8 @@ int main() try
         assert(!validation.ok());
 
         const auto hasMismatchError = std::ranges::any_of(validation.errors, [](const std::string& error) {
-            return error.find("Port type mismatch") != std::string::npos;
+            return error.find("Type conflict") != std::string::npos &&
+                   error.find("Insert a Convert element") != std::string::npos;
         });
         if (!hasMismatchError) {
             throw std::runtime_error("Expected validation mismatch error was not reported.");

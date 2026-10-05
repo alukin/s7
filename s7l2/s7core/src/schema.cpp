@@ -98,7 +98,15 @@ void Schema::step() {
 }
 
 void Schema::add_element(std::string id, ElementFactory factory) {
-    elements_.push_back(ElementSpec{std::move(id), std::move(factory)});
+    add_element(ElementSpec{std::move(id), std::move(factory), {}});
+}
+
+void Schema::add_element(std::string id, GenericElement element) {
+    add_element(ElementSpec{std::move(id), {}, std::move(element)});
+}
+
+void Schema::add_element(ElementSpec spec) {
+    elements_.push_back(std::move(spec));
     invalidate_compiled_runtime();
 }
 
@@ -185,7 +193,7 @@ void Schema::ensure_compiled_runtime()
 
     Schema executable{name_};
     for (const auto& spec : elements_) {
-        executable.add_element(spec.id, spec.factory);
+        executable.add_element(spec);
     }
     for (const auto& connection : connections_) {
         executable.connect(connection.from_element, connection.from_port, connection.to_element, connection.to_port);

@@ -11,6 +11,7 @@ add_library(s7core SHARED
     src/element_registry.cpp
     src/element_catalog.cpp
     src/builtin_element_registry.cpp
+    src/type_inference.cpp
 )
 
 set_target_properties(s7core PROPERTIES
@@ -70,6 +71,10 @@ add_test(NAME s7core_smoke COMMAND s7core_smoke)
 add_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
 target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)
 add_test(NAME s7core_signal_types_smoke COMMAND s7core_signal_types_smoke)
+
+add_executable(s7core_type_inference_smoke tests/type_inference_smoke.cpp)
+target_link_libraries(s7core_type_inference_smoke PRIVATE s7core)
+add_test(NAME s7core_type_inference_smoke COMMAND s7core_type_inference_smoke)
 
 # Plugins may build in strict ISO mode: the type headers must work there too.
 add_executable(s7core_signal_types_strict_smoke tests/signal_types_smoke.cpp)

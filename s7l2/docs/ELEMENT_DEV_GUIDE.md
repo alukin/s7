@@ -16,6 +16,8 @@ Source: `s7core/include/s7/element.hpp`.
 
 ## Type system (decided 2026-10-05; implementation in progress)
 
+**Writing a generic element.** Write the element as a template over `SignalType` (see `GainT` in `s7/elements.hpp`; `SignalOps<Type>` gives `add`/`multiply`/`one`/`zero` with the `Overflow` rule). In its registration, declare a type variable and port rules in the metadata (`type_variables = {{"T", allowed, "type"}}`, `port.type_rule = "T"`; rules may also be `component(T)` or `complex(T)`), and in the factory dispatch on the resolved type: `visit_signal_type(ctx.type(), [&]<SignalType T>() { ... })`. Convert parameters with `signal_value_from_json<T>()`. Loaders create elements with `make_element_spec(id, descriptor, params)`, which turns the metadata into a `GenericElement` for the resolver.
+
 This section is the target contract; the code is being moved to it (`CODE_REVIEW_REQUIRED_FIXES.md`, signal types item).
 
 - **Types.** Every port has exactly one type from the wire-format catalog (`S7_Network_Wire_Protocol_v1.md` section 8): I8–I128, U8–U128 (with I12/U12), F16, F32, F64, F128, complex floats C16–C128, and complex integers CI8, CU8, CI16, CI32, CI64, CI128. Each is stored as its native C++ type (C++26 on GCC: `std::float16_t`, `std::float128_t`, `__int128`; complex integers as a pair of the integer type). Nothing converts implicitly.

@@ -3,6 +3,7 @@
 
 #include "s7/element.hpp"
 #include "s7/element_metadata.hpp"
+#include "s7/schema.hpp"
 
 #include <boost/json.hpp>
 
@@ -12,6 +13,8 @@
 #include <vector>
 #include <memory>
 #include <functional>
+#include <span>
+#include <string_view>
 
 namespace s7 {
 
@@ -41,12 +44,24 @@ private:
 struct ElementCreationContext {
     const ElementMetadata& metadata;
     const boost::json::object& params;
+    // Resolved type variables of a generic element, in metadata order.
+    std::span<const SignalType> types{};
+
+    // The resolved type of the named variable.
+    [[nodiscard]] SignalType type(std::string_view variable = "T") const;
 
     [[nodiscard]] double get_real(const std::string& name) const;
     [[nodiscard]] int64_t get_int(const std::string& name) const;
     [[nodiscard]] std::string get_string(const std::string& name) const;
     [[nodiscard]] bool has_param(const std::string& name) const;
 };
+
+// A schema element created through a registry descriptor with JSON params.
+// Elements with type variables become generic (types inferred; a pin
+// parameter such as "type" fixes one); others are concrete.
+[[nodiscard]] ElementSpec make_element_spec(std::string id,
+                                            const ElementDescriptor& descriptor,
+                                            boost::json::object params);
 
 // Singleton registry for all available elements
 class ElementRegistry {
