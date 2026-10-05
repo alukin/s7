@@ -128,7 +128,9 @@ Also ensure that timestamp roles and their presence are encoded unambiguously; t
 - Protocol versioning rejects incompatible layouts explicitly.
 - Stream identity remains stable and unique for the configured stream lifetime.
 
-**Progress (2026-10-04):** proposed resolutions for the four open items (stream descriptor serialization and clock-domain handling, at-most-once crash guarantee with sender range reservation and receiver checkpoints, `GET_STREAM_STATUS` fault reporting, no in-band negotiation in the MVP) are in section 12.1 of the wire draft. They need the maintainer's approval; the Section 7 codec is deliberately not implemented until then, and the prototype codec remains in use.
+**Progress:** decided 2026-10-05 (wire draft 0.4, section 12.1): data must not be lost. While both processes run, delivery is exactly-once and in order across connection loss, using an in-memory send log, cumulative `ACK`, `RESUME` and replay; a full send log blocks the producer up to a configured limit, then faults the stream; process crashes fault the stream (no recovery in the MVP); every gap is a fault (no gap policy). Streams follow the schema's explicit network connections directly from producer to consumer; no relaying in the MVP, but the format stays end-to-end so relays can be added. Still awaiting approval: stream descriptor serialization (item 1), fault reporting (item 3), negotiation (item 4). The Section 7 codec is not implemented until those are settled.
+
+**Consequence for the current transport:** the drop-oldest send and receive queues from the multiple-peer item are wrong for data streams under this guarantee. With the new codec they become the send log (block, then fault) and receive-side delivery without dropping; fan-out to every connected peer becomes per-connection routing to the configured consumers.
 
 Relevant code: [transport.hpp](../s7transport/include/s7/transport.hpp:1), [transport.cpp](../s7transport/src/transport.cpp:210), [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md:1).
 

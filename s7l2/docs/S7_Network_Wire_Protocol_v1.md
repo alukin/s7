@@ -1,7 +1,7 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
 **Status:** Candidate wire-format draft; not yet a conformance standard.
-**Draft revision:** 0.3
+**Draft revision:** 0.4
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
 
@@ -13,22 +13,22 @@ The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** express protocol requi
 
 - Preserve causal sample order across explicit network boundaries.
 - Carry model-time data and real-time data with their timestamp meaning identified.
-- Detect duplicate packets and sequence gaps without adding a per-packet acknowledgement/retransmission protocol to the WebSocket/TCP MVP.
+- Lose and duplicate no data across connection loss: cumulative acknowledgements, resume and replay (Section 12.1).
 - Support different scalar and block signal types with a portable byte representation.
 - Let a stream declare how gaps affect its operation.
 - Keep future transports (including UDP or multicast) possible without changing signal meaning.
 
 ## 2. Scope and Guarantees
 
-The MVP data transport is a WebSocket binary message per S7 data packet. A runtime node MAY maintain simultaneous connections to multiple peer nodes. Each connection is authenticated and associated with one peer identity; the `/data` channel can carry the configured streams exchanged with that peer. A stream has one configured producer at a time. TCP/WebSocket preserves byte/message order within a live connection. S7 does not add another acknowledgement or retransmission layer in this version.
+The MVP data transport is a WebSocket binary message per S7 data packet. A runtime node MAY maintain simultaneous connections to multiple peer nodes. Each connection is authenticated and associated with one peer identity; the `/data` channel carries the configured streams exchanged with that peer. A stream has one configured producer at a time and follows an explicit network connection of the committed configuration: the producer node sends it directly to its consumer node(s). Nodes do not relay streams for other nodes in the MVP (Section 12.1, item 5).
 
-Each packet carries a persistent per-stream sequence number. Receivers use it to detect duplicates, regressions, and gaps, including discontinuities caused by producer restart or connection loss. A sequence number does not by itself make a missing packet recoverable.
+Each packet carries a per-stream sequence number. **Delivery guarantee (MVP):** while producer and consumer processes keep running, every packet of a stream is delivered to the consumer graph exactly once and in order, across connection loss and reconnects. This is achieved with an in-memory send log, cumulative acknowledgements and replay on resume (Section 12.1, item 2). A crash or restart of either process is not covered: it MUST be detected and reported as stream state loss, never silently skipped.
 
-The MVP does not define UDP behavior, multicast membership, forward error correction, global ordering between unrelated streams or peer connections, or a synchronized global clock. Crash replay behavior is being resolved separately; sequence numbers and persistent checkpoints alone MUST NOT be described as reliable delivery. A receiver MUST NOT infer causal order between packets from different streams based on arrival order.
+The MVP does not define UDP behavior, multicast membership, forward error correction, global ordering between unrelated streams or peer connections, or a synchronized global clock. A receiver MUST NOT infer causal order between packets from different streams based on arrival order.
 
 ## 3. Stream Identity and Setup
 
-Every stream has a 128-bit `stream_id`, assigned as part of the committed network configuration. It MUST be unique within the deployment and stable across runtime process restarts and transport reconnects while that logical stream configuration continues. The stream ID identifies the logical produced stream, independent of its consumer set or network route. A change to the producer, data meaning/type, timestamp profile, channel layout, or gap policy MUST assign a new `stream_id`; changing only consumers or routes MUST NOT reset stream identity or sequence state. This lets a receiver reject delayed packets from an old logical stream without putting the deployment revision in every packet.
+Every stream has a 128-bit `stream_id`, assigned as part of the committed network configuration. It MUST be unique within the deployment and stable across runtime process restarts and transport reconnects while that logical stream configuration continues. The stream ID identifies the logical produced stream, independent of its consumer set or network route. A change to the producer, data meaning/type, timestamp profile, channel layout, or send-log limits MUST assign a new `stream_id`; changing only consumers or routes MUST NOT reset stream identity or sequence state. This lets a receiver reject delayed packets from an old logical stream without putting the deployment revision in every packet.
 
 The committed configuration MUST declare at least:
 
@@ -36,39 +36,33 @@ The committed configuration MUST declare at least:
 - signal data type and channel layout;
 - timestamp profile and clock interpretation;
 - permitted packet/block sizes and sampling profile, if applicable;
-- gap policy;
+- send-log limits (`max_packets`, `max_block_ms`);
 - configuration revision to which the stream belongs.
 
-An implementation MUST NOT infer stream type, timestamp semantics, or gap policy from payload contents.
+An implementation MUST NOT infer stream type or timestamp semantics from payload contents.
 
 ## 4. Sequence Numbers
 
 `sequence` is an unsigned 64-bit integer scoped to one `stream_id` and counts data packets, not individual scalar values inside a block.
 
 - The first packet for a newly created stream starts at zero.
-- The producer MUST persist sequence state and continue it across process restarts and reconnects for that `stream_id`, so it never reuses a sequence number after a crash. A crash may therefore leave a gap. Implementations MAY durably reserve ranges of sequence numbers and consume them in memory, avoiding a durable storage write for every packet; after restart, the producer begins at the first number beyond its previous reservation.
-- The receiver MUST persist its per-stream sequence checkpoint across process restarts. Checkpoint writes MUST be crash-safe and MUST NOT move backwards. The receiver resumes duplicate/gap checks from that checkpoint; if its durable state is unavailable or corrupt, it MUST report state loss and require explicit stream recovery rather than silently adopting an arbitrary sequence.
-- A transport reconnect does not reset the sequence.
+- The producer MUST never reuse a sequence number for a `stream_id`, including after its own restart. It durably reserves ranges of sequence numbers and consumes them in memory, so it needs no storage write per packet; after restart it begins beyond its previous reservation. The resulting jump is how a producer restart becomes visible to the consumer.
+- A transport reconnect does not reset the sequence; the consumer resumes from its next expected sequence and the producer replays from its send log (Section 12.1, item 2).
 - A deliberate stream replacement uses a new `stream_id` and a new sequence beginning at zero.
 
 The receiver tracks the next expected sequence per stream:
 
 - `sequence == expected`: accept the packet and advance `expected`;
-- `sequence < expected`: discard and report the duplicate/regressed packet;
-- `sequence > expected`: report a gap, then apply the configured gap policy.
+- `sequence < expected`: discard it silently (counted). Duplicates are normal after a replay;
+- `sequence > expected`: a gap. Since the protocol replays everything, a gap means data was lost (for example a producer restart). The stream faults.
 
-For a receiver's initial observation of a stream, the first received sequence establishes the initial expectation; the receiver MUST report that it joined mid-stream if the first sequence is non-zero. A new receiver need not be able to distinguish historical loss from joining late without additional state.
+A new stream starts at sequence zero, and a receiver's expectation for it starts at zero. A first packet with a non-zero sequence is a gap.
 
 ## 5. Gap and Duplicate Policy
 
-The stream configuration declares the policy for a gap. The MVP defines:
+Losing data is not acceptable, so there is no gap policy in the MVP: every gap faults the stream. A faulted stream delivers nothing further to the consumer graph and its producer stops sending it, until an authorized recovery or reconfiguration. Receivers MUST NOT process one sequence number twice.
 
-- `CONTINUE_WITH_GAP`: report a discontinuity and continue processing later packets. The consumer must be able to observe the discontinuity; it must not silently fabricate missing values.
-- `FAULT_STREAM`: report a discontinuity and mark the stream failed/stopped until an authorized recovery or reconfiguration.
-
-This policy applies to gaps. Duplicate or regressed packets are always discarded and reported; the stream policy determines whether the condition also faults/stops the stream. Receivers MUST NOT process one sequence number twice.
-
-On the current WebSocket/TCP transport, a gap is expected mainly after producer crash/restart, stream reconfiguration, or an implementation/connection fault. A future datagram transport may expose gaps and reordering during ordinary delivery; its profile must specify bounded reorder handling and loss recovery separately.
+A gap occurs only when the delivery guarantee could not be kept: a producer or consumer restart, a send log that overflowed past its blocking limit, or an implementation fault. A future datagram transport may expose loss and reordering during ordinary delivery; its profile must specify bounded reorder handling and retransmission separately.
 
 ## 6. Time Semantics
 
@@ -200,20 +194,20 @@ The sequence number is public and predictable by design. It is an ordering and d
 
 The fixed header version identifies incompatible framing changes. Additive optional metadata uses noncritical TLV extensions. New mandatory extensions or changed timestamp/type semantics require explicit negotiation and a new compatible protocol profile or version.
 
-Implementations SHOULD reject unsupported types and extensions explicitly rather than reinterpret them. The control protocol's stream descriptor advertises data types, timestamp profiles, gap policy, and protocol versions supported by each participant.
+Implementations SHOULD reject unsupported types and extensions explicitly rather than reinterpret them. The control protocol's stream descriptor advertises data types, timestamp profiles, send-log limits, and protocol versions supported by each participant.
 
 ## 12. Items Requiring Review Before Interoperability Freeze
 
 1. Define the stream descriptor's exact serialization and the point at which its timestamp domains are updated after a source/runtime restart.
-2. Specify durable sender/receiver sequence checkpoint formats, crash consistency, and the selected crash-delivery guarantee.
+2. Specify the delivery guarantee, acknowledgement and resume behavior (decided, see 12.1 item 2) and the durable format of the producer's sequence-range reservation.
 3. Define control-plane fault/alarm messages for sequence gaps and malformed packets.
 4. Define protocol negotiation for supported packet versions and extensions; all Section 8 type IDs are mandatory in the MVP profile.
 
-### 12.1 Proposed resolutions (awaiting approval)
+### 12.1 Resolutions
 
-These proposals close the four items above. They are not yet decisions; nothing in this section is normative until approved, and no codec for Section 7 is implemented before then.
+Items 2 and 5 were decided on 2026-10-05. Items 1, 3 and 4 are proposals awaiting approval. No codec for Section 7 is implemented before all are settled.
 
-**1. Stream descriptor.** Each stream is a JSON object in the configuration bundle's `full_network.streams` array, so it is covered by the configuration digest and versioned with the deployment revision:
+**1. Stream descriptor (proposal).** Each stream is a JSON object in the configuration bundle's `full_network.streams` array, so it is covered by the configuration digest and versioned with the deployment revision. It is derived from an explicit network connection of the schema:
 
 ```json
 {
@@ -225,19 +219,26 @@ These proposals close the four items above. They are not yet decisions; nothing 
   "max_elements_per_packet": 1,
   "sample_rate": { "numerator": 48000, "denominator": 1 },
   "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ],
-  "gap_policy": "CONTINUE_WITH_GAP"
+  "send_log": { "max_packets": 4096, "max_block_ms": 2000 }
 }
 ```
 
-`sample_rate` is present only for uniformly sampled blocks. A `clock_domain` names a domain declared by the producing node, not a value: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`. This keeps descriptors stable across restarts while making a clock reset visible.
+`sample_rate` is present only for uniformly sampled blocks. A `clock_domain` names a domain declared by the producing node: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`.
 
-**2. Crash-delivery guarantee: at most once.** Packets are never replayed. A crash can lose packets but cannot duplicate them.
-- Sender: reserves sequence ranges of 65,536 and persists the reservation end in `<state-dir>/streams/<stream_id>.seq` (write to a temporary file, `fsync`, `rename`, `fsync` the directory) before using the range. After restart it starts at the stored end, so a crash leaves a gap of at most one range.
-- Receiver: persists the last accepted sequence in `<state-dir>/streams/<stream_id>.recv` the same way, at most once per second and on clean shutdown. Because senders never replay, a lagging checkpoint cannot cause duplicates to be accepted; it only bounds duplicate detection after a receiver restart. A missing or unreadable checkpoint for a configured stream is reported as `STREAM_STATE_LOST` and the stream waits for explicit recovery (`FAULT_STREAM` behavior) regardless of its gap policy.
+**2. Delivery: lossless across connection loss (decided 2026-10-05).**
+- *Guarantee:* while both processes run, each packet reaches the consumer graph exactly once, in order, across disconnects and reconnects. Process crashes are detected and fault the stream; they are not recovered in the MVP.
+- *Send log:* the producer keeps every packet of a stream in memory until the consumer acknowledges it, up to `send_log.max_packets`.
+- *Backpressure:* when the send log is full, publishing blocks (the producer's graph stops stepping) for at most `send_log.max_block_ms`; if the log is still full, the stream faults with `SEND_LOG_OVERFLOW`. A source that cannot pause (for example SDR hardware) then overflows at the device, and the node reports that as a source fault.
+- *Acknowledgement:* the consumer sends a cumulative `ACK {stream_id, next_expected}` after delivering packets to its graph, at least every 64 packets or 50 ms while data arrives. The producer frees the acknowledged packets.
+- *Resume:* after every (re)connect the consumer sends `RESUME {stream_id, next_expected}` for each stream it consumes from that peer; the producer replays from its log and continues. If `next_expected` is older than the oldest logged packet, or newer than the next sequence the producer will assign, the stream faults with `STREAM_STATE_LOST`. A restarted consumer has no expectation and sends `RESUME_NO_STATE`, which also faults the stream.
+- *Producer restart:* sequence-range reservation (Section 4) makes the restart visible as a gap, which faults the stream.
+- *Wire form:* acknowledgements travel on the same `/data` connection, consumer to producer, as a 32-byte message distinguished by its magic: `magic "S7DA"` (4), `version` (1), `kind` (1: `ACK`, 2: `RESUME`, 3: `RESUME_NO_STATE`), `reserved` (2, zero), `stream_id` (16), `next_expected` (8), big-endian.
 
-**3. Fault reporting.** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `faulted`, `waiting_recovery`), `last_sequence`, counters (`packets`, `gaps`, `missing_packets`, `duplicates`, `malformed`, `unauthorized`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `DUPLICATE_OR_REGRESSED`, `JOINED_MID_STREAM`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `STREAM_STATE_LOST`. Studio polls it. Pushed events are a later extension. Recovery of a faulted stream is `RECOVER_STREAM {stream_id}` (authorized like a configuration change), which resets the expectation to the next received sequence.
+**3. Fault reporting (proposal).** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `blocked`, `faulted`), `next_expected` / `next_sequence`, send-log depth, counters (`packets`, `replayed`, `duplicates_discarded`, `malformed`, `unauthorized`, `blocked_ms_total`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `SEND_LOG_OVERFLOW`, `STREAM_STATE_LOST`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `SOURCE_OVERFLOW`. Studio polls it; pushed events are a later extension. `RECOVER_STREAM {stream_id}` (authorized like a configuration change) restarts a faulted stream with a new sequence expectation; the data lost in the fault stays lost and stays reported.
 
-**4. Negotiation: none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support (Section 7). A future version adds negotiation through a new packet version, not through optional behavior in version 1.
+**4. Negotiation (proposal): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support.
+
+**5. Routing (decided 2026-10-05).** A stream follows the explicit network connection in the schema: the producer node sends it only on its connection to each configured consumer node, identified by the authenticated peer certificate, and a consumer accepts it only from the configured producer. Nodes do not relay streams in the MVP. Relaying through intermediate nodes may be needed later for unstable networks; to keep that possible, `stream_id`, sequence numbers and acknowledgements are end-to-end between producer and consumer, and packets carry no hop-specific fields.
 
 ## 13. Relationship to Implementation
 
