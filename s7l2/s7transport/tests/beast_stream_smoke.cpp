@@ -10,10 +10,16 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include <arpa/inet.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <netinet/in.h>
 
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
@@ -390,7 +396,7 @@ void test_mutual_streams_over_two_connections()
     const auto port_a = a.configure_server(0);
     const auto port_b = b.configure_server(0);
     b.configure_client("ws://127.0.0.1:" + std::to_string(port_a));
-    a.set_data_peers({"ws://127.0.0.1:" + std::to_string(port_b)});
+    a.set_data_peers({{"ws://127.0.0.1:" + std::to_string(port_b), {}}});
     expect(wait_for([&] { return a.stats().data_connections == 2 && b.stats().data_connections == 2; }),
            "two data connections between the nodes");
 
@@ -435,7 +441,7 @@ void test_data_peer_retried()
         port = probe.configure_server(0); // a free port, released again
     }
     transport::BeastRuntimeNetEndpoint consumer_node;
-    consumer_node.set_data_peers({"ws://127.0.0.1:" + std::to_string(port)});
+    consumer_node.set_data_peers({{"ws://127.0.0.1:" + std::to_string(port), {}}});
     const auto c = config("9d8e2b5a-6f0c-4a4d-8c3e-3b9a0f1e2d3c");
     const auto consumer = consumer_node.open_consumer(c);
     std::this_thread::sleep_for(milliseconds(300));
@@ -445,6 +451,94 @@ void test_data_peer_retried()
     transfer(producer_node, producer, {{&consumer_node, consumer}}, 1000);
     consumer_node.set_data_peers({});
     expect(wait_for([&] { return consumer_node.stats().data_connections == 0; }), "a removed data peer is disconnected");
+}
+
+// The address of a non-loopback IPv4 interface of this host, if any.
+std::optional<std::string> external_ipv4()
+{
+    ifaddrs* list = nullptr;
+    if (getifaddrs(&list) != 0) {
+        return std::nullopt;
+    }
+    std::optional<std::string> found;
+    for (auto* entry = list; entry && !found; entry = entry->ifa_next) {
+        if (entry->ifa_addr && entry->ifa_addr->sa_family == AF_INET && !(entry->ifa_flags & IFF_LOOPBACK) && (entry->ifa_flags & IFF_UP)) {
+            char text[INET_ADDRSTRLEN]{};
+            inet_ntop(AF_INET, &reinterpret_cast<sockaddr_in*>(entry->ifa_addr)->sin_addr, text, sizeof(text));
+            found = text;
+        }
+    }
+    freeifaddrs(list);
+    return found;
+}
+
+bool can_connect(const std::string& address, const std::uint16_t port)
+{
+    boost::asio::io_context io;
+    tcp::socket socket(io);
+    boost::system::error_code ec;
+    socket.connect(tcp::endpoint(boost::asio::ip::make_address(address), port), ec);
+    return !ec;
+}
+
+transport::TlsConfig tls_for(const char* name)
+{
+    const auto certs = std::filesystem::path(S7_TEST_CERT_DIR);
+    transport::TlsConfig t;
+    t.enabled = true;
+    t.cert_file = (certs / (std::string(name) + ".cert.pem")).string();
+    t.key_file = (certs / (std::string(name) + ".key.pem")).string();
+    t.ca_file = (certs / "s7_root_ca.cert.pem").string();
+    return t;
+}
+
+// Peer identity comes from the verified certificate, not from the URL.
+void test_node_identity()
+{
+    constexpr const char* kNodeA = "11111111-2222-3333-4444-555555555555";
+    constexpr const char* kNodeB = "33333333-4444-5555-6666-777777777777";
+    transport::BeastRuntimeNetEndpoint node_a;
+    const auto port = node_a.configure_server(0, tls_for("s7_runtime_node"));
+    transport::BeastRuntimeNetEndpoint client;
+    client.configure_client("wss://127.0.0.1:" + std::to_string(port), tls_for("s7_studio"));
+    const auto certificate = client.server_certificate();
+    expect(certificate && transport::node_uuid_of(*certificate) == std::string(kNodeA), "the server presents node A's identity");
+    expect(transport::check_node_identity(certificate, kNodeA) == transport::NodeIdentity::Verified, "claimed A: verified");
+    expect(transport::check_node_identity(certificate, kNodeB) == transport::NodeIdentity::Mismatch, "claimed B: mismatch");
+    expect(transport::check_node_identity(std::nullopt, kNodeA) == transport::NodeIdentity::Unverified, "no certificate: unverified");
+
+    // A data peer whose certificate is another node is refused.
+    transport::BeastRuntimeNetEndpoint consumer;
+    consumer.set_data_peers({{"wss://127.0.0.1:" + std::to_string(port), kNodeB}}, tls_for("s7_runtime_node_b"));
+    std::vector<std::string> errors;
+    expect(wait_for([&] {
+               for (auto& error : consumer.take_transport_errors()) {
+                   errors.push_back(std::move(error));
+               }
+               return !errors.empty();
+           }),
+           "the mismatch is reported");
+    expect(errors.front().find("identity mismatch") != std::string::npos, "reported as identity mismatch: " + errors.front());
+    expect(consumer.stats().data_connections == 0, "no data connection to the wrong node");
+    consumer.set_data_peers({{"wss://127.0.0.1:" + std::to_string(port), kNodeA}}, tls_for("s7_runtime_node_b"));
+    expect(wait_for([&] { return consumer.stats().data_connections == 1; }), "the right node is accepted");
+}
+
+// A plain WebSocket server listens on loopback unless an address is given.
+void test_plain_server_binds_loopback()
+{
+    transport::BeastRuntimeNetEndpoint plain;
+    const auto port = plain.configure_server(0);
+    expect(can_connect("127.0.0.1", port), "reachable on loopback");
+    const auto external = external_ipv4();
+    if (!external) {
+        std::cout << "no non-loopback interface: external reachability not checked\n";
+        return;
+    }
+    expect(!can_connect(*external, port), "a default plain server is not reachable on " + *external);
+    transport::BeastRuntimeNetEndpoint exposed;
+    const auto exposed_port = exposed.configure_server(0, {}, "0.0.0.0");
+    expect(can_connect(*external, exposed_port), "an explicit bind address exposes it");
 }
 
 } // namespace
@@ -459,6 +553,8 @@ try {
     test_reopen_continues_stream();
     test_mutual_streams_over_two_connections();
     test_data_peer_retried();
+    test_node_identity();
+    test_plain_server_binds_loopback();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport beast stream smoke: " << ex.what() << '\n';

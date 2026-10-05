@@ -171,7 +171,12 @@ int main(int argc, char** argv) {
             }
             service.start_websocket_server();
             if (definition.server.enabled) {
-                std::cout << "websocket.server.listening at ws://127.0.0.1:" << definition.server.port << "\n";
+                const bool tls = definition.server.tls.enabled;
+                const auto bind = !definition.server.bind_address.empty() ? definition.server.bind_address
+                                  : tls                                  ? std::string("0.0.0.0")
+                                                                         : std::string("127.0.0.1");
+                std::cout << "websocket.server.listening at " << (tls ? "wss://" : "ws://") << bind << ':' << definition.server.port
+                          << (tls || !definition.server.bind_address.empty() ? "" : " (loopback only: plain WebSocket)") << "\n";
                 std::cout.flush();
             }
             

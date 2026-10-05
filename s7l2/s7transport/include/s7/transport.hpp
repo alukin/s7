@@ -17,6 +17,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "s7/stream_protocol.hpp"
@@ -40,6 +41,32 @@ struct ControlPeer {
 
 // Reads identity attributes from a PEM certificate file.
 [[nodiscard]] auto inspect_certificate_file(const std::string& pem_path) -> PeerCertificate;
+
+// The peer certificate of an OpenSSL connection (an `SSL*`), if the peer
+// presented one and it passed chain verification.
+[[nodiscard]] auto verified_peer_certificate_of(void* openssl_ssl) -> std::optional<PeerCertificate>;
+
+// The node identity of a certificate: the UUID of its single SAN URI
+// spiffe://s7/node/<uuid>; nothing if it has none or more than one.
+[[nodiscard]] auto node_uuid_of(const PeerCertificate& certificate) -> std::optional<std::string>;
+
+// How a connection's peer relates to the node it claims to be.
+enum class NodeIdentity : std::uint8_t {
+    Verified,   // verified certificate whose node identity is the claimed node_uuid
+    Unverified, // no verified certificate (plain WebSocket)
+    Mismatch,   // verified certificate of another node, or without a node identity
+};
+[[nodiscard]] auto check_node_identity(const std::optional<PeerCertificate>& certificate, std::string_view claimed_node_uuid)
+    -> NodeIdentity;
+[[nodiscard]] auto to_string(NodeIdentity identity) -> std::string; // "verified", "unverified", "identity_mismatch"
+
+// An outbound data peer: a node this one consumes streams from.
+struct DataPeer {
+    std::string url;
+    std::string node_uuid; // expected identity of its certificate (empty: not checked)
+
+    bool operator==(const DataPeer&) const = default;
+};
 
 struct ParsedWebSocketUrl {
     std::string host;
@@ -171,8 +198,10 @@ public:
     [[nodiscard]] auto backend_name() const -> std::string override;
 
     // Accepts any number of peers (up to the inbound limit). Port 0 lets the
-    // system choose; returns the port listened on.
-    auto configure_server(std::uint16_t port, const TlsConfig& tls = {}) -> std::uint16_t;
+    // system choose; returns the port listened on. An empty bind_address
+    // listens on all interfaces with TLS and on loopback (127.0.0.1) without:
+    // a plain WebSocket node is reachable from other hosts only if asked.
+    auto configure_server(std::uint16_t port, const TlsConfig& tls = {}, const std::string& bind_address = {}) -> std::uint16_t;
     // Connects this endpoint's outbound control and data connections (replacing
     // previous ones) and keeps them connected: a dropped connection is
     // re-established with backoff and its streams resume. Throws if the first
@@ -182,7 +211,13 @@ public:
     // client connection), connecting new ones and closing those no longer
     // listed. A peer that cannot be reached is retried with backoff; this
     // call does not wait for connections.
-    void set_data_peers(const std::vector<std::string>& urls, const TlsConfig& tls = {});
+    // Over TLS, a peer whose certificate is not the expected node is refused
+    // (reported through take_transport_errors and retried).
+    void set_data_peers(const std::vector<DataPeer>& peers, const TlsConfig& tls = {});
+
+    // The verified certificate of the server this endpoint's client
+    // connection (configure_client) is connected to.
+    [[nodiscard]] auto server_certificate() const -> std::optional<PeerCertificate>;
 
     void set_control_request_handler(ControlRequestHandler handler);
     [[nodiscard]] auto request_control_json(const std::string& request_json) -> std::string;

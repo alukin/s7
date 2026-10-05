@@ -64,6 +64,7 @@ private:
         QString activeDeployment;
         QString detailText;
         QSet<QString> discoveredBy;
+        bool directlyChecked = false; // trustState from contacting the node itself
     };
 
     void setupUi();

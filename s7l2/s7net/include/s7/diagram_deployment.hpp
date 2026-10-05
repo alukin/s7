@@ -34,6 +34,7 @@
 
 #include "s7/signal_types.hpp"
 #include "s7/stream_protocol.hpp"
+#include "s7/transport.hpp"
 
 namespace s7::deployment {
 
@@ -95,9 +96,10 @@ using OutputTypeLookup = std::function<std::optional<SignalType>(const std::stri
 // without a stream, or the diagram is otherwise inconsistent.
 [[nodiscard]] auto extract_node_schema(const boost::json::object& diagram, std::string_view node_uuid) -> boost::json::object;
 
-// The endpoints of the nodes producing the streams this node consumes: the
-// data peers it connects to.
-[[nodiscard]] auto producer_endpoints(const boost::json::object& diagram, std::string_view node_uuid) -> std::vector<std::string>;
+// The nodes producing the streams this node consumes (endpoint and expected
+// identity): the data peers it connects to.
+[[nodiscard]] auto producer_endpoints(const boost::json::object& diagram, std::string_view node_uuid)
+    -> std::vector<transport::DataPeer>;
 
 } // namespace s7::deployment
 

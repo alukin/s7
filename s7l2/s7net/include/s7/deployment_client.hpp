@@ -31,7 +31,9 @@ namespace s7::deployment {
 // the node cannot be reached.
 using ControlRequester = std::function<boost::json::object(const RuntimeNode& node, const boost::json::object& request)>;
 
-// One mTLS (or plain) control connection per node endpoint, opened on first use.
+// One mTLS (or plain) control connection per node endpoint, opened on first
+// use. Over TLS the server certificate's node identity must equal the node's
+// node_uuid (when given).
 class BeastControlRequester {
 public:
     explicit BeastControlRequester(transport::TlsConfig tls) : tls_(std::move(tls)) {}

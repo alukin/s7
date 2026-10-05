@@ -173,7 +173,8 @@ void test_node_parts()
     const auto b = deployment::extract_node_schema(diagram, kB);
     expect(b.at("elements").as_array().size() == 3 && has_element(b, "g") && has_element(b, "out") && has_element(b, source),
            "B runs g, out and a NetSource: " + json::serialize(b));
-    expect(deployment::producer_endpoints(diagram, kB) == std::vector<std::string>{"ws://127.0.0.1:9101"}, "B connects to A");
+    expect(deployment::producer_endpoints(diagram, kB) == std::vector<s7::transport::DataPeer>{{"ws://127.0.0.1:9101", kA}},
+           "B connects to A and expects A's identity");
     expect(deployment::producer_endpoints(diagram, kA).empty(), "A consumes nothing");
 
     // Run A and B in one process: B's graph computes from A's values.

@@ -32,6 +32,7 @@
 #include <boost/beast/ssl.hpp>
 
 #include <algorithm>
+#include <optional>
 #include <cstring>
 #include <thread>
 #include <utility>
@@ -148,7 +149,8 @@ auto request_control_once(const QString& endpoint,
                          const QString& caFile,
                          const QString& certFile,
                          const QString& keyFile,
-                         QString* error) -> QString
+                         QString* error,
+                         std::optional<s7::transport::PeerCertificate>* serverCertificate = nullptr) -> QString
 {
     try {
         const auto parsed = s7::transport::parse_ws_url(endpoint.toStdString());
@@ -168,6 +170,9 @@ auto request_control_once(const QString& endpoint,
             boost::beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(2));
             boost::beast::get_lowest_layer(ws).connect(results);
             ws.next_layer().handshake(ssl::stream_base::client);
+            if (serverCertificate) {
+                *serverCertificate = s7::transport::verified_peer_certificate_of(ws.next_layer().native_handle());
+            }
             ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::client));
             ws.handshake(host_port, target);
             ws.write(boost::asio::buffer(requestJson.toStdString()));
@@ -356,8 +361,9 @@ void HeadlessNodesPanel::refreshNow()
 
         auto requestJsonSync = [caFile, certFile, keyFile](const QString& endpoint,
                                                            const QString& requestJson,
-                                                           QString* error) -> QString {
-            return request_control_once(endpoint, requestJson, caFile, certFile, keyFile, error);
+                                                           QString* error,
+                                                           std::optional<s7::transport::PeerCertificate>* serverCertificate = nullptr) -> QString {
+            return request_control_once(endpoint, requestJson, caFile, certFile, keyFile, error, serverCertificate);
         };
 
         QMap<QString, NodeSnapshot> discovered;
@@ -375,7 +381,12 @@ void HeadlessNodesPanel::refreshNow()
             if (!node.nodeName.isEmpty()) merged.nodeName = node.nodeName;
             if (!node.certificateCommonName.isEmpty()) merged.certificateCommonName = node.certificateCommonName;
             if (!node.certificateFingerprintSha256.isEmpty()) merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
-            if (!node.trustState.isEmpty()) merged.trustState = node.trustState;
+            // Trust established by contacting the node itself is never
+            // replaced by what another node reports about it.
+            if (!node.trustState.isEmpty() && (node.directlyChecked || !merged.directlyChecked)) {
+                merged.trustState = node.trustState;
+                merged.directlyChecked = merged.directlyChecked || node.directlyChecked;
+            }
             if (!node.reachability.isEmpty()) merged.reachability = node.reachability;
             if (!node.osFamily.isEmpty()) merged.osFamily = node.osFamily;
             if (!node.architecture.isEmpty()) merged.architecture = node.architecture;
@@ -397,10 +408,11 @@ void HeadlessNodesPanel::refreshNow()
             NodeSnapshot node;
             node.endpoint = endpoint;
             node.reachability = QStringLiteral("offline");
-            node.trustState = endpoint.startsWith(QStringLiteral("wss://")) ? QStringLiteral("verified") : QStringLiteral("unverified");
+            node.trustState = QStringLiteral("unverified");
 
             QString error;
-            const auto helloText = requestJsonSync(endpoint, requestHello, &error);
+            std::optional<s7::transport::PeerCertificate> serverCertificate;
+            const auto helloText = requestJsonSync(endpoint, requestHello, &error, &serverCertificate);
             if (helloText.isEmpty()) {
                 node.detailText = QStringLiteral("HELLO failed: %1").arg(error);
                 addOrUpdate(node);
@@ -469,6 +481,17 @@ void HeadlessNodesPanel::refreshNow()
                 }
             }
 
+            // Trust comes from the certificate the node presented: its
+            // identity (SAN spiffe://s7/node/<uuid>) must be the claimed node_uuid.
+            node.trustState = QString::fromStdString(
+                s7::transport::to_string(s7::transport::check_node_identity(serverCertificate, node.nodeUuid.toStdString())));
+            node.directlyChecked = true;
+            if (node.trustState == QStringLiteral("identity_mismatch")) {
+                const auto presented = serverCertificate ? s7::transport::node_uuid_of(*serverCertificate) : std::nullopt;
+                node.detailText = QStringLiteral("Certificate identity %1 does not match the claimed node_uuid %2.\n")
+                                      .arg(presented ? QString::fromStdString(*presented) : QStringLiteral("(none)"), node.nodeUuid) +
+                                  node.detailText;
+            }
             addOrUpdate(node);
 
             const auto peersText = requestJsonSync(endpoint, requestPeers, &error);
@@ -507,9 +530,10 @@ void HeadlessNodesPanel::refreshNow()
                 if (peerNode.nodeUuid.isEmpty() && !peerNode.certificateCommonName.isEmpty()) {
                     peerNode.nodeUuid = peerNode.certificateCommonName;
                 }
-                peerNode.trustState = jsonString(peerObject, "trust_state");
-                if (peerNode.trustState.isEmpty()) {
-                    peerNode.trustState = QStringLiteral("unverified");
+                // What a peer reports is a claim until this node is contacted directly.
+                peerNode.trustState = QStringLiteral("unverified");
+                if (const auto claimed = jsonString(peerObject, "trust_state"); !claimed.isEmpty()) {
+                    peerNode.detailText = QStringLiteral("Trust reported by %1: %2 (not verified by Studio)").arg(endpoint, claimed);
                 }
                 peerNode.reachability = jsonString(peerObject, "reachability");
                 if (peerNode.reachability.isEmpty()) {
@@ -559,8 +583,9 @@ void HeadlessNodesPanel::addOrUpdateNode(const NodeSnapshot& node)
     if (!node.nodeName.isEmpty()) {
         merged.nodeName = node.nodeName;
     }
-    if (!node.trustState.isEmpty()) {
+    if (!node.trustState.isEmpty() && (node.directlyChecked || !merged.directlyChecked)) {
         merged.trustState = node.trustState;
+        merged.directlyChecked = merged.directlyChecked || node.directlyChecked;
     }
     if (!node.reachability.isEmpty()) {
         merged.reachability = node.reachability;

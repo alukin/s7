@@ -408,13 +408,13 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
     return fragment;
 }
 
-auto producer_endpoints(const json::object& diagram, const std::string_view node_uuid) -> std::vector<std::string>
+auto producer_endpoints(const json::object& diagram, const std::string_view node_uuid) -> std::vector<transport::DataPeer>
 {
     std::unordered_map<std::string, std::string> endpoints;
     for (const auto& node : parse_runtime_nodes(diagram)) {
         endpoints[node.node_uuid] = node.endpoint;
     }
-    std::vector<std::string> result;
+    std::vector<transport::DataPeer> result;
     for (const auto& stream : parse_streams(diagram)) {
         const bool consumes = std::ranges::any_of(stream.consumers, [&](const auto& c) { return c.node_uuid == node_uuid; });
         if (!consumes || stream.producer.node_uuid == node_uuid) {
@@ -425,8 +425,9 @@ auto producer_endpoints(const json::object& diagram, const std::string_view node
             throw std::invalid_argument("Stream " + wire::to_string(stream.stream_id) + ": producer node " + stream.producer.node_uuid +
                                         " has no endpoint in 'runtime_nodes'.");
         }
-        if (std::ranges::find(result, it->second) == result.end()) {
-            result.push_back(it->second);
+        transport::DataPeer peer{it->second, stream.producer.node_uuid};
+        if (std::ranges::find(result, peer) == result.end()) {
+            result.push_back(std::move(peer));
         }
     }
     return result;

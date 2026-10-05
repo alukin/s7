@@ -121,6 +121,45 @@ namespace {
 
 } // namespace
 
+auto verified_peer_certificate_of(void* openssl_ssl) -> std::optional<PeerCertificate>
+{
+    return verified_peer_certificate(static_cast<SSL*>(openssl_ssl));
+}
+
+auto node_uuid_of(const PeerCertificate& certificate) -> std::optional<std::string>
+{
+    constexpr std::string_view prefix = "spiffe://s7/node/";
+    std::optional<std::string> found;
+    for (const auto& uri : certificate.uri_sans) {
+        if (uri.starts_with(prefix)) {
+            if (found) {
+                return std::nullopt; // more than one node identity
+            }
+            found = uri.substr(prefix.size());
+        }
+    }
+    return found;
+}
+
+auto check_node_identity(const std::optional<PeerCertificate>& certificate, const std::string_view claimed_node_uuid) -> NodeIdentity
+{
+    if (!certificate) {
+        return NodeIdentity::Unverified;
+    }
+    const auto uuid = node_uuid_of(*certificate);
+    return uuid && !claimed_node_uuid.empty() && *uuid == claimed_node_uuid ? NodeIdentity::Verified : NodeIdentity::Mismatch;
+}
+
+auto to_string(const NodeIdentity identity) -> std::string
+{
+    switch (identity) {
+        case NodeIdentity::Verified: return "verified";
+        case NodeIdentity::Unverified: return "unverified";
+        case NodeIdentity::Mismatch: return "identity_mismatch";
+    }
+    return "unverified";
+}
+
 auto inspect_certificate_file(const std::string& pem_path) -> PeerCertificate
 {
     std::unique_ptr<BIO, decltype(&BIO_free)> bio(BIO_new_file(pem_path.c_str(), "r"), BIO_free);
@@ -1115,6 +1154,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         std::shared_ptr<ssl::context> tls;
         bool control{false};
         bool reconnect_scheduled{false};
+        std::string expected_node_uuid; // data peers over TLS: the producer's identity
     };
     using LinkPtr = std::shared_ptr<Link>;
     static constexpr const char* kClientLink = "client";
@@ -1194,6 +1234,14 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 }
                 if (connection->tls) {
                     connection->peer = ControlPeer{true, verified_peer_certificate(connection->tls->next_layer().native_handle())};
+                    if (!link->expected_node_uuid.empty() &&
+                        check_node_identity(connection->peer.certificate, link->expected_node_uuid) != NodeIdentity::Verified) {
+                        const auto error = "data peer " + link->url.host + ":" + link->url.port + " is not node " +
+                                           link->expected_node_uuid + " (certificate identity mismatch)";
+                        self->record_error(error);
+                        connection->close();
+                        return complete(std::make_exception_ptr(std::runtime_error(error)));
+                    }
                 }
                 self->register_connection(connection);
                 complete(nullptr);
@@ -1311,7 +1359,8 @@ auto BeastRuntimeNetEndpoint::backend_name() const -> std::string
     return "beast";
 }
 
-auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls) -> std::uint16_t
+auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls, const std::string& bind_address)
+    -> std::uint16_t
 {
     std::shared_ptr<ssl::context> context;
     if (tls.enabled) {
@@ -1335,7 +1384,9 @@ auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
         }
         impl_->server_tls = context;
         Tcp::acceptor acceptor(impl_->io);
-        const Tcp::endpoint endpoint(Tcp::v4(), port);
+        const auto address = boost::asio::ip::make_address(
+            !bind_address.empty() ? bind_address : (context ? std::string("0.0.0.0") : std::string("127.0.0.1")));
+        const Tcp::endpoint endpoint(address, port);
         acceptor.open(endpoint.protocol());
         acceptor.set_option(Tcp::acceptor::reuse_address(true));
         acceptor.bind(endpoint);
@@ -1389,14 +1440,15 @@ void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const Tls
     future.get();
 }
 
-void BeastRuntimeNetEndpoint::set_data_peers(const std::vector<std::string>& urls, const TlsConfig& tls)
+void BeastRuntimeNetEndpoint::set_data_peers(const std::vector<DataPeer>& peers, const TlsConfig& tls)
 {
     std::vector<std::shared_ptr<Impl::Link>> wanted;
-    for (const auto& url : urls) {
+    for (const auto& peer : peers) {
         auto link = std::make_shared<Impl::Link>();
-        link->key = "data:" + url;
-        link->url = parse_ws_url(url);
+        link->key = "data:" + peer.url + "#" + peer.node_uuid;
+        link->url = parse_ws_url(peer.url);
         link->tls = make_client_tls(link->url, tls);
+        link->expected_node_uuid = peer.node_uuid;
         wanted.push_back(std::move(link));
     }
     impl_->run_on_io([&] {
@@ -1421,6 +1473,18 @@ void BeastRuntimeNetEndpoint::set_data_peers(const std::vector<std::string>& url
                 }
             });
         }
+    });
+}
+
+auto BeastRuntimeNetEndpoint::server_certificate() const -> std::optional<PeerCertificate>
+{
+    return impl_->run_on_io([&]() -> std::optional<PeerCertificate> {
+        for (const auto& connection : impl_->connections) {
+            if (connection->link && connection->link->key == Impl::kClientLink && !connection->is_data && !connection->closed) {
+                return connection->peer.certificate;
+            }
+        }
+        return std::nullopt;
     });
 }
 

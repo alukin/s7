@@ -85,6 +85,20 @@ done
 
 fail() { echo "FAIL: $*"; echo "--- node A"; cat "$WORK/a.log"; echo "--- node B"; cat "$WORK/b.log"; exit 1; }
 
+# 0) Endpoints swapped in the diagram: each node's certificate names the other
+#    node, so nothing is prepared anywhere.
+python3 - "$WORK/diagram.json" "$WORK/swapped.json" <<'EOF2'
+import json, sys
+d = json.load(open(sys.argv[1]))
+a, b = d["runtime_nodes"]
+a["endpoint"], b["endpoint"] = b["endpoint"], a["endpoint"]
+json.dump(d, open(sys.argv[2], "w"))
+EOF2
+if "$CTL" deploy "$WORK/swapped.json" "${TLS[@]}" > "$WORK/swapped.log" 2>&1; then fail "deployed to nodes with the wrong identity"; fi
+grep -q "is node $NODE_B, not node $NODE_A" "$WORK/swapped.log" || fail "identity mismatch not reported: $(cat "$WORK/swapped.log")"
+"$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-none.json" || true
+grep -q REVISION_NOT_FOUND "$WORK/config-none.json" || fail "a node was deployed despite the mismatch: $(cat "$WORK/config-none.json")"
+
 # 1) Deploy; keep the diagram with its streams for the next deployment.
 "$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" || fail "first deployment"
 sleep 1

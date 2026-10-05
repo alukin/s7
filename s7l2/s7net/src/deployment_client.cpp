@@ -78,6 +78,16 @@ auto BeastControlRequester::operator()(const RuntimeNode& node, const json::obje
     if (!client) {
         auto endpoint = std::make_shared<transport::BeastRuntimeNetEndpoint>();
         endpoint->configure_client(node.endpoint, tls_);
+        // Over TLS, the node's certificate must be the node the diagram names.
+        if (endpoint->server_certificate() && !node.node_uuid.empty()) {
+            const auto identity = transport::check_node_identity(endpoint->server_certificate(), node.node_uuid);
+            if (identity != transport::NodeIdentity::Verified) {
+                const auto presented = transport::node_uuid_of(*endpoint->server_certificate());
+                throw std::runtime_error("The certificate of " + node.endpoint + " is " +
+                                         (presented ? "node " + *presented : "not a node certificate") + ", not node " +
+                                         node.node_uuid + ".");
+            }
+        }
         client = std::move(endpoint);
     }
     return parse_json_precise(client->request_control_json(json::serialize(request))).as_object();

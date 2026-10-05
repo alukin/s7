@@ -76,10 +76,10 @@ public:
     virtual ~DeploymentHost() = default;
 
     // Validates and compiles this node's part of the deployed diagram without
-    // activating it. data_peers are the endpoints of the nodes producing the
+    // activating it. data_peers are the nodes producing the
     // streams it consumes. Throws std::exception describing why the
     // configuration is invalid.
-    [[nodiscard]] virtual auto stage(const boost::json::object& node_schema, const std::vector<std::string>& data_peers)
+    [[nodiscard]] virtual auto stage(const boost::json::object& node_schema, const std::vector<transport::DataPeer>& data_peers)
         -> std::unique_ptr<StagedConfiguration> = 0;
 
     // Makes the staged configuration the running graph. On failure throws and

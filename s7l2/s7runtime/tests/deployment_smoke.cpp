@@ -161,7 +161,7 @@ public:
         double value{};
     };
 
-    auto stage(const json::object& fragment, const std::vector<std::string>&) -> std::unique_ptr<s7::StagedConfiguration> override
+    auto stage(const json::object& fragment, const std::vector<s7::transport::DataPeer>&) -> std::unique_ptr<s7::StagedConfiguration> override
     {
         if (fragment.at("elements").as_array()[0].as_object().at("params").as_object().contains("broken")) {
             throw std::invalid_argument("fragment is broken");
@@ -527,9 +527,9 @@ class RecordingHost final : public s7::DeploymentHost {
 public:
     struct Staged final : s7::StagedConfiguration {
         json::object schema;
-        std::vector<std::string> peers;
+        std::vector<s7::transport::DataPeer> peers;
     };
-    auto stage(const json::object& schema, const std::vector<std::string>& peers) -> std::unique_ptr<s7::StagedConfiguration> override
+    auto stage(const json::object& schema, const std::vector<s7::transport::DataPeer>& peers) -> std::unique_ptr<s7::StagedConfiguration> override
     {
         if (fail) {
             throw std::invalid_argument("device busy");
@@ -548,7 +548,7 @@ public:
 
     bool fail{false};
     std::optional<json::object> active;
-    std::vector<std::string> peers;
+    std::vector<s7::transport::DataPeer> peers;
 };
 
 void test_deploy_client()
@@ -600,7 +600,7 @@ void test_deploy_client()
     const auto deployed = s7::deployment::deploy_diagram(diagram, types, request);
     expect(deployed.committed && deployed.revision == 1, "deployed to both nodes");
     expect(host_a->active && host_b->active, "both nodes run their part");
-    expect(host_b->peers == std::vector<std::string>{"wss://a"}, "the consumer connects to the producer");
+    expect(host_b->peers == std::vector<s7::transport::DataPeer>{{"wss://a", kNodeUuid}}, "the consumer connects to the producer");
     const auto& b_elements = host_b->active->at("elements").as_array();
     expect(b_elements.size() == 2 && b_elements[1].as_object().at("type").as_string() == "NetSource", "B consumes a stream");
 

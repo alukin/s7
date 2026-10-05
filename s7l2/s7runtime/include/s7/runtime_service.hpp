@@ -45,6 +45,9 @@ struct JsonConnectionDefinition {
 struct WebSocketServerConfig {
     bool enabled{};
     std::uint16_t port{};
+    // Empty: all interfaces with TLS, loopback only without (plain WebSocket
+    // is reachable from other hosts only when an address is given).
+    std::string bind_address;
     transport::TlsConfig tls{};
 };
 

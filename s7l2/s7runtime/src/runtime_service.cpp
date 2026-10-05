@@ -217,6 +217,12 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
             const auto& server_obj = expect_object(server_it->value(), "server");
             definition.server.enabled = get_bool(server_obj, "enabled", false);
             definition.server.port = get_u16_port(server_obj, "port", 0);
+            if (const auto bind_it = server_obj.find("bind_address"); bind_it != server_obj.end()) {
+                if (!bind_it->value().is_string()) {
+                    throw std::invalid_argument("Expected string field 'websocket.server.bind_address'.");
+                }
+                definition.server.bind_address = std::string(bind_it->value().as_string());
+            }
             if (const auto tls_it = server_obj.find("tls"); tls_it != server_obj.end()) {
                 const auto& tls_obj = expect_object(tls_it->value(), "websocket.server.tls");
                 definition.server.tls.enabled = get_bool(tls_obj, "enabled", false);
@@ -693,10 +699,10 @@ public:
 
     struct StagedGraph final : StagedConfiguration {
         std::unique_ptr<NodeRuntime> runtime;
-        std::vector<std::string> data_peers;
+        std::vector<transport::DataPeer> data_peers;
     };
 
-    auto stage(const boost::json::object& node_schema, const std::vector<std::string>& data_peers)
+    auto stage(const boost::json::object& node_schema, const std::vector<transport::DataPeer>& data_peers)
         -> std::unique_ptr<StagedConfiguration> override
     {
         // A deployment carries a graph only; node settings stay with the node.
@@ -1024,7 +1030,7 @@ void RuntimeService::start_websocket_server() const {
         throw std::invalid_argument("WebSocket server is enabled but port is 0.");
     }
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        beast_endpoint->configure_server(definition_.server.port, definition_.server.tls);
+        beast_endpoint->configure_server(definition_.server.port, definition_.server.tls, definition_.server.bind_address);
     }
 }
 

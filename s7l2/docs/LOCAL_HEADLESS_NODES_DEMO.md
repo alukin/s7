@@ -52,7 +52,9 @@ In Studio:
 1. Open the `Headless Nodes` dock.
 2. Add seed `ws://127.0.0.1:9002` (node B is found through its peer list) or add both seeds.
 3. Click `Refresh` (or enable auto refresh).
-4. Check the `Trusted nodes` / `Untrusted or unknown nodes` lists. Plain `ws://` nodes are always untrusted.
+4. Check the `Trusted nodes` / `Untrusted or unknown nodes` lists. A node is trusted only if its certificate's identity (`spiffe://s7/node/<uuid>`) is the `node_uuid` it reports; plain `ws://` nodes are always untrusted, a mismatch shows as `identity_mismatch`, and trust reported by other nodes is only a claim.
+
+Plain `ws://` nodes listen on 127.0.0.1 only. To reach one from another host, set `"bind_address": "0.0.0.0"` in `websocket.server` (prefer mTLS instead).
 5. Double-click a node to open or update its tab.
 
 ## 4) Optional mTLS run

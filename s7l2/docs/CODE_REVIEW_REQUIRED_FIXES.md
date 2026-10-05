@@ -442,7 +442,7 @@ Make the scene (or one model object) the single source of truth: serialize the s
 
 Relevant code: [main_window.cpp](../s7studio/src/main_window.cpp), [scene_serializer.cpp](../s7studio/src/scene_serializer.cpp).
 
-## P2: Trust is inferred from URL scheme and peers are not verified
+## P2: Trust is inferred from URL scheme and peers are not verified — fixed 2026-10-05
 
 ### Current problem
 
@@ -457,7 +457,14 @@ Trust state is derived from verified certificate identity: chain valid, SAN `spi
 - A `wss://` node whose certificate SAN does not match its claimed UUID is shown as `identity_mismatch`, not trusted.
 - A default plain `ws://` runtime is not reachable from another host.
 
-Relevant code: [headless_nodes_panel.cpp](../s7studio/src/headless_nodes_panel.cpp:400), [transport.cpp](../s7transport/src/transport.cpp:520), [transport.cpp](../s7transport/src/transport.cpp:699).
+**Resolution:**
+- Identity is the verified certificate's single SAN `spiffe://s7/node/<uuid>`: `transport::node_uuid_of()` and `check_node_identity()` give `verified`, `unverified` (no verified certificate) or `identity_mismatch`.
+- Studio's Headless Nodes panel takes the certificate presented in its own TLS handshake and compares it with the `node_uuid` the node claims; a `wss://` node presenting another identity is `identity_mismatch` and listed as untrusted. Trust reported by peers in `GET_PEERS` is shown only as a claim (`unverified` plus a note) and never replaces a result Studio obtained by contacting the node.
+- Clients check identity, not just the chain: the deployment client refuses a node whose server certificate is not the `node_uuid` in the diagram before sending anything, and a consumer's data peer connection is refused (reported, retried) if the producer's certificate is not the expected node.
+- A plain `ws://` server binds 127.0.0.1 by default; `websocket.server.bind_address` (or `configure_server(..., bind_address)`) exposes it explicitly. TLS servers still listen on all interfaces.
+- Tests: `s7transport_beast_stream_smoke` (identity verified / mismatch over real mTLS, a data peer of the wrong node refused, a default plain server unreachable on a non-loopback interface while an explicit `0.0.0.0` is reachable); `s7_two_node_deployment` deploys to swapped endpoints and is refused with nothing prepared. The panel's trust display is not covered by an automated test (it uses the tested check).
+
+Relevant code: [headless_nodes_panel.cpp](../s7studio/src/headless_nodes_panel.cpp), [transport.cpp](../s7transport/src/transport.cpp), [deployment_client.cpp](../s7net/src/deployment_client.cpp).
 
 ## P2: Transport threads share blocking sockets — fixed 2026-10-05
 
