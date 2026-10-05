@@ -128,3 +128,7 @@ if (S7_BUILD_STUDIO)
 endif()
 
 add_custom_target(all_targets ALL DEPENDS ${S7_ALL_TARGETS})
+
+# Step-rate benchmark of a 100-stage chain (not a test).
+add_executable(s7_benchmark_chain examples/benchmark_read_input.cpp)
+target_link_libraries(s7_benchmark_chain PRIVATE s7core)
