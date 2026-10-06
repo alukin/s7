@@ -289,20 +289,37 @@ void HeadlessNodesPanel::setupUi()
 void HeadlessNodesPanel::addSeedFromInput()
 {
     const auto endpoint = normalizeEndpoint(seedInput_->text());
+    seedInput_->clear();
     if (endpoint.isEmpty()) {
         return;
     }
-
     for (int i = 0; i < seedList_->count(); ++i) {
         if (seedList_->item(i)->text() == endpoint) {
-            seedInput_->clear();
             return;
         }
     }
-
-    seedList_->addItem(endpoint);
-    seedInput_->clear();
+    addSeed(endpoint);
     refreshNow();
+}
+
+void HeadlessNodesPanel::addSeed(const QString& endpoint)
+{
+    const auto normalized = normalizeEndpoint(endpoint);
+    for (int i = 0; i < seedList_->count(); ++i) {
+        if (seedList_->item(i)->text() == normalized) {
+            return;
+        }
+    }
+    if (!normalized.isEmpty()) {
+        seedList_->addItem(normalized);
+    }
+}
+
+void HeadlessNodesPanel::setClientCertificate(const QString& caFile, const QString& certFile, const QString& keyFile)
+{
+    caFileEdit_->setText(caFile);
+    certFileEdit_->setText(certFile);
+    keyFileEdit_->setText(keyFile);
 }
 
 void HeadlessNodesPanel::removeSelectedSeed()
@@ -565,8 +582,11 @@ void HeadlessNodesPanel::refreshNow()
             self->nodes_ = discovered;
             self->updateNodeLists();
             self->updateNetworkOverview();
-            const QMutexLocker locker(&self->refreshMutex_);
-            self->refreshInProgress_ = false;
+            {
+                const QMutexLocker locker(&self->refreshMutex_);
+                self->refreshInProgress_ = false;
+            }
+            emit self->refreshed();
         }, Qt::QueuedConnection);
     }).detach();
 }

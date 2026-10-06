@@ -37,9 +37,15 @@ public:
     [[nodiscard]] auto knownNodes() const -> QVector<KnownNode>;
     // The client certificate configured in the panel (enabled if a certificate is set).
     [[nodiscard]] auto clientTls() const -> s7::transport::TlsConfig;
+    // What the panel's fields set: the client certificate for wss:// nodes,
+    // and an endpoint to discover nodes from (no refresh).
+    void setClientCertificate(const QString& caFile, const QString& certFile, const QString& keyFile);
+    void addSeed(const QString& endpoint);
 
 signals:
     void nodeActivated(const QString& endpoint, const QString& nodeUuid, const QString& nodeName);
+    // A refresh finished; the node lists show its result.
+    void refreshed();
 
 public slots:
     void refreshNow();
