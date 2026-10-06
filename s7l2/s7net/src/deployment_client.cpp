@@ -1,11 +1,13 @@
 #include "s7/deployment_client.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <format>
 #include <optional>
 #include <unordered_map>
 
 #include "s7/base64url.hpp"
+#include "s7/clock_sync.hpp"
 #include "s7/canonical_json.hpp"
 #include "s7/schema_library.hpp"
 #include "s7/type_inference.hpp"
@@ -234,6 +236,7 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
     // revision and the data protocol it speaks.
     std::vector<std::uint64_t> active(targets.size());
     std::vector<ControlLimits> limits(targets.size());
+    std::chrono::nanoseconds round_trips{}; // summed over the nodes
     std::unordered_map<std::string, DataProtocol> protocols;
     for (std::size_t i = 0; i < targets.size(); ++i) {
         try {
@@ -247,7 +250,9 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
             const auto list = request(targets[i], request_object("LIST_DEPLOYMENTS", "list-" + std::to_string(i)));
             const auto* revision = list.if_contains("active_revision");
             active[i] = revision && (revision->is_int64() || revision->is_uint64()) ? revision->to_number<std::uint64_t>() : 0;
+            const auto asked = std::chrono::steady_clock::now();
             const auto info = request(targets[i], request_object("GET_NODE_INFO", "info-" + std::to_string(i)));
+            round_trips += std::chrono::steady_clock::now() - asked;
             limits[i] = control_limits_of(info);
             // Deployed nodes compare times in the shared "utc" domain: each must
             // report its clock synchronized within its bound.
@@ -367,9 +372,24 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
         return result;
     }
 
+    // One activation moment for every node, late enough for the last commit to arrive.
+    const auto delay = options.activation_delay.value_or(std::min<std::chrono::milliseconds>(
+        std::chrono::milliseconds(250) + std::chrono::duration_cast<std::chrono::milliseconds>(4 * round_trips), std::chrono::seconds(10)));
+    if (delay.count() > 0) {
+        result.activate_at_ns = clock::utc_now_ns() + std::chrono::duration_cast<std::chrono::nanoseconds>(delay).count();
+    }
     for (std::size_t i = 0; i < targets.size(); ++i) {
         try {
-            const auto response = request(targets[i], token_request("COMMIT_DEPLOYMENT", i));
+            auto commit = token_request("COMMIT_DEPLOYMENT", i);
+            if (result.activate_at_ns) {
+                commit["activate_at_ns"] = *result.activate_at_ns;
+            }
+            const auto response = request(targets[i], commit);
+            if (result.activate_at_ns && clock::utc_now_ns() > *result.activate_at_ns) {
+                // The node starts late and catches up on the grid.
+                result.nodes[i].message = "committed " + std::to_string((clock::utc_now_ns() - *result.activate_at_ns) / 1'000'000) +
+                                          " ms after activate_at; the node catches up";
+            }
             if (const auto* committed = response.if_contains("committed"); committed && committed->is_bool() && committed->as_bool()) {
                 result.nodes[i].status = "committed";
             } else {

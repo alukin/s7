@@ -2,6 +2,7 @@
 //
 //   s7ctl deploy <diagram> [tls] [elements] [--deployment-id <id>] [--write <file>]
 //   s7ctl check <diagram> [elements] [--write <file>]   streams and node parts, offline
+//   s7ctl info <url> [tls]                   GET_NODE_INFO (identity, clock, pacing)
 //   s7ctl config <url> [tls]                 GET_NETWORK_CONFIGURATION
 //   s7ctl streams <url> [tls]                GET_STREAM_STATUS
 //   s7ctl recover <url> <stream_id> [tls]    RECOVER_STREAM
@@ -36,6 +37,7 @@ void usage(std::ostream& out)
     out << "Usage:\n"
            "  s7ctl deploy <diagram> [tls] [elements] [--deployment-id <id>] [--write <file>]\n"
            "  s7ctl check <diagram> [elements] [--write <file>]\n"
+           "  s7ctl info <url> [tls]\n"
            "  s7ctl config <url> [tls]\n"
            "  s7ctl streams <url> [tls]\n"
            "  s7ctl recover <url> <stream_id> [tls]\n"
@@ -193,6 +195,9 @@ int deploy(const Arguments& args)
     if (result.committed) {
         std::cout << "deployed " << result.deployment_id << " revision " << result.revision << " " << result.configuration_digest
                   << '\n';
+        if (result.activate_at_ns) {
+            std::cout << "activate_at_ns " << *result.activate_at_ns << '\n';
+        }
     }
     return result.committed ? 0 : 1;
 }
@@ -215,6 +220,9 @@ try {
     if (command == "deploy" || command == "check") {
         load_element_types(args, loader);
         return command == "deploy" ? deploy(args) : check(args);
+    }
+    if (command == "info" && args.positional.size() == 1) {
+        return print(request(args.positional[0], args.tls, json::object{{"type", "GET_NODE_INFO"}}));
     }
     if (command == "config" && args.positional.size() == 1) {
         return print(request(args.positional[0], args.tls, json::object{{"type", "GET_NETWORK_CONFIGURATION"}}));

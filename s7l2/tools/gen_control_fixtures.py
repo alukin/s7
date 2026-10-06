@@ -81,7 +81,7 @@ def steps():
                             prepare_token="string|null", prepared_at="string|null", expires_at="string|null",
                             incompatibilities="array", reservations="object")
     commit_result = fields(deployment_id="string", revision="integer", committed="boolean", state="string",
-                           configuration_digest="string", execution="string")
+                           configuration_digest="string", execution="string", activate_at_ns="integer|null")
     stream_status = fields(**{
         "streams": "array", "streams[0].stream_id": "string", "streams[0].role": "string", "streams[0].data_type": "string",
         "streams[0].state": "string", "streams[0].fault": "string", "streams[0].next_sequence": "integer",
@@ -126,9 +126,14 @@ def steps():
          "request": request("PREPARE_DEPLOYMENT", "prepare-3",
                             deployment={**deployment_1, "configuration": {**first, "project_revision": "tampered"}}),
          "response": error("INVALID_REQUEST")},
+        {"name": "commit_activation_too_far", "peer": "studio",
+         "request": request("COMMIT_DEPLOYMENT", "commit-0", deployment_id="fixture-deployment", revision=1, prepare_token="${token}",
+                            activate_at_ns=4611686018427387904),
+         "response": error("INVALID_REQUEST"), "note": "activate_at_ns more than 60 s ahead"},
         {"name": "commit", "peer": "studio",
          "request": request("COMMIT_DEPLOYMENT", "commit-1", deployment_id="fixture-deployment", revision=1, prepare_token="${token}"),
-         "response": {"type": "COMMIT_DEPLOYMENT_RESULT", "fields": commit_result, "equals": {"committed": True, "state": "active"}}},
+         "response": {"type": "COMMIT_DEPLOYMENT_RESULT", "fields": commit_result,
+                      "equals": {"committed": True, "state": "active", "activate_at_ns": None}}},
         {"name": "commit_repeated", "peer": "studio",
          "request": request("COMMIT_DEPLOYMENT", "commit-2", deployment_id="fixture-deployment", revision=1, prepare_token="${token}"),
          "response": {"type": "COMMIT_DEPLOYMENT_RESULT", "fields": commit_result, "equals": {"committed": True}}},

@@ -11,7 +11,9 @@
 // prepare every node with the whole diagram, and commit only if every node is
 // ready (otherwise abort the prepared ones).
 
+#include <chrono>
 #include <cstdint>
+#include <optional>
 #include <functional>
 #include <map>
 #include <memory>
@@ -53,6 +55,11 @@ private:
 struct DeployOptions {
     std::string deployment_id;    // empty: generated
     std::string project_revision; // empty: derived from the diagram's digest
+    // Every node starts the new revision at the same UTC moment
+    // (COMMIT_DEPLOYMENT activate_at_ns), this long after the commits begin.
+    // Unset: 250 ms plus four times the nodes' summed request round trips
+    // (at most 10 s). Zero: each node activates as its commit arrives.
+    std::optional<std::chrono::milliseconds> activation_delay;
 };
 
 struct NodeOutcome {
@@ -68,6 +75,7 @@ struct DeployResult {
     std::string deployment_id;
     std::uint64_t revision{};
     std::string configuration_digest;
+    std::optional<std::int64_t> activate_at_ns; // when every node starts the new revision (UTC)
     boost::json::object diagram; // with the streams as deployed
     std::vector<NodeOutcome> nodes;
     std::vector<std::string> errors;

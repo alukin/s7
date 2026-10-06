@@ -71,7 +71,8 @@ diagram() {
       { "from_element": "double", "from_port": 0, "to_element": "scale", "to_port": 0 },
       { "from_element": "scale", "from_port": 0, "to_element": "out", "to_port": 0 }
     ]
-  }
+  },
+  "dt": 0.02
 }
 EOF
 }
@@ -105,9 +106,24 @@ grep -q "is node $NODE_B, not node $NODE_A" "$WORK/swapped.log" || fail "identit
 "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-none.json" || true
 grep -q REVISION_NOT_FOUND "$WORK/config-none.json" || fail "a node was deployed despite the mismatch: $(cat "$WORK/config-none.json")"
 
-# 1) Deploy; keep the diagram with its streams for the next deployment.
-"$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" || fail "first deployment"
+# 1) Deploy; keep the diagram with its streams for the next deployment. With
+#    dt both nodes step on one 20 ms UTC grid from the same activation time.
+"$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" > "$WORK/deploy1.log" || fail "first deployment: $(cat "$WORK/deploy1.log")"
+ACTIVATE_AT="$(sed -n 's/^activate_at_ns //p' "$WORK/deploy1.log")"
+[ -n "$ACTIVATE_AT" ] || fail "no activation time: $(cat "$WORK/deploy1.log")"
 sleep 1
+"$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a.json"
+"$CTL" info "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/info-b.json"
+python3 - "$WORK/info-a.json" "$WORK/info-b.json" "$ACTIVATE_AT" <<'EOF2' || fail "the nodes do not share the grid: $(cat "$WORK/info-a.json" "$WORK/info-b.json")"
+import json, sys
+a, b = (json.load(open(path))["state"]["timing"] for path in sys.argv[1:3])
+at = int(sys.argv[3])
+assert a["pacing"] == b["pacing"] == "grid" and a["period_ns"] == b["period_ns"] == 20000000, (a, b)
+assert a["origin_utc_ns"] == b["origin_utc_ns"] == at, (a, b, at)
+assert abs(a["steps"] - b["steps"]) <= 3, (a["steps"], b["steps"])  # read a moment apart
+assert a["steps"] >= 20, a["steps"]  # about 1 s after activation, at 50 Hz
+EOF2
+
 
 # json_check <file> <python expression over `r`>
 json_check() { python3 -c "import json,sys; r=json.load(open(sys.argv[1])); sys.exit(0 if ($2) else 1)" "$1"; }
@@ -136,7 +152,8 @@ for e in d["schema"]["elements"]:
 json.dump(d, open(sys.argv[1], "w"))
 EOF
 BEFORE="$(python3 -c "import json; print(json.load(open('$WORK/streams-b.json'))['streams'][0]['elements'])")"
-"$CTL" deploy "$WORK/deployed.json" "${TLS[@]}" || fail "redeployment"
+"$CTL" deploy "$WORK/deployed.json" "${TLS[@]}" > "$WORK/deploy2.log" || fail "redeployment: $(cat "$WORK/deploy2.log")"
+ACTIVATE_AT2="$(sed -n 's/^activate_at_ns //p' "$WORK/deploy2.log")"
 sleep 1
 "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b2.json"
 json_check "$WORK/streams-b2.json" \
@@ -163,6 +180,10 @@ for _ in $(seq 50); do (exec 3<>"/dev/tcp/127.0.0.1/$PORT_A") 2>/dev/null && bre
 grep -q "deployment.restored deployment_id=.* revision=2" "$WORK/a2.log" || fail "node A did not restore its deployment: $(cat "$WORK/a2.log")"
 "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a2.json"
 json_check "$WORK/config-a2.json" "r['revision']==2" || fail "the restarted node A runs revision 2: $(cat "$WORK/config-a2.json")"
+"$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a2.json"
+json_check "$WORK/info-a2.json" \
+  "(lambda t: t['pacing']=='grid' and t['origin_utc_ns']>$ACTIVATE_AT2 and (t['origin_utc_ns']-$ACTIVATE_AT2)%20000000==0)(r['state']['timing'])" \
+  || fail "the restarted node A is back on the deployment's grid: $(cat "$WORK/info-a2.json")"
 for _ in $(seq 50); do
   "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b3.json"
   json_check "$WORK/streams-b3.json" "r['streams'][0]['fault']=='SEQUENCE_GAP'" && break

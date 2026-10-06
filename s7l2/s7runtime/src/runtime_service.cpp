@@ -732,28 +732,26 @@ public:
         return staged;
     }
 
-    void activate(StagedConfiguration& staged) override
+    void activate(StagedConfiguration& staged, const std::optional<std::int64_t> activate_at_ns) override
     {
         auto& graph = dynamic_cast<StagedGraph&>(staged);
         if (!graph.runtime) {
             throw std::logic_error("Staged graph was already activated.");
         }
-        {
-            // The previous graph is destroyed under the lock: its network
-            // elements release their streams before the new graph's first
-            // step opens them again (and continues them).
+        const auto now = clock::utc_now_ns();
+        // With a model-time step the graph steps in real time from its activation.
+        const GraphPacing pacing{graph.model_time_step_ns, activate_at_ns.value_or(now)};
+        if (activate_at_ns && *activate_at_ns > now) {
+            // The serving loop installs it at that time; the current graph runs until then.
             std::lock_guard<std::mutex> lock(service_.graph_mutex_);
-            auto previous = std::exchange(service_.graph_, std::move(graph.runtime));
-            previous.reset();
-            // With a model-time step the graph steps in real time from now.
-            service_.pacing_ = GraphPacing{graph.model_time_step_ns, clock::utc_now_ns()};
-            ++service_.pacing_generation_;
-            service_.max_lag_ns_ = 0;
+            service_.pending_ = PendingGraph{std::move(graph.runtime), graph.data_peers, pacing};
+            return;
         }
-        if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(service_.network_endpoint_)) {
-            const auto& definition = service_.definition_;
-            beast->set_data_peers(graph.data_peers, definition.client.tls.enabled ? definition.client.tls : definition.server.tls);
+        {
+            std::lock_guard<std::mutex> lock(service_.graph_mutex_);
+            service_.pending_.reset(); // superseded
         }
+        service_.install_graph(std::move(graph.runtime), graph.data_peers, pacing);
     }
 
     auto execution_state() const -> std::string override
@@ -915,6 +913,45 @@ auto RuntimeService::execution_timing() const -> boost::json::object
     };
 }
 
+void RuntimeService::install_graph(std::unique_ptr<NodeRuntime> runtime, const std::vector<transport::DataPeer>& data_peers,
+                                   const GraphPacing pacing)
+{
+    {
+        // The previous graph is destroyed under the lock: its network
+        // elements release their streams before the new graph's first step
+        // opens them again (and continues them).
+        std::lock_guard<std::mutex> lock(graph_mutex_);
+        auto previous = std::exchange(graph_, std::move(runtime));
+        previous.reset();
+        pacing_ = pacing;
+        ++pacing_generation_;
+        max_lag_ns_ = 0;
+    }
+    if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
+        beast->set_data_peers(data_peers, definition_.client.tls.enabled ? definition_.client.tls : definition_.server.tls);
+    }
+}
+
+bool RuntimeService::apply_due_activation()
+{
+    std::optional<PendingGraph> due;
+    {
+        std::lock_guard<std::mutex> lock(graph_mutex_);
+        if (!pending_ || clock::utc_now_ns() < pending_->pacing.origin_utc_ns) {
+            return false;
+        }
+        due = std::exchange(pending_, std::nullopt);
+    }
+    install_graph(std::move(due->runtime), due->data_peers, due->pacing);
+    return true;
+}
+
+auto RuntimeService::pending_activation_ns() const -> std::optional<std::int64_t>
+{
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    return pending_ ? std::optional<std::int64_t>{pending_->pacing.origin_utc_ns} : std::nullopt;
+}
+
 bool RuntimeService::step_generation(const std::uint64_t generation)
 {
     std::lock_guard<std::mutex> lock(graph_mutex_);
@@ -944,8 +981,9 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
     bool faulted = false;
     std::uint64_t recoveries_at_fault = 0;
 
+    auto wake_limit = steady::time_point::max();
     auto sleep_until = [&](const steady::time_point wake) {
-        auto until = std::min({wake, steady::now() + max_sleep, next_housekeeping});
+        auto until = std::min({wake, steady::now() + max_sleep, next_housekeeping, wake_limit});
         if (deadline) {
             until = std::min(until, *deadline);
         }
@@ -965,6 +1003,14 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
         }
         if (deadline && now >= *deadline) {
             break;
+        }
+        if (apply_due_activation()) {
+            out << "runtime.execution=activated\n";
+        }
+        // Wake for a scheduled activation, whatever the current graph does meanwhile.
+        wake_limit = steady::time_point::max();
+        if (const auto at = pending_activation_ns()) {
+            wake_limit = now + std::chrono::nanoseconds(std::max<std::int64_t>(0, *at - clock::utc_now_ns()));
         }
         {
             std::lock_guard<std::mutex> lock(graph_mutex_);
@@ -1069,6 +1115,7 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
 }
 
 void RuntimeService::step() {
+    static_cast<void>(apply_due_activation());
     std::lock_guard<std::mutex> lock(graph_mutex_);
     if (!graph_) {
         throw std::logic_error("RuntimeService::step() called before initialize_graph().");

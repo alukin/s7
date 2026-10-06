@@ -27,7 +27,7 @@ public:
     {
         return std::make_unique<s7::StagedConfiguration>();
     }
-    void activate(s7::StagedConfiguration&) override {}
+    void activate(s7::StagedConfiguration&, std::optional<std::int64_t>) override {}
     auto execution_state() const -> std::string override { return "not_stepping"; }
 };
 

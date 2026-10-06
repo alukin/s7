@@ -88,9 +88,11 @@ public:
     // is invalid.
     [[nodiscard]] virtual auto stage(const NodePart& part) -> std::unique_ptr<StagedConfiguration> = 0;
 
-    // Makes the staged configuration the running graph. On failure throws and
-    // leaves the previously active graph running.
-    virtual void activate(StagedConfiguration& staged) = 0;
+    // Makes the staged configuration the running graph: now, or at
+    // activate_at_ns (UTC), until which the previous graph keeps running. With
+    // a model-time step the new graph's real-time grid starts at that moment
+    // (or now). On failure throws and leaves the previously active graph running.
+    virtual void activate(StagedConfiguration& staged, std::optional<std::int64_t> activate_at_ns) = 0;
 
     // Whether the active graph is being stepped: "stepping" or "not_stepping".
     [[nodiscard]] virtual auto execution_state() const -> std::string = 0;
@@ -180,6 +182,7 @@ private:
         boost::json::object diagram;
         boost::json::object node_schema;
         bool restored{false}; // restored at startup from deployment.json
+        std::optional<std::int64_t> activate_at_ns; // UTC; the graph runs from then
     };
 
     // A configuration arriving in chunks (BEGIN / CHUNK / END_CONFIGURATION_TRANSFER).

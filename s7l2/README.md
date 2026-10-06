@@ -64,7 +64,7 @@ ctest --test-dir build --output-on-failure
 ./build/s7studio/s7studio
 ```
 
-Runtime schema examples are in `s7runtime/examples/`. A `simulation` block runs a fixed number of steps at startup (`periods * sample_rate_hz / frequency_hz`). While serving (`--serve-forever` / `--serve-seconds`), the runtime steps its startup graph at `execution.step_rate_hz` (or `--step-rate <hz>`; with no rate set it only serves the control plane). A deployed diagram with a model-time step `dt` runs in real time instead, one step every `dt` on a UTC grid. SIGINT/SIGTERM stop stepping cleanly and print the step count and achieved rate. For two local nodes discovered by Studio see `docs/LOCAL_HEADLESS_NODES_DEMO.md`.
+Runtime schema examples are in `s7runtime/examples/`. A `simulation` block runs a fixed number of steps at startup (`periods * sample_rate_hz / frequency_hz`). While serving (`--serve-forever` / `--serve-seconds`), the runtime steps its startup graph at `execution.step_rate_hz` (or `--step-rate <hz>`; with no rate set it only serves the control plane). A deployed diagram with a model-time step `dt` runs in real time instead, one step every `dt` on a UTC grid; all its nodes start a new revision at the same moment. SIGINT/SIGTERM stop stepping cleanly and print the step count and achieved rate. For two local nodes discovered by Studio see `docs/LOCAL_HEADLESS_NODES_DEMO.md`.
 
 Nodes expect NTP-synchronized clocks: a node reports its clock state in `NODE_INFO`, and diagrams are deployed only to nodes whose worst-case clock error is within their bound (`"clock": { "max_error_ms": 250 }` in the node's schema; `"assume_synchronized": true` for tests).
 

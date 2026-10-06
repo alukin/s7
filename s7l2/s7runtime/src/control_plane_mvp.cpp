@@ -25,6 +25,7 @@ namespace {
 constexpr std::size_t kMaxChunkBytes = 1024 * 1024;
 constexpr std::size_t kMaxTransferBytes = 256 * 1024 * 1024;
 constexpr std::size_t kMaxTransfers = 4; // in progress or completed, at a time
+constexpr std::int64_t kMaxActivationDelayNs = 60'000'000'000; // activate_at_ns at most this far ahead
 
 [[nodiscard]] auto now_utc_iso8601() -> std::string
 {
@@ -628,6 +629,7 @@ bool ControlPlaneMvp::persist_active_locked() const
         {"revision", active_->revision},
         {"committed_at", active_->committed_at},
         {"configuration", active_->configuration},
+        {"activate_at_ns", active_->activate_at_ns ? boost::json::value(*active_->activate_at_ns) : boost::json::value(nullptr)},
     };
     try {
         write_file_atomically(options_.storage_dir / kDeploymentFile, boost::json::serialize(record));
@@ -678,9 +680,21 @@ auto ControlPlaneMvp::restore_deployment() -> RestoreOutcome
         }
         const auto& diagram = diagram_value->as_object();
         auto node_schema = deployment::extract_node_schema(diagram, descriptor_.node_uuid);
-        auto staged = options_.deployment_host->stage(NodePart{node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid),
-                                                               deployment::model_time_step_ns(diagram)});
-        options_.deployment_host->activate(*staged);
+        const auto step_ns = deployment::model_time_step_ns(diagram);
+        auto staged = options_.deployment_host->stage(NodePart{node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid), step_ns});
+        // Back on the deployment's grid: the next slot of its original
+        // activation time (the steps missed while down are not caught up).
+        std::optional<std::int64_t> activate_at;
+        if (const auto* at = record.if_contains("activate_at_ns"); at && at->is_int64()) {
+            const auto now = clock::utc_now_ns();
+            if (at->as_int64() > now) {
+                activate_at = at->as_int64();
+            } else if (step_ns) {
+                const auto missed = (now - at->as_int64() + *step_ns - 1) / *step_ns;
+                activate_at = at->as_int64() + missed * *step_ns;
+            }
+        }
+        options_.deployment_host->activate(*staged, activate_at);
 
         std::lock_guard<std::mutex> lock(mutex_);
         active_ = ActiveDeployment{
@@ -694,6 +708,9 @@ auto ControlPlaneMvp::restore_deployment() -> RestoreOutcome
             .diagram = diagram,
             .node_schema = std::move(node_schema),
             .restored = true,
+            .activate_at_ns = record.if_contains("activate_at_ns") && record.at("activate_at_ns").is_int64()
+                                  ? std::optional<std::int64_t>{record.at("activate_at_ns").as_int64()}
+                                  : std::nullopt,
         };
         record_history_locked(DeploymentOutcome{deployment_id, revision, "restored", {}});
         if (options_.log) {
@@ -999,6 +1016,8 @@ auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request
         active["configuration_digest"] = active_->configuration_digest;
         active["committed_at"] = active_->committed_at;
         active["restored"] = active_->restored;
+        active["activate_at_ns"] = active_->activate_at_ns ? boost::json::value(*active_->activate_at_ns) : boost::json::value(nullptr);
+        active["activated"] = !active_->activate_at_ns || *active_->activate_at_ns <= clock::utc_now_ns();
         out["active_deployment"] = std::move(active);
     } else {
         out["active_deployment"] = nullptr;
@@ -1290,6 +1309,17 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
         return make_error_response(request_id, "INVALID_REQUEST",
                                    "COMMIT_DEPLOYMENT requires deployment_id, revision in [1, 2^53], and prepare_token.");
     }
+    // When the committed graph starts (UTC ns): the same moment on every node.
+    std::optional<std::int64_t> activate_at;
+    if (const auto* at = request.if_contains("activate_at_ns"); at && !at->is_null()) {
+        if (!(at->is_int64() && at->as_int64() > 0)) {
+            return make_error_response(request_id, "INVALID_REQUEST", "activate_at_ns must be a positive integer (UTC nanoseconds).");
+        }
+        activate_at = at->as_int64();
+        if (*activate_at > clock::utc_now_ns() + kMaxActivationDelayNs) {
+            return make_error_response(request_id, "INVALID_REQUEST", "activate_at_ns is more than 60 seconds ahead.");
+        }
+    }
 
     auto committed = [&](const ActiveDeployment& active) {
         boost::json::object out;
@@ -1300,7 +1330,9 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
         out["revision"] = active.revision;
         out["configuration_digest"] = active.configuration_digest;
         out["committed"] = true;
-        out["state"] = "active";
+        const bool scheduled = active.activate_at_ns && *active.activate_at_ns > clock::utc_now_ns();
+        out["state"] = scheduled ? "scheduled" : "active";
+        out["activate_at_ns"] = active.activate_at_ns ? boost::json::value(*active.activate_at_ns) : boost::json::value(nullptr);
         out["execution"] = options_.deployment_host ? options_.deployment_host->execution_state() : "not_stepping";
         out["committed_at"] = active.committed_at;
         return out;
@@ -1339,7 +1371,7 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
     }
 
     try {
-        options_.deployment_host->activate(*prepared.staged);
+        options_.deployment_host->activate(*prepared.staged, activate_at);
     } catch (const std::exception& ex) {
         record_outcome_locked(prepared, "failed");
         prepared_.erase(prepared_it);
@@ -1357,6 +1389,8 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
         .configuration = std::move(prepared.configuration),
         .diagram = std::move(prepared.diagram),
         .node_schema = std::move(prepared.node_schema),
+        .restored = false,
+        .activate_at_ns = activate_at,
     };
     persist_active_locked(); // a failure is logged; the deployment is active either way
     record_outcome_locked(prepared, "committed");

@@ -442,6 +442,34 @@
       }
     },
     {
+      "name": "commit_activation_too_far",
+      "peer": "studio",
+      "request": {
+        "type": "COMMIT_DEPLOYMENT",
+        "request_id": "commit-0",
+        "protocol_version": 1,
+        "deployment_id": "fixture-deployment",
+        "revision": 1,
+        "prepare_token": "${token}",
+        "activate_at_ns": 4611686018427387904
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "INVALID_REQUEST"
+        }
+      },
+      "note": "activate_at_ns more than 60 s ahead"
+    },
+    {
       "name": "commit",
       "peer": "studio",
       "request": {
@@ -463,11 +491,13 @@
           "committed": "boolean",
           "state": "string",
           "configuration_digest": "string",
-          "execution": "string"
+          "execution": "string",
+          "activate_at_ns": "integer|null"
         },
         "equals": {
           "committed": true,
-          "state": "active"
+          "state": "active",
+          "activate_at_ns": null
         }
       }
     },
@@ -493,7 +523,8 @@
           "committed": "boolean",
           "state": "string",
           "configuration_digest": "string",
-          "execution": "string"
+          "execution": "string",
+          "activate_at_ns": "integer|null"
         },
         "equals": {
           "committed": true

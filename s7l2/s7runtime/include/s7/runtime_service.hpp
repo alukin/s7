@@ -210,6 +210,19 @@ private:
     std::atomic<std::uint64_t> grid_rebases_{0};
     // Steps the graph if it is still the one of `generation`.
     bool step_generation(std::uint64_t generation);
+    // A committed graph waiting for its activation time (guarded by graph_mutex_).
+    struct PendingGraph {
+        std::unique_ptr<NodeRuntime> runtime;
+        std::vector<transport::DataPeer> data_peers;
+        GraphPacing pacing; // origin: the activation time
+    };
+    std::optional<PendingGraph> pending_;
+    // Makes `runtime` the active graph (the previous one is destroyed first).
+    void install_graph(std::unique_ptr<NodeRuntime> runtime, const std::vector<transport::DataPeer>& data_peers, GraphPacing pacing);
+    // Installs the pending graph once its activation time has come; returns
+    // whether it did.
+    bool apply_due_activation();
+    [[nodiscard]] auto pending_activation_ns() const -> std::optional<std::int64_t>;
     std::atomic<std::uint64_t> stream_recoveries_{0};
     std::shared_ptr<GraphHost> graph_host_;
     std::optional<bool> clock_usable_;

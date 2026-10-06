@@ -184,7 +184,7 @@ public:
         return staged;
     }
 
-    void activate(s7::StagedConfiguration& staged) override
+    void activate(s7::StagedConfiguration& staged, std::optional<std::int64_t>) override
     {
         if (fail_next_activation) {
             fail_next_activation = false;
@@ -557,11 +557,12 @@ public:
         staged->model_time_step_ns = part.model_time_step_ns;
         return staged;
     }
-    void activate(s7::StagedConfiguration& staged) override
+    void activate(s7::StagedConfiguration& staged, const std::optional<std::int64_t> at) override
     {
         active = dynamic_cast<Staged&>(staged).schema;
         peers = dynamic_cast<Staged&>(staged).peers;
         model_time_step_ns = dynamic_cast<Staged&>(staged).model_time_step_ns;
+        activate_at_ns = at;
     }
     auto execution_state() const -> std::string override { return "not_stepping"; }
 
@@ -570,6 +571,7 @@ public:
     std::optional<json::object> active;
     std::vector<s7::transport::DataPeer> peers;
     std::optional<std::int64_t> model_time_step_ns;
+    std::optional<std::int64_t> activate_at_ns;
 };
 
 void test_deploy_client()
@@ -626,6 +628,14 @@ void test_deploy_client()
     const auto& b_elements = host_b->active->at("elements").as_array();
     expect(b_elements.size() == 2 && b_elements[1].as_object().at("type").as_string() == "NetSource", "B consumes a stream");
     expect(host_a->model_time_step_ns == 1'000'000 && host_b->model_time_step_ns == 1'000'000, "the nodes step in the diagram's model time");
+    expect(deployed.activate_at_ns && host_a->activate_at_ns == deployed.activate_at_ns && host_b->activate_at_ns == deployed.activate_at_ns,
+           "both nodes start the revision at the same moment");
+    {
+        auto commit = json::object{{"type", "COMMIT_DEPLOYMENT"}, {"request_id", "c"}, {"protocol_version", 1}, {"deployment_id", "x"},
+                                   {"revision", 9}, {"prepare_token", std::string(64, '0')},
+                                   {"activate_at_ns", s7::clock::utc_now_ns() + 61'000'000'000}};
+        expect_error(Client(node_a, verified_peer("s7_studio.cert.pem")).send(commit), "INVALID_REQUEST", "activation over 60 s ahead");
+    }
     const auto& stream = deployed.diagram.at("streams").as_array().at(0).as_object();
     expect(stream.at("sample_rate") == json::object{{"numerator", 1000}, {"denominator", 1}} &&
                stream.at("timestamps") == json::array{json::object{{"role", "MODEL_TIME"}, {"clock_domain", "model"}}},
@@ -750,6 +760,17 @@ void test_deployment_survives_restart()
         expect(host->active && host->active->at("elements").as_array().at(0).as_object().at("id").as_string() == "c",
                "the restored graph runs");
         expect(host->model_time_step_ns == 10'000'000, "with its model time");
+        const auto first_activation = s7::parse_json_precise([&] {
+                                          std::ifstream in(storage / "deployment.json");
+                                          return std::string(std::istreambuf_iterator<char>(in), {});
+                                      }())
+                                          .as_object()
+                                          .at("activate_at_ns")
+                                          .as_int64();
+        expect(host->activate_at_ns && *host->activate_at_ns >= first_activation &&
+                   (*host->activate_at_ns - first_activation) % 10'000'000 == 0 &&
+                   *host->activate_at_ns <= std::max(first_activation, s7::clock::utc_now_ns() + 10'000'000),
+               "the restored graph resumes on the deployment's grid, at its next slot");
         const auto listed = Client(*node, ControlPeer{}).send(list);
         expect(listed.at("active_revision").to_number<std::uint64_t>() == 1 &&
                    listed.at("active_deployment").as_object().at("restored").as_bool() &&
@@ -933,7 +954,8 @@ void test_large_deployment_over_mtls()
                                                          .ca_file = cert_path("s7_root_ca.cert.pem")});
         const auto deployed = s7::deployment::deploy_diagram(
             diagram, s7::deployment::infer_output_types(diagram),
-            [&](const s7::deployment::RuntimeNode& node, const json::object& message) { return requester(node, message); });
+            [&](const s7::deployment::RuntimeNode& node, const json::object& message) { return requester(node, message); },
+            s7::deployment::DeployOptions{.activation_delay = std::chrono::milliseconds(0)}); // activate as committed
         expect(deployed.committed, "a 2 MB diagram deployed: " + (deployed.errors.empty() ? std::string() : deployed.errors.front()));
         service.step();
         expect(service.active_real_output("c19999") == 19999.0, "the large graph runs");
@@ -990,9 +1012,11 @@ void test_grid_pacing()
                 {"dt", 0.01},
             };
             const auto result = s7::deployment::deploy_diagram(
-                diagram, s7::deployment::infer_output_types(diagram), [&](const s7::deployment::RuntimeNode&, const json::object& message) {
+                diagram, s7::deployment::infer_output_types(diagram),
+                [&](const s7::deployment::RuntimeNode&, const json::object& message) {
                     return s7::parse_json_precise(service.handle_control_request_json(studio, json::serialize(message))).as_object();
-                });
+                },
+                s7::deployment::DeployOptions{.activation_delay = std::chrono::milliseconds(0)});
             expect(result.committed, "deployed: " + (result.errors.empty() ? std::string() : result.errors.front()));
         };
         auto timing = [&] {
@@ -1021,6 +1045,46 @@ void test_grid_pacing()
                "step n runs at origin + n * dt: " + std::to_string(service.step_count()) + " steps, " + std::to_string(expected) + " slots");
         expect(timing().at("max_lag_ns").to_number<std::int64_t>() >= 250'000'000, "the initial lag is reported");
         expect(timing().at("lag_ns").to_number<std::int64_t>() < 50'000'000, "and then it keeps time");
+
+        // A scheduled activation: the current graph runs until the moment, then the new one starts its grid there.
+        {
+            std::atomic<bool> stop_serving{false};
+            std::thread serving([&] { static_cast<void>(service.serve(stop_serving, std::nullopt, out, err)); });
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            const json::object scheduled_diagram{
+                {"document_kind", "s7.diagram"},
+                {"runtime_nodes", json::array{json::object{{"node_uuid", node}, {"endpoint", "in-process"}}}},
+                {"schema", json::object{{"name", "grid"},
+                                        {"elements", json::array{json::object{{"id", "c"}, {"type", "Constant"},
+                                                                              {"params", json::object{{"value", 4.0}}}, {"node", node}}}}}},
+                {"dt", 0.01},
+            };
+            const auto result = s7::deployment::deploy_diagram(
+                scheduled_diagram, s7::deployment::infer_output_types(scheduled_diagram),
+                [&](const s7::deployment::RuntimeNode&, const json::object& message) {
+                    return s7::parse_json_precise(service.handle_control_request_json(studio, json::serialize(message))).as_object();
+                },
+                s7::deployment::DeployOptions{.activation_delay = std::chrono::milliseconds(300)});
+            expect(result.committed && result.activate_at_ns, "committed with an activation time");
+            std::int64_t last_old = 0;
+            std::int64_t first_new = 0;
+            while (first_new == 0 && s7::clock::utc_now_ns() < *result.activate_at_ns + 1'000'000'000) {
+                // The old value is stamped before reading it, the new one after: the
+                // stamps bound when the switch happened.
+                const auto before = s7::clock::utc_now_ns();
+                const auto value = service.active_real_output("c");
+                (value == 3.0 ? last_old : first_new) = value == 3.0 ? before : s7::clock::utc_now_ns();
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            stop_serving = true;
+            serving.join();
+            // The switch lands at the activation time, within scheduling jitter.
+            expect(last_old > *result.activate_at_ns - 100'000'000 && last_old < first_new,
+                   "the old graph ran until the activation time (last old " + std::to_string(last_old - *result.activate_at_ns) +
+                       " ns, first new " + std::to_string(first_new - *result.activate_at_ns) + " ns from it)");
+            expect(first_new >= *result.activate_at_ns && first_new < *result.activate_at_ns + 100'000'000, "the new graph started at it");
+            expect(service.pacing().origin_utc_ns == *result.activate_at_ns, "its grid starts at the activation time");
+        }
 
         // A graph that faults stops; after recovery the grid skips the slots it missed.
         deploy(json::array{json::object{{"id", "in"}, {"type", "NetSource"},
