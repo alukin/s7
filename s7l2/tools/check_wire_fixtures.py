@@ -30,6 +30,7 @@ TYPES = {  # id -> (name, kind, component bits)
 TYPE_NAMES = {name for name, _, _ in TYPES.values()}
 ROLES = {1: "MODEL_TIME", 2: "SOURCE_TIME", 3: "PROCESSING_TIME"}
 TIMESTAMPS = 0x8001
+SEND_TIME = 0x0002
 CRITICAL = 0x8000
 
 
@@ -119,6 +120,7 @@ def decode_data(message):
         raise Invalid("unknown data type")
     offset = 16
     timestamps = []
+    send_time = None
     if flags & 1:
         if len(message) < 18:
             raise Invalid("truncated extension area")
@@ -142,12 +144,17 @@ def decode_data(message):
             seen.add(ext_type)
             if ext_type == TIMESTAMPS:
                 timestamps = decode_timestamps(value)
+            elif ext_type == SEND_TIME:
+                if len(value) != 8:
+                    raise Invalid("SEND_TIME length")
+                (send_time,) = struct.unpack("<q", value)
             elif ext_type & CRITICAL:
                 raise Invalid("unknown critical extension")
             position += 4 + ext_length
         offset = padded_end
     values = decode_payload(type_id, message[offset:])
-    return {"type": TYPES[type_id][0], "stream_alias": alias, "sequence": sequence, "timestamps": timestamps, "values": values}
+    return {"type": TYPES[type_id][0], "stream_alias": alias, "sequence": sequence, "timestamps": timestamps, "values": values,
+            "send_time_ns": send_time}
 
 
 def decode_control(message):
@@ -228,6 +235,8 @@ def read_descriptor(d):
             raise Invalid("roles not ascending")
         previous = ROLE_IDS[t["role"]]
     out["timestamps"] = [{"role": t["role"], "clock_domain": t["clock_domain"]} for t in timestamps]
+    if "max_latency_ms" in d:
+        out["max_latency_ms"] = positive(d["max_latency_ms"], "max_latency_ms")
     return out
 
 
@@ -245,7 +254,8 @@ def main():
         expected_ts = case.get("timestamps", [])
         expected_ts = sorted(expected_ts, key=lambda r: ROLE_IDS[r["role"]])
         if (got["type"], got["stream_alias"], got["sequence"]) != (case["type"], case["stream_alias"], case["sequence"]) \
-                or got["timestamps"] != expected_ts or not same_value(case["values"], got["values"]):
+                or got["timestamps"] != expected_ts or not same_value(case["values"], got["values"]) \
+                or got["send_time_ns"] != case.get("send_time_ns"):
             failures.append(f"{case['name']}: decoded {got}")
     for case in fixtures["control"]:
         got = decode(bytes.fromhex(case["hex"]))

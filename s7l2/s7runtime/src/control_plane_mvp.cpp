@@ -1450,6 +1450,16 @@ auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& reques
                 {"buffered_elements", status.buffered_elements},
                 {"blocked_ms_total", status.blocked_total.count()},
                 {"recent_faults", std::move(recent)},
+                {"latency", boost::json::object{
+                                {"samples", status.latency.samples},
+                                {"min_ns", status.latency.min_ns},
+                                {"mean_ns", status.latency.mean_ns},
+                                {"p50_ns", status.latency.p50_ns},
+                                {"p99_ns", status.latency.p99_ns},
+                                {"max_ns", status.latency.max_ns},
+                                {"last_ns", status.latency.last_ns},
+                                {"late", status.latency.late},
+                            }},
             });
         }
     }

@@ -32,6 +32,7 @@ Both elements are generic over the stream type `T` (all signal types). The type 
 | `max_wait_ms` | 2000 | Consumer: how long a step may wait for data before the stream faults (`UNDERRUN`) |
 | `producer_node` | (any) | `NetSource`: the node UUID allowed to produce the stream |
 | `consumer_nodes` | (any) | `NetSink`: the node UUIDs allowed to consume the stream |
+| `max_latency_ms` | (none) | `NetSource`: packets arriving later than this end to end are counted late (`LATE`) |
 | `sample_rate` | (none) | `[numerator, denominator]` elements per second: a uniformly sampled stream, whose element times are derived |
 | `timestamps` | (none) | Timestamp roles of the stream (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) |
 
@@ -93,6 +94,8 @@ Refused peers are recorded in the stream's recent faults and counted as `unautho
 |---|---|
 | `UNAUTHORIZED_PRODUCER` | Consumer: packets from a connection that is not to the stream's producer node (the connection is closed) |
 | `UNAUTHORIZED_CONSUMER` | Producer: a `RESUME` from a node that is not one of the stream's consumer nodes (ignored) |
+| `LATE` | Consumer: a packet's end-to-end latency exceeded `max_latency_ms` (at most once a second) |
+| `CLOCK_UNSYNCHRONIZED` | The node's clock stopped being synchronized; its UTC times (and SEND_TIME) are not comparable until it is again |
 
 A faulted stream makes its element's step throw (`<type> stream <id> faulted: <CODE>.`); the runtime stops stepping and keeps serving the control plane. Studio reads stream state with `GET_STREAM_STATUS` and clears a fault with `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md`). After recovery a consumer accepts the next packet it receives as its new start; data lost in the fault stays lost and reported.
 

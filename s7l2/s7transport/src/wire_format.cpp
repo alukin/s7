@@ -287,12 +287,12 @@ std::vector<std::uint8_t> encode_data_packet(const DataPacket& packet)
     std::vector<std::uint8_t> out;
     out.reserve(kDataHeaderBytes + 32 + packet.payload.size());
     out.push_back(kDataVersion);
-    out.push_back(packet.timestamps.empty() ? 0 : kFlagExtensions);
+    out.push_back(packet.timestamps.empty() && !packet.send_time_ns ? 0 : kFlagExtensions);
     put_le<std::uint16_t>(out, static_cast<std::uint16_t>(packet.type));
     put_le<std::uint32_t>(out, packet.stream_alias);
     put_le<std::uint64_t>(out, packet.sequence);
 
-    if (!packet.timestamps.empty()) {
+    if (!packet.timestamps.empty() || packet.send_time_ns) {
         auto records = packet.timestamps;
         std::ranges::sort(records, {}, &TimestampRecord::role);
         for (std::size_t index = 1; index < records.size(); ++index) {
@@ -300,16 +300,24 @@ std::vector<std::uint8_t> encode_data_packet(const DataPacket& packet)
                 throw FormatError("a timestamp role appears twice");
             }
         }
-        // u16 length of the TLV records, the records, zero padding to a multiple of 8.
-        const auto value_length = 1 + 9 * records.size();
-        const auto tlv_length = 4 + value_length;
-        put_le<std::uint16_t>(out, static_cast<std::uint16_t>(tlv_length));
-        put_le<std::uint16_t>(out, kTimestampsExtension);
-        put_le<std::uint16_t>(out, static_cast<std::uint16_t>(value_length));
-        out.push_back(static_cast<std::uint8_t>(records.size()));
-        for (const auto& record : records) {
-            out.push_back(static_cast<std::uint8_t>(record.role));
-            put_le<std::uint64_t>(out, static_cast<std::uint64_t>(record.nanoseconds));
+        // u16 length of the TLV records, the records in ascending type order,
+        // zero padding to a multiple of 8.
+        const auto timestamps_length = records.empty() ? 0 : 4 + 1 + 9 * records.size();
+        const auto send_time_length = packet.send_time_ns ? 4 + 8 : 0;
+        put_le<std::uint16_t>(out, static_cast<std::uint16_t>(send_time_length + timestamps_length));
+        if (packet.send_time_ns) {
+            put_le<std::uint16_t>(out, kSendTimeExtension);
+            put_le<std::uint16_t>(out, 8);
+            put_le<std::uint64_t>(out, static_cast<std::uint64_t>(*packet.send_time_ns));
+        }
+        if (!records.empty()) {
+            put_le<std::uint16_t>(out, kTimestampsExtension);
+            put_le<std::uint16_t>(out, static_cast<std::uint16_t>(1 + 9 * records.size()));
+            out.push_back(static_cast<std::uint8_t>(records.size()));
+            for (const auto& record : records) {
+                out.push_back(static_cast<std::uint8_t>(record.role));
+                put_le<std::uint64_t>(out, static_cast<std::uint64_t>(record.nanoseconds));
+            }
         }
         while ((out.size() - kDataHeaderBytes) % 8 != 0) {
             out.push_back(0);
@@ -392,6 +400,14 @@ DataPacket decode_data_packet(const std::span<const std::uint8_t> message)
                     packet.timestamps.push_back(
                         {static_cast<TimestampRole>(role), static_cast<std::int64_t>(get_le<std::uint64_t>(message, base + 1))});
                 }
+            } else if (ext_type == kSendTimeExtension) {
+                if (packet.send_time_ns) {
+                    throw FormatError("SEND_TIME extension appears twice");
+                }
+                if (ext_length != 8) {
+                    throw FormatError("SEND_TIME extension is not 8 bytes");
+                }
+                packet.send_time_ns = static_cast<std::int64_t>(get_le<std::uint64_t>(message, offset));
             } else if ((ext_type & kCriticalExtensionBit) != 0) {
                 throw FormatError("unknown critical extension " + std::to_string(ext_type));
             }

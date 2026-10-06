@@ -89,7 +89,7 @@ Returns the node descriptor: identity, platform, network endpoints, runtime stat
 The data plane and the node's clock are described by these top-level members (wire draft section 12.1, items 1 and 4):
 
 ```json
-"data_protocol": { "packet_versions": [1], "extensions": ["0x8001"] },
+"data_protocol": { "packet_versions": [1], "extensions": ["0x0002", "0x8001"] },
 "clock_sync": { "synchronized": true, "max_error_ns": 87468000, "estimated_error_ns": 10284000,
                 "source": "kernel", "max_error_bound_ns": 250000000, "usable": true },
 "clock_domains": [
@@ -98,7 +98,7 @@ The data plane and the node's clock are described by these top-level members (wi
 ]
 ```
 
-`control_limits` (`max_configuration_bytes`, `max_chunk_bytes`, `max_transfer_bytes`) bound the configurations the node accepts (section 10.1, Configuration transfer). `packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x8001`: `TIMESTAMPS`). `model` is the deployment's model time.
+`control_limits` (`max_configuration_bytes`, `max_chunk_bytes`, `max_transfer_bytes`) bound the configurations the node accepts (section 10.1, Configuration transfer). `packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x0002`: `SEND_TIME`, `0x8001`: `TIMESTAMPS`). `model` is the deployment's model time.
 
 **Clock.** S7 nodes are expected to keep their UTC clocks synchronized by NTP. `clock_sync` is read from the kernel (`ntp_adjtime`) at each request: `synchronized` unless the kernel marks the clock unsynchronized, with its worst-case (`max_error_ns`) and estimated error. The clock is `usable` when it is synchronized and its worst-case error is within the node's bound (node setting `"clock": { "max_error_ms": 250 }`; `"assume_synchronized": true` skips the kernel check, for tests and hosts synchronized by other means, and reports `source: "assumed"`). A usable clock is the shared domain `utc` (nanoseconds since the Unix epoch, comparable between nodes within their error bounds); otherwise the node lists its own domain `node:<node_uuid>:utc`, which is not comparable with other nodes. The deployment client refuses a node whose clock is not usable before preparing anything. A running node re-reads the state every second; when the clock becomes unusable it prints `runtime.clock.usable=false` and records `CLOCK_UNSYNCHRONIZED` in the recent faults of every stream (the streams keep running).
 
@@ -293,13 +293,15 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
       "packets": 120, "elements": 120, "replayed": 10, "lost_resumes": 0,
       "duplicates_discarded": 0, "malformed": 0, "unauthorized": 0,
       "send_log_depth": 4, "buffered_elements": 0, "blocked_ms_total": 0,
-      "recent_faults": [ { "code": "UNDERRUN", "detail": "", "at": "2026-10-06T09:12:03.418Z" } ]
+      "recent_faults": [ { "code": "UNDERRUN", "detail": "", "at": "2026-10-06T09:12:03.418Z" } ],
+      "latency": { "samples": 120, "min_ns": 410000, "mean_ns": 5300000, "p50_ns": 4096000,
+                   "p99_ns": 16384000, "max_ns": 15100000, "last_ns": 5020000, "late": 0 }
     }
   ]
 }
 ```
 
-`state` is `active`, `blocked` (a producer waiting on a full send log), `faulted`, or `closed` (no element of the running graph uses the stream; its state is kept for a redeployment); `fault` is `NONE` or a fault code of `S7_Net_Element_Contract.md`. `next_sequence` is the next sequence a producer assigns, or the next a consumer expects. `unauthorized` counts refused peers (a producer: `RESUME`s from nodes that are not consumers of the stream; a consumer: packets from a connection that is not to its producer node). `recent_faults` lists the latest 16 faults and refusals, oldest first, with what was refused in `detail` (for example `node <uuid>`); it is kept across `RECOVER_STREAM`, so a recovered fault stays reported.
+`state` is `active`, `blocked` (a producer waiting on a full send log), `faulted`, or `closed` (no element of the running graph uses the stream; its state is kept for a redeployment); `fault` is `NONE` or a fault code of `S7_Net_Element_Contract.md`. `next_sequence` is the next sequence a producer assigns, or the next a consumer expects. `unauthorized` counts refused peers (a producer: `RESUME`s from nodes that are not consumers of the stream; a consumer: packets from a connection that is not to its producer node). `recent_faults` lists the latest 16 faults and refusals, oldest first, with what was refused in `detail` (for example `node <uuid>`); it is kept across `RECOVER_STREAM`, so a recovered fault stays reported. `latency` is the end-to-end latency of the packets a consumer stream received (wire protocol section 7.2); `late` counts those over the stream's `max_latency_ms`.
 
 **Stream recovery.** `RECOVER_STREAM {stream_id}` is authorized like a deployment mutation. It clears the stream's fault (a stream without one is left as it is, so a repeated request changes nothing) and returns `RECOVER_STREAM_RESULT {stream_id, recovered}` (`recovered: false` if the node has no such stream; `INVALID_REQUEST` for a malformed id). A recovered consumer accepts the next packet it receives as its new start; the data lost in the fault stays lost and stays counted. A runtime whose stepping stopped because a step failed (for example on a stream fault) resumes stepping after a successful recovery.
 

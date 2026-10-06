@@ -24,3 +24,6 @@ descriptors) and `tools/check_wire_fixtures.py`, a short Python decoder
 written from the specification that serves as the reference for decoders in
 other languages. `s7transport_wire_fixtures_current` checks that the file is
 what the generator writes.
+
+Packets with `send_time_ns` carry the noncritical `SEND_TIME` extension
+(section 7.2); `null` means none.

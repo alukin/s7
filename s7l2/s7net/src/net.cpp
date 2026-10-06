@@ -38,6 +38,7 @@ auto make_net_metadata(const std::string& type_name,
         {"max_wait_ms", "int", "Longest receive wait for data before the stream faults (underrun)", 2000, 0, std::nullopt, {}, false},
         {"producer_node", "string", "Node UUID allowed to produce the stream (NetSource; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
         {"consumer_nodes", "array", "Node UUIDs allowed to consume the stream (NetSink; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
+        {"max_latency_ms", "int", "NetSource: packets arriving later than this (end to end, synchronized clocks) are counted LATE", nullptr, 1, std::nullopt, {}, false},
         {"sample_rate", "array", "Uniform sampling [numerator, denominator] elements per second: timestamps are derived", nullptr, std::nullopt, std::nullopt, {}, false},
         {"timestamps", "array", "Timestamp roles of the stream (MODEL_TIME, SOURCE_TIME, PROCESSING_TIME); without sample_rate every packet carries them", nullptr, std::nullopt, std::nullopt, {}, false},
     };
@@ -72,6 +73,9 @@ stream::StreamConfig config_from_params(const ElementCreationContext& ctx)
     config.max_wait = std::chrono::milliseconds(positive("max_wait_ms", config.max_wait.count()));
     if (const auto* node = ctx.params.if_contains("producer_node"); node && node->is_string()) {
         config.producer_node = std::string(node->as_string());
+    }
+    if (const auto* latency = ctx.params.if_contains("max_latency_ms"); latency && !latency->is_null()) {
+        config.max_latency = std::chrono::milliseconds(latency->to_number<std::int64_t>());
     }
     if (const auto* rate = ctx.params.if_contains("sample_rate"); rate && !rate->is_null()) {
         const auto& pair = rate->as_array();

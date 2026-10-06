@@ -1,6 +1,9 @@
 #include "s7/stream_protocol.hpp"
+#include "s7/clock_sync.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <bit>
 #include <cstring>
 #include <fstream>
 #include <limits>
@@ -26,6 +29,7 @@ std::string to_string(const FaultCode code)
         case FaultCode::UnauthorizedProducer: return "UNAUTHORIZED_PRODUCER";
         case FaultCode::UnauthorizedConsumer: return "UNAUTHORIZED_CONSUMER";
         case FaultCode::ClockUnsynchronized: return "CLOCK_UNSYNCHRONIZED";
+        case FaultCode::Late: return "LATE";
     }
     return "UNKNOWN";
 }
@@ -45,6 +49,45 @@ bool roles_match(const std::span<const wire::TimestampRecord> records, const std
 }
 
 } // namespace
+
+// ---- latency ----------------------------------------------------------------
+
+bool LatencyHistogram::add(const std::int64_t latency_ns, const std::optional<std::chrono::milliseconds> limit)
+{
+    const auto micros = latency_ns <= 0 ? 0 : static_cast<std::uint64_t>(latency_ns / 1000);
+    const auto bucket = std::min<std::size_t>(std::bit_width(micros), kBuckets - 1);
+    ++counts_[bucket];
+    min_ns_ = samples_ == 0 ? latency_ns : std::min(min_ns_, latency_ns);
+    max_ns_ = samples_ == 0 ? latency_ns : std::max(max_ns_, latency_ns);
+    last_ns_ = latency_ns;
+    sum_ns_ += latency_ns;
+    ++samples_;
+    const bool late = limit && latency_ns > std::chrono::duration_cast<std::chrono::nanoseconds>(*limit).count();
+    late_ += late ? 1 : 0;
+    return late;
+}
+
+LatencyStats LatencyHistogram::stats() const
+{
+    LatencyStats stats{samples_, min_ns_, max_ns_, samples_ ? static_cast<std::int64_t>(sum_ns_ / samples_) : 0, 0, 0, last_ns_, late_};
+    auto percentile = [&](const double q) -> std::int64_t {
+        const auto rank = static_cast<std::uint64_t>(std::ceil(q * static_cast<double>(samples_)));
+        std::uint64_t seen = 0;
+        for (std::size_t bucket = 0; bucket < kBuckets; ++bucket) {
+            seen += counts_[bucket];
+            if (seen >= rank && seen > 0) {
+                // Bucket k holds latencies below 2^k us; never report more than the maximum.
+                return std::min<std::int64_t>(max_ns_, static_cast<std::int64_t>((std::uint64_t{1} << bucket) * 1000));
+            }
+        }
+        return max_ns_;
+    };
+    if (samples_ > 0) {
+        stats.p50_ns = percentile(0.50);
+        stats.p99_ns = percentile(0.99);
+    }
+    return stats;
+}
 
 // ---- sequence stores -------------------------------------------------------
 
@@ -213,6 +256,9 @@ void StreamProducer::seal()
     }
     LoggedPacket packet;
     packet.sequence = next_sequence_++;
+    if (stamp_send_time_) {
+        packet.send_time_ns = clock::utc_now_ns();
+    }
     packet.timestamps = std::move(pending_times_);
     pending_times_.clear();
     wire::encode_elements(config_.type, pending_.data(), pending_elements_, packet.payload);
@@ -299,6 +345,7 @@ std::optional<std::vector<std::uint8_t>> StreamProducer::next_message(const Cons
     packet.type = config_.type;
     packet.stream_alias = it->second.alias;
     packet.sequence = logged.sequence;
+    packet.send_time_ns = logged.send_time_ns;
     packet.timestamps = logged.timestamps;
     packet.payload = logged.payload;
     ++it->second.next_to_send;
@@ -330,20 +377,20 @@ wire::ControlMessage StreamConsumer::resume_message() const
     return wire::ControlMessage{wire::ControlKind::Resume, alias_, next_expected_, config_.stream_id};
 }
 
-void StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time_point now)
+bool StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time_point now, const std::optional<std::int64_t> received_utc_ns)
 {
     if (fault_ != FaultCode::None) {
-        return;
+        return false;
     }
     if (packet.type != config_.type) {
         fault(FaultCode::TypeMismatch);
-        return;
+        return false;
     }
     // Exactly the declared roles on every packet of an explicitly timestamped
     // stream, none on any other stream.
     if (config_.explicit_timestamps() ? !roles_match(packet.timestamps, config_.timestamp_roles) : !packet.timestamps.empty()) {
         fault(FaultCode::TimestampProfileMismatch);
-        return;
+        return false;
     }
     if (restart_at_next_) {
         restart_at_next_ = false;
@@ -353,11 +400,11 @@ void StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     }
     if (packet.sequence < next_expected_) {
         ++duplicates_;
-        return;
+        return false;
     }
     if (packet.sequence > next_expected_) {
         fault(FaultCode::SequenceGap);
-        return;
+        return false;
     }
     BufferedPacket buffered;
     buffered.sequence = packet.sequence;
@@ -372,6 +419,10 @@ void StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     if (last_ack_ == Clock::time_point{}) {
         last_ack_ = now;
     }
+    if (packet.send_time_ns) {
+        return latency_.add(received_utc_ns.value_or(clock::utc_now_ns()) - *packet.send_time_ns, config_.max_latency);
+    }
+    return false;
 }
 
 void StreamConsumer::on_malformed()

@@ -390,6 +390,57 @@ void test_derived_timestamps()
     expect(consumer.take(out.data(), 1, &times) == 1 && times.empty(), "no invented times after a recovery");
 }
 
+
+// End-to-end latency from SEND_TIME: statistics, the LATE limit, and no
+// stamps from a producer whose clock is not synchronized.
+void test_latency()
+{
+    auto c = config(SignalType::F64, 1, 256);
+    c.max_latency = milliseconds(10);
+    stream::MemorySequenceStore sequences;
+    stream::StreamProducer producer(c, sequences);
+    stream::StreamConsumer consumer(c, 1);
+    const auto resume = consumer.resume_message();
+    producer.resume("k", resume.stream_alias, resume.next_expected);
+    const auto t0 = stream::Clock::now();
+    const double value = 1.0;
+    // Latencies of 1, 2, 4, ... 512 ms, then 100 more of 1 ms.
+    std::vector<std::int64_t> latencies;
+    for (int i = 0; i < 10; ++i) {
+        latencies.push_back((std::int64_t{1} << i) * 1'000'000);
+    }
+    latencies.insert(latencies.end(), 100, 1'000'000);
+    std::size_t late = 0;
+    for (const auto latency : latencies) {
+        expect(producer.append(&value, 1, t0) == 1, "appended");
+        const auto packet = wire::decode_data_packet(*producer.next_message("k"));
+        expect(packet.send_time_ns.has_value(), "the producer stamps SEND_TIME");
+        late += consumer.on_packet(packet, t0, *packet.send_time_ns + latency) ? 1 : 0;
+    }
+    const auto stats = consumer.latency();
+    expect(stats.samples == 110 && stats.min_ns == 1'000'000 && stats.max_ns == 512'000'000 && stats.last_ns == 1'000'000,
+           "min, max, last");
+    expect(stats.late == 6 && late == 6, "16 to 512 ms are late for a 10 ms limit");
+    expect(stats.p50_ns <= 2'048'000 && stats.p50_ns >= 1'000'000, "p50 about 1 ms: " + std::to_string(stats.p50_ns));
+    expect(stats.p99_ns >= 256'000'000 && stats.p99_ns <= 512'000'000, "p99 among the slow ones: " + std::to_string(stats.p99_ns));
+    expect(stats.mean_ns == (1023 + 100) * 1'000'000 / 110, "mean");
+
+    // A duplicate adds no sample.
+    const auto duplicate = wire::decode_data_packet(*[&] {
+        producer.resume("k", resume.stream_alias, 0); // replays everything
+        return producer.next_message("k");
+    }());
+    consumer.on_packet(duplicate, t0, *duplicate.send_time_ns);
+    expect(consumer.latency().samples == 110, "duplicates are not measured");
+
+    // Without a synchronized clock the producer sends no SEND_TIME.
+    stream::StreamProducer unsynced(c, sequences);
+    unsynced.set_stamp_send_time(false);
+    unsynced.resume("k", 1, 0);
+    expect(unsynced.append(&value, 1, t0) == 1, "appended");
+    expect(!wire::decode_data_packet(*unsynced.next_message("k")).send_time_ns, "no SEND_TIME from an unsynchronized clock");
+}
+
 } // namespace
 
 int main()
@@ -403,6 +454,7 @@ try {
     test_soak_i12();
     test_explicit_timestamps();
     test_derived_timestamps();
+    test_latency();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport stream protocol smoke: " << ex.what() << '\n';

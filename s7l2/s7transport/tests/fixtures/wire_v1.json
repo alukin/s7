@@ -11,6 +11,7 @@
         1.5
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000f00070000000000000000000000000000000000f83f"
     },
     {
@@ -24,6 +25,7 @@
         -32768
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000500010000002a00000000000000feffe8030080"
     },
     {
@@ -37,6 +39,7 @@
         -2048
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000300020000000100000000000000ffff7f0008"
     },
     {
@@ -49,6 +52,7 @@
         291
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000400020000000200000000000000bc3a12"
     },
     {
@@ -61,6 +65,7 @@
         4294967295
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "0100080003000000050000000000000000000000ffffffff"
     },
     {
@@ -72,6 +77,7 @@
         -9223372036854775808
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010009000300000006000000000000000000000000000080"
     },
     {
@@ -84,6 +90,7 @@
         -0.5
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000d00040000000300000000000000003c00b8"
     },
     {
@@ -104,6 +111,7 @@
           "ns": 0
         }
       ],
+      "send_time_ns": null,
       "hex": "01010e00050000000a000000000000001700018013000201000000000000000002fbffffffffffffff0000000000000000005040"
     },
     {
@@ -117,6 +125,7 @@
         -0.25
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010010000600000004000000000000000000000000000000000000000000ff3f000000000000000000000000008000400000000000000000000000000000fdbf"
     },
     {
@@ -129,6 +138,7 @@
         "1267650600228229401496703205376"
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000b00060000000500000000000000ffffffffffffffffffffffffffffffff00000000000000000000000010000000"
     },
     {
@@ -140,6 +150,7 @@
         "340282366920938463463374607431768211455"
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000c00060000000600000000000000ffffffffffffffffffffffffffffffff"
     },
     {
@@ -154,6 +165,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000301080000000100000000000000000000000000f03f00000000000000c0"
     },
     {
@@ -168,6 +180,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "0100010108000000020000000000000000380040"
     },
     {
@@ -186,6 +199,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "0100010209000000640000000000000001ff7f80"
     },
     {
@@ -204,6 +218,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000202090000006500000000000000808000ff"
     },
     {
@@ -218,6 +233,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000302090000006600000000000000d4fe2c01"
     },
     {
@@ -232,6 +248,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000602090000006700000000000000feffffffffffffffffffffffffffffff00000000000000000000000000000001"
     },
     {
@@ -245,6 +262,7 @@
         0
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010001000a0000000000000000000000807f00"
     },
     {
@@ -257,6 +275,7 @@
         255
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010002000a000000010000000000000000ff"
     },
     {
@@ -270,6 +289,7 @@
         4660
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010006000a00000002000000000000000000ffff3412"
     },
     {
@@ -281,6 +301,7 @@
         "18446744073709551615"
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "01000a000a0000000300000000000000ffffffffffffffff"
     },
     {
@@ -295,6 +316,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010002010b00000000000000000000000000c0bf0000803e"
     },
     {
@@ -309,6 +331,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010004010b0000000100000000000000000000000000000000000000000000400000000000000000000000000000febf"
     },
     {
@@ -323,6 +346,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010004020b000000020000000000000000000080ffffff7f"
     },
     {
@@ -337,6 +361,7 @@
         ]
       ],
       "timestamps": [],
+      "send_time_ns": null,
       "hex": "010005020b00000003000000000000000000000000000080ffffffffffffff7f"
     },
     {
@@ -353,6 +378,7 @@
           "ns": 1759740000123456789
         }
       ],
+      "send_time_ns": null,
       "hex": "01010f000c00000000000000000000000e0001800a000103158d67e434da6b180000000000000080"
     },
     {
@@ -377,7 +403,38 @@
           "ns": -2
         }
       ],
+      "send_time_ns": null,
       "hex": "01010f000c0000000100000000000000200001801c000301010000000000000002feffffffffffffff0303000000000000000000000000000000000000000440"
+    },
+    {
+      "name": "f64_send_time",
+      "type": "F64",
+      "stream_alias": 13,
+      "sequence": 0,
+      "values": [
+        1.0
+      ],
+      "timestamps": [],
+      "send_time_ns": 1759740000123456789,
+      "hex": "01010f000d00000000000000000000000c0002000800158d67e434da6b180000000000000000f03f"
+    },
+    {
+      "name": "i16_send_time_and_timestamps",
+      "type": "I16",
+      "stream_alias": 13,
+      "sequence": 1,
+      "values": [
+        7,
+        -7
+      ],
+      "timestamps": [
+        {
+          "role": "PROCESSING_TIME",
+          "ns": 1759740000000000000
+        }
+      ],
+      "send_time_ns": 1759740000000000123,
+      "hex": "010105000d00000001000000000000001a00020008007bc00bdd34da6b1801800a00010300c00bdd34da6b18000000000700f9ff"
     }
   ],
   "data_ignoring_extensions": [
@@ -498,6 +555,16 @@
       "name": "timestamps_twice",
       "hex": "01010f000100000001000000000000001c0001800a000101000000000000000001800a00010100000000000000000000000000000000f03f",
       "reason": "TIMESTAMPS extension twice"
+    },
+    {
+      "name": "send_time_bad_length",
+      "hex": "01010f0001000000010000000000000008000200040000000000000000000000000000000000f03f",
+      "reason": "SEND_TIME value is not 8 bytes"
+    },
+    {
+      "name": "send_time_twice",
+      "hex": "01010f000100000001000000000000001800020008000100000000000000020008000100000000000000000000000000000000000000f03f",
+      "reason": "SEND_TIME extension twice"
     },
     {
       "name": "control_reserved",
@@ -888,6 +955,62 @@
         },
         "max_wait_ms": 250
       }
+    },
+    {
+      "name": "latency_limit",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_latency_ms": 50
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_latency_ms": 50,
+        "max_elements_per_packet": 1024,
+        "max_batch_latency_ms": 10,
+        "send_log": {
+          "max_packets": 4096,
+          "max_block_ms": 2000
+        },
+        "max_wait_ms": 2000
+      }
     }
   ],
   "invalid_descriptors": [
@@ -1251,6 +1374,33 @@
         "max_elements_per_packet": 0
       },
       "reason": "max_elements_per_packet is positive"
+    },
+    {
+      "name": "zero_latency_limit",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_latency_ms": 0
+      },
+      "reason": "max_latency_ms is positive"
     }
   ]
 }

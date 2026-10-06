@@ -127,6 +127,7 @@ struct StreamStatus {
     // The latest faults and refusals, oldest first (at most kMaxRecentFaults);
     // kept across RECOVER_STREAM.
     std::vector<RecentFault> recent_faults;
+    stream::LatencyStats latency; // consumer: end-to-end latency of the packets received
     std::size_t send_log_depth{};
     std::size_t buffered_elements{};
     std::chrono::milliseconds blocked_total{};
@@ -189,6 +190,9 @@ public:
     // Adds an event (a fault that does not stop streams, such as a lost clock
     // synchronization) to the recent faults of every stream.
     virtual void note_on_all_streams(stream::FaultCode code, const std::string& detail) = 0;
+    // Whether this node's clock is synchronized: producers stamp SEND_TIME
+    // only while it is (default: stamped).
+    virtual void set_clock_usable(bool usable) = 0;
 
     // Connection-level failures (e.g. malformed messages); returns and clears them.
     virtual auto take_transport_errors() -> std::vector<std::string> { return {}; }
@@ -213,6 +217,7 @@ public:
     [[nodiscard]] auto stream_statuses() const -> std::vector<StreamStatus> override;
     auto recover_stream(const wire::StreamId& stream_id) -> bool override;
     void note_on_all_streams(stream::FaultCode code, const std::string& detail) override;
+    void set_clock_usable(bool usable) override;
 
 private:
     struct Impl;
@@ -271,6 +276,7 @@ public:
     [[nodiscard]] auto stream_statuses() const -> std::vector<StreamStatus> override;
     auto recover_stream(const wire::StreamId& stream_id) -> bool override;
     void note_on_all_streams(stream::FaultCode code, const std::string& detail) override;
+    void set_clock_usable(bool usable) override;
     auto take_transport_errors() -> std::vector<std::string> override;
     [[nodiscard]] auto stats() const -> TransportStats override;
 

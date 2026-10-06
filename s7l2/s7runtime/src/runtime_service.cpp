@@ -1019,6 +1019,9 @@ bool RuntimeService::check_clock(std::ostream& out, const bool force)
         if (clock_usable_ && !usable && network_endpoint_) {
             network_endpoint_->note_on_all_streams(stream::FaultCode::ClockUnsynchronized, detail);
         }
+        if (network_endpoint_) {
+            network_endpoint_->set_clock_usable(usable); // SEND_TIME only from a synchronized clock
+        }
         clock_usable_ = usable;
     }
     return usable;

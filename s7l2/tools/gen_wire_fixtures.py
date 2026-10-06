@@ -76,14 +76,19 @@ def payload(type_name, values):
     return bytes(out)
 
 
-def data_packet(type_name, alias, sequence, values, timestamps=()):
+def data_packet(type_name, alias, sequence, values, timestamps=(), send_time=None):
     body = payload(type_name, values)
-    flags = 1 if timestamps else 0
+    flags = 1 if timestamps or send_time is not None else 0
     out = bytearray(struct.pack("<BBHIQ", 1, flags, TYPE_IDS[type_name], alias, sequence))
-    if timestamps:
-        records = sorted(timestamps, key=lambda r: ROLES[r["role"]])
-        value = bytes([len(records)]) + b"".join(struct.pack("<Bq", ROLES[r["role"]], r["ns"]) for r in records)
-        tlv = struct.pack("<HH", 0x8001, len(value)) + value
+    if flags:
+        # Extensions in ascending type order: SEND_TIME (0x0002), TIMESTAMPS (0x8001).
+        tlv = b""
+        if send_time is not None:
+            tlv += struct.pack("<HHq", 0x0002, 8, send_time)
+        if timestamps:
+            records = sorted(timestamps, key=lambda r: ROLES[r["role"]])
+            value = bytes([len(records)]) + b"".join(struct.pack("<Bq", ROLES[r["role"]], r["ns"]) for r in records)
+            tlv += struct.pack("<HH", 0x8001, len(value)) + value
         area = struct.pack("<H", len(tlv)) + tlv
         area += bytes((-len(area)) % 8)
         out += area
@@ -125,6 +130,13 @@ VALID = [
     ("f64_processing_time", "F64", 12, 0, [-0.0], [{"role": "PROCESSING_TIME", "ns": 1759740000123456789}]),
     ("f64_all_roles", "F64", 12, 1, [2.5],
      [{"role": "PROCESSING_TIME", "ns": 3}, {"role": "MODEL_TIME", "ns": 1}, {"role": "SOURCE_TIME", "ns": -2}]),
+]
+
+# SEND_TIME (0x0002, noncritical): UTC nanoseconds at which the producer sealed the packet.
+WITH_SEND_TIME = [
+    ("f64_send_time", "F64", 13, 0, [1.0], [], 1759740000123456789),
+    ("i16_send_time_and_timestamps", "I16", 13, 1, [7, -7], [{"role": "PROCESSING_TIME", "ns": 1759740000000000000}],
+     1759740000000000123),
 ]
 
 STREAM = "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370"
@@ -174,6 +186,10 @@ def invalid_cases():
         ("repeated_role", stamped([(1, 0), (1, 5)]), "a timestamp role repeated"),
         ("timestamps_bad_length", stamped([(1, 0)], value_length=11), "TIMESTAMPS value length is not 1 + 9 * count"),
         ("timestamps_twice", twice, "TIMESTAMPS extension twice"),
+        ("send_time_bad_length", good[:1] + bytes([1]) + good[2:16] + struct.pack("<HHHI", 8, 0x0002, 4, 0) + bytes(6) + good[16:],
+         "SEND_TIME value is not 8 bytes"),
+        ("send_time_twice", good[:1] + bytes([1]) + good[2:16] + struct.pack("<H", 24) + struct.pack("<HHq", 2, 8, 1) * 2
+         + bytes(6) + good[16:], "SEND_TIME extension twice"),
         ("control_reserved", control(1, 1, 1)[:2] + b"\x01\x00" + control(1, 1, 1)[4:], "control reserved field"),
         ("control_bad_kind", control(1, 1, 1)[:1] + bytes([4]) + control(1, 1, 1)[2:], "unknown control kind"),
         ("control_short", control(1, 1, 1)[:31], "control message length"),
@@ -228,6 +244,7 @@ def descriptor_cases():
                         {"role": "PROCESSING_TIME", "clock_domain": f"node:{NODE_A}:utc"}])),
         ("all_settings", descriptor(max_elements_per_packet=64, max_batch_latency_ms=3,
                                     send_log={"max_packets": 128, "max_block_ms": 500}, max_wait_ms=250)),
+        ("latency_limit", descriptor(max_latency_ms=50)),
     ]
     invalid = [
         ("missing_stream_id", descriptor(stream_id=None), "stream_id is required"),
@@ -246,6 +263,7 @@ def descriptor_cases():
         ("zero_rate", descriptor(sample_rate={"numerator": 0, "denominator": 1}), "a sample rate is positive"),
         ("rate_without_denominator", descriptor(sample_rate={"numerator": 1000}), "denominator is required"),
         ("zero_batch", descriptor(max_elements_per_packet=0), "max_elements_per_packet is positive"),
+        ("zero_latency_limit", descriptor(max_latency_ms=0), "max_latency_ms is positive"),
     ]
     return ([{"name": n, "descriptor": d, "canonical": canonical(d)} for n, d in valid],
             [{"name": n, "descriptor": d, "reason": r} for n, d, r in invalid])
@@ -259,8 +277,12 @@ def main():
         "generator": "tools/gen_wire_fixtures.py",
         "data": [
             {"name": name, "type": t, "stream_alias": alias, "sequence": seq, "values": values,
-             "timestamps": ts, "hex": data_packet(t, alias, seq, values, ts).hex()}
+             "timestamps": ts, "send_time_ns": None, "hex": data_packet(t, alias, seq, values, ts).hex()}
             for name, t, alias, seq, values, ts in VALID
+        ] + [
+            {"name": name, "type": t, "stream_alias": alias, "sequence": seq, "values": values,
+             "timestamps": ts, "send_time_ns": sent, "hex": data_packet(t, alias, seq, values, ts, sent).hex()}
+            for name, t, alias, seq, values, ts, sent in WITH_SEND_TIME
         ],
         # Accepted, with the unknown noncritical extension ignored.
         "data_ignoring_extensions": [{

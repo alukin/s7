@@ -117,6 +117,9 @@ json_check "$WORK/streams-b.json" \
   "len(r['streams'])==1 and r['streams'][0]['role']=='consumer' and r['streams'][0]['data_type']=='I32' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>10" \
   || fail "node B consumes the I32 stream: $(cat "$WORK/streams-b.json")"
 STREAM_ID="$(python3 -c "import json; print(json.load(open('$WORK/streams-b.json'))['streams'][0]['stream_id'])")"
+json_check "$WORK/streams-b.json" \
+  "r['streams'][0]['latency']['samples']>0 and 0<=r['streams'][0]['latency']['p50_ns']<1000000000" \
+  || fail "node B measures the stream's latency: $(cat "$WORK/streams-b.json")"
 
 "$CTL" config "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/config-b.json"
 json_check "$WORK/config-b.json" \

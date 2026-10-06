@@ -649,7 +649,7 @@ void test_deploy_client()
 
     // NODE_INFO advertises the data protocol and the clock domains.
     const auto info = Client(node_b, ControlPeer{}).send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
-    expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}}, {"extensions", json::array{"0x8001"}}},
+    expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}}, {"extensions", json::array{"0x0002", "0x8001"}}},
            "data protocol advertised: " + json::serialize(info.at("data_protocol")));
     expect(info.at("clock_domains").as_array().size() == 2 && info.at("clock_domains").as_array()[1].as_object().at("id").as_string() == "utc",
            "a synchronized clock is the shared utc domain");

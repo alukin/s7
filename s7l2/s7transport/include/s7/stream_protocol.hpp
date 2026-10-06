@@ -11,6 +11,7 @@
 // Consumer: delivers each sequence exactly once and in order, discards
 // duplicates, faults on a gap, and acknowledges what its graph consumed.
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -42,6 +43,7 @@ enum class FaultCode : std::uint8_t {
     UnauthorizedProducer, // packets from a peer that is not the stream's producer node
     UnauthorizedConsumer, // a RESUME from a peer that is not one of the stream's consumer nodes
     ClockUnsynchronized,  // the node's clock lost synchronization: its UTC times are not comparable
+    Late,                 // a packet arrived later than the stream's max_latency
 };
 
 [[nodiscard]] std::string to_string(FaultCode code);
@@ -81,6 +83,42 @@ struct StreamConfig {
     std::vector<wire::TimestampRole> timestamp_roles;
 
     [[nodiscard]] bool explicit_timestamps() const { return !sample_rate && !timestamp_roles.empty(); }
+
+    // Consumer: a packet whose latency (arrival minus SEND_TIME, both UTC)
+    // exceeds this is counted late. Unset: not checked.
+    std::optional<std::chrono::milliseconds> max_latency;
+};
+
+// End-to-end latency of a consumer stream: from the producer sealing a
+// packet (SEND_TIME) to the consumer receiving it, over synchronized UTC
+// clocks. Percentiles come from a log2 histogram of microseconds, so they
+// are upper bounds within a factor of two.
+struct LatencyStats {
+    std::uint64_t samples{};
+    std::int64_t min_ns{};
+    std::int64_t max_ns{};
+    std::int64_t mean_ns{};
+    std::int64_t p50_ns{};
+    std::int64_t p99_ns{};
+    std::int64_t last_ns{};
+    std::uint64_t late{}; // over max_latency
+};
+
+class LatencyHistogram {
+public:
+    // Returns whether the sample is late for the limit.
+    bool add(std::int64_t latency_ns, std::optional<std::chrono::milliseconds> limit);
+    [[nodiscard]] LatencyStats stats() const;
+
+private:
+    static constexpr std::size_t kBuckets = 40; // bucket k: latencies below 2^k microseconds
+    std::array<std::uint64_t, kBuckets> counts_{};
+    std::uint64_t samples_{};
+    __int128 sum_ns_{};
+    std::int64_t min_ns_{};
+    std::int64_t max_ns_{};
+    std::int64_t last_ns_{};
+    std::uint64_t late_{};
 };
 
 // Durable sequence-range reservations (wire draft section 4): a producer never
@@ -166,6 +204,9 @@ public:
     [[nodiscard]] std::optional<std::vector<std::uint8_t>> next_message(const ConsumerKey& consumer);
 
     void fault(FaultCode code);
+    // Whether sealed packets carry SEND_TIME (only while this node's clock is
+    // synchronized; default on).
+    void set_stamp_send_time(bool stamp) { stamp_send_time_ = stamp; }
     // RECOVER_STREAM: clears the fault; sending resumes.
     void recover() { fault_ = FaultCode::None; }
     [[nodiscard]] FaultCode fault_code() const { return fault_; }
@@ -177,6 +218,7 @@ public:
 private:
     struct LoggedPacket {
         std::uint64_t sequence{};
+        std::optional<std::int64_t> send_time_ns;
         std::vector<wire::TimestampRecord> timestamps;
         std::vector<std::uint8_t> payload;
     };
@@ -198,6 +240,7 @@ private:
     std::unordered_map<ConsumerKey, Consumer> consumers_;
     std::vector<std::uint8_t> pending_; // host storage of the open packet's elements
     std::vector<wire::TimestampRecord> pending_times_;
+    bool stamp_send_time_{true};
     std::size_t pending_elements_{};
     std::optional<Clock::time_point> pending_since_;
     FaultCode fault_{FaultCode::None};
@@ -228,8 +271,10 @@ public:
     [[nodiscard]] wire::ControlMessage resume_message() const;
 
     // A packet for this stream: delivered in order, duplicate discarded, or a
-    // gap / type mismatch, which faults the stream.
-    void on_packet(const wire::DataPacket& packet, Clock::time_point now);
+    // gap / type mismatch, which faults the stream. A delivered packet with
+    // SEND_TIME adds a latency sample (received_utc_ns: arrival time, default
+    // now); returns whether it was late.
+    bool on_packet(const wire::DataPacket& packet, Clock::time_point now, std::optional<std::int64_t> received_utc_ns = {});
     void on_malformed();
 
     // Elements available to the graph, and taking them (host storage).
@@ -252,6 +297,7 @@ public:
     void recover();
     [[nodiscard]] FaultCode fault_code() const { return fault_; }
     [[nodiscard]] ConsumerStats stats() const;
+    [[nodiscard]] LatencyStats latency() const { return latency_.stats(); }
 
 private:
     struct BufferedPacket {
@@ -274,6 +320,7 @@ private:
     FaultCode fault_{FaultCode::None};
     bool restart_at_next_{false};
     bool element_count_known_{true}; // false after a recovered fault
+    LatencyHistogram latency_;
     std::uint64_t packets_{};
     std::uint64_t elements_{};
     std::uint64_t duplicates_{};

@@ -91,6 +91,9 @@ def steps():
         "streams[0].blocked_ms_total": "integer", "streams[0].recent_faults": "array",
         "streams[0].recent_faults[0].code": "string", "streams[0].recent_faults[0].detail": "string",
         "streams[0].recent_faults[0].at": "string",
+        "streams[0].latency": "object", "streams[0].latency.samples": "integer", "streams[0].latency.min_ns": "integer",
+        "streams[0].latency.mean_ns": "integer", "streams[0].latency.p50_ns": "integer", "streams[0].latency.p99_ns": "integer",
+        "streams[0].latency.max_ns": "integer", "streams[0].latency.last_ns": "integer", "streams[0].latency.late": "integer",
     })
     return [
         {"name": "hello", "peer": "anonymous", "request": request("HELLO", "hello-1"),
@@ -98,7 +101,7 @@ def steps():
                       "equals": {"request_id": "hello-1", "node_uuid": NODE}}},
         {"name": "node_info", "peer": "anonymous", "request": request("GET_NODE_INFO", "info-1"),
          "response": {"type": "NODE_INFO", "fields": node_info,
-                      "equals": {"data_protocol.packet_versions": [1], "data_protocol.extensions": ["0x8001"],
+                      "equals": {"data_protocol.packet_versions": [1], "data_protocol.extensions": ["0x0002", "0x8001"],
                                  "clock_sync.usable": True, "clock_domains[1].id": "utc"}}},
         {"name": "peer_announce", "peer": "anonymous",
          "request": request("PEER_ANNOUNCE", "announce-1", self={"endpoint": "wss://127.0.0.1:9003", "node_uuid": "33333333-4444-5555-6666-777777777777"}),

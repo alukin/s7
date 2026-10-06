@@ -138,6 +138,9 @@ auto with_timing(json::object element, const StreamDescriptor& stream) -> json::
     if (stream.sample_rate) {
         params["sample_rate"] = json::array{stream.sample_rate->numerator, stream.sample_rate->denominator};
     }
+    if (stream.max_latency_ms && element.at("type") == "NetSource") {
+        params["max_latency_ms"] = *stream.max_latency_ms;
+    }
     return element;
 }
 
@@ -214,6 +217,9 @@ auto parse_streams(const json::object& diagram) -> std::vector<StreamDescriptor>
             stream.max_block_ms = u32_field(log->as_object(), "max_block_ms", stream.max_block_ms);
         }
         stream.max_wait_ms = u32_field(object, "max_wait_ms", stream.max_wait_ms);
+        if (object.contains("max_latency_ms")) {
+            stream.max_latency_ms = u32_field(object, "max_latency_ms", 0);
+        }
         if (const auto* rate = object.if_contains("sample_rate")) {
             if (!rate->is_object()) {
                 throw std::invalid_argument(what + ": 'sample_rate' must be an object.");
@@ -269,6 +275,9 @@ auto to_json(const StreamDescriptor& stream) -> json::object
         out["sample_rate"] = json::object{{"numerator", stream.sample_rate->numerator}, {"denominator", stream.sample_rate->denominator}};
     }
     out["timestamps"] = std::move(timestamps);
+    if (stream.max_latency_ms) {
+        out["max_latency_ms"] = *stream.max_latency_ms;
+    }
     return out;
 }
 

@@ -679,6 +679,39 @@ void test_plain_identity_mismatch()
     expect(consumer.stats().data_connections == 0, "no data connection to the wrong node");
 }
 
+
+// Latency is measured over real connections; packets that waited in the
+// send log for their consumer arrive late.
+void test_latency_over_websocket()
+{
+    transport::BeastRuntimeNetEndpoint producer_node;
+    const auto url = "ws://127.0.0.1:" + std::to_string(producer_node.configure_server(0));
+    auto c = config("8d3f4a5b-6c7d-4e8f-9a0b-1c2d3e4f5a6b");
+    c.max_latency = milliseconds(100);
+    const auto producer = producer_node.open_producer(c);
+    // Published before any consumer exists: these wait in the send log.
+    std::vector<double> early(100, 1.0);
+    expect(producer_node.publish(producer, early.data(), early.size()).fault == stream::FaultCode::None, "published");
+    std::this_thread::sleep_for(milliseconds(300));
+    transport::BeastRuntimeNetEndpoint consumer_node;
+    consumer_node.configure_client(url);
+    const auto consumer = consumer_node.open_consumer(c);
+    std::vector<double> got(100);
+    expect(consumer_node.receive(consumer, got.data(), got.size()).fault == stream::FaultCode::None, "received the early values");
+    // Then values that travel at once.
+    std::vector<double> prompt(64, 2.0);
+    expect(producer_node.publish(producer, prompt.data(), prompt.size()).fault == stream::FaultCode::None, "published");
+    expect(consumer_node.receive(consumer, prompt.data(), prompt.size()).fault == stream::FaultCode::None, "received");
+
+    const auto status = consumer_node.stream_statuses().front();
+    expect(status.latency.samples >= 3, "packets measured: " + std::to_string(status.latency.samples));
+    expect(status.latency.max_ns >= 300'000'000, "the waiting packets show their wait: " + std::to_string(status.latency.max_ns));
+    expect(status.latency.last_ns < 100'000'000, "a prompt packet is fast: " + std::to_string(status.latency.last_ns));
+    expect(status.latency.late >= 1 && !status.recent_faults.empty() && status.recent_faults.front().code == stream::FaultCode::Late &&
+               status.fault == stream::FaultCode::None,
+           "late packets are reported without stopping the stream");
+}
+
 } // namespace
 
 int main()
@@ -696,6 +729,7 @@ try {
     test_plain_consumers_on_two_nodes();
     test_stream_bound_to_its_nodes();
     test_plain_identity_mismatch();
+    test_latency_over_websocket();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport beast stream smoke: " << ex.what() << '\n';

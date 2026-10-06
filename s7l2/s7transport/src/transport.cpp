@@ -221,6 +221,20 @@ struct StreamEntry {
     std::uint64_t unauthorized{}; // see StreamStatus::unauthorized
     std::deque<RecentFault> recent_faults;
     FaultCode noted{FaultCode::None}; // the stream fault already in recent_faults
+    Clock::time_point late_noted{};    // LATE goes to recent_faults at most once a second
+
+    // After a packet arrived late (lock held).
+    void note_late()
+    {
+        const auto now = Clock::now();
+        if (now - late_noted < std::chrono::seconds(1)) {
+            return;
+        }
+        late_noted = now;
+        const auto latency = consumer->latency();
+        note(FaultCode::Late, "latency_ms=" + std::to_string(latency.last_ns / 1'000'000) +
+                                  " max_latency_ms=" + std::to_string(config.max_latency ? config.max_latency->count() : 0));
+    }
 
     [[nodiscard]] FaultCode fault_code() const { return producer ? producer->fault_code() : consumer->fault_code(); }
 
@@ -276,6 +290,7 @@ public:
                 existing.config.max_wait = config.max_wait;
                 existing.config.producer_node = config.producer_node;
                 existing.config.consumer_nodes = config.consumer_nodes;
+                existing.config.max_latency = config.max_latency;
                 changed.notify_all();
                 return existing.handle;
             }
@@ -288,6 +303,7 @@ public:
         entry->config = config;
         if (role == StreamRole::Producer) {
             entry->producer = std::make_unique<stream::StreamProducer>(config, sequences_);
+            entry->producer->set_stamp_send_time(clock_usable_);
         } else {
             // The alias is the handle: unique among this endpoint's consumer streams.
             entry->consumer = std::make_unique<stream::StreamConsumer>(config, static_cast<std::uint32_t>(entry->handle.value));
@@ -435,6 +451,7 @@ public:
                 status.duplicates_discarded = stats.duplicates_discarded;
                 status.malformed = stats.malformed;
                 status.buffered_elements = stats.buffered_elements;
+                status.latency = entry->consumer->latency();
                 status.state = status.fault != FaultCode::None ? "faulted" : entry->open ? "active" : "closed";
             }
             result.push_back(std::move(status));
@@ -460,6 +477,17 @@ public:
         }
         changed.notify_all();
         return found;
+    }
+
+    void set_clock_usable(const bool usable)
+    {
+        std::lock_guard lock(mutex);
+        clock_usable_ = usable;
+        for (auto& [_, entry] : entries_) {
+            if (entry->producer) {
+                entry->producer->set_stamp_send_time(usable);
+            }
+        }
     }
 
     void note_all(const FaultCode code, const std::string& detail)
@@ -513,6 +541,7 @@ private:
     }
 
     stream::SequenceStore& sequences_;
+    bool clock_usable_{true};
     std::uint64_t next_handle_{1};
     std::unordered_map<std::uint64_t, std::unique_ptr<StreamEntry>> entries_;
     std::unordered_map<std::string, std::uint64_t> producers_;
@@ -545,7 +574,9 @@ struct InMemoryRuntimeNetEndpoint::Impl {
             attached.insert(stream_key(id));
         }
         while (auto message = producer->producer->next_message(key)) {
-            consumer->consumer->on_packet(wire::decode_data_packet(*message), now);
+            if (consumer->consumer->on_packet(wire::decode_data_packet(*message), now)) {
+                consumer->note_late();
+            }
         }
         // The local consumer acknowledges whatever the graph has taken.
         if (const auto ack = consumer->consumer->ack_due(now + stream::kAckInterval)) {
@@ -612,6 +643,11 @@ auto InMemoryRuntimeNetEndpoint::receive(const StreamHandle handle, void* elemen
 auto InMemoryRuntimeNetEndpoint::stream_statuses() const -> std::vector<StreamStatus>
 {
     return impl_->table.statuses();
+}
+
+void InMemoryRuntimeNetEndpoint::set_clock_usable(const bool usable)
+{
+    impl_->table.set_clock_usable(usable);
 }
 
 void InMemoryRuntimeNetEndpoint::note_on_all_streams(const stream::FaultCode code, const std::string& detail)
@@ -978,7 +1014,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             connection.close();
             return;
         }
-        entry->consumer->on_packet(packet, Clock::now());
+        if (entry->consumer->on_packet(packet, Clock::now())) {
+            entry->note_late();
+        }
         consumer_sources[entry->handle.value] = connection.weak_from_this();
         table.changed.notify_all();
     }
@@ -1680,6 +1718,11 @@ auto BeastRuntimeNetEndpoint::receive(const StreamHandle handle, void* elements,
 auto BeastRuntimeNetEndpoint::stream_statuses() const -> std::vector<StreamStatus>
 {
     return impl_->table.statuses();
+}
+
+void BeastRuntimeNetEndpoint::set_clock_usable(const bool usable)
+{
+    impl_->table.set_clock_usable(usable);
 }
 
 void BeastRuntimeNetEndpoint::note_on_all_streams(const stream::FaultCode code, const std::string& detail)

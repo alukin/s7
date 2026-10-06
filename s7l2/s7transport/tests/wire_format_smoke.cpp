@@ -101,6 +101,9 @@ void check_fixtures(const json::object& fixtures)
             packet.timestamps.push_back({role_from_name(ts.at("role").as_string()), ts.at("ns").to_number<std::int64_t>()});
         }
         packet.payload = payload_from_values(type, c.at("values").as_array());
+        if (const auto* sent = c.if_contains("send_time_ns"); sent && !sent->is_null()) {
+            packet.send_time_ns = sent->to_number<std::int64_t>();
+        }
 
         const auto encoded = wire::encode_data_packet(packet);
         expect(to_hex(encoded) == c.at("hex").as_string(), name + ": encoding is byte-exact (got " + to_hex(encoded) + ")");
@@ -111,6 +114,7 @@ void check_fixtures(const json::object& fixtures)
         auto sorted = packet.timestamps;
         std::ranges::sort(sorted, {}, &wire::TimestampRecord::role);
         expect(decoded.timestamps == sorted, name + ": timestamps decode");
+        expect(decoded.send_time_ns == packet.send_time_ns, name + ": send time decodes");
         expect(decoded.payload == packet.payload, name + ": payload decodes");
         expect_payload_round_trip(type, decoded.payload, name);
     }

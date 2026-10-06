@@ -22,7 +22,8 @@
 //       "send_log": { "max_packets": 4096, "max_block_ms": 2000 },
 //       "max_wait_ms": 2000,
 //       "sample_rate": { "numerator": 1000, "denominator": 1 },
-//       "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ]
+//       "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ],
+//       "max_latency_ms": 50                       (optional)
 //   } ]
 //
 // Timing is derived from the diagram: with a model-time step (`dt`, seconds)
@@ -79,6 +80,7 @@ struct StreamDescriptor {
     std::uint32_t max_wait_ms{2000};
     std::optional<stream::SampleRate> sample_rate;
     std::vector<TimestampDeclaration> timestamps; // at least one, ascending role
+    std::optional<std::uint32_t> max_latency_ms;  // consumers count later packets as LATE
 };
 
 // The diagram's model-time step (`dt`, seconds, in ns); nothing if it has

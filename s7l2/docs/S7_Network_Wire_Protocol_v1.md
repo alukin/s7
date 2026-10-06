@@ -141,6 +141,12 @@ Role IDs are `1 = MODEL_TIME`, `2 = SOURCE_TIME`, and `3 = PROCESSING_TIME`. Rec
 
 In the MVP a packet with `TIMESTAMPS` carries one element, so every element has its own times; per-element times inside a block need a separately specified payload profile (Section 6).
 
+### 7.2 Send time
+
+Extension type `0x0002`, the noncritical `SEND_TIME` extension, is transmission metadata, not the data's time: an `i64` (two's complement), the UTC time in nanoseconds since the Unix epoch at which the producer sealed the packet (added it to its send log). A producer includes it while its clock is synchronized (clock domain `utc`, `S7_Control_Protocol_MVP.md` section 10.1) and omits it otherwise; a replayed packet keeps its original value. The value length MUST be 8 and the extension MUST NOT repeat. Extensions are written in ascending type order (`SEND_TIME` before `TIMESTAMPS`).
+
+A consumer measures each packet it delivers to its graph, `arrival − SEND_TIME` over the two synchronized clocks: end-to-end latency including batching, queuing and any replay, accurate to the clocks' combined error. `STREAM_STATUS` reports it per consumer stream (`latency`: samples, min, mean, p50, p99, max, last, in nanoseconds; percentiles are upper bounds from a log2 histogram of microseconds) and counts packets over the descriptor's optional `max_latency_ms` as `late`, recording `LATE` in the stream's recent faults at most once a second. Lateness does not stop the stream.
+
 ## 8. Numeric Data Types
 
 Every port of a graph has exactly one of these types, and a stream's wire type is the type of the producing port. Values are carried with no implicit conversion or canonicalization. Integer values use two's complement for signed and plain binary for unsigned types; IEEE values use their interchange bit patterns (NaNs, infinities and signed zero are preserved). All multi-byte values are little-endian.
@@ -228,7 +234,8 @@ All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
   "send_log": { "max_packets": 4096, "max_block_ms": 2000 },
   "max_wait_ms": 2000,
   "sample_rate": { "numerator": 48000, "denominator": 1 },
-  "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ]
+  "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ],
+  "max_latency_ms": 50
 }
 ```
 
@@ -251,7 +258,7 @@ There is one stream per producing output port with consumers on other nodes (a f
 
 **3. Fault reporting (decided 2026-10-05).** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `blocked`, `faulted`), `next_expected` / `next_sequence`, send-log depth, counters (`packets`, `replayed`, `duplicates_discarded`, `malformed`, `unauthorized`, `blocked_ms_total`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `SEND_LOG_OVERFLOW`, `STREAM_STATE_LOST`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `SOURCE_OVERFLOW`. Studio polls it; pushed events are a later extension. `RECOVER_STREAM {stream_id}` (authorized like a configuration change) restarts a faulted stream with a new sequence expectation; the data lost in the fault stays lost and stays reported.
 
-**4. Negotiation (decided 2026-10-05): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support. *Implemented 2026-10-06* (`deploy_diagram`, used by Studio and `s7ctl`): it also refuses a stream with per-packet timestamps when an end does not list the `TIMESTAMPS` extension. `NODE_INFO.clock_domains` lists `model` and `utc` (or the node's own `node:<uuid>:utc` while its clock is not synchronized).
+**4. Negotiation (decided 2026-10-05): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x0002", "0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support. *Implemented 2026-10-06* (`deploy_diagram`, used by Studio and `s7ctl`): it also refuses a stream with per-packet timestamps when an end does not list the `TIMESTAMPS` extension. `NODE_INFO.clock_domains` lists `model` and `utc` (or the node's own `node:<uuid>:utc` while its clock is not synchronized).
 
 **6. Deployment unit and placement (decided 2026-10-05).** Studio deploys the diagram itself (`.s7diagram`, including layout), not an extracted schema; each node extracts its part of the graph and keeps the whole diagram, so Studio can request the deployed diagram (`GET_NETWORK_CONFIGURATION`) and display it. Every element carries a `node` placement attribute. A node runs the elements placed on it; each connection between elements on different nodes becomes a stream with its own descriptor. The diagram format will be extended with whatever further deployment data is needed.
 
@@ -271,6 +278,7 @@ The C++ reference implementation (2026-10-05) implements:
 - `GET_STREAM_STATUS` and `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md` section 10.1);
 - binding of each stream to its producer and consumer nodes (Section 9 item 1, Section 12.1 item 5);
 - timestamp profiles (Sections 6 and 7.1): derived times on uniformly sampled streams, `TIMESTAMPS` records on the others, checked by the consumer (`TIMESTAMP_PROFILE_MISMATCH`), and each received element's times reported to the graph side (`ReceiveResult::timestamps`, `NetSource::last_timestamps()`);
-- `NODE_INFO.data_protocol` and `clock_domains`, checked by the deployment client before preparing any node.
+- `NODE_INFO.data_protocol` and `clock_domains`, checked by the deployment client before preparing any node;
+- `SEND_TIME` and end-to-end latency per consumer stream (Section 7.2).
 
 Not yet implemented: `SOURCE_TIME` production and relaying. The previous 54-byte big-endian prototype codec has been removed. The fixtures (Section 12 item 1) are what a Rust, JVM or other decoder is checked against; the Python decoder passes them.

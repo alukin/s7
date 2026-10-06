@@ -186,6 +186,12 @@ void test_node_parts()
     };
     expect(params_of(a, sink).at("consumer_nodes") == json::array{kB, kC}, "the NetSink serves only the consumer nodes");
     expect(params_of(b, source).at("producer_node") == kA, "the NetSource accepts only the producer node");
+
+    // A latency limit reaches the consumer end.
+    auto limited = diagram;
+    limited["streams"].as_array()[0].as_object()["max_latency_ms"] = 20;
+    expect(params_of(deployment::extract_node_schema(limited, kB), source).at("max_latency_ms") == 20, "the NetSource gets the latency limit");
+    expect(!params_of(deployment::extract_node_schema(limited, kA), sink).contains("max_latency_ms"), "the NetSink does not");
     expect(deployment::producer_endpoints(diagram, kB) == std::vector<s7::transport::DataPeer>{{"ws://127.0.0.1:9101", kA}},
            "B connects to A and expects A's identity");
     expect(deployment::producer_endpoints(diagram, kA).empty(), "A consumes nothing");
