@@ -66,6 +66,7 @@
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QSplitter>
+#include <QTabWidget>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -332,7 +333,9 @@ auto withDefaultedParams(const s7::ElementMetadata& metadata, const boost::json:
 {
     auto effective = params;
     for (const auto& parameter : metadata.parameters) {
-        if (effective.find(parameter.name) == effective.end()) {
+        // Optional parameters without a default (e.g. a generic element's
+        // `type`) stay absent: null is not a valid value for them.
+        if (effective.find(parameter.name) == effective.end() && !parameter.default_value.is_null()) {
             effective[parameter.name] = parameter.default_value;
         }
     }
@@ -707,7 +710,10 @@ void MainWindow::buildUi()
     headlessNodesDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
     headlessNodesDock_->setWidget(headlessNodesPanel_);
     addDockWidget(Qt::RightDockWidgetArea, headlessNodesDock_);
+    // Dock tabs above their docks; the Element Library is the tab shown at start.
+    setTabPosition(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea, QTabWidget::North);
     tabifyDockWidget(elementPickerDock_, headlessNodesDock_);
+    elementPickerDock_->raise();
 
     connect(headlessNodesPanel_, &ui::HeadlessNodesPanel::nodeActivated,
             this, &MainWindow::onHeadlessNodeActivated);
@@ -773,6 +779,8 @@ void MainWindow::onRunCompleted(bool success, const QString& error)
         appendLog("[studio] run completed");
     } else if (!error.isEmpty()) {
         appendLog(QString("[studio] run failed: %1").arg(error));
+        // The log panel may be hidden; a failed run must not look like an empty one.
+        QMessageBox::warning(this, QStringLiteral("Run failed"), error);
     }
     refreshActions();
 }
@@ -930,6 +938,14 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
             continue;
         }
 
+        // A null optional parameter means "not set".
+        if (descriptor) {
+            for (const auto& parameter : descriptor->metadata().parameters) {
+                if (const auto it = paramsObject.find(parameter.name); !parameter.required && it != paramsObject.end() && it->value().is_null()) {
+                    paramsObject.erase(it);
+                }
+            }
+        }
         auto element = elementNode->element();
         element.params = paramsObject;
         element.placement = nodeCombo->currentData().toString().toStdString();
