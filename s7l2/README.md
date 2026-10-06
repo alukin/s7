@@ -25,21 +25,24 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 
 ## Implemented
 
-- Element model with typed ports, templated real/complex elements, converters, filters, oscillator, file I/O, network elements.
+- Element model with exactly typed ports: 26 signal types (integers I8–U128 including 12-bit, F16–F128, complex floating and integer types), stored natively (C++26), inferred from connections, converted only by an explicit `Convert` element; generic arithmetic, filter, integrator, oscillator, file I/O and network elements. Parameters are checked against each element's declaration.
 - Validation before execution: port indices and types, single driver per input, every input connected, cycles must contain causal memory.
 - Compilation to an executable graph with instance UUIDs; elements with direct feedthrough (stateful or not) run in causal order; causal-memory elements (`Delay`, `PreviousValue`) publish their outputs one step later.
 - Nested schemas as elements with exposed inputs/outputs; schema-backed element libraries (`.json`, `.s7library`, `.gz`).
 - Element registry with metadata; C ABI plugins loaded at startup.
-- Runtime JSON schema loading, optional WebSocket server/client with mTLS, persistent node identity, control-plane MVP (`HELLO`, `GET_NODE_INFO`, `GET_PEERS`, `PEER_ANNOUNCE`, deployment prepare/commit/abort/list).
-- Studio diagram editing, element library, parameter dialogs, local runs with Scope plots, diagram/schema/library files, headless node discovery.
+- Runtime JSON schema loading, WebSocket server/client with mTLS, certificate-bound node identity, control protocol (`S7_Control_Protocol_MVP.md`): node information and peers, deployment prepare/commit/abort/list authorized by the pinned Studio certificate, chunked configuration transfer, stream status and recovery; the active deployment survives restarts.
+- Lossless typed data streams between nodes (`S7_Network_Wire_Protocol_v1.md`): exactly once and in order while both processes run, backpressure, faults reported and recoverable, each stream bound to its producer and consumer nodes, timestamp profiles.
+- Diagrams deployed across nodes: elements placed on nodes, streams assigned between them, each node running its part (Studio Run > Deploy to Nodes, `s7ctl deploy`).
+- Conformance data for other implementations of both protocols (`s7transport/tests/fixtures/`, `s7runtime/tests/fixtures/`), with a second wire decoder in Python.
+- Studio diagram editing, element library, parameter dialogs, local runs with Scope plots, diagram/schema/library files, headless node discovery with certificate-based trust.
 
 ## Not implemented yet
 
-- Executing a deployed configuration (commit currently only records state), multi-peer transport, the draft wire format.
-- Control authorization bound to authenticated certificates; certificate-bound node identity.
 - Snapshots/restore, dynamic probe subscriptions, remote observation streams.
 - `NetRuntime`, distributed scheduling, coherence domains.
-- Generic typed signals (all non-complex types are stored as `double`).
+- `SOURCE_TIME` on streams (needs source elements that know their acquisition time), relaying streams through other nodes.
+- Recovering stream data across a process crash (a crash faults the stream; recovery continues without the lost data).
+- Windows (a later MinGW-w64 port).
 
 ## Build
 

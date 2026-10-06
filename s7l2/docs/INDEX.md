@@ -44,6 +44,8 @@ S7 is in pre-MVP development. Backward compatibility of APIs, file formats, and 
 
 Module READMEs: `../s7transport/README.md`, `../s7noise/README.md`, `../s7spectral/README.md`.
 
+Conformance data for other implementations: `../s7transport/tests/fixtures/README.md` (wire format and stream descriptors) and `../s7runtime/tests/fixtures/README.md` (control protocol).
+
 ## Source entry points
 
 - `s7core/include/s7/element.hpp` — `Element` base class and port model

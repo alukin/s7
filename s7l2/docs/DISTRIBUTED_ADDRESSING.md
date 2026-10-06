@@ -26,7 +26,7 @@ A fully qualified element address is `node_uuid / element instance UUID`; the hu
 
 ## Node state directory
 
-Each node keeps persistent state (`node_uuid.txt`, `peers.json`, later deployment records) in its own directory, given with `s7runtime --state-dir <dir>`. Without the option the runtime uses `~/.s7runtime/default-node`, which is meant for single-node development only.
+Each node keeps persistent state (`node_uuid.txt`, `peers.json`, the active deployment in `deployment.json`, producer sequence reservations in `streams/`) in its own directory, given with `s7runtime --state-dir <dir>`. Without the option the runtime uses `~/.s7runtime/default-node`, which is meant for single-node development only.
 
 The runtime holds an exclusive lock (`runtime.lock`) on the directory while it runs, so two nodes cannot share one identity: a second runtime pointed at the same directory fails at startup.
 

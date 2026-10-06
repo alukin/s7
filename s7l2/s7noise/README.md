@@ -38,7 +38,7 @@ Generates white noise with normal (Gaussian) distribution.
 ### PinkNoiseGenerator
 **Type**: Source (0 inputs, 1 output)
 
-Intended to generate pink (1/f) noise. The current implementation is a 7-sample moving average of white noise, which is low-pass filtered noise rather than true 1/f noise (see `docs/CODE_REVIEW_REQUIRED_FIXES.md`).
+Generates pink (1/f) noise with the Voss-McCartney algorithm (Gardner form, 16 rows): power falls by 3 dB per octave.
 
 **Parameters**:
 - `amplitude` (real, default 1.0): Standard deviation of noise
@@ -123,8 +123,8 @@ Studio loads it from the build tree automatically. For `s7runtime`, pass `--plug
 - Use: General noise source, testing, flat spectrum
 
 ### Pink Noise (1/f)
-- Target: power decreasing with frequency, -3 dB/octave
-- Current implementation: 7-sample moving average of white noise (not yet 1/f)
+- Power decreasing with frequency, -3 dB per octave
+- Voss-McCartney (Gardner form) with 16 rows of white values; `s7noise_smoke` measures -3.1 dB per octave
 
 ## Seeding for Reproducibility
 

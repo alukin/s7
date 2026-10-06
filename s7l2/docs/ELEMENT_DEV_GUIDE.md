@@ -14,7 +14,7 @@ Source: `s7core/include/s7/element.hpp`.
 - The `Element` constructor takes `has_state` (informational: the element keeps internal state) and `Feedthrough` (default `Feedthrough::Direct`). Elements with direct feedthrough, stateful or not, run in topological order and their outputs are visible downstream in the same step: `Constant → FirFilter([1]) → Gain` yields the constant at step 1.
 - `Feedthrough::None` marks the element as causal memory (`Delay`, `PreviousValue`, `EulerIntegrator`). Its `step()` writes the output for the *next* step from the current inputs. The runtime steps causal-memory elements after the others, keeps their published outputs unchanged until the step ends, and publishes the new outputs at the start of the next step. Cycles in a graph are valid only if they contain at least one causal-memory element; a stateful element with direct feedthrough (`Accumulator`, filters, nested `Schema`) does not break a cycle.
 
-## Type system (decided 2026-10-05; implementation in progress)
+## Type system (decided and implemented 2026-10-05)
 
 **Integrators.** `Accumulator` is a running sum without a time step (all arithmetic types). For integration over model time use `EulerIntegrator` (forward Euler / rectangle rule, y[n+1] = y[n] + dt·x[n]; causal memory, so it can close a feedback loop such as an ODE system without a `Delay`) or `TrapezoidIntegrator` (y[n] = y[n−1] + dt/2·(x[n] + x[n−1]); direct feedthrough, more accurate, needs causal memory elsewhere in a loop). Both take `dt` and `initial_value` and support F16–F128 and C16–C128.
 

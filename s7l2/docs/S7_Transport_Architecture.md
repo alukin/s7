@@ -153,15 +153,16 @@ This is required for mixed private/public deployments.
 
 ## Reliability and Ordering Baseline
 
-Data-plane candidate baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md)):
+Data-plane baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md)):
 
-- persistent per-stream sender and receiver sequence state; durable state prevents sequence reuse and duplicate re-acceptance, while any crash replay guarantee must be defined separately
+- lossless, exactly-once, in-order delivery per stream while both processes run (send log, cumulative ACK, RESUME and replay); producers reserve sequence ranges durably, so a restart is never mistaken for continuity: it faults the stream (`SEQUENCE_GAP`) until recovered
 - ordering is defined per stream; no global ordering is implied across different streams or peers
-- timestamps are described by explicit stream roles (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) and clock domains
+- timestamps are described by explicit stream roles (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) and clock domains; uniformly sampled streams derive element times from their sample rate, others carry them per packet
+- each stream travels only between its configured producer and consumer nodes
 - model time is simulation time; it is not inferred from wall-clock time
 - variable-length packets with max payload `256 KiB`
 - little-endian numeric encoding on wire, written explicitly (never by copying host memory)
 
 Observation is local to a runtime node. Studio Scope may observe outputs in its local runtime, including outputs of configured network-source elements after packets cross an explicit graph boundary. The observation API does not probe remote nodes and does not bypass the data protocol.
 
-The candidate wire draft now requires support for all listed numeric types and all timestamp roles, with each stream declaring which timestamp roles occur on its packets. Non-model clocks have configured domains and must change domain ID when restart continuity cannot be guaranteed. Control drafts define canonical JSON SHA-256 digests, bounded chunked bundle transfer, one CA-policy-authorized Studio identity, and status/retry recovery for partial commits. The packet layout, lossless delivery while both processes run (send log, ACK, RESUME), direct producer-to-consumer routing and durable sequence reservations are decided and implemented (wire draft sections 7, 8 and 12.1); a process crash faults the stream and is not recovered in the MVP. Neither protocol draft is yet a conformance standard.
+The wire protocol requires support for all listed numeric types and all timestamp roles, with each stream declaring its timing. Non-model clocks have configured domains and must change domain ID when restart continuity cannot be guaranteed. The control protocol defines canonical JSON SHA-256 digests, bounded chunked configuration transfer, one CA-policy-authorized Studio identity, and status/retry recovery for partial commits. Both protocols are implemented by the C++ runtime and have conformance data for other implementations: `s7transport/tests/fixtures/wire_v1.json` and `s7runtime/tests/fixtures/control_v1.json`. A process crash faults the streams it took part in and is not recovered in the MVP.

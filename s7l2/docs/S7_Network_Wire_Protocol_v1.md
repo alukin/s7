@@ -1,7 +1,7 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
-**Status:** Approved MVP contract (2026-10-05). Not yet frozen for interoperability: byte-exact fixtures and the C++ implementation are pending (Section 12).
-**Draft revision:** 0.6
+**Status:** Approved MVP contract (2026-10-05), implemented by the C++ runtime; conformance fixtures for other implementations in `s7transport/tests/fixtures/wire_v1.json` (Section 12).
+**Draft revision:** 0.7
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
 
