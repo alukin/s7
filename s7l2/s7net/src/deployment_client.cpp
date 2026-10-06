@@ -5,6 +5,7 @@
 #include <optional>
 #include <unordered_map>
 
+#include "s7/base64url.hpp"
 #include "s7/canonical_json.hpp"
 #include "s7/schema_library.hpp"
 #include "s7/type_inference.hpp"
@@ -43,6 +44,30 @@ auto describe(const json::object& response) -> std::string
 auto request_object(const std::string& type, const std::string& request_id) -> json::object
 {
     return json::object{{"type", type}, {"request_id", request_id}, {"protocol_version", 1}};
+}
+
+// NODE_INFO.control_limits of a node; nodes that advertise none take
+// configurations of up to 1 MiB directly (the MVP chunk size).
+struct ControlLimits {
+    std::uint64_t max_configuration_bytes{1024 * 1024};
+    std::uint64_t max_chunk_bytes{1024 * 1024};
+};
+
+auto control_limits_of(const json::object& node_info) -> ControlLimits
+{
+    ControlLimits limits;
+    if (const auto* advertised = node_info.if_contains("control_limits"); advertised && advertised->is_object()) {
+        const auto& fields = advertised->as_object();
+        auto read = [&](const char* key, std::uint64_t& into) {
+            if (const auto* value = fields.if_contains(key); value && (value->is_uint64() || (value->is_int64() && value->as_int64() > 0))) {
+                into = value->to_number<std::uint64_t>();
+            }
+        };
+        read("max_configuration_bytes", limits.max_configuration_bytes);
+        read("max_chunk_bytes", limits.max_chunk_bytes);
+    }
+    limits.max_chunk_bytes = std::clamp<std::uint64_t>(limits.max_chunk_bytes, 1, 1024 * 1024);
+    return limits;
 }
 
 // NODE_INFO.data_protocol of a node: packet versions and extensions ("0x8001").
@@ -195,6 +220,7 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
     // Each node must be the one the diagram names, and report its active
     // revision and the data protocol it speaks.
     std::vector<std::uint64_t> active(targets.size());
+    std::vector<ControlLimits> limits(targets.size());
     std::unordered_map<std::string, DataProtocol> protocols;
     for (std::size_t i = 0; i < targets.size(); ++i) {
         try {
@@ -209,6 +235,7 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
             const auto* revision = list.if_contains("active_revision");
             active[i] = revision && (revision->is_int64() || revision->is_uint64()) ? revision->to_number<std::uint64_t>() : 0;
             const auto info = request(targets[i], request_object("GET_NODE_INFO", "info-" + std::to_string(i)));
+            limits[i] = control_limits_of(info);
             if (const auto protocol = data_protocol_of(info)) {
                 protocols[targets[i].node_uuid] = *protocol;
             } else {
@@ -240,7 +267,36 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
                                                                std::to_string(result.revision)
                                                          : options.deployment_id;
 
-    // Prepare everywhere; commit only if every node is ready.
+    // Prepare everywhere; commit only if every node is ready. A configuration
+    // larger than a node takes directly goes by chunked transfer first.
+    const auto configuration_text = json::serialize(configuration);
+    const auto transfer_id = "transfer-" + result.configuration_digest.substr(7, 16) + "-r" + std::to_string(result.revision);
+    auto transfer = [&](const std::size_t i) {
+        auto expect_type = [&](const json::object& response, const char* type) {
+            if (string_of(response, "type") != type) {
+                throw std::runtime_error("configuration transfer: " + describe(response));
+            }
+        };
+        auto begin = request_object("BEGIN_CONFIGURATION_TRANSFER", "begin-" + std::to_string(i));
+        begin["transfer_id"] = transfer_id;
+        begin["total_bytes"] = configuration_text.size();
+        begin["configuration_digest"] = result.configuration_digest;
+        expect_type(request(targets[i], begin), "CONFIGURATION_TRANSFER_STARTED");
+        const auto* bytes = reinterpret_cast<const std::uint8_t*>(configuration_text.data());
+        std::uint64_t index = 0;
+        for (std::size_t offset = 0; offset < configuration_text.size(); offset += limits[i].max_chunk_bytes, ++index) {
+            const auto length = std::min<std::size_t>(limits[i].max_chunk_bytes, configuration_text.size() - offset);
+            auto chunk = request_object("CONFIGURATION_CHUNK", "chunk-" + std::to_string(i) + "-" + std::to_string(index));
+            chunk["transfer_id"] = transfer_id;
+            chunk["index"] = index;
+            chunk["offset"] = offset;
+            chunk["data"] = encode_base64url({bytes + offset, length});
+            expect_type(request(targets[i], chunk), "CONFIGURATION_CHUNK_ACCEPTED");
+        }
+        auto end = request_object("END_CONFIGURATION_TRANSFER", "end-" + std::to_string(i));
+        end["transfer_id"] = transfer_id;
+        expect_type(request(targets[i], end), "CONFIGURATION_TRANSFER_COMPLETE");
+    };
     std::vector<std::string> tokens(targets.size());
     for (std::size_t i = 0; i < targets.size(); ++i) {
         auto prepare = request_object("PREPARE_DEPLOYMENT", "prepare-" + std::to_string(i));
@@ -248,9 +304,14 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
             {"deployment_id", result.deployment_id},
             {"revision", result.revision},
             {"base_revision", active[i]},
-            {"configuration", configuration},
         };
         try {
+            if (configuration_text.size() > limits[i].max_configuration_bytes) {
+                transfer(i);
+                prepare["deployment"].as_object()["configuration_transfer_id"] = transfer_id;
+            } else {
+                prepare["deployment"].as_object()["configuration"] = configuration;
+            }
             const auto response = request(targets[i], prepare);
             if (string_of(response, "prepare_status") == "READY") {
                 tokens[i] = string_of(response, "prepare_token");

@@ -87,6 +87,12 @@ struct TlsConfig {
 
 [[nodiscard]] auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl;
 
+// Largest WebSocket message a control connection accepts: a configuration
+// chunk of 1 MiB in base64url with its JSON envelope, or a direct
+// configuration up to a node's max_configuration_bytes. Data connections
+// accept one data packet (wire::kMaxPayloadBytes plus headers).
+inline constexpr std::size_t kMaxControlMessageBytes = 4 * 1024 * 1024;
+
 struct StreamHandle {
     std::uint64_t value{};
 

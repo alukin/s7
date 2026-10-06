@@ -5,8 +5,10 @@
 // does (S7_Control_Protocol_MVP.md, PREPARE / COMMIT / ABORT): assign the
 // streams, check each node's identity and that the producer and consumers of
 // every stream share a data protocol version (and the TIMESTAMPS extension
-// where the stream needs it), prepare every node with the whole diagram, and
-// commit only if every node is ready (otherwise abort the prepared ones).
+// where the stream needs it), send the configuration to each node (by
+// chunked transfer when it exceeds the node's max_configuration_bytes),
+// prepare every node with the whole diagram, and commit only if every node is
+// ready (otherwise abort the prepared ones).
 
 #include <cstdint>
 #include <functional>

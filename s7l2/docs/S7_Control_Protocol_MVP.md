@@ -96,7 +96,7 @@ The data plane is described by two top-level members (wire draft section 12.1, i
 ]
 ```
 
-`packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x8001`: `TIMESTAMPS`). `model` is the deployment's model time; `node:<node_uuid>:utc` is the node's system clock (nanoseconds since the Unix epoch), the clock domain of `PROCESSING_TIME` on streams it produces.
+`control_limits` (`max_configuration_bytes`, `max_chunk_bytes`, `max_transfer_bytes`) bound the configurations the node accepts (section 10.1, Configuration transfer). `packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x8001`: `TIMESTAMPS`). `model` is the deployment's model time; `node:<node_uuid>:utc` is the node's system clock (nanoseconds since the Unix epoch), the clock domain of `PROCESSING_TIME` on streams it produces.
 
 ### 5.3 `GET_PEERS` → `PEERS`
 
@@ -201,6 +201,9 @@ Initial error codes:
 - `PREPARE_EXPIRED`
 - `CAPABILITY_MISSING`
 - `RESOURCE_LIMIT`
+- `CONFIGURATION_TOO_LARGE`
+- `TRANSFER_NOT_FOUND`
+- `TRANSFER_INVALID`
 - `INTERNAL_ERROR`
 
 Errors MUST NOT disclose private key material, credentials, or sensitive local paths.
@@ -302,4 +305,12 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 **Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, reads each node's `data_protocol` with `GET_NODE_INFO` and refuses a deployment in which a stream's producer and a consumer share no packet version, or a stream with per-packet timestamps has an end without the `TIMESTAMPS` extension (nothing is prepared then), uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
 
-**Not yet implemented:** chunked configuration transfer and size limits, and request-ID replay caching.
+**Configuration transfer.** `NODE_INFO.control_limits` advertises `max_configuration_bytes` (default 1 MiB), `max_chunk_bytes` (at most 1 MiB) and `max_transfer_bytes` (default 64 MiB, at most 256 MiB). A `PREPARE_DEPLOYMENT` whose serialized `configuration` exceeds `max_configuration_bytes` is `CONFIGURATION_TOO_LARGE`; such a configuration is sent first by chunked transfer, and the prepare names it with `deployment.configuration_transfer_id` instead of `configuration`. The transfer messages are authorized like a deployment mutation:
+
+- `BEGIN_CONFIGURATION_TRANSFER {transfer_id, total_bytes, configuration_digest}` → `CONFIGURATION_TRANSFER_STARTED {transfer_id, max_chunk_bytes}`. `total_bytes` is the size of the serialized configuration (including its `configuration_digest` member). Over `max_transfer_bytes` it is `CONFIGURATION_TOO_LARGE`, refused before anything is allocated; at most 4 transfers exist at a time (`RESOURCE_LIMIT`). Repeating a `BEGIN` with the same parameters is accepted; with others it is `TRANSFER_INVALID`.
+- `CONFIGURATION_CHUNK {transfer_id, index, offset, data}` → `CONFIGURATION_CHUNK_ACCEPTED {transfer_id, index, received_bytes}`. `data` is unpadded base64url of 1 to `max_chunk_bytes` bytes. The next chunk must have the next index and start where the previous one ended, without exceeding `total_bytes`; otherwise `TRANSFER_INVALID` (the transfer stays). A chunk repeated with the same content is accepted; with other content it fails the transfer.
+- `END_CONFIGURATION_TRANSFER {transfer_id}` → `CONFIGURATION_TRANSFER_COMPLETE {transfer_id, configuration_digest, total_bytes}` once all bytes arrived (`TRANSFER_INVALID` before) and the bytes are a configuration whose canonical digest is the announced one (otherwise the transfer fails, `TRANSFER_INVALID`).
+
+A transfer, complete or not, expires with the prepare TTL (5 minutes); an unknown or failed transfer is `TRANSFER_NOT_FOUND`. Control connections accept WebSocket messages of up to 4 MiB (`transport::kMaxControlMessageBytes`); data connections one data packet. The deployment client reads each node's limits from `NODE_INFO` and uses the transfer when needed (`transfer-<digest prefix>-r<revision>` as `transfer_id`).
+
+**Not yet implemented:** request-ID replay caching.

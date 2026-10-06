@@ -4,6 +4,7 @@ add_library(s7net STATIC
     src/diagram_deployment.cpp
     src/canonical_json.cpp
     src/deployment_client.cpp
+    src/base64url.cpp
 )
 
 target_include_directories(s7net PUBLIC

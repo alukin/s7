@@ -14,11 +14,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "s7/base64url.hpp"
 #include "s7/canonical_json.hpp"
 #include "s7/diagram_deployment.hpp"
 
 namespace s7 {
 namespace {
+
+// Absolute MVP limits of a configuration transfer (section 5.6).
+constexpr std::size_t kMaxChunkBytes = 1024 * 1024;
+constexpr std::size_t kMaxTransferBytes = 256 * 1024 * 1024;
+constexpr std::size_t kMaxTransfers = 4; // in progress or completed, at a time
 
 [[nodiscard]] auto now_utc_iso8601() -> std::string
 {
@@ -298,9 +304,19 @@ auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, 
         return handle_get_stream_status(request);
     }
     if (request_type == "PREPARE_DEPLOYMENT" || request_type == "COMMIT_DEPLOYMENT" || request_type == "ABORT_DEPLOYMENT" ||
-        request_type == "RECOVER_STREAM") {
+        request_type == "RECOVER_STREAM" || request_type == "BEGIN_CONFIGURATION_TRANSFER" || request_type == "CONFIGURATION_CHUNK" ||
+        request_type == "END_CONFIGURATION_TRANSFER") {
         if (auto denied = authorize_mutation(peer, request_id, request_type)) {
             return std::move(*denied);
+        }
+        if (request_type == "BEGIN_CONFIGURATION_TRANSFER") {
+            return handle_begin_transfer(request);
+        }
+        if (request_type == "CONFIGURATION_CHUNK") {
+            return handle_configuration_chunk(request);
+        }
+        if (request_type == "END_CONFIGURATION_TRANSFER") {
+            return handle_end_transfer(request);
         }
         if (request_type == "RECOVER_STREAM") {
             return handle_recover_stream(request);
@@ -423,6 +439,177 @@ void write_file_atomically(const std::filesystem::path& path, const std::string&
 }
 
 } // namespace
+
+void ControlPlaneMvp::expire_transfers_locked(const std::chrono::steady_clock::time_point now)
+{
+    std::erase_if(transfers_, [now](const auto& item) { return item.second.expires <= now; });
+}
+
+auto ControlPlaneMvp::handle_begin_transfer(const boost::json::object& request) -> boost::json::object
+{
+    const auto request_id = as_string(request, "request_id").value_or("");
+    const auto transfer_id = as_string(request, "transfer_id").value_or("");
+    const auto digest = as_string(request, "configuration_digest").value_or("");
+    const auto* total_value = request.if_contains("total_bytes");
+    const bool total_valid = total_value && ((total_value->is_int64() && total_value->as_int64() > 0) || total_value->is_uint64());
+    if (transfer_id.empty() || transfer_id.size() > 128 || digest.empty() || !total_valid) {
+        return make_error_response(request_id, "INVALID_REQUEST",
+                                   "BEGIN_CONFIGURATION_TRANSFER requires transfer_id (1-128 characters), total_bytes > 0 and configuration_digest.");
+    }
+    const auto total = total_value->to_number<std::uint64_t>();
+    const auto limit = std::min(options_.max_transfer_bytes, kMaxTransferBytes);
+    if (total > limit) {
+        auto error = make_error_response(request_id, "CONFIGURATION_TOO_LARGE", "total_bytes exceeds max_transfer_bytes.");
+        error["details"] = boost::json::object{{"total_bytes", total}, {"max_transfer_bytes", limit}};
+        return error;
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    expire_transfers_locked(std::chrono::steady_clock::now());
+    if (const auto it = transfers_.find(transfer_id); it != transfers_.end()) {
+        if (it->second.total_bytes != total || it->second.configuration_digest != digest) {
+            return make_error_response(request_id, "TRANSFER_INVALID", "Transfer '" + transfer_id + "' exists with other parameters.");
+        }
+    } else {
+        if (transfers_.size() >= kMaxTransfers) {
+            return make_error_response(request_id, "RESOURCE_LIMIT", "Too many configuration transfers in progress.");
+        }
+        auto& transfer = transfers_[transfer_id];
+        transfer.total_bytes = total;
+        transfer.configuration_digest = digest;
+        transfer.expires = std::chrono::steady_clock::now() + options_.prepare_ttl;
+    }
+    boost::json::object out;
+    out["type"] = "CONFIGURATION_TRANSFER_STARTED";
+    out["request_id"] = request_id;
+    out["protocol_version"] = descriptor_.protocol_version;
+    out["transfer_id"] = transfer_id;
+    out["max_chunk_bytes"] = std::min(options_.max_chunk_bytes, kMaxChunkBytes);
+    return out;
+}
+
+auto ControlPlaneMvp::handle_configuration_chunk(const boost::json::object& request) -> boost::json::object
+{
+    const auto request_id = as_string(request, "request_id").value_or("");
+    const auto transfer_id = as_string(request, "transfer_id").value_or("");
+    const auto* index_value = request.if_contains("index");
+    const auto* offset_value = request.if_contains("offset");
+    const auto data = as_string(request, "data");
+    const auto non_negative = [](const boost::json::value* value) {
+        return value && ((value->is_int64() && value->as_int64() >= 0) || value->is_uint64());
+    };
+    if (transfer_id.empty() || !non_negative(index_value) || !non_negative(offset_value) || !data) {
+        return make_error_response(request_id, "INVALID_REQUEST", "CONFIGURATION_CHUNK requires transfer_id, index, offset and data.");
+    }
+    const auto index = index_value->to_number<std::uint64_t>();
+    const auto offset = offset_value->to_number<std::uint64_t>();
+    // Checked against the encoded size first, so an oversized chunk is not decoded.
+    const auto max_chunk = std::min(options_.max_chunk_bytes, kMaxChunkBytes);
+    const auto bytes = data->size() <= (max_chunk + 2) / 3 * 4 ? decode_base64url(*data) : std::nullopt;
+    auto refuse = [&](const std::string& message) {
+        auto error = make_error_response(request_id, "TRANSFER_INVALID", message);
+        error["details"] = boost::json::object{{"transfer_id", transfer_id}, {"index", index}};
+        return error;
+    };
+
+    std::lock_guard<std::mutex> lock(mutex_);
+    expire_transfers_locked(std::chrono::steady_clock::now());
+    const auto it = transfers_.find(transfer_id);
+    if (it == transfers_.end()) {
+        return make_error_response(request_id, "TRANSFER_NOT_FOUND", "No configuration transfer '" + transfer_id + "'.");
+    }
+    auto& transfer = it->second;
+    if (!bytes || bytes->empty() || bytes->size() > max_chunk) {
+        return refuse("data must be 1 to " + std::to_string(max_chunk) + " bytes in unpadded base64url.");
+    }
+    const std::string_view chunk(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+    if (index < transfer.chunks.size()) {
+        // A repeated chunk: the same bytes again are accepted, other bytes fail the transfer.
+        const auto [known_offset, known_length] = transfer.chunks[index];
+        const bool same = !transfer.configuration ? offset == known_offset && known_length == chunk.size() &&
+                                                        std::string_view(transfer.data).substr(known_offset, known_length) == chunk
+                                                  : offset == known_offset && known_length == chunk.size();
+        if (!same) {
+            transfers_.erase(it);
+            return refuse("Chunk " + std::to_string(index) + " was received with other content; the transfer failed.");
+        }
+    } else if (transfer.configuration) {
+        return refuse("The transfer is complete.");
+    } else if (index != transfer.chunks.size()) {
+        return refuse("Chunk " + std::to_string(transfer.chunks.size()) + " is expected next.");
+    } else if (offset != transfer.data.size()) {
+        return refuse("Chunk " + std::to_string(index) + " must start at offset " + std::to_string(transfer.data.size()) + ".");
+    } else if (transfer.data.size() + chunk.size() > transfer.total_bytes) {
+        return refuse("The chunk exceeds total_bytes.");
+    } else {
+        transfer.data.append(chunk);
+        transfer.chunks.emplace_back(offset, chunk.size());
+    }
+    boost::json::object out;
+    out["type"] = "CONFIGURATION_CHUNK_ACCEPTED";
+    out["request_id"] = request_id;
+    out["protocol_version"] = descriptor_.protocol_version;
+    out["transfer_id"] = transfer_id;
+    out["index"] = index;
+    out["received_bytes"] = transfer.configuration ? transfer.total_bytes : transfer.data.size();
+    return out;
+}
+
+auto ControlPlaneMvp::handle_end_transfer(const boost::json::object& request) -> boost::json::object
+{
+    const auto request_id = as_string(request, "request_id").value_or("");
+    const auto transfer_id = as_string(request, "transfer_id").value_or("");
+    if (transfer_id.empty()) {
+        return make_error_response(request_id, "INVALID_REQUEST", "END_CONFIGURATION_TRANSFER requires transfer_id.");
+    }
+    std::lock_guard<std::mutex> lock(mutex_);
+    expire_transfers_locked(std::chrono::steady_clock::now());
+    const auto it = transfers_.find(transfer_id);
+    if (it == transfers_.end()) {
+        return make_error_response(request_id, "TRANSFER_NOT_FOUND", "No configuration transfer '" + transfer_id + "'.");
+    }
+    auto& transfer = it->second;
+    if (!transfer.configuration) {
+        if (transfer.data.size() != transfer.total_bytes) {
+            auto error = make_error_response(request_id, "TRANSFER_INVALID", "The transfer is incomplete.");
+            error["details"] = boost::json::object{{"received_bytes", transfer.data.size()}, {"total_bytes", transfer.total_bytes}};
+            return error;
+        }
+        // The complete bundle must be a configuration whose canonical digest
+        // is the one announced.
+        std::string problem;
+        try {
+            const auto parsed = parse_json_precise(transfer.data);
+            if (!parsed.is_object()) {
+                problem = "The configuration is not a JSON object.";
+            } else {
+                auto digested = parsed.as_object();
+                const auto claimed = as_string(digested, "configuration_digest").value_or("");
+                digested.erase("configuration_digest");
+                if (claimed != transfer.configuration_digest || configuration_digest(digested) != claimed) {
+                    problem = "The configuration does not match configuration_digest.";
+                } else {
+                    transfer.configuration = parsed.as_object();
+                }
+            }
+        } catch (const std::exception& ex) {
+            problem = std::string("The configuration cannot be read: ") + ex.what();
+        }
+        if (!problem.empty()) {
+            transfers_.erase(it);
+            return make_error_response(request_id, "TRANSFER_INVALID", problem + " The transfer failed.");
+        }
+        transfer.data.clear();
+        transfer.data.shrink_to_fit();
+    }
+    boost::json::object out;
+    out["type"] = "CONFIGURATION_TRANSFER_COMPLETE";
+    out["request_id"] = request_id;
+    out["protocol_version"] = descriptor_.protocol_version;
+    out["transfer_id"] = transfer_id;
+    out["configuration_digest"] = transfer.configuration_digest;
+    out["total_bytes"] = transfer.total_bytes;
+    return out;
+}
 
 bool ControlPlaneMvp::persist_active_locked() const
 {
@@ -592,6 +779,11 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     for (const auto extension : wire::kSupportedExtensions) {
         extensions.emplace_back(std::format("0x{:04X}", extension));
     }
+    out["control_limits"] = boost::json::object{
+        {"max_configuration_bytes", options_.max_configuration_bytes},
+        {"max_chunk_bytes", std::min(options_.max_chunk_bytes, kMaxChunkBytes)},
+        {"max_transfer_bytes", std::min(options_.max_transfer_bytes, kMaxTransferBytes)},
+    };
     out["data_protocol"] = boost::json::object{{"packet_versions", std::move(packet_versions)}, {"extensions", std::move(extensions)}};
     out["clock_domains"] = boost::json::array{
         boost::json::object{{"id", "model"}, {"kind", "model"}, {"continuous_across_restart", true}},
@@ -849,11 +1041,34 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
         return invalid("deployment.base_revision must be an integer in [0, 2^53] (0: no active deployment).");
     }
 
+    // The configuration comes in the request, or from a completed chunked transfer.
+    boost::json::object configuration;
     const auto configuration_it = deployment.find("configuration");
-    if (configuration_it == deployment.end() || !configuration_it->value().is_object()) {
-        return invalid("deployment.configuration must be an object.");
+    const auto transfer_id = as_string(deployment, "configuration_transfer_id");
+    if ((configuration_it != deployment.end()) == transfer_id.has_value()) {
+        return invalid("deployment needs either configuration (an object) or configuration_transfer_id.");
     }
-    const auto& configuration = configuration_it->value().as_object();
+    if (transfer_id) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        expire_transfers_locked(std::chrono::steady_clock::now());
+        const auto it = transfers_.find(*transfer_id);
+        if (it == transfers_.end() || !it->second.configuration) {
+            return make_error_response(request_id, "TRANSFER_NOT_FOUND",
+                                       "No completed configuration transfer '" + *transfer_id + "' (it may have expired).");
+        }
+        configuration = *it->second.configuration;
+    } else {
+        if (!configuration_it->value().is_object()) {
+            return invalid("deployment.configuration must be an object.");
+        }
+        configuration = configuration_it->value().as_object();
+        if (const auto size = boost::json::serialize(configuration).size(); size > options_.max_configuration_bytes) {
+            auto error = make_error_response(request_id, "CONFIGURATION_TOO_LARGE",
+                                             "The configuration exceeds max_configuration_bytes; send it by chunked transfer.");
+            error["details"] = boost::json::object{{"bytes", size}, {"max_configuration_bytes", options_.max_configuration_bytes}};
+            return error;
+        }
+    }
     const auto project_revision = as_string(configuration, "project_revision").value_or("");
     if (project_revision.empty()) {
         return invalid("configuration.project_revision must be a non-empty string.");

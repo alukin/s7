@@ -693,9 +693,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
 
         void start()
         {
-            with_ws([](auto& ws) {
+            with_ws([this](auto& ws) {
                 ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::server));
-                ws.read_message_max(wire::kMaxPayloadBytes + 4096);
+                ws.read_message_max(is_data ? wire::kMaxPayloadBytes + 4096 : kMaxControlMessageBytes);
             });
             read();
         }

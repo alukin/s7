@@ -17,6 +17,7 @@
 
 #include <boost/json.hpp>
 
+#include <s7/base64url.hpp>
 #include <s7/builtin_element_registry.hpp>
 #include <s7/canonical_json.hpp>
 #include <s7/deployment_client.hpp>
@@ -758,6 +759,155 @@ void test_deployment_survives_restart()
     std::filesystem::remove_all(storage);
 }
 
+void test_base64url()
+{
+    std::vector<std::uint8_t> bytes;
+    for (int length = 0; length < 12; ++length) {
+        const auto text = s7::encode_base64url(bytes);
+        expect(text.find('=') == std::string::npos && s7::decode_base64url(text) == bytes, "round trip of " + std::to_string(length) + " bytes");
+        bytes.push_back(static_cast<std::uint8_t>(0xF0 + length));
+    }
+    expect(s7::encode_base64url(std::vector<std::uint8_t>{0xFB, 0xFF}) == "-_8", "url alphabet, no padding");
+    expect(!s7::decode_base64url("-_8=") && !s7::decode_base64url("a+b/") && !s7::decode_base64url("A") && !s7::decode_base64url("-_9"),
+           "padding, the standard alphabet, impossible lengths and spare bits are refused");
+}
+
+// A diagram of n constants on this node (about 100 bytes per element).
+json::object constants_diagram(const std::size_t n, const std::string& endpoint)
+{
+    json::array elements;
+    for (std::size_t i = 0; i < n; ++i) {
+        elements.push_back(json::object{{"id", "c" + std::to_string(i)},
+                                        {"type", "Constant"},
+                                        {"params", json::object{{"value", static_cast<double>(i)}}},
+                                        {"node", kNodeUuid}});
+    }
+    return json::object{
+        {"document_kind", "s7.diagram"},
+        {"runtime_nodes", json::array{json::object{{"node_uuid", kNodeUuid}, {"endpoint", endpoint}}}},
+        {"schema", json::object{{"name", "constants"}, {"elements", std::move(elements)}}},
+    };
+}
+
+// Configurations larger than a node takes directly arrive in chunks.
+void test_chunked_transfer()
+{
+    auto host = std::make_shared<RecordingHost>();
+    s7::ControlPlaneMvp node{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+                             s7::ControlPlaneOptions{.authorization = studio_authorization(),
+                                                     .deployment_host = host,
+                                                     .max_configuration_bytes = 2048,
+                                                     .max_chunk_bytes = 512,
+                                                     .max_transfer_bytes = 1024 * 1024}};
+    Client studio(node, verified_peer("s7_studio.cert.pem"));
+    const auto info = studio.send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
+    expect(info.at("control_limits") == json::object{{"max_configuration_bytes", 2048}, {"max_chunk_bytes", 512}, {"max_transfer_bytes", 1024 * 1024}},
+           "limits advertised: " + json::serialize(info.at("control_limits")));
+
+    // The deployment client sends a large configuration in chunks.
+    const auto diagram = constants_diagram(40, "wss://a");
+    std::map<std::string, int> sent;
+    const auto deployed = s7::deployment::deploy_diagram(diagram, s7::deployment::infer_output_types(diagram),
+                                                         [&](const s7::deployment::RuntimeNode&, const json::object& message) {
+                                                             ++sent[std::string(message.at("type").as_string())];
+                                                             return studio.send(message);
+                                                         });
+    expect(deployed.committed, "deployed by chunked transfer: " + (deployed.errors.empty() ? std::string() : deployed.errors.front()));
+    expect(sent["BEGIN_CONFIGURATION_TRANSFER"] == 1 && sent["CONFIGURATION_CHUNK"] > 4 && sent["END_CONFIGURATION_TRANSFER"] == 1,
+           "sent in " + std::to_string(sent["CONFIGURATION_CHUNK"]) + " chunks");
+    expect(host->active && host->active->at("elements").as_array().size() == 40, "the node runs the whole configuration");
+
+    // Directly, the same configuration is too large.
+    json::object configuration{{"project_revision", "p"}, {"diagram", diagram}};
+    configuration["configuration_digest"] = s7::configuration_digest(configuration);
+    auto direct = json::object{{"type", "PREPARE_DEPLOYMENT"}, {"request_id", "d"}, {"protocol_version", 1},
+                               {"deployment", json::object{{"deployment_id", "big"}, {"revision", 2}, {"base_revision", 1}, {"configuration", configuration}}}};
+    expect_error(studio.send(direct), "CONFIGURATION_TOO_LARGE", "a direct configuration over the limit");
+
+    // The transfer rules.
+    const auto text = json::serialize(configuration);
+    const auto* bytes = reinterpret_cast<const std::uint8_t*>(text.data());
+    auto message = [](const char* type, json::object fields) {
+        fields["type"] = type;
+        fields["request_id"] = "t";
+        fields["protocol_version"] = 1;
+        return fields;
+    };
+    auto begin = [&](const std::string& id, const std::uint64_t total, const std::string& digest) {
+        return studio.send(message("BEGIN_CONFIGURATION_TRANSFER", {{"transfer_id", id}, {"total_bytes", total}, {"configuration_digest", digest}}));
+    };
+    auto chunk = [&](const std::string& id, const std::uint64_t index, const std::uint64_t offset, const std::size_t length) {
+        return studio.send(message("CONFIGURATION_CHUNK", {{"transfer_id", id}, {"index", index}, {"offset", offset},
+                                                           {"data", s7::encode_base64url({bytes + offset, length})}}));
+    };
+    auto end = [&](const std::string& id) { return studio.send(message("END_CONFIGURATION_TRANSFER", {{"transfer_id", id}})); };
+    const auto digest = std::string(configuration.at("configuration_digest").as_string());
+
+    expect_error(Client(node, ControlPeer{}).send(message("BEGIN_CONFIGURATION_TRANSFER", {{"transfer_id", "x"}, {"total_bytes", 10}, {"configuration_digest", digest}})),
+                 "UNAUTHORIZED", "a transfer needs Studio authority");
+    expect_error(begin("huge", 2 * 1024 * 1024, digest), "CONFIGURATION_TOO_LARGE", "declared size over max_transfer_bytes");
+    expect(begin("t1", text.size(), digest).at("type").as_string() == "CONFIGURATION_TRANSFER_STARTED", "started");
+    expect(begin("t1", text.size(), digest).at("type").as_string() == "CONFIGURATION_TRANSFER_STARTED", "BEGIN repeated");
+    expect_error(begin("t1", text.size() + 1, digest), "TRANSFER_INVALID", "BEGIN repeated with other parameters");
+    expect_error(chunk("t1", 1, 0, 512), "TRANSFER_INVALID", "a missing index");
+    expect_error(chunk("t1", 0, 5, 512), "TRANSFER_INVALID", "an inconsistent offset");
+    expect_error(chunk("t1", 0, 0, 513), "TRANSFER_INVALID", "a chunk over max_chunk_bytes");
+    expect(chunk("t1", 0, 0, 512).at("received_bytes").to_number<std::uint64_t>() == 512, "chunk 0");
+    expect(chunk("t1", 0, 0, 512).at("received_bytes").to_number<std::uint64_t>() == 512, "an identical repeat is accepted");
+    expect_error(end("t1"), "TRANSFER_INVALID", "END before all bytes arrived");
+    expect_error(studio.send(message("CONFIGURATION_CHUNK", {{"transfer_id", "t1"}, {"index", 1}, {"offset", 512}, {"data", "a+b/"}})),
+                 "TRANSFER_INVALID", "data that is not base64url");
+    expect_error(chunk("t1", 0, 0, 511), "TRANSFER_INVALID", "a conflicting repeat");
+    expect_error(chunk("t1", 1, 512, 512), "TRANSFER_NOT_FOUND", "a conflicting repeat fails the transfer");
+
+    // A complete transfer whose content does not match its digest fails.
+    expect(begin("t2", text.size(), "sha256:" + std::string(64, '0')).at("type").as_string() == "CONFIGURATION_TRANSFER_STARTED", "t2");
+    for (std::size_t offset = 0, index = 0; offset < text.size(); offset += 512, ++index) {
+        expect(chunk("t2", index, offset, std::min<std::size_t>(512, text.size() - offset)).at("type").as_string() == "CONFIGURATION_CHUNK_ACCEPTED",
+               "t2 chunk");
+    }
+    expect_error(end("t2"), "TRANSFER_INVALID", "a digest mismatch");
+
+    auto by_transfer = direct;
+    by_transfer["deployment"].as_object().erase("configuration");
+    by_transfer["deployment"].as_object()["configuration_transfer_id"] = "t2";
+    expect_error(studio.send(by_transfer), "TRANSFER_NOT_FOUND", "PREPARE from a failed transfer");
+}
+
+// A configuration of about 2 MB reaches a runtime over mTLS in 1 MiB chunks
+// (larger than a data message may be).
+void test_large_deployment_over_mtls()
+{
+    auto definition = s7::JsonSchemaLoader::load_from_json(constant_gain_fragment(1.0));
+    definition.server.enabled = true;
+    definition.server.port = 0;
+    definition.server.tls = {.enabled = true,
+                             .cert_file = cert_path("s7_runtime_node.cert.pem"),
+                             .key_file = cert_path("s7_runtime_node.key.pem"),
+                             .ca_file = cert_path("s7_root_ca.cert.pem"),
+                             .require_client_cert = true};
+    definition.control = studio_authorization();
+    const auto state_dir = make_temp_state_dir("large");
+    {
+        s7::RuntimeService service{definition, state_dir};
+        service.initialize_graph();
+        const auto port = service.start_websocket_server();
+        const auto diagram = constants_diagram(20000, "wss://127.0.0.1:" + std::to_string(port));
+        expect(json::serialize(diagram).size() > 2'000'000, "the diagram is over 2 MB");
+        s7::deployment::BeastControlRequester requester({.enabled = true,
+                                                         .cert_file = cert_path("s7_studio.cert.pem"),
+                                                         .key_file = cert_path("s7_studio.key.pem"),
+                                                         .ca_file = cert_path("s7_root_ca.cert.pem")});
+        const auto deployed = s7::deployment::deploy_diagram(
+            diagram, s7::deployment::infer_output_types(diagram),
+            [&](const s7::deployment::RuntimeNode& node, const json::object& message) { return requester(node, message); });
+        expect(deployed.committed, "a 2 MB diagram deployed: " + (deployed.errors.empty() ? std::string() : deployed.errors.front()));
+        service.step();
+        expect(service.active_real_output("c19999") == 19999.0, "the large graph runs");
+    }
+    std::filesystem::remove_all(state_dir);
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -769,7 +919,10 @@ try {
     s7::register_net_elements(s7::ElementRegistry::instance());
     test_deploy_client();
     test_deployment_survives_restart();
+    test_base64url();
+    test_chunked_transfer();
     test_runtime_deployment_over_mtls();
+    test_large_deployment_over_mtls();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7runtime deployment smoke: " << ex.what() << '\n';

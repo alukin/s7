@@ -103,6 +103,14 @@ struct ControlPlaneOptions {
     std::chrono::seconds prepare_ttl{std::chrono::minutes(5)};
     transport::RuntimeNetEndpointPtr network; // streams for GET_STREAM_STATUS / RECOVER_STREAM
     std::function<void()> on_stream_recovered; // after a successful RECOVER_STREAM
+    // Configuration size limits (S7_Control_Protocol_MVP.md section 5.6),
+    // advertised in NODE_INFO.control_limits: PREPARE_DEPLOYMENT carries a
+    // configuration of up to max_configuration_bytes; a larger one arrives by
+    // chunked transfer, in chunks of up to max_chunk_bytes (at most 1 MiB),
+    // up to max_transfer_bytes in all (at most 256 MiB).
+    std::size_t max_configuration_bytes{1024 * 1024};
+    std::size_t max_chunk_bytes{1024 * 1024};
+    std::size_t max_transfer_bytes{64 * 1024 * 1024};
 };
 
 class ControlPlaneMvp {
@@ -166,6 +174,16 @@ private:
         bool restored{false}; // restored at startup from deployment.json
     };
 
+    // A configuration arriving in chunks (BEGIN / CHUNK / END_CONFIGURATION_TRANSFER).
+    struct ConfigurationTransfer {
+        std::uint64_t total_bytes{};
+        std::string configuration_digest;
+        std::string data;                                            // received so far
+        std::vector<std::pair<std::uint64_t, std::uint64_t>> chunks; // offset, length by index
+        std::chrono::steady_clock::time_point expires;
+        std::optional<boost::json::object> configuration; // verified, after END
+    };
+
     struct DeploymentOutcome {
         std::string deployment_id;
         std::uint64_t revision{};
@@ -195,6 +213,10 @@ private:
     [[nodiscard]] auto handle_get_stream_status(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_get_network_configuration(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_recover_stream(const boost::json::object& request) -> boost::json::object;
+    [[nodiscard]] auto handle_begin_transfer(const boost::json::object& request) -> boost::json::object;
+    [[nodiscard]] auto handle_configuration_chunk(const boost::json::object& request) -> boost::json::object;
+    [[nodiscard]] auto handle_end_transfer(const boost::json::object& request) -> boost::json::object;
+    void expire_transfers_locked(std::chrono::steady_clock::time_point now);
 
     void load_peers_from_disk();
     void persist_peers_to_disk() const;
@@ -206,6 +228,7 @@ private:
     std::unordered_map<std::string, PreparedDeployment> prepared_; // key: deployment_id#revision
     std::optional<ActiveDeployment> active_;
     std::vector<DeploymentOutcome> history_; // bounded, newest last
+    std::unordered_map<std::string, ConfigurationTransfer> transfers_;
 };
 
 } // namespace s7
