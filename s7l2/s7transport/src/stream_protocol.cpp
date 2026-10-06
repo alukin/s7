@@ -36,9 +36,9 @@ std::string to_string(const FaultCode code)
 
 std::int64_t element_time_ns(const SampleRate& rate, const std::uint64_t index)
 {
-    const auto ns = static_cast<unsigned __int128>(index) * 1'000'000'000u * rate.denominator / rate.numerator;
-    return ns > static_cast<unsigned __int128>(std::numeric_limits<std::int64_t>::max()) ? std::numeric_limits<std::int64_t>::max()
-                                                                                         : static_cast<std::int64_t>(ns);
+    const auto ns = static_cast<uint128_t>(index) * 1'000'000'000u * rate.denominator / rate.numerator;
+    return ns > static_cast<uint128_t>(std::numeric_limits<std::int64_t>::max()) ? std::numeric_limits<std::int64_t>::max()
+                                                                                 : static_cast<std::int64_t>(ns);
 }
 
 namespace {

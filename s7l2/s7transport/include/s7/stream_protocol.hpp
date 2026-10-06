@@ -114,7 +114,7 @@ private:
     static constexpr std::size_t kBuckets = 40; // bucket k: latencies below 2^k microseconds
     std::array<std::uint64_t, kBuckets> counts_{};
     std::uint64_t samples_{};
-    __int128 sum_ns_{};
+    int128_t sum_ns_{};
     std::int64_t min_ns_{};
     std::int64_t max_ns_{};
     std::int64_t last_ns_{};

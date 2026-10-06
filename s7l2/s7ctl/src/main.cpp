@@ -180,7 +180,7 @@ int deploy(const Arguments& args)
     s7::deployment::BeastControlRequester requester(args.tls);
     const auto result = s7::deployment::deploy_diagram(
         diagram, types, [&](const auto& node, const auto& message) { return requester(node, message); },
-        s7::deployment::DeployOptions{.deployment_id = args.deployment_id, .project_revision = {}});
+        s7::deployment::DeployOptions{.deployment_id = args.deployment_id, .project_revision = {}, .activation_delay = {}});
     for (const auto& node : result.nodes) {
         std::cout << "node " << node.node_uuid << " " << node.endpoint << " " << node.status
                   << (node.message.empty() ? "" : ": " + node.message) << '\n';
