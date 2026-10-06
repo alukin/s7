@@ -29,6 +29,17 @@ target_link_libraries(s7transport_stream_protocol_smoke PRIVATE s7transport)
 add_test(NAME s7transport_stream_protocol_smoke COMMAND s7transport_stream_protocol_smoke)
 add_test(NAME s7transport_wire_format_smoke COMMAND s7transport_wire_format_smoke)
 
+# The shared wire fixtures: a second, Python decoder passes all of them, and
+# they are what the generator writes.
+find_package(Python3 COMPONENTS Interpreter)
+if (Python3_Interpreter_FOUND)
+    add_test(NAME s7transport_wire_fixtures_python
+        COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/check_wire_fixtures.py ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wire_v1.json)
+    add_test(NAME s7transport_wire_fixtures_current
+        COMMAND sh -c "${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/gen_wire_fixtures.py \"$1\" > /dev/null && cmp \"$1\" ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/wire_v1.json"
+            sh ${CMAKE_CURRENT_BINARY_DIR}/wire_v1.generated.json)
+endif()
+
 
 add_executable(s7transport_beast_stream_smoke tests/beast_stream_smoke.cpp)
 target_link_libraries(s7transport_beast_stream_smoke PRIVATE s7transport)

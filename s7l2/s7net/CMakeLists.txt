@@ -25,4 +25,6 @@ add_test(NAME s7net_smoke COMMAND s7net_smoke)
 
 add_executable(s7net_diagram_deployment_smoke tests/diagram_deployment_smoke.cpp)
 target_link_libraries(s7net_diagram_deployment_smoke PRIVATE s7net)
+target_compile_definitions(s7net_diagram_deployment_smoke PRIVATE
+    S7_WIRE_FIXTURES="${PROJECT_SOURCE_DIR}/s7transport/tests/fixtures/wire_v1.json")
 add_test(NAME s7net_diagram_deployment_smoke COMMAND s7net_diagram_deployment_smoke)

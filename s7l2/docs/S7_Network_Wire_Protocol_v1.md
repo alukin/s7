@@ -206,7 +206,7 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 
 ## 12. Remaining Work Before Interoperability Freeze
 
-1. Byte-exact fixtures shared by all implementations. Packets and stream control messages: `s7transport/tests/fixtures/wire_v1.json`, written by the independent Python reference encoder `tools/gen_wire_fixtures.py` and checked by the C++ codec (`s7transport_wire_format_smoke`). Descriptor fixtures remain to be added.
+1. ~~Byte-exact fixtures shared by all implementations.~~ `s7transport/tests/fixtures/wire_v1.json` (see its `README.md`): packets of every type of Section 8, timestamp records, stream control messages, malformed messages, and valid and invalid stream descriptors. Written by the Python reference encoder `tools/gen_wire_fixtures.py`; checked by the C++ codec and descriptor reader and by `tools/check_wire_fixtures.py`, a separate Python decoder written from this specification that is the reference for decoders in other languages.
 2. The C++ reference implementation of Sections 7, 8 and 12.1.
 3. The durable format of the producer's sequence-range reservation.
 4. ~~Exact JSON schemas for `GET_STREAM_STATUS`, `RECOVER_STREAM` and the `NODE_INFO` additions (`clock_domains`, `data_protocol`).~~ Specified in `S7_Control_Protocol_MVP.md` sections 5.2 and 10.1.
@@ -273,4 +273,4 @@ The C++ reference implementation (2026-10-05) implements:
 - timestamp profiles (Sections 6 and 7.1): derived times on uniformly sampled streams, `TIMESTAMPS` records on the others, checked by the consumer (`TIMESTAMP_PROFILE_MISMATCH`), and each received element's times reported to the graph side (`ReceiveResult::timestamps`, `NetSource::last_timestamps()`);
 - `NODE_INFO.data_protocol` and `clock_domains`, checked by the deployment client before preparing any node.
 
-Not yet implemented: `SOURCE_TIME` production and relaying. The previous 54-byte big-endian prototype codec has been removed. Fixtures for Rust, Python and JVM decoders remain to be added before interoperability freeze.
+Not yet implemented: `SOURCE_TIME` production and relaying. The previous 54-byte big-endian prototype codec has been removed. The fixtures (Section 12 item 1) are what a Rust, JVM or other decoder is checked against; the Python decoder passes them.

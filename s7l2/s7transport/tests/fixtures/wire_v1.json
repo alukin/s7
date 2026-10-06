@@ -233,6 +233,151 @@
       ],
       "timestamps": [],
       "hex": "01000602090000006700000000000000feffffffffffffffffffffffffffffff00000000000000000000000000000001"
+    },
+    {
+      "name": "i8_values",
+      "type": "I8",
+      "stream_alias": 10,
+      "sequence": 0,
+      "values": [
+        -128,
+        127,
+        0
+      ],
+      "timestamps": [],
+      "hex": "010001000a0000000000000000000000807f00"
+    },
+    {
+      "name": "u8_values",
+      "type": "U8",
+      "stream_alias": 10,
+      "sequence": 1,
+      "values": [
+        0,
+        255
+      ],
+      "timestamps": [],
+      "hex": "010002000a000000010000000000000000ff"
+    },
+    {
+      "name": "u16_values",
+      "type": "U16",
+      "stream_alias": 10,
+      "sequence": 2,
+      "values": [
+        0,
+        65535,
+        4660
+      ],
+      "timestamps": [],
+      "hex": "010006000a00000002000000000000000000ffff3412"
+    },
+    {
+      "name": "u64_max",
+      "type": "U64",
+      "stream_alias": 10,
+      "sequence": 3,
+      "values": [
+        "18446744073709551615"
+      ],
+      "timestamps": [],
+      "hex": "01000a000a0000000300000000000000ffffffffffffffff"
+    },
+    {
+      "name": "c32_value",
+      "type": "C32",
+      "stream_alias": 11,
+      "sequence": 0,
+      "values": [
+        [
+          -1.5,
+          0.25
+        ]
+      ],
+      "timestamps": [],
+      "hex": "010002010b00000000000000000000000000c0bf0000803e"
+    },
+    {
+      "name": "c128_value",
+      "type": "C128",
+      "stream_alias": 11,
+      "sequence": 1,
+      "values": [
+        [
+          2.0,
+          -0.5
+        ]
+      ],
+      "timestamps": [],
+      "hex": "010004010b0000000100000000000000000000000000000000000000000000400000000000000000000000000000febf"
+    },
+    {
+      "name": "ci32_iq",
+      "type": "CI32",
+      "stream_alias": 11,
+      "sequence": 2,
+      "values": [
+        [
+          -2147483648,
+          2147483647
+        ]
+      ],
+      "timestamps": [],
+      "hex": "010004020b000000020000000000000000000080ffffff7f"
+    },
+    {
+      "name": "ci64_iq",
+      "type": "CI64",
+      "stream_alias": 11,
+      "sequence": 3,
+      "values": [
+        [
+          "-9223372036854775808",
+          "9223372036854775807"
+        ]
+      ],
+      "timestamps": [],
+      "hex": "010005020b00000003000000000000000000000000000080ffffffffffffff7f"
+    },
+    {
+      "name": "f64_processing_time",
+      "type": "F64",
+      "stream_alias": 12,
+      "sequence": 0,
+      "values": [
+        -0.0
+      ],
+      "timestamps": [
+        {
+          "role": "PROCESSING_TIME",
+          "ns": 1759740000123456789
+        }
+      ],
+      "hex": "01010f000c00000000000000000000000e0001800a000103158d67e434da6b180000000000000080"
+    },
+    {
+      "name": "f64_all_roles",
+      "type": "F64",
+      "stream_alias": 12,
+      "sequence": 1,
+      "values": [
+        2.5
+      ],
+      "timestamps": [
+        {
+          "role": "PROCESSING_TIME",
+          "ns": 3
+        },
+        {
+          "role": "MODEL_TIME",
+          "ns": 1
+        },
+        {
+          "role": "SOURCE_TIME",
+          "ns": -2
+        }
+      ],
+      "hex": "01010f000c0000000100000000000000200001801c000301010000000000000002feffffffffffffff0303000000000000000000000000000000000000000440"
     }
   ],
   "data_ignoring_extensions": [
@@ -335,6 +480,26 @@
       "reason": "timestamp roles not ascending"
     },
     {
+      "name": "unknown_role",
+      "hex": "01010f000100000001000000000000000e0001800a0001040000000000000000000000000000f03f",
+      "reason": "unknown timestamp role"
+    },
+    {
+      "name": "repeated_role",
+      "hex": "01010f000100000001000000000000001700018013000201000000000000000001050000000000000000000000000000000000000000f03f",
+      "reason": "a timestamp role repeated"
+    },
+    {
+      "name": "timestamps_bad_length",
+      "hex": "01010f000100000001000000000000000e0001800b0001010000000000000000000000000000f03f",
+      "reason": "TIMESTAMPS value length is not 1 + 9 * count"
+    },
+    {
+      "name": "timestamps_twice",
+      "hex": "01010f000100000001000000000000001c0001800a000101000000000000000001800a00010100000000000000000000000000000000f03f",
+      "reason": "TIMESTAMPS extension twice"
+    },
+    {
       "name": "control_reserved",
       "hex": "8101010001000000010000000000000000000000000000000000000000000000",
       "reason": "control reserved field"
@@ -348,6 +513,744 @@
       "name": "control_short",
       "hex": "81010000010000000100000000000000000000000000000000000000000000",
       "reason": "control message length"
+    }
+  ],
+  "descriptors": [
+    {
+      "name": "minimal",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_elements_per_packet": 1024,
+        "max_batch_latency_ms": 10,
+        "send_log": {
+          "max_packets": 4096,
+          "max_block_ms": 2000
+        },
+        "max_wait_ms": 2000
+      }
+    },
+    {
+      "name": "uniform_model_time",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "sample_rate": {
+          "numerator": 48000,
+          "denominator": 1
+        }
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "sample_rate": {
+          "numerator": 48000,
+          "denominator": 1
+        },
+        "max_elements_per_packet": 1024,
+        "max_batch_latency_ms": 10,
+        "send_log": {
+          "max_packets": 4096,
+          "max_block_ms": 2000
+        },
+        "max_wait_ms": 2000
+      }
+    },
+    {
+      "name": "rate_from_dt_ns",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "sample_rate": {
+          "numerator": 1000000000,
+          "denominator": 333333333
+        }
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "sample_rate": {
+          "numerator": 1000000000,
+          "denominator": 333333333
+        },
+        "max_elements_per_packet": 1024,
+        "max_batch_latency_ms": 10,
+        "send_log": {
+          "max_packets": 4096,
+          "max_block_ms": 2000
+        },
+        "max_wait_ms": 2000
+      }
+    },
+    {
+      "name": "explicit_processing_time",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "CI16",
+        "timestamps": [
+          {
+            "role": "PROCESSING_TIME",
+            "clock_domain": "node:aaaaaaaa-0000-4000-8000-000000000001:utc"
+          }
+        ]
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "CI16",
+        "timestamps": [
+          {
+            "role": "PROCESSING_TIME",
+            "clock_domain": "node:aaaaaaaa-0000-4000-8000-000000000001:utc"
+          }
+        ],
+        "max_elements_per_packet": 1024,
+        "max_batch_latency_ms": 10,
+        "send_log": {
+          "max_packets": 4096,
+          "max_block_ms": 2000
+        },
+        "max_wait_ms": 2000
+      }
+    },
+    {
+      "name": "all_roles_fan_out",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          },
+          {
+            "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+            "element": "scope",
+            "port": 2
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          },
+          {
+            "role": "SOURCE_TIME",
+            "clock_domain": "sdr0"
+          },
+          {
+            "role": "PROCESSING_TIME",
+            "clock_domain": "node:aaaaaaaa-0000-4000-8000-000000000001:utc"
+          }
+        ]
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          },
+          {
+            "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+            "element": "scope",
+            "port": 2
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          },
+          {
+            "role": "SOURCE_TIME",
+            "clock_domain": "sdr0"
+          },
+          {
+            "role": "PROCESSING_TIME",
+            "clock_domain": "node:aaaaaaaa-0000-4000-8000-000000000001:utc"
+          }
+        ],
+        "max_elements_per_packet": 1024,
+        "max_batch_latency_ms": 10,
+        "send_log": {
+          "max_packets": 4096,
+          "max_block_ms": 2000
+        },
+        "max_wait_ms": 2000
+      }
+    },
+    {
+      "name": "all_settings",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_elements_per_packet": 64,
+        "max_batch_latency_ms": 3,
+        "send_log": {
+          "max_packets": 128,
+          "max_block_ms": 500
+        },
+        "max_wait_ms": 250
+      },
+      "canonical": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_elements_per_packet": 64,
+        "max_batch_latency_ms": 3,
+        "send_log": {
+          "max_packets": 128,
+          "max_block_ms": 500
+        },
+        "max_wait_ms": 250
+      }
+    }
+  ],
+  "invalid_descriptors": [
+    {
+      "name": "missing_stream_id",
+      "descriptor": {
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "stream_id is required"
+    },
+    {
+      "name": "stream_id_not_uuid",
+      "descriptor": {
+        "stream_id": "not-a-uuid",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "stream_id is not a UUID"
+    },
+    {
+      "name": "no_consumers",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "at least one consumer"
+    },
+    {
+      "name": "unknown_data_type",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F80",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "unknown data_type"
+    },
+    {
+      "name": "negative_port",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": -1
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "a port is a non-negative integer"
+    },
+    {
+      "name": "no_timestamps",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": []
+      },
+      "reason": "at least one timestamp role"
+    },
+    {
+      "name": "timestamps_missing",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64"
+      },
+      "reason": "timestamps are required"
+    },
+    {
+      "name": "unknown_role",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "WALL_TIME",
+            "clock_domain": "x"
+          }
+        ]
+      },
+      "reason": "unknown timestamp role"
+    },
+    {
+      "name": "roles_not_ascending",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "SOURCE_TIME",
+            "clock_domain": "s"
+          },
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "roles not ascending"
+    },
+    {
+      "name": "repeated_role",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          },
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ]
+      },
+      "reason": "a role repeated"
+    },
+    {
+      "name": "role_without_domain",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME"
+          }
+        ]
+      },
+      "reason": "clock_domain is required"
+    },
+    {
+      "name": "zero_rate",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "sample_rate": {
+          "numerator": 0,
+          "denominator": 1
+        }
+      },
+      "reason": "a sample rate is positive"
+    },
+    {
+      "name": "rate_without_denominator",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "sample_rate": {
+          "numerator": 1000
+        }
+      },
+      "reason": "denominator is required"
+    },
+    {
+      "name": "zero_batch",
+      "descriptor": {
+        "stream_id": "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370",
+        "producer": {
+          "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001",
+          "element": "osc",
+          "port": 0
+        },
+        "consumers": [
+          {
+            "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002",
+            "element": "gain",
+            "port": 0
+          }
+        ],
+        "data_type": "F64",
+        "timestamps": [
+          {
+            "role": "MODEL_TIME",
+            "clock_domain": "model"
+          }
+        ],
+        "max_elements_per_packet": 0
+      },
+      "reason": "max_elements_per_packet is positive"
     }
   ]
 }

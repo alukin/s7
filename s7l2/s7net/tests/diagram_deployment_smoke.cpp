@@ -1,7 +1,9 @@
 // Splitting one diagram across nodes: placement, stream assignment and the
 // part each node runs.
 #include <chrono>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -265,6 +267,41 @@ void test_timing()
     expect(rejected, "MODEL_TIME without a sample rate is refused");
 }
 
+
+// The stream descriptor fixtures shared by every implementation
+// (tools/gen_wire_fixtures.py): valid descriptors read to their canonical
+// form, invalid ones refused.
+void test_descriptor_fixtures()
+{
+    std::ifstream in(S7_WIRE_FIXTURES);
+    expect(static_cast<bool>(in), "fixture file readable");
+    const auto fixtures = json::parse(std::string(std::istreambuf_iterator<char>(in), {})).as_object();
+    std::size_t checked = 0;
+    for (const auto& entry : fixtures.at("descriptors").as_array()) {
+        const auto& fixture = entry.as_object();
+        const auto name = std::string(fixture.at("name").as_string());
+        const json::object diagram{{"streams", json::array{fixture.at("descriptor")}}};
+        const auto streams = deployment::parse_streams(diagram);
+        expect(streams.size() == 1, name + ": one stream");
+        expect(json::value(deployment::to_json(streams.front())) == fixture.at("canonical"),
+               name + ": canonical form " + json::serialize(deployment::to_json(streams.front())));
+        ++checked;
+    }
+    for (const auto& entry : fixtures.at("invalid_descriptors").as_array()) {
+        const auto& fixture = entry.as_object();
+        const auto name = std::string(fixture.at("name").as_string());
+        bool refused = false;
+        try {
+            static_cast<void>(deployment::parse_streams(json::object{{"streams", json::array{fixture.at("descriptor")}}}));
+        } catch (const std::exception&) {
+            refused = true;
+        }
+        expect(refused, name + " is refused (" + std::string(fixture.at("reason").as_string()) + ")");
+        ++checked;
+    }
+    expect(checked >= 20, "descriptor fixtures checked");
+}
+
 } // namespace
 
 int main()
@@ -274,6 +311,7 @@ try {
     test_assignment();
     test_node_parts();
     test_timing();
+    test_descriptor_fixtures();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7net diagram deployment smoke: " << ex.what() << '\n';

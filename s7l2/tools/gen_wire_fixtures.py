@@ -5,7 +5,8 @@ An independent reference implementation of S7_Network_Wire_Protocol_v1.md
 (sections 7, 8 and 12.1), written from the specification rather than from the
 C++ code. It writes s7transport/tests/fixtures/wire_v1.json; every
 implementation must encode the valid cases to exactly these bytes, decode
-them back to the same fields, and reject the invalid ones.
+them back to the same fields, and reject the invalid ones; and read the valid
+stream descriptors to their canonical form and refuse the invalid ones.
 
 Usage: tools/gen_wire_fixtures.py [output.json]
 """
@@ -113,6 +114,17 @@ VALID = [
     ("cu8_iq", "CU8", 9, 101, [[128, 128], [0, 255]], []),
     ("ci16_iq", "CI16", 9, 102, [[-300, 300]], []),
     ("ci128_value", "CI128", 9, 103, [["-2", str(1 << 120)]], []),
+    ("i8_values", "I8", 10, 0, [-128, 127, 0], []),
+    ("u8_values", "U8", 10, 1, [0, 255], []),
+    ("u16_values", "U16", 10, 2, [0, 65535, 4660], []),
+    ("u64_max", "U64", 10, 3, [str((1 << 64) - 1)], []),
+    ("c32_value", "C32", 11, 0, [[-1.5, 0.25]], []),
+    ("c128_value", "C128", 11, 1, [[2.0, -0.5]], []),
+    ("ci32_iq", "CI32", 11, 2, [[-2147483648, 2147483647]], []),
+    ("ci64_iq", "CI64", 11, 3, [["-9223372036854775808", "9223372036854775807"]], []),
+    ("f64_processing_time", "F64", 12, 0, [-0.0], [{"role": "PROCESSING_TIME", "ns": 1759740000123456789}]),
+    ("f64_all_roles", "F64", 12, 1, [2.5],
+     [{"role": "PROCESSING_TIME", "ns": 3}, {"role": "MODEL_TIME", "ns": 1}, {"role": "SOURCE_TIME", "ns": -2}]),
 ]
 
 STREAM = "0335c8e1-a3ab-4e8c-8b17-dc8170f5e370"
@@ -127,6 +139,21 @@ def invalid_cases():
     good = data_packet("F64", 1, 1, [1.0])
     # Two records: 16 + 2 + 23 bytes, so bytes 41..47 are padding.
     ts = data_packet("F32", 1, 1, [1.0], [{"role": "MODEL_TIME", "ns": 1}, {"role": "SOURCE_TIME", "ns": 2}])
+
+    def stamped(records, value_length=None):
+        """A F64 packet whose TIMESTAMPS extension holds raw (role, ns) records."""
+        value = bytes([len(records)]) + b"".join(struct.pack("<Bq", role, ns) for role, ns in records)
+        tlv = struct.pack("<HH", 0x8001, len(value) if value_length is None else value_length) + value
+        area = struct.pack("<H", len(tlv)) + tlv
+        area += bytes((-len(area)) % 8)
+        return good[:1] + bytes([1]) + good[2:16] + area + good[16:]
+
+    one = bytes([1]) + struct.pack("<Bq", 1, 0)
+    tlv = struct.pack("<HH", 0x8001, len(one)) + one
+    area = struct.pack("<H", 2 * len(tlv)) + tlv + tlv
+    area += bytes((-len(area)) % 8)
+    twice = good[:1] + bytes([1]) + good[2:16] + area + good[16:]
+
     cases = [
         ("too_short", good[:15], "message shorter than the 16-byte header"),
         ("bad_version", bytes([2]) + good[1:], "unsupported version"),
@@ -143,11 +170,85 @@ def invalid_cases():
         ("roles_not_ascending", good[:1] + bytes([1]) + good[2:16]
          + struct.pack("<HHHB", 23, 0x8001, 19, 2) + struct.pack("<BqBq", 2, 0, 1, 0) + bytes(7) + good[16:],
          "timestamp roles not ascending"),
+        ("unknown_role", stamped([(4, 0)]), "unknown timestamp role"),
+        ("repeated_role", stamped([(1, 0), (1, 5)]), "a timestamp role repeated"),
+        ("timestamps_bad_length", stamped([(1, 0)], value_length=11), "TIMESTAMPS value length is not 1 + 9 * count"),
+        ("timestamps_twice", twice, "TIMESTAMPS extension twice"),
         ("control_reserved", control(1, 1, 1)[:2] + b"\x01\x00" + control(1, 1, 1)[4:], "control reserved field"),
         ("control_bad_kind", control(1, 1, 1)[:1] + bytes([4]) + control(1, 1, 1)[2:], "unknown control kind"),
         ("control_short", control(1, 1, 1)[:31], "control message length"),
     ]
     return [{"name": name, "hex": data.hex(), "reason": reason} for name, data, reason in cases]
+
+
+DESCRIPTOR_DEFAULTS = {
+    "max_elements_per_packet": 1024,
+    "max_batch_latency_ms": 10,
+    "send_log": {"max_packets": 4096, "max_block_ms": 2000},
+    "max_wait_ms": 2000,
+}
+NODE_A = "aaaaaaaa-0000-4000-8000-000000000001"
+NODE_B = "bbbbbbbb-0000-4000-8000-000000000002"
+
+
+def descriptor(**fields):
+    """A stream descriptor (section 12.1 item 1) with the required members."""
+    d = {
+        "stream_id": STREAM,
+        "producer": {"node_uuid": NODE_A, "element": "osc", "port": 0},
+        "consumers": [{"node_uuid": NODE_B, "element": "gain", "port": 0}],
+        "data_type": "F64",
+        "timestamps": [{"role": "MODEL_TIME", "clock_domain": "model"}],
+    }
+    d.update(fields)
+    return {k: v for k, v in d.items() if v is not None}
+
+
+def canonical(d):
+    """The descriptor with every optional member at its default."""
+    out = dict(d)
+    for key, value in DESCRIPTOR_DEFAULTS.items():
+        if key == "send_log":
+            out["send_log"] = {**value, **d.get("send_log", {})}
+        else:
+            out.setdefault(key, value)
+    return out
+
+
+def descriptor_cases():
+    valid = [
+        ("minimal", descriptor()),
+        ("uniform_model_time", descriptor(sample_rate={"numerator": 48000, "denominator": 1})),
+        ("rate_from_dt_ns", descriptor(sample_rate={"numerator": 1000000000, "denominator": 333333333})),
+        ("explicit_processing_time", descriptor(data_type="CI16",
+                                                timestamps=[{"role": "PROCESSING_TIME", "clock_domain": f"node:{NODE_A}:utc"}])),
+        ("all_roles_fan_out", descriptor(
+            consumers=[{"node_uuid": NODE_B, "element": "gain", "port": 0}, {"node_uuid": NODE_A, "element": "scope", "port": 2}],
+            timestamps=[{"role": "MODEL_TIME", "clock_domain": "model"}, {"role": "SOURCE_TIME", "clock_domain": "sdr0"},
+                        {"role": "PROCESSING_TIME", "clock_domain": f"node:{NODE_A}:utc"}])),
+        ("all_settings", descriptor(max_elements_per_packet=64, max_batch_latency_ms=3,
+                                    send_log={"max_packets": 128, "max_block_ms": 500}, max_wait_ms=250)),
+    ]
+    invalid = [
+        ("missing_stream_id", descriptor(stream_id=None), "stream_id is required"),
+        ("stream_id_not_uuid", descriptor(stream_id="not-a-uuid"), "stream_id is not a UUID"),
+        ("no_consumers", descriptor(consumers=[]), "at least one consumer"),
+        ("unknown_data_type", descriptor(data_type="F80"), "unknown data_type"),
+        ("negative_port", descriptor(producer={"node_uuid": NODE_A, "element": "osc", "port": -1}), "a port is a non-negative integer"),
+        ("no_timestamps", descriptor(timestamps=[]), "at least one timestamp role"),
+        ("timestamps_missing", descriptor(timestamps=None), "timestamps are required"),
+        ("unknown_role", descriptor(timestamps=[{"role": "WALL_TIME", "clock_domain": "x"}]), "unknown timestamp role"),
+        ("roles_not_ascending", descriptor(timestamps=[{"role": "SOURCE_TIME", "clock_domain": "s"},
+                                                       {"role": "MODEL_TIME", "clock_domain": "model"}]), "roles not ascending"),
+        ("repeated_role", descriptor(timestamps=[{"role": "MODEL_TIME", "clock_domain": "model"},
+                                                 {"role": "MODEL_TIME", "clock_domain": "model"}]), "a role repeated"),
+        ("role_without_domain", descriptor(timestamps=[{"role": "MODEL_TIME"}]), "clock_domain is required"),
+        ("zero_rate", descriptor(sample_rate={"numerator": 0, "denominator": 1}), "a sample rate is positive"),
+        ("rate_without_denominator", descriptor(sample_rate={"numerator": 1000}), "denominator is required"),
+        ("zero_batch", descriptor(max_elements_per_packet=0), "max_elements_per_packet is positive"),
+    ]
+    return ([{"name": n, "descriptor": d, "canonical": canonical(d)} for n, d in valid],
+            [{"name": n, "descriptor": d, "reason": r} for n, d, r in invalid])
 
 
 def main():
@@ -174,6 +275,9 @@ def main():
         ],
         "invalid": invalid_cases(),
     }
+    # Stream descriptors (section 12.1 item 1): valid ones with every member
+    # at its value or default, and descriptors a node must refuse.
+    fixtures["descriptors"], fixtures["invalid_descriptors"] = descriptor_cases()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(fixtures, indent=2) + "\n")
     print(f"wrote {out_path}")
