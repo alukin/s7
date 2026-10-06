@@ -22,7 +22,8 @@ namespace s7studio::diagram {
 //       { "from_element": "const1", "from_port": 0, "to_element": "add1", "to_port": 0 },
 //       { "from_element": "delay1", "from_port": 0, "to_element": "add1", "to_port": 1 },
 //       { "from_element": "add1", "from_port": 0, "to_element": "delay1", "to_port": 0 }
-//     ]
+//     ],
+//     "requires": [ { "plugin": "s7noise", "version": "1.0.0", "elements": ["WhiteNoiseGenerator"] } ]  // only if plugin elements are used
 //   },
 //   "diagram": {
 //     "grid": { "step": 20, "mm_per_step": 5.2917 },

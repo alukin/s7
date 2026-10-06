@@ -74,6 +74,15 @@
         "to_element": "scope_main",
         "to_port": 1
       }
+    ],
+    "requires": [
+      {
+        "plugin": "s7noise",
+        "version": "1.0.0",
+        "elements": [
+          "WhiteNoiseGenerator"
+        ]
+      }
     ]
   },
   "diagram": {

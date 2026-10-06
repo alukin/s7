@@ -227,6 +227,15 @@ void ElementNode::setPlacementLabel(const QString& text)
     placementLabel_->setPos(0.0, height() + 2.0);
 }
 
+void ElementNode::setProblem(const QString& problem)
+{
+    if (problem != problem_) {
+        problem_ = problem;
+        setToolTip(problem_);
+        update();
+    }
+}
+
 std::shared_ptr<QSchematic::Items::Item> ElementNode::deepCopy() const
 {
     auto clone = std::make_shared<ElementNode>(element_);
@@ -238,7 +247,8 @@ std::shared_ptr<QSchematic::Items::Item> ElementNode::deepCopy() const
 void ElementNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*)
 {
     painter->setRenderHint(QPainter::Antialiasing);
-    painter->setPen(QPen(isSelected() ? kSelected : kNodeBorder, isSelected() ? 2.0 : 1.2));
+    const QColor border = !problem_.isEmpty() ? kProblem : (isSelected() ? kSelected : kNodeBorder);
+    painter->setPen(QPen(border, isSelected() || !problem_.isEmpty() ? 2.0 : 1.2));
     painter->setBrush(kNodeFill);
     painter->drawRoundedRect(sizeRect(), 6.0, 6.0);
 

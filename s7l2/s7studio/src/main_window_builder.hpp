@@ -1,13 +1,7 @@
 #pragma once
 
 class QAction;
-class QDoubleSpinBox;
-class QLabel;
 class QMainWindow;
-class QPlainTextEdit;
-class QSplitter;
-class QSpinBox;
-class QWidget;
 
 namespace s7studio {
 
@@ -39,15 +33,6 @@ struct MainWindowActions {
 
 struct MainWindowWidgets {
     diagram::DiagramEditor* diagramEditor = nullptr;
-    QDoubleSpinBox* dtSpin = nullptr;
-    QSpinBox* hoursSpin = nullptr;
-    QSpinBox* minutesSpin = nullptr;
-    QSpinBox* secondsSpin = nullptr;
-    QLabel* statusLabel = nullptr;
-    QLabel* progressLabel = nullptr;
-    QPlainTextEdit* logView = nullptr;
-    QSplitter* splitter = nullptr;
-    QWidget* runtimePanel = nullptr;
 };
 
 class MainWindowBuilder

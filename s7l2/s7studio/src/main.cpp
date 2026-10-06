@@ -21,6 +21,7 @@
 
 #include <QApplication>
 #include <QImage>
+#include <QTimer>
 #include <QPainter>
 
 #include <boost/json.hpp>
@@ -621,8 +622,21 @@ int main(int argc, char** argv) try
     }
 
     QApplication app(argc, argv);
+    QApplication::setOrganizationName(QStringLiteral("s7"));
+    QApplication::setApplicationName(QStringLiteral("s7studio"));
     s7studio::MainWindow window;
     window.show();
+    // s7studio <file>: opens a diagram, schema or element library.
+    if (argc == 2 && argv[1][0] != '-') {
+        window.openPath(QString::fromLocal8Bit(argv[1]));
+    }
+    // S7_STUDIO_SCREENSHOT=<png>: saves a picture of the main window and quits (for checking the layout).
+    if (const char* png = std::getenv("S7_STUDIO_SCREENSHOT")) {
+        QTimer::singleShot(800, &window, [&window, path = QString::fromLocal8Bit(png)] {
+            window.grab().save(path);
+            QApplication::quit();
+        });
+    }
     return QApplication::exec();
 }
 catch (const std::exception& ex) {

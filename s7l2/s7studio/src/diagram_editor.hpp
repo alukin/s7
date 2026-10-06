@@ -6,6 +6,7 @@
 #include <boost/json.hpp>
 #include <memory>
 
+class QGraphicsItem;
 class QGraphicsRectItem;
 class QWidget;
 
@@ -32,8 +33,12 @@ public:
     // the editor is then empty.
     void loadDocument(const DiagramDocument& document);
     void loadRuntimeSchema(const boost::json::value& schemaJson);
+    // Selects the item and scrolls it into the middle of the view.
+    void showItem(QGraphicsItem* item);
     void fitToContents();
     void fitPageInView();
+    // Zooms so that the diagram's elements, text frames and wires fill the view (the page if empty).
+    void fitDiagramInView();
     void zoomIn();
     void zoomOut();
     void resetZoom();

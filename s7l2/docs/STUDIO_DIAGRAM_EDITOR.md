@@ -13,13 +13,37 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | `s7studio/src/diagram/wire_router.*` | Orthogonal A* router on the grid |
 | `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ scene (format version 2); layered auto-layout for plain schemas |
 | `s7studio/src/diagram_editor.*` | Widget hosting the scene and view, page frame (mm-based sheet), rulers, zoom; keys go to the scene first; emits node double-click signals |
+| `s7studio/src/element_requirements.*` | The plugins a schema's element types come from (`requires`); finds and loads them on diagram load and reports what is missing |
 | `s7studio/src/wire_type_labels.*` | Resolves the scene's types and labels the first wire of each net; marks wires that connect nothing. `s7studio --wire-types <file>` prints them, `S7_WIRE_TYPES_PNG=<png>` renders the result |
 | `s7studio/src/diagram_document.*`, `diagram_format.hpp` | Diagram file model and format description |
-| `s7studio/src/element_picker_panel.*` | Element Library dock built from `ElementCatalogService`; double-click emits `elementRequested` |
+| `s7studio/src/element_picker_panel.*` | Element Library tool window built from `ElementCatalogService`; double-click emits `elementRequested` |
 | `s7studio/src/main_window.cpp` | Wiring: add element, parameter dialog, run, save/load, Undo/Redo, schema libraries |
+| `s7studio/src/tool_windows.*` | JetBrains-style tool windows: docks with stripe buttons, one window per area, Alt+number toggles, Hide All Tool Windows |
+| `s7studio/src/tool_panels.*` | Tool window contents: Problems, Log, Run, Deploy |
+| `s7studio/src/ui_icons.*` | Tabler icons (`resources/icons/tabler`, MIT) drawn in the palette's text color or a given color |
 | `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp`, `scope_sample_mailbox.hpp` | Embedded runtime: builds the schema through the registry, runs it on a worker thread, hands Scope samples to the UI through a bounded mailbox (oldest dropped and counted when the UI falls behind) |
 
 The diagram sources build as the `s7studio_diagram` library, shared by `s7studio` and `s7studio_diagram_test`.
+
+## Main window
+
+The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills the middle, everything else is a tool window with a button on a stripe at the window edge. The left stripe holds the bottom windows' buttons (at its bottom end), the right stripe the right windows'. An area shows one tool window at a time; its button or shortcut shows it, pressed again it hides it. Side windows run the full height; the bottom window sits between them.
+
+| Tool window | Area | Shortcut | Content |
+|---|---|---|---|
+| Element Library | right | Alt+1 | Elements by category; double-click adds one (open at first start) |
+| Headless Nodes | right | Alt+2 | Discovered runtime nodes, Studio TLS credentials |
+| Run | bottom | Alt+4 | Run status, steps, messages of the run; run actions (run, pause, resume, stop, reset, Run Configuration) |
+| Problems | bottom | Alt+6 | What stops the diagram from running or deploying: missing plugins and element types, wires that connect nothing, type errors; load warnings. Double-click shows the element or wire |
+| Log | bottom | Alt+7 | Everything Studio logs; Clear |
+| Deploy | bottom | Alt+8 | Outcome of the last deployment per node; Deploy and Open Deployed Diagram |
+
+- View > Hide All Tool Windows (Ctrl+Shift+F12) gives the diagram the whole window; again brings the same windows back. View > Appearance hides the tool window bars and each toolbar.
+- The status bar shows the problem count (a click opens Problems). Run and Deploy refuse a diagram with errors and open Problems; a failed run opens Run, a failed deployment opens Deploy. Message boxes are left for actions that need an answer.
+- View > Fit Diagram to Window (Ctrl+8) zooms so the whole diagram fills the window; Fit Page (Ctrl+9) shows the whole sheet.
+- Run settings (run time, discretization frequency and the resulting dt, clearing Scope traces) are in Run > Run Configuration.
+- The window layout (geometry, open tool windows, toolbars) is restored at start (`QSettings`, organization `s7`, application `s7studio`).
+- `s7studio <file>` opens a diagram, schema or element library at start; `S7_STUDIO_SCREENSHOT=<png>` saves a picture of the main window and quits.
 
 ## Model
 
@@ -29,6 +53,10 @@ The diagram sources build as the `s7studio_diagram` library, shared by `s7studio
 - **Junction placement:** a junction keeps its point while that point is on its trunk (not at the trunk's ends); otherwise it moves to the trunk point nearest to where the branch goes next.
 - **Elements:** inputs on the left edge, outputs on the right, no rotation. Width 9 grid steps, height `max(5, 2 × ports + 1)` steps; ports two steps apart where they fit, centred. All positions, ports, bends and junctions are on the 20-unit grid. `Scope` is a Studio-only observer element (`local_runtime_v2.hpp`) with `channel_count` inputs of any real type. `TextFrame`s are diagram-only and not part of the runtime schema.
 - **Undo:** every edit is a `DiagramChange` (nodes and wires added or removed, wires re-hung, bends, element edits) pushed as one command on the scene's `QUndoStack`; element moves use QSchematic's `ItemMove`. Edit > Undo/Redo. Text frame text and style edits and run-configuration params (`sample_rate_hz`, `dt`) are applied directly.
+
+## Element types and plugins
+
+Studio loads every plugin in the plugin search paths at start (`PLUGIN_INTERFACE.md`, "Discovery and loading"). On save, the schema's root `requires` lists the plugins its element types come from (`PLUGIN_INTERFACE.md`, "Plugins a schema requires"). On loading a diagram or schema (Open, the demo, Open Deployed Diagram), Studio searches the plugin paths again when a required plugin or an element type is missing, then reports what it still cannot find: the Problems tool window opens with the missing plugins and element types, the affected elements are outlined red with the reason as tooltip, and Run and Deploy refuse the diagram until they are available. The diagram stays editable.
 
 ## Rules
 
@@ -44,7 +72,7 @@ Refused when drawing, with the reason in the status bar:
 | anything → an input already fed | refused |
 | incompatible types | refused when the diagram's types resolve without the connection and do not with it (same inference as the runtime, `s7::TypeResolver`) |
 
-Deleting a wire deletes the connection to its input; wires hanging on it move up to its upstream end (a branch of a deleted trunk becomes the new trunk). Deleting an element deletes the wires into it and the whole nets it drives. Shrinking an element's ports (fewer `weights`, `channel_count`) deletes the wires on the removed ports. A wire that still connects nothing (not reachable through the rules; e.g. a hand-edited file) is drawn red with the reason as tooltip, is not saved, and Run and Deploy refuse the diagram while it exists.
+Deleting a wire deletes the connection to its input; wires hanging on it move up to its upstream end (a branch of a deleted trunk becomes the new trunk). Deleting an element deletes the wires into it and the whole nets it drives. Shrinking an element's ports (fewer `weights`, `channel_count`) deletes the wires on the removed ports. A wire that still connects nothing (not reachable through the rules; e.g. a hand-edited file) is drawn red with the reason as tooltip, is listed under Problems, is not saved, and Run and Deploy refuse the diagram while it exists.
 
 ## Interaction
 
@@ -52,9 +80,9 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - **Click by click (Wire Draw, `Ctrl+W`, or a click on a port without dragging):** click a port or a wire to start, click empty canvas to place bends, click a port or a wire to finish. Escape cancels the wire, then leaves the mode; Backspace/Delete removes the last bend; right-click cancels.
 - **Editing a wire:** select it; drag a bend handle (filled: placed by hand, hollow: routed) or drag a straight segment. Context menu: Add Bend Here, Remove Bend, Re-route (remove hand-placed bends), Delete Wire.
 - **Elements:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click: element properties dialog (ports, parameter specs, editable parameter JSON, Node placement); `Scope` opens its plot window; `TextFrame` edits text.
-- **Element Library dock:** double-click adds an element; schema libraries can be loaded and saved from the File menu.
-- **Placement:** the element properties dialog has a Node field listing the nodes found in the Headless Nodes dock; placed elements show `@ <node>` under them.
-- Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes dock (the Studio certificate pinned by the nodes). It runs off the UI thread and logs each node's outcome; nothing is committed unless every node is ready.
+- **Element Library tool window:** double-click adds an element; schema libraries can be loaded and saved from the File menu.
+- **Placement:** the element properties dialog has a Node field listing the nodes found in the Headless Nodes tool window; placed elements show `@ <node>` under them.
+- Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes tool window (the Studio certificate pinned by the nodes). It runs off the UI thread; the Deploy tool window shows each node's outcome; nothing is committed unless every node is ready.
 - Run > Open Deployed Diagram...: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
 
 ## Diagram file format (`.s7diagram`, version 2)
@@ -80,6 +108,7 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 ```
 
 - `schema` is the runtime schema and the source of semantics; element params live there. `diagram` is layout only.
+- `schema.requires` lists the plugins the element types come from (see "Element types and plugins").
 - Coordinates are whole grid steps (`grid.step` scene units each; scene units are 96 per inch, so a step is 5.29 mm on the sheet). Text frame sizes are in scene units in their params.
 - A wire's `from` is an output port or a junction on another wire; `to` is an input port. `bends` are the bends placed by hand; routed points are not saved.
 - On load the connections the wires make must equal `schema.connections`, otherwise loading fails naming the connection. A layout without `wires` is wired automatically (one trunk per output, further connections as branches); a document without `diagram` (a plain runtime schema) is also laid out by data flow (columns from inputs to outputs, rows by the mean row of the inputs).
@@ -90,7 +119,7 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 
 | Command | Checks |
 |---|---|
-| `s7studio_diagram` (`s7studio_diagram_test`) | Rules, fan-out branches, deleting a trunk and an element, undo, port count changes, moves, bends, drag/click/bend-drag gestures, save/reload of connections, bends and routes, refusal of a layout that does not match its schema |
+| `s7studio_diagram` (`s7studio_diagram_test`) | Rules, fan-out branches, deleting a trunk and an element, undo, port count changes, moves, bends, drag/click/bend-drag gestures, save/reload of connections, bends and routes, refusal of a layout that does not match its schema, finding a required plugin and reporting missing plugins and element types |
 | `s7studio --layout-check <schema>` | Auto-layout: every connection drawn and attached, orthogonal, no wire through an element, nets never touch (`S7_LAYOUT_PNG` renders it) |
 | `s7studio --edit-check <diagram>` | Adding an element through the main window keeps connections and routes; undo; save/reload |
 | `s7studio --wire-types <file>` | Type labels (`s7studio_wire_types`) |

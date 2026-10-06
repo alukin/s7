@@ -2,7 +2,9 @@
 
 #include "local_schema_runner.hpp"
 #include "diagram_document.hpp"
+#include "element_requirements.hpp"
 #include "model_run_controller.hpp"
+#include "tool_panels.hpp"
 
 #include <QHash>
 #include <QMainWindow>
@@ -18,12 +20,9 @@
 
 class QAction;
 class QActionGroup;
-class QLabel;
-class QPlainTextEdit;
-class QDoubleSpinBox;
 class QSpinBox;
 class QCloseEvent;
-class QSplitter;
+class QToolButton;
 class QWidget;
 class QDockWidget;
 class QFontComboBox;
@@ -41,6 +40,7 @@ class DiagramEditor;
 }
 
 namespace ui {
+class ToolWindows;
 class ScopeViewWindow;
 class ElementPickerPanel;
 class HeadlessNodesPanel;
@@ -59,6 +59,9 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
+
+    // Opens a diagram, runtime schema or element library file.
+    void openPath(const QString& filePath, bool preferDiagram = true, const QString& errorTitle = QStringLiteral("Open failed"));
 
 private slots:
     void appendLog(const QString& message);
@@ -80,7 +83,6 @@ private slots:
     void zoomDiagramIn();
     void zoomDiagramOut();
     void resetDiagramZoom();
-    void setRuntimePanelVisible(bool visible);
     void setDiagramMode(int mode);
     void setPaperA5();
     void setPaperA4();
@@ -117,11 +119,16 @@ private:
                           const QString& errorTitle);
     void loadElementLibraryJson(const boost::json::value& libraryJson, const QString& sourceLabel);
     auto saveDocumentToPath(const QString& filePath) -> bool;
-    [[nodiscard]] auto selectedRunDuration() const -> ui::RunDuration;
     void loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
     void loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel);
     void connectSceneSignals();
     void openRunParametersDialog();
+    void buildToolWindows();
+    // Collects the diagram's problems into the Problems tool window and the status bar.
+    void refreshProblems();
+    void showProblem(const ui::Problem& problem);
+    void saveWindowLayout();
+    void restoreWindowLayout();
     auto configureRun(bool launchAfterAccept) -> bool;
     void launchRunWithCurrentConfiguration();
     void applyDiscretizationFrequency(double frequencyHz);
@@ -140,7 +147,11 @@ protected:
     void refreshPlacementLabels();
     // Copies element params of runtimeSchema_ (run configuration) onto the scene's elements.
     void applySchemaParamsToScene();
-    // Why the diagram cannot run or deploy (a wire that connects nothing); empty if it can.
+    // Loads the plugins a schema needs (searching the plugin paths) and
+    // reports, after the diagram is shown, what is still missing.
+    auto prepareElementTypes(const boost::json::value& schema) -> ElementCheck;
+    void reportElementTypes(const ElementCheck& check, const QString& sourceLabel);
+    // Why the diagram cannot run or deploy (a missing element type, a wire that connects nothing); empty if it can.
     [[nodiscard]] auto diagramProblem() const -> QString;
     // Runs work off the UI thread (one at a time); `done` runs on the UI thread.
     auto startNetworkTask(std::function<std::function<void()>()> work) -> bool;
@@ -176,7 +187,6 @@ private:
     QAction* zoomOutAction_ = nullptr;
     QAction* resetZoomAction_ = nullptr;
     QAction* fitPageAction_ = nullptr;
-    QAction* showRuntimePanelAction_ = nullptr;
     QAction* overlayScopeTracesAction_ = nullptr;
     QAction* modeNormalAction_ = nullptr;
     QAction* modeWireAction_ = nullptr;
@@ -194,15 +204,18 @@ private:
     QAction* redoAction_ = nullptr;
 
     diagram::DiagramEditor* diagramEditor_ = nullptr;
-    QDoubleSpinBox* dtSpin_ = nullptr;
-    QSpinBox* hoursSpin_ = nullptr;
-    QSpinBox* minutesSpin_ = nullptr;
-    QSpinBox* secondsSpin_ = nullptr;
-    QLabel* statusLabel_ = nullptr;
-    QLabel* progressLabel_ = nullptr;
-    QPlainTextEdit* logView_ = nullptr;
-    QSplitter* mainSplitter_ = nullptr;
-    QWidget* runtimePanel_ = nullptr;
+    ui::ToolWindows* toolWindows_ = nullptr;
+    ui::ProblemsPanel* problemsPanel_ = nullptr;
+    ui::LogPanel* logPanel_ = nullptr;
+    ui::RunPanel* runPanel_ = nullptr;
+    ui::DeployPanel* deployPanel_ = nullptr;
+    QDockWidget* problemsDock_ = nullptr;
+    QDockWidget* logDock_ = nullptr;
+    QDockWidget* runDock_ = nullptr;
+    QDockWidget* deployDock_ = nullptr;
+    QToolButton* problemsStatus_ = nullptr;
+    // Warnings from loading the diagram (e.g. another plugin version), shown under Problems.
+    std::vector<QString> loadWarnings_;
     QDockWidget* elementPickerDock_ = nullptr;
     ui::ElementPickerPanel* elementPickerPanel_ = nullptr;
     QDockWidget* headlessNodesDock_ = nullptr;

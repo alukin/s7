@@ -82,7 +82,7 @@ TLS="--cert s7runtime/examples/certs/s7_studio.cert.pem --key s7runtime/examples
 ./build/s7ctl/s7ctl info    wss://127.0.0.1:9003 $TLS     # NODE_INFO: clock synchronization, pacing (state.timing)
 ```
 
-In the diagram every schema element has `"node": "<node_uuid>"`, and `runtime_nodes` gives each node's endpoint. `s7ctl` infers stream types with the element types it knows: the built-in ones, plugins found where `s7runtime` looks for them, and those given with `--plugin <file>`, `--plugin-dir <dir>` or `--library <file>`. Deploy again from the `--write` output, so the streams keep their ids and continue. In Studio: place elements with the Node field of the element properties (nodes from the Headless Nodes dock), set the Studio certificate in the dock, then use Run > Deploy to Nodes...; Run > Open Deployed Diagram... shows what a node runs.
+In the diagram every schema element has `"node": "<node_uuid>"`, and `runtime_nodes` gives each node's endpoint. `s7ctl` infers stream types with the element types it knows: the built-in ones, plugins found where `s7runtime` looks for them, and those given with `--plugin <file>`, `--plugin-dir <dir>` or `--library <file>`. Deploy again from the `--write` output, so the streams keep their ids and continue. In Studio: place elements with the Node field of the element properties (nodes from the Headless Nodes tool window, Alt+2), set the Studio certificate there, then use Run > Deploy to Nodes...; Run > Open Deployed Diagram... shows what a node runs.
 
 ## 6) Stop nodes
 

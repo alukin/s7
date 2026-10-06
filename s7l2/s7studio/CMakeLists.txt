@@ -36,6 +36,9 @@ add_library(s7studio_diagram STATIC
     src/scene_serializer.hpp
     src/wire_type_labels.cpp
     src/wire_type_labels.hpp
+    src/element_requirements.cpp
+    src/element_requirements.hpp
+    ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp
 )
 target_include_directories(s7studio_diagram PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -54,6 +57,7 @@ target_link_libraries(s7studio_diagram PUBLIC
     s7net
     s7observe
     Boost::json
+    ${CMAKE_DL_LIBS}
 )
 set_target_properties(s7studio_diagram PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_diagram)
@@ -82,11 +86,16 @@ add_executable(s7studio
     resources/demo_startup.s7diagram
     src/deployment_support.cpp
     src/deployment_support.hpp
-    ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp
     src/diagram_editor.hpp
     src/diagram_editor.cpp
     src/diagram_ruler.hpp
     src/diagram_ruler.cpp
+    src/tool_windows.hpp
+    src/tool_windows.cpp
+    src/tool_panels.hpp
+    src/tool_panels.cpp
+    src/ui_icons.hpp
+    src/ui_icons.cpp
 )
 
 target_include_directories(s7studio PRIVATE
@@ -164,3 +173,8 @@ target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_
 set_target_properties(s7studio_diagram_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_diagram COMMAND s7studio_diagram_test)
 set_tests_properties(s7studio_diagram PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+if (TARGET s7noise)
+    # Finding a required plugin on load (element_requirements).
+    add_dependencies(s7studio_diagram_test s7noise)
+    target_compile_definitions(s7studio_diagram_test PRIVATE S7_TEST_NOISE_PLUGIN_DIR="$<TARGET_FILE_DIR:s7noise>")
+endif()

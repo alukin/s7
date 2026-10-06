@@ -6,9 +6,12 @@
 #include "diagram/diagram_scene.hpp"
 #include "diagram/element_ports.hpp"
 #include "element_picker_panel.hpp"
+#include "element_requirements.hpp"
 #include "headless_nodes_panel.hpp"
 #include "json_utils.hpp"
 #include "main_window_builder.hpp"
+#include "tool_windows.hpp"
+#include "ui_icons.hpp"
 #include "scene_serializer.hpp"
 #include "scope_view_window.hpp"
 
@@ -68,6 +71,8 @@
 #include <QSplitter>
 #include <QTabWidget>
 #include <QToolBar>
+#include <QToolButton>
+#include <QSettings>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -94,44 +99,6 @@ constexpr double kPaperLetterHeightMm = 215.9;
 constexpr int kMaxScopeHistoryPointsPerScope = 20000;
 constexpr const char* kBundledDemoDiagramPath = S7STUDIO_SOURCE_DIR "/resources/demo_startup.s7diagram";
 
-auto themedToolbarSvgIcon(const QString& resourcePath, const QColor& color) -> QIcon
-{
-    QIcon source(resourcePath);
-    if (source.isNull()) {
-        return source;
-    }
-
-    QIcon themed;
-    const std::vector<int> sizes{16, 18, 20, 24, 28, 32};
-    for (const int size : sizes) {
-        QPixmap base = source.pixmap(size, size);
-        if (base.isNull()) {
-            continue;
-        }
-
-        QPixmap normal = base;
-        {
-            QPainter painter(&normal);
-            painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-            painter.fillRect(normal.rect(), color);
-        }
-        themed.addPixmap(normal, QIcon::Normal, QIcon::Off);
-        themed.addPixmap(normal, QIcon::Active, QIcon::Off);
-        themed.addPixmap(normal, QIcon::Selected, QIcon::Off);
-
-        QPixmap disabled = base;
-        {
-            QColor disabledColor = color;
-            disabledColor.setAlpha(110);
-            QPainter painter(&disabled);
-            painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
-            painter.fillRect(disabled.rect(), disabledColor);
-        }
-        themed.addPixmap(disabled, QIcon::Disabled, QIcon::Off);
-    }
-
-    return themed.isNull() ? source : themed;
-}
 
 auto selectedTextFrame(diagram::DiagramScene* scene) -> std::shared_ptr<diagram::TextFrameNode>
 {
@@ -401,6 +368,7 @@ MainWindow::MainWindow(QWidget* parent)
     }
 
     appendLog("[studio] Local embedded runtime ready");
+    restoreWindowLayout();
     loadDemoDiagram();
     refreshActions();
     onStatusChanged("idle");
@@ -428,7 +396,12 @@ MainWindow::~MainWindow()
 
 void MainWindow::connectRunnerSignals()
 {
-    connect(runner_, &LocalSchemaRunner::logMessage, this, &MainWindow::appendLog);
+    connect(runner_, &LocalSchemaRunner::logMessage, this, [this](const QString& message) {
+        appendLog(message);
+        if (runPanel_) {
+            runPanel_->append(message);
+        }
+    });
     connect(runner_, &LocalSchemaRunner::statusChanged, this, &MainWindow::onStatusChanged);
     connect(runner_, &LocalSchemaRunner::runCompleted, this, &MainWindow::onRunCompleted);
     connect(runner_, &LocalSchemaRunner::ticksProgress, this, &MainWindow::onTickProgress);
@@ -460,7 +433,6 @@ void MainWindow::buildActions()
     zoomOutAction_ = new QAction("Zoom Out", this);
     resetZoomAction_ = new QAction("Actual Size", this);
     fitPageAction_ = new QAction("Fit Page", this);
-    showRuntimePanelAction_ = new QAction("Show Runtime Panel", this);
     overlayScopeTracesAction_ = new QAction("Overlay Scope Traces", this);
     overlayScopeTracesAction_->setCheckable(true);
     overlayScopeTracesAction_->setChecked(false);
@@ -471,7 +443,7 @@ void MainWindow::buildActions()
     modeNormalAction_->setChecked(true);
     modeNormalAction_->setToolTip("Switch to Normal mode (move/select elements)");
     const QColor drawIconColor = palette().color(QPalette::ButtonText);
-    modeNormalAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/pointer.svg"), drawIconColor));
+    modeNormalAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/pointer.svg"), drawIconColor));
 
     modeWireAction_ = new QAction("Wire Mode", this);
     modeWireAction_->setCheckable(true);
@@ -479,21 +451,21 @@ void MainWindow::buildActions()
     modeWireAction_->setToolTip("Draw wires click by click: a port or wire, bends, then a port or wire (Esc cancels). "
                                 "In normal mode, drag from a port to connect, or Alt+drag from a wire.");
     modeWireAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-    modeWireAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/vector-bezier-2.svg"), drawIconColor));
+    modeWireAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/vector-bezier-2.svg"), drawIconColor));
 
     addTextFrameAction_ = new QAction("Text Frame", this);
     addTextFrameAction_->setToolTip("Insert a diagram-only text frame");
-    addTextFrameAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/text-caption.svg"), drawIconColor));
+    addTextFrameAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/text-caption.svg"), drawIconColor));
 
     textColorAction_ = new QAction("Text Color", this);
     textColorAction_->setToolTip("Set selected text frame text color");
-    textColorAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/text-color.svg"), drawIconColor));
+    textColorAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/text-color.svg"), drawIconColor));
     lineColorAction_ = new QAction("Line Color", this);
     lineColorAction_->setToolTip("Set selected text frame border color");
-    lineColorAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/border-style-2.svg"), drawIconColor));
+    lineColorAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/border-style-2.svg"), drawIconColor));
     fillColorAction_ = new QAction("Fill Color", this);
     fillColorAction_->setToolTip("Set selected text frame background color");
-    fillColorAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/bucket.svg"), drawIconColor));
+    fillColorAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/bucket.svg"), drawIconColor));
 
     paperA5Action_ = new QAction("A5", this);
     paperA4Action_ = new QAction("A4", this);
@@ -521,10 +493,15 @@ void MainWindow::buildActions()
     pageOrientationGroup_->addAction(portraitPageAction_);
     pageOrientationGroup_->addAction(landscapePageAction_);
 
+    zoomInAction_->setIcon(ui::icon(QStringLiteral("zoom-in")));
+    zoomOutAction_->setIcon(ui::icon(QStringLiteral("zoom-out")));
     zoomInAction_->setShortcut(QKeySequence::ZoomIn);
     zoomOutAction_->setShortcut(QKeySequence::ZoomOut);
     resetZoomAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
     fitPageAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_9));
+    fitDiagramAction_->setText(QStringLiteral("Fit Diagram to Window"));
+    fitDiagramAction_->setToolTip(QStringLiteral("Zoom so that the whole diagram fills the window (Ctrl+8)"));
+    fitDiagramAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_8));
 
     openAction_->setShortcut(QKeySequence::Open);
     closeDiagramAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W));
@@ -538,7 +515,11 @@ void MainWindow::buildActions()
     connect(loadLibraryAction_, &QAction::triggered, this, &MainWindow::loadElementLibrary);
     connect(saveLibraryAction_, &QAction::triggered, this, &MainWindow::saveSchemaLibrary);
     connect(loadDemoAction_, &QAction::triggered, this, &MainWindow::loadDemoDiagram);
-    connect(fitDiagramAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
+    connect(fitDiagramAction_, &QAction::triggered, this, [this] {
+        if (diagramEditor_) {
+            diagramEditor_->fitDiagramInView();
+        }
+    });
     connect(exitAction_, &QAction::triggered, this, &QWidget::close);
 
     connect(runAction_, &QAction::triggered, this, [this] {
@@ -560,7 +541,6 @@ void MainWindow::buildActions()
     connect(zoomOutAction_, &QAction::triggered, this, &MainWindow::zoomDiagramOut);
     connect(resetZoomAction_, &QAction::triggered, this, &MainWindow::resetDiagramZoom);
     connect(fitPageAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
-    connect(showRuntimePanelAction_, &QAction::toggled, this, &MainWindow::setRuntimePanelVisible);
     connect(modeWireAction_, &QAction::toggled, this, [this](const bool checked) {
         setDiagramMode(checked ? diagram::DiagramScene::DrawMode : QSchematic::Scene::NormalMode);
     });
@@ -601,6 +581,7 @@ void MainWindow::buildUi()
     ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
 
     diagramDrawToolBar_ = addToolBar(QStringLiteral("Diagram Drawing"));
+    diagramDrawToolBar_->setObjectName(QStringLiteral("toolbar.drawing"));
     diagramDrawToolBar_->setToolButtonStyle(Qt::ToolButtonIconOnly);
     diagramDrawToolBar_->addAction(modeWireAction_);
     diagramDrawToolBar_->addSeparator();
@@ -628,9 +609,9 @@ void MainWindow::buildUi()
     viewMenu->addAction(zoomOutAction_);
     viewMenu->addAction(resetZoomAction_);
     viewMenu->addSeparator();
+    viewMenu->addAction(fitDiagramAction_);
     viewMenu->addAction(fitPageAction_);
     viewMenu->addSeparator();
-    viewMenu->addAction(showRuntimePanelAction_);
     viewMenu->addAction(overlayScopeTracesAction_);
 
     auto* pageMenu = menuBar()->addMenu("&Page");
@@ -648,35 +629,19 @@ void MainWindow::buildUi()
         auto* stack = diagramEditor_->scene()->undoStack();
         undoAction_ = stack->createUndoAction(this, QStringLiteral("&Undo"));
         undoAction_->setShortcut(QKeySequence::Undo);
+        undoAction_->setIcon(ui::icon(QStringLiteral("arrow-back-up")));
         redoAction_ = stack->createRedoAction(this, QStringLiteral("&Redo"));
         redoAction_->setShortcut(QKeySequence::Redo);
+        redoAction_->setIcon(ui::icon(QStringLiteral("arrow-forward-up")));
+        diagramDrawToolBar_->insertAction(diagramDrawToolBar_->actions().value(0), redoAction_);
+        diagramDrawToolBar_->insertAction(redoAction_, undoAction_);
+        diagramDrawToolBar_->insertSeparator(diagramDrawToolBar_->actions().value(2));
         auto* editMenu = new QMenu(QStringLiteral("&Edit"), this);
         editMenu->addAction(undoAction_);
         editMenu->addAction(redoAction_);
         const auto menus = menuBar()->actions();
         menuBar()->insertMenu(menus.size() > 1 ? menus.at(1) : nullptr, editMenu);
     }
-    dtSpin_ = widgets.dtSpin;
-    hoursSpin_ = widgets.hoursSpin;
-    minutesSpin_ = widgets.minutesSpin;
-    secondsSpin_ = widgets.secondsSpin;
-    statusLabel_ = widgets.statusLabel;
-    progressLabel_ = widgets.progressLabel;
-    logView_ = widgets.logView;
-    mainSplitter_ = widgets.splitter;
-    runtimePanel_ = widgets.runtimePanel;
-    setRuntimePanelVisible(false);
-
-    if (dtSpin_) {
-        discretizationFrequencyHz_ = 1.0 / std::max(dtSpin_->value(), 1e-12);
-        connect(dtSpin_, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](const double dtSeconds) {
-            if (dtSeconds <= 0.0) {
-                return;
-            }
-            applyDiscretizationFrequency(1.0 / dtSeconds);
-        });
-    }
-
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     s7::register_net_elements(registry);
@@ -697,23 +662,22 @@ void MainWindow::buildUi()
     }
 
     elementPickerPanel_ = new ui::ElementPickerPanel(registry, this);
-    elementPickerDock_ = new QDockWidget(QStringLiteral("Element Library"), this);
-    elementPickerDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
-    elementPickerDock_->setWidget(elementPickerPanel_);
-    addDockWidget(Qt::RightDockWidgetArea, elementPickerDock_);
-
     connect(elementPickerPanel_, &ui::ElementPickerPanel::elementRequested,
             this, &MainWindow::onElementRequested);
-
     headlessNodesPanel_ = new ui::HeadlessNodesPanel(this);
-    headlessNodesDock_ = new QDockWidget(QStringLiteral("Headless Nodes"), this);
-    headlessNodesDock_->setAllowedAreas(Qt::RightDockWidgetArea | Qt::LeftDockWidgetArea);
-    headlessNodesDock_->setWidget(headlessNodesPanel_);
-    addDockWidget(Qt::RightDockWidgetArea, headlessNodesDock_);
-    // Dock tabs above their docks; the Element Library is the tab shown at start.
-    setTabPosition(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea, QTabWidget::North);
-    tabifyDockWidget(elementPickerDock_, headlessNodesDock_);
-    elementPickerDock_->raise();
+    buildToolWindows();
+    viewMenu->addSeparator();
+    viewMenu->addMenu(toolWindows_->menu());
+    viewMenu->addAction(toolWindows_->hideAllAction());
+    auto* appearance = viewMenu->addMenu(QStringLiteral("&Appearance"));
+    appearance->addAction(toolWindows_->stripesAction());
+    for (auto* toolBar : findChildren<QToolBar*>(Qt::FindDirectChildrenOnly)) {
+        if (toolBar->objectName().startsWith(QStringLiteral("toolbar."))) {
+            auto* toggle = toolBar->toggleViewAction();
+            toggle->setText(toolBar->windowTitle() + QStringLiteral(" Toolbar"));
+            appearance->addAction(toggle);
+        }
+    }
 
     connect(headlessNodesPanel_, &ui::HeadlessNodesPanel::nodeActivated,
             this, &MainWindow::onHeadlessNodeActivated);
@@ -757,18 +721,138 @@ void MainWindow::onHeadlessNodeActivated(const QString& endpoint,
     appendLog(QStringLiteral("[studio] headless node activated: %1 (%2)").arg(title, nodeUuid.isEmpty() ? QStringLiteral("no-uuid") : nodeUuid));
 }
 
+void MainWindow::buildToolWindows()
+{
+    toolWindows_ = new ui::ToolWindows(this);
+    elementPickerDock_ = toolWindows_->add(QStringLiteral("elementLibrary"), QStringLiteral("Element Library"), QStringLiteral("books"),
+                                           elementPickerPanel_, Qt::RightDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_1));
+    headlessNodesDock_ = toolWindows_->add(QStringLiteral("headlessNodes"), QStringLiteral("Headless Nodes"), QStringLiteral("server-2"),
+                                           headlessNodesPanel_, Qt::RightDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_2));
+
+    problemsPanel_ = new ui::ProblemsPanel(this);
+    connect(problemsPanel_, &ui::ProblemsPanel::activated, this, &MainWindow::showProblem);
+    problemsDock_ = toolWindows_->add(QStringLiteral("problems"), QStringLiteral("Problems"), QStringLiteral("alert-triangle"), problemsPanel_,
+                                      Qt::BottomDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_6));
+    runPanel_ = new ui::RunPanel({runAction_, pauseAction_, resumeAction_, stopAction_, resetAction_, nullptr, runParametersAction_}, this);
+    runDock_ = toolWindows_->add(QStringLiteral("run"), QStringLiteral("Run"), QStringLiteral("player-play"), runPanel_,
+                                 Qt::BottomDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_4));
+    deployPanel_ = new ui::DeployPanel({deployAction_, openDeployedAction_}, this);
+    deployDock_ = toolWindows_->add(QStringLiteral("deploy"), QStringLiteral("Deploy"), QStringLiteral("cloud-upload"), deployPanel_,
+                                    Qt::BottomDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_8));
+    logPanel_ = new ui::LogPanel(this);
+    logDock_ = toolWindows_->add(QStringLiteral("log"), QStringLiteral("Log"), QStringLiteral("file-text"), logPanel_,
+                                 Qt::BottomDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_7));
+
+    // Problem count in the status bar; a click opens Problems.
+    problemsStatus_ = new QToolButton(this);
+    problemsStatus_->setAutoRaise(true);
+    problemsStatus_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    problemsStatus_->setToolTip(QStringLiteral("Problems (Alt+6)"));
+    connect(problemsStatus_, &QToolButton::clicked, this, [this] { toolWindows_->show(problemsDock_); });
+    statusBar()->addPermanentWidget(problemsStatus_);
+
+    // The Element Library is open at first start; restoreWindowLayout() brings back the last layout.
+    toolWindows_->show(elementPickerDock_);
+    toolWindows_->normalize();
+    refreshProblems();
+}
+
+void MainWindow::refreshProblems()
+{
+    if (!problemsPanel_) {
+        return;
+    }
+    std::vector<ui::Problem> problems;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        for (const auto& node : diagramEditor_->scene()->elementNodes()) {
+            if (!node->problem().isEmpty()) {
+                problems.push_back({ui::Problem::Severity::Error, node->problem(), QString::fromStdString(node->id()), {}});
+            }
+        }
+        for (const auto& wire : diagramEditor_->scene()->signalWires()) {
+            if (!wire->problem().isEmpty()) {
+                const auto target = wire->downstream.node.lock();
+                problems.push_back({ui::Problem::Severity::Error, wire->problem(), {},
+                                    target ? QStringLiteral("%1:%2").arg(QString::fromStdString(target->id())).arg(wire->downstream.index)
+                                           : QString()});
+            }
+        }
+    }
+    // Type errors only count when every element type is available (otherwise they follow from that).
+    const bool typesKnown = std::ranges::none_of(problems, [](const ui::Problem& problem) { return !problem.element.isEmpty(); });
+    if (!lastWireTypeError_.isEmpty() && typesKnown) {
+        problems.push_back({ui::Problem::Severity::Error, QStringLiteral("Types: %1").arg(lastWireTypeError_), {}, {}});
+    }
+    for (const auto& warning : loadWarnings_) {
+        problems.push_back({ui::Problem::Severity::Warning, warning, {}, {}});
+    }
+    problemsPanel_->setProblems(std::move(problems));
+
+    const int errors = problemsPanel_->errorCount();
+    const int warnings = problemsPanel_->warningCount();
+    if (errors > 0) {
+        problemsStatus_->setIcon(ui::icon(QStringLiteral("circle-x"), QColor(0xc6, 0x28, 0x28)));
+        problemsStatus_->setText(QStringLiteral("%1 error(s)").arg(errors));
+    } else if (warnings > 0) {
+        problemsStatus_->setIcon(ui::icon(QStringLiteral("alert-triangle"), QColor(0xc7, 0x7c, 0x02)));
+        problemsStatus_->setText(QStringLiteral("%1 warning(s)").arg(warnings));
+    } else {
+        problemsStatus_->setIcon(ui::icon(QStringLiteral("circle-check"), QColor(0x2e, 0x7d, 0x32)));
+        problemsStatus_->setText(QStringLiteral("No problems"));
+    }
+}
+
+void MainWindow::showProblem(const ui::Problem& problem)
+{
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (!scene) {
+        return;
+    }
+    QGraphicsItem* item = nullptr;
+    if (!problem.element.isEmpty()) {
+        if (const auto node = scene->elementNode(problem.element.toStdString())) {
+            item = node.get();
+        }
+    } else if (!problem.wireInput.isEmpty()) {
+        for (const auto& wire : scene->signalWires()) {
+            const auto target = wire->downstream.node.lock();
+            if (target && QStringLiteral("%1:%2").arg(QString::fromStdString(target->id())).arg(wire->downstream.index) == problem.wireInput) {
+                item = wire.get();
+            }
+        }
+    }
+    if (item) {
+        diagramEditor_->showItem(item);
+    }
+}
+
+void MainWindow::saveWindowLayout()
+{
+    QSettings settings;
+    settings.setValue(QStringLiteral("mainWindow/geometry"), saveGeometry());
+    settings.setValue(QStringLiteral("mainWindow/state"), saveState());
+}
+
+void MainWindow::restoreWindowLayout()
+{
+    const QSettings settings;
+    restoreGeometry(settings.value(QStringLiteral("mainWindow/geometry")).toByteArray());
+    restoreState(settings.value(QStringLiteral("mainWindow/state")).toByteArray());
+    toolWindows_->normalize();
+}
+
 void MainWindow::appendLog(const QString& message)
 {
-    if (logView_) {
-        logView_->appendPlainText(message);
+    if (logPanel_) {
+        logPanel_->append(message);
     }
     statusBar()->showMessage(message, 5000);
 }
 
 void MainWindow::onStatusChanged(const QString& status)
 {
-    if (statusLabel_) {
-        statusLabel_->setText(status);
+    if (runPanel_) {
+        runPanel_->setStatus(status);
     }
     refreshActions();
 }
@@ -777,20 +861,20 @@ void MainWindow::onRunCompleted(bool success, const QString& error)
 {
     if (success) {
         appendLog("[studio] run completed");
+        runPanel_->append(QStringLiteral("Run completed."));
     } else if (!error.isEmpty()) {
         appendLog(QString("[studio] run failed: %1").arg(error));
-        // The log panel may be hidden; a failed run must not look like an empty one.
-        QMessageBox::warning(this, QStringLiteral("Run failed"), error);
+        runPanel_->append(QStringLiteral("Run failed: %1").arg(error));
+        // A failed run must not look like an empty one.
+        toolWindows_->show(runDock_);
     }
     refreshActions();
 }
 
 void MainWindow::onTickProgress(const long completed, const long total)
 {
-    if (progressLabel_) {
-        progressLabel_->setText(total < 0
-            ? QString("%1 / continuous").arg(completed)
-            : QString("%1 / %2").arg(completed).arg(total));
+    if (runPanel_) {
+        runPanel_->setProgress(total < 0 ? QString("%1 / continuous").arg(completed) : QString("%1 / %2").arg(completed).arg(total));
     }
 }
 
@@ -875,7 +959,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         nodeCombo->addItem(currentPlacement, currentPlacement);
     }
     nodeCombo->setCurrentIndex(std::max(0, nodeCombo->findData(currentPlacement)));
-    nodeCombo->setToolTip(QStringLiteral("Runtime node this element runs on when the diagram is deployed (nodes from the Headless Nodes dock)."));
+    nodeCombo->setToolTip(QStringLiteral("Runtime node this element runs on when the diagram is deployed (nodes from the Headless Nodes tool window)."));
     form->addRow(QStringLiteral("Node"), nodeCombo);
 
     if (descriptor) {
@@ -1045,29 +1129,7 @@ void MainWindow::resetDiagramZoom()
      }
  }
 
- void MainWindow::setRuntimePanelVisible(const bool visible)
-{
-    if (showRuntimePanelAction_ && showRuntimePanelAction_->isChecked() != visible) {
-        const QSignalBlocker blocker(showRuntimePanelAction_);
-        showRuntimePanelAction_->setChecked(visible);
-    }
-
-    if (!runtimePanel_ || !mainSplitter_) {
-        return;
-    }
-
-    runtimePanel_->setVisible(visible);
-    if (!visible) {
-        mainSplitter_->setSizes({std::max(mainSplitter_->width(), 1), 0});
-        return;
-    }
-
-    const int totalWidth = std::max(mainSplitter_->width(), 900);
-    const int panelWidth = std::clamp(totalWidth / 5, 220, 320);
-    mainSplitter_->setSizes({std::max(totalWidth - panelWidth, 400), panelWidth});
-}
-
-void MainWindow::setDiagramMode(const int mode)
+ void MainWindow::setDiagramMode(const int mode)
 {
     if (diagramEditor_ && diagramEditor_->scene()) {
         diagramEditor_->scene()->setMode(mode);
@@ -1120,6 +1182,7 @@ void MainWindow::refreshWireTypeLabels()
             appendLog(QStringLiteral("[studio] types: %1").arg(error));
         }
     }
+    refreshProblems();
 }
 
 void MainWindow::addTextFrame()
@@ -1401,6 +1464,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
     }
 
     shuttingDown_ = true;
+    saveWindowLayout();
     if (diagramEditor_ && diagramEditor_->scene()) {
         disconnect(diagramEditor_->scene(), nullptr, this, nullptr);
     }
@@ -1497,10 +1561,16 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
 
 void MainWindow::launchRunWithCurrentConfiguration()
 {
+    refreshWireTypeLabels();
     if (const auto problem = diagramProblem(); !problem.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("Run"), QStringLiteral("The diagram has a broken wire: %1").arg(problem));
+        statusBar()->showMessage(QStringLiteral("The diagram cannot run: %1").arg(problem), 8000);
+        toolWindows_->show(problemsDock_);
         return;
     }
+    runPanel_->clearOutput();
+    runPanel_->append(QStringLiteral("Running at %1 Hz, %2.")
+                          .arg(discretizationFrequencyHz_)
+                          .arg(runtimeSeconds_ < 0 ? QStringLiteral("continuously") : QStringLiteral("%1 s").arg(runtimeSeconds_)));
     if (clearScopesBeforeRun_) {
         clearScopeSamples();
     }
@@ -1523,10 +1593,6 @@ void MainWindow::applyDiscretizationFrequency(const double frequencyHz)
 
     discretizationFrequencyHz_ = frequencyHz;
     const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
-    if (dtSpin_) {
-        const QSignalBlocker blocker(dtSpin_);
-        dtSpin_->setValue(dtSeconds);
-    }
 
     if (diagramEditor_ && diagramEditor_->scene()) {
         static_cast<void>(syncSchemaFromScene());
@@ -1603,15 +1669,6 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
     return changed;
 }
 
-auto MainWindow::selectedRunDuration() const -> ui::RunDuration
-{
-    ui::RunDuration duration;
-    duration.hours = hoursSpin_ ? hoursSpin_->value() : 0;
-    duration.minutes = minutesSpin_ ? minutesSpin_->value() : 1;
-    duration.seconds = secondsSpin_ ? secondsSpin_->value() : 0;
-    return duration;
-}
-
 void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
     closeScopeWindows();
@@ -1621,12 +1678,14 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
     deploymentRuntimeNodes_.clear();
     deploymentStreams_.clear();
 
+    const auto elementCheck = prepareElementTypes(runtimeSchema_);
     if (diagramEditor_) {
         diagramEditor_->loadRuntimeSchema(runtimeSchema_);
         syncPageActions();
         syncTextFrameStyleControls();
         refreshPlacementLabels();
     }
+    reportElementTypes(elementCheck, sourceLabel);
 
     const auto name = schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded schema: %1").arg(sourceLabel));
@@ -1644,18 +1703,18 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     deploymentRuntimeNodes_ = document.runtimeNodes;
     deploymentStreams_ = document.streams;
 
-    if (dtSpin_ && document.dt > 0.0) {
-        const QSignalBlocker blocker(dtSpin_);
-        dtSpin_->setValue(document.dt);
+    if (document.dt > 0.0) {
         discretizationFrequencyHz_ = 1.0 / document.dt;
     }
 
+    const auto elementCheck = prepareElementTypes(document.runtimeSchema);
     if (diagramEditor_) {
         diagramEditor_->loadDocument(document);
         syncPageActions();
         syncTextFrameStyleControls();
         refreshPlacementLabels();
     }
+    reportElementTypes(elementCheck, sourceLabel);
 
     const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded diagram: %1").arg(sourceLabel));
@@ -1749,7 +1808,11 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
     if (filePath.isEmpty()) {
         return;
     }
+    openPath(filePath, preferDiagram, errorTitle);
+}
 
+void MainWindow::openPath(const QString& filePath, const bool preferDiagram, const QString& errorTitle)
+{
     try {
         const auto parsed = json_utils::parseFile(filePath);
         const auto sourceLabel = QFileInfo(filePath).fileName();
@@ -2019,12 +2082,20 @@ auto MainWindow::serializeScene() const -> diagram::DiagramDocument
 {
     diagram::SerializationOptions options;
     options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-    options.dt = dtSpin_ ? dtSpin_->value() : 0.001;
+    options.dt = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
     const auto pageLayout = diagramEditor_->pageLayout();
     options.sheetOrientation = pageLayout.orientation;
     options.sheetWidthMm = pageLayout.widthMm;
     options.sheetHeightMm = pageLayout.heightMm;
-    return diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+    auto document = diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+    // The plugins the elements come from, so a runtime (or Studio) can find them.
+    auto& schema = document.runtimeSchema.as_object();
+    if (auto requirements = pluginLoader_ ? pluginRequirements(schema, *pluginLoader_) : boost::json::array{}; requirements.empty()) {
+        schema.erase("requires");
+    } else {
+        schema["requires"] = std::move(requirements);
+    }
+    return document;
 }
 
 auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
@@ -2034,6 +2105,11 @@ auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
     const auto& fromScene = document.runtimeSchema.as_object();
     schema["elements"] = fromScene.contains("elements") ? fromScene.at("elements") : boost::json::array{};
     schema["connections"] = fromScene.contains("connections") ? fromScene.at("connections") : boost::json::array{};
+    if (const auto* requirements = fromScene.if_contains("requires")) {
+        schema["requires"] = *requirements;
+    } else {
+        schema.erase("requires");
+    }
     runtimeSchema_ = schema;
     document.runtimeSchema = std::move(schema);
     return document;
@@ -2063,14 +2139,58 @@ void MainWindow::applySchemaParamsToScene()
     }
 }
 
-auto MainWindow::diagramProblem() const -> QString
+auto MainWindow::prepareElementTypes(const boost::json::value& schema) -> ElementCheck
 {
-    if (!diagramEditor_ || !diagramEditor_->scene()) {
+    if (!pluginLoader_ || !schema.is_object()) {
         return {};
     }
-    for (const auto& wire : diagramEditor_->scene()->signalWires()) {
-        if (!wire->problem().isEmpty()) {
-            return wire->problem();
+    std::vector<std::filesystem::path> buildTreePlugins;
+    for (const auto& candidate : developmentPluginCandidates()) {
+        buildTreePlugins.emplace_back(candidate);
+    }
+    const auto before = pluginLoader_->loaded_count();
+    auto check = ensureElementTypes(schema.as_object(), *pluginLoader_, s7::ElementRegistry::instance(), buildTreePlugins);
+    if (pluginLoader_->loaded_count() != before) {
+        appendLog(QStringLiteral("[studio] plugins loaded: %1").arg(pluginLoader_->loaded_count()));
+        if (elementPickerPanel_) {
+            elementPickerPanel_->refreshCatalog();
+        }
+    }
+    return check;
+}
+
+void MainWindow::reportElementTypes(const ElementCheck& check, const QString& sourceLabel)
+{
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        for (const auto& [id, problem] : check.elementProblems) {
+            if (const auto node = diagramEditor_->scene()->elementNode(id)) {
+                node->setProblem(problem);
+            }
+        }
+    }
+    loadWarnings_ = check.warnings;
+    for (const auto& warning : check.warnings) {
+        appendLog(QStringLiteral("[studio] %1").arg(warning));
+    }
+    for (const auto& error : check.errors) {
+        appendLog(QStringLiteral("[studio] error: %1").arg(error));
+    }
+    refreshProblems();
+    if (!check.errors.empty()) {
+        // Missing plugins or element types: the affected elements are listed under Problems.
+        statusBar()->showMessage(QStringLiteral("%1 uses element types that are not available; see Problems.").arg(sourceLabel), 8000);
+        toolWindows_->show(problemsDock_);
+    }
+}
+
+auto MainWindow::diagramProblem() const -> QString
+{
+    if (!problemsPanel_) {
+        return {};
+    }
+    for (const auto& problem : problemsPanel_->problems()) {
+        if (problem.severity == ui::Problem::Severity::Error) {
+            return problem.element.isEmpty() ? problem.message : QStringLiteral("%1: %2").arg(problem.element, problem.message);
         }
     }
     return {};
@@ -2136,8 +2256,10 @@ void MainWindow::deployToNodes()
     if (!diagramEditor_ || !diagramEditor_->scene() || !headlessNodesPanel_) {
         return;
     }
+    refreshWireTypeLabels();
     if (const auto problem = diagramProblem(); !problem.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("Deploy"), QStringLiteral("The diagram has a broken wire: %1").arg(problem));
+        statusBar()->showMessage(QStringLiteral("The diagram cannot be deployed: %1").arg(problem), 8000);
+        toolWindows_->show(problemsDock_);
         return;
     }
     QMap<QString, diagram::NodeAddress> known;
@@ -2151,7 +2273,7 @@ void MainWindow::deployToNodes()
         if (s7::deployment::placed_nodes(deployment).empty()) {
             QMessageBox::information(this, QStringLiteral("Deploy"),
                                      QStringLiteral("No element is placed on a node. Choose a node in each element's properties "
-                                                    "(nodes come from the Headless Nodes dock)."));
+                                                    "(nodes come from the Headless Nodes tool window)."));
             return;
         }
         types = diagram::studioOutputTypes(deployment);
@@ -2162,10 +2284,12 @@ void MainWindow::deployToNodes()
     const auto tls = headlessNodesPanel_->clientTls();
     if (!tls.enabled) {
         QMessageBox::warning(this, QStringLiteral("Deploy"),
-                             QStringLiteral("Deployments need the Studio certificate: set CA, certificate and key in the Headless Nodes dock."));
+                             QStringLiteral("Deployments need the Studio certificate: set CA, certificate and key in the Headless Nodes tool window."));
         return;
     }
     appendLog(QStringLiteral("[deploy] deploying to %1 node(s)...").arg(s7::deployment::placed_nodes(deployment).size()));
+    deployPanel_->setRunning(QStringLiteral("Deploying to %1 node(s)...").arg(s7::deployment::placed_nodes(deployment).size()));
+    toolWindows_->show(deployDock_);
     startNetworkTask([this, deployment, types, tls]() -> std::function<void()> {
         s7::deployment::DeployResult result;
         try {
@@ -2196,17 +2320,36 @@ void MainWindow::deployToNodes()
                 deploymentRuntimeNodes_ = result.diagram.at("runtime_nodes").as_array();
                 refreshPlacementLabels();
             }
+            std::vector<ui::DeployPanel::NodeRow> rows;
+            QMap<QString, QString> names;
+            if (headlessNodesPanel_) {
+                for (const auto& known : headlessNodesPanel_->knownNodes()) {
+                    names[known.nodeUuid] = known.nodeName;
+                }
+            }
+            for (const auto& node : result.nodes) {
+                const auto uuid = QString::fromStdString(node.node_uuid);
+                rows.push_back({names.value(uuid, uuid.left(8)), QString::fromStdString(node.endpoint), QString::fromStdString(node.status),
+                                QString::fromStdString(node.message)});
+            }
+            std::vector<QString> errors;
+            for (const auto& error : result.errors) {
+                errors.push_back(QString::fromStdString(error));
+            }
             if (result.committed) {
                 appendLog(QStringLiteral("[deploy] committed %1 revision %2")
                               .arg(QString::fromStdString(result.deployment_id))
                               .arg(result.revision));
                 statusBar()->showMessage(QStringLiteral("Deployed revision %1 to %2 node(s)").arg(result.revision).arg(result.nodes.size()),
                                          8000);
+                deployPanel_->setResult(QStringLiteral("Deployed revision %1 of %2 to %3 node(s).")
+                                            .arg(result.revision)
+                                            .arg(QString::fromStdString(result.deployment_id))
+                                            .arg(result.nodes.size()),
+                                        true, rows, errors);
             } else {
-                QMessageBox::warning(this, QStringLiteral("Deployment failed"),
-                                     QStringLiteral("Nothing was committed.\n\n%1\n%2")
-                                         .arg(lines.join('\n'),
-                                              result.errors.empty() ? QString() : QString::fromStdString(result.errors.front())));
+                deployPanel_->setResult(QStringLiteral("Deployment failed: nothing was committed."), false, rows, errors);
+                toolWindows_->show(deployDock_);
             }
         };
     });
@@ -2220,7 +2363,7 @@ void MainWindow::openDeployedDiagram()
     const auto nodes = headlessNodesPanel_->knownNodes();
     if (nodes.isEmpty()) {
         QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
-                                 QStringLiteral("No node is known yet. Add a seed in the Headless Nodes dock and refresh."));
+                                 QStringLiteral("No node is known yet. Add a seed in the Headless Nodes tool window and refresh."));
         return;
     }
     QStringList labels;

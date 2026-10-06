@@ -1,22 +1,13 @@
 #include "main_window_builder.hpp"
 
 #include "diagram_editor.hpp"
+#include "ui_icons.hpp"
 
 #include <QAction>
-#include <QDoubleSpinBox>
-#include <QFormLayout>
-#include <QLabel>
 #include <QMainWindow>
 #include <QMenuBar>
-#include <QPlainTextEdit>
-#include <QSizePolicy>
-#include <QSplitter>
-#include <QSpinBox>
-#include <QStatusBar>
-#include <QStyle>
 #include <QToolBar>
 #include <Qt>
-#include <QVBoxLayout>
 #include <QWidget>
 
 namespace s7studio::ui {
@@ -43,13 +34,17 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.deployAction = new QAction("Deploy to Nodes...", window);
     actions.openDeployedAction = new QAction("Open Deployed Diagram...", window);
 
-    actions.openAction->setIcon(window->style()->standardIcon(QStyle::SP_DialogOpenButton));
-    actions.saveAction->setIcon(window->style()->standardIcon(QStyle::SP_DialogSaveButton));
-    actions.runAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaPlay));
-    actions.pauseAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaPause));
-    actions.resumeAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaSeekForward));
-    actions.stopAction->setIcon(window->style()->standardIcon(QStyle::SP_MediaStop));
-    actions.resetAction->setIcon(window->style()->standardIcon(QStyle::SP_BrowserReload));
+    actions.openAction->setIcon(icon(QStringLiteral("folder-open")));
+    actions.saveAction->setIcon(icon(QStringLiteral("device-floppy")));
+    actions.runAction->setIcon(icon(QStringLiteral("player-play"), QColor(0x2e, 0x7d, 0x32)));
+    actions.runParametersAction->setIcon(icon(QStringLiteral("adjustments-horizontal")));
+    actions.pauseAction->setIcon(icon(QStringLiteral("player-pause")));
+    actions.resumeAction->setIcon(icon(QStringLiteral("player-track-next")));
+    actions.stopAction->setIcon(icon(QStringLiteral("player-stop"), QColor(0xc6, 0x28, 0x28)));
+    actions.resetAction->setIcon(icon(QStringLiteral("refresh")));
+    actions.deployAction->setIcon(icon(QStringLiteral("cloud-upload")));
+    actions.openDeployedAction->setIcon(icon(QStringLiteral("cloud-download")));
+    actions.runParametersAction->setText(QStringLiteral("Run Configuration..."));
 
     return actions;
 }
@@ -85,11 +80,14 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     runMenu->addAction(actions.openDeployedAction);
 
     auto* fileToolBar = window->addToolBar("File");
+    fileToolBar->setObjectName(QStringLiteral("toolbar.file"));
     fileToolBar->addAction(actions.openAction);
     fileToolBar->addAction(actions.saveAction);
 
     auto* runToolBar = window->addToolBar("Run");
-    runToolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    runToolBar->setObjectName(QStringLiteral("toolbar.run"));
+    runToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    runToolBar->addAction(actions.runParametersAction);
     runToolBar->addAction(actions.runAction);
     runToolBar->addAction(actions.pauseAction);
     runToolBar->addAction(actions.resumeAction);
@@ -100,68 +98,12 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
 auto MainWindowBuilder::buildCentralWidgets(QMainWindow* window) -> MainWindowWidgets
 {
     MainWindowWidgets widgets;
-
-    auto* central = new QWidget(window);
-    auto* rootLayout = new QVBoxLayout(central);
-    auto* splitter = new QSplitter(Qt::Horizontal, central);
-    splitter->setChildrenCollapsible(false);
-    widgets.splitter = splitter;
-
-    widgets.diagramEditor = new diagram::DiagramEditor(splitter);
+    // The diagram is the whole central area; everything else is a tool window.
+    widgets.diagramEditor = new diagram::DiagramEditor(window);
     widgets.diagramEditor->setMinimumWidth(320);
-    splitter->addWidget(widgets.diagramEditor);
-
-    auto* runtimePanel = new QWidget(splitter);
-    widgets.runtimePanel = runtimePanel;
-    runtimePanel->setMinimumWidth(220);
-    runtimePanel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
-    auto* runtimeLayout = new QVBoxLayout(runtimePanel);
-
-    auto* form = new QFormLayout();
-
-    widgets.dtSpin = new QDoubleSpinBox(runtimePanel);
-    widgets.dtSpin->setDecimals(6);
-    widgets.dtSpin->setRange(1e-6, 10.0);
-    widgets.dtSpin->setSingleStep(0.001);
-    widgets.dtSpin->setValue(0.001);
-
-    widgets.hoursSpin = new QSpinBox(runtimePanel);
-    widgets.hoursSpin->setRange(0, 23);
-
-    widgets.minutesSpin = new QSpinBox(runtimePanel);
-    widgets.minutesSpin->setRange(0, 59);
-    widgets.minutesSpin->setValue(1);
-
-    widgets.secondsSpin = new QSpinBox(runtimePanel);
-    widgets.secondsSpin->setRange(0, 59);
-
-    form->addRow("dt (s)", widgets.dtSpin);
-    form->addRow("Run hours", widgets.hoursSpin);
-    form->addRow("Run minutes", widgets.minutesSpin);
-    form->addRow("Run seconds", widgets.secondsSpin);
-    runtimeLayout->addLayout(form);
-
-    widgets.statusLabel = new QLabel("idle", runtimePanel);
-    widgets.progressLabel = new QLabel("0 / 0", runtimePanel);
-    runtimeLayout->addWidget(widgets.statusLabel);
-    runtimeLayout->addWidget(widgets.progressLabel);
-
-    widgets.logView = new QPlainTextEdit(runtimePanel);
-    widgets.logView->setReadOnly(true);
-    runtimeLayout->addWidget(widgets.logView, 1);
-
-    splitter->addWidget(runtimePanel);
-    splitter->setStretchFactor(0, 1);
-    splitter->setStretchFactor(1, 0);
-    splitter->setSizes({1200, 260});
-    runtimePanel->hide();
-    rootLayout->addWidget(splitter, 1);
-
-    window->setCentralWidget(central);
-    window->statusBar()->showMessage("Local embedded runtime with diagram editor");
+    window->setCentralWidget(widgets.diagramEditor);
     window->resize(1440, 900);
     window->setWindowTitle("s7studio");
-
     return widgets;
 }
 

@@ -3,11 +3,13 @@
 
 #include "diagram/diagram_scene.hpp"
 #include "diagram/net_model.hpp"
+#include "element_requirements.hpp"
 #include "scene_serializer.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/net.hpp>
+#include <s7/plugin_loader.hpp>
 
 #include <qschematic/commands/item_move.hpp>
 
@@ -19,6 +21,7 @@
 #include <cmath>
 #include <iostream>
 #include <set>
+#include <sstream>
 #include <string>
 
 using namespace s7studio::diagram;
@@ -343,6 +346,47 @@ int main(int argc, char** argv)
         gestures.undoStack()->undo();
         check(wire->userBends.isEmpty(), "undo removes the dragged bends");
     }
+
+#ifdef S7_TEST_NOISE_PLUGIN_DIR
+    // Element types and plugins: a required plugin is searched for on load,
+    // and what cannot be found is reported.
+    {
+        std::ostringstream quiet;
+        s7::PluginLoader loader({S7_TEST_NOISE_PLUGIN_DIR}, quiet);
+        auto parse = [](const char* text) { return boost::json::parse(text).as_object(); };
+        const auto noise = parse(R"({"name": "n", "elements": [ { "id": "w", "type": "WhiteNoiseGenerator" }, { "id": "g", "type": "Gain" } ],
+                                     "requires": [ { "plugin": "s7noise", "version": "1.0.0", "elements": ["WhiteNoiseGenerator"] } ]})");
+        auto found = s7studio::ensureElementTypes(noise, loader, registry);
+        check(found.errors.empty() && registry.find("WhiteNoiseGenerator"), "a required plugin is found in the search paths and loaded");
+        const auto requirements = s7studio::pluginRequirements(noise, loader);
+        check(requirements.size() == 1 && requirements[0].as_object().at("plugin") == "s7noise" &&
+                  requirements[0].as_object().at("elements") == boost::json::array{"WhiteNoiseGenerator"},
+              "requirements list the plugin and the element types taken from it (base elements are not listed)");
+        const auto nested = parse(R"({"name": "n", "elements": [ { "id": "lib", "type": "MyLib",
+                                      "schema": { "elements": [ { "id": "w", "type": "WhiteNoiseGenerator" } ] } } ]})");
+        check(s7studio::pluginRequirements(nested, loader).size() == 1, "requirements include nested schemas");
+
+        auto missingPlugin = s7studio::ensureElementTypes(
+            parse(R"({"elements": [ { "id": "f", "type": "Fancy" } ], "requires": [ { "plugin": "s7missing", "elements": ["Fancy"] } ]})"),
+            loader, registry);
+        check(missingPlugin.errors.size() == 1 && missingPlugin.errors[0].contains("s7missing") && missingPlugin.elementProblems.contains("f"),
+              "a plugin that cannot be found is reported for its elements");
+        auto missingElement = s7studio::ensureElementTypes(
+            parse(R"({"elements": [ { "id": "f", "type": "Fancy" } ], "requires": [ { "plugin": "s7noise", "elements": ["Fancy"] } ]})"),
+            loader, registry);
+        check(missingElement.errors.size() == 1 && missingElement.errors[0].contains("does not provide"),
+              "an element type the plugin does not provide is reported");
+        auto unknown = s7studio::ensureElementTypes(parse(R"({"elements": [ { "id": "x", "type": "Nope" }, { "id": "s", "type": "Scope" } ]})"),
+                                                    loader, registry);
+        check(unknown.errors.size() == 1 && unknown.elementProblems.contains("x") && !unknown.elementProblems.contains("s"),
+              "an unknown type without a plugin is reported (Studio's Scope is not)");
+        auto version = s7studio::ensureElementTypes(
+            parse(R"({"elements": [ { "id": "w", "type": "WhiteNoiseGenerator" } ],
+                      "requires": [ { "plugin": "s7noise", "version": "0.0.1", "elements": ["WhiteNoiseGenerator"] } ]})"),
+            loader, registry);
+        check(version.errors.empty() && version.warnings.size() == 1, "another plugin version is a warning");
+    }
+#endif
 
     std::cout << (failures == 0 ? "diagram test: OK\n" : "diagram test: FAILED\n");
     return failures == 0 ? 0 : 1;

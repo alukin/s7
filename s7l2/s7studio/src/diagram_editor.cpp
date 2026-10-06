@@ -173,6 +173,16 @@ void DiagramEditor::loadRuntimeSchema(const boost::json::value& schemaJson)
     loadDocument(document);
 }
 
+void DiagramEditor::showItem(QGraphicsItem* item)
+{
+    if (!item || !_view) {
+        return;
+    }
+    _scene->clearSelection();
+    item->setSelected(true);
+    _view->centerOn(item);
+}
+
 void DiagramEditor::fitToContents()
 {
     fitPageInView();
@@ -193,6 +203,30 @@ void DiagramEditor::fitPageInView()
     updateSceneRectFromPage();
     _view->QGraphicsView::fitInView(pageRect.adjusted(-4.0, -4.0, 4.0, 4.0), Qt::KeepAspectRatio);
     _pendingFitToContents = false;
+    updateRulers();
+}
+
+void DiagramEditor::fitDiagramInView()
+{
+    if (!_view || !_scene) {
+        return;
+    }
+    QRectF content;
+    for (const auto& node : _scene->elementNodes()) {
+        content = content.united(node->sceneBoundingRect());
+    }
+    for (const auto& frame : _scene->textFrames()) {
+        content = content.united(frame->sceneBoundingRect());
+    }
+    for (const auto& wire : _scene->signalWires()) {
+        content = content.united(wire->sceneBoundingRect());
+    }
+    if (content.isEmpty()) {
+        fitPageInView();
+        return;
+    }
+    const double margin = 2.0 * kGridStep;
+    _view->QGraphicsView::fitInView(content.adjusted(-margin, -margin, margin, margin), Qt::KeepAspectRatio);
     updateRulers();
 }
 

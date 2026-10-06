@@ -107,6 +107,9 @@ public:
 
     // "@ <node>" under the element, empty: hidden.
     void setPlacementLabel(const QString& text);
+    // Why the element cannot be built (e.g. its plugin is missing): drawn red, tooltip. Empty: none.
+    void setProblem(const QString& problem);
+    [[nodiscard]] const QString& problem() const { return problem_; }
 
     std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
@@ -120,6 +123,7 @@ private:
     std::vector<std::shared_ptr<PortConnector>> inputs_;
     std::vector<std::shared_ptr<PortConnector>> outputs_;
     QGraphicsSimpleTextItem* placementLabel_ = nullptr;
+    QString problem_;
 };
 
 // A diagram-only text frame (not part of the runtime schema). Its params hold

@@ -88,7 +88,7 @@ set_target_properties(myplugin PROPERTIES PREFIX "lib")   # libs7*.so is not req
 
 ## Discovery and loading
 
-Loader: `s7runtime/src/plugin_loader.cpp` (also compiled into `s7studio`).
+Loader: `s7runtime/src/plugin_loader.cpp` (also compiled into Studio's `s7studio_diagram` library).
 
 Search order:
 
@@ -103,6 +103,20 @@ File names: `libs7*.so*` (Linux), `libs7*.dylib` (macOS), `s7*.dll` (Windows). S
 Studio additionally tries the build-tree `s7noise` library next to its executable (`../s7noise/`), so a fresh build shows the noise elements without installation. `s7runtime` does not; use `--plugin-dir build/s7noise`.
 
 Loading steps: `dlopen(RTLD_LAZY | RTLD_LOCAL)` → read manifest or query info → check `api_version` → call `s7_register_elements` → keep the library loaded until process exit (registered factories point into plugin code). A plugin that fails any step is reported on stderr and skipped; the process continues.
+
+## Plugins a schema requires
+
+A runtime schema names the plugins its element types come from in a root `requires` list; Studio writes it on save:
+
+```json
+"requires": [ { "plugin": "s7noise", "version": "1.0.0", "elements": ["WhiteNoiseGenerator"] } ]
+```
+
+- `plugin` is the plugin's `plugin_name`. Plugin and element type names are part of the contract between runtimes: an S7 runtime in another language provides the base elements under the same names, and a port of a plugin keeps its plugin and element names.
+- Element types not listed are base elements, which every runtime provides. Nested schemas (schema-backed elements) are included. Studio's `Scope` is not a runtime element and is not listed.
+- `version` is the version the schema was saved with; another version is reported as a warning, not an error.
+
+On loading a diagram or schema, Studio rescans the search paths when a required plugin is not loaded or an element type is not registered, loads what it finds, and reports a plugin it cannot find, a listed element type the plugin does not provide, and a type that is neither built in nor provided by a plugin (`s7studio/src/element_requirements.cpp`). `s7runtime` does not read `requires` yet; it fails on the first unknown element type.
 
 ## Trust model
 
