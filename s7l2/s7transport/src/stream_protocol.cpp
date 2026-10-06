@@ -22,11 +22,28 @@ std::string to_string(const FaultCode code)
         case FaultCode::MalformedPacket: return "MALFORMED_PACKET";
         case FaultCode::TypeMismatch: return "TYPE_MISMATCH";
         case FaultCode::Underrun: return "UNDERRUN";
+        case FaultCode::TimestampProfileMismatch: return "TIMESTAMP_PROFILE_MISMATCH";
         case FaultCode::UnauthorizedProducer: return "UNAUTHORIZED_PRODUCER";
         case FaultCode::UnauthorizedConsumer: return "UNAUTHORIZED_CONSUMER";
     }
     return "UNKNOWN";
 }
+
+std::int64_t element_time_ns(const SampleRate& rate, const std::uint64_t index)
+{
+    const auto ns = static_cast<unsigned __int128>(index) * 1'000'000'000u * rate.denominator / rate.numerator;
+    return ns > static_cast<unsigned __int128>(std::numeric_limits<std::int64_t>::max()) ? std::numeric_limits<std::int64_t>::max()
+                                                                                         : static_cast<std::int64_t>(ns);
+}
+
+namespace {
+
+bool roles_match(const std::span<const wire::TimestampRecord> records, const std::vector<wire::TimestampRole>& roles)
+{
+    return std::ranges::equal(records, roles, {}, &wire::TimestampRecord::role);
+}
+
+} // namespace
 
 // ---- sequence stores -------------------------------------------------------
 
@@ -90,6 +107,13 @@ StreamProducer::StreamProducer(StreamConfig config, SequenceStore& sequences)
     if (config_.max_elements_per_packet == 0 || config_.send_log_max_packets == 0) {
         throw std::invalid_argument("Stream limits must be positive.");
     }
+    if (config_.sample_rate && (config_.sample_rate->numerator == 0 || config_.sample_rate->denominator == 0)) {
+        throw std::invalid_argument("A stream's sample rate must be positive.");
+    }
+    if (!std::ranges::is_sorted(config_.timestamp_roles) ||
+        std::ranges::adjacent_find(config_.timestamp_roles) != config_.timestamp_roles.end()) {
+        throw std::invalid_argument("A stream's timestamp roles must be distinct and in ascending role order.");
+    }
     if (wire::payload_bytes(config_.type, config_.max_elements_per_packet) > wire::kMaxPayloadBytes) {
         throw std::invalid_argument("max_elements_per_packet exceeds the 256 KiB payload limit for " +
                                     std::string(signal_type_name(config_.type)) + ".");
@@ -105,10 +129,33 @@ bool StreamProducer::log_full() const
     return log_.size() >= config_.send_log_max_packets;
 }
 
-std::size_t StreamProducer::append(const void* elements, const std::size_t count, const Clock::time_point now)
+std::size_t StreamProducer::append(const void* elements, const std::size_t count, const Clock::time_point now,
+                                   const std::span<const wire::TimestampRecord> times)
 {
+    if (config_.explicit_timestamps()) {
+        if (count > 1 || (count == 1 && !roles_match(times, config_.timestamp_roles))) {
+            throw std::invalid_argument("Stream " + wire::to_string(config_.stream_id) +
+                                        " has explicit timestamps: publish one element at a time with its declared roles.");
+        }
+    } else if (!times.empty()) {
+        throw std::invalid_argument("Stream " + wire::to_string(config_.stream_id) + " takes no per-element timestamps.");
+    }
     if (fault_ != FaultCode::None) {
         return count; // a faulted stream sends nothing; the graph is not held back
+    }
+    if (config_.explicit_timestamps()) {
+        // One element per packet: the packet's records are its element's times.
+        if (count == 0 || log_full()) {
+            return 0;
+        }
+        const auto element_bytes = signal_type_info(config_.type).storage_bytes;
+        const auto* bytes = static_cast<const std::uint8_t*>(elements);
+        pending_.assign(bytes, bytes + element_bytes);
+        pending_elements_ = 1;
+        pending_since_ = now;
+        pending_times_.assign(times.begin(), times.end());
+        seal();
+        return 1;
     }
     const auto element_bytes = signal_type_info(config_.type).storage_bytes;
     const auto* bytes = static_cast<const std::uint8_t*>(elements);
@@ -165,6 +212,8 @@ void StreamProducer::seal()
     }
     LoggedPacket packet;
     packet.sequence = next_sequence_++;
+    packet.timestamps = std::move(pending_times_);
+    pending_times_.clear();
     wire::encode_elements(config_.type, pending_.data(), pending_elements_, packet.payload);
     log_.push_back(std::move(packet));
     ++packets_;
@@ -249,6 +298,7 @@ std::optional<std::vector<std::uint8_t>> StreamProducer::next_message(const Cons
     packet.type = config_.type;
     packet.stream_alias = it->second.alias;
     packet.sequence = logged.sequence;
+    packet.timestamps = logged.timestamps;
     packet.payload = logged.payload;
     ++it->second.next_to_send;
     return wire::encode_data_packet(packet);
@@ -288,6 +338,12 @@ void StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
         fault(FaultCode::TypeMismatch);
         return;
     }
+    // Exactly the declared roles on every packet of an explicitly timestamped
+    // stream, none on any other stream.
+    if (config_.explicit_timestamps() ? !roles_match(packet.timestamps, config_.timestamp_roles) : !packet.timestamps.empty()) {
+        fault(FaultCode::TimestampProfileMismatch);
+        return;
+    }
     if (restart_at_next_) {
         restart_at_next_ = false;
         next_expected_ = packet.sequence;
@@ -304,6 +360,7 @@ void StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     }
     BufferedPacket buffered;
     buffered.sequence = packet.sequence;
+    buffered.timestamps = packet.timestamps;
     buffered.elements = wire::payload_element_count(config_.type, packet.payload.size());
     buffered.values.resize(buffered.elements * signal_type_info(config_.type).storage_bytes);
     wire::decode_elements(config_.type, packet.payload, buffered.values.data());
@@ -322,8 +379,24 @@ void StreamConsumer::on_malformed()
     fault(FaultCode::MalformedPacket);
 }
 
-std::size_t StreamConsumer::take(void* out, const std::size_t max_count)
+std::size_t StreamConsumer::take(void* out, const std::size_t max_count, std::vector<wire::TimestampRecord>* first_times)
 {
+    if (first_times) {
+        first_times->clear();
+        if (max_count > 0 && !buffer_.empty()) {
+            const auto& front = buffer_.front();
+            if (config_.sample_rate) {
+                if (element_count_known_) {
+                    const auto ns = element_time_ns(*config_.sample_rate, elements_);
+                    for (const auto role : config_.timestamp_roles) {
+                        first_times->push_back(wire::TimestampRecord{role, ns});
+                    }
+                }
+            } else if (front.consumed == 0) {
+                *first_times = front.timestamps;
+            }
+        }
+    }
     const auto element_bytes = signal_type_info(config_.type).storage_bytes;
     auto* bytes = static_cast<std::uint8_t*>(out);
     std::size_t taken = 0;
@@ -369,6 +442,7 @@ void StreamConsumer::recover()
 {
     fault_ = FaultCode::None;
     restart_at_next_ = true;
+    element_count_known_ = false; // the elements lost in the fault are not counted
 }
 
 ConsumerStats StreamConsumer::stats() const

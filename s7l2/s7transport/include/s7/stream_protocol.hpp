@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -37,11 +38,24 @@ enum class FaultCode : std::uint8_t {
     Underrun,          // the consumer waited longer than max_wait_ms for data
     // Refused peers. Reported in a stream's recent faults; they do not stop
     // the stream (a peer cannot interrupt a stream it has no part in).
+    TimestampProfileMismatch, // a packet's timestamp records differ from the stream's profile
     UnauthorizedProducer, // packets from a peer that is not the stream's producer node
     UnauthorizedConsumer, // a RESUME from a peer that is not one of the stream's consumer nodes
 };
 
 [[nodiscard]] std::string to_string(FaultCode code);
+
+// Elements per second of a uniformly sampled stream (wire draft section 7.1).
+struct SampleRate {
+    std::uint64_t numerator{};
+    std::uint64_t denominator{1};
+
+    friend bool operator==(const SampleRate&, const SampleRate&) = default;
+};
+
+// Time of element `index` of a uniformly sampled stream starting at 0 ns:
+// index / rate, in nanoseconds (rounded toward zero).
+[[nodiscard]] std::int64_t element_time_ns(const SampleRate& rate, std::uint64_t index);
 
 struct StreamConfig {
     wire::StreamId stream_id{};
@@ -56,6 +70,16 @@ struct StreamConfig {
     // serves it only to consumer_nodes (wire draft sections 9 and 12.1 item 5).
     std::string producer_node;
     std::vector<std::string> consumer_nodes;
+    // Timestamp profile (wire draft sections 6 and 7.1). With a sample_rate
+    // the stream is uniformly sampled: packets carry no timestamps and the
+    // element with index n has time n / sample_rate in each declared role.
+    // Without one, every packet carries exactly the declared roles (ascending
+    // role id) for its single element. No roles and no rate: an untimed
+    // stream (tests).
+    std::optional<SampleRate> sample_rate;
+    std::vector<wire::TimestampRole> timestamp_roles;
+
+    [[nodiscard]] bool explicit_timestamps() const { return !sample_rate && !timestamp_roles.empty(); }
 };
 
 // Durable sequence-range reservations (wire draft section 4): a producer never
@@ -118,7 +142,12 @@ public:
     // the send log. Returns how many elements were taken: fewer than `count`
     // when the send log is full (backpressure); the caller waits for acks and
     // retries, and calls fault(SendLogOverflow) after max_block.
-    std::size_t append(const void* elements, std::size_t count, Clock::time_point now);
+    // A stream with explicit timestamps takes one element at a time, with
+    // `times` holding exactly its declared roles, and seals it as a packet of
+    // its own; other streams take no times. Throws std::invalid_argument
+    // otherwise.
+    std::size_t append(const void* elements, std::size_t count, Clock::time_point now,
+                       std::span<const wire::TimestampRecord> times = {});
     // Seals the pending partial packet if its oldest element waited
     // max_batch_latency (or always with force). Returns whether it sealed one.
     bool flush(Clock::time_point now, bool force = false);
@@ -147,6 +176,7 @@ public:
 private:
     struct LoggedPacket {
         std::uint64_t sequence{};
+        std::vector<wire::TimestampRecord> timestamps;
         std::vector<std::uint8_t> payload;
     };
     struct Consumer {
@@ -166,6 +196,7 @@ private:
     std::deque<LoggedPacket> log_; // contiguous sequences
     std::unordered_map<ConsumerKey, Consumer> consumers_;
     std::vector<std::uint8_t> pending_; // host storage of the open packet's elements
+    std::vector<wire::TimestampRecord> pending_times_;
     std::size_t pending_elements_{};
     std::optional<Clock::time_point> pending_since_;
     FaultCode fault_{FaultCode::None};
@@ -202,7 +233,12 @@ public:
 
     // Elements available to the graph, and taking them (host storage).
     [[nodiscard]] std::size_t available() const { return buffered_elements_; }
-    std::size_t take(void* out, std::size_t max_count);
+    // first_times, if given, receives the times of the first element taken:
+    // its packet's records (explicit timestamps) or the times derived from the
+    // sample rate; empty when unknown (an untimed stream, an element inside a
+    // multi-element packet with explicit timestamps, or a uniformly sampled
+    // stream after a recovered fault, whose element count is no longer known).
+    std::size_t take(void* out, std::size_t max_count, std::vector<wire::TimestampRecord>* first_times = nullptr);
 
     // An ACK when 64 packets were consumed or 50 ms passed since the last one
     // while something new was consumed.
@@ -219,6 +255,7 @@ private:
     struct BufferedPacket {
         std::uint64_t sequence{};
         std::vector<std::uint8_t> values; // host storage of the decoded elements
+        std::vector<wire::TimestampRecord> timestamps;
         std::size_t elements{};
         std::size_t consumed{};
     };
@@ -234,6 +271,7 @@ private:
     Clock::time_point last_ack_{};
     FaultCode fault_{FaultCode::None};
     bool restart_at_next_{false};
+    bool element_count_known_{true}; // false after a recovered fault
     std::uint64_t packets_{};
     std::uint64_t elements_{};
     std::uint64_t duplicates_{};

@@ -102,6 +102,26 @@ constexpr std::size_t components_per_element = signal_type_info(Type).is_complex
 
 } // namespace
 
+std::string to_string(const TimestampRole role)
+{
+    switch (role) {
+        case TimestampRole::ModelTime: return "MODEL_TIME";
+        case TimestampRole::SourceTime: return "SOURCE_TIME";
+        case TimestampRole::ProcessingTime: return "PROCESSING_TIME";
+    }
+    return "UNKNOWN";
+}
+
+TimestampRole parse_timestamp_role(const std::string& name)
+{
+    for (const auto role : {TimestampRole::ModelTime, TimestampRole::SourceTime, TimestampRole::ProcessingTime}) {
+        if (to_string(role) == name) {
+            return role;
+        }
+    }
+    throw std::invalid_argument("Unknown timestamp role '" + name + "' (MODEL_TIME, SOURCE_TIME or PROCESSING_TIME).");
+}
+
 StreamId parse_stream_id(const std::string& uuid)
 {
     try {

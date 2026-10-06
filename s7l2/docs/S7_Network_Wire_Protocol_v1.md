@@ -128,7 +128,7 @@ Bit 15 of `type` marks a critical extension. Unknown critical extensions MUST be
 
 Uniformly sampled streams carry no per-packet timestamps. Delivery is lossless and ordered, so the consumer counts elements: the element with cumulative index `n` has time `origin + n / sample_rate` in each declared timestamp role, with the origin and rational sample rate from the stream descriptor.
 
-Irregular streams, and streams whose descriptor requires explicit timestamps, carry extension type `0x8001`, the critical `TIMESTAMPS` extension:
+Streams without a `sample_rate` carry extension type `0x8001`, the critical `TIMESTAMPS` extension, on every packet:
 
 ```text
 record_count: u8
@@ -137,7 +137,9 @@ records: record_count repetitions of:
     timestamp_ns: i64, two's complement
 ```
 
-Role IDs are `1 = MODEL_TIME`, `2 = SOURCE_TIME`, and `3 = PROCESSING_TIME`. Records MUST be ordered by ascending role ID, MUST NOT repeat a role, and the value length MUST equal `1 + 9 * record_count`. An unknown role ID MUST be rejected. A timestamp describes the first element of the packet. Clock-domain identifiers and timestamp origins are declared in the committed stream/node configuration and are not repeated per packet. A receiver MUST verify that the roles present match the stream descriptor.
+Role IDs are `1 = MODEL_TIME`, `2 = SOURCE_TIME`, and `3 = PROCESSING_TIME`. Records MUST be ordered by ascending role ID, MUST NOT repeat a role, and the value length MUST equal `1 + 9 * record_count`. An unknown role ID MUST be rejected. A timestamp describes the first element of the packet. Clock-domain identifiers and timestamp origins are declared in the committed stream/node configuration and are not repeated per packet. A receiver MUST verify that the roles present match the stream descriptor: exactly the declared roles on a stream without `sample_rate`, none on a uniformly sampled stream. A mismatch faults the stream with `TIMESTAMP_PROFILE_MISMATCH`.
+
+In the MVP a packet with `TIMESTAMPS` carries one element, so every element has its own times; per-element times inside a block need a separately specified payload profile (Section 6).
 
 ## 8. Numeric Data Types
 
@@ -230,7 +232,9 @@ All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
 }
 ```
 
-There is one stream per producing output port with consumers on other nodes (a fan-out to several nodes is one stream with several consumers). The implementation (`s7net/include/s7/diagram_deployment.hpp`) reads and writes every member above except `sample_rate` and `timestamps`, which are not implemented yet. A stream keeps its `stream_id` and settings while its producer stays on the same node with the same type; otherwise Studio assigns a new id.
+There is one stream per producing output port with consumers on other nodes (a fan-out to several nodes is one stream with several consumers). The implementation (`s7net/include/s7/diagram_deployment.hpp`) reads and writes every member above; `timestamps` must declare at least one role, in ascending role order. A stream keeps its `stream_id` and settings while its producer stays on the same node with the same type and timing; otherwise Studio assigns a new id.
+
+*Timing (implemented 2026-10-06).* Studio derives a stream's timing from the diagram. A graph steps once per model-time step and a `NetSink` publishes one element per step, so with a model-time step (`dt` in the diagram, seconds) every stream is uniformly sampled: `sample_rate` is `1 / dt` in exact form (`1e9 / dt_ns`, reduced; model time is kept in whole nanoseconds) and the only role is `MODEL_TIME` in clock domain `model`, the deployment's model time (element `n` at `n · dt`, from the start of the stream). Each node also steps its graph in that model time. Without `dt` a stream carries `PROCESSING_TIME` in the producer's clock domain `node:<uuid>:utc` (the producer's system clock, nanoseconds since the Unix epoch, continuous across restarts but not synchronized with other nodes) on every packet. `SOURCE_TIME` needs a source element that knows its acquisition time and is not produced by `NetSink` yet.
 
 `data_type` is the exact wire type (Section 8) and equals the producing and consuming ports' type. `max_elements_per_packet` and `max_batch_latency_ms` come from the network boundary element. `sample_rate` is present only for uniformly sampled streams; without it, packets carry explicit timestamps (Section 7.1). A `clock_domain` names a domain declared by the producing node: a node advertises its domains in `NODE_INFO` (`clock_domains: [{ "id", "kind", "continuous_across_restart" }]`). A domain that is not continuous across restart gets a new `id` at each process start (for example `node:<uuid>:monotonic:<boot-uuid>`); the descriptor refers to it as `node:<uuid>:monotonic`, and receivers resolve the current boot-specific id from the producer's `NODE_INFO`.
 
@@ -265,6 +269,7 @@ The C++ reference implementation (2026-10-05) implements:
 - the delivery rules of Section 12.1 item 2: batching, send log, cumulative ACK, RESUME and replay, per-consumer positions, backpressure with `SEND_LOG_OVERFLOW`, `UNDERRUN`, and durable sequence-range reservation (`stream_protocol.hpp`);
 - the WebSocket transport carrying them (`BeastRuntimeNetEndpoint`): one `/data` and one `/control` connection per peer pair, reconnect with resume, mTLS consumer identity;
 - `GET_STREAM_STATUS` and `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md` section 10.1);
-- binding of each stream to its producer and consumer nodes (Section 9 item 1, Section 12.1 item 5).
+- binding of each stream to its producer and consumer nodes (Section 9 item 1, Section 12.1 item 5);
+- timestamp profiles (Sections 6 and 7.1): derived times on uniformly sampled streams, `TIMESTAMPS` records on the others, checked by the consumer (`TIMESTAMP_PROFILE_MISMATCH`), and each received element's times reported to the graph side (`ReceiveResult::timestamps`, `NetSource::last_timestamps()`).
 
-Not yet implemented: timestamp-role records on the data path (the TIMESTAMPS TLV is encoded and decoded but not produced), `NODE_INFO.data_protocol`, and relaying. The previous 54-byte big-endian prototype codec has been removed. Fixtures for Rust, Python and JVM decoders remain to be added before interoperability freeze.
+Not yet implemented: `NODE_INFO.data_protocol`, `SOURCE_TIME` production, and relaying. The previous 54-byte big-endian prototype codec has been removed. Fixtures for Rust, Python and JVM decoders remain to be added before interoperability freeze.

@@ -20,8 +20,15 @@
 //       "data_type": "F64",
 //       "max_elements_per_packet": 1024, "max_batch_latency_ms": 10,
 //       "send_log": { "max_packets": 4096, "max_block_ms": 2000 },
-//       "max_wait_ms": 2000
+//       "max_wait_ms": 2000,
+//       "sample_rate": { "numerator": 1000, "denominator": 1 },
+//       "timestamps": [ { "role": "MODEL_TIME", "clock_domain": "model" } ]
 //   } ]
+//
+// Timing is derived from the diagram: with a model-time step (`dt`, seconds)
+// a stream is uniformly sampled at 1 / dt in MODEL_TIME (clock domain
+// "model"), one element per step; without one it carries the producer's
+// PROCESSING_TIME (clock domain "node:<producer uuid>:utc") on every packet.
 
 #include <cstddef>
 #include <functional>
@@ -52,6 +59,13 @@ struct StreamEndpoint {
     bool operator==(const StreamEndpoint&) const = default;
 };
 
+struct TimestampDeclaration {
+    wire::TimestampRole role{wire::TimestampRole::ModelTime};
+    std::string clock_domain;
+
+    bool operator==(const TimestampDeclaration&) const = default;
+};
+
 struct StreamDescriptor {
     wire::StreamId stream_id{};
     StreamEndpoint producer;
@@ -62,7 +76,23 @@ struct StreamDescriptor {
     std::uint32_t send_log_max_packets{4096};
     std::uint32_t max_block_ms{2000};
     std::uint32_t max_wait_ms{2000};
+    std::optional<stream::SampleRate> sample_rate;
+    std::vector<TimestampDeclaration> timestamps; // at least one, ascending role
 };
+
+// The diagram's model-time step (`dt`, seconds, in ns); nothing if it has
+// none. Throws std::invalid_argument if `dt` is not a positive number of at
+// least 1 ns.
+[[nodiscard]] auto model_time_step_ns(const boost::json::object& diagram) -> std::optional<std::int64_t>;
+
+// The timing a stream produced on `producer_node` gets in this diagram.
+struct StreamTiming {
+    std::optional<stream::SampleRate> sample_rate;
+    std::vector<TimestampDeclaration> timestamps;
+
+    bool operator==(const StreamTiming&) const = default;
+};
+[[nodiscard]] auto stream_timing(const boost::json::object& diagram, const std::string& producer_node) -> StreamTiming;
 
 [[nodiscard]] auto parse_runtime_nodes(const boost::json::object& diagram) -> std::vector<RuntimeNode>;
 // Throws std::invalid_argument on a malformed descriptor.
@@ -84,7 +114,8 @@ using OutputTypeLookup = std::function<std::optional<SignalType>(const std::stri
 // node) and rewrites `streams` to cover exactly the connections between
 // nodes, one stream per producing output port. A stream keeps its id and
 // settings while its producer stays on the same node with the same type,
-// so redeployments continue it; otherwise it gets a new random id.
+// and timing (stream_timing), so redeployments continue it; otherwise it gets
+// a new random id.
 // Returns the problems found (the diagram is unchanged if any).
 [[nodiscard]] auto assign_streams(boost::json::object& diagram, const OutputTypeLookup& output_type) -> std::vector<std::string>;
 

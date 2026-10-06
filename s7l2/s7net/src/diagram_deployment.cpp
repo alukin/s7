@@ -1,6 +1,8 @@
 #include "s7/diagram_deployment.hpp"
 
 #include <algorithm>
+#include <numeric>
+#include <cmath>
 #include <map>
 #include <set>
 #include <stdexcept>
@@ -129,6 +131,25 @@ auto connection_json(const std::string& from, const std::size_t from_port, const
     return json::object{{"from_element", from}, {"from_port", from_port}, {"to_element", to}, {"to_port", to_port}};
 }
 
+// A stream end element with the stream's timing parameters.
+auto with_timing(json::object element, const StreamDescriptor& stream) -> json::object
+{
+    auto& params = element["params"].as_object();
+    if (stream.sample_rate) {
+        params["sample_rate"] = json::array{stream.sample_rate->numerator, stream.sample_rate->denominator};
+    }
+    return element;
+}
+
+auto timestamps_param(const StreamDescriptor& stream) -> json::array
+{
+    json::array roles;
+    for (const auto& declaration : stream.timestamps) {
+        roles.emplace_back(wire::to_string(declaration.role));
+    }
+    return roles;
+}
+
 } // namespace
 
 auto parse_runtime_nodes(const json::object& diagram) -> std::vector<RuntimeNode>
@@ -193,6 +214,32 @@ auto parse_streams(const json::object& diagram) -> std::vector<StreamDescriptor>
             stream.max_block_ms = u32_field(log->as_object(), "max_block_ms", stream.max_block_ms);
         }
         stream.max_wait_ms = u32_field(object, "max_wait_ms", stream.max_wait_ms);
+        if (const auto* rate = object.if_contains("sample_rate")) {
+            if (!rate->is_object()) {
+                throw std::invalid_argument(what + ": 'sample_rate' must be an object.");
+            }
+            const auto& fields = rate->as_object();
+            stream.sample_rate = stream::SampleRate{index_field(fields, "numerator", what + " sample_rate"),
+                                                    index_field(fields, "denominator", what + " sample_rate")};
+            if (stream.sample_rate->numerator == 0 || stream.sample_rate->denominator == 0) {
+                throw std::invalid_argument(what + ": 'sample_rate' must be positive.");
+            }
+        }
+        const auto* timestamps = object.if_contains("timestamps");
+        if (!timestamps || !timestamps->is_array() || timestamps->as_array().empty()) {
+            throw std::invalid_argument(what + ": 'timestamps' must declare at least one timestamp role.");
+        }
+        for (const auto& value : timestamps->as_array()) {
+            if (!value.is_object()) {
+                throw std::invalid_argument(what + ": a timestamp declaration must be an object.");
+            }
+            stream.timestamps.push_back(TimestampDeclaration{wire::parse_timestamp_role(string_field(value.as_object(), "role", what)),
+                                                             string_field(value.as_object(), "clock_domain", what)});
+        }
+        if (!std::ranges::is_sorted(stream.timestamps, {}, &TimestampDeclaration::role) ||
+            std::ranges::adjacent_find(stream.timestamps, {}, &TimestampDeclaration::role) != stream.timestamps.end()) {
+            throw std::invalid_argument(what + ": timestamp roles must be distinct and in ascending role order.");
+        }
         streams.push_back(std::move(stream));
     }
     return streams;
@@ -204,7 +251,11 @@ auto to_json(const StreamDescriptor& stream) -> json::object
     for (const auto& consumer : stream.consumers) {
         consumers.push_back(endpoint_to_json(consumer));
     }
-    return json::object{
+    json::array timestamps;
+    for (const auto& declaration : stream.timestamps) {
+        timestamps.push_back(json::object{{"role", wire::to_string(declaration.role)}, {"clock_domain", declaration.clock_domain}});
+    }
+    json::object out{
         {"stream_id", wire::to_string(stream.stream_id)},
         {"producer", endpoint_to_json(stream.producer)},
         {"consumers", std::move(consumers)},
@@ -214,6 +265,41 @@ auto to_json(const StreamDescriptor& stream) -> json::object
         {"send_log", json::object{{"max_packets", stream.send_log_max_packets}, {"max_block_ms", stream.max_block_ms}}},
         {"max_wait_ms", stream.max_wait_ms},
     };
+    if (stream.sample_rate) {
+        out["sample_rate"] = json::object{{"numerator", stream.sample_rate->numerator}, {"denominator", stream.sample_rate->denominator}};
+    }
+    out["timestamps"] = std::move(timestamps);
+    return out;
+}
+
+auto model_time_step_ns(const json::object& diagram) -> std::optional<std::int64_t>
+{
+    const auto* dt = diagram.if_contains("dt");
+    if (!dt || dt->is_null()) {
+        return std::nullopt;
+    }
+    const double seconds = dt->is_double() ? dt->as_double() : dt->is_int64() ? static_cast<double>(dt->as_int64())
+                                                         : dt->is_uint64() ? static_cast<double>(dt->as_uint64())
+                                                                           : -1.0;
+    const auto ns = seconds * 1e9;
+    if (!(ns >= 1.0) || ns > 9e18) {
+        throw std::invalid_argument("'dt' must be a positive number of seconds (at least 1 ns).");
+    }
+    return std::llround(ns);
+}
+
+auto stream_timing(const json::object& diagram, const std::string& producer_node) -> StreamTiming
+{
+    StreamTiming timing;
+    if (const auto step = model_time_step_ns(diagram)) {
+        // 1 / dt elements per second, exactly: 1e9 / step_ns, reduced.
+        const auto divisor = std::gcd(std::uint64_t{1'000'000'000}, static_cast<std::uint64_t>(*step));
+        timing.sample_rate = stream::SampleRate{1'000'000'000 / divisor, static_cast<std::uint64_t>(*step) / divisor};
+        timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ModelTime, "model"});
+    } else {
+        timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ProcessingTime, "node:" + producer_node + ":utc"});
+    }
+    return timing;
 }
 
 auto diagram_schema(const json::object& diagram) -> const json::object&
@@ -245,6 +331,11 @@ auto assign_streams(json::object& diagram, const OutputTypeLookup& output_type) 
 {
     std::vector<std::string> errors;
     std::vector<StreamDescriptor> previous;
+    try {
+        static_cast<void>(model_time_step_ns(diagram));
+    } catch (const std::exception& ex) {
+        return {ex.what()};
+    }
     std::unordered_map<std::string, std::string> placement;
     std::vector<Connection> connections;
     std::set<std::string> known_nodes;
@@ -283,6 +374,9 @@ auto assign_streams(json::object& diagram, const OutputTypeLookup& output_type) 
         auto& stream = wanted[{c.from_element, c.from_port}];
         if (stream.consumers.empty()) {
             stream.producer = StreamEndpoint{from->second, c.from_element, c.from_port};
+            auto timing = stream_timing(diagram, from->second);
+            stream.sample_rate = timing.sample_rate;
+            stream.timestamps = std::move(timing.timestamps);
             if (const auto type = output_type(c.from_element, c.from_port)) {
                 stream.data_type = *type;
             } else {
@@ -301,7 +395,8 @@ auto assign_streams(json::object& diagram, const OutputTypeLookup& output_type) 
     for (const auto& old : previous) {
         const auto it = wanted.find({old.producer.element, old.producer.port});
         if (it == wanted.end() || it->second.producer.node_uuid != old.producer.node_uuid ||
-            it->second.data_type != old.data_type || used_ids.contains(wire::to_string(old.stream_id))) {
+            it->second.data_type != old.data_type || it->second.sample_rate != old.sample_rate ||
+            it->second.timestamps != old.timestamps || used_ids.contains(wire::to_string(old.stream_id))) {
             continue;
         }
         auto stream = old; // id and settings stay
@@ -362,7 +457,7 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
                     consumer_nodes.emplace_back(consumer.node_uuid);
                 }
             }
-            elements.push_back(json::object{
+            elements.push_back(with_timing(json::object{
                 {"id", stream_element_id(stream, "out")},
                 {"type", "NetSink"},
                 {"params", json::object{{"stream_id", wire::to_string(stream.stream_id)},
@@ -371,8 +466,9 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
                                         {"max_batch_latency_ms", stream.max_batch_latency_ms},
                                         {"send_log_max_packets", stream.send_log_max_packets},
                                         {"max_block_ms", stream.max_block_ms},
-                                        {"consumer_nodes", std::move(consumer_nodes)}}},
-            });
+                                        {"consumer_nodes", std::move(consumer_nodes)},
+                                        {"timestamps", timestamps_param(stream)}}},
+            }, stream));
             connections.push_back(connection_json(stream.producer.element, stream.producer.port, stream_element_id(stream, "out"), 0));
         }
         bool consumes = false;
@@ -389,14 +485,15 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
             consumes = true;
         }
         if (consumes) {
-            elements.push_back(json::object{
+            elements.push_back(with_timing(json::object{
                 {"id", stream_element_id(stream, "in")},
                 {"type", "NetSource"},
                 {"params", json::object{{"stream_id", wire::to_string(stream.stream_id)},
                                         {"type", std::string(signal_type_name(stream.data_type))},
                                         {"max_wait_ms", stream.max_wait_ms},
-                                        {"producer_node", stream.producer.node_uuid}}},
-            });
+                                        {"producer_node", stream.producer.node_uuid},
+                                        {"timestamps", timestamps_param(stream)}}},
+            }, stream));
         }
     }
 

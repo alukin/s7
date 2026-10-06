@@ -1,5 +1,6 @@
 // Splitting one diagram across nodes: placement, stream assignment and the
 // part each node runs.
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -201,6 +202,69 @@ void test_node_parts()
     s7::RuntimeNetContext::set_endpoint(nullptr);
 }
 
+
+// Stream timing follows the diagram's model-time step.
+void test_timing()
+{
+    auto diagram = make_diagram();
+    expect(deployment::assign_streams(diagram, infer(diagram)).empty(), "streams assigned");
+    auto stream = deployment::parse_streams(diagram).front();
+    expect(!stream.sample_rate && stream.timestamps == std::vector<deployment::TimestampDeclaration>{
+                                                          {s7::wire::TimestampRole::ProcessingTime, std::string("node:") + kA + ":utc"}},
+           "without dt: the producer's processing time on every packet");
+    const auto untimed_id = stream.stream_id;
+
+    // The producer stamps each element; the consumer receives the stamp.
+    const auto a = deployment::extract_node_schema(diagram, kA);
+    auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+    s7::RuntimeNetContext::set_endpoint(endpoint);
+    {
+        s7::NodeRuntime node_a{s7::Compiler::compile(build(a))};
+        node_a.step();
+        auto consumer_config = s7::net_stream_config(s7::wire::to_string(stream.stream_id));
+        consumer_config.type = SignalType::I16;
+        consumer_config.timestamp_roles = {s7::wire::TimestampRole::ProcessingTime};
+        const auto consumer = endpoint->open_consumer(consumer_config);
+        std::int16_t value = 0;
+        const auto result = endpoint->receive(consumer, &value, 1);
+        const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        expect(result.fault == s7::stream::FaultCode::None && value == -1234, "value received");
+        expect(result.timestamps.size() == 1 && result.timestamps[0].role == s7::wire::TimestampRole::ProcessingTime &&
+                   now - result.timestamps[0].nanoseconds >= 0 && now - result.timestamps[0].nanoseconds < 10'000'000'000,
+               "stamped with the producer's UTC clock");
+    }
+    s7::RuntimeNetContext::set_endpoint(nullptr);
+
+    // With dt the stream is uniformly sampled in model time; a timing change is a new stream.
+    diagram["dt"] = 0.0005;
+    expect(deployment::model_time_step_ns(diagram) == 500'000, "dt in ns");
+    expect(deployment::assign_streams(diagram, infer(diagram)).empty(), "reassigned with dt");
+    stream = deployment::parse_streams(diagram).front();
+    expect(stream.sample_rate == s7::stream::SampleRate{2000, 1} &&
+               stream.timestamps == std::vector<deployment::TimestampDeclaration>{{s7::wire::TimestampRole::ModelTime, "model"}},
+           "with dt: 2000 elements per second of model time");
+    expect(stream.stream_id != untimed_id, "a timing change starts a new stream");
+    diagram["dt"] = 1.0 / 3.0;
+    expect(deployment::assign_streams(diagram, infer(diagram)).empty(), "reassigned with dt = 1/3 s");
+    expect(deployment::parse_streams(diagram).front().sample_rate == s7::stream::SampleRate{1'000'000'000, 333'333'333},
+           "the rate matches the model-time step in whole nanoseconds");
+    diagram["dt"] = 0;
+    expect(!deployment::assign_streams(diagram, infer(diagram)).empty(), "dt must be positive");
+
+    // A NetSink cannot stamp model time by itself.
+    bool rejected = false;
+    try {
+        auto schema = build(json::parse(R"json({ "name": "bad", "elements": [
+            { "id": "c", "type": "Constant", "params": { "value": 1 } },
+            { "id": "s", "type": "NetSink", "params": { "stream_id": "1e2d3c4b-5a69-4788-9a0b-1c2d3e4f5a6b", "timestamps": ["MODEL_TIME"] } } ],
+            "connections": [ { "from_element": "c", "from_port": 0, "to_element": "s", "to_port": 0 } ] })json").as_object());
+        static_cast<void>(s7::Compiler::compile(schema));
+    } catch (const std::exception& ex) {
+        rejected = std::string(ex.what()).find("MODEL_TIME") != std::string::npos;
+    }
+    expect(rejected, "MODEL_TIME without a sample rate is refused");
+}
+
 } // namespace
 
 int main()
@@ -209,6 +273,7 @@ try {
     s7::register_net_elements(s7::ElementRegistry::instance());
     test_assignment();
     test_node_parts();
+    test_timing();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7net diagram deployment smoke: " << ex.what() << '\n';

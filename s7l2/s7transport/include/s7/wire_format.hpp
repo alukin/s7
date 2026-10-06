@@ -49,6 +49,10 @@ enum class TimestampRole : std::uint8_t {
     ProcessingTime = 3,
 };
 
+// "MODEL_TIME", "SOURCE_TIME", "PROCESSING_TIME"; parsing throws std::invalid_argument.
+[[nodiscard]] std::string to_string(TimestampRole role);
+[[nodiscard]] TimestampRole parse_timestamp_role(const std::string& name);
+
 struct TimestampRecord {
     TimestampRole role{TimestampRole::ModelTime};
     std::int64_t nanoseconds{};

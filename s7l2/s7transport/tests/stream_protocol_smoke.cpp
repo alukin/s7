@@ -3,6 +3,7 @@
 #include <deque>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -294,6 +295,96 @@ void test_soak_i12()
                                  std::to_string(received.size()) + ")");
 }
 
+
+// Explicit timestamps: one element per packet carrying exactly the declared
+// roles; the consumer reports each element's times and faults on a packet
+// with other roles.
+void test_explicit_timestamps()
+{
+    auto c = config(SignalType::F64, 64, 16);
+    c.timestamp_roles = {wire::TimestampRole::SourceTime, wire::TimestampRole::ProcessingTime};
+    stream::MemorySequenceStore sequences;
+    stream::StreamProducer producer(c, sequences);
+    stream::StreamConsumer consumer(c, 3);
+    Link link{producer, consumer};
+    link.connect();
+    const auto t0 = stream::Clock::now();
+    for (int i = 0; i < 3; ++i) {
+        const double value = i;
+        const std::vector<wire::TimestampRecord> times{{wire::TimestampRole::SourceTime, 1000 * i},
+                                                       {wire::TimestampRole::ProcessingTime, 5000 + i}};
+        expect(producer.append(&value, 1, t0, times) == 1, "one stamped element taken");
+    }
+    expect(producer.stats().packets == 3, "each stamped element is a packet of its own");
+    bool rejected = false;
+    try {
+        const double value = 9;
+        const std::vector<wire::TimestampRecord> wrong{{wire::TimestampRole::ProcessingTime, 1}};
+        static_cast<void>(producer.append(&value, 1, t0, wrong));
+    } catch (const std::invalid_argument&) {
+        rejected = true;
+    }
+    expect(rejected, "the producer refuses times without the declared roles");
+    link.pump(t0);
+    for (int i = 0; i < 3; ++i) {
+        double value = -1;
+        std::vector<wire::TimestampRecord> times;
+        expect(consumer.take(&value, 1, &times) == 1 && value == i, "element delivered");
+        expect(times == std::vector<wire::TimestampRecord>{{wire::TimestampRole::SourceTime, 1000 * i},
+                                                           {wire::TimestampRole::ProcessingTime, 5000 + i}},
+               "its times delivered with it");
+    }
+
+    // A packet with another profile faults the stream.
+    wire::DataPacket packet{SignalType::F64, 3, 3, {{wire::TimestampRole::ModelTime, 0}}, {}};
+    const double value = 1;
+    wire::encode_elements(SignalType::F64, &value, 1, packet.payload);
+    consumer.on_packet(packet, t0);
+    expect(consumer.fault_code() == stream::FaultCode::TimestampProfileMismatch, "other roles: TIMESTAMP_PROFILE_MISMATCH");
+    expect(stream::to_string(consumer.fault_code()) == "TIMESTAMP_PROFILE_MISMATCH", "reported by its code");
+
+    stream::StreamConsumer uniform(config(SignalType::F64, 4, 16), 1);
+    wire::DataPacket stamped{SignalType::F64, 1, 0, {{wire::TimestampRole::ProcessingTime, 0}}, {}};
+    wire::encode_elements(SignalType::F64, &value, 1, stamped.payload);
+    uniform.on_packet(stamped, t0);
+    expect(uniform.fault_code() == stream::FaultCode::TimestampProfileMismatch, "records on a stream without explicit timestamps");
+}
+
+// A uniformly sampled stream carries no timestamps: element n has time n / rate.
+void test_derived_timestamps()
+{
+    auto c = config(SignalType::F64, 4, 16);
+    c.sample_rate = stream::SampleRate{48000, 1};
+    c.timestamp_roles = {wire::TimestampRole::ModelTime};
+    stream::MemorySequenceStore sequences;
+    stream::StreamProducer producer(c, sequences);
+    stream::StreamConsumer consumer(c, 1);
+    Link link{producer, consumer};
+    link.connect();
+    const auto t0 = stream::Clock::now();
+    std::vector<double> values(10, 1.0);
+    expect(producer.append(values.data(), values.size(), t0) == 10, "batched as usual");
+    producer.flush(t0, true);
+    link.pump(t0);
+    std::vector<double> out(3);
+    std::vector<wire::TimestampRecord> times;
+    expect(consumer.take(out.data(), 3, &times) == 3 && times == std::vector<wire::TimestampRecord>{{wire::TimestampRole::ModelTime, 0}},
+           "element 0 at 0 ns");
+    expect(consumer.take(out.data(), 3, &times) == 3 &&
+               times == std::vector<wire::TimestampRecord>{{wire::TimestampRole::ModelTime, 62'500}},
+           "element 3 at 3 / 48000 s");
+    expect(stream::element_time_ns(stream::SampleRate{1, 3}, 1'000'000'000'000) == std::numeric_limits<std::int64_t>::max(),
+           "a time beyond the i64 range saturates");
+    expect(stream::element_time_ns(stream::SampleRate{1'000'000'000, 1}, 4'000'000'000'000'000'000) == 4'000'000'000'000'000'000,
+           "no overflow in the intermediate product");
+    expect(stream::element_time_ns(stream::SampleRate{3, 1}, 1) == 333'333'333, "rounded toward zero");
+
+    // After a recovered fault the element count, and so the time, is unknown.
+    consumer.fault(stream::FaultCode::Underrun);
+    consumer.recover();
+    expect(consumer.take(out.data(), 1, &times) == 1 && times.empty(), "no invented times after a recovery");
+}
+
 } // namespace
 
 int main()
@@ -305,6 +396,8 @@ try {
     test_retention_and_two_consumers();
     test_producer_restart_is_a_gap();
     test_soak_i12();
+    test_explicit_timestamps();
+    test_derived_timestamps();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport stream protocol smoke: " << ex.what() << '\n';

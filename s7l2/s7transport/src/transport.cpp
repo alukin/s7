@@ -315,7 +315,8 @@ public:
         changed.notify_all();
     }
 
-    PublishResult publish(const StreamHandle handle, const void* elements, const std::size_t count)
+    PublishResult publish(const StreamHandle handle, const void* elements, const std::size_t count,
+                          const std::span<const wire::TimestampRecord> times)
     {
         std::unique_lock lock(mutex);
         auto& entry = require(handle, StreamRole::Producer);
@@ -329,7 +330,7 @@ public:
                 return {count, producer.fault_code()}; // a faulted stream drops data; the graph continues
             }
             const auto now = Clock::now();
-            done += producer.append(bytes + done * element_bytes, count - done, now);
+            done += producer.append(bytes + done * element_bytes, count - done, now, times);
             if (on_producer_data) {
                 on_producer_data(entry);
             }
@@ -368,9 +369,10 @@ public:
         auto* bytes = static_cast<std::uint8_t*>(elements);
         std::size_t taken = 0;
         const auto deadline = Clock::now() + entry.config.max_wait;
+        std::vector<wire::TimestampRecord> first_times;
         while (true) {
             const auto before = taken;
-            taken += consumer.take(bytes + taken * element_bytes, count - taken);
+            taken += consumer.take(bytes + taken * element_bytes, count - taken, taken == 0 ? &first_times : nullptr);
             if (taken > before && on_consumed) {
                 on_consumed(entry);
             }
@@ -379,7 +381,7 @@ public:
             }
             if (starving) {
                 starving(entry);
-                taken += consumer.take(bytes + taken * element_bytes, count - taken);
+                taken += consumer.take(bytes + taken * element_bytes, count - taken, taken == 0 ? &first_times : nullptr);
                 if (taken == count) {
                     break;
                 }
@@ -388,14 +390,14 @@ public:
                 return !entries_.contains(handle.value) || consumer.available() > 0 || consumer.fault_code() != FaultCode::None;
             });
             if (!entries_.contains(handle.value)) {
-                return {taken, FaultCode::None};
+                return {taken, FaultCode::None, std::move(first_times)};
             }
             if (!data) {
                 consumer.fault(FaultCode::Underrun);
                 break;
             }
         }
-        return {taken, consumer.fault_code()};
+        return {taken, consumer.fault_code(), std::move(first_times)};
     }
 
     [[nodiscard]] std::vector<StreamStatus> statuses()
@@ -581,9 +583,10 @@ void InMemoryRuntimeNetEndpoint::close_stream(const StreamHandle handle)
     impl_->table.close(handle);
 }
 
-auto InMemoryRuntimeNetEndpoint::publish(const StreamHandle handle, const void* elements, const std::size_t count) -> PublishResult
+auto InMemoryRuntimeNetEndpoint::publish(const StreamHandle handle, const void* elements, const std::size_t count,
+                                   const std::span<const wire::TimestampRecord> times) -> PublishResult
 {
-    return impl_->table.publish(handle, elements, count);
+    return impl_->table.publish(handle, elements, count, times);
 }
 
 auto InMemoryRuntimeNetEndpoint::receive(const StreamHandle handle, void* elements, const std::size_t count) -> ReceiveResult
@@ -1650,9 +1653,10 @@ void BeastRuntimeNetEndpoint::close_stream(const StreamHandle handle)
     impl_->table.close(handle);
 }
 
-auto BeastRuntimeNetEndpoint::publish(const StreamHandle handle, const void* elements, const std::size_t count) -> PublishResult
+auto BeastRuntimeNetEndpoint::publish(const StreamHandle handle, const void* elements, const std::size_t count,
+                                   const std::span<const wire::TimestampRecord> times) -> PublishResult
 {
-    return impl_->table.publish(handle, elements, count);
+    return impl_->table.publish(handle, elements, count, times);
 }
 
 auto BeastRuntimeNetEndpoint::receive(const StreamHandle handle, void* elements, const std::size_t count) -> ReceiveResult

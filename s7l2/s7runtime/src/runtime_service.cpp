@@ -702,9 +702,9 @@ public:
         std::vector<transport::DataPeer> data_peers;
     };
 
-    auto stage(const boost::json::object& node_schema, const std::vector<transport::DataPeer>& data_peers)
-        -> std::unique_ptr<StagedConfiguration> override
+    auto stage(const NodePart& part) -> std::unique_ptr<StagedConfiguration> override
     {
+        const auto& node_schema = part.schema;
         // A deployment carries a graph only; node settings stay with the node.
         for (const auto* key : {"websocket", "simulation", "execution", "control"}) {
             if (node_schema.contains(key)) {
@@ -716,7 +716,8 @@ public:
         auto staged = std::make_unique<StagedGraph>();
         staged->runtime = std::make_unique<NodeRuntime>(
             Compiler::compile(*schema, service_.runtime_instance_uuid_, create_schema_instance_uuid()));
-        staged->data_peers = data_peers;
+        staged->runtime->set_model_time_step_ns(part.model_time_step_ns);
+        staged->data_peers = part.data_peers;
         return staged;
     }
 

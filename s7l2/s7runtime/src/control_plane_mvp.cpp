@@ -859,7 +859,8 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
             throw std::invalid_argument("No element of the diagram is placed on this node (" + descriptor_.node_uuid + ").");
         }
         node_schema = deployment::extract_node_schema(diagram, descriptor_.node_uuid);
-        staged = options_.deployment_host->stage(node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid));
+        staged = options_.deployment_host->stage(NodePart{node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid),
+                                                          deployment::model_time_step_ns(diagram)});
     } catch (const std::exception& ex) {
         boost::json::array issues;
         issues.emplace_back(make_issue("INVALID_CONFIGURATION", "configuration", deployment_id, ex.what()));

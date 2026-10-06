@@ -70,17 +70,22 @@ public:
     virtual ~StagedConfiguration() = default;
 };
 
+// This node's part of a deployed diagram.
+struct NodePart {
+    boost::json::object schema;                  // deployment::extract_node_schema
+    std::vector<transport::DataPeer> data_peers; // the nodes producing the streams it consumes
+    std::optional<std::int64_t> model_time_step_ns; // the diagram's `dt`: one step of model time
+};
+
 // Runs deployed configurations on behalf of the control plane.
 class DeploymentHost {
 public:
     virtual ~DeploymentHost() = default;
 
     // Validates and compiles this node's part of the deployed diagram without
-    // activating it. data_peers are the nodes producing the
-    // streams it consumes. Throws std::exception describing why the
-    // configuration is invalid.
-    [[nodiscard]] virtual auto stage(const boost::json::object& node_schema, const std::vector<transport::DataPeer>& data_peers)
-        -> std::unique_ptr<StagedConfiguration> = 0;
+    // activating it. Throws std::exception describing why the configuration
+    // is invalid.
+    [[nodiscard]] virtual auto stage(const NodePart& part) -> std::unique_ptr<StagedConfiguration> = 0;
 
     // Makes the staged configuration the running graph. On failure throws and
     // leaves the previously active graph running.

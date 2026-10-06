@@ -284,6 +284,8 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 **Network configuration.** `GET_NETWORK_CONFIGURATION {revision?}` (read-only) returns `NETWORK_CONFIGURATION` with `node_uuid`, `deployment_id`, `revision`, `project_revision`, `configuration_digest`, `committed_at`, the deployed `diagram` and this node's part of it as `node_schema`. Only the active revision is retained: no committed configuration, or another `revision`, is `REVISION_NOT_FOUND`.
 
+**Model time.** A deployed graph steps in the diagram's model time: with a `dt` (seconds) in the diagram each step advances model time by `dt` (in whole nanoseconds) and observations carry it; without one the graph's steps are untimed.
+
 **Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
 
 **Not yet implemented:** chunked configuration transfer and size limits, persistence of deployment state across node restarts (a restarted node runs its startup schema with active revision 0), and request-ID replay caching.

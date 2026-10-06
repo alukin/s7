@@ -52,6 +52,11 @@ protected:
     // Opens the stream if needed; false when no endpoint is configured.
     bool ensure_stream();
     [[noreturn]] void raise_fault(stream::FaultCode code) const;
+    // A NetSink stamps explicit timestamps itself: PROCESSING_TIME from the
+    // system clock (UTC, ns since the Unix epoch). MODEL_TIME needs a sample
+    // rate and SOURCE_TIME a source that knows it; both throw here.
+    static void check_stampable(const stream::StreamConfig& config);
+    [[nodiscard]] static std::vector<wire::TimestampRecord> stamp(const stream::StreamConfig& config);
 
     stream::StreamConfig config_;
     transport::StreamRole role_;
@@ -69,6 +74,7 @@ public:
         : NetStreamElement("NetSink", with_type(std::move(config)), transport::StreamRole::Producer)
     {
         register_input(0, port_names::in, Type, nullptr);
+        check_stampable(config_);
     }
 
     void step() override
@@ -76,6 +82,14 @@ public:
         const auto value = read_input<value_type>(0);
         if (!ensure_stream()) {
             return; // no network endpoint: a local run without peers
+        }
+        if (config_.explicit_timestamps()) {
+            const auto times = stamp(config_);
+            const auto result = endpoint_->publish(handle_, &value, 1, times);
+            if (result.fault != stream::FaultCode::None) {
+                raise_fault(result.fault);
+            }
+            return;
         }
         const auto result = endpoint_->publish(handle_, &value, 1);
         if (result.fault != stream::FaultCode::None) {
@@ -109,11 +123,15 @@ public:
         if (!ensure_stream()) {
             return;
         }
-        const auto result = endpoint_->receive(handle_, &output_value_, 1);
+        auto result = endpoint_->receive(handle_, &output_value_, 1);
         if (result.fault != stream::FaultCode::None) {
             raise_fault(result.fault);
         }
+        last_timestamps_ = std::move(result.timestamps);
     }
+
+    // The times of the value output by the last step (empty: unknown).
+    [[nodiscard]] const std::vector<wire::TimestampRecord>& last_timestamps() const { return last_timestamps_; }
 
 private:
     static stream::StreamConfig with_type(stream::StreamConfig config)
@@ -123,6 +141,7 @@ private:
     }
 
     value_type output_value_{};
+    std::vector<wire::TimestampRecord> last_timestamps_;
 };
 
 using NetSink = NetSinkT<SignalType::F64>;

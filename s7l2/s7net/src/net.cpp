@@ -1,5 +1,6 @@
 #include "s7/net.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <mutex>
 #include <string_view>
@@ -37,6 +38,8 @@ auto make_net_metadata(const std::string& type_name,
         {"max_wait_ms", "int", "Longest receive wait for data before the stream faults (underrun)", 2000, 0, std::nullopt, {}, false},
         {"producer_node", "string", "Node UUID allowed to produce the stream (NetSource; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
         {"consumer_nodes", "array", "Node UUIDs allowed to consume the stream (NetSink; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
+        {"sample_rate", "array", "Uniform sampling [numerator, denominator] elements per second: timestamps are derived", nullptr, std::nullopt, std::nullopt, {}, false},
+        {"timestamps", "array", "Timestamp roles of the stream (MODEL_TIME, SOURCE_TIME, PROCESSING_TIME); without sample_rate every packet carries them", nullptr, std::nullopt, std::nullopt, {}, false},
     };
     for (int i = 0; i < input_count; ++i) {
         metadata.input_ports.push_back({i == 0 ? "in" : "in" + std::to_string(i), "Value to publish", SignalType::F64, false, "T"});
@@ -69,6 +72,28 @@ stream::StreamConfig config_from_params(const ElementCreationContext& ctx)
     config.max_wait = std::chrono::milliseconds(positive("max_wait_ms", config.max_wait.count()));
     if (const auto* node = ctx.params.if_contains("producer_node"); node && node->is_string()) {
         config.producer_node = std::string(node->as_string());
+    }
+    if (const auto* rate = ctx.params.if_contains("sample_rate"); rate && !rate->is_null()) {
+        const auto& pair = rate->as_array();
+        const auto positive_int = [](const boost::json::value& value) {
+            return (value.is_int64() && value.as_int64() > 0) || (value.is_uint64() && value.as_uint64() > 0);
+        };
+        if (pair.size() != 2 || !positive_int(pair[0]) || !positive_int(pair[1])) {
+            throw std::invalid_argument(ctx.metadata.type_name + " parameter 'sample_rate' must be [numerator, denominator], both positive.");
+        }
+        config.sample_rate = stream::SampleRate{pair[0].to_number<std::uint64_t>(), pair[1].to_number<std::uint64_t>()};
+    }
+    if (const auto* roles = ctx.params.if_contains("timestamps"); roles && !roles->is_null()) {
+        for (const auto& role : roles->as_array()) {
+            if (!role.is_string()) {
+                throw std::invalid_argument(ctx.metadata.type_name + " parameter 'timestamps' must list role names.");
+            }
+            config.timestamp_roles.push_back(wire::parse_timestamp_role(std::string(role.as_string())));
+        }
+        std::ranges::sort(config.timestamp_roles);
+        if (std::ranges::adjacent_find(config.timestamp_roles) != config.timestamp_roles.end()) {
+            throw std::invalid_argument(ctx.metadata.type_name + " parameter 'timestamps' repeats a role.");
+        }
     }
     if (const auto* nodes = ctx.params.if_contains("consumer_nodes"); nodes && !nodes->is_null()) {
         for (const auto& node : nodes->as_array()) {
@@ -139,6 +164,29 @@ void NetStreamElement::raise_fault(const stream::FaultCode code) const
 {
     throw std::runtime_error(std::string(type_name()) + " stream " + wire::to_string(config_.stream_id) + " faulted: " +
                              stream::to_string(code) + ".");
+}
+
+void NetStreamElement::check_stampable(const stream::StreamConfig& config)
+{
+    if (!config.explicit_timestamps()) {
+        return;
+    }
+    for (const auto role : config.timestamp_roles) {
+        if (role != wire::TimestampRole::ProcessingTime) {
+            throw std::invalid_argument("NetSink stream " + wire::to_string(config.stream_id) + ": " + wire::to_string(role) +
+                                        " without a sample_rate is not supported (a NetSink stamps PROCESSING_TIME only).");
+        }
+    }
+}
+
+std::vector<wire::TimestampRecord> NetStreamElement::stamp(const stream::StreamConfig& config)
+{
+    const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    std::vector<wire::TimestampRecord> times;
+    for (const auto role : config.timestamp_roles) {
+        times.push_back(wire::TimestampRecord{role, static_cast<std::int64_t>(now)});
+    }
+    return times;
 }
 
 void RuntimeNetContext::set_endpoint(transport::RuntimeNetEndpointPtr endpoint)

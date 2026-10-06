@@ -32,8 +32,12 @@ Both elements are generic over the stream type `T` (all signal types). The type 
 | `max_wait_ms` | 2000 | Consumer: how long a step may wait for data before the stream faults (`UNDERRUN`) |
 | `producer_node` | (any) | `NetSource`: the node UUID allowed to produce the stream |
 | `consumer_nodes` | (any) | `NetSink`: the node UUIDs allowed to consume the stream |
+| `sample_rate` | (none) | `[numerator, denominator]` elements per second: a uniformly sampled stream, whose element times are derived |
+| `timestamps` | (none) | Timestamp roles of the stream (`MODEL_TIME`, `SOURCE_TIME`, `PROCESSING_TIME`) |
 
-A deployed diagram sets `producer_node` and `consumer_nodes` from its stream descriptors, so each stream travels only between its configured nodes.
+A deployed diagram sets `producer_node` and `consumer_nodes` from its stream descriptors, so each stream travels only between its configured nodes, and the timing parameters from the diagram's model-time step (`S7_Network_Wire_Protocol_v1.md`, section 12.1 item 1).
+
+**Timestamps.** With `sample_rate` no timestamps travel: element `n` has time `n / sample_rate` in each declared role. Without it, every packet carries one element and its times; a `NetSink` stamps `PROCESSING_TIME` from the system clock (UTC nanoseconds) and refuses other roles without a sample rate. `NetSource::last_timestamps()` gives the times of the value it output last (empty when unknown: an untimed stream, or a uniformly sampled stream after a recovered fault, whose element count is no longer known). Neither declared roles nor a rate: an untimed stream (tests and hand-written schemas).
 
 `NetSink` publishes its input value each step. `NetSource` outputs the next received value each step, waiting for it if necessary. The stream (handle) is opened lazily on the first step.
 
@@ -47,7 +51,8 @@ public:
     virtual auto open_producer(const stream::StreamConfig&) -> StreamHandle = 0;
     virtual auto open_consumer(const stream::StreamConfig&) -> StreamHandle = 0;
     virtual void close_stream(StreamHandle) = 0;
-    virtual auto publish(StreamHandle, const void* elements, std::size_t count) -> PublishResult = 0;
+    virtual auto publish(StreamHandle, const void* elements, std::size_t count,
+                         std::span<const wire::TimestampRecord> times = {}) -> PublishResult = 0;
     virtual auto receive(StreamHandle, void* elements, std::size_t count) -> ReceiveResult = 0;
     virtual auto stream_statuses() const -> std::vector<StreamStatus> = 0;
     virtual auto recover_stream(const wire::StreamId&) -> bool = 0;
@@ -79,6 +84,7 @@ Elements are host storage of the stream type (`signal_storage_t<T>`). Implementa
 | `STREAM_STATE_LOST` | Producer: a consumer resumed beyond anything this producer assigned (its sequence state was lost) |
 | `MALFORMED_PACKET` | A packet could not be decoded |
 | `TYPE_MISMATCH` | A packet's type differs from the stream type |
+| `TIMESTAMP_PROFILE_MISMATCH` | A packet's timestamp records differ from the stream's declared roles |
 | `UNDERRUN` | No data within `max_wait_ms` |
 
 Refused peers are recorded in the stream's recent faults and counted as `unauthorized`, but do not fault the stream:

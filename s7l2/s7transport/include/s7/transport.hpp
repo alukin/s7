@@ -17,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -133,6 +134,8 @@ struct PublishResult {
 struct ReceiveResult {
     std::size_t received{};   // elements written to the output
     stream::FaultCode fault{stream::FaultCode::None};
+    // Times of the first element received (StreamConsumer::take); empty when unknown.
+    std::vector<wire::TimestampRecord> timestamps;
 };
 
 struct TransportLimits {
@@ -164,7 +167,10 @@ public:
 
     // Elements are host storage of the stream's type. Blocks while the send
     // log is full; after max_block the stream faults (SEND_LOG_OVERFLOW).
-    virtual auto publish(StreamHandle handle, const void* elements, std::size_t count) -> PublishResult = 0;
+    // A stream with explicit timestamps takes one element with its times
+    // (StreamProducer::append).
+    virtual auto publish(StreamHandle handle, const void* elements, std::size_t count,
+                         std::span<const wire::TimestampRecord> times = {}) -> PublishResult = 0;
     // Waits until `count` elements are available, up to max_wait; then the
     // stream faults (UNDERRUN). A faulted stream returns immediately.
     virtual auto receive(StreamHandle handle, void* elements, std::size_t count) -> ReceiveResult = 0;
@@ -191,7 +197,8 @@ public:
     auto open_producer(const stream::StreamConfig& config) -> StreamHandle override;
     auto open_consumer(const stream::StreamConfig& config) -> StreamHandle override;
     void close_stream(StreamHandle handle) override;
-    auto publish(StreamHandle handle, const void* elements, std::size_t count) -> PublishResult override;
+    auto publish(StreamHandle handle, const void* elements, std::size_t count,
+                 std::span<const wire::TimestampRecord> times = {}) -> PublishResult override;
     auto receive(StreamHandle handle, void* elements, std::size_t count) -> ReceiveResult override;
     [[nodiscard]] auto stream_statuses() const -> std::vector<StreamStatus> override;
     auto recover_stream(const wire::StreamId& stream_id) -> bool override;
@@ -247,7 +254,8 @@ public:
     auto open_producer(const stream::StreamConfig& config) -> StreamHandle override;
     auto open_consumer(const stream::StreamConfig& config) -> StreamHandle override;
     void close_stream(StreamHandle handle) override;
-    auto publish(StreamHandle handle, const void* elements, std::size_t count) -> PublishResult override;
+    auto publish(StreamHandle handle, const void* elements, std::size_t count,
+                 std::span<const wire::TimestampRecord> times = {}) -> PublishResult override;
     auto receive(StreamHandle handle, void* elements, std::size_t count) -> ReceiveResult override;
     [[nodiscard]] auto stream_statuses() const -> std::vector<StreamStatus> override;
     auto recover_stream(const wire::StreamId& stream_id) -> bool override;

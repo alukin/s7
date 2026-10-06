@@ -161,8 +161,9 @@ public:
         double value{};
     };
 
-    auto stage(const json::object& fragment, const std::vector<s7::transport::DataPeer>&) -> std::unique_ptr<s7::StagedConfiguration> override
+    auto stage(const s7::NodePart& part) -> std::unique_ptr<s7::StagedConfiguration> override
     {
+        const auto& fragment = part.schema;
         if (fragment.at("elements").as_array()[0].as_object().at("params").as_object().contains("broken")) {
             throw std::invalid_argument("fragment is broken");
         }
@@ -529,27 +530,31 @@ public:
     struct Staged final : s7::StagedConfiguration {
         json::object schema;
         std::vector<s7::transport::DataPeer> peers;
+        std::optional<std::int64_t> model_time_step_ns;
     };
-    auto stage(const json::object& schema, const std::vector<s7::transport::DataPeer>& peers) -> std::unique_ptr<s7::StagedConfiguration> override
+    auto stage(const s7::NodePart& part) -> std::unique_ptr<s7::StagedConfiguration> override
     {
         if (fail) {
             throw std::invalid_argument("device busy");
         }
         auto staged = std::make_unique<Staged>();
-        staged->schema = schema;
-        staged->peers = peers;
+        staged->schema = part.schema;
+        staged->peers = part.data_peers;
+        staged->model_time_step_ns = part.model_time_step_ns;
         return staged;
     }
     void activate(s7::StagedConfiguration& staged) override
     {
         active = dynamic_cast<Staged&>(staged).schema;
         peers = dynamic_cast<Staged&>(staged).peers;
+        model_time_step_ns = dynamic_cast<Staged&>(staged).model_time_step_ns;
     }
     auto execution_state() const -> std::string override { return "not_stepping"; }
 
     bool fail{false};
     std::optional<json::object> active;
     std::vector<s7::transport::DataPeer> peers;
+    std::optional<std::int64_t> model_time_step_ns;
 };
 
 void test_deploy_client()
@@ -579,7 +584,8 @@ void test_deploy_client()
                 { "id": "gain", "type": "Gain", "params": { "factor": 2.0 }, "node": "33333333-4444-5555-6666-777777777777" }
             ],
             "connections": [ { "from_element": "source", "from_port": 0, "to_element": "gain", "to_port": 0 } ]
-        }
+        },
+        "dt": 0.001
     })json").as_object();
     const auto types = s7::deployment::infer_output_types(diagram);
 
@@ -604,6 +610,11 @@ void test_deploy_client()
     expect(host_b->peers == std::vector<s7::transport::DataPeer>{{"wss://a", kNodeUuid}}, "the consumer connects to the producer");
     const auto& b_elements = host_b->active->at("elements").as_array();
     expect(b_elements.size() == 2 && b_elements[1].as_object().at("type").as_string() == "NetSource", "B consumes a stream");
+    expect(host_a->model_time_step_ns == 1'000'000 && host_b->model_time_step_ns == 1'000'000, "the nodes step in the diagram's model time");
+    const auto& stream = deployed.diagram.at("streams").as_array().at(0).as_object();
+    expect(stream.at("sample_rate") == json::object{{"numerator", 1000}, {"denominator", 1}} &&
+               stream.at("timestamps") == json::array{json::object{{"role", "MODEL_TIME"}, {"clock_domain", "model"}}},
+           "the stream is sampled at 1 / dt in model time: " + json::serialize(stream));
 
     const json::object get{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "g"}, {"protocol_version", 1}};
     const auto configuration = Client(node_b, ControlPeer{}).send(get);
