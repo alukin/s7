@@ -86,6 +86,18 @@ Checks reachability and protocol compatibility. The response includes `node_uuid
 
 Returns the node descriptor: identity, platform, network endpoints, runtime state, supported protocol versions, available libraries/elements, and hardware capabilities. The capability structure is specified in [REMOTE_NODE_INFO_AND_DEPLOYMENT.md](REMOTE_NODE_INFO_AND_DEPLOYMENT.md); that document remains the detailed source for descriptor fields.
 
+The data plane is described by two top-level members (wire draft section 12.1, items 1 and 4):
+
+```json
+"data_protocol": { "packet_versions": [1], "extensions": ["0x8001"] },
+"clock_domains": [
+  { "id": "model", "kind": "model", "continuous_across_restart": true },
+  { "id": "node:<node_uuid>:utc", "kind": "utc", "continuous_across_restart": true }
+]
+```
+
+`packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x8001`: `TIMESTAMPS`). `model` is the deployment's model time; `node:<node_uuid>:utc` is the node's system clock (nanoseconds since the Unix epoch), the clock domain of `PROCESSING_TIME` on streams it produces.
+
 ### 5.3 `GET_PEERS` → `PEERS`
 
 Returns the node's known peer cache. Each entry SHOULD contain an endpoint, verified `node_uuid` when known, trust state, reachability, last-seen information, and certificate fingerprint when available. Peer records learned from announcements are claims until verified by connecting and validating the peer certificate.
@@ -286,6 +298,6 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 **Model time.** A deployed graph steps in the diagram's model time: with a `dt` (seconds) in the diagram each step advances model time by `dt` (in whole nanoseconds) and observations carry it; without one the graph's steps are untimed.
 
-**Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
+**Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, reads each node's `data_protocol` with `GET_NODE_INFO` and refuses a deployment in which a stream's producer and a consumer share no packet version, or a stream with per-packet timestamps has an end without the `TIMESTAMPS` extension (nothing is prepared then), uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
 
 **Not yet implemented:** chunked configuration transfer and size limits, persistence of deployment state across node restarts (a restarted node runs its startup schema with active revision 0), and request-ID replay caching.

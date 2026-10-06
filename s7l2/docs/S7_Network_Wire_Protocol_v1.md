@@ -209,7 +209,7 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 1. Byte-exact fixtures shared by all implementations. Packets and stream control messages: `s7transport/tests/fixtures/wire_v1.json`, written by the independent Python reference encoder `tools/gen_wire_fixtures.py` and checked by the C++ codec (`s7transport_wire_format_smoke`). Descriptor fixtures remain to be added.
 2. The C++ reference implementation of Sections 7, 8 and 12.1.
 3. The durable format of the producer's sequence-range reservation.
-4. Exact JSON schemas for `GET_STREAM_STATUS`, `RECOVER_STREAM` and the `NODE_INFO` additions (`clock_domains`, `data_protocol`).
+4. ~~Exact JSON schemas for `GET_STREAM_STATUS`, `RECOVER_STREAM` and the `NODE_INFO` additions (`clock_domains`, `data_protocol`).~~ Specified in `S7_Control_Protocol_MVP.md` sections 5.2 and 10.1.
 
 ### 12.1 Resolutions
 
@@ -251,7 +251,7 @@ There is one stream per producing output port with consumers on other nodes (a f
 
 **3. Fault reporting (decided 2026-10-05).** The MVP control protocol stays request/response. Add `GET_STREAM_STATUS` → `STREAM_STATUS`, returning per stream: `state` (`active`, `blocked`, `faulted`), `next_expected` / `next_sequence`, send-log depth, counters (`packets`, `replayed`, `duplicates_discarded`, `malformed`, `unauthorized`, `blocked_ms_total`), and a bounded list of recent faults with codes `SEQUENCE_GAP`, `SEND_LOG_OVERFLOW`, `STREAM_STATE_LOST`, `MALFORMED_PACKET`, `UNAUTHORIZED_PRODUCER`, `TIMESTAMP_PROFILE_MISMATCH`, `SOURCE_OVERFLOW`. Studio polls it; pushed events are a later extension. `RECOVER_STREAM {stream_id}` (authorized like a configuration change) restarts a faulted stream with a new sequence expectation; the data lost in the fault stays lost and stays reported.
 
-**4. Negotiation (decided 2026-10-05): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support.
+**4. Negotiation (decided 2026-10-05): none in band for the MVP.** `NODE_INFO` advertises `data_protocol: { "packet_versions": [1], "extensions": ["0x8001"] }`. Studio checks every producer/consumer pair before `PREPARE_DEPLOYMENT` and refuses deployments with no common version; a node also rejects packets whose version byte it does not support. *Implemented 2026-10-06* (`deploy_diagram`, used by Studio and `s7ctl`): it also refuses a stream with per-packet timestamps when an end does not list the `TIMESTAMPS` extension. `NODE_INFO.clock_domains` lists `model` and the node's `node:<uuid>:utc`.
 
 **6. Deployment unit and placement (decided 2026-10-05).** Studio deploys the diagram itself (`.s7diagram`, including layout), not an extracted schema; each node extracts its part of the graph and keeps the whole diagram, so Studio can request the deployed diagram (`GET_NETWORK_CONFIGURATION`) and display it. Every element carries a `node` placement attribute. A node runs the elements placed on it; each connection between elements on different nodes becomes a stream with its own descriptor. The diagram format will be extended with whatever further deployment data is needed.
 
@@ -270,6 +270,7 @@ The C++ reference implementation (2026-10-05) implements:
 - the WebSocket transport carrying them (`BeastRuntimeNetEndpoint`): one `/data` and one `/control` connection per peer pair, reconnect with resume, mTLS consumer identity;
 - `GET_STREAM_STATUS` and `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md` section 10.1);
 - binding of each stream to its producer and consumer nodes (Section 9 item 1, Section 12.1 item 5);
-- timestamp profiles (Sections 6 and 7.1): derived times on uniformly sampled streams, `TIMESTAMPS` records on the others, checked by the consumer (`TIMESTAMP_PROFILE_MISMATCH`), and each received element's times reported to the graph side (`ReceiveResult::timestamps`, `NetSource::last_timestamps()`).
+- timestamp profiles (Sections 6 and 7.1): derived times on uniformly sampled streams, `TIMESTAMPS` records on the others, checked by the consumer (`TIMESTAMP_PROFILE_MISMATCH`), and each received element's times reported to the graph side (`ReceiveResult::timestamps`, `NetSource::last_timestamps()`);
+- `NODE_INFO.data_protocol` and `clock_domains`, checked by the deployment client before preparing any node.
 
-Not yet implemented: `NODE_INFO.data_protocol`, `SOURCE_TIME` production, and relaying. The previous 54-byte big-endian prototype codec has been removed. Fixtures for Rust, Python and JVM decoders remain to be added before interoperability freeze.
+Not yet implemented: `SOURCE_TIME` production and relaying. The previous 54-byte big-endian prototype codec has been removed. Fixtures for Rust, Python and JVM decoders remain to be added before interoperability freeze.

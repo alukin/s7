@@ -448,6 +448,22 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     platform["target_triple"] = descriptor_.target_triple;
     out["platform"] = platform;
 
+    // The data protocol this node speaks and the clocks its streams are timed
+    // in (wire draft section 12.1, items 1 and 4).
+    boost::json::array packet_versions;
+    for (const auto version : wire::kSupportedPacketVersions) {
+        packet_versions.emplace_back(version);
+    }
+    boost::json::array extensions;
+    for (const auto extension : wire::kSupportedExtensions) {
+        extensions.emplace_back(std::format("0x{:04X}", extension));
+    }
+    out["data_protocol"] = boost::json::object{{"packet_versions", std::move(packet_versions)}, {"extensions", std::move(extensions)}};
+    out["clock_domains"] = boost::json::array{
+        boost::json::object{{"id", "model"}, {"kind", "model"}, {"continuous_across_restart", true}},
+        boost::json::object{{"id", "node:" + descriptor_.node_uuid + ":utc"}, {"kind", "utc"}, {"continuous_across_restart", true}},
+    };
+
     boost::json::object network;
     network["listen_url"] = descriptor_.listen_url;
     network["control_path"] = "/control";

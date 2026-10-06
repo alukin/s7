@@ -1,6 +1,8 @@
 #include "s7/deployment_client.hpp"
 
 #include <algorithm>
+#include <format>
+#include <optional>
 #include <unordered_map>
 
 #include "s7/canonical_json.hpp"
@@ -41,6 +43,76 @@ auto describe(const json::object& response) -> std::string
 auto request_object(const std::string& type, const std::string& request_id) -> json::object
 {
     return json::object{{"type", type}, {"request_id", request_id}, {"protocol_version", 1}};
+}
+
+// NODE_INFO.data_protocol of a node: packet versions and extensions ("0x8001").
+struct DataProtocol {
+    std::vector<std::uint64_t> packet_versions;
+    std::vector<std::string> extensions;
+};
+
+auto data_protocol_of(const json::object& node_info) -> std::optional<DataProtocol>
+{
+    const auto* protocol = node_info.if_contains("data_protocol");
+    if (!protocol || !protocol->is_object()) {
+        return std::nullopt;
+    }
+    DataProtocol result;
+    if (const auto* versions = protocol->as_object().if_contains("packet_versions"); versions && versions->is_array()) {
+        for (const auto& version : versions->as_array()) {
+            if (version.is_int64() || version.is_uint64()) {
+                result.packet_versions.push_back(version.to_number<std::uint64_t>());
+            }
+        }
+    }
+    if (const auto* extensions = protocol->as_object().if_contains("extensions"); extensions && extensions->is_array()) {
+        for (const auto& extension : extensions->as_array()) {
+            if (extension.is_string()) {
+                result.extensions.emplace_back(extension.as_string());
+            }
+        }
+    }
+    return result;
+}
+
+// Wire draft section 12.1 item 4: no in-band negotiation, so every stream's
+// producer and consumers must share a packet version, and a stream with
+// per-packet timestamps needs the TIMESTAMPS extension at both ends.
+auto check_data_protocols(const json::object& diagram, const std::unordered_map<std::string, DataProtocol>& protocols)
+    -> std::vector<std::string>
+{
+    std::vector<std::string> errors;
+    const auto timestamps_extension = std::format("0x{:04X}", wire::kTimestampsExtension);
+    for (const auto& stream : parse_streams(diagram)) {
+        const auto& producer = protocols.at(stream.producer.node_uuid);
+        const bool explicit_timestamps = !stream.sample_rate;
+        for (const auto& consumer_end : stream.consumers) {
+            const auto& consumer = protocols.at(consumer_end.node_uuid);
+            const bool common_version = std::ranges::any_of(producer.packet_versions, [&](const auto version) {
+                return std::ranges::find(consumer.packet_versions, version) != consumer.packet_versions.end();
+            });
+            if (!common_version) {
+                errors.push_back("Stream " + wire::to_string(stream.stream_id) + ": nodes " + stream.producer.node_uuid + " and " +
+                                 consumer_end.node_uuid + " share no data packet version.");
+            }
+        }
+        if (explicit_timestamps) {
+            std::vector<std::string> ends{stream.producer.node_uuid};
+            for (const auto& consumer_end : stream.consumers) {
+                ends.push_back(consumer_end.node_uuid);
+            }
+            for (const auto& node : ends) {
+                const auto& extensions = protocols.at(node).extensions;
+                if (std::ranges::find(extensions, timestamps_extension) == extensions.end()) {
+                    errors.push_back("Stream " + wire::to_string(stream.stream_id) + " carries per-packet timestamps, which node " + node +
+                                     " does not support (extension " + timestamps_extension + ").");
+                }
+            }
+        }
+    }
+    std::ranges::sort(errors);
+    errors.erase(std::ranges::unique(errors).begin(), errors.end());
+    return errors;
 }
 
 } // namespace
@@ -120,8 +192,10 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
         return result;
     }
 
-    // Each node must be the one the diagram names, and report its active revision.
+    // Each node must be the one the diagram names, and report its active
+    // revision and the data protocol it speaks.
     std::vector<std::uint64_t> active(targets.size());
+    std::unordered_map<std::string, DataProtocol> protocols;
     for (std::size_t i = 0; i < targets.size(); ++i) {
         try {
             const auto hello = request(targets[i], request_object("HELLO", "hello-" + std::to_string(i)));
@@ -134,11 +208,22 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
             const auto list = request(targets[i], request_object("LIST_DEPLOYMENTS", "list-" + std::to_string(i)));
             const auto* revision = list.if_contains("active_revision");
             active[i] = revision && (revision->is_int64() || revision->is_uint64()) ? revision->to_number<std::uint64_t>() : 0;
+            const auto info = request(targets[i], request_object("GET_NODE_INFO", "info-" + std::to_string(i)));
+            if (const auto protocol = data_protocol_of(info)) {
+                protocols[targets[i].node_uuid] = *protocol;
+            } else {
+                result.nodes[i].message = "The node at " + targets[i].endpoint + " does not advertise its data protocol (NODE_INFO.data_protocol).";
+                result.errors.push_back(result.nodes[i].message);
+            }
         } catch (const std::exception& ex) {
             result.nodes[i].message = ex.what();
             result.errors.push_back(targets[i].endpoint + ": " + ex.what());
         }
     }
+    if (!result.errors.empty()) {
+        return result;
+    }
+    result.errors = check_data_protocols(diagram, protocols);
     if (!result.errors.empty()) {
         return result;
     }

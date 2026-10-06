@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <map>
@@ -537,6 +538,7 @@ public:
         if (fail) {
             throw std::invalid_argument("device busy");
         }
+        ++prepared;
         auto staged = std::make_unique<Staged>();
         staged->schema = part.schema;
         staged->peers = part.data_peers;
@@ -552,6 +554,7 @@ public:
     auto execution_state() const -> std::string override { return "not_stepping"; }
 
     bool fail{false};
+    int prepared{0};
     std::optional<json::object> active;
     std::vector<s7::transport::DataPeer> peers;
     std::optional<std::int64_t> model_time_step_ns;
@@ -632,6 +635,37 @@ void test_deploy_client()
     auto old_revision = get;
     old_revision["revision"] = 1;
     expect_error(Client(node_b, ControlPeer{}).send(old_revision), "REVISION_NOT_FOUND", "only the active revision is retained");
+
+    // NODE_INFO advertises the data protocol and the clock domains.
+    const auto info = Client(node_b, ControlPeer{}).send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
+    expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}}, {"extensions", json::array{"0x8001"}}},
+           "data protocol advertised: " + json::serialize(info.at("data_protocol")));
+    expect(info.at("clock_domains").as_array().size() == 2 &&
+               info.at("clock_domains").as_array()[1].as_object().at("id").as_string() == std::string("node:") + kOther + ":utc",
+           "clock domains advertised");
+
+    // Nodes without a common data protocol are refused before anything is prepared.
+    const auto prepared_before = host_b->prepared;
+    auto refuse_with = [&](const std::function<void(json::object&)>& alter, const json::object& to_deploy, const std::string& expected) {
+        auto altered = [&](const s7::deployment::RuntimeNode& node, const json::object& message) {
+            auto response = request(node, message);
+            if (node.endpoint == "wss://b" && response.at("type").as_string() == "NODE_INFO") {
+                alter(response);
+            }
+            return response;
+        };
+        const auto refused = s7::deployment::deploy_diagram(to_deploy, types, altered);
+        expect(!refused.committed && !refused.errors.empty() && refused.errors.front().find(expected) != std::string::npos,
+               "refused (" + expected + "): " + (refused.errors.empty() ? std::string() : refused.errors.front()));
+        expect(host_b->prepared == prepared_before, "nothing prepared");
+    };
+    refuse_with([](json::object& response) { response.erase("data_protocol"); }, again.diagram, "does not advertise its data protocol");
+    refuse_with([](json::object& response) { response["data_protocol"].as_object()["packet_versions"] = json::array{2}; }, again.diagram,
+                "share no data packet version");
+    auto untimed = again.diagram;
+    untimed.erase("dt"); // per-packet timestamps
+    refuse_with([](json::object& response) { response["data_protocol"].as_object()["extensions"] = json::array{}; }, untimed,
+                "does not support (extension 0x8001)");
 
     // An endpoint answering as another node is refused before anything is prepared.
     by_endpoint["wss://b"] = &node_a;

@@ -29,6 +29,10 @@ inline constexpr std::size_t kMaxPayloadBytes = 256 * 1024;
 inline constexpr std::uint8_t kFlagExtensions = 0x01;
 inline constexpr std::uint16_t kTimestampsExtension = 0x8001; // critical
 inline constexpr std::uint16_t kCriticalExtensionBit = 0x8000;
+// What this implementation speaks, as NODE_INFO.data_protocol advertises it
+// (wire draft section 12.1 item 4).
+inline constexpr std::array<std::uint8_t, 1> kSupportedPacketVersions{kDataVersion};
+inline constexpr std::array<std::uint16_t, 1> kSupportedExtensions{kTimestampsExtension};
 
 // A malformed or unsupported message; the receiver drops it and reports a fault.
 class FormatError : public std::runtime_error {

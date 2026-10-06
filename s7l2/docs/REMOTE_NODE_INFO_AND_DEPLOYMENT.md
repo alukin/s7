@@ -1934,6 +1934,7 @@ At minimum return:
 - element-level catalog summary and deployability state
 - attached hardware capability summary
 - current deployment state
+- data protocol (`data_protocol`) and clock domains (`clock_domains`), see `S7_Control_Protocol_MVP.md` section 5.2
 
 ### Discovery/Membership MVP Inputs
 
