@@ -75,12 +75,13 @@ Deployments need mTLS and the pinned Studio certificate. `tools/test_two_node_de
 
 ```bash
 TLS="--cert s7runtime/examples/certs/s7_studio.cert.pem --key s7runtime/examples/certs/s7_studio.key.pem --ca s7runtime/examples/certs/s7_root_ca.cert.pem"
+./build/s7ctl/s7ctl check  my_diagram.s7diagram             # streams and each node's part, offline
 ./build/s7ctl/s7ctl deploy my_diagram.s7diagram $TLS --write my_diagram.deployed.s7diagram
 ./build/s7ctl/s7ctl streams wss://127.0.0.1:9002 $TLS     # GET_STREAM_STATUS
 ./build/s7ctl/s7ctl config  wss://127.0.0.1:9003 $TLS     # the deployed diagram and the node's part
 ```
 
-In the diagram every schema element has `"node": "<node_uuid>"`, and `runtime_nodes` gives each node's endpoint. Deploy again from the `--write` output, so the streams keep their ids and continue. In Studio: place elements with the Node field of the element properties (nodes from the Headless Nodes dock), set the Studio certificate in the dock, then use Run > Deploy to Nodes...; Run > Open Deployed Diagram... shows what a node runs.
+In the diagram every schema element has `"node": "<node_uuid>"`, and `runtime_nodes` gives each node's endpoint. `s7ctl` infers stream types with the element types it knows: the built-in ones, plugins found where `s7runtime` looks for them, and those given with `--plugin <file>`, `--plugin-dir <dir>` or `--library <file>`. Deploy again from the `--write` output, so the streams keep their ids and continue. In Studio: place elements with the Node field of the element properties (nodes from the Headless Nodes dock), set the Studio certificate in the dock, then use Run > Deploy to Nodes...; Run > Open Deployed Diagram... shows what a node runs.
 
 ## 6) Stop nodes
 

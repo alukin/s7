@@ -19,7 +19,7 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 | `s7noise/` | Example plugin: white and pink noise sources |
 | `s7spectral/` | Reference third-party plugin (FFT), built out of tree against the installed SDK by `ctest -R s7spectral_sdk_smoke` |
 | `s7studio/` | Qt6 Studio: diagram editor, element library, local embedded runtime with Scope windows, headless node discovery |
-| `s7ctl/` | CLI: deploy a diagram to its nodes, read a node's deployed configuration and stream status, recover a stream |
+| `s7ctl/` | CLI: check a diagram offline, deploy it to its nodes, read a node's deployed configuration and stream status, recover a stream |
 | `s7tests/` | Reserved for whole-system tests; module smoke tests live in `<module>/tests/` |
 | `external/` | Vendor code (QSchematic, QCustomPlot) — do not modify |
 

@@ -13,7 +13,7 @@
 - `s7spectral/`: reference third-party plugin, built out of tree against the installed SDK (`find_package(s7core)`) by `ctest -R s7spectral_sdk_smoke`; keep it out of the main build.
 - `s7io/`: file source/sink elements (compact binary, gnuplot text); future hardware I/O.
 - `s7net/`: network boundary elements and websocket/server-client scaffolding.
-- `s7ctl/`: CLI (`deploy`, `config`, `streams`, `recover`) over the control protocol.
+- `s7ctl/`: CLI (`check`, `deploy`, `config`, `streams`, `recover`) over the control protocol; loads plugins like `s7runtime` to infer stream types.
 - `s7studio/`: Qt UI client (guarded by `S7_BUILD_STUDIO`).
 - `s7transport/`: transport backends (in-memory, Beast WebSocket/TLS), wire format v1 and the lossless stream protocol.
 - `s7tests/`: reserved for whole-system tests; module smoke tests live in `<module>/tests/`.

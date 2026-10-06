@@ -124,8 +124,9 @@ auto resolve_symbol(void* handle, const char* symbol_name) -> void*
 
 } // namespace
 
-PluginLoader::PluginLoader(std::vector<fs::path> search_paths)
+PluginLoader::PluginLoader(std::vector<fs::path> search_paths, std::ostream& log)
     : search_paths_(std::move(search_paths))
+    , log_(log)
 {
 }
 
@@ -217,21 +218,21 @@ std::vector<std::filesystem::path> PluginLoader::discover_in_directory(
 void PluginLoader::load_plugins(ElementRegistry& registry) {
     auto search_paths = get_plugin_search_paths();
 
-    std::cout << "Plugin search paths:\n";
+    log_ << "Plugin search paths:\n";
     for (const auto& path : search_paths) {
-        std::cout << "  - " << path << "\n";
+        log_ << "  - " << path << "\n";
     }
 
     for (const auto& search_dir : search_paths) {
         auto plugins = discover_in_directory(search_dir);
 
         for (const auto& plugin_path : plugins) {
-            std::cout << "Found plugin: " << plugin_path << "\n";
+            log_ << "Found plugin: " << plugin_path << "\n";
             load_plugin(plugin_path, registry);
         }
     }
 
-    std::cout << "Loaded " << loaded_plugins_.size() << " plugins\n";
+    log_ << "Loaded " << loaded_plugins_.size() << " plugins\n";
 }
 
 bool PluginLoader::load_plugin(
@@ -293,7 +294,7 @@ bool PluginLoader::load_plugin(
         info = read_query_info(query_info, plugin_path);
     }
 
-    std::cout << "  Plugin: " << info.name
+    log_ << "  Plugin: " << info.name
               << " v" << info.version
               << (info.author.empty() ? "" : (" by " + info.author))
               << " (" << info.elements.size() << " elements)\n";
@@ -347,7 +348,7 @@ bool PluginLoader::load_plugin(
     loaded.registered_types = added_types();
     loaded_plugins_.push_back(std::move(loaded));
 
-    std::cout << "  Successfully loaded " << loaded_plugins_.back().info.elements.size() << " elements\n";
+    log_ << "  Successfully loaded " << loaded_plugins_.back().info.elements.size() << " elements\n";
     return true;
 }
 

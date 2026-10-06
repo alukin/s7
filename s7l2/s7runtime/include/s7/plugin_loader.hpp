@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <iostream>
 #include <memory>
 #include <cstddef>
 #include <unordered_set>
@@ -24,7 +25,8 @@ public:
         std::filesystem::path path;
     };
 
-    explicit PluginLoader(std::vector<std::filesystem::path> search_paths = {});
+    // Progress messages go to `log` (errors always to std::cerr).
+    explicit PluginLoader(std::vector<std::filesystem::path> search_paths = {}, std::ostream& log = std::cout);
     ~PluginLoader();
 
     // Prevent copy/move
@@ -67,6 +69,7 @@ private:
     };
 
     std::vector<std::filesystem::path> search_paths_;
+    std::ostream& log_;
     std::vector<LoadedPlugin> loaded_plugins_;
     std::unordered_set<std::string> loaded_paths_;
 
