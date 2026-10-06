@@ -1,1 +1,107 @@
-{"id":"s7studio_demo","dt":1E-3,"document_kind":"s7.diagram","diagram_magic":"S7STUDIO_DIAGRAM_V1","diagram_version":1,"units":"mm","sheet":{"orientation":"landscape","width_mm":2.97E2,"height_mm":2.1E2},"schema":{"name":"s7studio_demo","elements":[{"id":"unit","type":"Constant","params":{"value":2E0}},{"id":"sum","type":"Adder","params":{}},{"id":"memory","type":"Delay","params":{"initial_value":1E0}},{"id":"scope_main","type":"Scope","params":{"channel_count":2}}],"connections":[{"from_element":"unit","from_port":0,"to_element":"sum","to_port":0}]},"diagram":{"version":1,"nodes":[{"id":"unit","type":"Constant","name":"unit","position":{"x":0E0,"y":0E0}},{"id":"sum","type":"Adder","name":"sum","position":{"x":4E2,"y":2E1}},{"id":"memory","type":"Delay","name":"memory","position":{"x":3.6E2,"y":1.8E2}},{"id":"scope_main","type":"Scope","name":"scope_main","channel_count":2,"position":{"x":8.6E2,"y":3.4E2}}],"wires":[{"id":"wire_0","points":[{"x":1.8E2,"y":6E1},{"x":4E2,"y":6E1}]},{"id":"wire_1","points":[{"x":6.6E2,"y":1.6E2},{"x":6.6E2,"y":8E1},{"x":4E2,"y":8E1}]},{"id":"wire_2","points":[{"x":6.6E2,"y":1.6E2},{"x":6.6E2,"y":4E2},{"x":8.6E2,"y":4E2}]},{"id":"wire_3","points":[{"x":5.4E2,"y":2.4E2},{"x":5.4E2,"y":2.4E2}]},{"id":"wire_4","points":[{"x":6.6E2,"y":2.4E2},{"x":5.4E2,"y":2.4E2}]},{"id":"wire_5","points":[{"x":2.8E2,"y":2.4E2},{"x":3.6E2,"y":2.4E2}]},{"id":"wire_6","points":[{"x":2.8E2,"y":2.4E2},{"x":2.8E2,"y":3.8E2},{"x":8.6E2,"y":3.8E2}]},{"id":"wire_7","points":[{"x":8.6E2,"y":3.8E2},{"x":8.6E2,"y":3.8E2}]},{"id":"wire_8","points":[{"x":4E2,"y":8E1},{"x":2.8E2,"y":8E1},{"x":2.8E2,"y":2.4E2}]},{"id":"wire_9","points":[{"x":9.6E2,"y":3.8E2},{"x":9.6E2,"y":3.8E2}]}]}}
+{
+  "id": "s7studio_demo",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "schema": {
+    "name": "s7studio_demo",
+    "elements": [
+      {
+        "id": "unit",
+        "type": "Constant",
+        "params": {
+          "value": 2.0
+        }
+      },
+      {
+        "id": "sum",
+        "type": "Adder",
+        "params": {}
+      },
+      {
+        "id": "memory",
+        "type": "Delay",
+        "params": {
+          "initial_value": 1.0
+        }
+      },
+      {
+        "id": "scope_main",
+        "type": "Scope",
+        "params": {
+          "channel_count": 2
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "unit",
+        "from_port": 0,
+        "to_element": "sum",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "unit",
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "id": "sum",
+        "position": [
+          20,
+          1
+        ]
+      },
+      {
+        "id": "memory",
+        "position": [
+          18,
+          9
+        ]
+      },
+      {
+        "id": "scope_main",
+        "position": [
+          43,
+          17
+        ]
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "unit",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": []
+  }
+}

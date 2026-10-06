@@ -17,6 +17,47 @@ target_link_libraries(s7_qcustomplot PUBLIC
 target_link_libraries(s7_qcustomplot PUBLIC Qt6::PrintSupport)
 set_target_properties(s7_qcustomplot PROPERTIES AUTOMOC ON)
 
+# Diagram model, scene, router and file format: shared by Studio and its tests.
+add_library(s7studio_diagram STATIC
+    src/diagram/items.cpp
+    src/diagram/items.hpp
+    src/diagram/element_ports.cpp
+    src/diagram/element_ports.hpp
+    src/diagram/net_model.cpp
+    src/diagram/net_model.hpp
+    src/diagram/wire_router.cpp
+    src/diagram/wire_router.hpp
+    src/diagram/diagram_scene.cpp
+    src/diagram/diagram_scene.hpp
+    src/diagram_document.cpp
+    src/diagram_document.hpp
+    src/diagram_format.hpp
+    src/scene_serializer.cpp
+    src/scene_serializer.hpp
+    src/wire_type_labels.cpp
+    src/wire_type_labels.hpp
+)
+target_include_directories(s7studio_diagram PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/s7core/include
+    ${PROJECT_SOURCE_DIR}/s7net/include
+    ${PROJECT_SOURCE_DIR}/s7observe/include
+    ${PROJECT_SOURCE_DIR}/s7runtime/include
+    ${PROJECT_SOURCE_DIR}/s7transport/include
+)
+target_link_libraries(s7studio_diagram PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    qschematic-static
+    s7core
+    s7net
+    s7observe
+    Boost::json
+)
+set_target_properties(s7studio_diagram PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_diagram)
+
 add_executable(s7studio
     src/main.cpp
     src/main_window.cpp
@@ -39,19 +80,9 @@ add_executable(s7studio
     src/headless_nodes_panel.hpp
     resources/icons.qrc
     resources/demo_startup.s7diagram
-    src/diagram_document.hpp
-    src/diagram_document.cpp
-    src/diagram_node_roles.hpp
-    src/scene_serializer.hpp
-    src/scene_serializer.cpp
-    src/runtime_schema_extractor.hpp
-    src/runtime_schema_extractor.cpp
-    src/wire_type_labels.cpp
     src/deployment_support.cpp
     src/deployment_support.hpp
-    src/wire_type_labels.hpp
     ${PROJECT_SOURCE_DIR}/s7runtime/src/plugin_loader.cpp
-    src/diagram_format.hpp
     src/diagram_editor.hpp
     src/diagram_editor.cpp
     src/diagram_ruler.hpp
@@ -68,6 +99,7 @@ target_include_directories(s7studio PRIVATE
 )
 
 target_link_libraries(s7studio PRIVATE
+    s7studio_diagram
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -125,3 +157,10 @@ foreach(layout_case wire_types_ok layout_loops)
         COMMAND $<TARGET_FILE:s7studio> --layout-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/${layout_case}.json)
     set_tests_properties(s7studio_layout_${layout_case} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
+
+# Diagram editing: connection rules, wire trees, routing, undo, file round trips.
+add_executable(s7studio_diagram_test tests/diagram_test.cpp)
+target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_LIBS} Threads::Threads)
+set_target_properties(s7studio_diagram_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_diagram COMMAND s7studio_diagram_test)
+set_tests_properties(s7studio_diagram PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

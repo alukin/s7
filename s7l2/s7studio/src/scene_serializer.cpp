@@ -1,990 +1,497 @@
 #include "scene_serializer.hpp"
-#include "diagram_node_roles.hpp"
+
+#include "diagram/diagram_scene.hpp"
+#include "diagram/net_model.hpp"
 #include "json_utils.hpp"
-#include "runtime_schema_extractor.hpp"
-
-#include <s7/element_registry.hpp>
-
-#include <qschematic/items/node.hpp>
-#include <qschematic/items/connector.hpp>
-#include <qschematic/items/wire.hpp>
-#include <qschematic/scene.hpp>
-
-#include <QGraphicsColorizeEffect>
-#include <QGraphicsRectItem>
-#include <QGraphicsTextItem>
-#include <QPen>
 
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <string>
-#include <string_view>
 #include <functional>
 #include <map>
 #include <optional>
 #include <set>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
-
-#include <QLineF>
 #include <vector>
 
 namespace s7studio::diagram {
 
 namespace {
 
-constexpr double kDefaultNodeWidth = 180.0;
-constexpr double kDefaultNodeHeight = 100.0;
-constexpr double kDefaultTextFrameWidth = 260.0;
-constexpr double kDefaultTextFrameHeight = 120.0;
-
-struct NodeModel {
-    std::string id;
-    std::string type = "Element";
-    boost::json::object params;
-    boost::json::value nestedSchema;
-    QString title;
-    QPointF position;
-    bool hasExplicitPosition = false;
-    int inputPorts = 0;
-    int outputPorts = 0;
-    int channelCount = 1;
-    QString placement; // node_uuid
-};
+constexpr int kElementColumns = 9; // element width in grid steps (ElementNode)
+constexpr int kColumnGap = 5;      // grid steps between columns, at least
+constexpr int kRowGap = 3;         // grid steps between rows
 
 struct ConnectionModel {
     std::string fromElement;
     int fromPort = 0;
     std::string toElement;
     int toPort = 0;
+
+    auto operator<=>(const ConnectionModel&) const = default;
 };
 
-struct NodeWiring {
-    std::vector<std::shared_ptr<QSchematic::Items::Connector>> inputs;
-    std::vector<std::shared_ptr<QSchematic::Items::Connector>> outputs;
-};
-
-auto makeStyledConnector() -> std::shared_ptr<QSchematic::Items::Connector>
+auto error(const std::string& message) -> std::runtime_error
 {
-    auto connector = std::make_shared<QSchematic::Items::Connector>();
-    auto* colorize = new QGraphicsColorizeEffect();
-    colorize->setColor(QColor(143, 211, 255));
-    colorize->setStrength(1.0);
-    connector->setGraphicsEffect(colorize);
-    return connector;
+    return std::runtime_error("diagram: " + message);
 }
 
-auto parseEncodedParams(const QString& encodedParams) -> boost::json::object
+auto gridPoint(const boost::json::value& value, const std::string& what) -> QPoint
 {
-    if (encodedParams.isEmpty()) {
-        return {};
+    if (!value.is_array() || value.as_array().size() != 2 || !value.as_array()[0].is_number() || !value.as_array()[1].is_number()) {
+        throw error(what + " must be [x, y] in grid steps");
     }
-
-    boost::system::error_code ec;
-    const auto parsed = boost::json::parse(encodedParams.toStdString(), ec);
-    if (ec || !parsed.is_object()) {
-        return {};
-    }
-
-    return parsed.as_object();
+    return {static_cast<int>(std::lround(json_utils::numberValue(value.as_array()[0]))),
+            static_cast<int>(std::lround(json_utils::numberValue(value.as_array()[1])))};
 }
 
-auto defaultTextFrameParams() -> boost::json::object
+auto scenePoint(const QPoint grid) -> QPointF
 {
-    return boost::json::object{
-        {"text", "Text frame"},
-        {"text_color", "#202020"},
-        {"line_color", "#444444"},
-        {"fill_color", "#fff4cc"},
-        {"font_family", "Sans Serif"},
-        {"font_size", 12},
-        {"width", kDefaultTextFrameWidth},
-        {"height", kDefaultTextFrameHeight},
+    return {static_cast<double>(grid.x() * kGridStep), static_cast<double>(grid.y() * kGridStep)};
+}
+
+auto gridJson(const QPointF point) -> boost::json::array
+{
+    return boost::json::array{std::lround(point.x() / kGridStep), std::lround(point.y() / kGridStep)};
+}
+
+// Element rows (height in grid steps) as ElementNode sizes them.
+auto elementRows(const ElementNode& node) -> int
+{
+    return static_cast<int>(std::lround(node.size().height() / kGridStep));
+}
+
+// Columns by data flow (an element one column right of its inputs; the
+// connections closing a loop do not order the columns), rows ordered by the
+// mean row of the inputs.
+auto layeredPositions(const std::vector<std::string>& nodes, const std::vector<ConnectionModel>& connections,
+                      const std::unordered_map<std::string, int>& rows) -> std::unordered_map<std::string, QPoint>
+{
+    std::unordered_map<std::string, std::vector<std::string>> successors;
+    std::unordered_map<std::string, std::vector<std::string>> predecessors;
+    std::unordered_map<std::string, int> column;
+    for (const auto& node : nodes) {
+        column[node] = 0;
+    }
+    for (const auto& connection : connections) {
+        successors[connection.fromElement].push_back(connection.toElement);
+        predecessors[connection.toElement].push_back(connection.fromElement);
+    }
+    std::unordered_map<std::string, int> state; // 1: on stack, 2: done
+    std::vector<std::string> finished;
+    std::set<std::pair<std::string, std::string>> backEdges;
+    std::function<void(const std::string&)> visit = [&](const std::string& node) {
+        state[node] = 1;
+        for (const auto& next : successors[node]) {
+            if (state[next] == 1) {
+                backEdges.insert({node, next});
+            } else if (state[next] == 0) {
+                visit(next);
+            }
+        }
+        state[node] = 2;
+        finished.push_back(node);
     };
-}
-
-auto mergedTextFrameParams(const boost::json::object& custom) -> boost::json::object
-{
-    auto merged = defaultTextFrameParams();
-    for (const auto& [key, value] : custom) {
-        merged[key] = value;
+    for (const auto& node : nodes) {
+        if (state[node] == 0) {
+            visit(node);
+        }
     }
-    return merged;
-}
-
-struct PortCounts {
-    int inputs = 0;
-    int outputs = 0;
-};
-
-auto nestedSchemaPortCounts(const boost::json::value& schemaValue) -> PortCounts
-{
-    if (!schemaValue.is_object()) {
-        return {};
-    }
-
-    const auto& schemaObject = schemaValue.as_object();
-    PortCounts counts;
-
-    if (const auto* inputsValue = json_utils::findObjectValue(schemaObject, "exposed_inputs");
-        inputsValue && inputsValue->is_array()) {
-        counts.inputs = static_cast<int>(inputsValue->as_array().size());
-    }
-
-    if (const auto* outputsValue = json_utils::findObjectValue(schemaObject, "exposed_outputs");
-        outputsValue && outputsValue->is_array()) {
-        counts.outputs = static_cast<int>(outputsValue->as_array().size());
-    }
-
-    return counts;
-}
-
-auto declaredPortCounts(std::string_view type,
-                        const boost::json::object& params = {},
-                        const int fallbackChannelCount = 1,
-                        const boost::json::value* nestedSchema = nullptr) -> PortCounts
-{
-    if (nestedSchema && nestedSchema->is_object()) {
-        return nestedSchemaPortCounts(*nestedSchema);
-    }
-
-    if (type == "Constant" || type == "AnalogOscillator") {
-        return {0, 1};
-    }
-
-    if (type == "Gain" ||
-        type == "Delay" ||
-        type == "Accumulator" ||
-        type == "FirFilter" ||
-        type == "IirFilter" ||
-        type == "PreviousValue" ||
-        type == "Convert") {
-        return {1, 1};
-    }
-
-    if (type == "Adder") {
-        int inputCount = 2;
-        if (const auto it = params.find("weights"); it != params.end() && it->value().is_array()) {
-            const auto& weights = it->value().as_array();
-            if (!weights.empty()) {
-                inputCount = static_cast<int>(weights.size());
+    for (auto it = finished.rbegin(); it != finished.rend(); ++it) {
+        for (const auto& next : successors[*it]) {
+            if (!backEdges.contains({*it, next})) {
+                column[next] = std::max(column[next], column[*it] + 1);
             }
         }
-        return {std::max(2, inputCount), 1};
-    }
-    if (type == "Multiply") {
-        int inputCount = 2;
-        if (const auto it = params.find("factors"); it != params.end() && it->value().is_array()) {
-            const auto& factors = it->value().as_array();
-            if (!factors.empty()) {
-                inputCount = static_cast<int>(factors.size());
-            }
-        }
-        return {std::max(2, inputCount), 1};
-    }
-    if (type == "ReImToComplex") {
-        return {2, 1};
     }
 
-    if (type == "ComplexToReIm" || type == "ComplexToMagnitudePhase") {
-        return {1, 2};
+    std::map<int, std::vector<std::string>> columns;
+    for (const auto& node : nodes) {
+        columns[column[node]].push_back(node);
     }
-
-    if (type == "Scope") {
-        const int channelCount = std::max(1, json_utils::intValue(params, "channel_count", fallbackChannelCount));
-        return {channelCount, 0};
-    }
-
-    if (const auto* descriptor = s7::ElementRegistry::instance().find(std::string(type))) {
-        const auto& metadata = descriptor->metadata();
-        return {
-            static_cast<int>(metadata.input_ports.size()),
-            static_cast<int>(metadata.output_ports.size())
-        };
-    }
-
-    return {};
-}
-
-// Connectors snap to the scene grid, so ports are one grid step (or more)
-// apart and a node is tall enough for its ports.
-constexpr double kPortPitch = 20.0;
-
-auto nodeHeightFor(const int inputPorts, const int outputPorts) -> double
-{
-    const int ports = std::max({inputPorts, outputPorts, 1});
-    return std::max(kDefaultNodeHeight, kPortPitch * static_cast<double>(ports + 1) + 20.0);
-}
-
-// Ports evenly spaced on the grid and centred on the node.
-auto portOffsetY(const double nodeHeight, const int portIndex, const int portCount) -> double
-{
-    const int count = std::max(portCount, 1);
-    const double pitch = std::max(kPortPitch, std::floor(nodeHeight / (count + 1) / kPortPitch) * kPortPitch);
-    const double first = std::round((nodeHeight - pitch * (count - 1)) / 2.0 / kPortPitch) * kPortPitch;
-    return first + pitch * static_cast<double>(portIndex);
-}
-
-auto sortedSceneNodes(const QSchematic::Scene& scene) -> std::vector<std::shared_ptr<QSchematic::Items::Node>>
-{
-    const auto nodes = scene.items<QSchematic::Items::Node>();
-    std::vector<std::shared_ptr<QSchematic::Items::Node>> ordered(nodes.begin(), nodes.end());
-    std::sort(ordered.begin(), ordered.end(), [](const auto& lhs, const auto& rhs) {
-        if (lhs == rhs) {
-            return false;
-        }
-        if (lhs->pos().y() != rhs->pos().y()) {
-            return lhs->pos().y() < rhs->pos().y();
-        }
-        if (lhs->pos().x() != rhs->pos().x()) {
-            return lhs->pos().x() < rhs->pos().x();
-        }
-        return lhs.get() < rhs.get();
-    });
-    return ordered;
-}
-
-auto connectorAtPort(const std::vector<std::shared_ptr<QSchematic::Items::Connector>>& connectors,
-                     const int portIndex) -> std::shared_ptr<QSchematic::Items::Connector>
-{
-    if (portIndex < 0 || portIndex >= static_cast<int>(connectors.size())) {
-        return {};
-    }
-
-    return connectors[portIndex];
-}
-
-void appendOrthogonalWirePath(QSchematic::Items::Wire& wire, const QPointF& startPoint, const QPointF& endPoint)
-{
-    wire.append_point(startPoint);
-
-    if (std::abs(startPoint.x() - endPoint.x()) < 0.5 || std::abs(startPoint.y() - endPoint.y()) < 0.5) {
-        wire.append_point(endPoint);
-        return;
-    }
-
-    const double midX = (startPoint.x() + endPoint.x()) / 2.0;
-    wire.append_point(QPointF(midX, startPoint.y()));
-    wire.append_point(QPointF(midX, endPoint.y()));
-    wire.append_point(endPoint);
-}
-
-
-// Layered automatic layout for diagrams without stored positions. Elements
-// are placed in columns by data flow (an element one column right of its
-// inputs; connections that close a loop are left out of the ordering), and
-// every wire runs in tracks of its own between the columns, so wires never
-// cross nodes and wires of different outputs never touch (QSchematic would
-// merge touching wires into one net). Wires that go further than the next
-// column, or back, use a lane of their own below all nodes.
-class LayeredLayout {
-public:
-    static constexpr double kColumnGap = 80.0;
-    static constexpr double kRowGap = 80.0;
-    static constexpr double kTrackStep = 20.0;
-
-    LayeredLayout(const std::vector<std::string>& nodes, const std::vector<ConnectionModel>& connections,
-                  const std::unordered_map<std::string, double>& heights)
-    {
-        std::unordered_map<std::string, std::vector<std::string>> successors;
-        std::unordered_map<std::string, std::size_t> order;
-        for (std::size_t index = 0; index < nodes.size(); ++index) {
-            order[nodes[index]] = index;
-            column_[nodes[index]] = 0;
-        }
-        for (const auto& connection : connections) {
-            if (order.contains(connection.fromElement) && order.contains(connection.toElement)) {
-                successors[connection.fromElement].push_back(connection.toElement);
-            }
-        }
-        // Depth-first search in declaration order; an edge to a node on the
-        // stack closes a loop and does not order the columns.
-        std::unordered_map<std::string, int> state; // 1: on stack, 2: done
-        std::vector<std::string> finished;
-        std::set<std::pair<std::string, std::string>> backEdges;
-        std::function<void(const std::string&)> visit = [&](const std::string& node) {
-            state[node] = 1;
-            for (const auto& next : successors[node]) {
-                if (state[next] == 1) {
-                    backEdges.insert({node, next});
-                } else if (state[next] == 0) {
-                    visit(next);
+    std::unordered_map<std::string, int> row;
+    int rowCount = 0;
+    for (auto& [index, members] : columns) {
+        std::unordered_map<std::string, double> key;
+        for (std::size_t position = 0; position < members.size(); ++position) {
+            double sum = 0.0;
+            int count = 0;
+            for (const auto& from : predecessors[members[position]]) {
+                if (const auto it = row.find(from); it != row.end() && column[from] < index) {
+                    sum += it->second;
+                    ++count;
                 }
             }
-            state[node] = 2;
-            finished.push_back(node);
-        };
-        for (const auto& node : nodes) {
-            if (state[node] == 0) {
-                visit(node);
-            }
+            key[members[position]] = count > 0 ? sum / count : static_cast<double>(position);
         }
-        // Longest path over the remaining (acyclic) edges, in topological order.
-        for (auto it = finished.rbegin(); it != finished.rend(); ++it) {
-            for (const auto& next : successors[*it]) {
-                if (!backEdges.contains({*it, next})) {
-                    column_[next] = std::max(column_[next], column_[*it] + 1);
-                }
-            }
+        std::stable_sort(members.begin(), members.end(), [&](const auto& a, const auto& b) { return key[a] < key[b]; });
+        for (std::size_t position = 0; position < members.size(); ++position) {
+            row[members[position]] = static_cast<int>(position);
+            rowCount = std::max(rowCount, static_cast<int>(position) + 1);
         }
-        // Rows: declaration order within a column, then ordered by the mean
-        // row of the inputs (fewer crossings).
-        std::map<int, std::vector<std::string>> columns;
-        for (const auto& node : nodes) {
-            columns[column_[node]].push_back(node);
-        }
-        std::unordered_map<std::string, std::vector<std::string>> predecessors;
-        for (const auto& connection : connections) {
-            predecessors[connection.toElement].push_back(connection.fromElement);
-        }
-        for (auto& [column, members] : columns) {
-            std::unordered_map<std::string, double> key;
-            for (std::size_t index = 0; index < members.size(); ++index) {
-                double sum = 0.0;
-                int count = 0;
-                for (const auto& from : predecessors[members[index]]) {
-                    if (const auto row = row_.find(from); row != row_.end() && column_[from] < column) {
-                        sum += row->second;
-                        ++count;
-                    }
-                }
-                key[members[index]] = count > 0 ? sum / count : static_cast<double>(index);
-            }
-            std::stable_sort(members.begin(), members.end(), [&](const auto& a, const auto& b) { return key[a] < key[b]; });
-            for (std::size_t index = 0; index < members.size(); ++index) {
-                row_[members[index]] = static_cast<int>(index);
-                rows_ = std::max(rows_, static_cast<int>(index) + 1);
-            }
-            columns_ = std::max(columns_, column + 1);
-        }
-        // Tracks needed in each gap (gap g lies right of column g; gap -1 is
-        // left of the first column), and lanes below the nodes.
-        std::map<int, std::set<std::string>> tracks;
-        int lanes = 0;
-        for (const auto& connection : connections) {
-            if (!order.contains(connection.fromElement) || !order.contains(connection.toElement)) {
-                continue;
-            }
-            const int from = column_[connection.fromElement];
-            const int to = column_[connection.toElement];
-            tracks[from].insert(outputKey(connection));
-            if (to != from + 1) {
-                tracks[to - 1].insert(connectionKey(connection));
-                ++lanes;
-            }
-        }
-        double x = gapWidth(tracks, -1);
-        for (int column = 0; column < columns_; ++column) {
-            columnLeft_.push_back(x);
-            x += kDefaultNodeWidth + gapWidth(tracks, column);
-        }
-        static_cast<void>(lanes);
-        // Rows as tall as their tallest node.
-        std::vector<double> rowHeight(static_cast<std::size_t>(std::max(rows_, 1)), kDefaultNodeHeight);
-        for (const auto& [node, row] : row_) {
-            if (const auto it = heights.find(node); it != heights.end()) {
-                rowHeight[static_cast<std::size_t>(row)] = std::max(rowHeight[static_cast<std::size_t>(row)], it->second);
-            }
-        }
-        double y = 0.0;
-        for (const auto height : rowHeight) {
-            rowTop_.push_back(y);
-            y += height + kRowGap;
-        }
-        bottom_ = y - kRowGap;
     }
 
-    [[nodiscard]] QPointF position(const std::string& node) const
-    {
-        return {columnLeft_.at(static_cast<std::size_t>(column_.at(node))), rowTop_.at(static_cast<std::size_t>(row_.at(node)))};
+    // Each gap is wide enough for a vertical track per output leaving the column.
+    std::map<int, std::set<std::pair<std::string, int>>> leaving;
+    for (const auto& connection : connections) {
+        leaving[column[connection.fromElement]].insert({connection.fromElement, connection.fromPort});
+    }
+    std::map<int, int> columnLeft;
+    int x = 2;
+    for (const auto& [index, members] : columns) {
+        columnLeft[index] = x;
+        x += kElementColumns + std::max(kColumnGap, static_cast<int>(leaving[index].size()) + 3);
+    }
+    std::vector<int> rowHeight(static_cast<std::size_t>(std::max(rowCount, 1)), 5);
+    for (const auto& [node, index] : row) {
+        rowHeight[static_cast<std::size_t>(index)] = std::max(rowHeight[static_cast<std::size_t>(index)], rows.at(node));
+    }
+    std::vector<int> rowTop;
+    int y = 2;
+    for (const auto height : rowHeight) {
+        rowTop.push_back(y);
+        y += height + kRowGap;
     }
 
-    // The route of a connection between connector positions. The first
-    // wire of an output starts at its connector; further wires of the same
-    // output are branches starting on that wire, at its bend onto the
-    // output's track (QSchematic attaches one wire per connector).
-    struct Route {
-        std::vector<QPointF> points;
-        bool branch{false};
-    };
-    [[nodiscard]] Route route(const ConnectionModel& connection, const QPointF& start, const QPointF& end)
-    {
-        const int from = column_.at(connection.fromElement);
-        const int to = column_.at(connection.toElement);
-        const double first = track(from, outputKey(connection));
-        const bool branch = !trunks_.insert(outputKey(connection)).second;
-        const QPointF junction(first, start.y());
-        std::vector<QPointF> points = branch ? std::vector<QPointF>{junction} : std::vector<QPointF>{start, junction};
-        if (to == from + 1) {
-            if (!branch && std::abs(start.y() - end.y()) < 0.5) {
-                return {{start, end}, false};
-            }
-            points.push_back({first, end.y()});
-        } else {
-            const double second = track(to - 1, connectionKey(connection));
-            const double lane = bottom_ + kTrackStep * static_cast<double>(++lanesUsed_);
-            points.push_back({first, lane});
-            points.push_back({second, lane});
-            points.push_back({second, end.y()});
-        }
-        if (std::abs(points.back().y() - end.y()) > 0.5 || std::abs(points.back().x() - end.x()) > 0.5) {
-            points.push_back(end);
-        }
-        return {std::move(points), branch};
+    std::unordered_map<std::string, QPoint> positions;
+    for (const auto& node : nodes) {
+        positions[node] = QPoint(columnLeft[column[node]], rowTop[static_cast<std::size_t>(row[node])]);
     }
-
-private:
-    static auto outputKey(const ConnectionModel& c) -> std::string { return c.fromElement + ":" + std::to_string(c.fromPort); }
-    static auto connectionKey(const ConnectionModel& c) -> std::string
-    {
-        return outputKey(c) + "->" + c.toElement + ":" + std::to_string(c.toPort);
-    }
-    static auto gapWidth(const std::map<int, std::set<std::string>>& tracks, const int gap) -> double
-    {
-        const auto it = tracks.find(gap);
-        const auto count = it == tracks.end() ? 0 : it->second.size();
-        return std::max(kColumnGap, kTrackStep * static_cast<double>(count + 1));
-    }
-    // x of the track for `key` in gap g (allocated on first use).
-    auto track(const int gap, const std::string& key) -> double
-    {
-        auto& used = trackIndex_[gap];
-        const auto [it, inserted] = used.emplace(key, used.size());
-        const double gapLeft = gap < 0 ? 0.0 : columnLeft_.at(static_cast<std::size_t>(gap)) + kDefaultNodeWidth;
-        return gapLeft + kTrackStep * static_cast<double>(it->second + 1);
-    }
-
-    std::unordered_map<std::string, int> column_;
-    std::unordered_map<std::string, int> row_;
-    int columns_{0};
-    int rows_{0};
-    std::vector<double> columnLeft_;
-    std::vector<double> rowTop_;
-    double bottom_{0.0};
-    int lanesUsed_{0};
-    std::map<int, std::map<std::string, std::size_t>> trackIndex_;
-    std::set<std::string> trunks_; // outputs whose first wire is placed
-};
-
-void attachWireEndpoints(QSchematic::Scene& scene,
-                         const std::shared_ptr<QSchematic::Items::Wire>& wire,
-                         const std::shared_ptr<QSchematic::Items::Connector>& startConnector,
-                         const std::shared_ptr<QSchematic::Items::Connector>& endConnector)
-{
-    auto wireManager = scene.wire_manager();
-    if (!wireManager || !wire || wire->points_count() < 2) {
-        return;
-    }
-
-    if (startConnector) {
-        wireManager->attach_wire_to_connector(wire.get(), 0, startConnector.get());
-    }
-    if (endConnector) {
-        wireManager->attach_wire_to_connector(wire.get(), wire->points_count() - 1, endConnector.get());
-    }
+    return positions;
 }
 
-void attachWireEndpointsByPosition(QSchematic::Scene& scene,
-                                   const std::shared_ptr<QSchematic::Items::Wire>& wire)
+auto parseEnd(const boost::json::value& value, const std::string& what, DiagramScene& scene,
+              const std::unordered_map<std::string, std::shared_ptr<SignalWire>>& wires, const PortDirection direction) -> WireEnd
 {
-    if (!wire || wire->points_count() < 2) {
-        return;
+    if (!value.is_object()) {
+        throw error(what + " must be an object");
     }
-
-    std::shared_ptr<QSchematic::Items::Connector> startConnector;
-    std::shared_ptr<QSchematic::Items::Connector> endConnector;
-    const auto firstPoint = wire->points().first().toPoint();
-    const auto lastPoint = wire->points().last().toPoint();
-
-    for (const auto& connector : scene.connectors()) {
-        if (!connector) {
-            continue;
+    const auto& object = value.as_object();
+    if (const auto* port = object.if_contains("port")) {
+        const auto& parts = port->is_array() ? port->as_array() : boost::json::array{};
+        if (parts.size() != 3 || !parts[0].is_string() || !parts[1].is_string() || !parts[2].is_number()) {
+            throw error(what + ".port must be [element, \"in\" | \"out\", index]");
         }
-
-        const auto connectorPoint = connector->scenePos().toPoint();
-        if (!startConnector && connectorPoint == firstPoint) {
-            startConnector = connector;
+        const std::string element(parts[0].as_string());
+        const std::string side(parts[1].as_string());
+        const int index = static_cast<int>(json_utils::numberValue(parts[2]));
+        const auto node = scene.elementNode(element);
+        if (!node) {
+            throw error(what + " names unknown element '" + element + "'");
         }
-        if (!endConnector && connectorPoint == lastPoint) {
-            endConnector = connector;
+        if (side != (direction == PortDirection::Output ? "out" : "in")) {
+            throw error(what + " must be an " + (direction == PortDirection::Output ? "output" : "input") + " port");
         }
-
-        if (startConnector && endConnector) {
-            break;
+        if (!node->port(direction, index)) {
+            throw error(what + ": element '" + element + "' has no " + side + " port " + std::to_string(index));
         }
+        return WireEnd::onPort(node, direction, index);
     }
-
-    attachWireEndpoints(scene, wire, startConnector, endConnector);
+    if (const auto* wire = object.if_contains("wire"); wire && direction == PortDirection::Output) {
+        const std::string id = wire->is_string() ? std::string(wire->as_string()) : std::string{};
+        const auto it = wires.find(id);
+        if (it == wires.end()) {
+            throw error(what + " names unknown wire '" + id + "'");
+        }
+        const auto* at = object.if_contains("at");
+        return WireEnd::onWire(it->second, scenePoint(gridPoint(at ? *at : boost::json::value{}, what + ".at")));
+    }
+    throw error(what + " must name a port" + std::string(direction == PortDirection::Output ? " or a wire" : ""));
 }
 
 } // namespace
 
-auto SceneSerializer::serialize(const QSchematic::Scene& scene,
-                               const SerializationOptions& options) const -> DiagramDocument {
+auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOptions& options) const -> DiagramDocument
+{
     DiagramDocument doc;
     doc.id = options.schemaName;
     doc.dt = options.dt;
     doc.pageLayout.orientation = options.sheetOrientation;
     doc.pageLayout.widthMm = options.sheetWidthMm;
     doc.pageLayout.heightMm = options.sheetHeightMm;
-    
-    if (options.includeDiagram) {
-        RuntimeSchemaExtractor extractor;
-        std::vector<WireSource> connected;
-        doc.runtimeSchema = extractor.extract(scene, options, &connected);
-        doc.diagram = extractDiagramLayout(scene, connected);
+
+    const NetModel model(scene);
+    doc.runtimeSchema = model.schemaJson(options.schemaName.toStdString());
+    if (!options.includeDiagram) {
+        return doc;
     }
-    
+
+    boost::json::array nodes;
+    for (const auto& node : scene.elementNodes()) {
+        boost::json::object object{{"id", node->id()}, {"position", gridJson(node->pos())}};
+        if (!node->element().title.isEmpty()) {
+            object["title"] = node->element().title.toStdString();
+        }
+        nodes.push_back(std::move(object));
+    }
+
+    // Wires that connect nothing are not part of the schema and are not saved.
+    std::unordered_map<const SignalWire*, std::string> ids;
+    std::set<const SignalWire*> broken;
+    for (const auto& [wire, problem] : model.problems()) {
+        broken.insert(wire);
+    }
+    for (const auto& wire : scene.signalWires()) {
+        if (!broken.contains(wire.get())) {
+            ids.emplace(wire.get(), "w" + std::to_string(ids.size() + 1));
+        }
+    }
+    boost::json::array wires;
+    for (const auto& wire : scene.signalWires()) {
+        const auto id = ids.find(wire.get());
+        if (id == ids.end()) {
+            continue;
+        }
+        boost::json::object from;
+        if (wire->upstream.isJunction()) {
+            from["wire"] = ids.at(wire->upstream.wire.lock().get());
+            from["at"] = gridJson(wire->upstream.at);
+        } else {
+            from["port"] = boost::json::array{wire->upstream.node.lock()->id(), "out", wire->upstream.index};
+        }
+        boost::json::array bends;
+        for (const auto& bend : wire->userBends) {
+            bends.push_back(gridJson(bend));
+        }
+        wires.push_back(boost::json::object{
+            {"id", id->second},
+            {"from", std::move(from)},
+            {"to", boost::json::object{{"port", boost::json::array{wire->downstream.node.lock()->id(), "in", wire->downstream.index}}}},
+            {"bends", std::move(bends)},
+        });
+    }
+
+    boost::json::array frames;
+    for (const auto& frame : scene.textFrames()) {
+        frames.push_back(boost::json::object{{"id", frame->id()}, {"position", gridJson(frame->pos())}, {"params", frame->params()}});
+    }
+
+    doc.diagram = boost::json::object{
+        {"grid", boost::json::object{{"step", kGridStep}, {"mm_per_step", kGridStep * 25.4 / 96.0}}},
+        {"nodes", std::move(nodes)},
+        {"wires", std::move(wires)},
+        {"text_frames", std::move(frames)},
+    };
     return doc;
 }
 
-void SceneSerializer::deserialize(const DiagramDocument& document,
-                                  QSchematic::Scene& scene) const {
-    scene.clear();
-
-    constexpr double xSpacing = 260.0;
-    constexpr double ySpacing = 180.0;
-
-    std::unordered_map<std::string, NodeModel> nodesById;
-    std::vector<std::string> nodeOrder;
-    std::vector<ConnectionModel> connections;
-    std::vector<std::vector<QPointF>> diagramWireRoutes;
-    // Routes that name their connection: "from:port->to:port" -> points.
-    std::unordered_map<std::string, std::vector<QPointF>> keyedWireRoutes;
-    auto routeKey = [](const std::string& from, int fromPort, const std::string& to, int toPort) {
-        return from + ":" + std::to_string(fromPort) + "->" + to + ":" + std::to_string(toPort);
+void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene& scene) const
+{
+    scene.clearDiagram();
+    // A layout of another version is refused unless it lays nothing out
+    // (documents written by tools carry an empty one).
+    static const boost::json::object noLayout;
+    auto laysOut = [](const boost::json::object& layout) {
+        for (const char* key : {"nodes", "wires", "text_frames"}) {
+            if (const auto* list = layout.if_contains(key); list && list->is_array() && !list->as_array().empty()) {
+                return true;
+            }
+        }
+        return false;
     };
+    if (document.diagramVersion != kDiagramVersion && laysOut(document.diagram)) {
+        throw error("diagram_version " + std::to_string(document.diagramVersion) + " is not supported (this Studio reads version " +
+                    std::to_string(kDiagramVersion) + "); open the plain runtime schema to lay it out again");
+    }
+    const auto& layout = document.diagramVersion == kDiagramVersion ? document.diagram : noLayout;
 
+    // Elements and connections of the runtime schema.
+    struct Model {
+        ElementNode::Element element;
+        std::optional<QPoint> position;
+        int inputs = 0;
+        int outputs = 0;
+    };
+    std::vector<Model> models;
+    std::unordered_map<std::string, std::size_t> index;
+    std::vector<ConnectionModel> connections;
     if (document.runtimeSchema.is_object()) {
-        const auto& schemaObject = document.runtimeSchema.as_object();
-
-        if (const auto* elementsValue = json_utils::findObjectValue(schemaObject, "elements"); elementsValue && elementsValue->is_array()) {
-            int elementIndex = 0;
-            for (const auto& elementValue : elementsValue->as_array()) {
-                if (!elementValue.is_object()) {
+        const auto& schema = document.runtimeSchema.as_object();
+        if (const auto* elements = json_utils::findObjectValue(schema, "elements"); elements && elements->is_array()) {
+            for (const auto& value : elements->as_array()) {
+                if (!value.is_object()) {
                     continue;
                 }
-
-                const auto& element = elementValue.as_object();
-                NodeModel model;
-                model.id = json_utils::stringValue(element, "id", "element_" + std::to_string(elementIndex++));
-                model.type = json_utils::stringValue(element, "type", "Element");
-                if (const auto* placement = json_utils::findObjectValue(element, "node"); placement && placement->is_string()) {
-                    model.placement = QString::fromStdString(std::string(placement->as_string()));
+                const auto& object = value.as_object();
+                Model model;
+                model.element.id = json_utils::stringValue(object, "id", "element_" + std::to_string(models.size()));
+                model.element.type = json_utils::stringValue(object, "type", "Element");
+                model.element.placement = json_utils::stringValue(object, "node", "");
+                if (const auto* params = json_utils::findObjectValue(object, "params"); params && params->is_object()) {
+                    model.element.params = params->as_object();
                 }
-                if (const auto* paramsValue = json_utils::findObjectValue(element, "params"); paramsValue && paramsValue->is_object()) {
-                    model.params = paramsValue->as_object();
+                if (const auto* nested = json_utils::findObjectValue(object, "schema"); nested && nested->is_object()) {
+                    model.element.schema = *nested;
                 }
-                if (const auto* schemaValue = json_utils::findObjectValue(element, "schema"); schemaValue && schemaValue->is_object()) {
-                    model.nestedSchema = *schemaValue;
+                if (!index.emplace(model.element.id, models.size()).second) {
+                    throw error("element id '" + model.element.id + "' is used twice");
                 }
-                if (model.type == "Scope") {
-                    model.channelCount = std::max(1, json_utils::intValue(model.params, "channel_count", 1));
-                }
-                const auto declaredPorts = declaredPortCounts(model.type, model.params, model.channelCount, &model.nestedSchema);
-                model.inputPorts = std::max(model.inputPorts, declaredPorts.inputs);
-                model.outputPorts = std::max(model.outputPorts, declaredPorts.outputs);
-                model.title = QString::fromUtf8(model.id.c_str());
-
-                nodeOrder.push_back(model.id);
-                nodesById.emplace(model.id, std::move(model));
+                models.push_back(std::move(model));
             }
         }
-
-        if (const auto* connectionsValue = json_utils::findObjectValue(schemaObject, "connections"); connectionsValue && connectionsValue->is_array()) {
-            for (const auto& connectionValue : connectionsValue->as_array()) {
-                if (!connectionValue.is_object()) {
+        if (const auto* list = json_utils::findObjectValue(schema, "connections"); list && list->is_array()) {
+            for (const auto& value : list->as_array()) {
+                if (!value.is_object()) {
                     continue;
                 }
-
-                const auto& connectionObject = connectionValue.as_object();
-                ConnectionModel model;
-                model.fromElement = json_utils::stringValue(connectionObject, "from_element");
-                model.fromPort = json_utils::intValue(connectionObject, "from_port");
-                model.toElement = json_utils::stringValue(connectionObject, "to_element");
-                model.toPort = json_utils::intValue(connectionObject, "to_port");
-                connections.push_back(model);
-
-                if (auto it = nodesById.find(model.fromElement); it != nodesById.end()) {
-                    it->second.outputPorts = std::max(it->second.outputPorts, model.fromPort + 1);
+                const auto& object = value.as_object();
+                ConnectionModel connection{json_utils::stringValue(object, "from_element"), json_utils::intValue(object, "from_port"),
+                                           json_utils::stringValue(object, "to_element"), json_utils::intValue(object, "to_port")};
+                const auto from = index.find(connection.fromElement);
+                const auto to = index.find(connection.toElement);
+                if (from == index.end() || to == index.end()) {
+                    throw error("connection " + connection.fromElement + ":" + std::to_string(connection.fromPort) + " -> " +
+                                connection.toElement + ":" + std::to_string(connection.toPort) + " names an unknown element");
                 }
-                if (auto it = nodesById.find(model.toElement); it != nodesById.end()) {
-                    it->second.inputPorts = std::max(it->second.inputPorts, model.toPort + 1);
-                }
+                models[from->second].outputs = std::max(models[from->second].outputs, connection.fromPort + 1);
+                models[to->second].inputs = std::max(models[to->second].inputs, connection.toPort + 1);
+                connections.push_back(std::move(connection));
             }
         }
     }
 
-    if (const auto nodesIt = document.diagram.find("nodes"); nodesIt != document.diagram.end() && nodesIt->value().is_array()) {
-        int fallbackIndex = static_cast<int>(nodeOrder.size());
-        for (const auto& nodeValue : nodesIt->value().as_array()) {
-            if (!nodeValue.is_object()) {
-                continue;
+    // Layout: positions and titles.
+    if (const auto* nodes = json_utils::findObjectValue(layout, "nodes"); nodes && nodes->is_array()) {
+        for (const auto& value : nodes->as_array()) {
+            const auto& object = value.is_object() ? value.as_object() : boost::json::object{};
+            const auto id = json_utils::stringValue(object, "id");
+            const auto it = index.find(id);
+            if (it == index.end()) {
+                throw error("layout node '" + id + "' is not an element of the schema");
             }
-
-            const auto& nodeObject = nodeValue.as_object();
-            const auto id = json_utils::stringValue(nodeObject, "id", "node_" + std::to_string(fallbackIndex++));
-
-            auto [it, inserted] = nodesById.try_emplace(id);
-            if (inserted) {
-                it->second.id = id;
-                it->second.type = json_utils::stringValue(nodeObject, "type", "Element");
-                it->second.title = QString::fromUtf8(id.c_str());
-                nodeOrder.push_back(id);
+            auto& model = models[it->second];
+            if (const auto* position = json_utils::findObjectValue(object, "position")) {
+                model.position = gridPoint(*position, "position of '" + id + "'");
             }
-
-            if (const auto name = json_utils::stringValue(nodeObject, "name"); !name.empty()) {
-                it->second.title = QString::fromUtf8(name.c_str());
-            }
-            if (const auto type = json_utils::stringValue(nodeObject, "type"); !type.empty()) {
-                it->second.type = type;
-            }
-            if (const auto* paramsValue = json_utils::findObjectValue(nodeObject, "params");
-                paramsValue && paramsValue->is_object()) {
-                it->second.params = paramsValue->as_object();
-            }
-            if (const auto* schemaValue = json_utils::findObjectValue(nodeObject, "schema");
-                schemaValue && schemaValue->is_object()) {
-                it->second.nestedSchema = *schemaValue;
-            }
-            if (it->second.type == "Scope") {
-                it->second.channelCount = std::max(1, json_utils::intValue(nodeObject, "channel_count", it->second.channelCount));
-            }
-            const auto declaredPorts = declaredPortCounts(it->second.type,
-                                                         it->second.params,
-                                                         it->second.channelCount,
-                                                         &it->second.nestedSchema);
-            it->second.inputPorts = std::max(it->second.inputPorts, declaredPorts.inputs);
-            it->second.outputPorts = std::max(it->second.outputPorts, declaredPorts.outputs);
-
-            it->second.position = json_utils::pointValue(nodeObject, "position", it->second.position);
-            it->second.hasExplicitPosition = true;
+            model.element.title = QString::fromStdString(json_utils::stringValue(object, "title", ""));
         }
     }
 
-    if (const auto wiresIt = document.diagram.find("wires"); wiresIt != document.diagram.end() && wiresIt->value().is_array()) {
-        for (const auto& wireValue : wiresIt->value().as_array()) {
-            if (!wireValue.is_object()) {
-                continue;
+    std::vector<std::shared_ptr<ElementNode>> nodes;
+    std::unordered_map<std::string, int> rows;
+    for (auto& model : models) {
+        auto node = std::make_shared<ElementNode>(model.element);
+        node->setMinimumPorts(model.inputs, model.outputs);
+        rows[model.element.id] = elementRows(*node);
+        nodes.push_back(std::move(node));
+    }
+    const bool anyPosition = std::any_of(models.begin(), models.end(), [](const Model& model) { return model.position.has_value(); });
+    if (!anyPosition) {
+        std::vector<std::string> ids;
+        for (const auto& model : models) {
+            ids.push_back(model.element.id);
+        }
+        const auto positions = layeredPositions(ids, connections, rows);
+        for (auto& model : models) {
+            model.position = positions.at(model.element.id);
+        }
+    } else {
+        // Elements without a position go in a row below the others.
+        int bottom = 0;
+        for (std::size_t at = 0; at < models.size(); ++at) {
+            if (models[at].position) {
+                bottom = std::max(bottom, models[at].position->y() + rows[models[at].element.id]);
             }
-
-            const auto& wireObject = wireValue.as_object();
-            const auto* pointsValue = json_utils::findObjectValue(wireObject, "points");
-            if (!pointsValue || !pointsValue->is_array()) {
-                continue;
+        }
+        int x = 2;
+        for (auto& model : models) {
+            if (!model.position) {
+                model.position = QPoint(x, bottom + kRowGap);
+                x += kElementColumns + kColumnGap;
             }
+        }
+    }
+    for (std::size_t at = 0; at < models.size(); ++at) {
+        nodes[at]->setPos(scenePoint(*models[at].position));
+        scene.addNodeItem(nodes[at]);
+    }
 
-            std::vector<QPointF> points;
-            for (const auto& pointValue : pointsValue->as_array()) {
-                if (!pointValue.is_object()) {
-                    continue;
+    if (const auto* frames = json_utils::findObjectValue(layout, "text_frames"); frames && frames->is_array()) {
+        for (const auto& value : frames->as_array()) {
+            const auto& object = value.is_object() ? value.as_object() : boost::json::object{};
+            const auto* params = json_utils::findObjectValue(object, "params");
+            auto frame = std::make_shared<TextFrameNode>(json_utils::stringValue(object, "id", "text_frame"),
+                                                         params && params->is_object() ? params->as_object() : boost::json::object{});
+            const auto* position = json_utils::findObjectValue(object, "position");
+            frame->setPos(scenePoint(position ? gridPoint(*position, "text frame position") : QPoint(2, 2)));
+            scene.addNodeItem(frame);
+        }
+    }
+
+    // Wires: as the layout has them, or one tree per output.
+    if (const auto* list = json_utils::findObjectValue(layout, "wires"); list && list->is_array()) {
+        std::unordered_map<std::string, std::shared_ptr<SignalWire>> wires;
+        std::vector<std::pair<std::shared_ptr<SignalWire>, const boost::json::object*>> ordered;
+        for (const auto& value : list->as_array()) {
+            if (!value.is_object()) {
+                throw error("every wire must be an object");
+            }
+            const auto id = json_utils::stringValue(value.as_object(), "id");
+            auto wire = std::make_shared<SignalWire>();
+            if (id.empty() || !wires.emplace(id, wire).second) {
+                throw error("wire ids must be unique and not empty ('" + id + "')");
+            }
+            ordered.emplace_back(wire, &value.as_object());
+        }
+        for (const auto& [wire, object] : ordered) {
+            const auto id = json_utils::stringValue(*object, "id");
+            const auto* from = object->if_contains("from");
+            const auto* to = object->if_contains("to");
+            wire->upstream = parseEnd(from ? *from : boost::json::value{}, "wire " + id + " from", scene, wires, PortDirection::Output);
+            wire->downstream = parseEnd(to ? *to : boost::json::value{}, "wire " + id + " to", scene, wires, PortDirection::Input);
+            if (const auto* bends = object->if_contains("bends"); bends && bends->is_array()) {
+                for (const auto& bend : bends->as_array()) {
+                    wire->userBends.append(scenePoint(gridPoint(bend, "a bend of wire " + id)));
                 }
-
-                const auto& pointObject = pointValue.as_object();
-                const auto* xValue = json_utils::findObjectValue(pointObject, "x");
-                const auto* yValue = json_utils::findObjectValue(pointObject, "y");
-                if (!xValue || !yValue) {
-                    continue;
+            }
+            scene.addWireItem(wire);
+        }
+        const NetModel model(scene);
+        if (!model.problems().empty()) {
+            throw error(model.problems().front().second.toStdString());
+        }
+        std::multiset<ConnectionModel> drawn;
+        for (const auto& connection : model.connections()) {
+            drawn.insert({connection.from.element, connection.from.port, connection.to.element, connection.to.port});
+        }
+        const std::multiset<ConnectionModel> declared(connections.begin(), connections.end());
+        if (drawn != declared) {
+            for (const auto& connection : declared) {
+                if (!drawn.contains(connection)) {
+                    throw error("connection " + connection.fromElement + ":" + std::to_string(connection.fromPort) + " -> " +
+                                connection.toElement + ":" + std::to_string(connection.toPort) + " has no wire");
                 }
-
-                points.emplace_back(json_utils::numberValue(*xValue), json_utils::numberValue(*yValue));
             }
-
-            if (points.size() >= 2) {
-                if (json_utils::findObjectValue(wireObject, "from_element") && json_utils::findObjectValue(wireObject, "to_element")) {
-                    keyedWireRoutes[routeKey(json_utils::stringValue(wireObject, "from_element", ""),
-                                             json_utils::intValue(wireObject, "from_port", 0),
-                                             json_utils::stringValue(wireObject, "to_element", ""),
-                                             json_utils::intValue(wireObject, "to_port", 0))] = points;
+            for (const auto& connection : drawn) {
+                if (!declared.contains(connection)) {
+                    throw error("the wires connect " + connection.fromElement + ":" + std::to_string(connection.fromPort) + " -> " +
+                                connection.toElement + ":" + std::to_string(connection.toPort) + ", which the schema does not");
                 }
-                diagramWireRoutes.push_back(std::move(points));
             }
         }
-    }
-
-    if (nodeOrder.empty()) {
-        return;
-    }
-
-    // Without any stored position the whole diagram is laid out by data flow.
-    const bool autoLayout = std::none_of(nodeOrder.begin(), nodeOrder.end(),
-                                         [&](const std::string& id) { return nodesById.at(id).hasExplicitPosition; });
-    std::optional<LayeredLayout> layered;
-    if (autoLayout) {
-        std::unordered_map<std::string, double> heights;
-        for (const auto& nodeId : nodeOrder) {
-            const auto& model = nodesById.at(nodeId);
-            heights[nodeId] = nodeHeightFor(model.inputPorts, model.type == "Scope" ? 0 : model.outputPorts);
-        }
-        layered.emplace(nodeOrder, connections, heights);
-        for (const auto& nodeId : nodeOrder) {
-            nodesById.at(nodeId).position = layered->position(nodeId);
-            nodesById.at(nodeId).hasExplicitPosition = true;
-        }
-    }
-
-    int autoIndex = 0;
-    const int autoColumnCount = std::max(1, static_cast<int>(std::ceil(std::sqrt(static_cast<double>(nodeOrder.size())))));
-    for (const auto& nodeId : nodeOrder) {
-        auto& node = nodesById.at(nodeId);
-        if (node.hasExplicitPosition) {
-            continue;
-        }
-
-        const int column = autoIndex % autoColumnCount;
-        const int row = autoIndex / autoColumnCount;
-        node.position = QPointF(column * xSpacing, row * ySpacing);
-        ++autoIndex;
-    }
-
-    std::unordered_map<std::string, std::shared_ptr<QSchematic::Items::Node>> sceneNodes;
-    std::unordered_map<std::string, NodeWiring> nodeWirings;
-    sceneNodes.reserve(nodesById.size());
-    nodeWirings.reserve(nodesById.size());
-
-    for (const auto& nodeId : nodeOrder) {
-        const auto& model = nodesById.at(nodeId);
-
-        auto node = std::make_shared<QSchematic::Items::Node>();
-        node->setPos(model.position);
-        node->setAllowMouseRotate(false);
-        node->setConnectorsMovable(false);
-
-        NodeWiring wiring;
-
-        if (model.type == "TextFrame") {
-            const auto params = mergedTextFrameParams(model.params);
-            const auto* widthValue = json_utils::findObjectValue(params, "width");
-            const auto* heightValue = json_utils::findObjectValue(params, "height");
-            const double frameWidth = std::max(80.0, json_utils::numberValue(widthValue ? *widthValue : boost::json::value{}, kDefaultTextFrameWidth));
-            const double frameHeight = std::max(50.0, json_utils::numberValue(heightValue ? *heightValue : boost::json::value{}, kDefaultTextFrameHeight));
-
-            node->setSize(frameWidth, frameHeight);
-            auto* frameRect = new QGraphicsRectItem(0.0, 0.0, frameWidth, frameHeight, node.get());
-            frameRect->setPen(QPen(QColor(QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444"))), 1.4));
-            frameRect->setBrush(QColor(QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc"))));
-
-            auto* label = new QGraphicsTextItem(QString::fromStdString(json_utils::stringValue(params, "text", "Text frame")), node.get());
-            label->setDefaultTextColor(QColor(QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020"))));
-            QFont labelFont(QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif")));
-            labelFont.setPointSize(std::max(6, json_utils::intValue(params, "font_size", 12)));
-            label->setFont(labelFont);
-            label->setTextWidth(frameWidth - 20.0);
-            label->setPos(10.0, 8.0);
-
-            node->setData(kNodeIdRole, QString::fromStdString(model.id));
-        node->setData(kNodePlacementRole, model.placement);
-            node->setData(kNodeTypeRole, QStringLiteral("TextFrame"));
-            node->setData(kNodeTitleRole, model.title);
-            node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(params)));
-            node->setData(kTextFrameTextRole, QString::fromStdString(json_utils::stringValue(params, "text", "Text frame")));
-            node->setData(kTextFrameTextColorRole, QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020")));
-            node->setData(kTextFrameLineColorRole, QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444")));
-            node->setData(kTextFrameFillColorRole, QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc")));
-            node->setData(kTextFrameFontFamilyRole, QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif")));
-            node->setData(kTextFrameFontSizeRole, std::max(6, json_utils::intValue(params, "font_size", 12)));
-
-            scene.addItem(node);
-            sceneNodes.emplace(nodeId, std::move(node));
-            nodeWirings.emplace(nodeId, std::move(wiring));
-            continue;
-        }
-
-        const int shownOutputs = model.type == "Scope" ? 0 : std::max(model.outputPorts, 0);
-        const double nodeHeight = nodeHeightFor(std::max(model.inputPorts, 0), shownOutputs);
-        node->setSize(kDefaultNodeWidth, nodeHeight);
-
-        const int inputPortCount = std::max(model.inputPorts, 0);
-        for (int portIndex = 0; portIndex < inputPortCount; ++portIndex) {
-            auto connector = makeStyledConnector();
-            const double y = portOffsetY(nodeHeight, portIndex, inputPortCount);
-            connector->setPos(0.0, y);
-            node->addConnector(connector);
-            wiring.inputs.push_back(connector);
-        }
-
-        const int outputPortCount = model.type == "Scope" ? 0 : std::max(model.outputPorts, 0);
-        for (int portIndex = 0; portIndex < outputPortCount; ++portIndex) {
-            auto connector = makeStyledConnector();
-            connector->setPos(kDefaultNodeWidth, portOffsetY(nodeHeight, portIndex, outputPortCount));
-            node->addConnector(connector);
-            wiring.outputs.push_back(connector);
-        }
-
-        auto* label = new QGraphicsTextItem(QStringLiteral("%1\n%2").arg(model.title, QString::fromUtf8(model.type.c_str())), node.get());
-        label->setDefaultTextColor(Qt::black);
-        label->setTextWidth(kDefaultNodeWidth - 20.0);
-        label->setPos(10.0, 10.0);
-
-        node->setData(kNodeIdRole, QString::fromStdString(model.id));
-        node->setData(kNodePlacementRole, model.placement);
-        node->setData(kNodeTypeRole, QString::fromStdString(model.type));
-        node->setData(kNodeTitleRole, model.title);
-        node->setData(kNodeParamsRole, QString::fromStdString(boost::json::serialize(model.params)));
-            if (model.nestedSchema.is_object()) {
-            node->setData(kNodeSchemaRole, QString::fromStdString(boost::json::serialize(model.nestedSchema)));
-        }
-        node->setData(kNodeChannelCountRole, model.channelCount);
-
-        scene.addItem(node);
-        sceneNodes.emplace(nodeId, std::move(node));
-        nodeWirings.emplace(nodeId, std::move(wiring));
-    }
-
-    if (!connections.empty()) {
-        for (std::size_t connectionIndex = 0; connectionIndex < connections.size(); ++connectionIndex) {
-            const auto& connection = connections[connectionIndex];
-            const auto fromIt = sceneNodes.find(connection.fromElement);
-            const auto toIt = sceneNodes.find(connection.toElement);
-            const auto fromWiringIt = nodeWirings.find(connection.fromElement);
-            const auto toWiringIt = nodeWirings.find(connection.toElement);
-            if (fromIt == sceneNodes.end() || toIt == sceneNodes.end() ||
-                fromWiringIt == nodeWirings.end() || toWiringIt == nodeWirings.end()) {
-                continue;
+    } else {
+        std::set<std::pair<std::string, int>> fed;
+        std::map<std::pair<std::string, int>, std::shared_ptr<SignalWire>> trunks;
+        for (const auto& connection : connections) {
+            const auto from = scene.elementNode(connection.fromElement);
+            const auto to = scene.elementNode(connection.toElement);
+            if (!fed.insert({connection.toElement, connection.toPort}).second) {
+                throw error("input " + connection.toElement + ":" + std::to_string(connection.toPort) + " has two connections");
             }
-
-            const auto startConnector = connectorAtPort(fromWiringIt->second.outputs, connection.fromPort);
-            const auto endConnector = connectorAtPort(toWiringIt->second.inputs, connection.toPort);
-            if (!startConnector || !endConnector) {
-                continue;
-            }
-
-            auto wire = std::make_shared<QSchematic::Items::Wire>();
-            // Routes are matched by their connection; files without
-            // connection names in routes fall back to the route's position.
-            const std::vector<QPointF>* route = nullptr;
-            if (!keyedWireRoutes.empty()) {
-                const auto it = keyedWireRoutes.find(
-                    routeKey(connection.fromElement, connection.fromPort, connection.toElement, connection.toPort));
-                route = it != keyedWireRoutes.end() ? &it->second : nullptr;
-            } else if (connectionIndex < diagramWireRoutes.size()) {
-                route = &diagramWireRoutes[connectionIndex];
-            }
-            // A branch starts on another wire of the same output, not at the
-            // output connector, and is attached at its input end only.
-            bool branch = false;
-            if (route && route->size() >= 2) {
-                const auto& savedPoints = *route;
-                branch = QLineF(savedPoints.front(), startConnector->scenePos()).length() > 1.0;
-                wire->append_point(branch ? savedPoints.front() : startConnector->scenePos());
-                for (std::size_t pointIndex = 1; pointIndex + 1 < savedPoints.size(); ++pointIndex) {
-                    wire->append_point(savedPoints[pointIndex]);
-                }
-                wire->append_point(endConnector->scenePos());
-            } else if (layered) {
-                auto planned = layered->route(connection, startConnector->scenePos(), endConnector->scenePos());
-                branch = planned.branch;
-                for (const auto& point : planned.points) {
-                    wire->append_point(point);
-                }
+            auto wire = std::make_shared<SignalWire>();
+            const auto output = WireEnd::onPort(from, PortDirection::Output, connection.fromPort);
+            if (const auto trunk = trunks.find({connection.fromElement, connection.fromPort}); trunk != trunks.end()) {
+                wire->upstream = WireEnd::onWire(trunk->second, output.port() ? output.port()->scenePos() : QPointF());
             } else {
-                appendOrthogonalWirePath(*wire, startConnector->scenePos(), endConnector->scenePos());
+                wire->upstream = output;
+                trunks.emplace(std::make_pair(connection.fromElement, connection.fromPort), wire);
             }
-
-            if (scene.addWire(wire)) {
-                attachWireEndpoints(scene, wire, branch ? nullptr : startConnector, endConnector);
-            }
-        }
-
-        if (const auto wireManager = scene.wire_manager()) {
-            wireManager->generate_junctions();
-        }
-
-        return;
-    }
-
-    if (!diagramWireRoutes.empty()) {
-        for (const auto& savedPoints : diagramWireRoutes) {
-            auto wire = std::make_shared<QSchematic::Items::Wire>();
-            for (const auto& point : savedPoints) {
-                wire->append_point(point);
-            }
-
-            if (scene.addWire(wire)) {
-                attachWireEndpointsByPosition(scene, wire);
-            }
+            wire->downstream = WireEnd::onPort(to, PortDirection::Input, connection.toPort);
+            scene.addWireItem(wire);
         }
     }
-
-    if (const auto wireManager = scene.wire_manager()) {
-        wireManager->generate_junctions();
-    }
-}
-
-
-auto SceneSerializer::extractDiagramLayout(const QSchematic::Scene& scene, const std::vector<WireSource>& connected) const
-    -> boost::json::object {
-    boost::json::object diagram;
-    diagram["version"] = 1;
-    diagram["nodes"] = boost::json::array();
-    diagram["wires"] = boost::json::array();
-    
-    auto& diagramNodes = diagram["nodes"].as_array();
-    auto& diagramWires = diagram["wires"].as_array();
-    
-    // Add nodes with visual info (position, name)
-    const auto nodes = sortedSceneNodes(scene);
-    int nodeIndex = 0;
-    
-    for (const auto& nodePtr : nodes) {
-        auto node = nodePtr.get();
-        if (!node) continue;
-        
-        const auto storedNodeId = node->data(kNodeIdRole).toString();
-        std::string nodeId = storedNodeId.isEmpty()
-            ? "node_" + std::to_string(nodeIndex++)
-            : storedNodeId.toStdString();
-        const auto storedType = node->data(kNodeTypeRole).toString();
-        const auto storedTitle = node->data(kNodeTitleRole).toString();
-        const auto storedParams = node->data(kNodeParamsRole).toString();
-
-        boost::json::object nodeObj;
-        nodeObj["id"] = nodeId;
-        const auto nodeType = storedType.isEmpty() ? QStringLiteral("Element") : storedType;
-        nodeObj["type"] = nodeType.toStdString();
-        nodeObj["name"] = storedTitle.isEmpty() ? nodeId : storedTitle.toStdString();
-        if (nodeType == QStringLiteral("Scope")) {
-            nodeObj["channel_count"] = std::max(1, node->data(kNodeChannelCountRole).toInt());
-        } else if (nodeType == QStringLiteral("TextFrame")) {
-            auto params = mergedTextFrameParams(parseEncodedParams(storedParams));
-            params["width"] = node->size().width();
-            params["height"] = node->size().height();
-            nodeObj["params"] = params;
-        }
-
-        boost::json::object posObj;
-        posObj["x"] = node->pos().x();
-        posObj["y"] = node->pos().y();
-        nodeObj["position"] = posObj;
-        
-        diagramNodes.push_back(nodeObj);
-    }
-    
-    // Routes of the connected wires; each names its connection, so a route
-    // can never be attached to another connection (wires that connect
-    // nothing are not part of the schema and are not saved).
-    int wireIndex = 0;
-    for (const auto& source : connected) {
-        if (!source.wire) {
-            continue;
-        }
-        boost::json::object wireObj;
-        wireObj["id"] = "wire_" + std::to_string(wireIndex++);
-        wireObj["from_element"] = source.element;
-        wireObj["from_port"] = source.port;
-        wireObj["to_element"] = source.toElement;
-        wireObj["to_port"] = source.toPort;
-        // Absolute scene coordinates, so endpoint attachments can be restored reliably.
-        boost::json::array points;
-        for (const auto& point : source.wire->pointsAbsolute()) {
-            points.push_back(boost::json::object{{"x", point.x()}, {"y", point.y()}});
-        }
-        wireObj["points"] = std::move(points);
-        diagramWires.push_back(std::move(wireObj));
-    }
-
-    return diagram;
+    scene.rerouteAll();
 }
 
 } // namespace s7studio::diagram
-

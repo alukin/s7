@@ -3,7 +3,8 @@
 #include "deployment_support.hpp"
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
-#include "diagram_node_roles.hpp"
+#include "diagram/diagram_scene.hpp"
+#include "diagram/element_ports.hpp"
 #include "element_picker_panel.hpp"
 #include "headless_nodes_panel.hpp"
 #include "json_utils.hpp"
@@ -44,7 +45,9 @@
 #include <QLabel>
 #include <QKeySequence>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMenuBar>
+#include <QUndoStack>
 #include <QMessageBox>
 #include <QFontComboBox>
 #include <QFont>
@@ -89,46 +92,6 @@ constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
 constexpr int kMaxScopeHistoryPointsPerScope = 20000;
 constexpr const char* kBundledDemoDiagramPath = S7STUDIO_SOURCE_DIR "/resources/demo_startup.s7diagram";
-constexpr double kDefaultTextFrameWidth = 260.0;
-constexpr double kDefaultTextFrameHeight = 120.0;
-
-auto parseEncodedParams(const QString& encodedParams) -> boost::json::object
-{
-    if (encodedParams.isEmpty()) {
-        return {};
-    }
-
-    boost::system::error_code ec;
-    const auto parsed = boost::json::parse(encodedParams.toStdString(), ec);
-    if (ec || !parsed.is_object()) {
-        return {};
-    }
-
-    return parsed.as_object();
-}
-
-auto defaultTextFrameParams() -> boost::json::object
-{
-    return boost::json::object{
-        {"text", "Text frame"},
-        {"text_color", "#202020"},
-        {"line_color", "#444444"},
-        {"fill_color", "#fff4cc"},
-        {"font_family", "Sans Serif"},
-        {"font_size", 12},
-        {"width", kDefaultTextFrameWidth},
-        {"height", kDefaultTextFrameHeight},
-    };
-}
-
-auto mergedTextFrameParams(const boost::json::object& custom) -> boost::json::object
-{
-    auto merged = defaultTextFrameParams();
-    for (const auto& [key, value] : custom) {
-        merged[key] = value;
-    }
-    return merged;
-}
 
 auto themedToolbarSvgIcon(const QString& resourcePath, const QColor& color) -> QIcon
 {
@@ -169,92 +132,24 @@ auto themedToolbarSvgIcon(const QString& resourcePath, const QColor& color) -> Q
     return themed.isNull() ? source : themed;
 }
 
-auto applyTextFrameVisuals(QSchematic::Items::Node& node, const boost::json::object& rawParams) -> boost::json::object
-{
-    auto params = mergedTextFrameParams(rawParams);
-    const auto* widthValue = json_utils::findObjectValue(params, "width");
-    const auto* heightValue = json_utils::findObjectValue(params, "height");
-    const double width = std::max(80.0, json_utils::numberValue(widthValue ? *widthValue : boost::json::value{}, kDefaultTextFrameWidth));
-    const double height = std::max(50.0, json_utils::numberValue(heightValue ? *heightValue : boost::json::value{}, kDefaultTextFrameHeight));
-    params["width"] = width;
-    params["height"] = height;
-
-    const auto text = QString::fromStdString(json_utils::stringValue(params, "text", "Text frame"));
-    const auto lineColor = QColor(QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444")));
-    const auto fillColor = QColor(QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc")));
-    const auto textColor = QColor(QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020")));
-    const auto fontFamily = QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif"));
-    const int fontSize = std::max(6, json_utils::intValue(params, "font_size", 12));
-    params["font_size"] = fontSize;
-
-    node.setSize(width, height);
-
-    QGraphicsRectItem* frameRect = nullptr;
-    QGraphicsTextItem* frameText = nullptr;
-    for (auto* child : node.childItems()) {
-        if (!frameRect) {
-            frameRect = dynamic_cast<QGraphicsRectItem*>(child);
-        }
-        if (!frameText) {
-            frameText = dynamic_cast<QGraphicsTextItem*>(child);
-        }
-    }
-
-    if (!frameRect) {
-        frameRect = new QGraphicsRectItem(&node);
-    }
-    frameRect->setRect(0.0, 0.0, width, height);
-    frameRect->setPen(QPen(lineColor, 1.4));
-    frameRect->setBrush(fillColor);
-
-    if (!frameText) {
-        frameText = new QGraphicsTextItem(&node);
-    }
-    frameText->setPlainText(text);
-    frameText->setDefaultTextColor(textColor);
-    QFont font(fontFamily);
-    font.setPointSize(fontSize);
-    frameText->setFont(font);
-    frameText->setTextWidth(width - 20.0);
-    frameText->setPos(10.0, 8.0);
-
-    node.setData(diagram::kNodeTypeRole, QStringLiteral("TextFrame"));
-    node.setData(diagram::kNodeParamsRole, QString::fromStdString(boost::json::serialize(params)));
-    node.setData(diagram::kTextFrameTextRole, text);
-    node.setData(diagram::kTextFrameTextColorRole, textColor.name(QColor::HexRgb));
-    node.setData(diagram::kTextFrameLineColorRole, lineColor.name(QColor::HexRgb));
-    node.setData(diagram::kTextFrameFillColorRole, fillColor.name(QColor::HexRgb));
-    node.setData(diagram::kTextFrameFontFamilyRole, fontFamily);
-    node.setData(diagram::kTextFrameFontSizeRole, fontSize);
-    return params;
-}
-
-auto selectedTextFrameNode(QSchematic::Scene* scene) -> std::shared_ptr<QSchematic::Items::Node>
+auto selectedTextFrame(diagram::DiagramScene* scene) -> std::shared_ptr<diagram::TextFrameNode>
 {
     if (!scene) {
         return {};
     }
-
-    for (const auto& node : scene->items<QSchematic::Items::Node>()) {
-        if (!node || !node->isSelected()) {
-            continue;
-        }
-        if (node->data(diagram::kNodeTypeRole).toString() == QStringLiteral("TextFrame")) {
-            return node;
+    for (const auto& frame : scene->textFrames()) {
+        if (frame->isSelected()) {
+            return frame;
         }
     }
-
     return {};
 }
 
-auto nextTextFrameId(const QSchematic::Scene& scene) -> QString
+auto nextTextFrameId(const diagram::DiagramScene& scene) -> std::string
 {
     int maxSuffix = 0;
-    for (const auto& node : scene.items<QSchematic::Items::Node>()) {
-        if (!node) {
-            continue;
-        }
-        const auto id = node->data(diagram::kNodeIdRole).toString();
+    for (const auto& frame : scene.textFrames()) {
+        const auto id = QString::fromStdString(frame->id());
         if (!id.startsWith(QStringLiteral("text_frame_"))) {
             continue;
         }
@@ -264,7 +159,7 @@ auto nextTextFrameId(const QSchematic::Scene& scene) -> QString
             maxSuffix = std::max(maxSuffix, suffix);
         }
     }
-    return QStringLiteral("text_frame_%1").arg(maxSuffix + 1);
+    return "text_frame_" + std::to_string(maxSuffix + 1);
 }
 
 auto developmentPluginCandidates() -> std::vector<std::string>
@@ -380,37 +275,14 @@ auto elementLibraryForType(const QString& type) -> QString
     return QStringLiteral("s7core (.so at runtime link: libs7core)");
 }
 
-auto nextElementId(boost::json::value& runtimeSchema, const QString& elementType) -> QString
+auto nextElementId(const diagram::DiagramScene& scene, const QString& elementType) -> QString
 {
     const QString base = elementType.toLower() + QStringLiteral("_");
     int suffix = 1;
-
-    auto hasId = [&runtimeSchema](const QString& probeId) {
-        if (!runtimeSchema.is_object()) {
-            return false;
-        }
-        auto& root = runtimeSchema.as_object();
-        const auto elementsIt = root.find("elements");
-        if (elementsIt == root.end() || !elementsIt->value().is_array()) {
-            return false;
-        }
-        for (const auto& item : elementsIt->value().as_array()) {
-            if (!item.is_object()) {
-                continue;
-            }
-            const auto id = json_utils::stringValue(item.as_object(), "id");
-            if (QString::fromUtf8(id.c_str()) == probeId) {
-                return true;
-            }
-        }
-        return false;
-    };
-
     QString candidate;
     do {
         candidate = base + QString::number(suffix++);
-    } while (hasId(candidate));
-
+    } while (scene.elementNode(candidate.toStdString()));
     return candidate;
 }
 
@@ -454,75 +326,6 @@ auto parseEditableParams(const QString& text, boost::json::object& paramsOut, QS
 
     paramsOut = parsed.as_object();
     return true;
-}
-
-auto findElementParamsObject(boost::json::value& runtimeSchema, const QString& elementId) -> boost::json::object*
-{
-    if (!runtimeSchema.is_object()) {
-        return nullptr;
-    }
-
-    auto& root = runtimeSchema.as_object();
-    const auto elementsIt = root.find("elements");
-    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
-        return nullptr;
-    }
-
-    auto& elements = elementsIt->value().as_array();
-    for (auto& elementValue : elements) {
-        if (!elementValue.is_object()) {
-            continue;
-        }
-
-        auto& elementObject = elementValue.as_object();
-        const auto id = json_utils::stringValue(elementObject, "id");
-        if (QString::fromUtf8(id.c_str()) != elementId) {
-            continue;
-        }
-
-        if (const auto it = elementObject.find("params"); it != elementObject.end() && it->value().is_object()) {
-            return &it->value().as_object();
-        }
-
-        elementObject["params"] = boost::json::object{};
-        return &elementObject["params"].as_object();
-    }
-
-    return nullptr;
-}
-
-auto findElementParamsObjectView(const boost::json::value& runtimeSchema, const QString& elementId) -> const boost::json::object*
-{
-    if (!runtimeSchema.is_object()) {
-        return nullptr;
-    }
-
-    const auto& root = runtimeSchema.as_object();
-    const auto elementsIt = root.find("elements");
-    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
-        return nullptr;
-    }
-
-    const auto& elements = elementsIt->value().as_array();
-    for (const auto& elementValue : elements) {
-        if (!elementValue.is_object()) {
-            continue;
-        }
-
-        const auto& elementObject = elementValue.as_object();
-        const auto id = json_utils::stringValue(elementObject, "id");
-        if (QString::fromUtf8(id.c_str()) != elementId) {
-            continue;
-        }
-
-        if (const auto it = elementObject.find("params"); it != elementObject.end() && it->value().is_object()) {
-            return &it->value().as_object();
-        }
-
-        return nullptr;
-    }
-
-    return nullptr;
 }
 
 auto withDefaultedParams(const s7::ElementMetadata& metadata, const boost::json::object& params) -> boost::json::object
@@ -670,7 +473,8 @@ void MainWindow::buildActions()
     modeWireAction_ = new QAction("Wire Mode", this);
     modeWireAction_->setCheckable(true);
     modeWireAction_->setText(QStringLiteral("Wire Draw"));
-    modeWireAction_->setToolTip("Toggle wire drawing mode");
+    modeWireAction_->setToolTip("Draw wires click by click: a port or wire, bends, then a port or wire (Esc cancels). "
+                                "In normal mode, drag from a port to connect, or Alt+drag from a wire.");
     modeWireAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
     modeWireAction_->setIcon(themedToolbarSvgIcon(QStringLiteral(":/icons/tabler/vector-bezier-2.svg"), drawIconColor));
 
@@ -755,7 +559,7 @@ void MainWindow::buildActions()
     connect(fitPageAction_, &QAction::triggered, this, &MainWindow::fitDiagramToView);
     connect(showRuntimePanelAction_, &QAction::toggled, this, &MainWindow::setRuntimePanelVisible);
     connect(modeWireAction_, &QAction::toggled, this, [this](const bool checked) {
-        setDiagramMode(checked ? QSchematic::Scene::WireMode : QSchematic::Scene::NormalMode);
+        setDiagramMode(checked ? diagram::DiagramScene::DrawMode : QSchematic::Scene::NormalMode);
     });
     connect(addTextFrameAction_, &QAction::triggered, this, &MainWindow::addTextFrame);
     connect(textColorAction_, &QAction::triggered, this, &MainWindow::setSelectedTextFrameTextColor);
@@ -837,6 +641,18 @@ void MainWindow::buildUi()
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        auto* stack = diagramEditor_->scene()->undoStack();
+        undoAction_ = stack->createUndoAction(this, QStringLiteral("&Undo"));
+        undoAction_->setShortcut(QKeySequence::Undo);
+        redoAction_ = stack->createRedoAction(this, QStringLiteral("&Redo"));
+        redoAction_->setShortcut(QKeySequence::Redo);
+        auto* editMenu = new QMenu(QStringLiteral("&Edit"), this);
+        editMenu->addAction(undoAction_);
+        editMenu->addAction(redoAction_);
+        const auto menus = menuBar()->actions();
+        menuBar()->insertMenu(menus.size() > 1 ? menus.at(1) : nullptr, editMenu);
+    }
     dtSpin_ = widgets.dtSpin;
     hoursSpin_ = widgets.hoursSpin;
     minutesSpin_ = widgets.minutesSpin;
@@ -907,51 +723,24 @@ void MainWindow::buildUi()
 
 void MainWindow::onElementRequested(const QString& elementType, const QString& /*displayName*/)
 {
-    if (elementType.isEmpty() || !diagramEditor_ || !diagramEditor_->scene()) {
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (elementType.isEmpty() || !scene) {
         return;
     }
-    auto* scene = diagramEditor_->scene();
-    // Start from the scene as it is now (wires drawn since the last load included).
-    auto document = syncSchemaFromScene();
-    auto& root = runtimeSchema_.as_object();
-
-    const QString elementId = nextElementId(runtimeSchema_, elementType);
     const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
-    const auto* schemaDefinition = descriptor && descriptor->metadata().schema_definition.has_value()
-        ? &descriptor->metadata().schema_definition.value()
-        : nullptr;
-
-    boost::json::object elementObj;
-    elementObj["id"] = elementId.toStdString();
-    elementObj["type"] = elementType.toStdString();
-    elementObj["params"] = boost::json::object{};
-    if (schemaDefinition) {
-        elementObj["schema"] = *schemaDefinition;
-    }
-    root["elements"].as_array().push_back(elementObj);
-    document.runtimeSchema = runtimeSchema_;
-
-    if (!document.diagram.contains("nodes") || !document.diagram.at("nodes").is_array()) {
-        document.diagram["nodes"] = boost::json::array{};
-    }
-    const auto position = suggestedNewNodePosition(*scene);
-    boost::json::object nodeJson;
-    nodeJson["id"] = elementId.toStdString();
-    nodeJson["type"] = elementType.toStdString();
-    nodeJson["name"] = elementId.toStdString();
-    nodeJson["position"] = boost::json::object{{"x", position.x()}, {"y", position.y()}};
-    if (schemaDefinition) {
-        nodeJson["schema"] = *schemaDefinition;
+    diagram::ElementNode::Element element;
+    element.id = nextElementId(*scene, elementType).toStdString();
+    element.type = elementType.toStdString();
+    if (descriptor && descriptor->metadata().schema_definition.has_value()) {
+        element.schema = *descriptor->metadata().schema_definition;
     }
     if (elementType == QStringLiteral("Scope")) {
-        nodeJson["channel_count"] = 1;
+        element.params["channel_count"] = 1;
     }
-    document.diagram["nodes"].as_array().push_back(nodeJson);
-
-    diagramEditor_->loadDocument(document);
-    syncPageActions();
+    scene->addElement(element, suggestedNewNodePosition(*scene));
+    setDiagramMode(QSchematic::Scene::NormalMode);
     refreshPlacementLabels();
-    appendLog(QStringLiteral("[studio] added element %1 (%2)").arg(elementId, elementType));
+    appendLog(QStringLiteral("[studio] added element %1 (%2)").arg(QString::fromStdString(element.id), elementType));
 }
 
 void MainWindow::onHeadlessNodeActivated(const QString& endpoint,
@@ -1006,35 +795,36 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
                                             const QString& elementType,
                                             const int channelCount)
 {
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (!scene) {
+        return;
+    }
     if (elementType == QStringLiteral("TextFrame")) {
-        if (!diagramEditor_ || !diagramEditor_->scene()) {
-            return;
-        }
-
-        for (const auto& node : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
-            if (!node || node->data(diagram::kNodeIdRole).toString() != elementId) {
+        for (const auto& frame : scene->textFrames()) {
+            if (QString::fromStdString(frame->id()) != elementId) {
                 continue;
             }
-
-            auto params = parseEncodedParams(node->data(diagram::kNodeParamsRole).toString());
-            const auto defaults = mergedTextFrameParams(params);
+            auto params = frame->params();
             bool accepted = false;
             const QString editedText = QInputDialog::getMultiLineText(
                 this,
                 QStringLiteral("Edit Text Frame"),
                 QStringLiteral("Text"),
-                QString::fromStdString(json_utils::stringValue(defaults, "text", "Text frame")),
+                QString::fromStdString(json_utils::stringValue(params, "text", "")),
                 &accepted);
             if (!accepted) {
                 return;
             }
-
             params["text"] = editedText.toStdString();
-            applyTextFrameVisuals(*node, params);
+            frame->setParams(params);
             appendLog(QStringLiteral("[studio] updated text frame: %1").arg(elementId));
             syncTextFrameStyleControls();
             return;
         }
+        return;
+    }
+    const auto elementNode = scene->elementNode(elementId.toStdString());
+    if (!elementNode) {
         return;
     }
 
@@ -1065,15 +855,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     form->addRow(QStringLiteral("Description"), descriptionLabel);
 
     // Placement: the runtime node this element runs on when the diagram is deployed.
-    QString currentPlacement;
-    if (diagramEditor_ && diagramEditor_->scene()) {
-        for (const auto& node : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
-            if (node && node->data(diagram::kNodeIdRole).toString() == elementId) {
-                currentPlacement = node->data(diagram::kNodePlacementRole).toString();
-                break;
-            }
-        }
-    }
+    const QString currentPlacement = QString::fromStdString(elementNode->element().placement);
     auto* nodeCombo = new QComboBox(&dialog);
     nodeCombo->addItem(QStringLiteral("(not placed)"), QString());
     if (headlessNodesPanel_) {
@@ -1124,10 +906,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     auto* paramsLabel = new QLabel(QStringLiteral("Parameters (effective JSON object):"), &dialog);
     layout->addWidget(paramsLabel);
 
-    boost::json::object paramsForDialog;
-    if (const auto* schemaParams = findElementParamsObjectView(runtimeSchema_, elementId)) {
-        paramsForDialog = *schemaParams;
-    }
+    boost::json::object paramsForDialog = elementNode->element().params;
     if (descriptor) {
         paramsForDialog = withDefaultedParams(descriptor->metadata(), paramsForDialog);
     }
@@ -1151,60 +930,18 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
             continue;
         }
 
-        const QString encodedParams = QString::fromStdString(boost::json::serialize(paramsObject));
-        if (diagramEditor_ && diagramEditor_->scene()) {
-            for (const auto& nodePtr : diagramEditor_->scene()->items<QSchematic::Items::Node>()) {
-                if (!nodePtr || nodePtr->data(diagram::kNodeIdRole).toString() != elementId) {
-                    continue;
-                }
-
-                nodePtr->setData(diagram::kNodeParamsRole, encodedParams);
-                nodePtr->setData(diagram::kNodePlacementRole, nodeCombo->currentData().toString());
-                if (elementType == QStringLiteral("Scope")) {
-                    const int updatedChannels = std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount));
-                    nodePtr->setData(diagram::kNodeChannelCountRole, updatedChannels);
-                    if (const auto window = scopeWindows_.value(elementId); window && window->channelCount() != updatedChannels) {
-                        window->setChannelCount(updatedChannels);
-                        replayScopeSamples(elementId, *window);
-                    }
-                }
-                break;
+        auto element = elementNode->element();
+        element.params = paramsObject;
+        element.placement = nodeCombo->currentData().toString().toStdString();
+        if (elementType == QStringLiteral("Scope")) {
+            const int updatedChannels = std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount));
+            if (const auto window = scopeWindows_.value(elementId); window && window->channelCount() != updatedChannels) {
+                window->setChannelCount(updatedChannels);
+                replayScopeSamples(elementId, *window);
             }
         }
-
-        if (auto* schemaParams = findElementParamsObject(runtimeSchema_, elementId)) {
-            *schemaParams = paramsObject;
-        }
-        if (runtimeSchema_.is_object()) {
-            if (auto* elements = runtimeSchema_.as_object().if_contains("elements"); elements && elements->is_array()) {
-                for (auto& element : elements->as_array()) {
-                    if (element.is_object() && json_utils::stringValue(element.as_object(), "id", "") == elementId.toStdString()) {
-                        const auto placement = nodeCombo->currentData().toString();
-                        if (placement.isEmpty()) {
-                            element.as_object().erase("node");
-                        } else {
-                            element.as_object()["node"] = placement.toStdString();
-                        }
-                    }
-                }
-            }
-        }
+        scene->changeElement(elementNode, element);
         refreshPlacementLabels();
-
-        if ((elementType == QStringLiteral("Adder") ||
-             elementType == QStringLiteral("Multiply") ||
-             elementType == QStringLiteral("Scope")) && diagramEditor_) {
-            if (diagramEditor_->scene()) {
-                // The scene already carries the new parameters; rebuild it
-                // from itself so its wires stay.
-                diagramEditor_->loadDocument(syncSchemaFromScene());
-                refreshPlacementLabels();
-            } else {
-                diagramEditor_->loadRuntimeSchema(runtimeSchema_);
-            }
-            syncPageActions();
-            syncTextFrameStyleControls();
-        }
 
         appendLog(QStringLiteral("[studio] updated element params: %1").arg(elementId));
         break;
@@ -1323,18 +1060,22 @@ void MainWindow::setDiagramMode(const int mode)
 
 void MainWindow::connectSceneSignals()
 {
-    if (!diagramEditor_ || !diagramEditor_->scene()) {
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (!scene) {
         return;
     }
 
-    connect(diagramEditor_->scene(), &QSchematic::Scene::modeChanged, this, [this](int mode) {
+    connect(scene, &QSchematic::Scene::modeChanged, this, [this](int mode) {
         if (modeWireAction_) {
             const QSignalBlocker blockerWire(modeWireAction_);
-            modeWireAction_->setChecked(mode == QSchematic::Scene::WireMode);
+            modeWireAction_->setChecked(mode == diagram::DiagramScene::DrawMode);
         }
     });
+    connect(scene, &diagram::DiagramScene::statusMessage, this, [this](const QString& message) {
+        statusBar()->showMessage(message, 6000);
+    });
 
-    connect(diagramEditor_->scene(), &QGraphicsScene::selectionChanged,
+    connect(scene, &QGraphicsScene::selectionChanged,
             this, &MainWindow::syncTextFrameStyleControls,
             Qt::UniqueConnection);
 
@@ -1342,10 +1083,10 @@ void MainWindow::connectSceneSignals()
     if (!wireTypeTimer_) {
         wireTypeTimer_ = new QTimer(this);
         wireTypeTimer_->setSingleShot(true);
-        wireTypeTimer_->setInterval(300);
+        wireTypeTimer_->setInterval(150);
         connect(wireTypeTimer_, &QTimer::timeout, this, &MainWindow::refreshWireTypeLabels);
     }
-    connect(diagramEditor_->scene(), &QGraphicsScene::changed, wireTypeTimer_, qOverload<>(&QTimer::start),
+    connect(scene, &diagram::DiagramScene::diagramChanged, wireTypeTimer_, qOverload<>(&QTimer::start),
             Qt::UniqueConnection);
     wireTypeTimer_->start();
 }
@@ -1367,42 +1108,27 @@ void MainWindow::refreshWireTypeLabels()
 
 void MainWindow::addTextFrame()
 {
-    if (!diagramEditor_ || !diagramEditor_->scene()) {
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (!scene) {
         return;
     }
-
-    auto* scene = diagramEditor_->scene();
-    auto node = std::make_shared<QSchematic::Items::Node>();
-    node->setAllowMouseRotate(false);
-    node->setConnectorsMovable(false);
-    node->setPos(suggestedNewNodePosition(*scene));
-
     const auto frameId = nextTextFrameId(*scene);
-    node->setData(diagram::kNodeIdRole, frameId);
-    node->setData(diagram::kNodeTitleRole, QStringLiteral("Text frame"));
-
-    applyTextFrameVisuals(*node, defaultTextFrameParams());
-    scene->addItem(node);
-
-    for (const auto& item : scene->selectedItems()) {
-        if (item) {
-            item->setSelected(false);
-        }
-    }
-    node->setSelected(true);
+    const auto frame = scene->addTextFrame(frameId, diagram::TextFrameNode::defaultParams(), suggestedNewNodePosition(*scene));
+    scene->clearSelection();
+    frame->setSelected(true);
     setDiagramMode(QSchematic::Scene::NormalMode);
     syncTextFrameStyleControls();
-    appendLog(QStringLiteral("[studio] added diagram text frame: %1").arg(frameId));
+    appendLog(QStringLiteral("[studio] added diagram text frame: %1").arg(QString::fromStdString(frameId)));
 }
 
 void MainWindow::setSelectedTextFrameTextColor()
 {
-    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
-    if (!node) {
+    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!frame) {
         return;
     }
 
-    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    auto params = frame->params();
     const auto current = QColor(QString::fromStdString(json_utils::stringValue(params, "text_color", "#202020")));
     const auto selected = QColorDialog::getColor(current, this, QStringLiteral("Select text color"));
     if (!selected.isValid()) {
@@ -1410,18 +1136,18 @@ void MainWindow::setSelectedTextFrameTextColor()
     }
 
     params["text_color"] = selected.name(QColor::HexRgb).toStdString();
-    applyTextFrameVisuals(*node, params);
+    frame->setParams(params);
     syncTextFrameStyleControls();
 }
 
 void MainWindow::setSelectedTextFrameLineColor()
 {
-    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
-    if (!node) {
+    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!frame) {
         return;
     }
 
-    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    auto params = frame->params();
     const auto current = QColor(QString::fromStdString(json_utils::stringValue(params, "line_color", "#444444")));
     const auto selected = QColorDialog::getColor(current, this, QStringLiteral("Select line color"));
     if (!selected.isValid()) {
@@ -1429,18 +1155,18 @@ void MainWindow::setSelectedTextFrameLineColor()
     }
 
     params["line_color"] = selected.name(QColor::HexRgb).toStdString();
-    applyTextFrameVisuals(*node, params);
+    frame->setParams(params);
     syncTextFrameStyleControls();
 }
 
 void MainWindow::setSelectedTextFrameFillColor()
 {
-    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
-    if (!node) {
+    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!frame) {
         return;
     }
 
-    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    auto params = frame->params();
     const auto current = QColor(QString::fromStdString(json_utils::stringValue(params, "fill_color", "#fff4cc")));
     const auto selected = QColorDialog::getColor(current, this, QStringLiteral("Select fill color"));
     if (!selected.isValid()) {
@@ -1448,38 +1174,36 @@ void MainWindow::setSelectedTextFrameFillColor()
     }
 
     params["fill_color"] = selected.name(QColor::HexRgb).toStdString();
-    applyTextFrameVisuals(*node, params);
+    frame->setParams(params);
     syncTextFrameStyleControls();
 }
 
 void MainWindow::setSelectedTextFrameFont(const QFont& font)
 {
-    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
-    if (!node) {
+    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!frame) {
         return;
     }
-
-    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    auto params = frame->params();
     params["font_family"] = font.family().toStdString();
-    applyTextFrameVisuals(*node, params);
+    frame->setParams(params);
 }
 
 void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
 {
-    auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
-    if (!node) {
+    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    if (!frame) {
         return;
     }
-
-    auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    auto params = frame->params();
     params["font_size"] = std::max(6, pointSize);
-    applyTextFrameVisuals(*node, params);
+    frame->setParams(params);
 }
 
 void MainWindow::syncTextFrameStyleControls()
 {
-    const auto node = selectedTextFrameNode(diagramEditor_ ? diagramEditor_->scene() : nullptr);
-    const bool enabled = static_cast<bool>(node);
+    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const bool enabled = static_cast<bool>(frame);
 
     if (textColorAction_) textColorAction_->setEnabled(enabled);
     if (lineColorAction_) lineColorAction_->setEnabled(enabled);
@@ -1491,7 +1215,7 @@ void MainWindow::syncTextFrameStyleControls()
         return;
     }
 
-    const auto params = mergedTextFrameParams(parseEncodedParams(node->data(diagram::kNodeParamsRole).toString()));
+    const auto& params = frame->params();
     if (textFrameFontCombo_) {
         const QSignalBlocker blocker(textFrameFontCombo_);
         textFrameFontCombo_->setCurrentFont(QFont(QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif"))));
@@ -1757,6 +1481,10 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
 
 void MainWindow::launchRunWithCurrentConfiguration()
 {
+    if (const auto problem = diagramProblem(); !problem.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("Run"), QStringLiteral("The diagram has a broken wire: %1").arg(problem));
+        return;
+    }
     if (clearScopesBeforeRun_) {
         clearScopeSamples();
     }
@@ -1785,17 +1513,10 @@ void MainWindow::applyDiscretizationFrequency(const double frequencyHz)
     }
 
     if (diagramEditor_ && diagramEditor_->scene()) {
-        auto document = syncSchemaFromScene();
-        updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
-        document.runtimeSchema = runtimeSchema_;
-        diagramEditor_->loadDocument(document);
-        syncPageActions();
-        syncTextFrameStyleControls();
-        refreshPlacementLabels();
-        return;
+        static_cast<void>(syncSchemaFromScene());
     }
-
     updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
+    applySchemaParamsToScene();
 }
 
 auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
@@ -2302,6 +2023,43 @@ auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
     return document;
 }
 
+void MainWindow::applySchemaParamsToScene()
+{
+    if (!diagramEditor_ || !diagramEditor_->scene() || !runtimeSchema_.is_object()) {
+        return;
+    }
+    const auto* elements = runtimeSchema_.as_object().if_contains("elements");
+    if (!elements || !elements->is_array()) {
+        return;
+    }
+    for (const auto& value : elements->as_array()) {
+        if (!value.is_object()) {
+            continue;
+        }
+        const auto& object = value.as_object();
+        const auto node = diagramEditor_->scene()->elementNode(json_utils::stringValue(object, "id"));
+        const auto* params = object.if_contains("params");
+        if (node && params && params->is_object() && node->element().params != params->as_object()) {
+            auto element = node->element();
+            element.params = params->as_object();
+            node->setElement(element);
+        }
+    }
+}
+
+auto MainWindow::diagramProblem() const -> QString
+{
+    if (!diagramEditor_ || !diagramEditor_->scene()) {
+        return {};
+    }
+    for (const auto& wire : diagramEditor_->scene()->signalWires()) {
+        if (!wire->problem().isEmpty()) {
+            return wire->problem();
+        }
+    }
+    return {};
+}
+
 auto MainWindow::currentDocument() const -> boost::json::value
 {
     auto document = serializeScene();
@@ -2360,6 +2118,10 @@ auto MainWindow::startNetworkTask(std::function<std::function<void()>()> work) -
 void MainWindow::deployToNodes()
 {
     if (!diagramEditor_ || !diagramEditor_->scene() || !headlessNodesPanel_) {
+        return;
+    }
+    if (const auto problem = diagramProblem(); !problem.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("Deploy"), QStringLiteral("The diagram has a broken wire: %1").arg(problem));
         return;
     }
     QMap<QString, diagram::NodeAddress> known;
@@ -2478,7 +2240,11 @@ void MainWindow::openDeployedDiagram()
                 return;
             }
             const auto revision = response.at("revision").to_number<std::uint64_t>();
-            loadDiagramJson(response.at("diagram"), QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision));
+            try {
+                loadDiagramJson(response.at("diagram"), QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision));
+            } catch (const std::exception& ex) {
+                QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QString::fromUtf8(ex.what()));
+            }
             currentDiagramPath_.clear();
         };
     });

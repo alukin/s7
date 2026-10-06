@@ -5,6 +5,9 @@
 
 namespace s7studio::diagram {
 
+// Version of the `diagram` layout this Studio reads and writes (diagram_format.hpp).
+constexpr int kDiagramVersion = 2;
+
 // Page layout for diagram printing/display
 enum class PageOrientation {
     Landscape,
@@ -24,9 +27,10 @@ struct DiagramPageLayout {
 struct DiagramDocument {
     QString id = QStringLiteral("s7studio_diagram");
     double dt = 0.001;                // Time step from runtime schema
+    int diagramVersion = 0;           // `diagram_version` of the file, 0 if absent
     DiagramPageLayout pageLayout;
     boost::json::value runtimeSchema;  // The embedded runtime schema (elements + connections)
-    boost::json::object diagram;       // Visual layout: nodes (positions, names), wires (routing points)
+    boost::json::object diagram;       // Layout: element positions, wires, text frames (empty: none)
     // Deployment (s7/diagram_deployment.hpp): the nodes elements are placed on
     // and the streams between them, kept so redeployments continue them.
     boost::json::array runtimeNodes;

@@ -138,6 +138,10 @@ protected:
     [[nodiscard]] auto syncSchemaFromScene() -> diagram::DiagramDocument;
     [[nodiscard]] auto serializeScene() const -> diagram::DiagramDocument;
     void refreshPlacementLabels();
+    // Copies element params of runtimeSchema_ (run configuration) onto the scene's elements.
+    void applySchemaParamsToScene();
+    // Why the diagram cannot run or deploy (a wire that connects nothing); empty if it can.
+    [[nodiscard]] auto diagramProblem() const -> QString;
     // Runs work off the UI thread (one at a time); `done` runs on the UI thread.
     auto startNetworkTask(std::function<std::function<void()>()> work) -> bool;
 
@@ -186,6 +190,8 @@ private:
     QAction* textColorAction_ = nullptr;
     QAction* lineColorAction_ = nullptr;
     QAction* fillColorAction_ = nullptr;
+    QAction* undoAction_ = nullptr;
+    QAction* redoAction_ = nullptr;
 
     diagram::DiagramEditor* diagramEditor_ = nullptr;
     QDoubleSpinBox* dtSpin_ = nullptr;

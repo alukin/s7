@@ -1,11 +1,9 @@
 #include "diagram_editor.hpp"
 
 #include "diagram_ruler.hpp"
-#include "diagram_node_roles.hpp"
+#include "diagram/diagram_scene.hpp"
 #include "scene_serializer.hpp"
 
-#include <qschematic/items/node.hpp>
-#include <qschematic/scene.hpp>
 #include <qschematic/view.hpp>
 
 #include <QEvent>
@@ -13,6 +11,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QPen>
@@ -36,6 +35,33 @@ class DiagramView final : public QSchematic::View
 public:
     using QSchematic::View::View;
     using QAbstractScrollArea::setViewportMargins;
+
+    void setDiagramScene(DiagramScene* scene)
+    {
+        diagramScene_ = scene;
+        setScene(scene);
+    }
+
+protected:
+    // The diagram scene's keys first; QSchematic's own Wire mode (Ctrl+W)
+    // becomes the scene's DrawMode.
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (diagramScene_) {
+            if (event->modifiers().testFlag(Qt::ControlModifier) && event->key() == Qt::Key_W) {
+                diagramScene_->setMode(diagramScene_->mode() == DiagramScene::DrawMode ? QSchematic::Scene::NormalMode
+                                                                                       : DiagramScene::DrawMode);
+                return;
+            }
+            if (diagramScene_->handleKey(event->key(), event->modifiers())) {
+                return;
+            }
+        }
+        QSchematic::View::keyPressEvent(event);
+    }
+
+private:
+    DiagramScene* diagramScene_ = nullptr;
 };
 
 constexpr double kSceneUnitsPerMm = 96.0 / 25.4;
@@ -66,7 +92,7 @@ auto orientedPageRect(const DiagramPageLayout& pageLayout) -> QRectF
 
 DiagramEditor::DiagramEditor(QWidget* parent)
     : QWidget(parent),
-      _scene(std::make_unique<QSchematic::Scene>(this))
+      _scene(std::make_unique<DiagramScene>(this))
 {
 
     auto layout = new QVBoxLayout(this);
@@ -76,7 +102,7 @@ DiagramEditor::DiagramEditor(QWidget* parent)
     // Create editor view
     auto* diagramView = new DiagramView(this);
     _view = diagramView;
-    _view->setScene(_scene.get());
+    diagramView->setDiagramScene(_scene.get());
     _view->setRenderHint(QPainter::Antialiasing);
     _view->setDragMode(QGraphicsView::RubberBandDrag);
     _view->setBackgroundBrush(QColor(0xd8, 0xd8, 0xd8));
@@ -114,16 +140,20 @@ DiagramEditor::~DiagramEditor() = default;
 
 void DiagramEditor::clearDiagram()
 {
-    _scene->clear();
-    pageFrame_ = nullptr;
+    pageFrame_ = nullptr; // deleted with the scene's content
+    _scene->clearDiagram();
     rebuildPageFrame();
 }
 
 void DiagramEditor::loadDocument(const DiagramDocument& document)
 {
-    SceneSerializer serializer;
-    serializer.deserialize(document, *_scene);
-    pageFrame_ = nullptr;
+    pageFrame_ = nullptr; // deleted with the scene's content
+    try {
+        SceneSerializer{}.deserialize(document, *_scene);
+    } catch (...) {
+        clearDiagram();
+        throw;
+    }
     setPageLayout(document.pageLayout);
     scheduleFitToContents();
 }
@@ -229,21 +259,22 @@ bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
         if (const auto* mouseEvent = dynamic_cast<QMouseEvent*>(event)) {
             const QPoint viewPos = mouseEvent->position().toPoint();
             const QPointF scenePos = _view->mapToScene(viewPos);
-            QGraphicsItem* item = _scene ? _scene->itemAt(scenePos, QTransform()) : nullptr;
+            QGraphicsItem* item = _scene && _scene->mode() == QSchematic::Scene::NormalMode ? _scene->itemAt(scenePos, QTransform()) : nullptr;
 
             while (item) {
-                auto* node = dynamic_cast<QSchematic::Items::Node*>(item);
-                if (node) {
-                    const QString type = node->data(kNodeTypeRole).toString();
-                    const QString elementId = node->data(kNodeIdRole).toString();
-                    const int channelCount = std::max(1, node->data(kNodeChannelCountRole).toInt());
-                    if (!elementId.isEmpty()) {
-                        if (type == QStringLiteral("Scope")) {
-                            emit scopeNodeDoubleClicked(elementId, channelCount);
-                        } else {
-                            emit elementNodeDoubleClicked(elementId, type, channelCount);
-                        }
+                if (const auto* node = dynamic_cast<ElementNode*>(item)) {
+                    const QString elementId = QString::fromStdString(node->id());
+                    const QString type = QString::fromStdString(node->element().type);
+                    const int channelCount = static_cast<int>(std::max<std::size_t>(1, node->inputs().size()));
+                    if (type == QStringLiteral("Scope")) {
+                        emit scopeNodeDoubleClicked(elementId, channelCount);
+                    } else {
+                        emit elementNodeDoubleClicked(elementId, type, channelCount);
                     }
+                    break;
+                }
+                if (const auto* frame = dynamic_cast<TextFrameNode*>(item)) {
+                    emit elementNodeDoubleClicked(QString::fromStdString(frame->id()), QStringLiteral("TextFrame"), 1);
                     break;
                 }
                 item = item->parentItem();
@@ -354,11 +385,11 @@ void DiagramEditor::zoomBy(const double factor)
     _view->setZoomValue(nextZoom);
 }
 
-QSchematic::Scene* DiagramEditor::scene() {
+DiagramScene* DiagramEditor::scene() {
     return _scene.get();
 }
 
-const QSchematic::Scene* DiagramEditor::scene() const {
+const DiagramScene* DiagramEditor::scene() const {
     return _scene.get();
 }
 

@@ -6,15 +6,10 @@
 #include "diagram_editor.hpp"
 #include "deployment_support.hpp"
 #include "scene_serializer.hpp"
-#include "diagram_node_roles.hpp"
-#include "runtime_schema_extractor.hpp"
+#include "diagram/diagram_scene.hpp"
+#include "diagram/net_model.hpp"
 
-#include <qschematic/items/node.hpp>
-#include <qschematic/items/wire.hpp>
-#include <qschematic/wire_system/manager.hpp>
-#include <qschematic/wire_system/net.hpp>
-#include <qschematic/scene.hpp>
-
+#include <map>
 #include <set>
 #include <unordered_map>
 #include "wire_type_labels.hpp"
@@ -25,7 +20,6 @@
 #include <s7/transport.hpp>
 
 #include <QApplication>
-#include <qschematic/scene.hpp>
 #include <QImage>
 #include <QPainter>
 
@@ -280,30 +274,54 @@ int runSmoke()
     }
 }
 
-// --wire-types <diagram or schema JSON>: lays the diagram out in an (offscreen)
-// editor, resolves its types like the wire labels do, and prints one
-// "element:port=TYPE" line per wire, plus "error: ..." on a type error.
-int runWireTypes(int argc, char** argv)
+auto readJson(const char* path) -> boost::json::value
 {
-    QApplication app(argc, argv);
+    std::ifstream in(path);
+    if (!in) {
+        throw std::runtime_error(std::string("cannot read ") + path);
+    }
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return boost::json::parse(text);
+}
+
+void registerElements()
+{
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     s7::register_net_elements(registry);
+}
 
-    std::ifstream in(argv[2]);
-    if (!in) {
-        std::cerr << "cannot read " << argv[2] << '\n';
-        return 2;
-    }
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    const auto json = boost::json::parse(text);
-
-    s7studio::diagram::DiagramEditor editor;
-    if (json.as_object().contains("diagram")) {
+// Loads a diagram document, or lays a plain runtime schema out.
+void loadInto(s7studio::diagram::DiagramEditor& editor, const boost::json::value& json)
+{
+    if (json.as_object().contains("diagram") || json.as_object().contains("document_kind")) {
         editor.loadDocument(s7studio::diagram::DiagramDocument::fromJson(json));
     } else {
         editor.loadRuntimeSchema(json);
     }
+}
+
+void renderScene(QGraphicsScene& scene, const QString& path)
+{
+    const auto bounds = scene.itemsBoundingRect().adjusted(-20, -20, 20, 20);
+    QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
+    image.fill(Qt::white);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing);
+    scene.render(&painter, QRectF(), bounds);
+    painter.end();
+    image.save(path);
+}
+
+// --wire-types <diagram or schema JSON>: lays the diagram out in an (offscreen)
+// editor, resolves its types like the wire labels do, and prints one
+// "element:port=TYPE" line per connection, plus "error: ..." on a type error.
+int runWireTypes(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    registerElements();
+    s7studio::diagram::DiagramEditor editor;
+    loadInto(editor, readJson(argv[2]));
     QString error;
     for (const auto& label : s7studio::diagram::updateWireTypeLabels(*editor.scene(), &error)) {
         std::cout << label.element.toStdString() << ':' << label.port << '=' << label.type.toStdString() << '\n';
@@ -313,19 +331,46 @@ int runWireTypes(int argc, char** argv)
     }
     // Optional picture of the labelled diagram, for checking the rendering.
     if (const char* png = std::getenv("S7_WIRE_TYPES_PNG")) {
-        auto* scene = editor.scene();
-        const auto bounds = scene->itemsBoundingRect().adjusted(-20, -20, 20, 20);
-        QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
-        image.fill(Qt::white);
-        QPainter painter(&image);
-        painter.setRenderHint(QPainter::Antialiasing);
-        scene->render(&painter, QRectF(), bounds);
-        painter.end();
-        image.save(QString::fromLocal8Bit(png));
+        renderScene(*editor.scene(), QString::fromLocal8Bit(png));
     }
     return 0;
 }
 
+// --normalize <in> <out>: loads a diagram (or lays a schema out) and writes
+// it as Studio saves it (format version 2).
+int runNormalize(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    registerElements();
+    const auto json = readJson(argv[2]);
+    s7studio::diagram::DiagramEditor editor;
+    loadInto(editor, json);
+    const auto loaded = s7studio::diagram::DiagramDocument::fromJson(json);
+    s7studio::diagram::SerializationOptions options;
+    options.schemaName = loaded.runtimeSchema.is_object() && loaded.runtimeSchema.as_object().contains("name")
+        ? QString::fromStdString(std::string(loaded.runtimeSchema.as_object().at("name").as_string()))
+        : loaded.id;
+    options.dt = loaded.dt;
+    options.sheetOrientation = loaded.pageLayout.orientation;
+    options.sheetWidthMm = loaded.pageLayout.widthMm;
+    options.sheetHeightMm = loaded.pageLayout.heightMm;
+    auto document = s7studio::diagram::SceneSerializer{}.serialize(*editor.scene(), options);
+    document.id = loaded.id;
+    document.runtimeNodes = loaded.runtimeNodes;
+    document.streams = loaded.streams;
+    // Root keys of the schema other than its elements and connections stay.
+    if (loaded.runtimeSchema.is_object()) {
+        auto schema = loaded.runtimeSchema.as_object();
+        schema["elements"] = document.runtimeSchema.as_object().at("elements");
+        schema["connections"] = document.runtimeSchema.as_object().at("connections");
+        document.runtimeSchema = std::move(schema);
+    }
+    std::ofstream(argv[3]) << boost::json::serialize(document.toJson()) << '\n';
+    if (const char* png = std::getenv("S7_NORMALIZE_PNG")) {
+        renderScene(*editor.scene(), QString::fromLocal8Bit(png));
+    }
+    return 0;
+}
 
 // --deployment-diagram <diagram> <out>: loads the diagram into an (offscreen)
 // editor, serializes it back as Studio saves it, assigns its streams as
@@ -334,17 +379,8 @@ int runWireTypes(int argc, char** argv)
 int runDeploymentDiagram(int argc, char** argv)
 {
     QApplication app(argc, argv);
-    auto& registry = s7::ElementRegistry::instance();
-    s7::register_builtin_elements(registry);
-    s7::register_net_elements(registry);
-
-    std::ifstream in(argv[2]);
-    if (!in) {
-        std::cerr << "cannot read " << argv[2] << '\n';
-        return 2;
-    }
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    const auto loaded = s7studio::diagram::DiagramDocument::fromJson(boost::json::parse(text));
+    registerElements();
+    const auto loaded = s7studio::diagram::DiagramDocument::fromJson(readJson(argv[2]));
 
     s7studio::diagram::DiagramEditor editor;
     editor.loadDocument(loaded);
@@ -362,15 +398,7 @@ int runDeploymentDiagram(int argc, char** argv)
             names[QString::fromStdString(node.node_uuid)] = QString::fromStdString(node.name);
         }
         s7studio::diagram::updatePlacementLabels(*editor.scene(), names);
-        auto* scene = editor.scene();
-        const auto bounds = scene->itemsBoundingRect().adjusted(-20, -20, 20, 20);
-        QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
-        image.fill(Qt::white);
-        QPainter painter(&image);
-        painter.setRenderHint(QPainter::Antialiasing);
-        scene->render(&painter, QRectF(), bounds);
-        painter.end();
-        image.save(QString::fromLocal8Bit(png));
+        renderScene(*editor.scene(), QString::fromLocal8Bit(png));
     }
     const auto errors = s7::deployment::assign_streams(diagram, s7studio::diagram::studioOutputTypes(diagram));
     for (const auto& error : errors) {
@@ -380,21 +408,36 @@ int runDeploymentDiagram(int argc, char** argv)
     return errors.empty() ? 0 : 1;
 }
 
-// --edit-check <diagram>: the scene is the source of truth. Loads the diagram
-// into the editor of a main window whose stored schema does not know it (as
-// after drawing wires), adds a wire that connects nothing, adds an element
-// through the Element Library slot, and checks that every connection
-// survives, then that a save/reload round trip keeps connections and routes.
+auto connectionSet(const s7studio::diagram::DiagramScene& scene) -> std::set<std::string>
+{
+    std::set<std::string> result;
+    for (const auto& connection : s7studio::diagram::NetModel(scene).connections()) {
+        result.insert(connection.from.element + ":" + std::to_string(connection.from.port) + "->" + connection.to.element + ":" +
+                      std::to_string(connection.to.port));
+    }
+    return result;
+}
+
+auto routesOf(const s7studio::diagram::DiagramScene& scene) -> std::map<std::string, std::string>
+{
+    std::map<std::string, std::string> routes;
+    for (const auto& connection : s7studio::diagram::NetModel(scene).connections()) {
+        std::string text;
+        for (const auto& point : connection.wire->pointsAbsolute()) {
+            text += "(" + std::to_string(std::lround(point.x())) + "," + std::to_string(std::lround(point.y())) + ")";
+        }
+        routes[connection.to.element + ":" + std::to_string(connection.to.port)] = text;
+    }
+    return routes;
+}
+
+// --edit-check <diagram>: adds an element through the Element Library slot of
+// a main window and checks that every connection and route stays, then that
+// a save/reload round trip keeps connections and routes.
 int runEditCheck(int argc, char** argv)
 {
     QApplication app(argc, argv);
-    std::ifstream in(argv[2]);
-    if (!in) {
-        std::cerr << "cannot read " << argv[2] << '\n';
-        return 2;
-    }
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    const auto document = s7studio::diagram::DiagramDocument::fromJson(boost::json::parse(text));
+    const auto document = s7studio::diagram::DiagramDocument::fromJson(readJson(argv[2]));
 
     s7studio::MainWindow window;
     auto* editor = window.findChild<s7studio::diagram::DiagramEditor*>();
@@ -403,141 +446,141 @@ int runEditCheck(int argc, char** argv)
         return 2;
     }
     editor->loadDocument(document);
-    auto connections = [](QSchematic::Scene& scene) {
-        const auto schema = s7studio::diagram::SceneSerializer{}.serialize(scene, {}).runtimeSchema.as_object();
-        std::set<std::string> result;
-        for (const auto& c : schema.at("connections").as_array()) {
-            result.insert(boost::json::serialize(c));
-        }
-        return std::make_pair(result, schema.at("elements").as_array().size());
-    };
-    const auto [expected, element_count] = connections(*editor->scene());
-
-    auto dangling = std::make_shared<QSchematic::Items::Wire>();
-    dangling->append_point(QPointF(-500, -500));
-    dangling->append_point(QPointF(-400, -500));
-    editor->scene()->addWire(dangling);
+    auto& scene = *editor->scene();
+    const auto expected = connectionSet(scene);
+    const auto routes = routesOf(scene);
+    const auto elementCount = scene.elementNodes().size();
 
     QMetaObject::invokeMethod(&window, "onElementRequested", Qt::DirectConnection, Q_ARG(QString, QStringLiteral("Gain")),
                               Q_ARG(QString, QStringLiteral("Gain")));
-    const auto [after, after_count] = connections(*editor->scene());
     bool ok = true;
-    if (after != expected) {
-        std::cout << "error: adding an element changed the connections (" << expected.size() << " -> " << after.size() << ")\n";
+    if (connectionSet(scene) != expected) {
+        std::cout << "error: adding an element changed the connections\n";
         ok = false;
     }
-    if (after_count != element_count + 1) {
-        std::cout << "error: expected " << element_count + 1 << " elements, got " << after_count << '\n';
+    if (scene.elementNodes().size() != elementCount + 1) {
+        std::cout << "error: expected " << elementCount + 1 << " elements, got " << scene.elementNodes().size() << '\n';
+        ok = false;
+    }
+    if (routesOf(scene) != routes) {
+        std::cout << "error: adding an element away from the wires moved them\n";
+        ok = false;
+    }
+    scene.undoStack()->undo();
+    if (scene.elementNodes().size() != elementCount) {
+        std::cout << "error: undo did not remove the added element\n";
         ok = false;
     }
 
-    // Save and reload: routes belong to their connections.
-    const auto saved = s7studio::diagram::SceneSerializer{}.serialize(*editor->scene(), {});
-    const auto& wires = saved.diagram.at("wires").as_array();
-    if (wires.size() != expected.size()) {
-        std::cout << "error: " << wires.size() << " routes saved for " << expected.size() << " connections\n";
-        ok = false;
-    }
-    for (const auto& wire : wires) {
-        if (!wire.as_object().contains("from_element") || !wire.as_object().contains("to_element")) {
-            std::cout << "error: a route does not name its connection\n";
-            ok = false;
-        }
-    }
+    // Save and reload.
+    const auto saved = s7studio::diagram::SceneSerializer{}.serialize(scene, {});
     s7studio::diagram::DiagramEditor reloaded;
     reloaded.loadDocument(s7studio::diagram::DiagramDocument::fromJson(saved.toJson()));
-    if (connections(*reloaded.scene()).first != expected) {
+    if (connectionSet(*reloaded.scene()) != expected) {
         std::cout << "error: connections changed across save and reload\n";
+        ok = false;
+    }
+    if (routesOf(*reloaded.scene()) != routes) {
+        std::cout << "error: routes changed across save and reload\n";
         ok = false;
     }
     std::cout << (ok ? "edit check: OK (" : "edit check: FAILED (") << expected.size() << " connections)\n";
     return ok ? 0 : 1;
 }
 
-// --layout-check <schema>: lays a schema without a diagram out and checks the
-// automatic routing: every connection's wire is attached at both connectors,
-// no wire segment passes through a node, and every QSchematic net carries
-// one output (wires of different outputs never touch).
-int runLayoutCheck(int argc, char** argv)
+// Problems of the scene's routes: wires not attached at both connectors,
+// non-orthogonal segments, segments through elements, and wires of different
+// nets that overlap or touch.
+auto routeProblems(const s7studio::diagram::DiagramScene& scene) -> std::vector<std::string>
 {
-    QApplication app(argc, argv);
-    auto& registry = s7::ElementRegistry::instance();
-    s7::register_builtin_elements(registry);
-    s7::register_net_elements(registry);
-    std::ifstream in(argv[2]);
-    if (!in) {
-        std::cerr << "cannot read " << argv[2] << '\n';
-        return 2;
-    }
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    const auto schema = boost::json::parse(text);
-    s7studio::diagram::DiagramEditor editor;
-    editor.loadRuntimeSchema(schema);
-    auto& scene = *editor.scene();
-
-    bool ok = true;
-    std::vector<s7studio::diagram::WireSource> sources;
-    const auto extracted = s7studio::diagram::RuntimeSchemaExtractor{}.extract(scene, {}, &sources).as_object();
-    const auto expected = schema.as_object().at("connections").as_array().size();
-    if (extracted.at("connections").as_array().size() != expected) {
-        std::cout << "error: " << extracted.at("connections").as_array().size() << " of " << expected
-                  << " connections attached at both connectors\n";
-        std::set<std::string> attached;
-        for (const auto& c : extracted.at("connections").as_array()) {
-            attached.insert(boost::json::serialize(c));
+    using s7studio::diagram::NetModel;
+    std::vector<std::string> problems;
+    const auto manager = scene.wire_manager();
+    std::vector<std::pair<const s7studio::diagram::SignalWire*, std::string>> wires;
+    for (const auto& connection : NetModel(scene).connections()) {
+        const auto name = connection.from.element + ":" + std::to_string(connection.from.port) + " -> " + connection.to.element + ":" +
+                          std::to_string(connection.to.port);
+        const auto* wire = connection.wire;
+        wires.emplace_back(wire, name);
+        const auto points = wire->pointsAbsolute();
+        const auto input = wire->downstream.port();
+        if (!input || !manager->is_wire_attached_to(wire, input.get())) {
+            problems.push_back("the wire of " + name + " is not attached to its input");
         }
-        for (const auto& c : schema.as_object().at("connections").as_array()) {
-            if (!attached.contains(boost::json::serialize(c))) {
-                std::cout << "error: not attached: " << boost::json::serialize(c) << "\n";
-            }
+        if (const auto output = wire->upstream.port(); output && !manager->is_wire_attached_to(wire, output.get())) {
+            problems.push_back("the wire of " + name + " is not attached to its output");
         }
-        ok = false;
-    }
-    std::unordered_map<const void*, std::string> outputOf;
-    for (const auto& source : sources) {
-        outputOf[static_cast<const wire_system::wire*>(source.wire)] = source.element + ":" + std::to_string(source.port);
-        const auto points = source.wire->pointsAbsolute();
         for (int index = 0; index + 1 < points.size(); ++index) {
-            const QLineF segment(points[index], points[index + 1]);
-            for (const auto& node : scene.items<QSchematic::Items::Node>()) {
-                const auto box = node->sceneBoundingRect().adjusted(2, 2, -2, -2);
-                // Orthogonal segments: sample the segment densely.
+            const QPointF a = points[index];
+            const QPointF b = points[index + 1];
+            if (std::abs(a.x() - b.x()) > 0.5 && std::abs(a.y() - b.y()) > 0.5) {
+                problems.push_back("the wire of " + name + " has a diagonal segment");
+            }
+            const QLineF segment(a, b);
+            for (const auto& node : scene.elementNodes()) {
+                const QRectF box = QRectF(node->pos(), node->size()).adjusted(2, 2, -2, -2);
                 for (int step = 0; step <= 50; ++step) {
                     if (box.contains(segment.pointAt(step / 50.0))) {
-                        std::cout << "error: the wire of " << source.element << ":" << source.port << " -> " << source.toElement << ":"
-                                  << source.toPort << " crosses " << node->data(s7studio::diagram::kNodeIdRole).toString().toStdString() << '\n';
-                        ok = false;
-                        step = 51;
+                        problems.push_back("the wire of " + name + " crosses " + node->id());
+                        break;
                     }
                 }
             }
         }
     }
-    for (const auto& net : scene.wire_manager()->nets()) {
-        std::set<std::string> outputs;
-        for (const auto& wire : net->wires()) {
-            if (const auto it = outputOf.find(wire.get()); it != outputOf.end()) {
-                outputs.insert(it->second);
+    // Different nets: no shared stretch, and no end or bend of one on the other.
+    auto onSegment = [](const QPointF p, const QPointF a, const QPointF b) {
+        return std::abs(QLineF(a, p).length() + QLineF(p, b).length() - QLineF(a, b).length()) < 0.01;
+    };
+    for (std::size_t i = 0; i < wires.size(); ++i) {
+        for (std::size_t j = i + 1; j < wires.size(); ++j) {
+            if (NetModel::rootOf(*wires[i].first) == NetModel::rootOf(*wires[j].first)) {
+                continue;
             }
-        }
-        if (outputs.size() > 1) {
-            std::string names;
-            for (const auto& output : outputs) {
-                names += " " + output;
+            const auto a = wires[i].first->pointsAbsolute();
+            const auto b = wires[j].first->pointsAbsolute();
+            bool touch = false;
+            for (const auto& point : a) {
+                for (int k = 0; k + 1 < b.size() && !touch; ++k) {
+                    touch = onSegment(point, b[k], b[k + 1]);
+                }
             }
-            std::cout << "error: one net joins the wires of " << outputs.size() << " outputs:" << names << "\n";
-            ok = false;
+            for (const auto& point : b) {
+                for (int k = 0; k + 1 < a.size() && !touch; ++k) {
+                    touch = onSegment(point, a[k], a[k + 1]);
+                }
+            }
+            if (touch) {
+                problems.push_back("the wires of " + wires[i].second + " and " + wires[j].second + " touch");
+            }
         }
     }
+    return problems;
+}
+
+// --layout-check <schema>: lays a schema without a diagram out and checks the
+// automatic routing (routeProblems) and that every connection is drawn.
+int runLayoutCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    registerElements();
+    const auto schema = readJson(argv[2]);
+    s7studio::diagram::DiagramEditor editor;
+    editor.loadRuntimeSchema(schema);
+    auto& scene = *editor.scene();
+
+    bool ok = true;
+    const auto expected = schema.as_object().at("connections").as_array().size();
+    if (const auto drawn = connectionSet(scene).size(); drawn != expected) {
+        std::cout << "error: " << drawn << " of " << expected << " connections drawn\n";
+        ok = false;
+    }
+    for (const auto& problem : routeProblems(scene)) {
+        std::cout << "error: " << problem << '\n';
+        ok = false;
+    }
     if (const char* png = std::getenv("S7_LAYOUT_PNG")) {
-        const auto bounds = scene.itemsBoundingRect().adjusted(-20, -20, 20, 20);
-        QImage image(bounds.size().toSize() * 2, QImage::Format_ARGB32);
-        image.fill(Qt::white);
-        QPainter painter(&image);
-        painter.setRenderHint(QPainter::Antialiasing);
-        scene.render(&painter, QRectF(), bounds);
-        painter.end();
-        image.save(QString::fromLocal8Bit(png));
+        renderScene(scene, QString::fromLocal8Bit(png));
     }
     std::cout << (ok ? "layout check: OK (" : "layout check: FAILED (") << expected << " connections)\n";
     return ok ? 0 : 1;
@@ -572,6 +615,9 @@ int main(int argc, char** argv) try
     }
     if (argc == 4 && std::string_view(argv[1]) == "--deployment-diagram") {
         return runDeploymentDiagram(argc, argv);
+    }
+    if (argc == 4 && std::string_view(argv[1]) == "--normalize") {
+        return runNormalize(argc, argv);
     }
 
     QApplication app(argc, argv);

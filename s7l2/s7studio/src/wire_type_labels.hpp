@@ -4,11 +4,9 @@
 
 #include <vector>
 
-namespace QSchematic {
-class Scene;
-}
-
 namespace s7studio::diagram {
+
+class DiagramScene;
 
 struct WireTypeLabel {
     QString element;
@@ -16,9 +14,10 @@ struct WireTypeLabel {
     QString type; // resolved type name, or "?" when the diagram's types do not resolve
 };
 
-// Resolves the scene's signal types (the same inference the runtime uses) and
-// shows each wire net's type as its label. Returns the label of every
-// connected wire; `error` receives the first type error, if any.
-auto updateWireTypeLabels(QSchematic::Scene& scene, QString* error = nullptr) -> std::vector<WireTypeLabel>;
+// Resolves the scene's signal types (the same inference the runtime uses),
+// labels the first wire of every net with its type and marks wires that
+// connect nothing. Returns the label of every connection (by its output);
+// `error` receives the first type error, if any.
+auto updateWireTypeLabels(DiagramScene& scene, QString* error = nullptr) -> std::vector<WireTypeLabel>;
 
 } // namespace s7studio::diagram

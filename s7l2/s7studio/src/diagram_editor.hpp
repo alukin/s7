@@ -11,12 +11,12 @@ class QWidget;
 
 namespace QSchematic {
 class View;
-class Scene;
 }
 
 namespace s7studio::diagram {
 
 class DiagramRuler;
+class DiagramScene;
 
 // Minimal diagram editor widget
 // Embeds a QSchematic scene for visual editing of the schema diagram
@@ -28,6 +28,8 @@ public:
     ~DiagramEditor() override;
 
     void clearDiagram();
+    // Both throw std::runtime_error when the document cannot be laid out;
+    // the editor is then empty.
     void loadDocument(const DiagramDocument& document);
     void loadRuntimeSchema(const boost::json::value& schemaJson);
     void fitToContents();
@@ -38,8 +40,8 @@ public:
     void setPageLayout(const DiagramPageLayout& pageLayout);
     [[nodiscard]] auto pageLayout() const -> DiagramPageLayout;
 
-    [[nodiscard]] QSchematic::Scene* scene();
-    [[nodiscard]] const QSchematic::Scene* scene() const;
+    [[nodiscard]] DiagramScene* scene();
+    [[nodiscard]] const DiagramScene* scene() const;
 
 signals:
     void scopeNodeDoubleClicked(const QString& scopeId, int channelCount);
@@ -60,7 +62,7 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
-    std::unique_ptr<QSchematic::Scene> _scene;
+    std::unique_ptr<DiagramScene> _scene;
     QSchematic::View* _view = nullptr;
     bool _pendingFitToContents = false;
     DiagramPageLayout pageLayout_;

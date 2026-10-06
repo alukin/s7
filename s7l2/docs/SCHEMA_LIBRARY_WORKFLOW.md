@@ -139,7 +139,7 @@ Studio integration path:
 
 - `s7studio/src/main_window.cpp`
 - `s7studio/src/scene_serializer.cpp`
-- `s7studio/src/runtime_schema_extractor.cpp`
+- `s7studio/src/diagram/net_model.cpp`
 
 ---
 

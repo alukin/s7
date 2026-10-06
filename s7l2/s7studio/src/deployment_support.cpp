@@ -1,37 +1,13 @@
 #include "deployment_support.hpp"
 
-#include "diagram_node_roles.hpp"
+#include "diagram/diagram_scene.hpp"
 #include "local_runtime_v2.hpp"
-
-#include <qschematic/items/node.hpp>
-#include <qschematic/scene.hpp>
-
-#include <QBrush>
-#include <QColor>
-#include <QFont>
-#include <QGraphicsSimpleTextItem>
 
 #include <memory>
 #include <unordered_map>
 #include <vector>
 
 namespace s7studio::diagram {
-
-namespace {
-
-constexpr int kPlacementLabelRole = 0x5738; // marks the label item (cf. wire type labels)
-
-auto findPlacementLabel(QGraphicsItem& node) -> QGraphicsSimpleTextItem*
-{
-    for (auto* child : node.childItems()) {
-        if (child->data(kPlacementLabelRole).toBool()) {
-            return dynamic_cast<QGraphicsSimpleTextItem*>(child);
-        }
-    }
-    return nullptr;
-}
-
-} // namespace
 
 auto deploymentDiagram(const DiagramDocument& document, const QMap<QString, NodeAddress>& known) -> boost::json::object
 {
@@ -81,29 +57,16 @@ auto studioOutputTypes(const boost::json::object& diagram) -> s7::deployment::Ou
     };
 }
 
-void updatePlacementLabels(QSchematic::Scene& scene, const QMap<QString, QString>& nodeNames)
+void updatePlacementLabels(DiagramScene& scene, const QMap<QString, QString>& nodeNames)
 {
-    for (const auto& node : scene.items<QSchematic::Items::Node>()) {
-        if (!node) {
-            continue;
-        }
-        const auto placement = node->data(kNodePlacementRole).toString();
-        auto* label = findPlacementLabel(*node);
+    for (const auto& node : scene.elementNodes()) {
+        const auto placement = QString::fromStdString(node->element().placement);
         if (placement.isEmpty()) {
-            delete label;
+            node->setPlacementLabel({});
             continue;
-        }
-        if (!label) {
-            label = new QGraphicsSimpleTextItem(node.get());
-            label->setData(kPlacementLabelRole, true);
-            QFont font = label->font();
-            font.setPointSizeF(font.pointSizeF() * 0.85);
-            label->setFont(font);
-            label->setBrush(QBrush(QColor(0x20, 0x70, 0x40)));
         }
         const auto name = nodeNames.value(placement);
-        label->setText(QStringLiteral("@ ") + (name.isEmpty() ? placement.left(8) : name));
-        label->setPos(0.0, node->size().height() + 2.0);
+        node->setPlacementLabel(QStringLiteral("@ ") + (name.isEmpty() ? placement.left(8) : name));
     }
 }
 

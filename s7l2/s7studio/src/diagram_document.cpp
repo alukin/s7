@@ -59,6 +59,10 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
         doc.pageLayout = DiagramPageLayout::fromJson(it->value().as_object());
     }
     
+    if (auto it = root.find("diagram_version"); it != root.end() && it->value().is_number()) {
+        doc.diagramVersion = static_cast<int>(it->value().to_number<double>());
+    }
+
     if (auto it = root.find("diagram"); it != root.end() && it->value().is_object()) {
         doc.diagram = it->value().as_object();
     }
@@ -85,9 +89,7 @@ auto DiagramDocument::toJson() const -> boost::json::value {
     root["id"] = id.toStdString();
     root["dt"] = dt;
     root["document_kind"] = "s7.diagram";
-    root["diagram_magic"] = "S7STUDIO_DIAGRAM_V1";
-    root["diagram_version"] = 1;
-    root["units"] = "mm";
+    root["diagram_version"] = kDiagramVersion;
     root["sheet"] = pageLayout.toJson();
     
     if (runtimeSchema.is_object()) {

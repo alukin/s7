@@ -1,90 +1,107 @@
 # Studio Diagram Editor
 
-Internals of the `s7studio` diagram editor and its file format. Studio is a runtime client (ADR-014); the editor produces runtime schema JSON and never defines execution semantics.
+Internals of the `s7studio` diagram editor and its file format. Studio is a runtime client (ADR-014); the editor produces runtime schema JSON and never defines execution semantics. The design decisions behind the wiring are recorded in `STUDIO_DIAGRAM_WIRING_DESIGN.md`.
 
 ## Components
 
 | File | Role |
 |---|---|
-| `s7studio/src/diagram_editor.*` | Widget hosting the QSchematic `Scene`/`View`, page frame (mm-based sheet), rulers, zoom; emits node double-click signals |
-| `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ QSchematic scene; creates nodes, connectors, and wires |
-| `s7studio/src/runtime_schema_extractor.*` | Scene → runtime schema JSON (`elements`, `connections`), optionally the source of every wire |
-| `s7studio/src/wire_type_labels.*` | Resolves the scene's types and labels each wire with its type (child text items, not saved); `s7studio --wire-types <file>` prints them, `S7_WIRE_TYPES_PNG=<png>` renders the result |
+| `s7studio/src/diagram/items.*` | Scene items, QSchematic subclasses: `ElementNode` (element id, type, params, nested schema, placement, title as typed members; one `PortConnector` per port), `PortConnector` (direction, index, name), `TextFrameNode`, `SignalWire` (its two `WireEnd`s and the bends placed by hand) |
+| `s7studio/src/diagram/element_ports.*` | The ports an element shows: nested schema `exposed_inputs`/`exposed_outputs`, registry metadata, `Adder` `weights`, `Multiply` `factors`, `Scope` `channel_count` |
+| `s7studio/src/diagram/diagram_scene.*` | `DiagramScene` (a `QSchematic::Scene`): connection rules, gestures, undoable edits (`DiagramChange`), routing of changed wires, junction placement |
+| `s7studio/src/diagram/net_model.*` | Connections read from the wire trees, wires that connect nothing, the runtime schema of the scene |
+| `s7studio/src/diagram/wire_router.*` | Orthogonal A* router on the grid |
+| `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ scene (format version 2); layered auto-layout for plain schemas |
+| `s7studio/src/diagram_editor.*` | Widget hosting the scene and view, page frame (mm-based sheet), rulers, zoom; keys go to the scene first; emits node double-click signals |
+| `s7studio/src/wire_type_labels.*` | Resolves the scene's types and labels the first wire of each net; marks wires that connect nothing. `s7studio --wire-types <file>` prints them, `S7_WIRE_TYPES_PNG=<png>` renders the result |
 | `s7studio/src/diagram_document.*`, `diagram_format.hpp` | Diagram file model and format description |
 | `s7studio/src/element_picker_panel.*` | Element Library dock built from `ElementCatalogService`; double-click emits `elementRequested` |
-| `s7studio/src/main_window.cpp` | Wiring: add element, parameter dialog, run, save/load, schema libraries |
+| `s7studio/src/main_window.cpp` | Wiring: add element, parameter dialog, run, save/load, Undo/Redo, schema libraries |
 | `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp`, `scope_sample_mailbox.hpp` | Embedded runtime: builds the schema through the registry, runs it on a worker thread, hands Scope samples to the UI through a bounded mailbox (oldest dropped and counted when the UI falls behind) |
 
+The diagram sources build as the `s7studio_diagram` library, shared by `s7studio` and `s7studio_diagram_test`.
 
-## Model and conventions
+## Model
 
-- Each scene node stores its schema identity in `QGraphicsItem` data roles (`diagram_node_roles.hpp`): id, type, title, params (JSON string), nested schema (JSON string), scope channel count, and text-frame styling.
-- Input connectors are on the left edge, outputs on the right. The extractor derives port indices from connector geometry (left/right of node center, then sorted by y). Port counts come from built-in rules, element metadata, nested-schema `exposed_inputs`/`exposed_outputs`, and connections in the loaded schema.
-- `Scope` is a Studio-only observer element (implemented in `local_runtime_v2.hpp`) with `channel_count` inputs, each of any real type (inferred per channel). `TextFrame` nodes are diagram-only and are omitted from the runtime schema.
-- Running a diagram serializes the current scene to schema JSON, fills `sample_rate_hz` / `dt` parameters from the run configuration, and passes it to `LocalSchemaRunner`.
+- **Nets are trees.** A net has one driver, an output port. Its first wire (the trunk) runs from that output to an input; every further wire starts at a junction on a wire of the same net and ends at an input. A `WireEnd` is either a port (`node`, `direction`, `index`) or a junction (`wire`, `at`). Junctions are drawn as dots; wires that only cross are not connected. Wires refer to ports by element and index, so ports rebuilt after a parameter change keep their wires.
+- **Connections come from the trees:** each wire ending at an input connects the driver of its tree to that input (`NetModel`). Nothing is guessed from geometry.
+- **Routes are derived.** A wire's route runs from its upstream end through its user bends to its downstream end; `WireRouter` routes each leg between them. Only the bends are saved. Routes are recomputed for the wires an edit touches, for the wires of moved elements (after the move, including undo/redo of moves), and for any wire whose route no longer fits (an end off its port, a junction off its trunk, a segment through an element).
+- **Junction placement:** a junction keeps its point while that point is on its trunk (not at the trunk's ends); otherwise it moves to the trunk point nearest to where the branch goes next.
+- **Elements:** inputs on the left edge, outputs on the right, no rotation. Width 9 grid steps, height `max(5, 2 × ports + 1)` steps; ports two steps apart where they fit, centred. All positions, ports, bends and junctions are on the 20-unit grid. `Scope` is a Studio-only observer element (`local_runtime_v2.hpp`) with `channel_count` inputs of any real type. `TextFrame`s are diagram-only and not part of the runtime schema.
+- **Undo:** every edit is a `DiagramChange` (nodes and wires added or removed, wires re-hung, bends, element edits) pushed as one command on the scene's `QUndoStack`; element moves use QSchematic's `ItemMove`. Edit > Undo/Redo. Text frame text and style edits and run-configuration params (`sample_rate_hz`, `dt`) are applied directly.
 
-## Diagram file format (`.s7diagram`)
+## Rules
+
+Refused when drawing, with the reason in the status bar:
+
+| Connection | Result |
+|---|---|
+| output → free input | connected; a further wire of the same output branches off its first wire |
+| input → wire, wire → input | connected, the wire end is a junction |
+| output → output | refused: two outputs |
+| output → wire of a net | refused: a net has one output |
+| input → input, wire → wire | refused |
+| anything → an input already fed | refused |
+| incompatible types | refused when the diagram's types resolve without the connection and do not with it (same inference as the runtime, `s7::TypeResolver`) |
+
+Deleting a wire deletes the connection to its input; wires hanging on it move up to its upstream end (a branch of a deleted trunk becomes the new trunk). Deleting an element deletes the wires into it and the whole nets it drives. Shrinking an element's ports (fewer `weights`, `channel_count`) deletes the wires on the removed ports. A wire that still connects nothing (not reachable through the rules; e.g. a hand-edited file) is drawn red with the reason as tooltip, is not saved, and Run and Deploy refuse the diagram while it exists.
+
+## Interaction
+
+- **Drag from a port** to a port or a wire: valid targets are marked with a green ring, refused ones are dimmed, and the routed wire is previewed. Alt+drag starts from a wire (a junction). Releasing anywhere else connects nothing.
+- **Click by click (Wire Draw, `Ctrl+W`, or a click on a port without dragging):** click a port or a wire to start, click empty canvas to place bends, click a port or a wire to finish. Escape cancels the wire, then leaves the mode; Backspace/Delete removes the last bend; right-click cancels.
+- **Editing a wire:** select it; drag a bend handle (filled: placed by hand, hollow: routed) or drag a straight segment. Context menu: Add Bend Here, Remove Bend, Re-route (remove hand-placed bends), Delete Wire.
+- **Elements:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click: element properties dialog (ports, parameter specs, editable parameter JSON, Node placement); `Scope` opens its plot window; `TextFrame` edits text.
+- **Element Library dock:** double-click adds an element; schema libraries can be loaded and saved from the File menu.
+- **Placement:** the element properties dialog has a Node field listing the nodes found in the Headless Nodes dock; placed elements show `@ <node>` under them.
+- Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes dock (the Studio certificate pinned by the nodes). It runs off the UI thread and logs each node's outcome; nothing is committed unless every node is ready.
+- Run > Open Deployed Diagram...: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
+
+## Diagram file format (`.s7diagram`, version 2)
 
 ```json
 {
   "document_kind": "s7.diagram",
-  "diagram_magic": "S7STUDIO_DIAGRAM_V1",
-  "diagram_version": 1,
+  "diagram_version": 2,
   "id": "feedback_loop_demo",
   "dt": 0.001,
-  "units": "mm",
   "sheet": { "orientation": "landscape", "width_mm": 297.0, "height_mm": 210.0 },
   "schema": { "name": "...", "elements": [ ... ], "connections": [ ... ] },
   "diagram": {
-    "version": 1,
-    "nodes": [ { "id": "const1", "type": "Constant", "name": "Constant 2.0", "position": { "x": 50.0, "y": 100.0 } } ],
-    "wires": [ { "id": "wire_0", "points": [ { "x": 100.0, "y": 100.0 }, { "x": 150.0, "y": 100.0 } ] } ]
+    "grid": { "step": 20, "mm_per_step": 5.2917 },
+    "nodes": [ { "id": "add1", "position": [17, 8], "title": "Sum" } ],
+    "wires": [
+      { "id": "w1", "from": { "port": ["c1", "out", 0] }, "to": { "port": ["add1", "in", 0] }, "bends": [] },
+      { "id": "w2", "from": { "wire": "w1", "at": [12, 10] }, "to": { "port": ["d1", "in", 0] }, "bends": [[12, 16], [30, 16]] }
+    ],
+    "text_frames": [ { "id": "text_frame_1", "position": [2, 20], "params": { "text": "...", "width": 260.0, "height": 120.0 } } ]
   }
 }
 ```
 
-- `schema` is the runtime schema; parameters live there, not in `diagram`.
-- `diagram.nodes` stores positions and titles (and `channel_count` for scopes, `params` for text frames).
-- `diagram.wires` stores routing points in absolute scene coordinates. On load, wire *i* is matched with connection *i* of the schema; endpoints are re-attached to connectors.
-- A plain runtime schema file can also be opened; Studio lays it out by data flow (columns from inputs to outputs, each wire on its own tracks between columns, loops and long wires in lanes below the nodes). `s7studio --layout-check <schema>` checks such a layout offscreen.
-- Fan-out: QSchematic attaches one wire per connector, so further wires of an output start on its first wire (a junction). Studio derives connections from these nets.
+- `schema` is the runtime schema and the source of semantics; element params live there. `diagram` is layout only.
+- Coordinates are whole grid steps (`grid.step` scene units each; scene units are 96 per inch, so a step is 5.29 mm on the sheet). Text frame sizes are in scene units in their params.
+- A wire's `from` is an output port or a junction on another wire; `to` is an input port. `bends` are the bends placed by hand; routed points are not saved.
+- On load the connections the wires make must equal `schema.connections`, otherwise loading fails naming the connection. A layout without `wires` is wired automatically (one trunk per output, further connections as branches); a document without `diagram` (a plain runtime schema) is also laid out by data flow (columns from inputs to outputs, rows by the mean row of the inputs).
+- A layout of another `diagram_version` is refused unless it is empty. `s7studio --normalize <in> <out>` loads a diagram or schema and writes it as Studio saves it.
 - Deployment: each schema element may carry `node` (the node_uuid it runs on); the root keeps `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and `streams` (stream descriptors, so redeployments continue the streams). See `S7_Network_Wire_Protocol_v1.md`, section 12.1, items 1 and 6.
 
-## Interaction
+## Tests and tools
 
-- Normal mode: select/move; Wire Draw mode (`Ctrl+W`): click a connector, intermediate points, then a target connector.
-- Double-click a node: element properties dialog (ports, parameter specs, editable parameter JSON); `Scope` opens its plot window; `TextFrame` edits text.
-- Element Library dock: double-click adds a node; schema libraries can be loaded and saved from the File menu.
-- Placement: the element properties dialog has a Node field listing the nodes found in the Headless Nodes dock; placed elements show `@ <node>` under them.
-- Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes dock (the Studio certificate pinned by the nodes). It runs off the UI thread and logs each node's outcome; nothing is committed unless every node is ready.
-- Run > Open Deployed Diagram...: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
-- `s7studio --deployment-diagram <in> <out>` (offscreen) writes the diagram as Studio would deploy it, with streams assigned; used by `s7studio_deployment_diagram`.
+| Command | Checks |
+|---|---|
+| `s7studio_diagram` (`s7studio_diagram_test`) | Rules, fan-out branches, deleting a trunk and an element, undo, port count changes, moves, bends, drag/click/bend-drag gestures, save/reload of connections, bends and routes, refusal of a layout that does not match its schema |
+| `s7studio --layout-check <schema>` | Auto-layout: every connection drawn and attached, orthogonal, no wire through an element, nets never touch (`S7_LAYOUT_PNG` renders it) |
+| `s7studio --edit-check <diagram>` | Adding an element through the main window keeps connections and routes; undo; save/reload |
+| `s7studio --wire-types <file>` | Type labels (`s7studio_wire_types`) |
+| `s7studio --deployment-diagram <in> <out>` | Placement and stream assignment as Deploy does it (`s7studio_deployment_diagram`) |
 
 ## Known gaps
 
-- No undo/redo: the scene owns a `QUndoStack`, but edits are not pushed as commands and several operations rebuild the whole scene.
-- Some operations rebuild the scene from the stored schema and can drop interactively drawn wires (see `CODE_REVIEW_REQUIRED_FIXES.md`).
 - Drag-and-drop from the Element Library is not implemented.
+- Routing is per wire in a fixed order (trunks first); a wire routed earlier is not moved to make room for a later one.
+- Live preview while dragging an element stretches the attached wire ends; the wires are re-routed on release.
 
-## QSchematic quick reference
+## QSchematic notes
 
-QSchematic lives in `external/QSchematic` and is vendor code: do not edit it; wrap or subclass in `s7studio` instead.
-
-```cpp
-scene->setMode(QSchematic::Scene::NormalMode);   // or WireMode
-connect(scene, &QSchematic::Scene::modeChanged, ...);
-scene->setWireFactory([] { return std::make_shared<CustomWire>(); });
-
-auto cmd = std::make_unique<QSchematic::Commands::ItemAdd>(scene, item);   // undo-aware add
-scene->undoStack()->push(cmd.release());
-scene->undoStack()->createUndoAction(parent, "Undo");
-
-auto nodes = scene->nodes();
-auto wires = scene->items<QSchematic::Items::Wire>();
-scene->wire_manager()->attach_wire_to_connector(wire, pointIndex, connector);
-
-QSchematic::Netlist<NodeT, ConnectorT> netlist;
-QSchematic::NetlistGenerator::generate(netlist, *scene);
-```
-
-The QSchematic demo (`external/QSchematic/demo`) shows library widgets, undo/redo, and GPDS serialization. Studio deliberately keeps JSON as its file format instead of GPDS.
+QSchematic lives in `external/QSchematic` and is vendor code: do not edit it; Studio subclasses it. What Studio uses: `Scene` (items, selection, element moves through `ItemMove`, undo stack, the wire manager for connector attachments and junction dots), `View` (zoom, pan, grid), `Node`/`Connector`/`Wire` as base classes. What Studio replaces: QSchematic's `WireMode` (its internals are private and it attaches a wire to any wire it touches) by `DiagramScene::DrawMode`; wire point dragging by the scene's bend editing; the netlist by `NetModel`. Item types are `QSchematicItemUserType + n` (`diagram/items.hpp`). Studio keeps JSON as its file format instead of GPDS.

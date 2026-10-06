@@ -40,6 +40,7 @@ S7 is in pre-MVP development. Backward compatibility of APIs, file formats, and 
 | `PLUGIN_INTERFACE.md` | C ABI for element plugins, discovery paths, loading process |
 | `SCHEMA_LIBRARY_WORKFLOW.md` | Schema-backed element libraries in Studio and the runtime |
 | `STUDIO_DIAGRAM_EDITOR.md` | Studio diagram editor internals, diagram file format, QSchematic notes |
+| `STUDIO_DIAGRAM_WIRING_DESIGN.md` | Design record of the diagram wiring: QSchematic subclasses, format v2, connection rules, router (implemented) |
 | `LOCAL_HEADLESS_NODES_DEMO.md` | Run two local headless runtimes and discover them in Studio |
 
 Module READMEs: `../s7transport/README.md`, `../s7noise/README.md`, `../s7spectral/README.md`.

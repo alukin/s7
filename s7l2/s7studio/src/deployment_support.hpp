@@ -12,11 +12,9 @@
 
 #include <boost/json.hpp>
 
-namespace QSchematic {
-class Scene;
-}
-
 namespace s7studio::diagram {
+
+class DiagramScene;
 
 struct NodeAddress {
     QString name;
@@ -33,6 +31,6 @@ struct NodeAddress {
 [[nodiscard]] auto studioOutputTypes(const boost::json::object& diagram) -> s7::deployment::OutputTypeLookup;
 
 // Shows "@ <node name>" under each placed element (names keyed by node_uuid).
-void updatePlacementLabels(QSchematic::Scene& scene, const QMap<QString, QString>& nodeNames);
+void updatePlacementLabels(DiagramScene& scene, const QMap<QString, QString>& nodeNames);
 
 } // namespace s7studio::diagram

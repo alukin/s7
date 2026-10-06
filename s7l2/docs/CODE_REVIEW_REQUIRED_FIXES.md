@@ -440,6 +440,8 @@ Make the scene (or one model object) the single source of truth: serialize the s
 
 **Resolution:** reproduced (adding an element to a scene with five drawn connections kept three). The scene is now the source of truth: `MainWindow::syncSchemaFromScene()` takes elements and connections from the scene and keeps the other schema fields (name, exposed ports) from `runtimeSchema_`; adding an element, editing `Adder` / `Multiply` / `Scope` parameters, changing the discretization, running, saving and saving a library all go through it. Wire routes no longer depend on order: only connected wires are saved, each route names its connection (`from_element`, `from_port`, `to_element`, `to_port`) and is matched by it on load (files without these fall back to the position). Test: `s7studio_edit_check` (offscreen, through the real main window: stale stored schema, a wire that connects nothing, adding an element, save and reload); it fails on the previous code. Editing through the parameter dialog is covered by the same rebuild path but not driven by the test (modal dialog).
 
+**Superseded 2026-10-06:** edits no longer rebuild the scene. Elements, wires and params are typed scene items changed by undoable commands; connections come from the wire trees, and a saved wire names its ports (format version 2). See `STUDIO_DIAGRAM_EDITOR.md` and `STUDIO_DIAGRAM_WIRING_DESIGN.md`. `s7studio_edit_check` now also checks that adding an element keeps every route and that undo removes it; `s7studio_diagram` covers the editing rules.
+
 Relevant code: [main_window.cpp](../s7studio/src/main_window.cpp), [scene_serializer.cpp](../s7studio/src/scene_serializer.cpp).
 
 ## P2: Trust is inferred from URL scheme and peers are not verified — fixed 2026-10-05

@@ -1,18 +1,12 @@
 #pragma once
 
 #include "diagram_document.hpp"
-#include <boost/json.hpp>
+
 #include <QString>
-
-#include <vector>
-
-namespace QSchematic {
-class Scene;
-}
 
 namespace s7studio::diagram {
 
-struct WireSource;
+class DiagramScene;
 
 struct SerializationOptions {
     QString schemaName;
@@ -23,22 +17,16 @@ struct SerializationOptions {
     double sheetHeightMm = 210.0;
 };
 
-// Serializes QSchematic scene to s7studio diagram JSON format
+// Diagram documents (format version 2, diagram_format.hpp) <-> DiagramScene.
 class SceneSerializer {
 public:
-    // Convert scene to diagram document (with visual layout info)
-    [[nodiscard]] auto serialize(const QSchematic::Scene& scene,
-                                 const SerializationOptions& options) const -> DiagramDocument;
-    
-    // Convert diagram to QSchematic scene (deserialize)
-    void deserialize(const DiagramDocument& document,
-                     QSchematic::Scene& scene) const;
+    [[nodiscard]] auto serialize(const DiagramScene& scene, const SerializationOptions& options) const -> DiagramDocument;
 
-private:
-    // Node positions, and the route of every connected wire (with the
-    // connection it belongs to) in the order of `connected`.
-    [[nodiscard]] auto extractDiagramLayout(const QSchematic::Scene& scene, const std::vector<WireSource>& connected) const
-        -> boost::json::object;
+    // Replaces the scene's content. A document without a layout (a plain
+    // runtime schema) is laid out by data flow and wired automatically, as
+    // is a layout without `wires`. Throws std::runtime_error when the layout
+    // does not match the schema.
+    void deserialize(const DiagramDocument& document, DiagramScene& scene) const;
 };
 
 } // namespace s7studio::diagram
