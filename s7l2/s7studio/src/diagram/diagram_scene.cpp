@@ -868,11 +868,17 @@ void DiagramScene::route(std::vector<SignalWire*> forced)
             router.addWire(gridPoints(wire->pointsAbsolute()), netOf(*wire));
         }
     }
-    std::sort(forced.begin(), forced.end());
-    forced.erase(std::unique(forced.begin(), forced.end()), forced.end());
-    std::stable_sort(forced.begin(), forced.end(), [](const SignalWire* a, const SignalWire* b) {
-        return NetModel::depthOf(*a) < NetModel::depthOf(*b);
+    // Trunks before branches, otherwise in scene order: the routes depend on
+    // the order, so it must not depend on where the wires are in memory.
+    std::unordered_map<const SignalWire*, std::size_t> sceneOrder;
+    for (const auto& wire : wires) {
+        sceneOrder.emplace(wire.get(), sceneOrder.size());
+    }
+    std::erase_if(forced, [&](const SignalWire* wire) { return !sceneOrder.contains(wire); });
+    std::sort(forced.begin(), forced.end(), [&](const SignalWire* a, const SignalWire* b) {
+        return std::make_pair(NetModel::depthOf(*a), sceneOrder.at(a)) < std::make_pair(NetModel::depthOf(*b), sceneOrder.at(b));
     });
+    forced.erase(std::unique(forced.begin(), forced.end()), forced.end());
     for (auto* wire : forced) {
         std::optional<QPointF> start;
         if (wire->upstream.isJunction()) {
