@@ -37,7 +37,7 @@ Both elements are generic over the stream type `T` (all signal types). The type 
 
 A deployed diagram sets `producer_node` and `consumer_nodes` from its stream descriptors, so each stream travels only between its configured nodes, and the timing parameters from the diagram's model-time step (`S7_Network_Wire_Protocol_v1.md`, section 12.1 item 1).
 
-**Timestamps.** With `sample_rate` no timestamps travel: element `n` has time `n / sample_rate` in each declared role. Without it, every packet carries one element and its times; a `NetSink` stamps `PROCESSING_TIME` from the system clock (UTC nanoseconds) and refuses other roles without a sample rate. `NetSource::last_timestamps()` gives the times of the value it output last (empty when unknown: an untimed stream, or a uniformly sampled stream after a recovered fault, whose element count is no longer known). Neither declared roles nor a rate: an untimed stream (tests and hand-written schemas).
+**Timestamps.** With `sample_rate` no timestamps travel: element `n` has time `n / sample_rate` in each declared role. Without it, every packet carries one element and its times; a `NetSink` stamps `PROCESSING_TIME` from the system clock (UTC nanoseconds, clock domain `utc`) and refuses other roles without a sample rate. `NetSource::last_timestamps()` gives the times of the value it output last (empty when unknown: an untimed stream, or a uniformly sampled stream after a recovered fault, whose element count is no longer known). Neither declared roles nor a rate: an untimed stream (tests and hand-written schemas).
 
 `NetSink` publishes its input value each step. `NetSource` outputs the next received value each step, waiting for it if necessary. The stream (handle) is opened lazily on the first step.
 

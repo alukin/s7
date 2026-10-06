@@ -14,6 +14,7 @@
 
 #include <boost/json.hpp>
 
+#include "s7/clock_sync.hpp"
 #include "s7/transport.hpp"
 
 namespace s7 {
@@ -111,6 +112,11 @@ struct ControlPlaneOptions {
     std::size_t max_configuration_bytes{1024 * 1024};
     std::size_t max_chunk_bytes{1024 * 1024};
     std::size_t max_transfer_bytes{64 * 1024 * 1024};
+    // The node's clock synchronization (default: the kernel's NTP state) and
+    // the error bound within which its UTC times count as the shared "utc"
+    // clock domain (NODE_INFO.clock_sync, clock_domains).
+    std::function<clock::SyncStatus()> clock_sync;
+    std::int64_t max_clock_error_ns{250'000'000};
 };
 
 class ControlPlaneMvp {

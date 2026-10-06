@@ -25,6 +25,7 @@ std::string to_string(const FaultCode code)
         case FaultCode::TimestampProfileMismatch: return "TIMESTAMP_PROFILE_MISMATCH";
         case FaultCode::UnauthorizedProducer: return "UNAUTHORIZED_PRODUCER";
         case FaultCode::UnauthorizedConsumer: return "UNAUTHORIZED_CONSUMER";
+        case FaultCode::ClockUnsynchronized: return "CLOCK_UNSYNCHRONIZED";
     }
     return "UNKNOWN";
 }

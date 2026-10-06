@@ -6,8 +6,8 @@ node (`node`) and the peers requests come from (`peers`), then gives `steps`:
 each a request and what its response must hold.
 
 To check an implementation, start a node as `node` describes (its node UUID,
-listen URL, `max_configuration_bytes`, and one consumer stream that faulted
-with `UNDERRUN`), authorize the Studio certificate
+listen URL, `max_configuration_bytes`, a synchronized clock, and one consumer
+stream that faulted with `UNDERRUN`), authorize the Studio certificate
 `s7runtime/examples/certs/s7_studio.cert.pem`, and send the steps in order:
 
 - replace each `"${name}"` in a request with the value captured earlier

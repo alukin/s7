@@ -121,7 +121,8 @@ try {
                                                   .studio_certificate_sha256 = studio.fingerprint_sha256},
                                 .deployment_host = std::make_shared<AcceptingHost>(),
                                 .network = network,
-                                .max_configuration_bytes = node.at("max_configuration_bytes").to_number<std::size_t>()}};
+                                .max_configuration_bytes = node.at("max_configuration_bytes").to_number<std::size_t>(),
+                                .clock_sync = [] { return s7::clock::SyncStatus{.synchronized = true, .source = "assumed"}; }}};
     const std::map<std::string, s7::transport::ControlPeer> peers{
         {"anonymous", {}},
         {"studio", {.tls = true, .certificate = studio}},

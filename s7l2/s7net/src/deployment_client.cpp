@@ -70,6 +70,19 @@ auto control_limits_of(const json::object& node_info) -> ControlLimits
     return limits;
 }
 
+// Whether NODE_INFO lists the shared "utc" clock domain (its clock is
+// synchronized within its bound).
+auto has_utc_domain(const json::object& node_info) -> bool
+{
+    const auto* domains = node_info.if_contains("clock_domains");
+    if (!domains || !domains->is_array()) {
+        return false;
+    }
+    return std::ranges::any_of(domains->as_array(), [](const json::value& domain) {
+        return domain.is_object() && string_of(domain.as_object(), "id") == "utc";
+    });
+}
+
 // NODE_INFO.data_protocol of a node: packet versions and extensions ("0x8001").
 struct DataProtocol {
     std::vector<std::uint64_t> packet_versions;
@@ -236,6 +249,14 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
             active[i] = revision && (revision->is_int64() || revision->is_uint64()) ? revision->to_number<std::uint64_t>() : 0;
             const auto info = request(targets[i], request_object("GET_NODE_INFO", "info-" + std::to_string(i)));
             limits[i] = control_limits_of(info);
+            // Deployed nodes compare times in the shared "utc" domain: each must
+            // report its clock synchronized within its bound.
+            if (!has_utc_domain(info)) {
+                const auto* sync = info.if_contains("clock_sync");
+                result.nodes[i].message = "The clock of the node at " + targets[i].endpoint + " is not synchronized (" +
+                                          (sync ? json::serialize(*sync) : std::string("no clock_sync reported")) + ").";
+                result.errors.push_back(result.nodes[i].message);
+            }
             if (const auto protocol = data_protocol_of(info)) {
                 protocols[targets[i].node_uuid] = *protocol;
             } else {

@@ -288,6 +288,15 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
         }
     }
 
+    if (const auto clock_it = root.find("clock"); clock_it != root.end()) {
+        const auto& clock_obj = expect_object(clock_it->value(), "clock");
+        definition.clock.max_error_ms = get_f64(clock_obj, "max_error_ms", definition.clock.max_error_ms);
+        definition.clock.assume_synchronized = get_bool(clock_obj, "assume_synchronized", false);
+        if (!std::isfinite(definition.clock.max_error_ms) || definition.clock.max_error_ms <= 0.0) {
+            throw std::invalid_argument("clock.max_error_ms must be a positive number.");
+        }
+    }
+
     if (const auto execution_it = root.find("execution"); execution_it != root.end()) {
         const auto& execution_obj = expect_object(execution_it->value(), "execution");
         definition.execution.step_rate_hz = get_f64(execution_obj, "step_rate_hz", 0.0);
@@ -706,7 +715,7 @@ public:
     {
         const auto& node_schema = part.schema;
         // A deployment carries a graph only; node settings stay with the node.
-        for (const auto* key : {"websocket", "simulation", "execution", "control"}) {
+        for (const auto* key : {"websocket", "simulation", "execution", "control", "clock"}) {
             if (node_schema.contains(key)) {
                 throw std::invalid_argument(std::string{"A deployed graph must not contain node settings ('"} + key + "').");
             }
@@ -811,6 +820,8 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
                 .log = [](const std::string& line) { std::cerr << line << '\n'; },
                 .network = network_endpoint_,
                 .on_stream_recovered = [this] { ++stream_recoveries_; },
+                .clock_sync = [this] { return clock_sync(); },
+                .max_clock_error_ns = static_cast<std::int64_t>(definition_.clock.max_error_ms * 1e6),
             });
     } catch (...) {
         ::close(state_dir_lock_fd_);
@@ -972,6 +983,45 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.simulation.sample_rate_hz=" << definition_.simulation.sample_rate_hz << '\n';
     out << "runtime.simulation.frequency_hz=" << definition_.simulation.frequency_hz << '\n';
     out << "runtime.execution.step_rate_hz=" << definition_.execution.step_rate_hz << '\n';
+}
+
+void RuntimeService::set_clock_source(std::function<clock::SyncStatus()> source)
+{
+    clock_source_ = std::move(source);
+}
+
+auto RuntimeService::clock_sync() const -> clock::SyncStatus
+{
+    if (clock_source_) {
+        return clock_source_();
+    }
+    if (definition_.clock.assume_synchronized) {
+        return clock::SyncStatus{.synchronized = true, .max_error_ns = 0, .estimated_error_ns = 0, .source = "assumed"};
+    }
+    return clock::read_kernel_sync();
+}
+
+bool RuntimeService::check_clock(std::ostream& out, const bool force)
+{
+    const auto now = std::chrono::steady_clock::now();
+    if (!force && clock_usable_ && now - clock_checked_ < std::chrono::seconds(1)) {
+        return *clock_usable_;
+    }
+    clock_checked_ = now;
+    const auto sync = clock_sync();
+    const auto bound_ns = static_cast<std::int64_t>(definition_.clock.max_error_ms * 1e6);
+    const bool usable = clock::usable(sync, bound_ns);
+    if (clock_usable_ != usable) {
+        const auto detail = "synchronized=" + std::string(sync.synchronized ? "true" : "false") +
+                            " max_error_ns=" + std::to_string(sync.max_error_ns) + " bound_ns=" + std::to_string(bound_ns) +
+                            " source=" + sync.source;
+        out << "runtime.clock.usable=" << (usable ? "true " : "false ") << detail << '\n';
+        if (clock_usable_ && !usable && network_endpoint_) {
+            network_endpoint_->note_on_all_streams(stream::FaultCode::ClockUnsynchronized, detail);
+        }
+        clock_usable_ = usable;
+    }
+    return usable;
 }
 
 void RuntimeService::report_transport_errors(std::ostream& out) const {

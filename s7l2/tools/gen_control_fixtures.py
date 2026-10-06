@@ -71,6 +71,9 @@ def steps():
         "data_protocol": "object", "data_protocol.packet_versions": "array", "data_protocol.extensions": "array",
         "clock_domains": "array", "clock_domains[0].id": "string", "clock_domains[0].kind": "string",
         "clock_domains[0].continuous_across_restart": "boolean",
+        "clock_sync": "object", "clock_sync.synchronized": "boolean", "clock_sync.max_error_ns": "integer",
+        "clock_sync.estimated_error_ns": "integer", "clock_sync.source": "string", "clock_sync.max_error_bound_ns": "integer",
+        "clock_sync.usable": "boolean",
     })
     deployments = fields(state="string", execution="string", active_revision="integer", active_deployment="object|null",
                          prepared_deployments="array", history="array")
@@ -95,7 +98,8 @@ def steps():
                       "equals": {"request_id": "hello-1", "node_uuid": NODE}}},
         {"name": "node_info", "peer": "anonymous", "request": request("GET_NODE_INFO", "info-1"),
          "response": {"type": "NODE_INFO", "fields": node_info,
-                      "equals": {"data_protocol.packet_versions": [1], "data_protocol.extensions": ["0x8001"]}}},
+                      "equals": {"data_protocol.packet_versions": [1], "data_protocol.extensions": ["0x8001"],
+                                 "clock_sync.usable": True, "clock_domains[1].id": "utc"}}},
         {"name": "peer_announce", "peer": "anonymous",
          "request": request("PEER_ANNOUNCE", "announce-1", self={"endpoint": "wss://127.0.0.1:9003", "node_uuid": "33333333-4444-5555-6666-777777777777"}),
          "response": {"type": "PEER_ANNOUNCE_OK", "fields": fields(accepted="boolean")}},
@@ -204,6 +208,7 @@ def main():
         "generator": "tools/gen_control_fixtures.py",
         "node": {"node_uuid": NODE, "node_name": "fixture-node", "listen_url": "wss://127.0.0.1:9002",
                  "max_configuration_bytes": 2048,
+                 "clock": "synchronized (NODE_INFO.clock_sync.usable)",
                  "stream": {"stream_id": STREAM, "role": "consumer", "data_type": "F64", "fault": "UNDERRUN"}},
         "peers": {"anonymous": "no TLS client certificate",
                   "studio": "the authorized Studio's verified certificate (s7runtime/examples/certs/s7_studio.cert.pem)"},

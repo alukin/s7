@@ -160,6 +160,7 @@ int main(int argc, char** argv) {
         std::cout << "runtime.library_count=" << library_paths.size() << '\n';
         std::cout << "runtime.plugin_count=" << plugin_loader.loaded_count() << '\n';
         service.print_summary(std::cout);
+        service.check_clock(std::cout);
 
         // Start WebSocket server if enabled in schema, or if --start-net flag is provided
         bool should_start_network = start_network || definition.server.enabled;
@@ -224,7 +225,10 @@ int main(int argc, char** argv) {
                     try {
                         const auto stats = s7::run_step_loop([&service] { service.step(); },
                                                              definition.execution.step_rate_hz, stop_requested, deadline,
-                                                             [&service] { service.report_transport_errors(std::cerr); });
+                                                             [&service] {
+                                                                 service.report_transport_errors(std::cerr);
+                                                                 service.check_clock(std::cerr);
+                                                             });
                         steps += stats.steps;
                         elapsed_seconds += stats.elapsed_seconds;
                         stopped_by_signal = stats.stop_reason == s7::StepLoopStats::StopReason::StopRequested;
@@ -242,6 +246,7 @@ int main(int argc, char** argv) {
                                service.stream_recoveries() == recoveries) {
                             std::this_thread::sleep_for(std::chrono::milliseconds(100));
                             service.report_transport_errors(std::cerr);
+                            service.check_clock(std::cerr);
                         }
                         if (service.stream_recoveries() == recoveries) {
                             stopped_by_signal = stop_requested.load();
@@ -265,6 +270,7 @@ int main(int argc, char** argv) {
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
                     service.report_transport_errors(std::cerr);
+                    service.check_clock(std::cerr);
                 }
                 stopped_by_signal = stop_requested.load();
             }

@@ -70,6 +70,16 @@ struct ExecutionConfig {
     double step_rate_hz{};
 };
 
+// The node's clock: "clock": { "max_error_ms": 250, "assume_synchronized": false }.
+// Its UTC times count as the shared "utc" domain while the kernel reports it
+// NTP-synchronized with a worst-case error within max_error_ms.
+// assume_synchronized skips the kernel check (tests and hosts whose
+// synchronization the kernel does not know about).
+struct ClockConfig {
+    double max_error_ms{250.0};
+    bool assume_synchronized{false};
+};
+
 struct RuntimeSchemaDefinition;
 
 struct RuntimeSchemaDefinition {
@@ -82,6 +92,7 @@ struct RuntimeSchemaDefinition {
     WebSocketClientConfig client;
     SimulationConfig simulation;
     ExecutionConfig execution;
+    ClockConfig clock;
     // Node settings, not deployable: "control": { "studio_key_purpose_oid": "...",
     // "studio_certificate_sha256": "<hex>" } names the authorized Studio.
     ControlAuthorization control;
@@ -134,6 +145,14 @@ public:
     void add_seed_peer(const std::string& endpoint);
     // Prints and clears connection-level transport errors (e.g. malformed frames).
     void report_transport_errors(std::ostream& out) const;
+    // Re-reads the clock synchronization (at most once a second unless
+    // forced). A change is printed; a lost synchronization is also recorded
+    // as CLOCK_UNSYNCHRONIZED on every stream. Returns whether the clock is usable.
+    bool check_clock(std::ostream& out, bool force = false);
+    [[nodiscard]] auto clock_sync() const -> clock::SyncStatus;
+    // Replaces where the synchronization is read from (default: the node's
+    // clock configuration, then the kernel).
+    void set_clock_source(std::function<clock::SyncStatus()> source);
     // Prints connection counts, queue drops and packet counters of the transport.
     void report_transport_stats(std::ostream& out) const;
     void print_summary(std::ostream& out) const;
@@ -159,6 +178,9 @@ private:
     std::atomic<bool> stepping_{false};
     std::atomic<std::uint64_t> stream_recoveries_{0};
     std::shared_ptr<GraphHost> graph_host_;
+    std::optional<bool> clock_usable_;
+    std::function<clock::SyncStatus()> clock_source_;
+    std::chrono::steady_clock::time_point clock_checked_{};
 };
 
 struct StepLoopStats {

@@ -86,17 +86,21 @@ Checks reachability and protocol compatibility. The response includes `node_uuid
 
 Returns the node descriptor: identity, platform, network endpoints, runtime state, supported protocol versions, available libraries/elements, and hardware capabilities. The capability structure is specified in [REMOTE_NODE_INFO_AND_DEPLOYMENT.md](REMOTE_NODE_INFO_AND_DEPLOYMENT.md); that document remains the detailed source for descriptor fields.
 
-The data plane is described by two top-level members (wire draft section 12.1, items 1 and 4):
+The data plane and the node's clock are described by these top-level members (wire draft section 12.1, items 1 and 4):
 
 ```json
 "data_protocol": { "packet_versions": [1], "extensions": ["0x8001"] },
+"clock_sync": { "synchronized": true, "max_error_ns": 87468000, "estimated_error_ns": 10284000,
+                "source": "kernel", "max_error_bound_ns": 250000000, "usable": true },
 "clock_domains": [
   { "id": "model", "kind": "model", "continuous_across_restart": true },
-  { "id": "node:<node_uuid>:utc", "kind": "utc", "continuous_across_restart": true }
+  { "id": "utc", "kind": "utc", "continuous_across_restart": true, "synchronized": true }
 ]
 ```
 
-`control_limits` (`max_configuration_bytes`, `max_chunk_bytes`, `max_transfer_bytes`) bound the configurations the node accepts (section 10.1, Configuration transfer). `packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x8001`: `TIMESTAMPS`). `model` is the deployment's model time; `node:<node_uuid>:utc` is the node's system clock (nanoseconds since the Unix epoch), the clock domain of `PROCESSING_TIME` on streams it produces.
+`control_limits` (`max_configuration_bytes`, `max_chunk_bytes`, `max_transfer_bytes`) bound the configurations the node accepts (section 10.1, Configuration transfer). `packet_versions` are the data packet versions the node sends and accepts; `extensions` the header extensions it understands (`0x8001`: `TIMESTAMPS`). `model` is the deployment's model time.
+
+**Clock.** S7 nodes are expected to keep their UTC clocks synchronized by NTP. `clock_sync` is read from the kernel (`ntp_adjtime`) at each request: `synchronized` unless the kernel marks the clock unsynchronized, with its worst-case (`max_error_ns`) and estimated error. The clock is `usable` when it is synchronized and its worst-case error is within the node's bound (node setting `"clock": { "max_error_ms": 250 }`; `"assume_synchronized": true` skips the kernel check, for tests and hosts synchronized by other means, and reports `source: "assumed"`). A usable clock is the shared domain `utc` (nanoseconds since the Unix epoch, comparable between nodes within their error bounds); otherwise the node lists its own domain `node:<node_uuid>:utc`, which is not comparable with other nodes. The deployment client refuses a node whose clock is not usable before preparing anything. A running node re-reads the state every second; when the clock becomes unusable it prints `runtime.clock.usable=false` and records `CLOCK_UNSYNCHRONIZED` in the recent faults of every stream (the streams keep running).
 
 ### 5.3 `GET_PEERS` → `PEERS`
 
@@ -303,7 +307,7 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 **Model time.** A deployed graph steps in the diagram's model time: with a `dt` (seconds) in the diagram each step advances model time by `dt` (in whole nanoseconds) and observations carry it; without one the graph's steps are untimed.
 
-**Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, reads each node's `data_protocol` with `GET_NODE_INFO` and refuses a deployment in which a stream's producer and a consumer share no packet version, or a stream with per-packet timestamps has an end without the `TIMESTAMPS` extension (nothing is prepared then), uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
+**Deployment client.** `s7::deployment::deploy_diagram` (`s7net/include/s7/deployment_client.hpp`), used by Studio (Run > Deploy to Nodes) and `s7ctl deploy`, assigns the streams, checks each node's identity with `HELLO`, reads each node's clock and `data_protocol` with `GET_NODE_INFO` (refusing a node whose clock is not usable) and refuses a deployment in which a stream's producer and a consumer share no packet version, or a stream with per-packet timestamps has an end without the `TIMESTAMPS` extension (nothing is prepared then), uses one revision (the highest active revision + 1) with each node's own `base_revision`, prepares every node and commits only if all are `READY`; otherwise it aborts the prepared ones. A commit that fails after others succeeded is reported per node.
 
 **Configuration transfer.** `NODE_INFO.control_limits` advertises `max_configuration_bytes` (default 1 MiB), `max_chunk_bytes` (at most 1 MiB) and `max_transfer_bytes` (default 64 MiB, at most 256 MiB). A `PREPARE_DEPLOYMENT` whose serialized `configuration` exceeds `max_configuration_bytes` is `CONFIGURATION_TOO_LARGE`; such a configuration is sent first by chunked transfer, and the prepare names it with `deployment.configuration_transfer_id` instead of `configuration`. The transfer messages are authorized like a deployment mutation:
 

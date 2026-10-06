@@ -3,6 +3,7 @@ add_library(s7transport STATIC
     src/transport.cpp
     src/wire_format.cpp
     src/stream_protocol.cpp
+    src/clock_sync.cpp
 )
 
 target_include_directories(s7transport PUBLIC

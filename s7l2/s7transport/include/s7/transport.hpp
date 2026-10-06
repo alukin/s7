@@ -186,6 +186,10 @@ public:
     // packet it receives as the new start; a producer resumes sending.
     virtual auto recover_stream(const wire::StreamId& stream_id) -> bool = 0;
 
+    // Adds an event (a fault that does not stop streams, such as a lost clock
+    // synchronization) to the recent faults of every stream.
+    virtual void note_on_all_streams(stream::FaultCode code, const std::string& detail) = 0;
+
     // Connection-level failures (e.g. malformed messages); returns and clears them.
     virtual auto take_transport_errors() -> std::vector<std::string> { return {}; }
     [[nodiscard]] virtual auto stats() const -> TransportStats { return {}; }
@@ -208,6 +212,7 @@ public:
     auto receive(StreamHandle handle, void* elements, std::size_t count) -> ReceiveResult override;
     [[nodiscard]] auto stream_statuses() const -> std::vector<StreamStatus> override;
     auto recover_stream(const wire::StreamId& stream_id) -> bool override;
+    void note_on_all_streams(stream::FaultCode code, const std::string& detail) override;
 
 private:
     struct Impl;
@@ -265,6 +270,7 @@ public:
     auto receive(StreamHandle handle, void* elements, std::size_t count) -> ReceiveResult override;
     [[nodiscard]] auto stream_statuses() const -> std::vector<StreamStatus> override;
     auto recover_stream(const wire::StreamId& stream_id) -> bool override;
+    void note_on_all_streams(stream::FaultCode code, const std::string& detail) override;
     auto take_transport_errors() -> std::vector<std::string> override;
     [[nodiscard]] auto stats() const -> TransportStats override;
 

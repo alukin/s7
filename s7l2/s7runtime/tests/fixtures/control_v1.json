@@ -6,6 +6,7 @@
     "node_name": "fixture-node",
     "listen_url": "wss://127.0.0.1:9002",
     "max_configuration_bytes": 2048,
+    "clock": "synchronized (NODE_INFO.clock_sync.usable)",
     "stream": {
       "stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
       "role": "consumer",
@@ -84,7 +85,14 @@
           "clock_domains": "array",
           "clock_domains[0].id": "string",
           "clock_domains[0].kind": "string",
-          "clock_domains[0].continuous_across_restart": "boolean"
+          "clock_domains[0].continuous_across_restart": "boolean",
+          "clock_sync": "object",
+          "clock_sync.synchronized": "boolean",
+          "clock_sync.max_error_ns": "integer",
+          "clock_sync.estimated_error_ns": "integer",
+          "clock_sync.source": "string",
+          "clock_sync.max_error_bound_ns": "integer",
+          "clock_sync.usable": "boolean"
         },
         "equals": {
           "data_protocol.packet_versions": [
@@ -92,7 +100,9 @@
           ],
           "data_protocol.extensions": [
             "0x8001"
-          ]
+          ],
+          "clock_sync.usable": true,
+          "clock_domains[1].id": "utc"
         }
       }
     },

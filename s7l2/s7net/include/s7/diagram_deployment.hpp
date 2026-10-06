@@ -28,7 +28,8 @@
 // Timing is derived from the diagram: with a model-time step (`dt`, seconds)
 // a stream is uniformly sampled at 1 / dt in MODEL_TIME (clock domain
 // "model"), one element per step; without one it carries the producer's
-// PROCESSING_TIME (clock domain "node:<producer uuid>:utc") on every packet.
+// PROCESSING_TIME (clock domain "utc": the nodes' NTP-synchronized UTC
+// clocks) on every packet.
 
 #include <cstddef>
 #include <functional>
@@ -85,14 +86,14 @@ struct StreamDescriptor {
 // least 1 ns.
 [[nodiscard]] auto model_time_step_ns(const boost::json::object& diagram) -> std::optional<std::int64_t>;
 
-// The timing a stream produced on `producer_node` gets in this diagram.
+// The timing every stream of this diagram gets.
 struct StreamTiming {
     std::optional<stream::SampleRate> sample_rate;
     std::vector<TimestampDeclaration> timestamps;
 
     bool operator==(const StreamTiming&) const = default;
 };
-[[nodiscard]] auto stream_timing(const boost::json::object& diagram, const std::string& producer_node) -> StreamTiming;
+[[nodiscard]] auto stream_timing(const boost::json::object& diagram) -> StreamTiming;
 
 [[nodiscard]] auto parse_runtime_nodes(const boost::json::object& diagram) -> std::vector<RuntimeNode>;
 // Throws std::invalid_argument on a malformed descriptor.

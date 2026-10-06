@@ -791,9 +791,23 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
         {"max_transfer_bytes", std::min(options_.max_transfer_bytes, kMaxTransferBytes)},
     };
     out["data_protocol"] = boost::json::object{{"packet_versions", std::move(packet_versions)}, {"extensions", std::move(extensions)}};
+    // Its UTC clock is the shared "utc" domain only while it is synchronized
+    // within the bound; otherwise it is this node's own domain.
+    const auto sync = options_.clock_sync ? options_.clock_sync() : clock::read_kernel_sync();
+    const bool usable = clock::usable(sync, options_.max_clock_error_ns);
+    out["clock_sync"] = boost::json::object{
+        {"synchronized", sync.synchronized},
+        {"max_error_ns", sync.max_error_ns},
+        {"estimated_error_ns", sync.estimated_error_ns},
+        {"source", sync.source},
+        {"max_error_bound_ns", options_.max_clock_error_ns},
+        {"usable", usable},
+    };
     out["clock_domains"] = boost::json::array{
         boost::json::object{{"id", "model"}, {"kind", "model"}, {"continuous_across_restart", true}},
-        boost::json::object{{"id", "node:" + descriptor_.node_uuid + ":utc"}, {"kind", "utc"}, {"continuous_across_restart", true}},
+        usable ? boost::json::object{{"id", "utc"}, {"kind", "utc"}, {"continuous_across_restart", true}, {"synchronized", true}}
+               : boost::json::object{{"id", "node:" + descriptor_.node_uuid + ":utc"}, {"kind", "utc"}, {"continuous_across_restart", true},
+                                     {"synchronized", false}},
     };
 
     boost::json::object network;

@@ -66,4 +66,6 @@ ctest --test-dir build --output-on-failure
 
 Runtime schema examples are in `s7runtime/examples/`. A `simulation` block runs a fixed number of steps at startup (`periods * sample_rate_hz / frequency_hz`). While serving (`--serve-forever` / `--serve-seconds`), the runtime steps the graph continuously at `execution.step_rate_hz` (or `--step-rate <hz>`); with no rate set it serves the control plane only. SIGINT/SIGTERM stop stepping cleanly and print the step count and achieved rate. For two local nodes discovered by Studio see `docs/LOCAL_HEADLESS_NODES_DEMO.md`.
 
-Runtime state (node identity, peer cache) is stored in the directory given by `--state-dir` (default `~/.s7runtime/default-node`, for single-node development); each node needs its own, and the runtime locks it while running. With a TLS certificate, the node UUID comes from its SAN URI `spiffe://s7/node/<node_uuid>`.
+Nodes expect NTP-synchronized clocks: a node reports its clock state in `NODE_INFO`, and diagrams are deployed only to nodes whose worst-case clock error is within their bound (`"clock": { "max_error_ms": 250 }` in the node's schema; `"assume_synchronized": true` for tests).
+
+Runtime state (node identity, peer cache, active deployment) is stored in the directory given by `--state-dir` (default `~/.s7runtime/default-node`, for single-node development); each node needs its own, and the runtime locks it while running. With a TLS certificate, the node UUID comes from its SAN URI `spiffe://s7/node/<node_uuid>`.

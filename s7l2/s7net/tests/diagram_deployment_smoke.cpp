@@ -212,8 +212,8 @@ void test_timing()
     expect(deployment::assign_streams(diagram, infer(diagram)).empty(), "streams assigned");
     auto stream = deployment::parse_streams(diagram).front();
     expect(!stream.sample_rate && stream.timestamps == std::vector<deployment::TimestampDeclaration>{
-                                                          {s7::wire::TimestampRole::ProcessingTime, std::string("node:") + kA + ":utc"}},
-           "without dt: the producer's processing time on every packet");
+                                                          {s7::wire::TimestampRole::ProcessingTime, "utc"}},
+           "without dt: the producer's synchronized UTC time on every packet");
     const auto untimed_id = stream.stream_id;
 
     // The producer stamps each element; the consumer receives the stamp.

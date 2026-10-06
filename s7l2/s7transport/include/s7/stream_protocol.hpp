@@ -41,6 +41,7 @@ enum class FaultCode : std::uint8_t {
     TimestampProfileMismatch, // a packet's timestamp records differ from the stream's profile
     UnauthorizedProducer, // packets from a peer that is not the stream's producer node
     UnauthorizedConsumer, // a RESUME from a peer that is not one of the stream's consumer nodes
+    ClockUnsynchronized,  // the node's clock lost synchronization: its UTC times are not comparable
 };
 
 [[nodiscard]] std::string to_string(FaultCode code);

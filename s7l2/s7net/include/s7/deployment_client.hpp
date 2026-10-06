@@ -3,7 +3,8 @@
 
 // Deploying a diagram to the nodes its elements are placed on, as Studio
 // does (S7_Control_Protocol_MVP.md, PREPARE / COMMIT / ABORT): assign the
-// streams, check each node's identity and that the producer and consumers of
+// streams, check each node's identity and that its clock is synchronized
+// (NODE_INFO lists the "utc" clock domain), that the producer and consumers of
 // every stream share a data protocol version (and the TIMESTAMPS extension
 // where the stream needs it), send the configuration to each node (by
 // chunked transfer when it exceeds the node's max_configuration_bytes),

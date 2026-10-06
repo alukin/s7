@@ -462,6 +462,14 @@ public:
         return found;
     }
 
+    void note_all(const FaultCode code, const std::string& detail)
+    {
+        std::lock_guard lock(mutex);
+        for (auto& [_, entry] : entries_) {
+            entry->note(code, detail);
+        }
+    }
+
     // Lock held by the caller.
     StreamEntry* find(const StreamHandle handle)
     {
@@ -604,6 +612,11 @@ auto InMemoryRuntimeNetEndpoint::receive(const StreamHandle handle, void* elemen
 auto InMemoryRuntimeNetEndpoint::stream_statuses() const -> std::vector<StreamStatus>
 {
     return impl_->table.statuses();
+}
+
+void InMemoryRuntimeNetEndpoint::note_on_all_streams(const stream::FaultCode code, const std::string& detail)
+{
+    impl_->table.note_all(code, detail);
 }
 
 auto InMemoryRuntimeNetEndpoint::recover_stream(const wire::StreamId& stream_id) -> bool
@@ -1667,6 +1680,11 @@ auto BeastRuntimeNetEndpoint::receive(const StreamHandle handle, void* elements,
 auto BeastRuntimeNetEndpoint::stream_statuses() const -> std::vector<StreamStatus>
 {
     return impl_->table.statuses();
+}
+
+void BeastRuntimeNetEndpoint::note_on_all_streams(const stream::FaultCode code, const std::string& detail)
+{
+    impl_->table.note_all(code, detail);
 }
 
 auto BeastRuntimeNetEndpoint::recover_stream(const wire::StreamId& stream_id) -> bool

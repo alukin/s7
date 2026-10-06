@@ -41,6 +41,7 @@ node_config() {
     "enabled": true, "cert_file": "$CERTS/$1.cert.pem", "key_file": "$CERTS/$1.key.pem",
     "ca_file": "$CERTS/s7_root_ca.cert.pem", "require_client_cert": true } } },
   "control": { "studio_key_purpose_oid": "$OID", "studio_certificate_sha256": "$STUDIO_FP" },
+  "clock": { "assume_synchronized": true },
   "execution": { "step_rate_hz": 50 }
 }
 EOF

@@ -11,6 +11,7 @@
 #include <optional>
 #include <random>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -55,6 +56,12 @@ std::filesystem::path make_temp_state_dir(const std::string& label)
 ControlPeer verified_peer(const std::string& certificate_name)
 {
     return ControlPeer{.tls = true, .certificate = s7::transport::inspect_certificate_file(cert_path(certificate_name))};
+}
+
+// A clock taken as synchronized, so tests do not depend on the host's NTP state.
+s7::clock::SyncStatus assumed_clock()
+{
+    return {.synchronized = true, .max_error_ns = 0, .estimated_error_ns = 0, .source = "assumed"};
 }
 
 s7::ControlAuthorization studio_authorization()
@@ -415,6 +422,7 @@ void test_runtime_deployment_over_mtls()
                              .ca_file = cert_path("s7_root_ca.cert.pem"),
                              .require_client_cert = true};
     definition.control = studio_authorization();
+    definition.clock.assume_synchronized = true;
 
     const auto state_dir = make_temp_state_dir("deploy");
     {
@@ -569,9 +577,9 @@ void test_deploy_client()
     auto host_a = std::make_shared<RecordingHost>();
     auto host_b = std::make_shared<RecordingHost>();
     s7::ControlPlaneMvp node_a{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
-                               s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_a}};
+                               s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_a, .clock_sync = assumed_clock}};
     s7::ControlPlaneMvp node_b{s7::ControlNodeDescriptor{.node_uuid = kOther},
-                               s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_b}};
+                               s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_b, .clock_sync = assumed_clock}};
     std::map<std::string, s7::ControlPlaneMvp*> by_endpoint{{"wss://a", &node_a}, {"wss://b", &node_b}};
     auto request = [&](const s7::deployment::RuntimeNode& node, const json::object& message) {
         return Client(*by_endpoint.at(node.endpoint), verified_peer("s7_studio.cert.pem")).send(message);
@@ -643,9 +651,24 @@ void test_deploy_client()
     const auto info = Client(node_b, ControlPeer{}).send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
     expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}}, {"extensions", json::array{"0x8001"}}},
            "data protocol advertised: " + json::serialize(info.at("data_protocol")));
-    expect(info.at("clock_domains").as_array().size() == 2 &&
-               info.at("clock_domains").as_array()[1].as_object().at("id").as_string() == std::string("node:") + kOther + ":utc",
-           "clock domains advertised");
+    expect(info.at("clock_domains").as_array().size() == 2 && info.at("clock_domains").as_array()[1].as_object().at("id").as_string() == "utc",
+           "a synchronized clock is the shared utc domain");
+    expect(info.at("clock_sync").as_object().at("usable").as_bool() && info.at("clock_sync").as_object().at("source").as_string() == "assumed",
+           "clock synchronization reported");
+
+    // A clock beyond its error bound, or not synchronized, is the node's own domain.
+    for (const auto& sync : {s7::clock::SyncStatus{.synchronized = true, .max_error_ns = 300'000'000, .source = "kernel"},
+                             s7::clock::SyncStatus{.synchronized = false, .source = "kernel"}}) {
+        s7::ControlPlaneMvp drifting{s7::ControlNodeDescriptor{.node_uuid = kOther},
+                                     s7::ControlPlaneOptions{.clock_sync = [sync] { return sync; }, .max_clock_error_ns = 250'000'000}};
+        const auto drifting_info =
+            Client(drifting, ControlPeer{}).send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
+        expect(!drifting_info.at("clock_sync").as_object().at("usable").as_bool() &&
+                   drifting_info.at("clock_domains").as_array()[1].as_object().at("id").as_string() == std::string("node:") + kOther + ":utc",
+               "an unusable clock is not the utc domain");
+    }
+    const auto kernel = s7::clock::read_kernel_sync();
+    expect(kernel.source == "kernel" && kernel.max_error_ns >= 0 && kernel.estimated_error_ns >= 0, "the kernel's NTP state is read");
 
     // Nodes without a common data protocol are refused before anything is prepared.
     const auto prepared_before = host_b->prepared;
@@ -663,6 +686,12 @@ void test_deploy_client()
         expect(host_b->prepared == prepared_before, "nothing prepared");
     };
     refuse_with([](json::object& response) { response.erase("data_protocol"); }, again.diagram, "does not advertise its data protocol");
+    refuse_with(
+        [](json::object& response) {
+            response["clock_domains"].as_array()[1].as_object()["id"] = std::string("node:") + kOther + ":utc";
+            response["clock_sync"].as_object()["usable"] = false;
+        },
+        again.diagram, "is not synchronized");
     refuse_with([](json::object& response) { response["data_protocol"].as_object()["packet_versions"] = json::array{2}; }, again.diagram,
                 "share no data packet version");
     auto untimed = again.diagram;
@@ -694,7 +723,8 @@ void test_deployment_survives_restart()
     auto make_node = [&](const std::shared_ptr<RecordingHost>& host) {
         return std::make_unique<s7::ControlPlaneMvp>(
             s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
-            s7::ControlPlaneOptions{.storage_dir = storage, .authorization = studio_authorization(), .deployment_host = host});
+            s7::ControlPlaneOptions{.storage_dir = storage, .authorization = studio_authorization(), .deployment_host = host,
+                                    .clock_sync = assumed_clock});
     };
     auto deploy_to = [&](s7::ControlPlaneMvp& node, const json::object& what) {
         return s7::deployment::deploy_diagram(what, types, [&](const s7::deployment::RuntimeNode&, const json::object& message) {
@@ -798,7 +828,8 @@ void test_chunked_transfer()
                                                      .deployment_host = host,
                                                      .max_configuration_bytes = 2048,
                                                      .max_chunk_bytes = 512,
-                                                     .max_transfer_bytes = 1024 * 1024}};
+                                                     .max_transfer_bytes = 1024 * 1024,
+                                                     .clock_sync = assumed_clock}};
     Client studio(node, verified_peer("s7_studio.cert.pem"));
     const auto info = studio.send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
     expect(info.at("control_limits") == json::object{{"max_configuration_bytes", 2048}, {"max_chunk_bytes", 512}, {"max_transfer_bytes", 1024 * 1024}},
@@ -887,6 +918,7 @@ void test_large_deployment_over_mtls()
                              .ca_file = cert_path("s7_root_ca.cert.pem"),
                              .require_client_cert = true};
     definition.control = studio_authorization();
+    definition.clock.assume_synchronized = true;
     const auto state_dir = make_temp_state_dir("large");
     {
         s7::RuntimeService service{definition, state_dir};
@@ -908,6 +940,35 @@ void test_large_deployment_over_mtls()
     std::filesystem::remove_all(state_dir);
 }
 
+// A node whose clock loses synchronization says so and records it on its streams.
+void test_clock_loss()
+{
+    const auto state_dir = make_temp_state_dir("clock");
+    {
+        s7::RuntimeService service{s7::JsonSchemaLoader::load_from_json(constant_gain_fragment(1.0)), state_dir};
+        auto sync = assumed_clock();
+        service.set_clock_source([&sync] { return sync; });
+        s7::stream::StreamConfig config;
+        config.stream_id = s7::wire::parse_stream_id("5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a");
+        static_cast<void>(service.network_endpoint()->open_consumer(config));
+        std::ostringstream log;
+        expect(service.check_clock(log, true) && log.str().find("runtime.clock.usable=true") != std::string::npos, "synchronized at start");
+        sync = {.synchronized = false, .max_error_ns = 16'000'000'000, .source = "kernel"};
+        expect(!service.check_clock(log, true) && log.str().find("runtime.clock.usable=false") != std::string::npos, "the loss is printed");
+        const auto statuses = service.network_endpoint()->stream_statuses();
+        expect(statuses.size() == 1 && statuses.front().recent_faults.size() == 1 &&
+                   statuses.front().recent_faults.front().code == s7::stream::FaultCode::ClockUnsynchronized &&
+                   statuses.front().fault == s7::stream::FaultCode::None,
+               "recorded on the stream without stopping it");
+        const auto info = s7::parse_json_precise(service.handle_control_request_json(
+            ControlPeer{}, R"({"type":"GET_NODE_INFO","request_id":"i","protocol_version":1})")).as_object();
+        expect(!info.at("clock_sync").as_object().at("usable").as_bool(), "NODE_INFO shows the clock unusable");
+        expect(!service.check_clock(log, true) && service.network_endpoint()->stream_statuses().front().recent_faults.size() == 1,
+               "recorded once per loss");
+    }
+    std::filesystem::remove_all(state_dir);
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -923,6 +984,7 @@ try {
     test_chunked_transfer();
     test_runtime_deployment_over_mtls();
     test_large_deployment_over_mtls();
+    test_clock_loss();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7runtime deployment smoke: " << ex.what() << '\n';

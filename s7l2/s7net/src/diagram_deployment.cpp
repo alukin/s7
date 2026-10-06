@@ -288,7 +288,7 @@ auto model_time_step_ns(const json::object& diagram) -> std::optional<std::int64
     return std::llround(ns);
 }
 
-auto stream_timing(const json::object& diagram, const std::string& producer_node) -> StreamTiming
+auto stream_timing(const json::object& diagram) -> StreamTiming
 {
     StreamTiming timing;
     if (const auto step = model_time_step_ns(diagram)) {
@@ -297,7 +297,7 @@ auto stream_timing(const json::object& diagram, const std::string& producer_node
         timing.sample_rate = stream::SampleRate{1'000'000'000 / divisor, static_cast<std::uint64_t>(*step) / divisor};
         timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ModelTime, "model"});
     } else {
-        timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ProcessingTime, "node:" + producer_node + ":utc"});
+        timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ProcessingTime, "utc"});
     }
     return timing;
 }
@@ -374,7 +374,7 @@ auto assign_streams(json::object& diagram, const OutputTypeLookup& output_type) 
         auto& stream = wanted[{c.from_element, c.from_port}];
         if (stream.consumers.empty()) {
             stream.producer = StreamEndpoint{from->second, c.from_element, c.from_port};
-            auto timing = stream_timing(diagram, from->second);
+            auto timing = stream_timing(diagram);
             stream.sample_rate = timing.sample_rate;
             stream.timestamps = std::move(timing.timestamps);
             if (const auto type = output_type(c.from_element, c.from_port)) {
