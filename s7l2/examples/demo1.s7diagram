@@ -1,0 +1,222 @@
+{
+  "id": "s7studio_demo_oscillator_noise",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "schema": {
+    "name": "s7studio_demo_oscillator_noise",
+    "elements": [
+      {
+        "id": "osc",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1.0,
+          "frequency_hz": 2.0,
+          "sample_rate_hz": 1000.0,
+          "phase": 0.0
+        }
+      },
+      {
+        "id": "noise",
+        "type": "WhiteNoiseGenerator",
+        "params": {
+          "amplitude": 0.15,
+          "seed": 42
+        }
+      },
+      {
+        "id": "summator",
+        "type": "Adder",
+        "params": {}
+      },
+      {
+        "id": "scope_main",
+        "type": "Scope",
+        "params": {
+          "channel_count": 2
+        }
+      },
+      {
+        "id": "eulerintegrator_1",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "osc",
+        "from_port": 0,
+        "to_element": "summator",
+        "to_port": 0
+      },
+      {
+        "from_element": "noise",
+        "from_port": 0,
+        "to_element": "summator",
+        "to_port": 1
+      },
+      {
+        "from_element": "summator",
+        "from_port": 0,
+        "to_element": "scope_main",
+        "to_port": 1
+      },
+      {
+        "from_element": "summator",
+        "from_port": 0,
+        "to_element": "eulerintegrator_1",
+        "to_port": 0
+      },
+      {
+        "from_element": "eulerintegrator_1",
+        "from_port": 0,
+        "to_element": "scope_main",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "osc",
+        "position": [
+          2,
+          4
+        ]
+      },
+      {
+        "id": "noise",
+        "position": [
+          2,
+          12
+        ]
+      },
+      {
+        "id": "summator",
+        "position": [
+          17,
+          8
+        ]
+      },
+      {
+        "id": "scope_main",
+        "position": [
+          43,
+          8
+        ]
+      },
+      {
+        "id": "eulerintegrator_1",
+        "position": [
+          30,
+          8
+        ]
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "osc",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "summator",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "noise",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "summator",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "summator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "eulerintegrator_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "eulerintegrator_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_main",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "wire": "w3",
+          "at": [
+            29,
+            10
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_main",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": []
+  }
+}
