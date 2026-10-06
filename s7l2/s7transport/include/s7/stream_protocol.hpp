@@ -35,6 +35,10 @@ enum class FaultCode : std::uint8_t {
     MalformedPacket,
     TypeMismatch,      // packet type differs from the stream's type
     Underrun,          // the consumer waited longer than max_wait_ms for data
+    // Refused peers. Reported in a stream's recent faults; they do not stop
+    // the stream (a peer cannot interrupt a stream it has no part in).
+    UnauthorizedProducer, // packets from a peer that is not the stream's producer node
+    UnauthorizedConsumer, // a RESUME from a peer that is not one of the stream's consumer nodes
 };
 
 [[nodiscard]] std::string to_string(FaultCode code);
@@ -47,6 +51,11 @@ struct StreamConfig {
     std::uint32_t send_log_max_packets{4096};
     std::chrono::milliseconds max_block{2000};
     std::chrono::milliseconds max_wait{2000}; // consumer side: how long a step may wait for data
+    // The nodes allowed at the other end (node UUIDs; empty: not checked).
+    // A consumer accepts the stream only from producer_node; a producer
+    // serves it only to consumer_nodes (wire draft sections 9 and 12.1 item 5).
+    std::string producer_node;
+    std::vector<std::string> consumer_nodes;
 };
 
 // Durable sequence-range reservations (wire draft section 4): a producer never

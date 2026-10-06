@@ -5,8 +5,9 @@
 // (S7_Network_Wire_Protocol_v1.md) and the control channel.
 //
 // A producer stream sends what the graph publishes to every peer that
-// RESUMEs it; a consumer stream RESUMEs on every data connection and receives
-// from the one that produces it. Publishing blocks while the send log is full
+// RESUMEs it (only configured consumer nodes, when the stream names them); a
+// consumer stream RESUMEs on every data connection to its producer node (any
+// data connection when it names none) and accepts packets only there. Publishing blocks while the send log is full
 // (up to max_block, then the stream faults); receiving waits for data (up to
 // max_wait, then the stream faults with UNDERRUN).
 
@@ -93,6 +94,13 @@ struct StreamHandle {
 
 enum class StreamRole : std::uint8_t { Producer, Consumer };
 
+struct RecentFault {
+    stream::FaultCode code{stream::FaultCode::None};
+    std::string detail;
+    std::chrono::system_clock::time_point at;
+};
+inline constexpr std::size_t kMaxRecentFaults = 16;
+
 struct StreamStatus {
     wire::StreamId stream_id{};
     StreamRole role{StreamRole::Producer};
@@ -106,6 +114,12 @@ struct StreamStatus {
     std::uint64_t lost_resumes{}; // producer: consumers that resumed from a lost position
     std::uint64_t duplicates_discarded{};
     std::uint64_t malformed{};
+    // Refused peers: producer: RESUMEs from a node that is not a configured
+    // consumer; consumer: packets from a connection it did not RESUME on.
+    std::uint64_t unauthorized{};
+    // The latest faults and refusals, oldest first (at most kMaxRecentFaults);
+    // kept across RECOVER_STREAM.
+    std::vector<RecentFault> recent_faults;
     std::size_t send_log_depth{};
     std::size_t buffered_elements{};
     std::chrono::milliseconds blocked_total{};
@@ -196,6 +210,14 @@ public:
     ~BeastRuntimeNetEndpoint() override;
 
     [[nodiscard]] auto backend_name() const -> std::string override;
+
+    // This node's UUID. It is sent in the WebSocket handshake (header
+    // S7-Node, both directions). Over TLS a peer is known by its verified
+    // certificate and the header is ignored; over plain WebSocket the header
+    // is the peer's (unverified) identity: it keeps consumers on different
+    // nodes apart and selects which streams a connection may carry. Set it
+    // before connecting.
+    void set_node_uuid(const std::string& node_uuid);
 
     // Accepts any number of peers (up to the inbound limit). Port 0 lets the
     // system choose; returns the port listened on. An empty bind_address

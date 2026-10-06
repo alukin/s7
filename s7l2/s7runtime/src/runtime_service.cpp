@@ -797,6 +797,9 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
             state_dir_,
             identity_cert ? std::optional<std::string>{certificate_node_uuid(*identity_cert)} : std::nullopt);
 
+        if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
+            beast->set_node_uuid(runtime_instance_uuid_); // the identity plain WebSocket peers know this node by
+        }
         graph_host_ = std::make_shared<GraphHost>(*this);
         control_plane_ = std::make_shared<ControlPlaneMvp>(
             build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),

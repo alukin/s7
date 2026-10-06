@@ -20,8 +20,10 @@ std::string to_string(const FaultCode code)
         case FaultCode::SendLogOverflow: return "SEND_LOG_OVERFLOW";
         case FaultCode::StreamStateLost: return "STREAM_STATE_LOST";
         case FaultCode::MalformedPacket: return "MALFORMED_PACKET";
-        case FaultCode::TypeMismatch: return "TIMESTAMP_PROFILE_MISMATCH";
+        case FaultCode::TypeMismatch: return "TYPE_MISMATCH";
         case FaultCode::Underrun: return "UNDERRUN";
+        case FaultCode::UnauthorizedProducer: return "UNAUTHORIZED_PRODUCER";
+        case FaultCode::UnauthorizedConsumer: return "UNAUTHORIZED_CONSUMER";
     }
     return "UNKNOWN";
 }

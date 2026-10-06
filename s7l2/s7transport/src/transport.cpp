@@ -218,6 +218,28 @@ struct StreamEntry {
     std::unique_ptr<stream::StreamProducer> producer;
     std::unique_ptr<stream::StreamConsumer> consumer;
     bool open{true}; // owned by an element; a closed stream keeps its state
+    std::uint64_t unauthorized{}; // see StreamStatus::unauthorized
+    std::deque<RecentFault> recent_faults;
+    FaultCode noted{FaultCode::None}; // the stream fault already in recent_faults
+
+    [[nodiscard]] FaultCode fault_code() const { return producer ? producer->fault_code() : consumer->fault_code(); }
+
+    void note(const FaultCode code, std::string detail)
+    {
+        if (recent_faults.size() == kMaxRecentFaults) {
+            recent_faults.pop_front();
+        }
+        recent_faults.push_back(RecentFault{code, std::move(detail), std::chrono::system_clock::now()});
+    }
+    // Records the stream's fault once, when it is first seen.
+    void note_fault()
+    {
+        const auto code = fault_code();
+        if (code != FaultCode::None && code != noted) {
+            note(code, {});
+        }
+        noted = code;
+    }
 };
 
 std::string stream_key(const wire::StreamId& id)
@@ -252,6 +274,8 @@ public:
                 existing.open = true;
                 existing.config.max_block = config.max_block;
                 existing.config.max_wait = config.max_wait;
+                existing.config.producer_node = config.producer_node;
+                existing.config.consumer_nodes = config.consumer_nodes;
                 changed.notify_all();
                 return existing.handle;
             }
@@ -374,7 +398,7 @@ public:
         return {taken, consumer.fault_code()};
     }
 
-    [[nodiscard]] std::vector<StreamStatus> statuses() const
+    [[nodiscard]] std::vector<StreamStatus> statuses()
     {
         std::unique_lock lock(mutex);
         std::vector<StreamStatus> result;
@@ -383,6 +407,9 @@ public:
             status.stream_id = entry->config.stream_id;
             status.role = entry->role;
             status.type = entry->config.type;
+            status.unauthorized = entry->unauthorized;
+            entry->note_fault();
+            status.recent_faults.assign(entry->recent_faults.begin(), entry->recent_faults.end());
             if (entry->producer) {
                 const auto stats = entry->producer->stats();
                 status.fault = entry->producer->fault_code();
@@ -420,6 +447,7 @@ public:
         for (auto* index : {&producers_, &consumers_}) {
             if (const auto it = index->find(stream_key(id)); it != index->end()) {
                 auto& entry = *entries_.at(it->second);
+                entry.note_fault();
                 if (entry.producer) {
                     entry.producer->recover();
                 } else {
@@ -598,6 +626,7 @@ using Bytes = std::vector<std::uint8_t>;
 constexpr std::size_t kMaxQueuedWrites = 64; // per connection, before the producer waits for write completions
 constexpr auto kTick = std::chrono::milliseconds(1);
 constexpr auto kReconnectDelay = std::chrono::seconds(1);
+constexpr const char* kNodeHeader = "S7-Node"; // the sender's node UUID, in both handshake directions
 
 } // namespace
 
@@ -615,6 +644,13 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         std::shared_ptr<Link> link; // outbound: the link it belongs to
         ControlPeer peer;
         stream::ConsumerKey consumer_key{"anonymous"};
+        // The peer's node: from its verified certificate over TLS; over plain
+        // WebSocket as it claims (S7-Node header) or as configured (data peer).
+        std::string peer_node;
+        std::string claimed_node; // S7-Node header received in the handshake
+        // Consumer side: aliases of the local consumer streams RESUMEd here;
+        // packets for any other alias are refused.
+        std::unordered_set<std::uint32_t> resumed;
         std::unique_ptr<PlainWs> plain;
         std::unique_ptr<TlsWs> tls;
         boost::beast::flat_buffer read_buffer;
@@ -639,6 +675,17 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             } else {
                 f(*plain);
             }
+        }
+
+        // Announces this node in the handshake (request or response).
+        void decorate()
+        {
+            if (impl.node_uuid.empty()) {
+                return;
+            }
+            with_ws([uuid = impl.node_uuid](auto& ws) {
+                ws.set_option(websocket::stream_base::decorator([uuid](auto& message) { message.set(kNodeHeader, uuid); }));
+            });
         }
 
         void start()
@@ -755,9 +802,10 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         table.on_consumer_opened = [weak](StreamEntry& entry) {
             if (const auto self = weak.lock()) {
                 const auto resume = entry.consumer->resume_message();
-                boost::asio::post(self->io, [self, resume] {
+                boost::asio::post(self->io, [self, resume, producer_node = entry.config.producer_node] {
                     for (const auto& connection : self->connections) {
-                        if (connection->is_data && !connection->closed) {
+                        if (connection->is_data && !connection->closed && may_produce(*connection, producer_node)) {
+                            connection->resumed.insert(resume.stream_alias);
                             connection->send(std::make_shared<const Bytes>(to_bytes(resume)), true);
                         }
                     }
@@ -793,6 +841,22 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     {
         const auto bytes = wire::encode_control_message(message);
         return Bytes(bytes.begin(), bytes.end());
+    }
+
+    // Whether the connection's peer may produce a stream configured with
+    // producer_node / consume a stream with this configuration.
+    [[nodiscard]] static bool may_produce(const Connection& connection, const std::string& producer_node)
+    {
+        return producer_node.empty() || connection.peer_node == producer_node;
+    }
+    [[nodiscard]] static bool may_consume(const Connection& connection, const stream::StreamConfig& config)
+    {
+        return config.consumer_nodes.empty() || std::ranges::find(config.consumer_nodes, connection.peer_node) != config.consumer_nodes.end();
+    }
+
+    [[nodiscard]] static std::string describe_peer(const Connection& connection)
+    {
+        return connection.peer_node.empty() ? std::string("an unidentified peer") : "node " + connection.peer_node;
     }
 
     void record_error(std::string error)
@@ -842,7 +906,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 connection.pending_resumes[stream_key(message.stream_id)] = pending;
                 return;
             }
-            attach(connection, *entry, message.stream_alias, next);
+            if (!attach(connection, *entry, message.stream_alias, next)) {
+                return;
+            }
         }
         lock.unlock();
         pump_connection(connection);
@@ -853,8 +919,16 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     // same nodes, or a reconnect before the old connection noticed it was
     // gone), the latest RESUME wins, so packets are never sent on two
     // connections at once and cannot overtake each other.
-    void attach(Connection& connection, StreamEntry& entry, const std::uint32_t alias, const std::uint64_t next)
+    // A peer that is not a configured consumer is refused (false).
+    bool attach(Connection& connection, StreamEntry& entry, const std::uint32_t alias, const std::uint64_t next)
     {
+        if (!may_consume(connection, entry.config)) {
+            ++entry.unauthorized;
+            entry.note(FaultCode::UnauthorizedConsumer, describe_peer(connection));
+            record_error("refused RESUME of stream " + wire::to_string(entry.config.stream_id) + " from " + describe_peer(connection) +
+                         ": not a configured consumer");
+            return false;
+        }
         auto& route = routes[{entry.handle.value, connection.consumer_key}];
         if (const auto previous = route.lock(); previous && previous.get() != &connection) {
             if (const auto it = previous->producing_alias.find(entry.handle.value); it != previous->producing_alias.end()) {
@@ -867,14 +941,26 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         connection.producing[alias] = entry.handle.value;
         connection.producing_alias[entry.handle.value] = alias;
         table.changed.notify_all();
+        return true;
     }
 
     void on_data_packet(Connection& connection, const wire::DataPacket& packet)
     {
-        std::lock_guard lock(table.mutex);
+        std::unique_lock lock(table.mutex);
         auto* entry = table.find_consumer_by_alias(packet.stream_alias);
         if (!entry) {
             return; // a stream closed meanwhile
+        }
+        if (!connection.resumed.contains(packet.stream_alias)) {
+            // Not RESUMEd here: this peer is not the stream's producer.
+            ++entry->unauthorized;
+            entry->note(FaultCode::UnauthorizedProducer, describe_peer(connection));
+            const auto id = entry->config.stream_id;
+            lock.unlock();
+            record_error("refused packets of stream " + wire::to_string(id) + " from " + describe_peer(connection) +
+                         ": not the configured producer");
+            connection.close();
+            return;
         }
         entry->consumer->on_packet(packet, Clock::now());
         consumer_sources[entry->handle.value] = connection.weak_from_this();
@@ -903,7 +989,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         std::lock_guard lock(table.mutex);
         for (auto it = connection.pending_resumes.begin(); it != connection.pending_resumes.end();) {
             if (auto* entry = table.find_producer(it->second.stream_id)) {
-                attach(connection, *entry, it->second.stream_alias, it->second.next_expected);
+                static_cast<void>(attach(connection, *entry, it->second.stream_alias, it->second.next_expected));
                 it = connection.pending_resumes.erase(it);
             } else {
                 ++it;
@@ -988,8 +1074,10 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         {
             std::lock_guard lock(table.mutex);
             table.for_each([&](StreamEntry& entry) {
-                if (entry.consumer) {
-                    resumes.push_back(to_bytes(entry.consumer->resume_message()));
+                if (entry.consumer && may_produce(connection, entry.config.producer_node)) {
+                    const auto resume = entry.consumer->resume_message();
+                    connection.resumed.insert(resume.stream_alias);
+                    resumes.push_back(to_bytes(resume));
                 }
             });
         }
@@ -1096,6 +1184,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 return;
             }
             connection->is_data = target.ends_with("/data");
+            connection->claimed_node = std::string((*request)[kNodeHeader]);
             self->register_connection(connection);
         };
         if (server_tls) {
@@ -1113,6 +1202,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                                              return;
                                          }
                                          boost::beast::get_lowest_layer(*connection->tls).expires_never();
+                                         connection->decorate();
                                          connection->tls->async_accept(*request, finish);
                                      });
                 });
@@ -1125,6 +1215,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                                      return;
                                  }
                                  boost::beast::get_lowest_layer(*connection->plain).expires_never();
+                                 connection->decorate();
                                  connection->plain->async_accept(*request, finish);
                              });
         }
@@ -1132,8 +1223,18 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
 
     void register_connection(const ConnectionPtr& connection)
     {
+        if (connection->tls) {
+            const auto& certificate = connection->peer.certificate;
+            connection->peer_node = certificate ? node_uuid_of(*certificate).value_or("") : "";
+        } else {
+            connection->peer_node = !connection->claimed_node.empty() ? connection->claimed_node
+                                    : connection->link                ? connection->link->expected_node_uuid
+                                                                      : std::string{};
+        }
         if (connection->peer.certificate) {
             connection->consumer_key = connection->peer.certificate->fingerprint_sha256;
+        } else if (!connection->peer_node.empty()) {
+            connection->consumer_key = "node:" + connection->peer_node;
         }
         connections.insert(connection);
         connection->start();
@@ -1218,19 +1319,29 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         auto fail = [complete](const boost::system::error_code& ec, const char* stage) {
             complete(std::make_exception_ptr(std::runtime_error(std::string("connect failed (") + stage + "): " + ec.message())));
         };
+        auto response = std::make_shared<websocket::response_type>();
         auto resolver = std::make_shared<Tcp::resolver>(io);
-        resolver->async_resolve(url.host, url.port, [self = shared_from_this(), resolver, connection, link, target, host, complete, fail](
-                                                        const boost::system::error_code& ec, Tcp::resolver::results_type results) {
+        resolver->async_resolve(url.host, url.port, [self = shared_from_this(), resolver, connection, link, target, host, complete, fail,
+                                                     response](const boost::system::error_code& ec, Tcp::resolver::results_type results) {
             if (ec) {
                 return fail(ec, "resolve");
             }
-            auto on_ws = [self, connection, link, complete, fail](const boost::system::error_code& ws_ec) {
+            auto on_ws = [self, connection, link, complete, fail, response](const boost::system::error_code& ws_ec) {
                 if (ws_ec) {
                     return fail(ws_ec, "websocket handshake");
                 }
                 if (!self->current(link)) {
                     connection->close();
                     return complete(nullptr);
+                }
+                connection->claimed_node = std::string((*response)[kNodeHeader]);
+                if (!connection->tls && !link->expected_node_uuid.empty() && !connection->claimed_node.empty() &&
+                    connection->claimed_node != link->expected_node_uuid) {
+                    const auto error = "data peer " + link->url.host + ":" + link->url.port + " is node " + connection->claimed_node +
+                                       ", not node " + link->expected_node_uuid + " (identity mismatch)";
+                    self->record_error(error);
+                    connection->close();
+                    return complete(std::make_exception_ptr(std::runtime_error(error)));
                 }
                 if (connection->tls) {
                     connection->peer = ControlPeer{true, verified_peer_certificate(connection->tls->next_layer().native_handle())};
@@ -1250,28 +1361,30 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(self->io), *link->tls);
                 auto& tcp = boost::beast::get_lowest_layer(*connection->tls);
                 tcp.expires_after(std::chrono::seconds(10));
-                tcp.async_connect(results, [connection, target, host, on_ws, fail](const boost::system::error_code& c_ec, const auto&) {
+                tcp.async_connect(results, [connection, target, host, on_ws, fail, response](const boost::system::error_code& c_ec, const auto&) {
                     if (c_ec) {
                         return fail(c_ec, "tcp connect");
                     }
-                    connection->tls->next_layer().async_handshake(ssl::stream_base::client, [connection, target, host, on_ws, fail](const boost::system::error_code& h_ec) {
+                    connection->tls->next_layer().async_handshake(ssl::stream_base::client, [connection, target, host, on_ws, fail, response](const boost::system::error_code& h_ec) {
                         if (h_ec) {
                             return fail(h_ec, "tls handshake");
                         }
                         boost::beast::get_lowest_layer(*connection->tls).expires_never();
-                        connection->tls->async_handshake(host, target, on_ws);
+                        connection->decorate();
+                        connection->tls->async_handshake(*response, host, target, on_ws);
                     });
                 });
             } else {
                 connection->plain = std::make_unique<PlainWs>(boost::beast::tcp_stream(self->io));
                 auto& tcp = boost::beast::get_lowest_layer(*connection->plain);
                 tcp.expires_after(std::chrono::seconds(10));
-                tcp.async_connect(results, [connection, target, host, on_ws, fail](const boost::system::error_code& c_ec, const auto&) {
+                tcp.async_connect(results, [connection, target, host, on_ws, fail, response](const boost::system::error_code& c_ec, const auto&) {
                     if (c_ec) {
                         return fail(c_ec, "tcp connect");
                     }
                     boost::beast::get_lowest_layer(*connection->plain).expires_never();
-                    connection->plain->async_handshake(host, target, on_ws);
+                    connection->decorate();
+                    connection->plain->async_handshake(*response, host, target, on_ws);
                 });
             }
         });
@@ -1323,6 +1436,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     StreamTable table;
 
     // I/O thread only:
+    std::string node_uuid; // this node, announced in handshakes
     bool stopping{false};
     std::optional<Tcp::acceptor> acceptor;
     std::shared_ptr<ssl::context> server_tls;
@@ -1357,6 +1471,11 @@ BeastRuntimeNetEndpoint::~BeastRuntimeNetEndpoint()
 auto BeastRuntimeNetEndpoint::backend_name() const -> std::string
 {
     return "beast";
+}
+
+void BeastRuntimeNetEndpoint::set_node_uuid(const std::string& node_uuid)
+{
+    impl_->run_on_io([&] { impl_->node_uuid = node_uuid; });
 }
 
 auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls, const std::string& bind_address)

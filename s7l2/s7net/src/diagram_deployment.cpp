@@ -356,6 +356,12 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
                                             "' is not placed on this node.");
             }
             produced[{stream.producer.element, stream.producer.port}] = &stream;
+            json::array consumer_nodes;
+            for (const auto& consumer : stream.consumers) {
+                if (std::ranges::find(consumer_nodes, json::value(consumer.node_uuid)) == consumer_nodes.end()) {
+                    consumer_nodes.emplace_back(consumer.node_uuid);
+                }
+            }
             elements.push_back(json::object{
                 {"id", stream_element_id(stream, "out")},
                 {"type", "NetSink"},
@@ -364,7 +370,8 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
                                         {"max_elements_per_packet", stream.max_elements_per_packet},
                                         {"max_batch_latency_ms", stream.max_batch_latency_ms},
                                         {"send_log_max_packets", stream.send_log_max_packets},
-                                        {"max_block_ms", stream.max_block_ms}}},
+                                        {"max_block_ms", stream.max_block_ms},
+                                        {"consumer_nodes", std::move(consumer_nodes)}}},
             });
             connections.push_back(connection_json(stream.producer.element, stream.producer.port, stream_element_id(stream, "out"), 0));
         }
@@ -387,7 +394,8 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
                 {"type", "NetSource"},
                 {"params", json::object{{"stream_id", wire::to_string(stream.stream_id)},
                                         {"type", std::string(signal_type_name(stream.data_type))},
-                                        {"max_wait_ms", stream.max_wait_ms}}},
+                                        {"max_wait_ms", stream.max_wait_ms},
+                                        {"producer_node", stream.producer.node_uuid}}},
             });
         }
     }

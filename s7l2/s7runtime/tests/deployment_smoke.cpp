@@ -512,6 +512,9 @@ void test_stream_status_and_recovery()
     expect(recoveries == 1, "recovery resumes stepping");
     status = Client(control, ControlPeer{}).send(status_request);
     expect(status.at("streams").as_array().at(0).as_object().at("state").as_string() == "active", "stream active again");
+    const auto& recent = status.at("streams").as_array().at(0).as_object().at("recent_faults").as_array();
+    expect(recent.size() == 1 && recent.at(0).as_object().at("code").as_string() == "UNDERRUN",
+           "the recovered fault stays reported: " + json::serialize(recent));
 
     recover["stream_id"] = "00000000-0000-4000-8000-000000000000";
     expect(!Client(control, verified_peer("s7_studio.cert.pem")).send(recover).at("recovered").as_bool(), "unknown stream");

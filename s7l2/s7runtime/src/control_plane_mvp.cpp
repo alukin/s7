@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -1029,6 +1030,14 @@ auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& reques
     boost::json::array streams;
     if (options_.network) {
         for (const auto& status : options_.network->stream_statuses()) {
+            boost::json::array recent;
+            for (const auto& fault : status.recent_faults) {
+                recent.emplace_back(boost::json::object{
+                    {"code", stream::to_string(fault.code)},
+                    {"detail", fault.detail},
+                    {"at", std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::milliseconds>(fault.at))},
+                });
+            }
             streams.emplace_back(boost::json::object{
                 {"stream_id", wire::to_string(status.stream_id)},
                 {"role", status.role == transport::StreamRole::Producer ? "producer" : "consumer"},
@@ -1042,9 +1051,11 @@ auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& reques
                 {"lost_resumes", status.lost_resumes},
                 {"duplicates_discarded", status.duplicates_discarded},
                 {"malformed", status.malformed},
+                {"unauthorized", status.unauthorized},
                 {"send_log_depth", status.send_log_depth},
                 {"buffered_elements", status.buffered_elements},
                 {"blocked_ms_total", status.blocked_total.count()},
+                {"recent_faults", std::move(recent)},
             });
         }
     }

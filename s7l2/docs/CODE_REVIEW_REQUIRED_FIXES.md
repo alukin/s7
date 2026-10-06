@@ -552,6 +552,12 @@ Test: `s7studio --layout-check` (`s7studio_layout_wire_types_ok`, `s7studio_layo
 - ~~The WebSocket server performs TLS and HTTP handshakes on the accept thread.~~ Fixed 2026-10-05: handshakes are asynchronous with a 10 s timeout.
 - Tests bind fixed ports inside the Linux ephemeral range (32768–60999), so a parallel test's outgoing connection can occupy one (`bind: Address already in use`). `configure_server(0)` now picks a free port and returns it. Fixed 2026-10-05: all in-process network tests use free ports (`RuntimeService::start_websocket_server()` accepts port 0 and returns the bound port); `s7_two_node_deployment` uses ports below the ephemeral range.
 
+## Follow-up items (2026-10-06)
+
+Work that the resolutions above left open.
+
+- ~~Stream binding: a consumer accepted a stream from any peer (`UNAUTHORIZED_PRODUCER`), and over plain WebSocket all consumers shared one anonymous identity, so only one node could consume a stream.~~ Fixed 2026-10-06: each stream end knows the nodes at the other end (`NetSource.producer_node`, `NetSink.consumer_nodes`, set from the stream descriptor). A consumer RESUMEs and accepts a stream only on connections to its producer node; a producer serves it only to its consumer nodes. Over plain WebSocket nodes announce themselves in the handshake (`S7-Node` header), which keeps consumers apart; a data peer announcing another node is refused. Refusals are counted (`unauthorized`) and listed in the new `recent_faults` of `STREAM_STATUS` without faulting the stream. Also fixed: `TYPE_MISMATCH` was reported as `TIMESTAMP_PROFILE_MISMATCH`. Tests: `s7transport_beast_stream_smoke` (two plain consumer nodes each receive the whole stream; a rogue producer is never asked; pushed packets are refused; an outsider is not served; plain identity mismatch), `s7net_diagram_deployment_smoke`, `s7runtime_deployment_smoke` (a recovered fault stays in `recent_faults`).
+
 ## Suggested order
 
 0. ~~Fix the verified 2026-10-04 defects: dangling port names, extra delay from stateful elements, certificate-bound node identity and per-node state directories; then the headless execution loop.~~ Done 2026-10-04.

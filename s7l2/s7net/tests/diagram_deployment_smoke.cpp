@@ -173,6 +173,16 @@ void test_node_parts()
     const auto b = deployment::extract_node_schema(diagram, kB);
     expect(b.at("elements").as_array().size() == 3 && has_element(b, "g") && has_element(b, "out") && has_element(b, source),
            "B runs g, out and a NetSource: " + json::serialize(b));
+    const auto params_of = [](const json::object& schema, const std::string& id) {
+        for (const auto& element : schema.at("elements").as_array()) {
+            if (element.as_object().at("id").as_string() == id) {
+                return element.as_object().at("params").as_object();
+            }
+        }
+        return json::object{};
+    };
+    expect(params_of(a, sink).at("consumer_nodes") == json::array{kB, kC}, "the NetSink serves only the consumer nodes");
+    expect(params_of(b, source).at("producer_node") == kA, "the NetSource accepts only the producer node");
     expect(deployment::producer_endpoints(diagram, kB) == std::vector<s7::transport::DataPeer>{{"ws://127.0.0.1:9101", kA}},
            "B connects to A and expects A's identity");
     expect(deployment::producer_endpoints(diagram, kA).empty(), "A consumes nothing");

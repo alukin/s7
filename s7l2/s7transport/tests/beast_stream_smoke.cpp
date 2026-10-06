@@ -541,6 +541,144 @@ void test_plain_server_binds_loopback()
     expect(can_connect(*external, exposed_port), "an explicit bind address exposes it");
 }
 
+
+// Over plain WebSocket, consumers on different nodes are told apart by the
+// node they announce: each gets the whole stream.
+void test_plain_consumers_on_two_nodes()
+{
+    constexpr const char* kProducer = "aaaaaaaa-1111-4111-8111-000000000001";
+    constexpr const char* kFirst = "bbbbbbbb-2222-4222-8222-000000000002";
+    constexpr const char* kSecond = "cccccccc-3333-4333-8333-000000000003";
+    transport::BeastRuntimeNetEndpoint producer_node;
+    producer_node.set_node_uuid(kProducer);
+    const auto url = "ws://127.0.0.1:" + std::to_string(producer_node.configure_server(0));
+    transport::BeastRuntimeNetEndpoint first;
+    transport::BeastRuntimeNetEndpoint second;
+    first.set_node_uuid(kFirst);
+    second.set_node_uuid(kSecond);
+    first.set_data_peers({{url, kProducer}});
+    second.set_data_peers({{url, kProducer}});
+
+    auto c = config("6b1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f");
+    c.producer_node = kProducer;
+    c.consumer_nodes = {kFirst, kSecond};
+    const auto producer = producer_node.open_producer(c);
+    const auto a = first.open_consumer(c);
+    const auto b = second.open_consumer(c);
+    transfer(producer_node, producer, {{&first, a}, {&second, b}}, 5000);
+    expect(producer_node.stream_statuses().front().unauthorized == 0, "nothing refused");
+}
+
+// A consumer accepts a stream only from its producer node, and a producer
+// serves it only to its consumer nodes.
+void test_stream_bound_to_its_nodes()
+{
+    constexpr const char* kProducer = "aaaaaaaa-1111-4111-8111-000000000001";
+    constexpr const char* kRogue = "dddddddd-4444-4444-8444-000000000004";
+    constexpr const char* kConsumer = "bbbbbbbb-2222-4222-8222-000000000002";
+    constexpr const char* kOutsider = "eeeeeeee-5555-4555-8555-000000000005";
+    auto c = config("7c2e3f4a-5b6c-4d7e-8f90-a1b2c3d4e5f6");
+    c.producer_node = kProducer;
+    c.consumer_nodes = {kConsumer};
+    c.max_wait = milliseconds(300);
+
+    transport::BeastRuntimeNetEndpoint producer_node;
+    producer_node.set_node_uuid(kProducer);
+    const auto producer_url = "ws://127.0.0.1:" + std::to_string(producer_node.configure_server(0));
+    transport::BeastRuntimeNetEndpoint rogue_node;
+    rogue_node.set_node_uuid(kRogue);
+    const auto rogue_url = "ws://127.0.0.1:" + std::to_string(rogue_node.configure_server(0));
+
+    // The consumer is connected to both; it RESUMEs only on the producer's connection.
+    transport::BeastRuntimeNetEndpoint consumer_node;
+    consumer_node.set_node_uuid(kConsumer);
+    consumer_node.set_data_peers({{producer_url, kProducer}, {rogue_url, kRogue}});
+    expect(wait_for([&] { return consumer_node.stats().data_connections == 2; }), "connected to both nodes");
+    const auto consumer = consumer_node.open_consumer(c);
+    const auto rogue = rogue_node.open_producer(c);
+    const auto producer = producer_node.open_producer(c);
+    const double rogue_value = -1.0;
+    expect(rogue_node.publish(rogue, &rogue_value, 1).fault == stream::FaultCode::None, "the rogue publishes");
+    const double value = 42.0;
+    expect(producer_node.publish(producer, &value, 1).fault == stream::FaultCode::None, "the producer publishes");
+    double received = 0.0;
+    const auto result = consumer_node.receive(consumer, &received, 1);
+    expect(result.fault == stream::FaultCode::None && received == 42.0, "the value comes from the producer node");
+    std::this_thread::sleep_for(milliseconds(50));
+    expect(rogue_node.stream_statuses().front().send_log_depth == 1, "the rogue's packet was never requested");
+
+    // A peer that sends packets without being asked is refused and disconnected.
+    const auto consumer_port = consumer_node.configure_server(0);
+    RawClient push(consumer_port);
+    s7::wire::DataPacket packet;
+    packet.type = s7::SignalType::F64;
+    packet.stream_alias = static_cast<std::uint32_t>(consumer.value); // the consumer's alias is its handle
+    packet.sequence = 1;
+    const double pushed = 7.0;
+    s7::wire::encode_elements(s7::SignalType::F64, &pushed, 1, packet.payload);
+    const auto bytes = s7::wire::encode_data_packet(packet);
+    push.ws.write(boost::asio::buffer(bytes));
+    boost::beast::flat_buffer buffer;
+    boost::system::error_code ec;
+    do {
+        push.ws.read(buffer, ec); // until the consumer node closes the connection
+        buffer.consume(buffer.size());
+    } while (!ec);
+    expect(wait_for([&] {
+               for (const auto& status : consumer_node.stream_statuses()) {
+                   if (status.unauthorized == 1) {
+                       return true;
+                   }
+               }
+               return false;
+           }),
+           "the pushed packet is counted as unauthorized");
+    const auto consumer_status = consumer_node.stream_statuses().front();
+    expect(consumer_status.fault == stream::FaultCode::None, "the stream is not faulted by it");
+    expect(consumer_status.recent_faults.size() == 1 && consumer_status.recent_faults.front().code == stream::FaultCode::UnauthorizedProducer,
+           "the refusal is a recent fault");
+
+    // A node that is not a consumer is not served.
+    transport::BeastRuntimeNetEndpoint outsider;
+    outsider.set_node_uuid(kOutsider);
+    outsider.set_data_peers({{producer_url, kProducer}});
+    auto outsider_config = c;
+    outsider_config.max_wait = milliseconds(300);
+    const auto stolen = outsider.open_consumer(outsider_config);
+    double nothing = 0.0;
+    expect(outsider.receive(stolen, &nothing, 1).fault == stream::FaultCode::Underrun, "an outsider receives nothing");
+    const auto producer_status = producer_node.stream_statuses().front();
+    expect(producer_status.unauthorized >= 1, "the outsider's RESUME is counted");
+    expect(!producer_status.recent_faults.empty() && producer_status.recent_faults.front().code == stream::FaultCode::UnauthorizedConsumer &&
+               producer_status.recent_faults.front().detail == std::string("node ") + kOutsider,
+           "the refused consumer is a recent fault naming the node");
+    bool reported = false;
+    for (const auto& error : producer_node.take_transport_errors()) {
+        reported |= error.find("not a configured consumer") != std::string::npos;
+    }
+    expect(reported, "the refused RESUME is reported");
+}
+
+// A plain WebSocket peer announcing another node than configured is refused.
+void test_plain_identity_mismatch()
+{
+    transport::BeastRuntimeNetEndpoint node;
+    node.set_node_uuid("aaaaaaaa-1111-4111-8111-000000000001");
+    const auto url = "ws://127.0.0.1:" + std::to_string(node.configure_server(0));
+    transport::BeastRuntimeNetEndpoint consumer;
+    consumer.set_data_peers({{url, "dddddddd-4444-4444-8444-000000000004"}});
+    std::vector<std::string> errors;
+    expect(wait_for([&] {
+               for (auto& error : consumer.take_transport_errors()) {
+                   errors.push_back(std::move(error));
+               }
+               return !errors.empty();
+           }),
+           "the mismatch is reported");
+    expect(errors.front().find("identity mismatch") != std::string::npos, "reported as identity mismatch: " + errors.front());
+    expect(consumer.stats().data_connections == 0, "no data connection to the wrong node");
+}
+
 } // namespace
 
 int main()
@@ -555,6 +693,9 @@ try {
     test_data_peer_retried();
     test_node_identity();
     test_plain_server_binds_loopback();
+    test_plain_consumers_on_two_nodes();
+    test_stream_bound_to_its_nodes();
+    test_plain_identity_mismatch();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport beast stream smoke: " << ex.what() << '\n';

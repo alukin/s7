@@ -35,6 +35,8 @@ auto make_net_metadata(const std::string& type_name,
         {"send_log_max_packets", "int", "Unacknowledged packets kept for replay", 4096, 1, std::nullopt, {}, false},
         {"max_block_ms", "int", "Longest publish wait on a full send log before the stream faults", 2000, 0, std::nullopt, {}, false},
         {"max_wait_ms", "int", "Longest receive wait for data before the stream faults (underrun)", 2000, 0, std::nullopt, {}, false},
+        {"producer_node", "string", "Node UUID allowed to produce the stream (NetSource; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
+        {"consumer_nodes", "array", "Node UUIDs allowed to consume the stream (NetSink; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
     };
     for (int i = 0; i < input_count; ++i) {
         metadata.input_ports.push_back({i == 0 ? "in" : "in" + std::to_string(i), "Value to publish", SignalType::F64, false, "T"});
@@ -65,6 +67,17 @@ stream::StreamConfig config_from_params(const ElementCreationContext& ctx)
     config.send_log_max_packets = static_cast<std::uint32_t>(positive("send_log_max_packets", config.send_log_max_packets));
     config.max_block = std::chrono::milliseconds(positive("max_block_ms", config.max_block.count()));
     config.max_wait = std::chrono::milliseconds(positive("max_wait_ms", config.max_wait.count()));
+    if (const auto* node = ctx.params.if_contains("producer_node"); node && node->is_string()) {
+        config.producer_node = std::string(node->as_string());
+    }
+    if (const auto* nodes = ctx.params.if_contains("consumer_nodes"); nodes && !nodes->is_null()) {
+        for (const auto& node : nodes->as_array()) {
+            if (!node.is_string()) {
+                throw std::invalid_argument(ctx.metadata.type_name + " parameter 'consumer_nodes' must list node UUIDs.");
+            }
+            config.consumer_nodes.emplace_back(node.as_string());
+        }
+    }
     return config;
 }
 

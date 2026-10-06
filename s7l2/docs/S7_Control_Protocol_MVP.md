@@ -270,14 +270,15 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
       "stream_id": "3f2b8c1d-6e4a-4b7f-9a2c-1d5e8f7a6b3c", "role": "producer", "data_type": "F64",
       "state": "active", "fault": "NONE", "next_sequence": 120,
       "packets": 120, "elements": 120, "replayed": 10, "lost_resumes": 0,
-      "duplicates_discarded": 0, "malformed": 0,
-      "send_log_depth": 4, "buffered_elements": 0, "blocked_ms_total": 0
+      "duplicates_discarded": 0, "malformed": 0, "unauthorized": 0,
+      "send_log_depth": 4, "buffered_elements": 0, "blocked_ms_total": 0,
+      "recent_faults": [ { "code": "UNDERRUN", "detail": "", "at": "2026-10-06T09:12:03.418Z" } ]
     }
   ]
 }
 ```
 
-`state` is `active`, `blocked` (a producer waiting on a full send log) or `faulted`; `fault` is `NONE` or a fault code of `S7_Net_Element_Contract.md`. `next_sequence` is the next sequence a producer assigns, or the next a consumer expects.
+`state` is `active`, `blocked` (a producer waiting on a full send log), `faulted`, or `closed` (no element of the running graph uses the stream; its state is kept for a redeployment); `fault` is `NONE` or a fault code of `S7_Net_Element_Contract.md`. `next_sequence` is the next sequence a producer assigns, or the next a consumer expects. `unauthorized` counts refused peers (a producer: `RESUME`s from nodes that are not consumers of the stream; a consumer: packets from a connection that is not to its producer node). `recent_faults` lists the latest 16 faults and refusals, oldest first, with what was refused in `detail` (for example `node <uuid>`); it is kept across `RECOVER_STREAM`, so a recovered fault stays reported.
 
 **Stream recovery.** `RECOVER_STREAM {stream_id}` is authorized like a deployment mutation. It clears the stream's fault and returns `RECOVER_STREAM_RESULT {stream_id, recovered}` (`recovered: false` if the node has no such stream; `INVALID_REQUEST` for a malformed id). A recovered consumer accepts the next packet it receives as its new start; the data lost in the fault stays lost and stays counted. A runtime whose stepping stopped because a step failed (for example on a stream fault) resumes stepping after a successful recovery.
 
