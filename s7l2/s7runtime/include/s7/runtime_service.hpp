@@ -110,8 +110,10 @@ public:
     [[nodiscard]] std::vector<std::filesystem::path> output_files() const;
     [[nodiscard]] s7::Schema build_schema() const;
 
-    // The running graph. initialize_graph() compiles the schema the service was
-    // started with; a committed deployment replaces it. step() and
+    // The running graph. initialize_graph() restores the deployment that was
+    // active when the node stopped (state_dir/deployment.json), or else
+    // compiles the schema the service was started with; a committed
+    // deployment replaces it. step() and
     // step_count() are safe to call while the control plane activates a new
     // graph from another thread.
     void initialize_graph();

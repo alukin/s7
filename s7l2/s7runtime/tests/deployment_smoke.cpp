@@ -2,7 +2,9 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <iostream>
 #include <memory>
 #include <map>
@@ -674,6 +676,88 @@ void test_deploy_client()
            "node identity checked: " + (wrong.errors.empty() ? std::string() : wrong.errors.front()));
 }
 
+// The active deployment survives a restart of the node; a damaged record is
+// reported and not run.
+void test_deployment_survives_restart()
+{
+    const auto storage = make_temp_state_dir("restore");
+    auto diagram = json::parse(R"json({
+        "document_kind": "s7.diagram",
+        "runtime_nodes": [ { "node_uuid": "11111111-2222-3333-4444-555555555555", "endpoint": "wss://a" } ],
+        "schema": { "name": "single", "elements": [
+            { "id": "c", "type": "Constant", "params": { "value": 5.0 }, "node": "11111111-2222-3333-4444-555555555555" } ] },
+        "dt": 0.01
+    })json").as_object();
+    const auto types = s7::deployment::infer_output_types(diagram);
+    const json::object list{{"type", "LIST_DEPLOYMENTS"}, {"request_id", "l"}, {"protocol_version", 1}};
+    auto make_node = [&](const std::shared_ptr<RecordingHost>& host) {
+        return std::make_unique<s7::ControlPlaneMvp>(
+            s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+            s7::ControlPlaneOptions{.storage_dir = storage, .authorization = studio_authorization(), .deployment_host = host});
+    };
+    auto deploy_to = [&](s7::ControlPlaneMvp& node, const json::object& what) {
+        return s7::deployment::deploy_diagram(what, types, [&](const s7::deployment::RuntimeNode&, const json::object& message) {
+            return Client(node, verified_peer("s7_studio.cert.pem")).send(message);
+        });
+    };
+
+    {
+        auto host = std::make_shared<RecordingHost>();
+        auto node = make_node(host);
+        expect(node->restore_deployment() == s7::ControlPlaneMvp::RestoreOutcome::NothingPersisted, "nothing to restore at first");
+        const auto deployed = deploy_to(*node, diagram);
+        expect(deployed.committed && deployed.revision == 1, "deployed");
+        expect(std::filesystem::exists(storage / "deployment.json"), "the commit is persisted");
+    }
+
+    // The restarted node runs the same deployment at the same revision.
+    {
+        auto host = std::make_shared<RecordingHost>();
+        auto node = make_node(host);
+        expect(node->restore_deployment() == s7::ControlPlaneMvp::RestoreOutcome::Restored, "restored");
+        expect(host->active && host->active->at("elements").as_array().at(0).as_object().at("id").as_string() == "c",
+               "the restored graph runs");
+        expect(host->model_time_step_ns == 10'000'000, "with its model time");
+        const auto listed = Client(*node, ControlPeer{}).send(list);
+        expect(listed.at("active_revision").to_number<std::uint64_t>() == 1 &&
+                   listed.at("active_deployment").as_object().at("restored").as_bool() &&
+                   listed.at("history").as_array().back().as_object().at("outcome").as_string() == "restored",
+               "reported as restored at revision 1: " + json::serialize(listed));
+        const auto configuration =
+            Client(*node, ControlPeer{}).send(json::object{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "g"}, {"protocol_version", 1}});
+        expect(configuration.at("revision").to_number<std::uint64_t>() == 1, "the deployed diagram is available again");
+
+        // The next deployment builds on the restored revision.
+        auto next = diagram;
+        next["schema"].as_object()["elements"].as_array()[0].as_object()["params"].as_object()["value"] = 6.0;
+        const auto again = deploy_to(*node, next);
+        expect(again.committed && again.revision == 2, "redeployed on top of the restored revision");
+    }
+
+    // A damaged record is not run.
+    {
+        const auto path = storage / "deployment.json";
+        auto record = json::parse([&] {
+                          std::ifstream in(path);
+                          return std::string(std::istreambuf_iterator<char>(in), {});
+                      }())
+                          .as_object();
+        record["configuration"].as_object()["diagram"].as_object()["schema"].as_object()["name"] = "tampered";
+        std::ofstream(path, std::ios::trunc) << json::serialize(record);
+        auto host = std::make_shared<RecordingHost>();
+        auto node = make_node(host);
+        expect(node->restore_deployment() == s7::ControlPlaneMvp::RestoreOutcome::Failed, "a damaged record fails to restore");
+        expect(!host->active, "nothing runs");
+        const auto listed = Client(*node, ControlPeer{}).send(list);
+        const auto& last = listed.at("history").as_array().back().as_object();
+        expect(listed.at("active_revision").to_number<std::uint64_t>() == 0 && last.at("outcome").as_string() == "restore_failed" &&
+                   last.at("revision").to_number<std::uint64_t>() == 2 &&
+                   last.at("message").as_string().find("configuration_digest") != std::string::npos,
+               "reported: " + json::serialize(last));
+    }
+    std::filesystem::remove_all(storage);
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -684,6 +768,7 @@ try {
     test_stream_status_and_recovery();
     s7::register_net_elements(s7::ElementRegistry::instance());
     test_deploy_client();
+    test_deployment_survives_restart();
     test_runtime_deployment_over_mtls();
     return 0;
 } catch (const std::exception& ex) {

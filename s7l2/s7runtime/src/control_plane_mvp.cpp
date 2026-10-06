@@ -11,6 +11,9 @@
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "s7/canonical_json.hpp"
 #include "s7/diagram_deployment.hpp"
 
@@ -376,10 +379,141 @@ void ControlPlaneMvp::expire_prepared_locked(const std::chrono::steady_clock::ti
 
 void ControlPlaneMvp::record_outcome_locked(const PreparedDeployment& prepared, const std::string& outcome)
 {
+    record_history_locked(DeploymentOutcome{prepared.deployment_id, prepared.revision, outcome, {}});
+}
+
+void ControlPlaneMvp::record_history_locked(DeploymentOutcome outcome)
+{
     constexpr std::size_t max_history = 64;
-    history_.push_back(DeploymentOutcome{prepared.deployment_id, prepared.revision, outcome});
+    history_.push_back(std::move(outcome));
     if (history_.size() > max_history) {
         history_.erase(history_.begin());
+    }
+}
+
+namespace {
+
+constexpr const char* kDeploymentFile = "deployment.json";
+
+// Writes the file through a temporary file, fsync and rename, so a crash
+// leaves either the old or the new content.
+void write_file_atomically(const std::filesystem::path& path, const std::string& text)
+{
+    const auto temporary = std::filesystem::path(path).concat(".tmp");
+    {
+        std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
+        out << text;
+        out.flush();
+        if (!out) {
+            throw std::runtime_error("cannot write " + temporary.string());
+        }
+    }
+    if (const int fd = ::open(temporary.c_str(), O_WRONLY | O_CLOEXEC); fd >= 0) {
+        const bool synced = ::fsync(fd) == 0;
+        ::close(fd);
+        if (!synced) {
+            throw std::runtime_error("cannot sync " + temporary.string());
+        }
+    }
+    std::filesystem::rename(temporary, path);
+    if (const int dir = ::open(path.parent_path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC); dir >= 0) {
+        ::fsync(dir);
+        ::close(dir);
+    }
+}
+
+} // namespace
+
+bool ControlPlaneMvp::persist_active_locked() const
+{
+    if (options_.storage_dir.empty() || !active_) {
+        return true;
+    }
+    const boost::json::object record{
+        {"format", 1},
+        {"deployment_id", active_->deployment_id},
+        {"revision", active_->revision},
+        {"committed_at", active_->committed_at},
+        {"configuration", active_->configuration},
+    };
+    try {
+        write_file_atomically(options_.storage_dir / kDeploymentFile, boost::json::serialize(record));
+        return true;
+    } catch (const std::exception& ex) {
+        if (options_.log) {
+            options_.log(std::string("deployment.persist_failed ") + ex.what());
+        }
+        return false;
+    }
+}
+
+auto ControlPlaneMvp::restore_deployment() -> RestoreOutcome
+{
+    const auto path = options_.storage_dir / kDeploymentFile;
+    if (options_.storage_dir.empty() || !options_.deployment_host || !std::filesystem::exists(path)) {
+        return RestoreOutcome::NothingPersisted;
+    }
+    std::string deployment_id;
+    std::uint64_t revision{};
+    try {
+        std::ifstream in(path, std::ios::binary);
+        std::ostringstream text;
+        text << in.rdbuf();
+        const auto parsed = parse_json_precise(text.str());
+        if (!parsed.is_object()) {
+            throw std::invalid_argument("not a JSON object");
+        }
+        const auto& record = parsed.as_object();
+        deployment_id = as_string(record, "deployment_id").value_or("");
+        const auto record_revision = read_revision(record, "revision", false);
+        const auto* configuration = record.if_contains("configuration");
+        if (deployment_id.empty() || !record_revision || !configuration || !configuration->is_object()) {
+            throw std::invalid_argument("deployment_id, revision and configuration are required");
+        }
+        revision = *record_revision;
+        const auto& config = configuration->as_object();
+        // The digest the commit was made with must still match the content.
+        auto digested = config;
+        digested.erase("configuration_digest");
+        const auto digest = as_string(config, "configuration_digest").value_or("");
+        if (digest.empty() || configuration_digest(digested) != digest) {
+            throw std::invalid_argument("the configuration does not match its configuration_digest");
+        }
+        const auto* diagram_value = config.if_contains("diagram");
+        if (!diagram_value || !diagram_value->is_object()) {
+            throw std::invalid_argument("configuration.diagram must be an object");
+        }
+        const auto& diagram = diagram_value->as_object();
+        auto node_schema = deployment::extract_node_schema(diagram, descriptor_.node_uuid);
+        auto staged = options_.deployment_host->stage(NodePart{node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid),
+                                                               deployment::model_time_step_ns(diagram)});
+        options_.deployment_host->activate(*staged);
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        active_ = ActiveDeployment{
+            .deployment_id = deployment_id,
+            .revision = revision,
+            .project_revision = as_string(config, "project_revision").value_or(""),
+            .configuration_digest = digest,
+            .committed_at = as_string(record, "committed_at").value_or(""),
+            .prepare_token = {},
+            .configuration = config,
+            .diagram = diagram,
+            .node_schema = std::move(node_schema),
+            .restored = true,
+        };
+        record_history_locked(DeploymentOutcome{deployment_id, revision, "restored", {}});
+        if (options_.log) {
+            options_.log("deployment.restored deployment_id=" + deployment_id + " revision=" + std::to_string(revision));
+        }
+        return RestoreOutcome::Restored;
+    } catch (const std::exception& ex) {
+        if (options_.log) {
+            options_.log("deployment.restore_failed path=" + path.string() + " error=" + ex.what());
+        }
+        std::lock_guard<std::mutex> lock(mutex_);
+        record_history_locked(DeploymentOutcome{deployment_id, revision, "restore_failed", ex.what()});
+        return RestoreOutcome::Failed;
     }
 }
 
@@ -650,6 +784,7 @@ auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request
         active["project_revision"] = active_->project_revision;
         active["configuration_digest"] = active_->configuration_digest;
         active["committed_at"] = active_->committed_at;
+        active["restored"] = active_->restored;
         out["active_deployment"] = std::move(active);
     } else {
         out["active_deployment"] = nullptr;
@@ -674,11 +809,15 @@ auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request
 
     boost::json::array history;
     for (const auto& item : history_) {
-        history.emplace_back(boost::json::object{
+        boost::json::object entry{
             {"deployment_id", item.deployment_id},
             {"revision", item.revision},
             {"outcome", item.outcome},
-        });
+        };
+        if (!item.message.empty()) {
+            entry["message"] = item.message;
+        }
+        history.emplace_back(std::move(entry));
     }
     out["history"] = std::move(history);
     return out;
@@ -894,6 +1033,7 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
     prepared.expires = std::chrono::steady_clock::now() + options_.prepare_ttl;
     prepared.expires_at = plus_seconds_iso8601(options_.prepare_ttl);
     prepared.staged = std::move(staged);
+    prepared.configuration = configuration;
     prepared.diagram = diagram;
     prepared.node_schema = std::move(node_schema);
 
@@ -977,9 +1117,11 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
         .configuration_digest = prepared.configuration_digest,
         .committed_at = now_utc_iso8601(),
         .prepare_token = prepared.prepare_token,
+        .configuration = std::move(prepared.configuration),
         .diagram = std::move(prepared.diagram),
         .node_schema = std::move(prepared.node_schema),
     };
+    persist_active_locked(); // a failure is logged; the deployment is active either way
     record_outcome_locked(prepared, "committed");
     prepared_.erase(prepared_it);
     return committed(*active_);

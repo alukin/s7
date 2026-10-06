@@ -850,6 +850,11 @@ RuntimeService::~RuntimeService()
 }
 
 void RuntimeService::initialize_graph() {
+    // A deployment committed before the node restarted takes precedence over
+    // the startup schema.
+    if (control_plane_->restore_deployment() == ControlPlaneMvp::RestoreOutcome::Restored) {
+        return;
+    }
     const auto schema = build_schema_from_definition(definition_);
     auto runtime = std::make_unique<NodeRuntime>(
         Compiler::compile(*schema, runtime_instance_uuid_, create_schema_instance_uuid()));

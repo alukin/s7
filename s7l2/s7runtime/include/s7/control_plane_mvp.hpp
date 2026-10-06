@@ -96,7 +96,7 @@ public:
 };
 
 struct ControlPlaneOptions {
-    std::filesystem::path storage_dir; // peers.json; empty: not persisted
+    std::filesystem::path storage_dir; // peers.json, deployment.json; empty: not persisted
     ControlAuthorization authorization;
     std::shared_ptr<DeploymentHost> deployment_host; // null: deployments are refused
     std::function<void(const std::string&)> log;     // authorization decisions
@@ -110,6 +110,15 @@ public:
     explicit ControlPlaneMvp(ControlNodeDescriptor descriptor, ControlPlaneOptions options = {});
 
     void add_seed_peer(const std::string& endpoint);
+
+    // The active deployment survives restarts: a commit writes it to
+    // storage_dir/deployment.json, and restore_deployment() stages and
+    // activates it again at startup, with its revision, so the next
+    // deployment builds on it. A record that cannot be restored (corrupt,
+    // or the node can no longer run it) is logged and reported in the
+    // deployment history as "restore_failed"; the node then starts idle.
+    enum class RestoreOutcome : std::uint8_t { NothingPersisted, Restored, Failed };
+    auto restore_deployment() -> RestoreOutcome;
     [[nodiscard]] auto handle_request_json(const transport::ControlPeer& peer, const std::string& request_json)
         -> std::string;
 
@@ -139,8 +148,9 @@ private:
         std::string expires_at;
         std::chrono::steady_clock::time_point expires;
         std::shared_ptr<StagedConfiguration> staged;
-        boost::json::object diagram;     // as deployed
-        boost::json::object node_schema; // this node's part of it
+        boost::json::object configuration; // as received (diagram, project_revision, configuration_digest)
+        boost::json::object diagram;       // as deployed
+        boost::json::object node_schema;   // this node's part of it
     };
 
     struct ActiveDeployment {
@@ -149,15 +159,18 @@ private:
         std::string project_revision;
         std::string configuration_digest;
         std::string committed_at;
-        std::string prepare_token; // makes a repeated commit idempotent
+        std::string prepare_token; // makes a repeated commit idempotent (empty after a restore)
+        boost::json::object configuration;
         boost::json::object diagram;
         boost::json::object node_schema;
+        bool restored{false}; // restored at startup from deployment.json
     };
 
     struct DeploymentOutcome {
         std::string deployment_id;
         std::uint64_t revision{};
-        std::string outcome; // committed, aborted, expired, failed, superseded
+        std::string outcome; // committed, aborted, expired, failed, superseded, restored, restore_failed
+        std::string message;
     };
 
     [[nodiscard]] auto handle_request_object(const transport::ControlPeer& peer, const boost::json::object& request)
@@ -167,6 +180,9 @@ private:
                                           const std::string& request_type) const -> std::optional<boost::json::object>;
     void expire_prepared_locked(std::chrono::steady_clock::time_point now);
     void record_outcome_locked(const PreparedDeployment& prepared, const std::string& outcome);
+    void record_history_locked(DeploymentOutcome outcome);
+    // Writes active_ to deployment.json (atomically); false on failure (logged).
+    bool persist_active_locked() const;
     [[nodiscard]] auto state_name_locked() const -> std::string;
     [[nodiscard]] auto handle_hello(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_get_node_info(const boost::json::object& request) const -> boost::json::object;

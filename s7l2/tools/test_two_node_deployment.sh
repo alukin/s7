@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Deploys one diagram across two s7runtime nodes over mTLS with s7ctl, checks
 # that node B computes from node A's stream, then redeploys a changed diagram
-# and checks that the stream continues without a fault.
+# and checks that the stream continues without a fault; finally restarts the
+# producer node, which restores its deployment, and recovers the stream.
 #
 # Usage: test_two_node_deployment.sh <build dir> <source dir>
 set -euo pipefail
@@ -83,7 +84,11 @@ for port in "$PORT_A" "$PORT_B"; do
   for _ in $(seq 50); do (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break; sleep 0.1; done
 done
 
-fail() { echo "FAIL: $*"; echo "--- node A"; cat "$WORK/a.log"; echo "--- node B"; cat "$WORK/b.log"; exit 1; }
+fail() {
+  echo "FAIL: $*"
+  for log in a a2 b; do [ -f "$WORK/$log.log" ] && { echo "--- node $log"; cat "$WORK/$log.log"; }; done
+  exit 1
+}
 
 # 0) Endpoints swapped in the diagram: each node's certificate names the other
 #    node, so nothing is prepared anywhere.
@@ -141,5 +146,32 @@ json_check "$WORK/streams-a.json" \
 json_check "$WORK/config-a.json" "r['revision']==2" || fail "node A runs revision 2"
 
 grep -q "runtime.execution.stopped=error" "$WORK/a.log" "$WORK/b.log" && fail "a node stopped stepping"
+
+# 3) Restart node A: it restores revision 2 from its state directory. Its
+#    stream continues beyond its sequence reservation, so node B sees the
+#    gap and faults (a process restart loses data in flight); recovery
+#    resumes it.
+kill "${PIDS[0]}"
+wait "${PIDS[0]}" 2>/dev/null || true
+"$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a2.log" 2>&1 &
+PIDS+=($!)
+for _ in $(seq 50); do (exec 3<>"/dev/tcp/127.0.0.1/$PORT_A") 2>/dev/null && break; sleep 0.1; done
+grep -q "deployment.restored deployment_id=.* revision=2" "$WORK/a2.log" || fail "node A did not restore its deployment: $(cat "$WORK/a2.log")"
+"$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a2.json"
+json_check "$WORK/config-a2.json" "r['revision']==2" || fail "the restarted node A runs revision 2: $(cat "$WORK/config-a2.json")"
+for _ in $(seq 50); do
+  "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b3.json"
+  json_check "$WORK/streams-b3.json" "r['streams'][0]['fault']=='SEQUENCE_GAP'" && break
+  sleep 0.1
+done
+json_check "$WORK/streams-b3.json" "r['streams'][0]['fault']=='SEQUENCE_GAP'" \
+  || fail "node B reports the producer restart as a gap: $(cat "$WORK/streams-b3.json")"
+"$CTL" recover "wss://127.0.0.1:$PORT_B" "$STREAM_ID" "${TLS[@]}" > /dev/null || fail "recovery"
+GAP_ELEMENTS="$(python3 -c "import json; print(json.load(open('$WORK/streams-b3.json'))['streams'][0]['elements'])")"
+sleep 1
+"$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b4.json"
+json_check "$WORK/streams-b4.json" \
+  "r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>$GAP_ELEMENTS and r['streams'][0]['recent_faults'][-1]['code']=='SEQUENCE_GAP'" \
+  || fail "the stream resumes after recovery and the gap stays reported: $(cat "$WORK/streams-b4.json")"
 
 echo "two-node deployment: OK (stream $STREAM_ID)"
