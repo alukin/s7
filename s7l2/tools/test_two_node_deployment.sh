@@ -120,7 +120,8 @@ a, b = (json.load(open(path))["state"]["timing"] for path in sys.argv[1:3])
 at = int(sys.argv[3])
 assert a["pacing"] == b["pacing"] == "grid" and a["period_ns"] == b["period_ns"] == 20000000, (a, b)
 assert a["origin_utc_ns"] == b["origin_utc_ns"] == at, (a, b, at)
-assert abs(a["steps"] - b["steps"]) <= 3, (a["steps"], b["steps"])  # read a moment apart
+# Each node keeps time on the shared grid (its steps are read at different moments).
+assert a["lag_ns"] < 2 * a["period_ns"] and b["lag_ns"] < 2 * b["period_ns"], (a, b)
 assert a["steps"] >= 20, a["steps"]  # about 1 s after activation, at 50 Hz
 EOF2
 
