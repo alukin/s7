@@ -709,6 +709,7 @@ public:
     struct StagedGraph final : StagedConfiguration {
         std::unique_ptr<NodeRuntime> runtime;
         std::vector<transport::DataPeer> data_peers;
+        std::optional<std::int64_t> model_time_step_ns;
     };
 
     auto stage(const NodePart& part) -> std::unique_ptr<StagedConfiguration> override
@@ -726,6 +727,7 @@ public:
         staged->runtime = std::make_unique<NodeRuntime>(
             Compiler::compile(*schema, service_.runtime_instance_uuid_, create_schema_instance_uuid()));
         staged->runtime->set_model_time_step_ns(part.model_time_step_ns);
+        staged->model_time_step_ns = part.model_time_step_ns;
         staged->data_peers = part.data_peers;
         return staged;
     }
@@ -743,6 +745,10 @@ public:
             std::lock_guard<std::mutex> lock(service_.graph_mutex_);
             auto previous = std::exchange(service_.graph_, std::move(graph.runtime));
             previous.reset();
+            // With a model-time step the graph steps in real time from now.
+            service_.pacing_ = GraphPacing{graph.model_time_step_ns, clock::utc_now_ns()};
+            ++service_.pacing_generation_;
+            service_.max_lag_ns_ = 0;
         }
         if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(service_.network_endpoint_)) {
             const auto& definition = service_.definition_;
@@ -754,6 +760,8 @@ public:
     {
         return service_.stepping_.load() ? "stepping" : "not_stepping";
     }
+
+    auto execution_timing() const -> boost::json::object override { return service_.execution_timing(); }
 
 private:
     RuntimeService& service_;
@@ -876,6 +884,188 @@ void RuntimeService::initialize_graph() {
     }
     std::lock_guard<std::mutex> lock(graph_mutex_);
     graph_ = std::move(runtime);
+    pacing_ = GraphPacing{};
+    ++pacing_generation_;
+}
+
+auto RuntimeService::pacing() const -> GraphPacing
+{
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    return pacing_;
+}
+
+auto RuntimeService::execution_timing() const -> boost::json::object
+{
+    const auto current = pacing();
+    if (current.period_ns) {
+        return boost::json::object{
+            {"pacing", "grid"},
+            {"period_ns", *current.period_ns},
+            {"origin_utc_ns", current.origin_utc_ns},
+            {"steps", step_count()},
+            {"lag_ns", lag_ns_.load()},
+            {"max_lag_ns", max_lag_ns_.load()},
+            {"rebases", grid_rebases_.load()},
+        };
+    }
+    return boost::json::object{
+        {"pacing", definition_.execution.step_rate_hz > 0.0 ? "rate" : "none"},
+        {"step_rate_hz", definition_.execution.step_rate_hz},
+        {"steps", step_count()},
+    };
+}
+
+bool RuntimeService::step_generation(const std::uint64_t generation)
+{
+    std::lock_guard<std::mutex> lock(graph_mutex_);
+    if (generation != pacing_generation_ || !graph_) {
+        return false;
+    }
+    graph_->step();
+    return true;
+}
+
+auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::optional<std::chrono::steady_clock::time_point> deadline,
+                           std::ostream& out, std::ostream& err) -> ServeStats
+{
+    using steady = std::chrono::steady_clock;
+    constexpr auto housekeeping_interval = std::chrono::milliseconds(100);
+    constexpr auto max_sleep = std::chrono::milliseconds(50);
+    ServeStats stats;
+    const auto started = steady::now();
+    auto next_housekeeping = started;
+    auto last_behind_report = steady::time_point{};
+
+    std::uint64_t generation = 0;
+    GraphPacing current;
+    bool have_generation = false;
+    std::int64_t grid_index = 0;  // grid: index of the next step
+    auto next_rate_step = started; // rate: when the next step is due
+    bool faulted = false;
+    std::uint64_t recoveries_at_fault = 0;
+
+    auto sleep_until = [&](const steady::time_point wake) {
+        auto until = std::min({wake, steady::now() + max_sleep, next_housekeeping});
+        if (deadline) {
+            until = std::min(until, *deadline);
+        }
+        std::this_thread::sleep_until(until);
+    };
+
+    while (true) {
+        const auto now = steady::now();
+        if (now >= next_housekeeping) {
+            report_transport_errors(err);
+            check_clock(err);
+            next_housekeeping = now + housekeeping_interval;
+        }
+        if (stop_requested.load()) {
+            stats.stopped_by_signal = true;
+            break;
+        }
+        if (deadline && now >= *deadline) {
+            break;
+        }
+        {
+            std::lock_guard<std::mutex> lock(graph_mutex_);
+            if (!have_generation || generation != pacing_generation_) {
+                // A new graph: its own pacing, from its first step.
+                have_generation = true;
+                generation = pacing_generation_;
+                current = pacing_;
+                grid_index = 0;
+                next_rate_step = now;
+                if (faulted) {
+                    faulted = false;
+                    out << "runtime.execution=resumed (new graph)\n";
+                }
+                if (current.period_ns) {
+                    out << "runtime.execution=grid period_ns=" << *current.period_ns << " origin_utc_ns=" << current.origin_utc_ns << '\n';
+                }
+            }
+        }
+        if (faulted) {
+            if (stream_recoveries() == recoveries_at_fault) {
+                sleep_until(now + housekeeping_interval);
+                continue;
+            }
+            faulted = false;
+            out << "runtime.execution=resumed\n";
+            if (current.period_ns) {
+                // Continue at the next grid slot; the slots missed while stopped are skipped.
+                const auto elapsed = clock::utc_now_ns() - current.origin_utc_ns;
+                const auto slot = elapsed <= 0 ? 0 : (elapsed + *current.period_ns - 1) / *current.period_ns;
+                if (slot > grid_index) {
+                    current.origin_utc_ns += (slot - grid_index) * *current.period_ns;
+                    out << "runtime.execution.grid_rebased skipped_steps=" << slot - grid_index << '\n';
+                    ++grid_rebases_;
+                    std::lock_guard<std::mutex> lock(graph_mutex_);
+                    if (generation == pacing_generation_) {
+                        pacing_.origin_utc_ns = current.origin_utc_ns;
+                    }
+                }
+            }
+            next_rate_step = steady::now();
+        }
+
+        std::int64_t lag = 0;
+        if (current.period_ns) {
+            const auto due = current.origin_utc_ns + grid_index * *current.period_ns;
+            const auto utc = clock::utc_now_ns();
+            if (utc < due) {
+                sleep_until(now + std::chrono::nanoseconds(due - utc));
+                continue;
+            }
+            lag = utc - due;
+        } else if (definition_.execution.step_rate_hz > 0.0) {
+            if (now < next_rate_step) {
+                sleep_until(next_rate_step);
+                continue;
+            }
+        } else {
+            sleep_until(now + housekeeping_interval);
+            continue;
+        }
+
+        try {
+            set_stepping(true);
+            if (!step_generation(generation)) {
+                continue; // the graph changed meanwhile
+            }
+            ++stats.steps;
+        } catch (const std::exception& ex) {
+            // A failed step (e.g. a stream fault): keep serving the control
+            // plane so the fault can be inspected, and resume after a recovery.
+            set_stepping(false);
+            faulted = true;
+            recoveries_at_fault = stream_recoveries();
+            out << "runtime.execution.stopped=error\n";
+            err << "runtime.execution.error=" << ex.what() << '\n';
+            out.flush();
+            continue;
+        }
+        if (current.period_ns) {
+            ++grid_index;
+            lag_ns_ = lag;
+            if (lag > max_lag_ns_.load()) {
+                max_lag_ns_ = lag;
+            }
+            if (lag > std::max<std::int64_t>(*current.period_ns, 50'000'000) && steady::now() - last_behind_report > std::chrono::seconds(1)) {
+                err << "runtime.execution.behind lag_ms=" << lag / 1'000'000 << '\n';
+                last_behind_report = steady::now();
+            }
+        } else {
+            const auto period = std::chrono::duration_cast<steady::duration>(std::chrono::duration<double>(1.0 / definition_.execution.step_rate_hz));
+            next_rate_step += period;
+            // Falling further behind than this drops the backlog instead of bursting.
+            if (steady::now() - next_rate_step > std::max<steady::duration>(period, std::chrono::milliseconds(100))) {
+                next_rate_step = steady::now();
+            }
+        }
+    }
+    set_stepping(false);
+    stats.elapsed_seconds = std::chrono::duration<double>(steady::now() - started).count();
+    return stats;
 }
 
 void RuntimeService::step() {

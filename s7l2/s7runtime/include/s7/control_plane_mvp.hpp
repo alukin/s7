@@ -94,6 +94,8 @@ public:
 
     // Whether the active graph is being stepped: "stepping" or "not_stepping".
     [[nodiscard]] virtual auto execution_state() const -> std::string = 0;
+    // How the active graph is paced (NODE_INFO.state.timing, DEPLOYMENTS.timing).
+    [[nodiscard]] virtual auto execution_timing() const -> boost::json::object { return {}; }
 };
 
 struct ControlPlaneOptions {

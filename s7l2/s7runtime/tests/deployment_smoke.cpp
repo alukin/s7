@@ -1,4 +1,5 @@
 #include <cassert>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -969,6 +970,79 @@ void test_clock_loss()
     std::filesystem::remove_all(state_dir);
 }
 
+// Deployed graphs with a model-time step run on a real-time UTC grid.
+void test_grid_pacing()
+{
+    auto definition = s7::JsonSchemaLoader::load_from_json(constant_gain_fragment(1.0));
+    definition.control = studio_authorization();
+    definition.clock.assume_synchronized = true;
+    const auto state_dir = make_temp_state_dir("grid");
+    {
+        s7::RuntimeService service{definition, state_dir};
+        service.initialize_graph();
+        const auto node = service.runtime_instance_uuid();
+        const auto studio = verified_peer("s7_studio.cert.pem");
+        auto deploy = [&](const json::array& elements, const json::array& connections) {
+            const json::object diagram{
+                {"document_kind", "s7.diagram"},
+                {"runtime_nodes", json::array{json::object{{"node_uuid", node}, {"endpoint", "in-process"}}}},
+                {"schema", json::object{{"name", "grid"}, {"elements", elements}, {"connections", connections}}},
+                {"dt", 0.01},
+            };
+            const auto result = s7::deployment::deploy_diagram(
+                diagram, s7::deployment::infer_output_types(diagram), [&](const s7::deployment::RuntimeNode&, const json::object& message) {
+                    return s7::parse_json_precise(service.handle_control_request_json(studio, json::serialize(message))).as_object();
+                });
+            expect(result.committed, "deployed: " + (result.errors.empty() ? std::string() : result.errors.front()));
+        };
+        auto timing = [&] {
+            return s7::parse_json_precise(service.handle_control_request_json(
+                       ControlPeer{}, R"({"type":"LIST_DEPLOYMENTS","request_id":"l","protocol_version":1})"))
+                .as_object()
+                .at("timing")
+                .as_object();
+        };
+        std::atomic<bool> stop{false};
+        std::ostringstream out;
+        std::ostringstream err;
+
+        deploy(json::array{json::object{{"id", "c"}, {"type", "Constant"}, {"params", json::object{{"value", 3.0}}}, {"node", node}}},
+               json::array{});
+        const auto pacing = service.pacing();
+        expect(pacing.period_ns == 10'000'000, "a 10 ms grid from dt");
+        expect(timing().at("pacing").as_string() == "grid", "reported as a grid");
+
+        // Serving starts 300 ms after activation: the missed steps are caught up, not dropped.
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        const auto stats = service.serve(stop, std::chrono::steady_clock::now() + std::chrono::milliseconds(200), out, err);
+        const auto expected = (s7::clock::utc_now_ns() - pacing.origin_utc_ns) / 10'000'000;
+        expect(stats.steps >= 40 && service.step_count() >= 40, "caught up: " + std::to_string(stats.steps) + " steps");
+        expect(std::llabs(static_cast<long long>(service.step_count()) - expected) <= 3,
+               "step n runs at origin + n * dt: " + std::to_string(service.step_count()) + " steps, " + std::to_string(expected) + " slots");
+        expect(timing().at("max_lag_ns").to_number<std::int64_t>() >= 250'000'000, "the initial lag is reported");
+        expect(timing().at("lag_ns").to_number<std::int64_t>() < 50'000'000, "and then it keeps time");
+
+        // A graph that faults stops; after recovery the grid skips the slots it missed.
+        deploy(json::array{json::object{{"id", "in"}, {"type", "NetSource"},
+                                        {"params", json::object{{"stream_id", "6e5d4c3b-2a1f-4e0d-9c8b-7a6f5e4d3c2b"}, {"type", "F64"}, {"max_wait_ms", 20}}},
+                                        {"node", node}},
+                           json::object{{"id", "g"}, {"type", "Gain"}, {"params", json::object{{"factor", 2.0}}}, {"node", node}}},
+               json::array{json::object{{"from_element", "in"}, {"from_port", 0}, {"to_element", "g"}, {"to_port", 0}}});
+        std::thread serving([&] { static_cast<void>(service.serve(stop, std::nullopt, out, err)); });
+        std::this_thread::sleep_for(std::chrono::milliseconds(400));
+        static_cast<void>(service.handle_control_request_json(
+            studio, R"({"type":"RECOVER_STREAM","request_id":"r","protocol_version":1,"stream_id":"6e5d4c3b-2a1f-4e0d-9c8b-7a6f5e4d3c2b"})"));
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        stop = true;
+        serving.join();
+        expect(out.str().find("runtime.execution.stopped=error") != std::string::npos, "the fault stopped stepping");
+        expect(out.str().find("runtime.execution.grid_rebased skipped_steps=") != std::string::npos, "the grid moved on: " + out.str());
+        expect(timing().at("rebases").to_number<std::int64_t>() >= 1 && service.step_count() < 5,
+               "no burst of missed steps: " + std::to_string(service.step_count()));
+    }
+    std::filesystem::remove_all(state_dir);
+}
+
 int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
@@ -985,6 +1059,7 @@ try {
     test_runtime_deployment_over_mtls();
     test_large_deployment_over_mtls();
     test_clock_loss();
+    test_grid_pacing();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7runtime deployment smoke: " << ex.what() << '\n';

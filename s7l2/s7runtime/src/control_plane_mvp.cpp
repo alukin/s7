@@ -864,6 +864,7 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     state["mode"] = mode;
     state["active_deployment"] = active_deployment;
     state["execution"] = options_.deployment_host ? options_.deployment_host->execution_state() : "not_stepping";
+    state["timing"] = options_.deployment_host ? options_.deployment_host->execution_timing() : boost::json::object{};
     out["state"] = std::move(state);
 
     return out;
@@ -988,6 +989,7 @@ auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request
     const auto now = std::chrono::steady_clock::now();
     out["state"] = state_name_locked();
     out["execution"] = options_.deployment_host ? options_.deployment_host->execution_state() : "not_stepping";
+    out["timing"] = options_.deployment_host ? options_.deployment_host->execution_timing() : boost::json::object{};
     out["active_revision"] = active_ ? active_->revision : 0;
     if (active_) {
         boost::json::object active;

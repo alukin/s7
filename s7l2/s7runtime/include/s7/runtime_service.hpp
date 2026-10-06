@@ -98,6 +98,22 @@ struct RuntimeSchemaDefinition {
     ControlAuthorization control;
 };
 
+// How the active graph is stepped while the node serves (RuntimeService::serve).
+// grid: a deployed graph with a model-time step steps in real time on a UTC
+// grid, step n due at origin_utc_ns + n * period_ns; when it falls behind it
+// catches up (every step runs; the lag is reported). Otherwise the node's
+// execution.step_rate_hz paces it on its own clock (0: not stepped).
+struct GraphPacing {
+    std::optional<std::int64_t> period_ns;
+    std::int64_t origin_utc_ns{};
+};
+
+struct ServeStats {
+    std::uint64_t steps{};
+    double elapsed_seconds{};
+    bool stopped_by_signal{};
+};
+
 class JsonSchemaLoader {
 public:
     static RuntimeSchemaDefinition load_from_file(const std::string& file_path);
@@ -157,6 +173,17 @@ public:
     void report_transport_stats(std::ostream& out) const;
     void print_summary(std::ostream& out) const;
 
+    // Steps the active graph as its pacing says until stop_requested or the
+    // deadline, and every 100 ms reports transport errors and checks the
+    // clock. A step that fails (e.g. a stream fault) stops stepping until a
+    // RECOVER_STREAM or a new deployment; a grid then continues at the next
+    // grid slot (the missed steps are skipped, not burst). Progress lines go
+    // to `out`, errors to `err`.
+    auto serve(const std::atomic<bool>& stop_requested, std::optional<std::chrono::steady_clock::time_point> deadline,
+               std::ostream& out, std::ostream& err) -> ServeStats;
+    [[nodiscard]] auto pacing() const -> GraphPacing;
+    [[nodiscard]] auto execution_timing() const -> boost::json::object;
+
     // Port 0 lets the system choose. Returns the port listened on (0 if the
     // server is not enabled).
     std::uint16_t start_websocket_server() const;
@@ -176,6 +203,13 @@ private:
     mutable std::mutex graph_mutex_;
     std::unique_ptr<NodeRuntime> graph_;
     std::atomic<bool> stepping_{false};
+    GraphPacing pacing_;                  // guarded by graph_mutex_
+    std::uint64_t pacing_generation_{0};  // changes with every graph (guarded by graph_mutex_)
+    std::atomic<std::int64_t> lag_ns_{0};
+    std::atomic<std::int64_t> max_lag_ns_{0};
+    std::atomic<std::uint64_t> grid_rebases_{0};
+    // Steps the graph if it is still the one of `generation`.
+    bool step_generation(std::uint64_t generation);
     std::atomic<std::uint64_t> stream_recoveries_{0};
     std::shared_ptr<GraphHost> graph_host_;
     std::optional<bool> clock_usable_;
