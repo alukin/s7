@@ -88,6 +88,21 @@ target_compile_definitions(s7runtime_deployment_smoke PRIVATE
 
 add_test(NAME s7runtime_deployment_smoke COMMAND s7runtime_deployment_smoke)
 
+# The control protocol conformance script, run against the control plane.
+add_executable(s7runtime_control_fixtures_smoke tests/control_fixtures_smoke.cpp src/control_plane_mvp.cpp)
+target_include_directories(s7runtime_control_fixtures_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(s7runtime_control_fixtures_smoke PRIVATE s7core s7transport s7net Boost::json Threads::Threads)
+target_compile_definitions(s7runtime_control_fixtures_smoke PRIVATE
+    S7_TEST_CERT_DIR="${PROJECT_SOURCE_DIR}/s7runtime/examples/certs"
+    S7_CONTROL_FIXTURES="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/control_v1.json")
+add_test(NAME s7runtime_control_fixtures_smoke COMMAND s7runtime_control_fixtures_smoke)
+find_package(Python3 COMPONENTS Interpreter)
+if (Python3_Interpreter_FOUND)
+    add_test(NAME s7runtime_control_fixtures_current
+        COMMAND sh -c "${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/gen_control_fixtures.py \"$1\" > /dev/null && cmp \"$1\" ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/control_v1.json"
+            sh ${CMAKE_CURRENT_BINARY_DIR}/control_v1.generated.json)
+endif()
+
 
 # Third-party plugin path: build s7spectral against the installed SDK and load it.
 add_executable(s7runtime_plugin_sdk_smoke

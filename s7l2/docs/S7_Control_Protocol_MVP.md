@@ -1,7 +1,7 @@
 # S7 Control Protocol — MVP Draft
 
-**Status:** Proposed protocol draft; not yet a conformance standard.
-**Version:** 0.2
+**Status:** MVP contract, implemented by the C++ runtime (2026-10-06). The conformance script `s7runtime/tests/fixtures/control_v1.json` (section 9) is its message schema.
+**Version:** 0.3
 **Transport:** WebSocket carrying UTF-8 JSON messages.
 
 This document defines how the S7 control Studio and runtime nodes identify one another, discover peers, exchange network configuration, and prepare/commit a configuration update. It is intended to be implementable in C++, Rust, Python, and JVM runtimes without depending on a shared implementation library.
@@ -217,20 +217,20 @@ Errors MUST NOT disclose private key material, credentials, or sensitive local p
 - A failed or disconnected Studio does not stop a runtime node's last committed execution.
 - Local Git history on Studio is not a runtime-node dependency. Runtime configuration retrieval and deployment use S7 control messages.
 
-## 9. Open Items Before Interoperability Freeze
+## 9. Formerly Open Items (resolved 2026-10-06)
 
-1. Exact JSON schemas for each message and chunk-transfer operation.
-2. Configuration schema/diagram bundle representation and the mapping from Git project revision to exact executable configuration.
-3. Retention and garbage-collection rules for configuration and deployment history.
-4. Whether request IDs use UUIDv4 specifically and how long duplicate responses are cached.
+1. **Message schemas.** `s7runtime/tests/fixtures/control_v1.json` (written by `tools/gen_control_fixtures.py`) is the normative schema of every message: a scripted conversation with one node that gives each request and, for its response, the type, every required member with its JSON type, and exact values where they are determined, including the errors and idempotent repeats. Responses may carry further members. The configuration digests in it are computed from RFC 8785 by the generator, independently of the C++ code, so the script also checks an implementation's canonicalization. Section 10.1 describes each message's behavior.
+2. **Bundle representation.** A configuration bundle is `{project_revision, configuration_digest, diagram}`. `diagram` is the S7 diagram document (`document_kind: "s7.diagram"`): `schema` (elements with their `node` placement, connections), `runtime_nodes`, `streams` (stream descriptors, wire protocol section 12.1 item 1), `dt` (the model-time step, optional) and Studio's `diagram` layout. `project_revision` is opaque: a Git revision when the diagram is in Git, otherwise `diagram:<first 16 hex digits of the content digest>`; nodes never resolve it. The executable configuration of a node is its part of the diagram (`extract_node_schema`), which depends on the bundle content only.
+3. **Retention.** A node keeps its active configuration only (persisted, `GET_NETWORK_CONFIGURATION` serves no other revision), prepared deployments until they are committed, aborted or expire (5 minutes), configuration transfers until they expire (5 minutes, at most 4), and the latest 64 deployment outcomes in memory. After a restart the history starts with the restored deployment's `restored` (or `restore_failed`) entry.
+4. **Request IDs and duplicates.** `request_id` is required: a string of 1 to 128 characters, chosen by the client (a UUIDv4 is recommended, not required) and echoed in the response; a request without one is `INVALID_REQUEST` with an empty `request_id`. Responses are not cached by request ID, because every mutation is idempotent by its own keys: `PREPARE_DEPLOYMENT` by deployment, revision and digest (the same token again), `COMMIT_DEPLOYMENT` by its token (the same result), `ABORT_DEPLOYMENT` always, configuration transfers by transfer ID, chunk index and content, and `RECOVER_STREAM` (a stream without a fault is left alone). Prepare tokens do not survive a restart: a commit repeated after one is `PREPARE_TOKEN_INVALID`, and the client reconciles with `LIST_DEPLOYMENTS`, whose active revision and digest show whether its commit took effect.
 
 ## 10. Relationship to Implementation
 
-The C++ runtime is the reference implementation. Existing code contains JSON control handlers for several messages and mTLS configuration, but this document also specifies behavior that is not yet implemented. Conformance must be established with cross-language protocol fixtures and tests before this draft is treated as a stable wire contract.
+The C++ runtime is the reference implementation; `s7runtime_control_fixtures_smoke` runs the conformance script of section 9 against it. Other implementations are checked with the same script.
 
-### 10.1 Implemented behavior (C++ runtime, 2026-10-05)
+### 10.1 Implemented behavior (C++ runtime, 2026-10-06)
 
-**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT`, `ABORT_DEPLOYMENT` and `RECOVER_STREAM` are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Extended Key Usage OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate's Extended Key Usage contains the configured control-node key purpose (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
+**Authorization.** `PREPARE_DEPLOYMENT`, `COMMIT_DEPLOYMENT`, `ABORT_DEPLOYMENT`, `RECOVER_STREAM` and the configuration transfer messages are authorized from the TLS session only. The transport passes each control request together with the authenticated peer: whether the connection is TLS and, if the client certificate passed chain verification, its SHA-256 fingerprint, SAN URIs and Extended Key Usage OIDs. A mutation is accepted only if all hold, in this order: TLS (`UNAUTHORIZED`), a verified client certificate (`CERTIFICATE_REQUIRED`), the node has an authorized Studio configured (`UNAUTHORIZED`), the certificate's Extended Key Usage contains the configured control-node key purpose (`UNAUTHORIZED`), and its fingerprint equals the pinned Studio fingerprint (`UNAUTHORIZED`). JSON fields are never consulted. Each decision is logged as `control.authorized` / `control.denied` with the peer certificate fingerprint; denials also return it in `details.peer_certificate_sha256`. Read-only messages and `PEER_ANNOUNCE` need no authorization.
 
 The authorized Studio is node configuration in the runtime schema file, not deployable:
 
@@ -297,7 +297,7 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 `state` is `active`, `blocked` (a producer waiting on a full send log), `faulted`, or `closed` (no element of the running graph uses the stream; its state is kept for a redeployment); `fault` is `NONE` or a fault code of `S7_Net_Element_Contract.md`. `next_sequence` is the next sequence a producer assigns, or the next a consumer expects. `unauthorized` counts refused peers (a producer: `RESUME`s from nodes that are not consumers of the stream; a consumer: packets from a connection that is not to its producer node). `recent_faults` lists the latest 16 faults and refusals, oldest first, with what was refused in `detail` (for example `node <uuid>`); it is kept across `RECOVER_STREAM`, so a recovered fault stays reported.
 
-**Stream recovery.** `RECOVER_STREAM {stream_id}` is authorized like a deployment mutation. It clears the stream's fault and returns `RECOVER_STREAM_RESULT {stream_id, recovered}` (`recovered: false` if the node has no such stream; `INVALID_REQUEST` for a malformed id). A recovered consumer accepts the next packet it receives as its new start; the data lost in the fault stays lost and stays counted. A runtime whose stepping stopped because a step failed (for example on a stream fault) resumes stepping after a successful recovery.
+**Stream recovery.** `RECOVER_STREAM {stream_id}` is authorized like a deployment mutation. It clears the stream's fault (a stream without one is left as it is, so a repeated request changes nothing) and returns `RECOVER_STREAM_RESULT {stream_id, recovered}` (`recovered: false` if the node has no such stream; `INVALID_REQUEST` for a malformed id). A recovered consumer accepts the next packet it receives as its new start; the data lost in the fault stays lost and stays counted. A runtime whose stepping stopped because a step failed (for example on a stream fault) resumes stepping after a successful recovery.
 
 **Network configuration.** `GET_NETWORK_CONFIGURATION {revision?}` (read-only) returns `NETWORK_CONFIGURATION` with `node_uuid`, `deployment_id`, `revision`, `project_revision`, `configuration_digest`, `committed_at`, the deployed `diagram` and this node's part of it as `node_schema`. Only the active revision is retained: no committed configuration, or another `revision`, is `REVISION_NOT_FOUND`.
 
@@ -313,4 +313,4 @@ The OID above is a development placeholder (UUID-derived, under `2.25`) used by 
 
 A transfer, complete or not, expires with the prepare TTL (5 minutes); an unknown or failed transfer is `TRANSFER_NOT_FOUND`. Control connections accept WebSocket messages of up to 4 MiB (`transport::kMaxControlMessageBytes`); data connections one data packet. The deployment client reads each node's limits from `NODE_INFO` and uses the transfer when needed (`transfer-<digest prefix>-r<revision>` as `transfer_id`).
 
-**Not yet implemented:** request-ID replay caching.
+Request IDs and retention follow section 9 (items 3 and 4).

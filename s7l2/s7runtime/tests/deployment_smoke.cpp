@@ -338,7 +338,7 @@ void test_deployment_lifecycle()
     expect(token.size() == 5 + 64 && token.starts_with("ptok_"), "256-bit token");
     expect(studio.send(request).at("prepare_token").as_string() == token, "repeated prepare returns the same token");
 
-    const auto listing = studio.send(json::object{{"type", "LIST_DEPLOYMENTS"}, {"protocol_version", 1}});
+    const auto listing = studio.send(json::object{{"type", "LIST_DEPLOYMENTS"}, {"request_id", "list"}, {"protocol_version", 1}});
     expect(listing.at("state").as_string() == "idle", "idle before commit");
     expect(listing.at("prepared_deployments").as_array().size() == 1, "one prepared deployment");
     expect(json::serialize(listing).find(token) == std::string::npos, "listing does not reveal the token");
@@ -354,7 +354,7 @@ void test_deployment_lifecycle()
     expect(again.at("committed").as_bool() && again.at("committed_at") == committed.at("committed_at"), "commit is idempotent");
     expect_error(studio.send(token_request("ABORT_DEPLOYMENT", "dep-1", 1, token)), "INVALID_REQUEST", "abort after commit");
 
-    const auto active_listing = studio.send(json::object{{"type", "LIST_DEPLOYMENTS"}, {"protocol_version", 1}});
+    const auto active_listing = studio.send(json::object{{"type", "LIST_DEPLOYMENTS"}, {"request_id", "list"}, {"protocol_version", 1}});
     expect(active_listing.at("state").as_string() == "active" && active_listing.at("active_revision").to_number<std::uint64_t>() == 1,
            "listing shows the active revision");
 
@@ -367,7 +367,7 @@ void test_deployment_lifecycle()
     expect_error(studio.send(token_request("COMMIT_DEPLOYMENT", "dep-2", 2, second.at("prepare_token").as_string().c_str())),
                  "INTERNAL_ERROR", "failed activation");
     expect(host->active_value == 2.0, "previous configuration stays active after failed activation");
-    expect(studio.send(json::object{{"type", "LIST_DEPLOYMENTS"}, {"protocol_version", 1}}).at("active_revision").to_number<std::uint64_t>() == 1,
+    expect(studio.send(json::object{{"type", "LIST_DEPLOYMENTS"}, {"request_id", "list"}, {"protocol_version", 1}}).at("active_revision").to_number<std::uint64_t>() == 1,
            "active revision unchanged after failed activation");
 
     // Two preparations on the same base: committing one supersedes the other.

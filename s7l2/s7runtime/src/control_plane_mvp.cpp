@@ -281,6 +281,12 @@ auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, 
     if (protocol_version != 1) {
         return make_error_response(request_id, "UNSUPPORTED_PROTOCOL_VERSION", "Only protocol_version=1 is supported.");
     }
+    // Echoed in the response; requests are idempotent by their own keys, so
+    // nothing is cached by request_id.
+    const auto* id_value = request.if_contains("request_id");
+    if (!id_value || !id_value->is_string() || id_value->as_string().empty() || id_value->as_string().size() > 128) {
+        return make_error_response({}, "INVALID_REQUEST", "request_id must be a string of 1 to 128 characters.");
+    }
 
     if (request_type == "HELLO") {
         return handle_hello(request);

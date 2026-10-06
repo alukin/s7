@@ -440,6 +440,9 @@ void StreamConsumer::fault(const FaultCode code)
 
 void StreamConsumer::recover()
 {
+    if (fault_ == FaultCode::None) {
+        return; // a repeated RECOVER_STREAM changes nothing
+    }
     fault_ = FaultCode::None;
     restart_at_next_ = true;
     element_count_known_ = false; // the elements lost in the fault are not counted

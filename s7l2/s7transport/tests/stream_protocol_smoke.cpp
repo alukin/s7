@@ -379,6 +379,11 @@ void test_derived_timestamps()
            "no overflow in the intermediate product");
     expect(stream::element_time_ns(stream::SampleRate{3, 1}, 1) == 333'333'333, "rounded toward zero");
 
+    // A recovery of a healthy stream changes nothing (a repeated RECOVER_STREAM).
+    consumer.recover();
+    expect(consumer.take(out.data(), 1, &times) == 1 && times == std::vector<wire::TimestampRecord>{{wire::TimestampRole::ModelTime, 125'000}},
+           "times still known after recovering a healthy stream");
+
     // After a recovered fault the element count, and so the time, is unknown.
     consumer.fault(stream::FaultCode::Underrun);
     consumer.recover();

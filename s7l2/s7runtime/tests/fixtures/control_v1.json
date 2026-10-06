@@ -1,0 +1,1053 @@
+{
+  "format": "S7 control protocol v1 conformance script (S7_Control_Protocol_MVP.md)",
+  "generator": "tools/gen_control_fixtures.py",
+  "node": {
+    "node_uuid": "11111111-2222-3333-4444-555555555555",
+    "node_name": "fixture-node",
+    "listen_url": "wss://127.0.0.1:9002",
+    "max_configuration_bytes": 2048,
+    "stream": {
+      "stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+      "role": "consumer",
+      "data_type": "F64",
+      "fault": "UNDERRUN"
+    }
+  },
+  "peers": {
+    "anonymous": "no TLS client certificate",
+    "studio": "the authorized Studio's verified certificate (s7runtime/examples/certs/s7_studio.cert.pem)"
+  },
+  "types": "Each response member, by path (a.b, a[0].b), has one of the JSON types string, integer, boolean, object, array, null; 'x|y' allows either. 'equals' gives exact values. '${name}' in a request is a value captured from an earlier response ('capture': {name: member}). Other members may be present.",
+  "steps": [
+    {
+      "name": "hello",
+      "peer": "anonymous",
+      "request": {
+        "type": "HELLO",
+        "request_id": "hello-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "HELLO_OK",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "node_uuid": "string",
+          "node_name": "string",
+          "status": "string"
+        },
+        "equals": {
+          "request_id": "hello-1",
+          "node_uuid": "11111111-2222-3333-4444-555555555555"
+        }
+      }
+    },
+    {
+      "name": "node_info",
+      "peer": "anonymous",
+      "request": {
+        "type": "GET_NODE_INFO",
+        "request_id": "info-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "NODE_INFO",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "node": "object",
+          "node.node_uuid": "string",
+          "node.node_name": "string",
+          "node.runtime_version": "string",
+          "node.protocol_version": "integer",
+          "node.certificate": "object",
+          "platform": "object",
+          "platform.os_family": "string",
+          "platform.architecture": "string",
+          "network": "object",
+          "network.listen_url": "string",
+          "network.control_path": "string",
+          "network.data_path": "string",
+          "libraries": "array",
+          "state": "object",
+          "state.mode": "string",
+          "state.execution": "string",
+          "control_limits": "object",
+          "control_limits.max_configuration_bytes": "integer",
+          "control_limits.max_chunk_bytes": "integer",
+          "control_limits.max_transfer_bytes": "integer",
+          "data_protocol": "object",
+          "data_protocol.packet_versions": "array",
+          "data_protocol.extensions": "array",
+          "clock_domains": "array",
+          "clock_domains[0].id": "string",
+          "clock_domains[0].kind": "string",
+          "clock_domains[0].continuous_across_restart": "boolean"
+        },
+        "equals": {
+          "data_protocol.packet_versions": [
+            1
+          ],
+          "data_protocol.extensions": [
+            "0x8001"
+          ]
+        }
+      }
+    },
+    {
+      "name": "peer_announce",
+      "peer": "anonymous",
+      "request": {
+        "type": "PEER_ANNOUNCE",
+        "request_id": "announce-1",
+        "protocol_version": 1,
+        "self": {
+          "endpoint": "wss://127.0.0.1:9003",
+          "node_uuid": "33333333-4444-5555-6666-777777777777"
+        }
+      },
+      "response": {
+        "type": "PEER_ANNOUNCE_OK",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "accepted": "boolean"
+        }
+      }
+    },
+    {
+      "name": "peers",
+      "peer": "anonymous",
+      "request": {
+        "type": "GET_PEERS",
+        "request_id": "peers-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "PEERS",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "peers": "array",
+          "peers[0].endpoint": "string",
+          "peers[0].node_uuid": "string|null",
+          "peers[0].trust_state": "string",
+          "peers[0].reachability": "string"
+        }
+      }
+    },
+    {
+      "name": "list_idle",
+      "peer": "anonymous",
+      "request": {
+        "type": "LIST_DEPLOYMENTS",
+        "request_id": "list-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "DEPLOYMENTS",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "state": "string",
+          "execution": "string",
+          "active_revision": "integer",
+          "active_deployment": "object|null",
+          "prepared_deployments": "array",
+          "history": "array"
+        },
+        "equals": {
+          "active_revision": 0,
+          "active_deployment": null
+        }
+      }
+    },
+    {
+      "name": "configuration_none",
+      "peer": "anonymous",
+      "request": {
+        "type": "GET_NETWORK_CONFIGURATION",
+        "request_id": "config-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "REVISION_NOT_FOUND"
+        }
+      }
+    },
+    {
+      "name": "prepare_unauthorized",
+      "peer": "anonymous",
+      "request": {
+        "type": "PREPARE_DEPLOYMENT",
+        "request_id": "prepare-0",
+        "protocol_version": 1,
+        "deployment": {
+          "deployment_id": "fixture-deployment",
+          "revision": 1,
+          "base_revision": 0,
+          "configuration": {
+            "project_revision": "fixture:1",
+            "diagram": {
+              "document_kind": "s7.diagram",
+              "runtime_nodes": [
+                {
+                  "node_uuid": "11111111-2222-3333-4444-555555555555",
+                  "name": "fixture-node",
+                  "endpoint": "wss://127.0.0.1:9002"
+                }
+              ],
+              "schema": {
+                "name": "fixture",
+                "elements": [
+                  {
+                    "id": "c",
+                    "type": "Constant",
+                    "params": {
+                      "value": 4
+                    },
+                    "node": "11111111-2222-3333-4444-555555555555"
+                  }
+                ],
+                "connections": []
+              }
+            },
+            "configuration_digest": "sha256:a2d6231e0da0b3b10d7169efcef143a869c20258fac5be6213c602b405a57ab8"
+          }
+        }
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "UNAUTHORIZED"
+        }
+      }
+    },
+    {
+      "name": "prepare",
+      "peer": "studio",
+      "request": {
+        "type": "PREPARE_DEPLOYMENT",
+        "request_id": "prepare-1",
+        "protocol_version": 1,
+        "deployment": {
+          "deployment_id": "fixture-deployment",
+          "revision": 1,
+          "base_revision": 0,
+          "configuration": {
+            "project_revision": "fixture:1",
+            "diagram": {
+              "document_kind": "s7.diagram",
+              "runtime_nodes": [
+                {
+                  "node_uuid": "11111111-2222-3333-4444-555555555555",
+                  "name": "fixture-node",
+                  "endpoint": "wss://127.0.0.1:9002"
+                }
+              ],
+              "schema": {
+                "name": "fixture",
+                "elements": [
+                  {
+                    "id": "c",
+                    "type": "Constant",
+                    "params": {
+                      "value": 4
+                    },
+                    "node": "11111111-2222-3333-4444-555555555555"
+                  }
+                ],
+                "connections": []
+              }
+            },
+            "configuration_digest": "sha256:a2d6231e0da0b3b10d7169efcef143a869c20258fac5be6213c602b405a57ab8"
+          }
+        }
+      },
+      "response": {
+        "type": "PREPARE_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "deployment_id": "string",
+          "revision": "integer",
+          "configuration_digest": "string",
+          "prepare_status": "string",
+          "prepare_token": "string|null",
+          "prepared_at": "string|null",
+          "expires_at": "string|null",
+          "incompatibilities": "array",
+          "reservations": "object"
+        },
+        "equals": {
+          "prepare_status": "READY",
+          "configuration_digest": "sha256:a2d6231e0da0b3b10d7169efcef143a869c20258fac5be6213c602b405a57ab8"
+        }
+      },
+      "capture": {
+        "token": "prepare_token"
+      }
+    },
+    {
+      "name": "prepare_repeated",
+      "peer": "studio",
+      "request": {
+        "type": "PREPARE_DEPLOYMENT",
+        "request_id": "prepare-2",
+        "protocol_version": 1,
+        "deployment": {
+          "deployment_id": "fixture-deployment",
+          "revision": 1,
+          "base_revision": 0,
+          "configuration": {
+            "project_revision": "fixture:1",
+            "diagram": {
+              "document_kind": "s7.diagram",
+              "runtime_nodes": [
+                {
+                  "node_uuid": "11111111-2222-3333-4444-555555555555",
+                  "name": "fixture-node",
+                  "endpoint": "wss://127.0.0.1:9002"
+                }
+              ],
+              "schema": {
+                "name": "fixture",
+                "elements": [
+                  {
+                    "id": "c",
+                    "type": "Constant",
+                    "params": {
+                      "value": 4
+                    },
+                    "node": "11111111-2222-3333-4444-555555555555"
+                  }
+                ],
+                "connections": []
+              }
+            },
+            "configuration_digest": "sha256:a2d6231e0da0b3b10d7169efcef143a869c20258fac5be6213c602b405a57ab8"
+          }
+        }
+      },
+      "response": {
+        "type": "PREPARE_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "deployment_id": "string",
+          "revision": "integer",
+          "configuration_digest": "string",
+          "prepare_status": "string",
+          "prepare_token": "string|null",
+          "prepared_at": "string|null",
+          "expires_at": "string|null",
+          "incompatibilities": "array",
+          "reservations": "object"
+        },
+        "equals": {
+          "prepare_token": "${token}"
+        }
+      }
+    },
+    {
+      "name": "prepare_tampered",
+      "peer": "studio",
+      "request": {
+        "type": "PREPARE_DEPLOYMENT",
+        "request_id": "prepare-3",
+        "protocol_version": 1,
+        "deployment": {
+          "deployment_id": "fixture-deployment",
+          "revision": 1,
+          "base_revision": 0,
+          "configuration": {
+            "project_revision": "tampered",
+            "diagram": {
+              "document_kind": "s7.diagram",
+              "runtime_nodes": [
+                {
+                  "node_uuid": "11111111-2222-3333-4444-555555555555",
+                  "name": "fixture-node",
+                  "endpoint": "wss://127.0.0.1:9002"
+                }
+              ],
+              "schema": {
+                "name": "fixture",
+                "elements": [
+                  {
+                    "id": "c",
+                    "type": "Constant",
+                    "params": {
+                      "value": 4
+                    },
+                    "node": "11111111-2222-3333-4444-555555555555"
+                  }
+                ],
+                "connections": []
+              }
+            },
+            "configuration_digest": "sha256:a2d6231e0da0b3b10d7169efcef143a869c20258fac5be6213c602b405a57ab8"
+          }
+        }
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "INVALID_REQUEST"
+        }
+      }
+    },
+    {
+      "name": "commit",
+      "peer": "studio",
+      "request": {
+        "type": "COMMIT_DEPLOYMENT",
+        "request_id": "commit-1",
+        "protocol_version": 1,
+        "deployment_id": "fixture-deployment",
+        "revision": 1,
+        "prepare_token": "${token}"
+      },
+      "response": {
+        "type": "COMMIT_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "deployment_id": "string",
+          "revision": "integer",
+          "committed": "boolean",
+          "state": "string",
+          "configuration_digest": "string",
+          "execution": "string"
+        },
+        "equals": {
+          "committed": true,
+          "state": "active"
+        }
+      }
+    },
+    {
+      "name": "commit_repeated",
+      "peer": "studio",
+      "request": {
+        "type": "COMMIT_DEPLOYMENT",
+        "request_id": "commit-2",
+        "protocol_version": 1,
+        "deployment_id": "fixture-deployment",
+        "revision": 1,
+        "prepare_token": "${token}"
+      },
+      "response": {
+        "type": "COMMIT_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "deployment_id": "string",
+          "revision": "integer",
+          "committed": "boolean",
+          "state": "string",
+          "configuration_digest": "string",
+          "execution": "string"
+        },
+        "equals": {
+          "committed": true
+        }
+      }
+    },
+    {
+      "name": "commit_bad_token",
+      "peer": "studio",
+      "request": {
+        "type": "COMMIT_DEPLOYMENT",
+        "request_id": "commit-3",
+        "protocol_version": 1,
+        "deployment_id": "fixture-deployment",
+        "revision": 1,
+        "prepare_token": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "PREPARE_TOKEN_INVALID"
+        }
+      }
+    },
+    {
+      "name": "list_active",
+      "peer": "anonymous",
+      "request": {
+        "type": "LIST_DEPLOYMENTS",
+        "request_id": "list-2",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "DEPLOYMENTS",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "state": "string",
+          "execution": "string",
+          "active_revision": "integer",
+          "active_deployment": "object|null",
+          "prepared_deployments": "array",
+          "history": "array",
+          "active_deployment.deployment_id": "string",
+          "active_deployment.revision": "integer",
+          "active_deployment.configuration_digest": "string",
+          "active_deployment.committed_at": "string",
+          "active_deployment.restored": "boolean",
+          "history[0].deployment_id": "string",
+          "history[0].revision": "integer",
+          "history[0].outcome": "string"
+        },
+        "equals": {
+          "active_revision": 1
+        }
+      }
+    },
+    {
+      "name": "configuration",
+      "peer": "anonymous",
+      "request": {
+        "type": "GET_NETWORK_CONFIGURATION",
+        "request_id": "config-2",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "NETWORK_CONFIGURATION",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "node_uuid": "string",
+          "deployment_id": "string",
+          "revision": "integer",
+          "project_revision": "string",
+          "configuration_digest": "string",
+          "committed_at": "string",
+          "diagram": "object",
+          "node_schema": "object"
+        },
+        "equals": {
+          "revision": 1,
+          "project_revision": "fixture:1",
+          "configuration_digest": "sha256:a2d6231e0da0b3b10d7169efcef143a869c20258fac5be6213c602b405a57ab8"
+        }
+      }
+    },
+    {
+      "name": "begin_transfer",
+      "peer": "studio",
+      "request": {
+        "type": "BEGIN_CONFIGURATION_TRANSFER",
+        "request_id": "begin-1",
+        "protocol_version": 1,
+        "transfer_id": "fixture-transfer",
+        "total_bytes": 479,
+        "configuration_digest": "sha256:99c66d6c17d1f2467d2c5c031e75cf12c37a94967b8556f427e550a18c90295e"
+      },
+      "response": {
+        "type": "CONFIGURATION_TRANSFER_STARTED",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "transfer_id": "string",
+          "max_chunk_bytes": "integer"
+        }
+      }
+    },
+    {
+      "name": "chunk",
+      "peer": "studio",
+      "request": {
+        "type": "CONFIGURATION_CHUNK",
+        "request_id": "chunk-1",
+        "protocol_version": 1,
+        "transfer_id": "fixture-transfer",
+        "index": 0,
+        "offset": 0,
+        "data": "eyJwcm9qZWN0X3JldmlzaW9uIjogImZpeHR1cmU6MiIsICJkaWFncmFtIjogeyJkb2N1bWVudF9raW5kIjogInM3LmRpYWdyYW0iLCAicnVudGltZV9ub2RlcyI6IFt7Im5vZGVfdXVpZCI6ICIxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTUiLCAibmFtZSI6ICJmaXh0dXJlLW5vZGUiLCAiZW5kcG9pbnQiOiAid3NzOi8vMTI3LjAuMC4xOjkwMDIifV0sICJzY2hlbWEiOiB7Im5hbWUiOiAiZml4dHVyZSIsICJlbGVtZW50cyI6IFt7ImlkIjogImMiLCAidHlwZSI6ICJDb25zdGFudCIsICJwYXJhbXMiOiB7InZhbHVlIjogNX0sICJub2RlIjogIjExMTExMTExLTIyMjItMzMzMy00NDQ0LTU1NTU1NTU1NTU1NSJ9XSwgImNvbm5lY3Rpb25zIjogW119fSwgImNvbmZpZ3VyYXRpb25fZGlnZXN0IjogInNoYTI1Njo5OWM2NmQ2YzE3ZDFmMjQ2N2QyYzVjMDMxZTc1Y2YxMmMzN2E5NDk2N2I4NTU2ZjQyN2U1NTBhMThjOTAyOTVlIn0"
+      },
+      "response": {
+        "type": "CONFIGURATION_CHUNK_ACCEPTED",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "transfer_id": "string",
+          "index": "integer",
+          "received_bytes": "integer"
+        },
+        "equals": {
+          "received_bytes": 479
+        }
+      }
+    },
+    {
+      "name": "chunk_out_of_order",
+      "peer": "studio",
+      "request": {
+        "type": "CONFIGURATION_CHUNK",
+        "request_id": "chunk-2",
+        "protocol_version": 1,
+        "transfer_id": "fixture-transfer",
+        "index": 2,
+        "offset": 0,
+        "data": "AA"
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "TRANSFER_INVALID"
+        }
+      }
+    },
+    {
+      "name": "end_transfer",
+      "peer": "studio",
+      "request": {
+        "type": "END_CONFIGURATION_TRANSFER",
+        "request_id": "end-1",
+        "protocol_version": 1,
+        "transfer_id": "fixture-transfer"
+      },
+      "response": {
+        "type": "CONFIGURATION_TRANSFER_COMPLETE",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "transfer_id": "string",
+          "configuration_digest": "string",
+          "total_bytes": "integer"
+        },
+        "equals": {
+          "configuration_digest": "sha256:99c66d6c17d1f2467d2c5c031e75cf12c37a94967b8556f427e550a18c90295e"
+        }
+      }
+    },
+    {
+      "name": "prepare_from_transfer",
+      "peer": "studio",
+      "request": {
+        "type": "PREPARE_DEPLOYMENT",
+        "request_id": "prepare-4",
+        "protocol_version": 1,
+        "deployment": {
+          "deployment_id": "fixture-deployment",
+          "revision": 2,
+          "base_revision": 1,
+          "configuration_transfer_id": "fixture-transfer"
+        }
+      },
+      "response": {
+        "type": "PREPARE_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "deployment_id": "string",
+          "revision": "integer",
+          "configuration_digest": "string",
+          "prepare_status": "string",
+          "prepare_token": "string|null",
+          "prepared_at": "string|null",
+          "expires_at": "string|null",
+          "incompatibilities": "array",
+          "reservations": "object"
+        },
+        "equals": {
+          "prepare_status": "READY"
+        }
+      },
+      "capture": {
+        "token2": "prepare_token"
+      }
+    },
+    {
+      "name": "abort",
+      "peer": "studio",
+      "request": {
+        "type": "ABORT_DEPLOYMENT",
+        "request_id": "abort-1",
+        "protocol_version": 1,
+        "deployment_id": "fixture-deployment",
+        "revision": 2,
+        "prepare_token": "${token2}"
+      },
+      "response": {
+        "type": "ABORT_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "deployment_id": "string",
+          "revision": "integer",
+          "aborted": "boolean",
+          "state": "string"
+        },
+        "equals": {
+          "aborted": true
+        }
+      }
+    },
+    {
+      "name": "abort_repeated",
+      "peer": "studio",
+      "request": {
+        "type": "ABORT_DEPLOYMENT",
+        "request_id": "abort-2",
+        "protocol_version": 1,
+        "deployment_id": "fixture-deployment",
+        "revision": 2,
+        "prepare_token": "${token2}"
+      },
+      "response": {
+        "type": "ABORT_DEPLOYMENT_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "aborted": "boolean"
+        },
+        "equals": {
+          "aborted": true
+        }
+      }
+    },
+    {
+      "name": "prepare_too_large",
+      "peer": "studio",
+      "request": {
+        "type": "PREPARE_DEPLOYMENT",
+        "request_id": "prepare-5",
+        "protocol_version": 1,
+        "deployment": {
+          "deployment_id": "fixture-deployment",
+          "revision": 3,
+          "base_revision": 1,
+          "configuration": {
+            "project_revision": "fixture:large",
+            "diagram": {
+              "document_kind": "s7.diagram",
+              "runtime_nodes": [
+                {
+                  "node_uuid": "11111111-2222-3333-4444-555555555555",
+                  "name": "fixture-node",
+                  "endpoint": "wss://127.0.0.1:9002"
+                }
+              ],
+              "schema": {
+                "name": "fixture",
+                "elements": [
+                  {
+                    "id": "c",
+                    "type": "Constant",
+                    "params": {
+                      "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    },
+                    "node": "11111111-2222-3333-4444-555555555555"
+                  }
+                ],
+                "connections": []
+              }
+            },
+            "configuration_digest": "sha256:487838ba29c1880c61a12b822e3721630f17c5b0a0f8d07e351b806681958620"
+          }
+        }
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "CONFIGURATION_TOO_LARGE"
+        }
+      },
+      "note": "the fixture node is configured with max_configuration_bytes = 2048"
+    },
+    {
+      "name": "stream_status",
+      "peer": "anonymous",
+      "request": {
+        "type": "GET_STREAM_STATUS",
+        "request_id": "streams-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "STREAM_STATUS",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "streams": "array",
+          "streams[0].stream_id": "string",
+          "streams[0].role": "string",
+          "streams[0].data_type": "string",
+          "streams[0].state": "string",
+          "streams[0].fault": "string",
+          "streams[0].next_sequence": "integer",
+          "streams[0].packets": "integer",
+          "streams[0].elements": "integer",
+          "streams[0].replayed": "integer",
+          "streams[0].lost_resumes": "integer",
+          "streams[0].duplicates_discarded": "integer",
+          "streams[0].malformed": "integer",
+          "streams[0].unauthorized": "integer",
+          "streams[0].send_log_depth": "integer",
+          "streams[0].buffered_elements": "integer",
+          "streams[0].blocked_ms_total": "integer",
+          "streams[0].recent_faults": "array",
+          "streams[0].recent_faults[0].code": "string",
+          "streams[0].recent_faults[0].detail": "string",
+          "streams[0].recent_faults[0].at": "string"
+        },
+        "equals": {
+          "streams[0].stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+          "streams[0].fault": "UNDERRUN",
+          "streams[0].state": "faulted"
+        }
+      },
+      "note": "the fixture node has one consumer stream that faulted with UNDERRUN"
+    },
+    {
+      "name": "recover_unauthorized",
+      "peer": "anonymous",
+      "request": {
+        "type": "RECOVER_STREAM",
+        "request_id": "recover-0",
+        "protocol_version": 1,
+        "stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a"
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "UNAUTHORIZED"
+        }
+      }
+    },
+    {
+      "name": "recover",
+      "peer": "studio",
+      "request": {
+        "type": "RECOVER_STREAM",
+        "request_id": "recover-1",
+        "protocol_version": 1,
+        "stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a"
+      },
+      "response": {
+        "type": "RECOVER_STREAM_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "stream_id": "string",
+          "recovered": "boolean"
+        },
+        "equals": {
+          "recovered": true
+        }
+      }
+    },
+    {
+      "name": "recover_repeated",
+      "peer": "studio",
+      "request": {
+        "type": "RECOVER_STREAM",
+        "request_id": "recover-2",
+        "protocol_version": 1,
+        "stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a"
+      },
+      "response": {
+        "type": "RECOVER_STREAM_RESULT",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "stream_id": "string",
+          "recovered": "boolean"
+        },
+        "equals": {
+          "recovered": true
+        }
+      }
+    },
+    {
+      "name": "status_after_recovery",
+      "peer": "anonymous",
+      "request": {
+        "type": "GET_STREAM_STATUS",
+        "request_id": "streams-2",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "STREAM_STATUS",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "streams": "array",
+          "streams[0].stream_id": "string",
+          "streams[0].role": "string",
+          "streams[0].data_type": "string",
+          "streams[0].state": "string",
+          "streams[0].fault": "string",
+          "streams[0].next_sequence": "integer",
+          "streams[0].packets": "integer",
+          "streams[0].elements": "integer",
+          "streams[0].replayed": "integer",
+          "streams[0].lost_resumes": "integer",
+          "streams[0].duplicates_discarded": "integer",
+          "streams[0].malformed": "integer",
+          "streams[0].unauthorized": "integer",
+          "streams[0].send_log_depth": "integer",
+          "streams[0].buffered_elements": "integer",
+          "streams[0].blocked_ms_total": "integer",
+          "streams[0].recent_faults": "array",
+          "streams[0].recent_faults[0].code": "string",
+          "streams[0].recent_faults[0].detail": "string",
+          "streams[0].recent_faults[0].at": "string"
+        },
+        "equals": {
+          "streams[0].fault": "NONE",
+          "streams[0].recent_faults[0].code": "UNDERRUN"
+        }
+      }
+    },
+    {
+      "name": "unsupported_type",
+      "peer": "anonymous",
+      "request": {
+        "type": "SHUTDOWN",
+        "request_id": "x-1",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "UNSUPPORTED_MESSAGE_TYPE"
+        }
+      }
+    },
+    {
+      "name": "missing_request_id",
+      "peer": "anonymous",
+      "request": {
+        "type": "HELLO",
+        "protocol_version": 1
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "INVALID_REQUEST"
+        }
+      }
+    },
+    {
+      "name": "unsupported_version",
+      "peer": "anonymous",
+      "request": {
+        "type": "HELLO",
+        "request_id": "v-1",
+        "protocol_version": 2
+      },
+      "response": {
+        "type": "ERROR",
+        "fields": {
+          "type": "string",
+          "request_id": "string",
+          "protocol_version": "integer",
+          "code": "string",
+          "message": "string",
+          "details": "object"
+        },
+        "equals": {
+          "code": "UNSUPPORTED_PROTOCOL_VERSION"
+        }
+      }
+    }
+  ]
+}

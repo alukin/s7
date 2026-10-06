@@ -247,6 +247,7 @@ public:
     void fault(FaultCode code);
     // RECOVER_STREAM: clears the fault and accepts the next packet received as
     // the new start (the data lost in the fault stays lost and reported).
+    // Nothing happens to a stream without a fault.
     void recover();
     [[nodiscard]] FaultCode fault_code() const { return fault_; }
     [[nodiscard]] ConsumerStats stats() const;
