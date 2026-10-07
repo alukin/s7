@@ -1,5 +1,7 @@
+#include <complex>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -104,6 +106,35 @@ void test_complex_integer_rules()
            "CI16 exact product");
 }
 
+// F16/F128 limits and math: native std types on GCC, builtins plus
+// s7/float_types.hpp on Clang (where numeric_limits<_Float16> is otherwise 0).
+void test_extended_floats()
+{
+    using F16 = s7::float16_t;
+    using F128 = s7::float128_t;
+    static_assert(sizeof(F16) == 2 && sizeof(F128) == 16);
+    static_assert(std::numeric_limits<F16>::is_specialized && std::numeric_limits<F16>::digits == 11);
+    static_assert(std::numeric_limits<F16>::max() == F16(65504) && std::numeric_limits<F16>::lowest() == F16(-65504));
+    static_assert(std::numeric_limits<F16>::epsilon() == F16(1) / F16(1024));
+    static_assert(std::numeric_limits<F128>::is_specialized && std::numeric_limits<F128>::digits == 113);
+
+    expect(s7::math::ldexp(F16(1), 10) == F16(1024), "F16 ldexp");
+    expect(s7::math::isinf(F16(65504) * F16(2)), "F16 overflows to infinity");
+    expect(s7::math::isnan(std::numeric_limits<F16>::quiet_NaN()), "F16 NaN");
+    expect(s7::math::copysign(F16(2), F16(-1)) == F16(-2), "F16 copysign");
+    expect(s7::math::nearbyint(F16(2.5)) == F16(2) && s7::math::trunc(F16(-2.5)) == F16(-2), "F16 rounding");
+    expect(s7::math::abs(std::complex<F16>{3, 4}) == F16(5), "C16 abs");
+    expect(s7::math::abs(s7::math::sin(s7::math::pi_v<F16>)) < F16(0.01), "F16 sin(pi)");
+
+    // 2^100 + 1 needs 101 significant bits: exact in binary128 only.
+    const auto big = s7::math::ldexp(F128(1), 100);
+    expect(big + F128(1) != big && s7::math::trunc(big + F128(0.5)) == big, "F128 ldexp, precision and trunc");
+    expect(s7::math::isinf(std::numeric_limits<F128>::infinity()) && s7::math::isnan(std::numeric_limits<F128>::quiet_NaN()),
+           "F128 infinity and NaN");
+    expect(s7::math::abs(std::complex<F128>{3, 4}) == F128(5), "C128 abs");
+    expect(s7::math::abs(s7::math::sin(s7::math::pi_v<F128>)) < F128(1e-30), "F128 sin(pi) at binary128 precision");
+}
+
 } // namespace
 
 int main()
@@ -111,6 +142,7 @@ try {
     test_catalog();
     test_integer_rules();
     test_complex_integer_rules();
+    test_extended_floats();
     expect(s7::overflow_from_name("wrap") == Overflow::Wrap, "overflow names");
     return 0;
 } catch (const std::exception& ex) {

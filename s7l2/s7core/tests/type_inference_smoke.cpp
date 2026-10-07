@@ -152,7 +152,7 @@ void test_wide_and_complex_types()
     s7::NodeRuntime runtime{s7::Compiler::compile(wide)};
     runtime.step();
     expect(runtime.output_of<SignalType::I128>("double_it") == s7::kInt128Max, "I128 saturates at its max");
-    expect(runtime.output_of<SignalType::F128>("scale") == 1.5f128, "F128 arithmetic");
+    expect(runtime.output_of<SignalType::F128>("scale") == s7::float128_t(1.5), "F128 arithmetic");
 
     // Raw SDR-style I/Q: (100 + 100i)^2 = 0 + 20000i saturates to (0, 127) in CI8.
     s7::Schema iq{"iq"};
@@ -200,13 +200,13 @@ void test_integrators()
     }
     const auto x = oscillator.output_of<SignalType::F128>("x");
     const auto v = oscillator.output_of<SignalType::F128>("v");
-    std::float128_t growth = 1;
-    const auto dt = static_cast<std::float128_t>(0.001); // the parameter's value, as converted
+    s7::float128_t growth = 1;
+    const auto dt = static_cast<s7::float128_t>(0.001); // the parameter's value, as converted
     for (int n = 0; n < steps; ++n) {
         growth *= 1 + dt * dt;
     }
     const auto error = (x * x + v * v) - growth;
-    expect(error < 1e-28f128 && error > -1e-28f128, "F128 Euler energy growth matches (1 + dt^2)^n");
+    expect(error < s7::float128_t(1e-28) && error > -s7::float128_t(1e-28), "F128 Euler energy growth matches (1 + dt^2)^n");
     expect(oscillator.output_type_of("minus") == SignalType::F128, "F128 inferred through the loop");
 
     // A loop closed only through TrapezoidIntegrator has no causal memory.
@@ -259,14 +259,14 @@ void test_convert()
     expect(throws([] { (void)convert<SignalType::F64, SignalType::I8>(std::nan(""), M::Value, R::HalfEven, O::Fault); }),
            "NaN faults");
     expect(convert<SignalType::F64, SignalType::U8>(1e300) == 255, "large value saturates");
-    expect(convert<SignalType::F128, SignalType::I128>(std::ldexp(1.0f128, 100)) == (static_cast<s7::int128_t>(1) << 100),
+    expect(convert<SignalType::F128, SignalType::I128>(s7::math::ldexp(s7::float128_t(1), 100)) == (static_cast<s7::int128_t>(1) << 100),
            "F128 -> I128 exact");
-    expect(convert<SignalType::I128, SignalType::F128>(static_cast<s7::int128_t>(1) << 100) == std::ldexp(1.0f128, 100),
+    expect(convert<SignalType::I128, SignalType::F128>(static_cast<s7::int128_t>(1) << 100) == s7::math::ldexp(s7::float128_t(1), 100),
            "I128 -> F128 exact");
 
     // float narrowing overflow
     expect(convert<SignalType::F64, SignalType::F32>(1e300) == std::numeric_limits<float>::max(), "F64 -> F32 saturates");
-    expect(convert<SignalType::F64, SignalType::F16>(1e6) == std::numeric_limits<std::float16_t>::max(), "F64 -> F16 saturates");
+    expect(convert<SignalType::F64, SignalType::F16>(1e6) == std::numeric_limits<s7::float16_t>::max(), "F64 -> F16 saturates");
     expect(throws([] { (void)convert<SignalType::F64, SignalType::F32>(1e300, M::Value, R::HalfEven, O::Fault); }),
            "float overflow can fault");
 

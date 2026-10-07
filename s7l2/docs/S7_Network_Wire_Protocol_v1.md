@@ -184,7 +184,7 @@ Complex integer types exist so that raw SDR I/Q samples travel at their native w
 
 **12-bit packing.** Two consecutive 12-bit values occupy three bytes as one little-endian 24-bit word: the first value in bits 0–11, the second in bits 12–23. An odd final value occupies two bytes, in bits 0–11 of a little-endian 16-bit word with bits 12–15 zero. A payload of `b` bytes is valid only if `b mod 3` is 0 or 2; it holds `2(b div 3)` values, plus one if `b mod 3` is 2. The unused top 4 bits of an odd final value MUST be zero.
 
-**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 or 128-bit integer support MUST NOT be assigned F128, C128, I128, U128 or CI128 streams. The C++ reference runtime supports all listed types (C++26, GCC: `std::float16_t`, `std::float128_t`, `__int128`).
+**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 or 128-bit integer support MUST NOT be assigned F128, C128, I128, U128 or CI128 streams. The C++ reference runtime supports all listed types (C++26 on GCC or Clang with libstdc++: binary16, binary128 and `__int128`; see `s7core/include/s7/float_types.hpp`).
 
 ## 9. Validation and Fault Behavior
 

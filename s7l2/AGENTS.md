@@ -64,7 +64,7 @@ ctest --test-dir build -R s7io_smoke
 - Plugin elements are loaded at runtime via `PluginLoader`; keep element registration idempotent and scoped to plugin registration hooks (`s7runtime/include/s7/plugin_loader.hpp`, `s7runtime/src/plugin_loader.cpp`).
 
 ## Integration and dependency notes
-- C++26, GCC 15+ only (configure fails otherwise; `std::float16_t`/`std::float128_t`/`__int128` are required); a Windows port would use MinGW-w64. The runtime uses POSIX APIs (`flock`/`open` for the state-directory lock) that such a port must replace. Dependencies: Boost (JSON/Asio/Beast), OpenSSL, zlib, optional Qt6 (`CMakeLists.txt`).
+- C++26 on GCC 15+ or Clang 22+ with libstdc++ (configure fails otherwise; libc++ lacks `<stdfloat>`). F16/F128 storage is `s7::float16_t`/`s7::float128_t` (`std::float16_t`/`std::float128_t` on GCC, `_Float16`/`__float128` on Clang); math on signal values goes through `s7::math` (`s7core/include/s7/float_types.hpp`), never `std::` directly. A Windows port would use MinGW-w64. The runtime uses POSIX APIs (`flock`/`open` for the state-directory lock) that such a port must replace. Dependencies: Boost (JSON/Asio/Beast), OpenSSL, zlib, optional Qt6 (`CMakeLists.txt`).
 - Optional plugin dependencies include FFTW3 for `s7spectral` and standard RNG-based noise generation in `s7noise`.
 - JSON schemas under `s7runtime/examples/` are canonical runtime inputs.
 - Runtime default schema path is compiled via `S7RUNTIME_DEFAULT_SCHEMA_PATH` in `s7runtime/CMakeLists.txt`.

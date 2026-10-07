@@ -14,9 +14,10 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
-#include <stdfloat>
 #include <string_view>
 #include <type_traits>
+
+#include "s7/float_types.hpp"
 
 namespace s7 {
 
@@ -66,14 +67,14 @@ enum class SignalKind : std::uint8_t {
     X(U64, std::uint64_t, UnsignedInteger, 64, 0x000A)                               \
     X(I128, ::s7::int128_t, SignedInteger, 128, 0x000B)                              \
     X(U128, ::s7::uint128_t, UnsignedInteger, 128, 0x000C)                           \
-    X(F16, std::float16_t, Float, 16, 0x000D)                                        \
+    X(F16, ::s7::float16_t, Float, 16, 0x000D)                                       \
     X(F32, float, Float, 32, 0x000E)                                                 \
     X(F64, double, Float, 64, 0x000F)                                                \
-    X(F128, std::float128_t, Float, 128, 0x0010)                                     \
-    X(C16, std::complex<std::float16_t>, ComplexFloat, 16, 0x0101)                   \
+    X(F128, ::s7::float128_t, Float, 128, 0x0010)                                    \
+    X(C16, std::complex<::s7::float16_t>, ComplexFloat, 16, 0x0101)                  \
     X(C32, std::complex<float>, ComplexFloat, 32, 0x0102)                            \
     X(C64, std::complex<double>, ComplexFloat, 64, 0x0103)                           \
-    X(C128, std::complex<std::float128_t>, ComplexFloat, 128, 0x0104)                \
+    X(C128, std::complex<::s7::float128_t>, ComplexFloat, 128, 0x0104)               \
     X(CI8, ::s7::ComplexInt<std::int8_t>, ComplexInteger, 8, 0x0201)                 \
     X(CU8, ::s7::ComplexInt<std::uint8_t>, ComplexUnsigned, 8, 0x0202)               \
     X(CI16, ::s7::ComplexInt<std::int16_t>, ComplexInteger, 16, 0x0203)              \

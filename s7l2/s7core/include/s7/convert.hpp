@@ -15,7 +15,6 @@
 // Complex types convert component-wise; real <-> complex is not a
 // conversion (use ReImToComplex / ComplexToReIm).
 
-#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -93,16 +92,16 @@ template <SignalType To, typename F>
     -> typename IntegerRange<To>::component
 {
     using Range = IntegerRange<To>;
-    if (std::isnan(value)) {
+    if (math::isnan(value)) {
         if (options.overflow == ConvertOverflow::Fault) {
             conversion_fault(from, signal_type_name(To), "NaN has no integer value");
         }
         return typename Range::component{};
     }
-    value = options.rounding == ConvertRounding::HalfEven ? std::nearbyint(value) : std::trunc(value);
+    value = options.rounding == ConvertRounding::HalfEven ? math::nearbyint(value) : math::trunc(value);
     // Compare in the float type; the bounds 2^k are exact in every IEEE format
     // whose range covers them, otherwise the value cannot exceed them either.
-    const auto upper = std::ldexp(F(1), static_cast<int>(Range::is_signed ? Range::bits - 1 : Range::bits)); // max + 1
+    const auto upper = math::ldexp(F(1), static_cast<int>(Range::is_signed ? Range::bits - 1 : Range::bits)); // max + 1
     const auto lower = Range::is_signed ? -upper : F(0);
     if (!(value < upper) || value < lower) {
         if (options.overflow == ConvertOverflow::Fault) {
@@ -121,11 +120,11 @@ template <typename To, typename F>
                                 const std::string_view to)
 {
     const auto result = static_cast<To>(value);
-    if (std::isinf(result) && !std::isinf(value)) {
+    if (math::isinf(result) && !math::isinf(value)) {
         if (overflow == ConvertOverflow::Fault) {
             conversion_fault(from, to, "value out of range");
         }
-        return std::copysign(std::numeric_limits<To>::max(), result);
+        return math::copysign(std::numeric_limits<To>::max(), result);
     }
     return result;
 }
@@ -203,13 +202,13 @@ template <SignalType From, SignalType To>
         if (normalized) {
             constexpr unsigned bits = IntegerRange<from_part>::bits;
             constexpr bool is_signed = from_offset || IntegerRange<from_part>::is_signed;
-            code = std::ldexp(code, -static_cast<int>(is_signed ? bits - 1 : bits));
+            code = math::ldexp(code, -static_cast<int>(is_signed ? bits - 1 : bits));
         }
-        if (std::isinf(code)) {
+        if (math::isinf(code)) {
             if (options.overflow == ConvertOverflow::Fault) {
                 detail::conversion_fault(from_name, to_name, "value out of range");
             }
-            return std::copysign(std::numeric_limits<ToC>::max(), code);
+            return math::copysign(std::numeric_limits<ToC>::max(), code);
         }
         return code;
     } else if constexpr (to_integer) {
@@ -218,7 +217,7 @@ template <SignalType From, SignalType To>
         if (normalized) {
             constexpr unsigned bits = IntegerRange<to_part>::bits;
             constexpr bool is_signed = to_offset || IntegerRange<to_part>::is_signed;
-            scaled = std::ldexp(value, static_cast<int>(is_signed ? bits - 1 : bits));
+            scaled = math::ldexp(value, static_cast<int>(is_signed ? bits - 1 : bits));
         }
         if constexpr (to_offset) {
             const auto code = detail::float_to_integer<SignalType::I8>(scaled, options, from_name);

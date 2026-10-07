@@ -398,17 +398,17 @@ public:
         if (!(sample_rate_hz > value_type(0))) {
             throw std::invalid_argument("AnalogOscillator requires a positive sample rate.");
         }
-        phase_increment_ = value_type(2) * std::numbers::pi_v<value_type> * frequency_hz / sample_rate_hz;
+        phase_increment_ = value_type(2) * math::pi_v<value_type> * frequency_hz / sample_rate_hz;
         register_output(0, port_names::out, Type, &output_value_);
     }
 
     void step() override
     {
-        constexpr auto two_pi = value_type(2) * std::numbers::pi_v<value_type>;
-        output_value_ = amplitude_ * std::sin(phase_);
+        constexpr auto two_pi = value_type(2) * math::pi_v<value_type>;
+        output_value_ = amplitude_ * math::sin(phase_);
         phase_ += phase_increment_;
         if (phase_ > two_pi || phase_ < -two_pi) {
-            phase_ = std::fmod(phase_, two_pi);
+            phase_ = math::fmod(phase_, two_pi);
         }
     }
 
@@ -491,8 +491,8 @@ public:
     void step() override
     {
         const auto value = read_input<value_type>(0);
-        magnitude_ = std::abs(value);
-        phase_ = std::arg(value);
+        magnitude_ = math::abs(value);
+        phase_ = math::arg(value);
     }
 
 private:
