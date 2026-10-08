@@ -2,7 +2,7 @@
 #define S7TRANSPORT_INCLUDE_S7_WIRE_FORMAT_HPP
 
 // S7 data stream protocol, wire format version 1
-// (docs/S7_Network_Wire_Protocol_v1.md, sections 7, 8 and 12.1).
+// (doc/S7_Network_Wire_Protocol_v1.md, sections 7, 8 and 12.1).
 //
 // Every multi-byte field and value is little-endian. Values are always
 // written through explicit little-endian encoding, never by copying host

@@ -1,7 +1,7 @@
 # Control protocol fixtures
 
 `control_v1.json` is the conformance script of the S7 control protocol,
-version 1 (`docs/S7_Control_Protocol_MVP.md`, section 9). It describes one
+version 1 (`../doc/S7_Control_Protocol_MVP.md`, section 9). It describes one
 node (`node`) and the peers requests come from (`peers`), then gives `steps`:
 each a request and what its response must hold.
 

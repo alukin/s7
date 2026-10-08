@@ -4,9 +4,9 @@
 
 ## Architecture Check
 
-- [ ] I verified this change against `docs/S7_Architecture_Overview.md`.
-- [ ] I verified this change against `docs/S7_Formal_Model.md`.
-- [ ] I verified this change against `docs/S7_Runtime_Architecture.md`.
+- [ ] I verified this change against `../doc/S7_Architecture_Overview.md`.
+- [ ] I verified this change against `../doc/S7_Formal_Model.md`.
+- [ ] I verified this change against `../doc/S7_Runtime_Architecture.md`.
 - [ ] If implementation and docs differ, I updated implementation or opened an explicit ADR/doc decision.
 
 ## Invariant Check

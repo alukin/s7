@@ -1,7 +1,7 @@
 # Wire format fixtures
 
 `wire_v1.json` is the conformance data for the S7 data stream wire format,
-version 1 (`docs/S7_Network_Wire_Protocol_v1.md`). Any implementation, in any
+version 1 (`../doc/S7_Network_Wire_Protocol_v1.md`). Any implementation, in any
 language, should pass all of it:
 
 | Section | An implementation must |

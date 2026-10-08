@@ -153,7 +153,7 @@ This is required for mixed private/public deployments.
 
 ## Reliability and Ordering Baseline
 
-Data-plane baseline (see [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md)):
+Data-plane baseline (see [S7_Network_Wire_Protocol_v1.md](../../doc/S7_Network_Wire_Protocol_v1.md)):
 
 - lossless, exactly-once, in-order delivery per stream while both processes run (send log, cumulative ACK, RESUME and replay); producers reserve sequence ranges durably, so a restart is never mistaken for continuity: it faults the stream (`SEQUENCE_GAP`) until recovered
 - ordering is defined per stream; no global ordering is implied across different streams or peers

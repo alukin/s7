@@ -16,7 +16,7 @@ Identifiers used to address nodes, running schemas, elements, and data streams i
 | `instance_id` | One runtime process incarnation; new on every start | Random UUIDv4 |
 | `runtime_instance_uuid` | Runtime that executes a compiled graph | Currently equal to `node_uuid` (`RuntimeService::runtime_instance_uuid()`) |
 | `schema_instance_uuid` | One compiled instance of a schema | Random UUIDv4 per compilation |
-| element instance UUID | One element inside one schema instance | UUIDv5 with `schema_instance_uuid` as namespace and the element id as name (`s7core/src/compiler.cpp`) |
+| element instance UUID | One element inside one schema instance | UUIDv5 with `schema_instance_uuid` as namespace and the element id as name (`s7l2/s7core/src/compiler.cpp`) |
 | element id | Human-readable, unique within its schema | Schema JSON `id` |
 | `stream_id` | One logical cross-node data stream | A UUID set as the `stream_id` parameter of the `NetSink` / `NetSource` pair; carried as 128 bits in RESUME, bound to a 32-bit connection-local alias in data packets |
 

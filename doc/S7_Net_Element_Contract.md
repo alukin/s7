@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented MVP contract for the `s7net` boundary elements (`s7net/include/s7/net.hpp`) and the runtime endpoint they use (`s7transport/include/s7/transport.hpp`). The data protocol is [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md).
+Implemented MVP contract for the `s7net` boundary elements (`s7l2/s7net/include/s7/net.hpp`) and the runtime endpoint they use (`s7l2/s7transport/include/s7/transport.hpp`). The data protocol is [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md).
 
 ---
 

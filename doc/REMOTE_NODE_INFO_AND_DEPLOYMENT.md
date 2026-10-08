@@ -6,7 +6,7 @@ Discussion baseline captured on 2026-09-20.
 
 For a compact implementer view of the control message contract, see:
 
-- `docs/S7_Control_Protocol_MVP.md`
+- `S7_Control_Protocol_MVP.md`
 
 This document records the current design direction for two related concerns:
 

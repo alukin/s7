@@ -6,9 +6,9 @@ Design proposal for the S7 MVP. This document describes the intended provisionin
 
 Related documents:
 
-- `docs/REMOTE_NODE_INFO_AND_DEPLOYMENT.md` — node identity and control-plane behavior
-- `docs/S7_Control_Protocol_MVP.md` — control messages and node identity binding
-- `docs/S7_Transport_Architecture.md` — TLS identity and network boundaries
+- `REMOTE_NODE_INFO_AND_DEPLOYMENT.md` — node identity and control-plane behavior
+- `S7_Control_Protocol_MVP.md` — control messages and node identity binding
+- `s7l2/docs/S7_Transport_Architecture.md` — TLS identity and network boundaries
 
 ## Goals
 
@@ -117,7 +117,7 @@ The format and storage location of this record are not yet standardized. It shou
 ## Open Decisions
 
 - Which service issues S7 certificates, and how initial trust roots are delivered and rotated.
-- Numeric assignment of the S7 key-purpose OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods. Until then, development and tests use the UUID-derived placeholder `2.25.4266950079767543379770189370854073200` for the control-node role (`tools/generate_test_runtime_certs.sh`).
+- Numeric assignment of the S7 key-purpose OIDs under the organization's private enterprise arc; certificate key algorithms, profiles, and validity periods. Until then, development and tests use the UUID-derived placeholder `2.25.4266950079767543379770189370854073200` for the control-node role (`s7l2/tools/generate_test_runtime_certs.sh`).
 - Whether project diagrams and executable schemas are stored as separate files or in one project document.
 - How the Studio maps a Git commit to the exact schema/configuration sent to runtime nodes.
 - Whether and how remote Git hosting is added after the MVP.
@@ -126,4 +126,4 @@ The format and storage location of this record are not yet standardized. It shou
 
 ## Current Repository State
 
-The repository contains test certificates under `s7runtime/examples/certs/` and a script for generating them. These are development fixtures only. The runtime currently extracts certificate common name and SHA-256 fingerprint for control-plane metadata; this must not be confused with a complete provisioning, authorization, or certificate-bound role enforcement implementation.
+The repository contains test certificates under `s7l2/s7runtime/examples/certs/` and a script for generating them. These are development fixtures only. The runtime currently extracts certificate common name and SHA-256 fingerprint for control-plane metadata; this must not be confused with a complete provisioning, authorization, or certificate-bound role enforcement implementation.

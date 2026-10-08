@@ -1,7 +1,7 @@
 # s7transport
 
 The data plane of S7 runtime nodes: typed, lossless streams between nodes
-([wire protocol](../docs/S7_Network_Wire_Protocol_v1.md)) and the WebSocket
+([wire protocol](../../doc/S7_Network_Wire_Protocol_v1.md)) and the WebSocket
 connections that carry them and the control protocol.
 
 | Header | What it is |
@@ -11,7 +11,7 @@ connections that carry them and the control protocol.
 | `s7/transport.hpp` | Runtime endpoints (`IRuntimeNetEndpoint`): `InMemoryRuntimeNetEndpoint` (one process) and `BeastRuntimeNetEndpoint` (WebSocket and mTLS, asynchronous on one I/O thread): streams routed directly from producer to consumer, bound to their configured nodes, stream status and recovery, the control channel, and certificate-based node identity. |
 
 `NetSink` / `NetSource` (`s7net`) are the graph elements using these
-endpoints; their contract is [S7_Net_Element_Contract.md](../docs/S7_Net_Element_Contract.md).
+endpoints; their contract is [S7_Net_Element_Contract.md](../../doc/S7_Net_Element_Contract.md).
 
 ## Tests
 

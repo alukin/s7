@@ -1,6 +1,6 @@
 # S7 Inter-Node Data Stream Protocol — MVP Draft
 
-**Status:** Approved MVP contract (2026-10-05), implemented by the C++ runtime; conformance fixtures for other implementations in `s7transport/tests/fixtures/wire_v1.json` (Section 12).
+**Status:** Approved MVP contract (2026-10-05), implemented by the C++ runtime; conformance fixtures for other implementations in `s7l2/s7transport/tests/fixtures/wire_v1.json` (Section 12).
 **Draft revision:** 0.7
 **Wire version:** 1 (proposed)
 **Transport:** WebSocket binary messages over TCP; TLS is required for trusted deployments.
@@ -184,7 +184,7 @@ Complex integer types exist so that raw SDR I/Q samples travel at their native w
 
 **12-bit packing.** Two consecutive 12-bit values occupy three bytes as one little-endian 24-bit word: the first value in bits 0–11, the second in bits 12–23. An odd final value occupies two bytes, in bits 0–11 of a little-endian 16-bit word with bits 12–15 zero. A payload of `b` bytes is valid only if `b mod 3` is 0 or 2; it holds `2(b div 3)` values, plus one if `b mod 3` is 2. The unused top 4 bits of an odd final value MUST be zero.
 
-**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 or 128-bit integer support MUST NOT be assigned F128, C128, I128, U128 or CI128 streams. The C++ reference runtime supports all listed types (C++26 on GCC or Clang with libstdc++: binary16, binary128 and `__int128`; see `s7core/include/s7/float_types.hpp`).
+**Support.** Every conforming implementation MUST transport and preserve every listed type. Arithmetic is a separate capability: a node advertises the types it can compute with, and Studio MUST NOT deploy a graph, or a network connection, that requires a type a participating node cannot support. In particular, nodes without binary128 or 128-bit integer support MUST NOT be assigned F128, C128, I128, U128 or CI128 streams. The C++ reference runtime supports all listed types (C++26 on GCC or Clang with libstdc++: binary16, binary128 and `__int128`; see `s7l2/s7core/include/s7/float_types.hpp`).
 
 ## 9. Validation and Fault Behavior
 
@@ -212,7 +212,7 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 
 ## 12. Remaining Work Before Interoperability Freeze
 
-1. ~~Byte-exact fixtures shared by all implementations.~~ `s7transport/tests/fixtures/wire_v1.json` (see its `README.md`): packets of every type of Section 8, timestamp records, stream control messages, malformed messages, and valid and invalid stream descriptors. Written by the Python reference encoder `tools/gen_wire_fixtures.py`; checked by the C++ codec and descriptor reader and by `tools/check_wire_fixtures.py`, a separate Python decoder written from this specification that is the reference for decoders in other languages.
+1. ~~Byte-exact fixtures shared by all implementations.~~ `s7l2/s7transport/tests/fixtures/wire_v1.json` (see its `README.md`): packets of every type of Section 8, timestamp records, stream control messages, malformed messages, and valid and invalid stream descriptors. Written by the Python reference encoder `s7l2/tools/gen_wire_fixtures.py`; checked by the C++ codec and descriptor reader and by `s7l2/tools/check_wire_fixtures.py`, a separate Python decoder written from this specification that is the reference for decoders in other languages.
 2. The C++ reference implementation of Sections 7, 8 and 12.1.
 3. The durable format of the producer's sequence-range reservation.
 4. ~~Exact JSON schemas for `GET_STREAM_STATUS`, `RECOVER_STREAM` and the `NODE_INFO` additions (`clock_domains`, `data_protocol`).~~ Specified in `S7_Control_Protocol_MVP.md` sections 5.2 and 10.1.
@@ -239,7 +239,7 @@ All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
 }
 ```
 
-There is one stream per producing output port with consumers on other nodes (a fan-out to several nodes is one stream with several consumers). The implementation (`s7net/include/s7/diagram_deployment.hpp`) reads and writes every member above; `timestamps` must declare at least one role, in ascending role order. A stream keeps its `stream_id` and settings while its producer stays on the same node with the same type and timing; otherwise Studio assigns a new id.
+There is one stream per producing output port with consumers on other nodes (a fan-out to several nodes is one stream with several consumers). The implementation (`s7l2/s7net/include/s7/diagram_deployment.hpp`) reads and writes every member above; `timestamps` must declare at least one role, in ascending role order. A stream keeps its `stream_id` and settings while its producer stays on the same node with the same type and timing; otherwise Studio assigns a new id.
 
 *Timing (implemented 2026-10-06).* Studio derives a stream's timing from the diagram. A graph steps once per model-time step and a `NetSink` publishes one element per step, so with a model-time step (`dt` in the diagram, seconds) every stream is uniformly sampled: `sample_rate` is `1 / dt` in exact form (`1e9 / dt_ns`, reduced; model time is kept in whole nanoseconds) and the only role is `MODEL_TIME` in clock domain `model`, the deployment's model time (element `n` at `n · dt`, from the start of the stream). Each node also steps its graph in that model time. Without `dt` a stream carries `PROCESSING_TIME` in the clock domain `utc` (the producer's NTP-synchronized system clock, nanoseconds since the Unix epoch, comparable between nodes within their error bounds) on every packet. Nodes are deployed only while their clocks are synchronized (`S7_Control_Protocol_MVP.md`, section 10.1, Clock). `SOURCE_TIME` needs a source element that knows its acquisition time and is not produced by `NetSink` yet.
 
@@ -272,7 +272,7 @@ There is one stream per producing output port with consumers on other nodes (a f
 
 The C++ reference implementation (2026-10-05) implements:
 
-- the packet format of Section 7, the control messages and 12-bit packing (`s7transport/include/s7/wire_format.hpp`), checked against byte-exact fixtures (`s7transport/tests/fixtures/wire_v1.json`) produced by an independent Python encoder (`tools/gen_wire_fixtures.py`);
+- the packet format of Section 7, the control messages and 12-bit packing (`s7l2/s7transport/include/s7/wire_format.hpp`), checked against byte-exact fixtures (`s7l2/s7transport/tests/fixtures/wire_v1.json`) produced by an independent Python encoder (`s7l2/tools/gen_wire_fixtures.py`);
 - the delivery rules of Section 12.1 item 2: batching, send log, cumulative ACK, RESUME and replay, per-consumer positions, backpressure with `SEND_LOG_OVERFLOW`, `UNDERRUN`, and durable sequence-range reservation (`stream_protocol.hpp`);
 - the WebSocket transport carrying them (`BeastRuntimeNetEndpoint`): one `/data` and one `/control` connection per peer pair, reconnect with resume, mTLS consumer identity;
 - `GET_STREAM_STATUS` and `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md` section 10.1);

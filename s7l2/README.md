@@ -4,7 +4,7 @@ S7 is a platform for constructing, executing, and observing distributed causal s
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
 
-Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
+Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, architecture, protocols) is in `../doc/README.md`. Known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
 
 ## Repository layout
 
@@ -30,8 +30,8 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 - Compilation to an executable graph with instance UUIDs; elements with direct feedthrough (stateful or not) run in causal order; causal-memory elements (`Delay`, `PreviousValue`) publish their outputs one step later.
 - Nested schemas as elements with exposed inputs/outputs; schema-backed element libraries (`.json`, `.s7library`, `.gz`).
 - Element registry with metadata; C ABI plugins loaded at startup.
-- Runtime JSON schema loading, WebSocket server/client with mTLS, certificate-bound node identity, control protocol (`S7_Control_Protocol_MVP.md`): node information and peers, deployment prepare/commit/abort/list authorized by the pinned Studio certificate, chunked configuration transfer, stream status and recovery; the active deployment survives restarts.
-- Lossless typed data streams between nodes (`S7_Network_Wire_Protocol_v1.md`): exactly once and in order while both processes run, backpressure, faults reported and recoverable, each stream bound to its producer and consumer nodes, timestamp profiles.
+- Runtime JSON schema loading, WebSocket server/client with mTLS, certificate-bound node identity, control protocol (`../doc/S7_Control_Protocol_MVP.md`): node information and peers, deployment prepare/commit/abort/list authorized by the pinned Studio certificate, chunked configuration transfer, stream status and recovery; the active deployment survives restarts.
+- Lossless typed data streams between nodes (`../doc/S7_Network_Wire_Protocol_v1.md`): exactly once and in order while both processes run, backpressure, faults reported and recoverable, each stream bound to its producer and consumer nodes, timestamp profiles.
 - Diagrams deployed across nodes: elements placed on nodes, streams assigned between them, each node running its part (Studio Run > Deploy to Nodes, `s7ctl deploy`).
 - Conformance data for other implementations of both protocols (`s7transport/tests/fixtures/`, `s7runtime/tests/fixtures/`), with a second wire decoder in Python.
 - Studio diagram editing, element library, parameter dialogs, local runs with Scope plots, diagram/schema/library files, headless node discovery with certificate-based trust.

@@ -1,8 +1,8 @@
 # AGENTS.md
 
 ## Mission-critical orientation
-- S7 is a **causal graph runtime**: schema -> validate -> compile -> execute -> observe (`README.md`, `docs/S7_Runtime_Architecture.md`).
-- Prioritize **causality over clock time** and keep network boundaries explicit (`docs/S7_Architecture_Overview.md`, `docs/S7_Architectural_Decisions.md`).
+- S7 is a **causal graph runtime**: schema -> validate -> compile -> execute -> observe (`README.md`, `../doc/S7_Runtime_Architecture.md`).
+- Prioritize **causality over clock time** and keep network boundaries explicit (`../doc/S7_Architecture_Overview.md`, `../doc/S7_Architectural_Decisions.md`).
 - Keep runtime logic headless-first; GUI (`s7studio`) is optional and should not leak into core/runtime paths.
 
 ## Component map (where to change what)
@@ -17,7 +17,7 @@
 - `s7studio/`: Qt UI client (guarded by `S7_BUILD_STUDIO`).
 - `s7transport/`: transport backends (in-memory, Beast WebSocket/TLS), wire format v1 and the lossless stream protocol.
 - `s7tests/`: reserved for whole-system tests; module smoke tests live in `<module>/tests/`.
-- Docs map: `docs/INDEX.md`; known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
+- Docs map: `docs/INDEX.md` (C++ and Studio), `../doc/README.md` (language-neutral model, architecture, protocols); known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
 
 ## Build/test workflow (verified from repo docs/config)
 - Configure + build:
@@ -80,7 +80,7 @@ ctest --test-dir build -R s7io_smoke
 - The project is pre-MVP with no deployments: breaking changes to APIs, formats, and protocols are allowed; do not add compatibility shims.
 - Prefer explicit errors around schema/type mismatches over silent coercion.
 - Tests must not write under `$HOME`: give `RuntimeService` a temporary state directory.
-- Control mutations are authorized only from the transport's `ControlPeer` (verified certificate, control-node key purpose in Extended Key Usage, pinned fingerprint); never add authorization based on JSON fields. Implemented control behavior is summarized in `docs/S7_Control_Protocol_MVP.md` section 10.1.
+- Control mutations are authorized only from the transport's `ControlPeer` (verified certificate, control-node key purpose in Extended Key Usage, pinned fingerprint); never add authorization based on JSON fields. Implemented control behavior is summarized in `../doc/S7_Control_Protocol_MVP.md` section 10.1.
 - Preserve public namespace and API surface conventions (`namespace s7`, public headers under `s7core/include/s7/`).
 - Before any edit in `external/`, stop and confirm explicit user approval; otherwise, do not change vendored sources.
 
