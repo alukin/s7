@@ -18,7 +18,8 @@ struct SyncStatus {
 };
 
 // The kernel's NTP state: synchronized unless the clock is marked
-// unsynchronized (STA_UNSYNC) or in error (TIME_ERROR).
+// unsynchronized (STA_UNSYNC) or in error (TIME_ERROR). Never synchronized
+// on Windows, which has no error bound to report.
 [[nodiscard]] auto read_kernel_sync() -> SyncStatus;
 
 // Synchronized within max_error_ns: the node's times are in the shared "utc" domain.

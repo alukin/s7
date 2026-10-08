@@ -63,7 +63,7 @@ private:
     struct LoadedPlugin {
         LoadedPlugin() : info{}, handle(nullptr) {}
         LoadedPluginInfo info;
-        void* handle;  // dlopen handle
+        void* handle;  // platform::open_library handle
         ElementRegistry* registry{nullptr};
         std::vector<std::string> registered_types; // what its registration added
     };

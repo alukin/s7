@@ -133,6 +133,30 @@ void test_extended_floats()
            "F128 infinity and NaN");
     expect(s7::math::abs(std::complex<F128>{3, 4}) == F128(5), "C128 abs");
     expect(s7::math::abs(s7::math::sin(s7::math::pi_v<F128>)) < F128(1e-30), "F128 sin(pi) at binary128 precision");
+
+    // Arithmetic and conversions at run time, not folded: on MinGW these go
+    // through s7core/src/windows_f128_abi.cpp.
+    volatile int i = -3;
+    volatile unsigned u = 5;
+    volatile long long ll = -(1LL << 40);
+    volatile unsigned long long ull = 1ULL << 63;
+    __extension__ volatile __int128 i128 = -(static_cast<__int128>(1) << 100);
+    __extension__ volatile unsigned __int128 u128 = static_cast<unsigned __int128>(1) << 127;
+    volatile float f = 0.25F;
+    volatile double d = 0.125;
+    volatile long double ld = 0.0625L;
+    volatile F16 h = F16(1.5);
+    const F128 a = F128(i);
+    const F128 b = F128(u);
+    expect(a + b == F128(2) && a - b == F128(-8) && a * b == F128(-15) && F128(-15) / b == a, "F128 + - * /");
+    expect(-a == F128(3), "F128 negation");
+    expect(F128(ll) == -s7::math::ldexp(F128(1), 40) && F128(ull) == s7::math::ldexp(F128(1), 63), "F128 from 64-bit integers");
+    expect(F128(i128) == -big && F128(u128) == s7::math::ldexp(F128(1), 127), "F128 from 128-bit integers");
+    expect(F128(f) + F128(d) + F128(ld) == F128(0.4375) && F128(F16(h)) == F128(1.5), "F128 from float, double, long double and F16");
+    expect(static_cast<double>(a / b) == -0.6 && static_cast<long long>(F128(ll)) == ll &&
+               (__extension__ static_cast<__int128>(F128(i128)) == i128) && static_cast<F16>(F128(h)) == F16(1.5) &&
+               static_cast<long double>(F128(ld)) == 0.0625L,
+           "F128 to double, integers, F16 and long double");
 }
 
 } // namespace

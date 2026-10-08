@@ -2,8 +2,9 @@
 #include "s7/element_registry.hpp"
 #include "s7/element_plugin.hpp"
 
+#include "s7/platform.hpp"
+
 #include <algorithm>
-#include <dlfcn.h>
 #include <boost/json.hpp>
 
 #include <iostream>
@@ -113,13 +114,7 @@ auto read_query_info(const S7PluginInfo* info, const fs::path& plugin_path) -> P
 
 auto resolve_symbol(void* handle, const char* symbol_name) -> void*
 {
-    dlerror();
-    void* symbol = dlsym(handle, symbol_name);
-    const char* err = dlerror();
-    if (err || !symbol) {
-        return nullptr;
-    }
-    return symbol;
+    return platform::library_symbol(handle, symbol_name);
 }
 
 } // namespace
@@ -151,12 +146,14 @@ std::vector<std::filesystem::path> PluginLoader::get_plugin_search_paths() const
     }
 
     // 1. ~/.s7/plugins/
-    if (const char* home = std::getenv("HOME")) {
-        paths.push_back(std::filesystem::path(home) / ".s7" / "plugins");
+    if (const auto home = platform::home_directory()) {
+        paths.push_back(*home / ".s7" / "plugins");
     }
 
+#if !defined(_WIN32)
     // 2. /opt/s7/plugins/
     paths.push_back("/opt/s7/plugins");
+#endif
 
     // 3. ./plugins/ (relative to current directory)
     paths.push_back("./plugins");
@@ -191,13 +188,13 @@ std::vector<std::filesystem::path> PluginLoader::discover_in_directory(
             const auto& path = entry.path();
             const auto& filename = path.filename().string();
 
-            // Match libs7*.so, libs7*.dylib, s7*.dll
+            // Match libs7*.so, libs7*.dylib, libs7*.dll (MinGW) or s7*.dll
             bool matches = false;
 
             #ifdef __APPLE__
             matches = filename.find("libs7") == 0 && filename.find(".dylib") != std::string::npos;
             #elif defined(_WIN32)
-            matches = filename.find("s7") == 0 && filename.find(".dll") != std::string::npos;
+            matches = (filename.starts_with("libs7") || filename.starts_with("s7")) && filename.ends_with(".dll");
             #else  // Linux
             matches = filename.find("libs7") == 0 &&
                      (filename.find(".so") != std::string::npos);
@@ -245,13 +242,11 @@ bool PluginLoader::load_plugin(
     }
 
     // Open shared library
-    dlerror();  // Clear any previous errors
-    void* handle = dlopen(plugin_path.c_str(), RTLD_LAZY | RTLD_LOCAL);
+    std::string error;
+    void* handle = platform::open_library(plugin_path, error);
 
     if (!handle) {
-        const char* err = dlerror();
-        std::cerr << "Failed to load plugin " << plugin_path << ": "
-                  << (err ? err : "Unknown error") << "\n";
+        std::cerr << "Failed to load plugin " << plugin_path << ": " << error << "\n";
         return false;
     }
 
@@ -266,7 +261,7 @@ bool PluginLoader::load_plugin(
             }
         } catch (const std::exception& e) {
             std::cerr << "Plugin " << plugin_path << " manifest error: " << e.what() << "\n";
-            dlclose(handle);
+            platform::close_library(handle);
             return false;
         }
     }
@@ -275,20 +270,20 @@ bool PluginLoader::load_plugin(
         const auto query_symbol = resolve_symbol(handle, "s7_plugin_query");
         if (!query_symbol) {
             std::cerr << "Plugin " << plugin_path << " missing s7_plugin_query\n";
-            dlclose(handle);
+            platform::close_library(handle);
             return false;
         }
         auto query_func = reinterpret_cast<S7PluginQueryFunc>(query_symbol);
         const auto* query_info = query_func();
         if (!query_info) {
             std::cerr << "Plugin " << plugin_path << " returned null info\n";
-            dlclose(handle);
+            platform::close_library(handle);
             return false;
         }
         if (query_info->api_version != S7_PLUGIN_API_VERSION) {
             std::cerr << "Plugin " << plugin_path << " API version mismatch: expected "
                       << S7_PLUGIN_API_VERSION << ", got " << query_info->api_version << "\n";
-            dlclose(handle);
+            platform::close_library(handle);
             return false;
         }
         info = read_query_info(query_info, plugin_path);
@@ -302,7 +297,7 @@ bool PluginLoader::load_plugin(
     const auto register_symbol = resolve_symbol(handle, "s7_register_elements");
     if (!register_symbol) {
         std::cerr << "Plugin " << plugin_path << " missing s7_register_elements\n";
-        dlclose(handle);
+        platform::close_library(handle);
         return false;
     }
     auto register_func = reinterpret_cast<S7RegisterElementsFunc>(register_symbol);
@@ -334,7 +329,7 @@ bool PluginLoader::load_plugin(
         registry.unregister(added);
         std::cerr << "Plugin " << plugin_path << " registration failed: " << reason << " (" << added.size()
                   << " partial registrations removed)\n";
-        dlclose(handle);
+        platform::close_library(handle);
         return false;
     }
 
@@ -375,7 +370,7 @@ void PluginLoader::unload_all() {
             plugin.registry->unregister(plugin.registered_types);
         }
         if (plugin.handle) {
-            dlclose(plugin.handle);
+            platform::close_library(plugin.handle);
             plugin.handle = nullptr;
         }
     }

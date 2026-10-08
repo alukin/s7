@@ -381,7 +381,7 @@ Extract `node_uuid` from the SAN URI and fail startup if the certificate has no 
 - Two runtimes started per `LOCAL_HEADLESS_NODES_DEMO.md` report different `node_uuid`s and appear as two nodes in Studio.
 - `ctest` does not create or modify files under `$HOME`.
 
-**Resolution:** `node_uuid` comes from the certificate's single `spiffe://s7/node/<uuid>` SAN URI; startup fails if it is missing, invalid, ambiguous, or disagrees with `node_uuid.txt` in the state directory. The common name is no longer used as a node UUID anywhere (including peer records). `RuntimeService` takes the state directory explicitly; `s7runtime --state-dir <dir>` sets it (default `~/.s7runtime/default-node` for single-node development; `S7_NODE_STATE_DIR` was removed). The runtime holds an exclusive `flock` on `<dir>/runtime.lock`, so a second runtime using the same directory fails at startup. `control_plane_smoke` uses temporary directories and checks the certificate UUID, the conflict and lock errors, and distinct persistent UUIDs for two directories; `ctest` with an empty `HOME` leaves it empty.
+**Resolution:** `node_uuid` comes from the certificate's single `spiffe://s7/node/<uuid>` SAN URI; startup fails if it is missing, invalid, ambiguous, or disagrees with `node_uuid.txt` in the state directory. The common name is no longer used as a node UUID anywhere (including peer records). `RuntimeService` takes the state directory explicitly; `s7runtime --state-dir <dir>` sets it (default `~/.s7runtime/default-node` for single-node development; `S7_NODE_STATE_DIR` was removed). The runtime holds an exclusive lock on `<dir>/runtime.lock` (`flock`; on Windows the file is opened without sharing), so a second runtime using the same directory fails at startup. `control_plane_smoke` uses temporary directories and checks the certificate UUID, the conflict and lock errors, and distinct persistent UUIDs for two directories; `ctest` with an empty `HOME` leaves it empty.
 
 Relevant code: [runtime_service.cpp](../s7runtime/src/runtime_service.cpp:441), [runtime_service.cpp](../s7runtime/src/runtime_service.cpp:584), [control_plane_smoke.cpp](../s7runtime/tests/control_plane_smoke.cpp:248).
 
@@ -592,4 +592,4 @@ Known and documented, not defects:
 - A process crash faults the streams it took part in; recovery (`RECOVER_STREAM`) continues without the lost data. Lossless delivery holds while both processes run.
 - Streams are not relayed through other nodes.
 - Over plain WebSocket node identities are claims (the `S7-Node` header): they keep consumers apart and streams on their configured connections, but only mTLS makes a deployment trusted.
-- Windows is not supported (a later MinGW-w64 port).
+- Windows binaries are cross-built on Linux and tested under Wine, not on Windows itself (`WINDOWS_BUILD.md`); a Windows node's clock never counts as synchronized (no error bound), so it needs `clock.assume_synchronized` to join multi-node deployments.

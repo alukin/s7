@@ -118,7 +118,7 @@ add_test(NAME s7spectral_sdk_smoke
 )
 set_tests_properties(s7spectral_sdk_smoke PROPERTIES
     SKIP_RETURN_CODE 77
-    ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}"
+    ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER};${S7_SCRIPT_TEST_ENV}"
 )
 
 # Transactional plugin registration.

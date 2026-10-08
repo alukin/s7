@@ -18,6 +18,9 @@ target_link_libraries(s7transport PUBLIC
     OpenSSL::Crypto
     Threads::Threads
 )
+if (WIN32)
+    target_link_libraries(s7transport PUBLIC ws2_32 mswsock)
+endif()
 
 add_executable(s7transport_wire_format_smoke tests/wire_format_smoke.cpp)
 target_link_libraries(s7transport_wire_format_smoke PRIVATE s7transport)

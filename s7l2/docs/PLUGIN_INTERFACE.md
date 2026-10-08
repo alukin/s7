@@ -93,16 +93,16 @@ Loader: `s7runtime/src/plugin_loader.cpp` (also compiled into Studio's `s7studio
 Search order:
 
 1. directories passed with `s7runtime --plugin-dir <dir>` (repeatable);
-2. `~/.s7/plugins/`;
-3. `/opt/s7/plugins/`;
+2. `~/.s7/plugins/` (`%USERPROFILE%\.s7\plugins\` on Windows);
+3. `/opt/s7/plugins/` (not on Windows);
 4. `./plugins/` (relative to the working directory);
 5. `$S7_PLUGIN_PATH` (a single directory).
 
-File names: `libs7*.so*` (Linux), `libs7*.dylib` (macOS), `s7*.dll` (Windows). Symlinks are skipped.
+File names: `libs7*.so*` (Linux), `libs7*.dylib` (macOS), `libs7*.dll` or `s7*.dll` (Windows). Symlinks are skipped.
 
 Studio additionally tries the build-tree `s7noise` library next to its executable (`../s7noise/`), so a fresh build shows the noise elements without installation. `s7runtime` does not; use `--plugin-dir build/s7noise`.
 
-Loading steps: `dlopen(RTLD_LAZY | RTLD_LOCAL)` → read manifest or query info → check `api_version` → call `s7_register_elements` → keep the library loaded until process exit (registered factories point into plugin code). A plugin that fails any step is reported on stderr and skipped; the process continues.
+Loading steps: `dlopen(RTLD_LAZY | RTLD_LOCAL)` (on Windows `LoadLibraryExW`, which also searches the plugin's directory for the DLLs it needs; `s7/platform.hpp`) → read manifest or query info → check `api_version` → call `s7_register_elements` → keep the library loaded until process exit (registered factories point into plugin code). A plugin that fails any step is reported on stderr and skipped; the process continues.
 
 ## Plugins a schema requires
 

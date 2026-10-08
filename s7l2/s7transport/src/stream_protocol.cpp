@@ -10,8 +10,7 @@
 #include <stdexcept>
 #include <system_error>
 
-#include <fcntl.h>
-#include <unistd.h>
+#include "s7/platform.hpp"
 
 namespace s7::stream {
 
@@ -120,26 +119,7 @@ std::uint64_t FileSequenceStore::reserved_end(const wire::StreamId& stream)
 
 void FileSequenceStore::reserve(const wire::StreamId& stream, const std::uint64_t end)
 {
-    const auto path = directory_ / (wire::to_string(stream) + ".seq");
-    const auto temporary = std::filesystem::path(path).concat(".tmp");
-    {
-        const auto text = std::to_string(end) + "\n";
-        const int fd = ::open(temporary.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
-        if (fd < 0) {
-            throw std::system_error(errno, std::generic_category(), "open " + temporary.string());
-        }
-        const bool ok = ::write(fd, text.data(), text.size()) == static_cast<ssize_t>(text.size()) && ::fsync(fd) == 0;
-        ::close(fd);
-        if (!ok) {
-            throw std::runtime_error("Could not persist sequence reservation " + temporary.string() + ".");
-        }
-    }
-    std::filesystem::rename(temporary, path);
-    const int dir = ::open(directory_.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
-    if (dir >= 0) {
-        ::fsync(dir);
-        ::close(dir);
-    }
+    platform::write_file_atomically(directory_ / (wire::to_string(stream) + ".seq"), std::to_string(end) + "\n");
 }
 
 // ---- producer --------------------------------------------------------------

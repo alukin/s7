@@ -19,6 +19,7 @@
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/net.hpp>
+#include <s7/platform.hpp>
 #include <s7/schema_library.hpp>
 
 #ifndef S7RUNTIME_DEFAULT_SCHEMA_PATH
@@ -142,11 +143,11 @@ int main(int argc, char** argv) {
         }
 
         if (state_dir.empty()) {
-            const char* home = std::getenv("HOME");
-            if (!home || !*home) {
-                throw std::invalid_argument("HOME is not set; pass --state-dir.");
+            const auto home = s7::platform::home_directory();
+            if (!home) {
+                throw std::invalid_argument("No home directory (HOME is not set); pass --state-dir.");
             }
-            state_dir = std::filesystem::path(home) / ".s7runtime" / "default-node";
+            state_dir = *home / ".s7runtime" / "default-node";
         }
 
         s7::RuntimeService service{definition, state_dir};

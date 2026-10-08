@@ -143,9 +143,10 @@ add_test(NAME s7studio_wire_types
 
 add_test(NAME s7studio_deployment_diagram
     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/deployment_diagram_test.sh $<TARGET_FILE:s7studio> ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+set_tests_properties(s7studio_wire_types s7studio_deployment_diagram PROPERTIES ENVIRONMENT "${S7_SCRIPT_TEST_ENV}")
 
 add_test(NAME s7studio_edit_check
-    COMMAND $<TARGET_FILE:s7studio> --edit-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/wire_types_ok.json)
+    COMMAND s7studio --edit-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/wire_types_ok.json)
 set_tests_properties(s7studio_edit_check PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
 # Trust shown by the Headless Nodes panel, against fake nodes (honest,
@@ -163,7 +164,7 @@ add_test(NAME s7studio_nodes_panel_trust COMMAND s7studio_nodes_panel_test)
 
 foreach(layout_case wire_types_ok layout_loops)
     add_test(NAME s7studio_layout_${layout_case}
-        COMMAND $<TARGET_FILE:s7studio> --layout-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/${layout_case}.json)
+        COMMAND s7studio --layout-check ${CMAKE_CURRENT_SOURCE_DIR}/tests/${layout_case}.json)
     set_tests_properties(s7studio_layout_${layout_case} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endforeach()
 

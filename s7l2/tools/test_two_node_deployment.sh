@@ -6,12 +6,17 @@
 #
 # Usage: test_two_node_deployment.sh <build dir> <source dir>
 set -euo pipefail
+# In a cross build, S7_RUN runs the target's programs (Wine) and
+# S7_EXE_SUFFIX is their file suffix; run drops the \r of their \r\n output.
+RUN=()
+[ -n "${S7_RUN:-}" ] && RUN=("$S7_RUN")
+run() { if [ -n "${S7_RUN:-}" ]; then "$S7_RUN" "$@" | tr -d '\r'; else "$@"; fi; }
 
 BUILD="$1"
 SRC="$2"
 CERTS="$SRC/s7runtime/examples/certs"
-RUNTIME="$BUILD/s7runtime/s7runtime"
-CTL="$BUILD/s7ctl/s7ctl"
+RUNTIME="$BUILD/s7runtime/s7runtime${S7_EXE_SUFFIX:-}"
+CTL="$BUILD/s7ctl/s7ctl${S7_EXE_SUFFIX:-}"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/s7-two-node.XXXXXX")"
 PIDS=()
 cleanup() {
@@ -78,9 +83,9 @@ EOF
 }
 diagram 10 > "$WORK/diagram.json"
 
-"$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a.log" 2>&1 &
+"${RUN[@]}" "$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a.log" 2>&1 &
 PIDS+=($!)
-"$RUNTIME" --schema "$WORK/b.json" --state-dir "$WORK/state-b" --serve-seconds 60 > "$WORK/b.log" 2>&1 &
+"${RUN[@]}" "$RUNTIME" --schema "$WORK/b.json" --state-dir "$WORK/state-b" --serve-seconds 60 > "$WORK/b.log" 2>&1 &
 PIDS+=($!)
 for port in "$PORT_A" "$PORT_B"; do
   for _ in $(seq 50); do (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null && break; sleep 0.1; done
@@ -101,19 +106,19 @@ a, b = d["runtime_nodes"]
 a["endpoint"], b["endpoint"] = b["endpoint"], a["endpoint"]
 json.dump(d, open(sys.argv[2], "w"))
 EOF2
-if "$CTL" deploy "$WORK/swapped.json" "${TLS[@]}" > "$WORK/swapped.log" 2>&1; then fail "deployed to nodes with the wrong identity"; fi
+if run "$CTL" deploy "$WORK/swapped.json" "${TLS[@]}" > "$WORK/swapped.log" 2>&1; then fail "deployed to nodes with the wrong identity"; fi
 grep -q "is node $NODE_B, not node $NODE_A" "$WORK/swapped.log" || fail "identity mismatch not reported: $(cat "$WORK/swapped.log")"
-"$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-none.json" || true
+run "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-none.json" || true
 grep -q REVISION_NOT_FOUND "$WORK/config-none.json" || fail "a node was deployed despite the mismatch: $(cat "$WORK/config-none.json")"
 
 # 1) Deploy; keep the diagram with its streams for the next deployment. With
 #    dt both nodes step on one 20 ms UTC grid from the same activation time.
-"$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" > "$WORK/deploy1.log" || fail "first deployment: $(cat "$WORK/deploy1.log")"
+run "$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" > "$WORK/deploy1.log" || fail "first deployment: $(cat "$WORK/deploy1.log")"
 ACTIVATE_AT="$(sed -n 's/^activate_at_ns //p' "$WORK/deploy1.log")"
 [ -n "$ACTIVATE_AT" ] || fail "no activation time: $(cat "$WORK/deploy1.log")"
 sleep 1
-"$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a.json"
-"$CTL" info "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/info-b.json"
+run "$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a.json"
+run "$CTL" info "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/info-b.json"
 python3 - "$WORK/info-a.json" "$WORK/info-b.json" "$ACTIVATE_AT" <<'EOF2' || fail "the nodes do not share the grid: $(cat "$WORK/info-a.json" "$WORK/info-b.json")"
 import json, sys
 a, b = (json.load(open(path))["state"]["timing"] for path in sys.argv[1:3])
@@ -129,7 +134,7 @@ EOF2
 # json_check <file> <python expression over `r`>
 json_check() { python3 -c "import json,sys; r=json.load(open(sys.argv[1])); sys.exit(0 if ($2) else 1)" "$1"; }
 
-"$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b.json"
+run "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b.json"
 json_check "$WORK/streams-b.json" \
   "len(r['streams'])==1 and r['streams'][0]['role']=='consumer' and r['streams'][0]['data_type']=='I32' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>10" \
   || fail "node B consumes the I32 stream: $(cat "$WORK/streams-b.json")"
@@ -138,7 +143,7 @@ json_check "$WORK/streams-b.json" \
   "r['streams'][0]['latency']['samples']>0 and 0<=r['streams'][0]['latency']['p50_ns']<1000000000" \
   || fail "node B measures the stream's latency: $(cat "$WORK/streams-b.json")"
 
-"$CTL" config "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/config-b.json"
+run "$CTL" config "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/config-b.json"
 json_check "$WORK/config-b.json" \
   "r['type']=='NETWORK_CONFIGURATION' and r['revision']==1 and r['diagram']['streams'][0]['stream_id']=='$STREAM_ID' and any(e['type']=='NetSource' for e in r['node_schema']['elements']) and not any(e['id']=='double' for e in r['node_schema']['elements'])" \
   || fail "node B returns the deployed diagram and its part: $(cat "$WORK/config-b.json")"
@@ -153,18 +158,18 @@ for e in d["schema"]["elements"]:
 json.dump(d, open(sys.argv[1], "w"))
 EOF
 BEFORE="$(python3 -c "import json; print(json.load(open('$WORK/streams-b.json'))['streams'][0]['elements'])")"
-"$CTL" deploy "$WORK/deployed.json" "${TLS[@]}" > "$WORK/deploy2.log" || fail "redeployment: $(cat "$WORK/deploy2.log")"
+run "$CTL" deploy "$WORK/deployed.json" "${TLS[@]}" > "$WORK/deploy2.log" || fail "redeployment: $(cat "$WORK/deploy2.log")"
 ACTIVATE_AT2="$(sed -n 's/^activate_at_ns //p' "$WORK/deploy2.log")"
 sleep 1
-"$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b2.json"
+run "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b2.json"
 json_check "$WORK/streams-b2.json" \
   "len(r['streams'])==1 and r['streams'][0]['stream_id']=='$STREAM_ID' and r['streams'][0]['state']=='active' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>$BEFORE" \
   || fail "the stream continues across the redeployment: $(cat "$WORK/streams-b2.json")"
-"$CTL" streams "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/streams-a.json"
+run "$CTL" streams "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/streams-a.json"
 json_check "$WORK/streams-a.json" \
   "r['streams'][0]['role']=='producer' and r['streams'][0]['fault']=='NONE' and r['streams'][0]['lost_resumes']==0" \
   || fail "the producer has no fault: $(cat "$WORK/streams-a.json")"
-"$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a.json"
+run "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a.json"
 json_check "$WORK/config-a.json" "r['revision']==2" || fail "node A runs revision 2"
 
 grep -q "runtime.execution.stopped=error" "$WORK/a.log" "$WORK/b.log" && fail "a node stopped stepping"
@@ -175,27 +180,27 @@ grep -q "runtime.execution.stopped=error" "$WORK/a.log" "$WORK/b.log" && fail "a
 #    resumes it.
 kill "${PIDS[0]}"
 wait "${PIDS[0]}" 2>/dev/null || true
-"$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a2.log" 2>&1 &
+"${RUN[@]}" "$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a2.log" 2>&1 &
 PIDS+=($!)
 for _ in $(seq 50); do (exec 3<>"/dev/tcp/127.0.0.1/$PORT_A") 2>/dev/null && break; sleep 0.1; done
 grep -q "deployment.restored deployment_id=.* revision=2" "$WORK/a2.log" || fail "node A did not restore its deployment: $(cat "$WORK/a2.log")"
-"$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a2.json"
+run "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-a2.json"
 json_check "$WORK/config-a2.json" "r['revision']==2" || fail "the restarted node A runs revision 2: $(cat "$WORK/config-a2.json")"
-"$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a2.json"
+run "$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a2.json"
 json_check "$WORK/info-a2.json" \
   "(lambda t: t['pacing']=='grid' and t['origin_utc_ns']>$ACTIVATE_AT2 and (t['origin_utc_ns']-$ACTIVATE_AT2)%20000000==0)(r['state']['timing'])" \
   || fail "the restarted node A is back on the deployment's grid: $(cat "$WORK/info-a2.json")"
 for _ in $(seq 50); do
-  "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b3.json"
+  run "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b3.json"
   json_check "$WORK/streams-b3.json" "r['streams'][0]['fault']=='SEQUENCE_GAP'" && break
   sleep 0.1
 done
 json_check "$WORK/streams-b3.json" "r['streams'][0]['fault']=='SEQUENCE_GAP'" \
   || fail "node B reports the producer restart as a gap: $(cat "$WORK/streams-b3.json")"
-"$CTL" recover "wss://127.0.0.1:$PORT_B" "$STREAM_ID" "${TLS[@]}" > /dev/null || fail "recovery"
+run "$CTL" recover "wss://127.0.0.1:$PORT_B" "$STREAM_ID" "${TLS[@]}" > /dev/null || fail "recovery"
 GAP_ELEMENTS="$(python3 -c "import json; print(json.load(open('$WORK/streams-b3.json'))['streams'][0]['elements'])")"
 sleep 1
-"$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b4.json"
+run "$CTL" streams "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/streams-b4.json"
 json_check "$WORK/streams-b4.json" \
   "r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>$GAP_ELEMENTS and r['streams'][0]['recent_faults'][-1]['code']=='SEQUENCE_GAP'" \
   || fail "the stream resumes after recovery and the gap stays reported: $(cat "$WORK/streams-b4.json")"

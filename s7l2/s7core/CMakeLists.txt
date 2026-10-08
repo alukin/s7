@@ -13,6 +13,7 @@ add_library(s7core SHARED
     src/builtin_element_registry.cpp
     src/type_inference.cpp
     src/convert.cpp
+    src/platform.cpp
 )
 
 set_target_properties(s7core PROPERTIES
@@ -31,13 +32,29 @@ target_link_libraries(s7core PUBLIC
     Boost::json
     Boost::system
     ZLIB::ZLIB
+    ${CMAKE_DL_LIBS}
 )
+if (WIN32)
+    # F128 on MinGW (s7/float_types.hpp), used by inline functions too: math
+    # from libquadmath, and soft-float routines with Clang's return convention
+    # (src/windows_f128_abi.cpp) for every module that links s7core.
+    add_library(s7_f128_abi STATIC src/windows_f128_abi.cpp)
+    # Each module keeps its own copy: a DLL must not export them (MinGW
+    # exports every symbol by default), or an executable linking it would see
+    # them twice.
+    target_link_options(s7_f128_abi INTERFACE "SHELL:-Xlinker --exclude-symbols=__addtf3,__subtf3,__multf3,__divtf3,__negtf2,__powitf2,__extendsftf2,__extenddftf2,__extendxftf2,__extendhftf2,__floatsitf,__floatunsitf,__floatditf,__floatunditf,__floattitf,__floatuntitf")
+    target_link_libraries(s7core PUBLIC s7_f128_abi quadmath)
+    set(S7CORE_SDK_TARGETS s7core s7_f128_abi)
+else()
+    set(S7CORE_SDK_TARGETS s7core)
+endif()
 
 # --- SDK: headers, library and CMake package for out-of-tree plugins --------
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-install(TARGETS s7core EXPORT s7coreTargets
+install(TARGETS ${S7CORE_SDK_TARGETS} EXPORT s7coreTargets
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT s7sdk
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk
 )
@@ -82,5 +99,8 @@ add_executable(s7core_signal_types_strict_smoke tests/signal_types_smoke.cpp)
 target_include_directories(s7core_signal_types_strict_smoke PRIVATE include)
 set_target_properties(s7core_signal_types_strict_smoke PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(s7core_signal_types_strict_smoke PRIVATE -Wall -Wextra -Wpedantic)
+if (WIN32)
+    target_link_libraries(s7core_signal_types_strict_smoke PRIVATE s7_f128_abi quadmath)
+endif()
 add_test(NAME s7core_signal_types_strict_smoke COMMAND s7core_signal_types_strict_smoke)
 

@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 # Install development dependencies for s7l2 on Ubuntu (tested on 26.04 LTS).
 #
-# Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-spectral] [--no-extras] [--dry-run]
+# Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-spectral] [--no-extras] [--windows] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
 #   --no-spectral  skip FFTW (needed only by the s7spectral plugin)
 #   --no-extras    skip optional tools (ninja, gnuplot)
+#   --windows      also the Windows cross toolchain: Clang/LLVM 22, Wine (docs/WINDOWS_BUILD.md)
 #   --dry-run      print the apt command instead of running it
 set -euo pipefail
 
 WITH_STUDIO=1
 WITH_SPECTRAL=1
 WITH_EXTRAS=1
+WITH_WINDOWS=0
 DRY_RUN=0
 
 for arg in "$@"; do
@@ -18,6 +20,7 @@ for arg in "$@"; do
     --no-studio) WITH_STUDIO=0 ;;
     --no-spectral) WITH_SPECTRAL=0 ;;
     --no-extras) WITH_EXTRAS=0 ;;
+    --windows) WITH_WINDOWS=1 ;;
     --dry-run) DRY_RUN=1 ;;
     -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
@@ -70,6 +73,25 @@ if (( WITH_EXTRAS )); then
   )
 fi
 
+# Windows cross build: Clang targeting MinGW, lld and the LLVM binutils, Wine
+# for the tests, zstd for tools/windows/fetch_msys2_sysroot.py. The host Qt's
+# moc/uic/rcc (qt6-base-dev-tools) generate code for the Windows Qt.
+if (( WITH_WINDOWS )); then
+  PACKAGES+=(
+    clang-22
+    lld-22
+    llvm-22
+    wine
+    wine64
+    zstd
+    python3
+    ninja-build
+  )
+  if (( WITH_STUDIO )); then
+    PACKAGES+=(qt6-base-dev-tools)
+  fi
+fi
+
 SUDO=()
 if (( EUID != 0 )); then
   SUDO=(sudo)
@@ -93,3 +115,11 @@ else
 fi
 echo "  cmake --build build --parallel"
 echo "  ctest --test-dir build --output-on-failure"
+if (( WITH_WINDOWS )); then
+  echo
+  echo "Windows binaries (docs/WINDOWS_BUILD.md):"
+  echo "  tools/windows/fetch_msys2_sysroot.py$( (( WITH_STUDIO )) || echo ' --no-studio')"
+  echo "  cmake -S . -B build-win -G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake$( (( WITH_STUDIO )) || echo ' -DS7_BUILD_STUDIO=OFF')"
+  echo "  cmake --build build-win"
+  echo "  ctest --test-dir build-win --output-on-failure"
+fi

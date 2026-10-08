@@ -15,3 +15,4 @@ add_test(NAME s7ctl_plugin_types
 # Two s7runtime nodes over mTLS, deployed with s7ctl.
 add_test(NAME s7_two_node_deployment
     COMMAND ${PROJECT_SOURCE_DIR}/tools/test_two_node_deployment.sh ${CMAKE_BINARY_DIR} ${PROJECT_SOURCE_DIR})
+set_tests_properties(s7ctl_plugin_types s7_two_node_deployment PROPERTIES ENVIRONMENT "${S7_SCRIPT_TEST_ENV}")

@@ -196,7 +196,8 @@ int runSmoke()
             for (std::size_t index = 0; index < batch.samples.size(); ++index) {
                 assert(batch.samples[index].step == static_cast<long>(6 + index));
             }
-            assert(mailbox.push(s7studio::ScopeSample{"scope", 0, 10, 0.01, 10.0}));
+            [[maybe_unused]] const bool pushed = mailbox.push(s7studio::ScopeSample{"scope", 0, 10, 0.01, 10.0});
+            assert(pushed);
             batch = mailbox.take();
             assert(batch.samples.size() == 1 && batch.dropped == 0);
         }
@@ -221,7 +222,9 @@ int runSmoke()
         s7::RuntimeNetContext::set_endpoint(endpoint);
         const auto tx = endpoint->open_producer(s7::net_stream_config("5b3a9f6e-2c4d-4e8a-b1f0-9d8c7b6a5f4e"));
         const double sent = 8.5;
-        assert(endpoint->publish(tx, &sent, 1).fault == s7::stream::FaultCode::None);
+        // Not inside assert(): the NetSource below needs the sample in release builds too.
+        [[maybe_unused]] const auto published = endpoint->publish(tx, &sent, 1);
+        assert(published.fault == s7::stream::FaultCode::None);
 
         static constexpr std::string_view netSchema = R"json({
             "name": "s7studio_net_smoke",

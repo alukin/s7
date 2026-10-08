@@ -2,10 +2,20 @@
 
 #include <chrono>
 
+#if !defined(_WIN32)
 #include <sys/timex.h>
+#endif
 
 namespace s7::clock {
 
+#if defined(_WIN32)
+// Windows publishes no error bound for its clock: never synchronized, so a
+// node shares the "utc" domain only with clock.assume_synchronized.
+auto read_kernel_sync() -> SyncStatus
+{
+    return SyncStatus{.synchronized = false, .source = "kernel"};
+}
+#else
 auto read_kernel_sync() -> SyncStatus
 {
     timex state{};
@@ -17,6 +27,7 @@ auto read_kernel_sync() -> SyncStatus
     status.estimated_error_ns = static_cast<std::int64_t>(state.esterror) * 1000;
     return status;
 }
+#endif
 
 auto utc_now_ns() -> std::int64_t
 {

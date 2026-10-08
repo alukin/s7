@@ -29,13 +29,10 @@
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
-#include <fcntl.h>
-#include <sys/file.h>
-#include <unistd.h>
-
 #include "s7/io.hpp"
 #include "s7/net.hpp"
 #include "s7/element_registry.hpp"
+#include "s7/platform.hpp"
 
 namespace s7 {
 namespace {
@@ -628,19 +625,14 @@ void write_node_uuid_file(const std::filesystem::path& path, const std::string& 
 
 // Takes an exclusive lock on the state directory for the life of the process,
 // so that two runtimes never share one node identity and peer cache.
-[[nodiscard]] auto lock_state_dir(const std::filesystem::path& state_dir) -> int
+[[nodiscard]] auto lock_state_dir(const std::filesystem::path& state_dir) -> platform::FileLock
 {
-    const auto path = state_dir / "runtime.lock";
-    const int fd = ::open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
-    if (fd < 0) {
-        throw std::runtime_error("Could not open state directory lock '" + path.string() + "'.");
-    }
-    if (::flock(fd, LOCK_EX | LOCK_NB) != 0) {
-        ::close(fd);
+    auto lock = platform::FileLock::try_lock(state_dir / "runtime.lock");
+    if (!lock) {
         throw std::runtime_error("Node state directory '" + state_dir.string() +
                                  "' is in use by another runtime; give each node its own --state-dir.");
     }
-    return fd;
+    return std::move(*lock);
 }
 
 [[nodiscard]] auto build_control_descriptor(const std::string& node_uuid,
@@ -798,41 +790,36 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
         throw std::invalid_argument("RuntimeService requires a node state directory.");
     }
     std::filesystem::create_directories(state_dir_);
-    state_dir_lock_fd_ = lock_state_dir(state_dir_);
+    state_dir_lock_ = lock_state_dir(state_dir_);
 
-    try {
-        // Producer sequence reservations live in the node state directory.
-        if (definition_.server.enabled || definition_.client.enabled) {
-            network_endpoint_ = std::make_shared<s7::transport::BeastRuntimeNetEndpoint>(transport::TransportLimits{}, state_dir_.string());
-        } else {
-            network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
-        }
-
-        const auto identity_cert = select_identity_certificate(definition_);
-        runtime_instance_uuid_ = load_or_create_node_uuid(
-            state_dir_,
-            identity_cert ? std::optional<std::string>{certificate_node_uuid(*identity_cert)} : std::nullopt);
-
-        if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-            beast->set_node_uuid(runtime_instance_uuid_); // the identity plain WebSocket peers know this node by
-        }
-        graph_host_ = std::make_shared<GraphHost>(*this);
-        control_plane_ = std::make_shared<ControlPlaneMvp>(
-            build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
-            ControlPlaneOptions{
-                .storage_dir = state_dir_,
-                .authorization = definition_.control,
-                .deployment_host = graph_host_,
-                .log = [](const std::string& line) { std::cerr << line << '\n'; },
-                .network = network_endpoint_,
-                .on_stream_recovered = [this] { ++stream_recoveries_; },
-                .clock_sync = [this] { return clock_sync(); },
-                .max_clock_error_ns = static_cast<std::int64_t>(definition_.clock.max_error_ms * 1e6),
-            });
-    } catch (...) {
-        ::close(state_dir_lock_fd_);
-        throw;
+    // Producer sequence reservations live in the node state directory.
+    if (definition_.server.enabled || definition_.client.enabled) {
+        network_endpoint_ = std::make_shared<s7::transport::BeastRuntimeNetEndpoint>(transport::TransportLimits{}, state_dir_.string());
+    } else {
+        network_endpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     }
+
+    const auto identity_cert = select_identity_certificate(definition_);
+    runtime_instance_uuid_ = load_or_create_node_uuid(
+        state_dir_,
+        identity_cert ? std::optional<std::string>{certificate_node_uuid(*identity_cert)} : std::nullopt);
+
+    if (const auto beast = std::dynamic_pointer_cast<transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
+        beast->set_node_uuid(runtime_instance_uuid_); // the identity plain WebSocket peers know this node by
+    }
+    graph_host_ = std::make_shared<GraphHost>(*this);
+    control_plane_ = std::make_shared<ControlPlaneMvp>(
+        build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
+        ControlPlaneOptions{
+            .storage_dir = state_dir_,
+            .authorization = definition_.control,
+            .deployment_host = graph_host_,
+            .log = [](const std::string& line) { std::cerr << line << '\n'; },
+            .network = network_endpoint_,
+            .on_stream_recovered = [this] { ++stream_recoveries_; },
+            .clock_sync = [this] { return clock_sync(); },
+            .max_clock_error_ns = static_cast<std::int64_t>(definition_.clock.max_error_ms * 1e6),
+        });
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
         std::weak_ptr<ControlPlaneMvp> weak_control = control_plane_;
@@ -859,10 +846,6 @@ RuntimeService::~RuntimeService()
     // Only clear global runtime endpoint context if it still points to this service's endpoint.
     if (RuntimeNetContext::endpoint() == network_endpoint_) {
         RuntimeNetContext::set_endpoint(nullptr);
-    }
-
-    if (state_dir_lock_fd_ >= 0) {
-        ::close(state_dir_lock_fd_);
     }
 }
 

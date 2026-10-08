@@ -42,7 +42,6 @@ Documentation map: `docs/INDEX.md`. Known defects and planned fixes: `docs/CODE_
 - `NetRuntime`, distributed scheduling, coherence domains.
 - `SOURCE_TIME` on streams (needs source elements that know their acquisition time), relaying streams through other nodes.
 - Recovering stream data across a process crash (a crash faults the stream; recovery continues without the lost data).
-- Windows (a later MinGW-w64 port).
 
 ## Build
 
@@ -53,6 +52,8 @@ cmake -S . -B build                       # add -DS7_BUILD_STUDIO=OFF to skip Qt
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
+
+Windows binaries are cross-built on Linux with Clang and tested under Wine: `docs/WINDOWS_BUILD.md`.
 
 ## Run
 

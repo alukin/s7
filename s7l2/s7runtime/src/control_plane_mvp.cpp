@@ -11,12 +11,10 @@
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include "s7/base64url.hpp"
 #include "s7/canonical_json.hpp"
 #include "s7/diagram_deployment.hpp"
+#include "s7/platform.hpp"
 
 namespace s7 {
 namespace {
@@ -418,33 +416,6 @@ namespace {
 
 constexpr const char* kDeploymentFile = "deployment.json";
 
-// Writes the file through a temporary file, fsync and rename, so a crash
-// leaves either the old or the new content.
-void write_file_atomically(const std::filesystem::path& path, const std::string& text)
-{
-    const auto temporary = std::filesystem::path(path).concat(".tmp");
-    {
-        std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
-        out << text;
-        out.flush();
-        if (!out) {
-            throw std::runtime_error("cannot write " + temporary.string());
-        }
-    }
-    if (const int fd = ::open(temporary.c_str(), O_WRONLY | O_CLOEXEC); fd >= 0) {
-        const bool synced = ::fsync(fd) == 0;
-        ::close(fd);
-        if (!synced) {
-            throw std::runtime_error("cannot sync " + temporary.string());
-        }
-    }
-    std::filesystem::rename(temporary, path);
-    if (const int dir = ::open(path.parent_path().c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC); dir >= 0) {
-        ::fsync(dir);
-        ::close(dir);
-    }
-}
-
 } // namespace
 
 void ControlPlaneMvp::expire_transfers_locked(const std::chrono::steady_clock::time_point now)
@@ -632,7 +603,7 @@ bool ControlPlaneMvp::persist_active_locked() const
         {"activate_at_ns", active_->activate_at_ns ? boost::json::value(*active_->activate_at_ns) : boost::json::value(nullptr)},
     };
     try {
-        write_file_atomically(options_.storage_dir / kDeploymentFile, boost::json::serialize(record));
+        platform::write_file_atomically(options_.storage_dir / kDeploymentFile, boost::json::serialize(record));
         return true;
     } catch (const std::exception& ex) {
         if (options_.log) {

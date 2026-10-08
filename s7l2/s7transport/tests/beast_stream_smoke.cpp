@@ -16,10 +16,12 @@
 #include <thread>
 #include <vector>
 
+#if !defined(_WIN32)
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#endif
 
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
@@ -454,6 +456,20 @@ void test_data_peer_retried()
 }
 
 // The address of a non-loopback IPv4 interface of this host, if any.
+#if defined(_WIN32)
+std::optional<std::string> external_ipv4()
+{
+    boost::asio::io_context io;
+    boost::system::error_code ec;
+    for (const auto& entry : tcp::resolver(io).resolve(boost::asio::ip::host_name(), "", ec)) {
+        const auto address = entry.endpoint().address();
+        if (address.is_v4() && !address.is_loopback()) {
+            return address.to_string();
+        }
+    }
+    return std::nullopt;
+}
+#else
 std::optional<std::string> external_ipv4()
 {
     ifaddrs* list = nullptr;
@@ -471,6 +487,7 @@ std::optional<std::string> external_ipv4()
     freeifaddrs(list);
     return found;
 }
+#endif
 
 bool can_connect(const std::string& address, const std::uint16_t port)
 {

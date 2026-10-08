@@ -13,7 +13,8 @@
 //   - <cmath> functions (otherwise ambiguous calls), in s7::math,
 //   - std::numbers constants for _Float16, in s7::math.
 // libstdc++ already treats __float128 as a floating-point type (traits,
-// numeric_limits, std::numbers, std::complex).
+// numeric_limits, std::numbers, std::complex). Its math comes from glibc's
+// binary128 functions on Linux and from libquadmath on Windows (MinGW).
 //
 // Code that does math on a signal value calls s7::math::f(x), never std::f(x).
 
@@ -40,6 +41,46 @@ __extension__ typedef __float128 float128_t;
 #endif
 
 } // namespace s7
+
+#if !defined(S7_NATIVE_EXTENDED_FLOATS) && defined(_WIN32)
+// libquadmath (the C runtime has no binary128 functions); s7core links it.
+// It is built by GCC, whose Win64 convention for __float128 differs from
+// Clang's: the result goes through a hidden pointer and arguments are passed
+// by reference. These declarations spell that convention out.
+extern "C" {
+__float128* s7_atan2q(__float128*, const __float128*, const __float128*) __asm__("atan2q");
+__float128* s7_copysignq(__float128*, const __float128*, const __float128*) __asm__("copysignq");
+__float128* s7_fmodq(__float128*, const __float128*, const __float128*) __asm__("fmodq");
+__float128* s7_hypotq(__float128*, const __float128*, const __float128*) __asm__("hypotq");
+__float128* s7_ldexpq(__float128*, const __float128*, int) __asm__("ldexpq");
+__float128* s7_nearbyintq(__float128*, const __float128*) __asm__("nearbyintq");
+__float128* s7_sinq(__float128*, const __float128*) __asm__("sinq");
+__float128* s7_sqrtq(__float128*, const __float128*) __asm__("sqrtq");
+__float128* s7_truncq(__float128*, const __float128*) __asm__("truncq");
+}
+
+namespace s7::math::quadmath {
+inline __float128 call(__float128* (*f)(__float128*, const __float128*), const __float128 x)
+{
+    __float128 result;
+    return *f(&result, &x);
+}
+inline __float128 call(__float128* (*f)(__float128*, const __float128*, const __float128*), const __float128 x, const __float128 y)
+{
+    __float128 result;
+    return *f(&result, &x, &y);
+}
+inline __float128 call(__float128* (*f)(__float128*, const __float128*, int), const __float128 x, const int e)
+{
+    __float128 result;
+    return *f(&result, &x, e);
+}
+} // namespace s7::math::quadmath
+
+#define S7_F128_MATH(name, ...) ::s7::math::quadmath::call(s7_##name##q, __VA_ARGS__)
+#else
+#define S7_F128_MATH(name, ...) __builtin_##name##f128(__VA_ARGS__)
+#endif
 
 #if !defined(S7_NATIVE_EXTENDED_FLOATS)
 // Mirrors libstdc++'s specialization for std::float16_t under GCC.
@@ -107,7 +148,7 @@ inline constexpr float128_t pi_v<float128_t> = __builtin_bit_cast(
     float128_t, (static_cast<unsigned __int128>(0x4000921FB54442D1ULL) << 64) | 0x8469898CC51701B8ULL);
 
 // float16_t: computed in float, as libstdc++ does under GCC (glibc has no
-// _Float16 functions). float128_t: glibc's binary128 functions.
+// _Float16 functions). float128_t: glibc's binary128 functions, or libquadmath's.
 inline bool isnan(const float16_t x) { return __builtin_isnan(x); }
 inline bool isinf(const float16_t x) { return __builtin_isinf(x); }
 inline float16_t abs(const float16_t x) { return __builtin_fabsf16(x); }
@@ -133,18 +174,20 @@ inline float16_t arg(const std::complex<float16_t>& z) { return atan2(z.imag(), 
 
 inline bool isnan(const float128_t x) { return __builtin_isnan(x); }
 inline bool isinf(const float128_t x) { return __builtin_isinf(x); }
-inline float128_t copysign(const float128_t x, const float128_t y) { return __builtin_copysignf128(x, y); }
-inline float128_t ldexp(const float128_t x, const int e) { return __builtin_ldexpf128(x, e); }
-inline float128_t nearbyint(const float128_t x) { return __builtin_nearbyintf128(x); }
-inline float128_t trunc(const float128_t x) { return __builtin_truncf128(x); }
-inline float128_t sin(const float128_t x) { return __builtin_sinf128(x); }
-inline float128_t sqrt(const float128_t x) { return __builtin_sqrtf128(x); }
-inline float128_t fmod(const float128_t x, const float128_t y) { return __builtin_fmodf128(x, y); }
-inline float128_t atan2(const float128_t y, const float128_t x) { return __builtin_atan2f128(y, x); }
-inline float128_t abs(const std::complex<float128_t>& z) { return __builtin_hypotf128(z.real(), z.imag()); }
+inline float128_t copysign(const float128_t x, const float128_t y) { return S7_F128_MATH(copysign, x, y); }
+inline float128_t ldexp(const float128_t x, const int e) { return S7_F128_MATH(ldexp, x, e); }
+inline float128_t nearbyint(const float128_t x) { return S7_F128_MATH(nearbyint, x); }
+inline float128_t trunc(const float128_t x) { return S7_F128_MATH(trunc, x); }
+inline float128_t sin(const float128_t x) { return S7_F128_MATH(sin, x); }
+inline float128_t sqrt(const float128_t x) { return S7_F128_MATH(sqrt, x); }
+inline float128_t fmod(const float128_t x, const float128_t y) { return S7_F128_MATH(fmod, x, y); }
+inline float128_t atan2(const float128_t y, const float128_t x) { return S7_F128_MATH(atan2, y, x); }
+inline float128_t abs(const std::complex<float128_t>& z) { return S7_F128_MATH(hypot, z.real(), z.imag()); }
 inline float128_t arg(const std::complex<float128_t>& z) { return atan2(z.imag(), z.real()); }
 #endif
 
 } // namespace s7::math
+
+#undef S7_F128_MATH
 
 #endif // S7CORE_INCLUDE_S7_FLOAT_TYPES_HPP

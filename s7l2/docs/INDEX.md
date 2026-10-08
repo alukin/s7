@@ -42,6 +42,7 @@ S7 is in pre-MVP development. Backward compatibility of APIs, file formats, and 
 | `STUDIO_DIAGRAM_EDITOR.md` | Studio diagram editor internals, diagram file format, QSchematic notes |
 | `STUDIO_DIAGRAM_WIRING_DESIGN.md` | Design record of the diagram wiring: QSchematic subclasses, format v2, connection rules, router (implemented) |
 | `LOCAL_HEADLESS_NODES_DEMO.md` | Run two local headless runtimes and discover them in Studio |
+| `WINDOWS_BUILD.md` | Cross-building Windows binaries on Linux (Clang, MSYS2 sysroot), testing under Wine, packaging |
 
 Module READMEs: `../s7transport/README.md`, `../s7noise/README.md`, `../s7spectral/README.md`.
 

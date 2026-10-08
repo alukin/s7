@@ -17,6 +17,7 @@
 
 #include "s7/control_plane_mvp.hpp"
 #include "s7/core.hpp"
+#include "s7/platform.hpp"
 #include "s7/transport.hpp"
 
 namespace s7 {
@@ -192,7 +193,7 @@ public:
 private:
     RuntimeSchemaDefinition definition_;
     std::filesystem::path state_dir_;
-    int state_dir_lock_fd_{-1};
+    std::optional<platform::FileLock> state_dir_lock_; // released after every later member is destroyed
     std::string runtime_instance_uuid_;
     std::shared_ptr<ControlPlaneMvp> control_plane_;
     transport::RuntimeNetEndpointPtr network_endpoint_;
