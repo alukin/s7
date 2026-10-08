@@ -1,0 +1,18 @@
+{
+  "node_name": "python-node",
+  "websocket": {
+    "server": {
+      "port": 9012,
+      "tls": {
+        "cert_file": "../s7l2/s7runtime/examples/certs/s7_runtime_node_b.cert.pem",
+        "key_file": "../s7l2/s7runtime/examples/certs/s7_runtime_node_b.key.pem",
+        "ca_file": "../s7l2/s7runtime/examples/certs/s7_root_ca.cert.pem"
+      }
+    }
+  },
+  "control": {
+    "studio_key_purpose_oid": "2.25.4266950079767543379770189370854073200",
+    "studio_certificate_sha256": "7898f34e0608101f46b2c762008d0a8f1569f5d0f0665346eb369fa7768785bb"
+  },
+  "clock": { "max_error_ms": 250 }
+}

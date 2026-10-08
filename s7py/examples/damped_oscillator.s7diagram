@@ -1,0 +1,21 @@
+{
+  "document_kind": "s7.diagram",
+  "dt": 0.01,
+  "runtime_nodes": [
+    { "node_uuid": "33333333-4444-5555-6666-777777777777", "name": "python-node", "endpoint": "wss://127.0.0.1:9012" }
+  ],
+  "schema": {
+    "name": "damped_oscillator",
+    "elements": [
+      { "id": "velocity", "type": "EulerIntegrator", "params": { "dt": 0.01, "initial_value": 1.0 }, "node": "33333333-4444-5555-6666-777777777777" },
+      { "id": "position", "type": "EulerIntegrator", "params": { "dt": 0.01, "initial_value": 0.0 }, "node": "33333333-4444-5555-6666-777777777777" },
+      { "id": "acceleration", "type": "Adder", "params": { "weights": [-39.48, -1.0] }, "node": "33333333-4444-5555-6666-777777777777" }
+    ],
+    "connections": [
+      { "from_element": "acceleration", "from_port": 0, "to_element": "velocity", "to_port": 0 },
+      { "from_element": "velocity", "from_port": 0, "to_element": "position", "to_port": 0 },
+      { "from_element": "position", "from_port": 0, "to_element": "acceleration", "to_port": 0 },
+      { "from_element": "velocity", "from_port": 0, "to_element": "acceleration", "to_port": 1 }
+    ]
+  }
+}

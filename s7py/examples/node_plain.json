@@ -1,0 +1,15 @@
+{
+  "name": "s7py_startup_counter",
+  "elements": [
+    { "id": "one", "type": "Constant", "params": { "value": 1.0 } },
+    { "id": "count", "type": "Adder", "params": { "weights": [1, 1] } },
+    { "id": "previous", "type": "Delay", "params": { "initial_value": 0.0 } }
+  ],
+  "connections": [
+    { "from_element": "one", "from_port": 0, "to_element": "count", "to_port": 0 },
+    { "from_element": "previous", "from_port": 0, "to_element": "count", "to_port": 1 },
+    { "from_element": "count", "from_port": 0, "to_element": "previous", "to_port": 0 }
+  ],
+  "websocket": { "server": { "port": 9012 } },
+  "execution": { "step_rate_hz": 10 }
+}
