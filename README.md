@@ -26,3 +26,7 @@ The implementations interoperate through the protocols in `doc/`. Their conforma
 ## License
 
 GNU General Public License, version 2 ([`LICENSE`](LICENSE)).
+
+## Development with AI tools
+
+This project was developed with the help of Claude, GitHub Copilot and Codex. The authors will continue to use AI tools to develop faster and to make the software better.
