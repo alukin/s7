@@ -29,8 +29,10 @@ set(CMAKE_CXX_COMPILER clang++${S7_LLVM_SUFFIX})
 set(CMAKE_C_COMPILER_TARGET ${S7_WINDOWS_TARGET})
 set(CMAKE_CXX_COMPILER_TARGET ${S7_WINDOWS_TARGET})
 set(CMAKE_RC_COMPILER llvm-windres${S7_LLVM_SUFFIX})
-set(CMAKE_AR llvm-ar${S7_LLVM_SUFFIX} CACHE FILEPATH "")
-set(CMAKE_RANLIB llvm-ranlib${S7_LLVM_SUFFIX} CACHE FILEPATH "")
+find_program(S7_LLVM_AR NAMES llvm-ar${S7_LLVM_SUFFIX} llvm-ar ar REQUIRED)
+find_program(S7_LLVM_RANLIB NAMES llvm-ranlib${S7_LLVM_SUFFIX} llvm-ranlib ranlib REQUIRED)
+set(CMAKE_AR "${S7_LLVM_AR}" CACHE FILEPATH "Archiver for the Windows cross build")
+set(CMAKE_RANLIB "${S7_LLVM_RANLIB}" CACHE FILEPATH "Archive indexer for the Windows cross build")
 set(CMAKE_LINKER_TYPE LLD)
 # libstdc++ (thread model posix) calls winpthreads from inline code; GCC's
 # driver links it implicitly, Clang's does not.

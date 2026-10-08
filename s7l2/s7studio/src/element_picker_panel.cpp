@@ -17,6 +17,7 @@
 #include <QDrag>
 #include <QMouseEvent>
 #include <QFont>
+#include <algorithm>
 
 namespace s7studio::ui {
 
@@ -89,9 +90,24 @@ void ElementPickerPanel::buildCategoryTree() {
 
     // Get all categories
     auto categories = catalog.categories();
+    if (std::find(categories.begin(), categories.end(), "observation") == categories.end()) {
+        categories.push_back("observation"); // Studio-only elements are not in the runtime registry.
+    }
+    std::sort(categories.begin(), categories.end());
 
     for (const auto& category : categories) {
         auto elements = catalog.elements_in_category(category);
+        if (category == "observation") {
+            elements.push_back({
+                "Scope",
+                "Scope",
+                "Scope observer: records selected channels for plotting.",
+                "observation",
+                "",
+                1,
+                0,
+            });
+        }
 
         if (elements.empty()) {
             continue;
@@ -131,7 +147,7 @@ void ElementPickerPanel::buildCategoryTree() {
     }
 
     elementTree_->expandAll();
-    elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count()));
+    elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count() + 1));
 }
 
 void ElementPickerPanel::onSearchTextChanged(const QString& text) {
@@ -204,4 +220,3 @@ void ElementPickerPanel::dropEvent(QDropEvent* event) {
 }
 
 } // namespace s7studio::ui
-

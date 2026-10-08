@@ -168,10 +168,6 @@ endif()
 
 add_custom_target(all_targets ALL DEPENDS ${S7_ALL_TARGETS})
 
-# Step-rate benchmark of a 100-stage chain (not a test).
-add_executable(s7_benchmark_chain examples/benchmark_read_input.cpp)
-target_link_libraries(s7_benchmark_chain PRIVATE s7core)
-
 if (WIN32 AND CMAKE_CROSSCOMPILING)
 	# WINEPATH: the directories of this build's DLLs, then the sysroot's.
 	set(S7_WINE_DLL_PATH "$<TARGET_FILE_DIR:s7core>;$<TARGET_FILE_DIR:s7noise>;${CMAKE_SYSROOT}/bin")

@@ -5,12 +5,13 @@
 #   --release    optimized build in build-release/ (tests that use assert() check nothing there)
 #   --no-studio  skip s7studio (no Qt needed)
 #   --test       run the tests after building
+# Set S7_BUILD_JOBS to override the conservative default of 2 compile jobs.
 # Dependencies: tools/install_deps_ubuntu.sh. Compiler: set CXX (e.g. CXX=clang++-22) on the first build.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 BUILD=build
-ARGS=()
+ARGS=(-DS7_BUILD_STUDIO=ON)
 TEST=0
 for arg in "$@"; do
     case "$arg" in
@@ -22,13 +23,19 @@ for arg in "$@"; do
     esac
 done
 
+JOBS="${S7_BUILD_JOBS:-2}"
+if [[ ! "$JOBS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "S7_BUILD_JOBS must be a positive integer (got: $JOBS)" >&2
+    exit 2
+fi
+
 # A new build directory uses Ninja when available; an existing one keeps its generator.
 if [ ! -f "$BUILD/CMakeCache.txt" ] && command -v ninja > /dev/null; then
     ARGS+=(-G Ninja)
 fi
 cmake -S . -B "$BUILD" "${ARGS[@]}"
-cmake --build "$BUILD" --parallel
+cmake --build "$BUILD" --parallel "$JOBS"
 if (( TEST )); then
-    ctest --test-dir "$BUILD" --output-on-failure --parallel "$(nproc)"
+    ctest --test-dir "$BUILD" --output-on-failure --parallel "$JOBS"
 fi
 echo "Built in $BUILD/. Run programs with ./run_on_linux$( [ "$BUILD" = build ] || echo ' --release') <program>."

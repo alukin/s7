@@ -8,13 +8,15 @@
 #   --no-studio  skip s7studio (no Qt needed)
 #   --test       run the tests under Wine after building
 #   --package    collect the programs and their DLLs into dist/s7-windows/ (implies --release)
+# Set S7_QT_HOST_PATH when the host Qt tools are outside /usr (e.g. Fedora).
 # Dependencies: tools/install_deps_ubuntu.sh --windows.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 BUILD=build-win
-ARGS=()
+ARGS=(-DS7_BUILD_STUDIO=ON)
 FETCH=()
+FRESH=()
 TEST=0
 PACKAGE=0
 for arg in "$@"; do
@@ -28,16 +30,47 @@ for arg in "$@"; do
     esac
 done
 [ "$BUILD" = build-win-release ] && ARGS+=(-DCMAKE_BUILD_TYPE=Release)
+HOST_QT_PATH="${S7_QT_HOST_PATH:-}"
+if [[ -z "$HOST_QT_PATH" && -x /usr/lib64/qt6/libexec/moc ]]; then
+    HOST_QT_PATH=/usr/lib64/qt6
+fi
+if [[ -n "$HOST_QT_PATH" ]]; then
+    ARGS+=(-DS7_QT_HOST_PATH="$HOST_QT_PATH")
+fi
 
 SYSROOT="${S7_MINGW_SYSROOT:-$HOME/.cache/s7/msys2-ucrt64}"
 if [ ! -d "$SYSROOT/include/c++" ]; then
     tools/windows/fetch_msys2_sysroot.py "$SYSROOT" "${FETCH[@]}"
 fi
 
-if [ ! -f "$BUILD/CMakeCache.txt" ]; then
+RECONFIGURE=0
+if [ -f "$BUILD/CMakeCache.txt" ]; then
+    # A build tree moved from another Linux host can retain tool paths from
+    # that host in CMake's generated compiler files, even after CMAKE_AR is
+    # changed in the cache. Reconfigure it from scratch if an archiver vanished.
+    for compiler_file in "$BUILD"/CMakeFiles/*/CMakeCXXCompiler.cmake "$BUILD"/CMakeFiles/*/CMakeCCompiler.cmake; do
+        [ -f "$compiler_file" ] || continue
+        for tool in $(sed -n 's/^set(CMAKE_\(AR\|RANLIB\) "\([^"]*\)").*/\2/p' "$compiler_file"); do
+            if [[ "$tool" == */* ]]; then
+                [ -x "$tool" ] || RECONFIGURE=1
+            else
+                command -v "$tool" > /dev/null || RECONFIGURE=1
+            fi
+        done
+    done
+fi
+if [ ! -f "$BUILD/CMakeCache.txt" ] || (( RECONFIGURE )); then
     ARGS+=(-G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake -DS7_MINGW_SYSROOT="$SYSROOT")
 fi
-cmake -S . -B "$BUILD" "${ARGS[@]}"
+if (( RECONFIGURE )); then
+    if cmake --help | grep -q -- '--fresh'; then
+        FRESH=(--fresh)
+    else
+        cmake -E rm -rf "$BUILD/CMakeFiles"
+        cmake -E rm -f "$BUILD/CMakeCache.txt"
+    fi
+fi
+cmake "${FRESH[@]}" -S . -B "$BUILD" "${ARGS[@]}"
 cmake --build "$BUILD" --parallel
 if (( TEST )); then
     ctest --test-dir "$BUILD" --output-on-failure --parallel "$(nproc)"
