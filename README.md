@@ -30,3 +30,5 @@ GNU General Public License, version 2 ([`LICENSE`](LICENSE)).
 ## Development with AI tools
 
 This project was developed with the help of Claude, GitHub Copilot and Codex. The authors will continue to use AI tools to develop faster and to make the software better.
+
+Many thanks to the companies and engineers who build these AI tools: they make development a real pleasure.
