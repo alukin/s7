@@ -2,6 +2,8 @@
 
 S7 builds 64-bit Windows binaries on Linux (Ubuntu 26.04): Clang 22 cross-compiles for MinGW-w64 (UCRT) against libstdc++ and the dependencies from MSYS2's UCRT64 packages, and the tests run under Wine. No Windows machine is needed to build or test; the result runs on Windows 10 and later.
 
+In short, from the project root: `./build_for_windows --test` (fetches the sysroot on the first run, builds in `build-win/`, runs the tests), `./run_on_wine s7studio`, and `./build_for_windows --package` for `dist/s7-windows/`. The rest of this page is what these scripts do.
+
 ## Setup (once)
 
 ```bash

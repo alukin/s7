@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Runs an S7 program built by ./build_for_linux.
+#
+# Usage: ./run_on_linux [--release] [<program> [arguments...]]
+#   program: s7studio (default), s7runtime or s7ctl
+#   --release  the program from build-release/ instead of build/
+# The s7noise plugin of the build is found through S7_PLUGIN_PATH (unless set).
+# Example: ./run_on_linux s7runtime --schema s7runtime/examples/schema_minimal.json --serve-seconds 5
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+BUILD="$ROOT/build"
+if [ "${1:-}" = --release ]; then
+    BUILD="$ROOT/build-release"
+    shift
+fi
+case "${1:-s7studio}" in
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
+    s7studio|s7runtime|s7ctl) PROGRAM="${1:-s7studio}"; shift || true ;;
+    *) echo "Unknown program: $1 (s7studio, s7runtime or s7ctl)" >&2; exit 2 ;;
+esac
+
+EXE="$BUILD/$PROGRAM/$PROGRAM"
+if [ ! -x "$EXE" ]; then
+    echo "$EXE is not built; run ./build_for_linux$( [ "$BUILD" = "$ROOT/build" ] || echo ' --release') first." >&2
+    exit 1
+fi
+export S7_PLUGIN_PATH="${S7_PLUGIN_PATH:-$BUILD/s7noise}"
+exec "$EXE" "$@"

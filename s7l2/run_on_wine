@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Runs an S7 Windows program built by ./build_for_windows under Wine.
+#
+# Usage: ./run_on_wine [--release] [<program> [arguments...]]
+#   program: s7studio (default), s7runtime or s7ctl
+#   --release  the program from build-win-release/ instead of build-win/
+# The build's DLLs and the sysroot's are on WINEPATH (build-win/wine-run.sh), the
+# Wine prefix is build-win/wine-prefix, and the s7noise plugin of the build is
+# found through S7_PLUGIN_PATH (unless set). Linux paths work as arguments.
+# Example: ./run_on_wine s7runtime --schema s7runtime/examples/schema_minimal.json --state-dir /tmp/s7-wine-node --serve-seconds 5
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+BUILD="$ROOT/build-win"
+if [ "${1:-}" = --release ]; then
+    BUILD="$ROOT/build-win-release"
+    shift
+fi
+case "${1:-s7studio}" in
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
+    s7studio|s7runtime|s7ctl) PROGRAM="${1:-s7studio}"; shift || true ;;
+    *) echo "Unknown program: $1 (s7studio, s7runtime or s7ctl)" >&2; exit 2 ;;
+esac
+
+EXE="$BUILD/$PROGRAM/$PROGRAM.exe"
+if [ ! -f "$EXE" ] || [ ! -x "$BUILD/wine-run.sh" ]; then
+    echo "$EXE is not built; run ./build_for_windows$( [ "$BUILD" = "$ROOT/build-win" ] || echo ' --release') first." >&2
+    exit 1
+fi
+export S7_PLUGIN_PATH="${S7_PLUGIN_PATH:-$BUILD/s7noise}"
+exec "$BUILD/wine-run.sh" "$EXE" "$@"

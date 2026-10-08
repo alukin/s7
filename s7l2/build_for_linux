@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Builds S7 for Linux (GCC 15+ or Clang 22+) in build/ (build-release/ with --release).
+#
+# Usage: ./build_for_linux [--release] [--no-studio] [--test]
+#   --release    optimized build in build-release/ (tests that use assert() check nothing there)
+#   --no-studio  skip s7studio (no Qt needed)
+#   --test       run the tests after building
+# Dependencies: tools/install_deps_ubuntu.sh. Compiler: set CXX (e.g. CXX=clang++-22) on the first build.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+BUILD=build
+ARGS=()
+TEST=0
+for arg in "$@"; do
+    case "$arg" in
+        --release) BUILD=build-release; ARGS+=(-DCMAKE_BUILD_TYPE=Release) ;;
+        --no-studio) ARGS+=(-DS7_BUILD_STUDIO=OFF) ;;
+        --test) TEST=1 ;;
+        -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
+        *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
+    esac
+done
+
+# A new build directory uses Ninja when available; an existing one keeps its generator.
+if [ ! -f "$BUILD/CMakeCache.txt" ] && command -v ninja > /dev/null; then
+    ARGS+=(-G Ninja)
+fi
+cmake -S . -B "$BUILD" "${ARGS[@]}"
+cmake --build "$BUILD" --parallel
+if (( TEST )); then
+    ctest --test-dir "$BUILD" --output-on-failure --parallel "$(nproc)"
+fi
+echo "Built in $BUILD/. Run programs with ./run_on_linux$( [ "$BUILD" = build ] || echo ' --release') <program>."

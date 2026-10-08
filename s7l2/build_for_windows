@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Cross-builds S7 for 64-bit Windows on Linux in build-win/ (build-win-release/
+# with --release): Clang 22 against the MSYS2 sysroot, tests under Wine
+# (docs/WINDOWS_BUILD.md). Fetches the sysroot on the first run.
+#
+# Usage: ./build_for_windows [--release] [--no-studio] [--test] [--package]
+#   --release    optimized build in build-win-release/ (tests that use assert() check nothing there)
+#   --no-studio  skip s7studio (no Qt needed)
+#   --test       run the tests under Wine after building
+#   --package    collect the programs and their DLLs into dist/s7-windows/ (implies --release)
+# Dependencies: tools/install_deps_ubuntu.sh --windows.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+BUILD=build-win
+ARGS=()
+FETCH=()
+TEST=0
+PACKAGE=0
+for arg in "$@"; do
+    case "$arg" in
+        --release) BUILD=build-win-release ;;
+        --no-studio) ARGS+=(-DS7_BUILD_STUDIO=OFF); FETCH+=(--no-studio) ;;
+        --test) TEST=1 ;;
+        --package) PACKAGE=1; BUILD=build-win-release ;;
+        -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
+        *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
+    esac
+done
+[ "$BUILD" = build-win-release ] && ARGS+=(-DCMAKE_BUILD_TYPE=Release)
+
+SYSROOT="${S7_MINGW_SYSROOT:-$HOME/.cache/s7/msys2-ucrt64}"
+if [ ! -d "$SYSROOT/include/c++" ]; then
+    tools/windows/fetch_msys2_sysroot.py "$SYSROOT" "${FETCH[@]}"
+fi
+
+if [ ! -f "$BUILD/CMakeCache.txt" ]; then
+    ARGS+=(-G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake -DS7_MINGW_SYSROOT="$SYSROOT")
+fi
+cmake -S . -B "$BUILD" "${ARGS[@]}"
+cmake --build "$BUILD" --parallel
+if (( TEST )); then
+    ctest --test-dir "$BUILD" --output-on-failure --parallel "$(nproc)"
+fi
+if (( PACKAGE )); then
+    tools/windows/package.sh "$BUILD" dist/s7-windows
+fi
+echo "Built in $BUILD/. Run programs with ./run_on_wine$( [ "$BUILD" = build-win ] || echo ' --release') <program>."

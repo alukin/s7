@@ -53,7 +53,9 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-Windows binaries are cross-built on Linux with Clang and tested under Wine: `docs/WINDOWS_BUILD.md`.
+Or use the scripts in the project root (`--help` on each): `./build_for_linux [--release] [--no-studio] [--test]` and `./run_on_linux [<program> [args...]]` (program `s7studio`, `s7runtime` or `s7ctl`).
+
+Windows binaries are cross-built on Linux with Clang and tested under Wine: `./build_for_windows [--test] [--package]` and `./run_on_wine [<program> [args...]]`; details in `docs/WINDOWS_BUILD.md`.
 
 ## Run
 

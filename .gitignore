@@ -37,6 +37,7 @@ build/
 build_*/
 build-*/
 cmake-build-*/
+dist/
 out/
 tmp/
 
