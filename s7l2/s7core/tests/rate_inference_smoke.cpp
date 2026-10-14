@@ -1,8 +1,8 @@
-// Stand-alone smoke test for RateResolver (s7/rate_inference.hpp,
-// doc/S7_Sample_Rate_Model.md). Not yet wired into Validator::validate(): see
-// that header's comment. A schema's elements are created once via
-// s7::detail::check_schema (the same helper Validator/Compiler use), and the
-// resulting instances are handed to RateResolver directly.
+// Smoke test for RateResolver (s7/rate_inference.hpp,
+// doc/S7_Sample_Rate_Model.md), wired into Validator::validate() /
+// Compiler::compile() as a mandatory check (s7core/src/validation.cpp): every
+// schema must resolve one rate per connected set of elements, pinned by an
+// element's own declared_rate() or by Schema::set_rate(), or validation fails.
 
 #include <iostream>
 #include <stdexcept>
@@ -31,30 +31,36 @@ void add(s7::Schema& schema, const std::string& id, const std::string& type, jso
     schema.add_element(s7::make_element_spec(id, *descriptor, std::move(params)));
 }
 
-s7::ResolvedRates resolve(const s7::Schema& schema)
+std::string validation_errors(const s7::Schema& schema)
 {
-    auto checked = s7::detail::check_schema(schema);
-    std::string check_errors;
-    for (const auto& error : checked.errors) {
-        check_errors += error + "\n";
+    std::string text;
+    for (const auto& error : s7::Validator::validate(schema).errors) {
+        text += error + "\n";
     }
-    expect(checked.errors.empty(), "schema is otherwise valid: " + check_errors);
+    return text;
+}
+
+void expect_error(const s7::Schema& schema, const std::string& fragment, const std::string& what)
+{
+    const auto errors = validation_errors(schema);
+    expect(errors.find(fragment) != std::string::npos, what + ": expected '" + fragment + "' in: " + errors);
+}
+
+// The schema must already validate: builds every instance once (as
+// Validator/Compiler do) and hands them to RateResolver directly, to inspect
+// the resolved rates (Validator::validate() itself reports only errors).
+s7::ResolvedRates resolved_rates(const s7::Schema& schema)
+{
+    expect(s7::Validator::validate(schema).ok(), "schema validates: " + validation_errors(schema));
+    auto checked = s7::detail::check_schema(schema);
     std::unordered_map<std::string, const s7::Element*> instances;
     const auto& elements = schema.elements();
     for (std::size_t index = 0; index < elements.size(); ++index) {
         instances.emplace(elements[index].id, checked.elements[index].get());
     }
-    return s7::RateResolver::resolve(schema, instances);
-}
-
-void expect_rate_error(const s7::Schema& schema, const std::string& fragment, const std::string& what)
-{
-    const auto resolved = resolve(schema);
-    std::string text;
-    for (const auto& error : resolved.errors) {
-        text += error + "\n";
-    }
-    expect(text.find(fragment) != std::string::npos, what + ": expected '" + fragment + "' in: " + text);
+    const auto result = s7::RateResolver::resolve(schema, instances);
+    expect(result.ok(), "resolves now that validation passed");
+    return result;
 }
 
 void test_pinned_component_agrees()
@@ -69,8 +75,7 @@ void test_pinned_component_agrees()
     schema.connect("x", 0, "minus", 0);
     schema.connect("minus", 0, "v", 0);
 
-    const auto resolved = resolve(schema);
-    expect(resolved.ok(), "matching dt resolves without error");
+    const auto resolved = resolved_rates(schema);
     const auto expected = s7::Rate::from_seconds(0.5);
     expect(resolved.rates.at("x") == expected, "integrator rate resolved");
     expect(resolved.rates.at("v") == expected, "second integrator rate resolved");
@@ -89,8 +94,8 @@ void test_conflict_is_reported()
     schema.connect("one", 0, "slow", 0);
     schema.connect("fast", 0, "sum", 0);
     schema.connect("slow", 0, "sum", 1);
-    expect_rate_error(schema, "Rate conflict", "two different dt values meet at one Adder");
-    expect_rate_error(schema, "Insert a rate-changing element", "conflict names the fix");
+    expect_error(schema, "Rate conflict", "two different dt values meet at one Adder");
+    expect_error(schema, "Insert a rate-changing element", "conflict names the fix");
 }
 
 void test_undetermined_without_a_pin_or_seed()
@@ -100,15 +105,14 @@ void test_undetermined_without_a_pin_or_seed()
     add(schema, "one", "Constant", {{"value", 1}});
     add(schema, "gain", "Gain", {{"factor", 2}});
     schema.connect("one", 0, "gain", 0);
-    expect_rate_error(schema, "cannot be determined", "no element pins a rate and the schema has none");
+    expect_error(schema, "cannot be determined", "no element pins a rate and the schema has none");
 
     s7::Schema seeded{"seeded"};
     add(seeded, "one", "Constant", {{"value", 1}});
     add(seeded, "gain", "Gain", {{"factor", 2}});
     seeded.connect("one", 0, "gain", 0);
     seeded.set_rate(s7::Rate::from_hz(100));
-    const auto resolved = resolve(seeded);
-    expect(resolved.ok(), "the schema-level seed resolves what no element pins");
+    const auto resolved = resolved_rates(seeded);
     const auto expected = s7::Rate::from_hz(100);
     expect(resolved.rates.at("one") == expected && resolved.rates.at("gain") == expected, "seed applies to the whole component");
 }
@@ -125,21 +129,17 @@ void test_components_are_resolved_independently()
     add(schema, "triple_it", "Gain", {{"factor", 3}});
     schema.connect("one", 0, "triple_it", 0);
 
-    const auto resolved = resolve(schema);
-    expect(!resolved.ok(), "the unconnected, unpinned second component is still undetermined");
-    bool names_pinned_component = false;
-    for (const auto& error : resolved.errors) {
-        names_pinned_component |= error.find("ramp") != std::string::npos || error.find("double_it") != std::string::npos;
-    }
-    expect(!names_pinned_component, "the resolved component is not the one reported as undetermined");
+    const auto errors = validation_errors(schema);
+    expect(errors.find("cannot be determined") != std::string::npos, "the unconnected, unpinned second component is still undetermined");
+    expect(errors.find("ramp") == std::string::npos && errors.find("double_it") == std::string::npos,
+           "the resolved component is not the one reported as undetermined");
 }
 
 void test_isolated_pinned_element()
 {
     s7::Schema schema{"oscillator"};
     add(schema, "osc", "AnalogOscillator", {{"sample_rate_hz", 48000}});
-    const auto resolved = resolve(schema);
-    expect(resolved.ok(), "a single pinned element with no connections still resolves");
+    const auto resolved = resolved_rates(schema);
     expect(resolved.rates.at("osc") == s7::Rate::from_hz(48000), "AnalogOscillator's own sample_rate_hz pins its rate");
 }
 

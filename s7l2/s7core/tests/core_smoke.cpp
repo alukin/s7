@@ -22,6 +22,7 @@ namespace {
 s7::Schema make_valid_schema()
 {
     s7::Schema schema{"valid_feedback"};
+    schema.set_rate(s7::Rate::from_hz(1));
     schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
     schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
     schema.add_element("memory", [] { return std::make_unique<s7::Delay>(0.0); });
@@ -35,6 +36,7 @@ s7::Schema make_valid_schema()
 s7::Schema make_invalid_schema()
 {
     s7::Schema schema{"invalid_cycle"};
+    schema.set_rate(s7::Rate::from_hz(1));
     schema.add_element("a", [] { return std::make_unique<s7::Gain>(2.0); });
     schema.add_element("b", [] { return std::make_unique<s7::Gain>(0.5); });
 
@@ -46,6 +48,7 @@ s7::Schema make_invalid_schema()
 s7::Schema make_complex_schema()
 {
     s7::Schema schema{"complex_path"};
+    schema.set_rate(s7::Rate::from_hz(1));
     schema.add_element("c0", [] { return std::make_unique<s7::ComplexConstant>(std::complex<double>{1.0, 2.0}); });
     schema.add_element("gain", [] { return std::make_unique<s7::ComplexGain>(std::complex<double>{0.5, 0.0}); });
 
@@ -56,6 +59,7 @@ s7::Schema make_complex_schema()
 s7::Schema make_implicit_conversion_schema()
 {
     s7::Schema schema{"real_to_complex_with_warning"};
+    schema.set_rate(s7::Rate::from_hz(1));
     schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
     schema.add_element("cgain", [] { return std::make_unique<s7::ComplexGain>(std::complex<double>{2.0, 0.0}); });
 
@@ -78,6 +82,7 @@ boost::json::value make_schema_library_json()
           "version": "1.0.0",
           "schema": {
             "name": "double_gain",
+            "dt": 1.0,
             "elements": [
               {
                 "id": "gain",
@@ -262,6 +267,7 @@ int main() try
     {
         auto makeComposite = [] {
             auto schema = std::make_unique<s7::Schema>("composite_gain");
+            schema->set_rate(s7::Rate::from_hz(1));
             schema->add_element("inner_gain", [] { return std::make_unique<s7::Gain>(2.5); });
             schema->expose_input("in", s7::SignalType::F64, "inner_gain", 0);
             schema->expose_output("out", s7::SignalType::F64, "inner_gain", 0);
@@ -275,6 +281,7 @@ int main() try
         }
 
         s7::Schema outer{"outer_with_schema_element"};
+        outer.set_rate(s7::Rate::from_hz(1));
         outer.add_element("source", [] { return std::make_unique<s7::Constant>(4.0); });
         outer.add_element("composite", [makeComposite] { return makeComposite(); });
         outer.connect("source", 0, "composite", 0);
@@ -286,9 +293,11 @@ int main() try
 
     {
         s7::Schema root{"nested_schema"};
+        root.set_rate(s7::Rate::from_hz(1));
         root.add_element("source", [] { return std::make_unique<s7::Constant>(3.0); });
         root.add_element("nested", [] {
             auto inner = std::make_unique<s7::Schema>("inner");
+            inner->set_rate(s7::Rate::from_hz(1));
             inner->add_element("g1", [] { return std::make_unique<s7::Gain>(2.0); });
             inner->add_element("g2", [] { return std::make_unique<s7::Gain>(5.0); });
             inner->connect("g1", 0, "g2", 0);
@@ -305,9 +314,11 @@ int main() try
 
     {
         s7::Schema outer{"invalid_nested_schema"};
+        outer.set_rate(s7::Rate::from_hz(1));
         outer.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
         outer.add_element("broken_nested", [] {
             auto inner = std::make_unique<s7::Schema>("broken");
+            inner->set_rate(s7::Rate::from_hz(1));
             inner->add_element("g", [] { return std::make_unique<s7::Gain>(2.0); });
             inner->expose_input("in", s7::SignalType::F64, "g", 0);
             inner->expose_output("out", s7::SignalType::F64, "missing", 0);
@@ -345,6 +356,7 @@ int main() try
 
     {
         s7::Schema schema{"explicit_uuid_lookup"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(4.0); });
         schema.add_element("gain", [] { return std::make_unique<s7::Gain>(3.0); });
         schema.connect("source", 0, "gain", 0);
@@ -364,6 +376,7 @@ int main() try
 
     {
         s7::Schema schema{"weighted_adder"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("a", [] { return std::make_unique<s7::Constant>(1.0); });
         schema.add_element("b", [] { return std::make_unique<s7::Constant>(2.0); });
         schema.add_element("c", [] { return std::make_unique<s7::Constant>(3.0); });
@@ -382,6 +395,7 @@ int main() try
 
     {
         s7::Schema schema{"variadic_multiply"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("a", [] { return std::make_unique<s7::Constant>(2.0); });
         schema.add_element("b", [] { return std::make_unique<s7::Constant>(3.0); });
         schema.add_element("c", [] { return std::make_unique<s7::Constant>(4.0); });
@@ -441,6 +455,7 @@ int main() try
     {
         // Stateful elements with direct feedthrough add no delay.
         s7::Schema schema{"fir_feedthrough"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
         schema.add_element("fir", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{1.0}); });
         schema.add_element("gain", [] { return std::make_unique<s7::Gain>(1.0); });
@@ -456,6 +471,7 @@ int main() try
     {
         // Stateful-to-stateful chains run in topological order within one step.
         s7::Schema schema{"stateful_chain"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(2.0); });
         schema.add_element("integrator", [] { return std::make_unique<s7::Accumulator>(0.0); });
         schema.add_element("iir", [] { return std::make_unique<s7::IirFilter>(1.0, 0.0, 0.0); });
@@ -474,6 +490,7 @@ int main() try
         // independent of declaration order.
         for (const bool reversed : {false, true}) {
             s7::Schema schema{"unit_delays"};
+            schema.set_rate(s7::Rate::from_hz(1));
             std::vector<std::pair<std::string, s7::ElementFactory>> elements{
                 {"source", [] { return std::make_unique<s7::Accumulator>(0.0); }},
                 {"unit", [] { return std::make_unique<s7::Constant>(1.0); }},
@@ -510,6 +527,7 @@ int main() try
         // A loop closed only through elements with direct feedthrough is rejected.
         for (const auto* type : {"FirFilter", "Accumulator"}) {
             s7::Schema schema{"stateful_loop_without_memory"};
+            schema.set_rate(s7::Rate::from_hz(1));
             schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
             schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
             if (std::string_view{type} == "FirFilter") {
@@ -545,14 +563,17 @@ int main() try
         };
 
         s7::Schema flat{"flat"};
+        flat.set_rate(s7::Rate::from_hz(1));
         flat.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
         buildChain(flat);
         flat.connect("source", 0, "fir", 0);
 
         s7::Schema wrapped{"wrapped"};
+        wrapped.set_rate(s7::Rate::from_hz(1));
         wrapped.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
         wrapped.add_element("nested", [buildChain] {
             auto inner = std::make_unique<s7::Schema>("chain");
+            inner->set_rate(s7::Rate::from_hz(1));
             buildChain(*inner);
             inner->expose_input("in", s7::SignalType::F64, "fir", 0);
             inner->expose_output("out", s7::SignalType::F64, "sum", 0);
@@ -591,6 +612,7 @@ int main() try
         assert(libraryElement->type_name() == "Schema");
 
         s7::Schema schema{"library_use"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(3.0); });
         schema.add_element("gain", [descriptor] {
             const auto& descriptorMetadata = descriptor->metadata();

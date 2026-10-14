@@ -77,6 +77,7 @@ json::object constant_gain_fragment(const double value)
 {
     auto fragment = json::parse(R"json({
         "name": "fragment",
+        "dt": 1.0,
         "elements": [
             { "id": "source", "type": "Constant", "params": { "value": 0.0 } },
             { "id": "gain", "type": "Gain", "params": { "factor": 1.0 } }
@@ -103,6 +104,7 @@ json::object diagram_on_node(const json::object& fragment, const std::string& no
         {"document_kind", "s7.diagram"},
         {"runtime_nodes", json::array{json::object{{"node_uuid", node_uuid}, {"name", "test"}, {"endpoint", ""}}}},
         {"schema", std::move(schema)},
+        {"dt", 1.0},
     };
 }
 
@@ -838,6 +840,7 @@ json::object constants_diagram(const std::size_t n, const std::string& endpoint)
         {"document_kind", "s7.diagram"},
         {"runtime_nodes", json::array{json::object{{"node_uuid", kNodeUuid}, {"endpoint", endpoint}}}},
         {"schema", json::object{{"name", "constants"}, {"elements", std::move(elements)}}},
+        {"dt", 1.0},
     };
 }
 

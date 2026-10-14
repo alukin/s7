@@ -48,6 +48,7 @@ void test_forward_inference_and_saturation()
 {
     for (const auto* overflow : {"saturate", "wrap"}) {
         s7::Schema schema{"forward"};
+        schema.set_rate(s7::Rate::from_hz(1));
         add(schema, "source", "Constant", {{"type", "I16"}, {"value", 20000}});
         add(schema, "gain", "Gain", {{"factor", 2}, {"overflow", overflow}});
         add(schema, "delay", "Delay");
@@ -66,6 +67,7 @@ void test_forward_inference_and_saturation()
 void test_backward_inference_and_default()
 {
     s7::Schema pinned{"backward"};
+    pinned.set_rate(s7::Rate::from_hz(1));
     add(pinned, "source", "Constant", {{"value", 0.25}});
     add(pinned, "gain", "Gain", {{"type", "F32"}, {"factor", 4}});
     pinned.connect("source", 0, "gain", 0);
@@ -75,6 +77,7 @@ void test_backward_inference_and_default()
     expect(runtime.output_of<SignalType::F32>("gain") == 1.0f, "F32 gain value");
 
     s7::Schema open{"default"};
+    open.set_rate(s7::Rate::from_hz(1));
     add(open, "source", "Constant", {{"value", 1.5}});
     add(open, "gain", "Gain", {{"factor", 2}});
     open.connect("source", 0, "gain", 0);
@@ -88,6 +91,7 @@ void test_feedback_loop()
 {
     // counter: sum = 1 + previous(sum), all I32 from the pinned constant.
     s7::Schema schema{"counter"};
+    schema.set_rate(s7::Rate::from_hz(1));
     add(schema, "one", "Constant", {{"type", "I32"}, {"value", 1}});
     add(schema, "sum", "Adder");
     add(schema, "previous", "Delay");
@@ -105,6 +109,7 @@ void test_feedback_loop()
 void test_conflicts_and_errors()
 {
     s7::Schema mixed{"mixed"};
+    mixed.set_rate(s7::Rate::from_hz(1));
     add(mixed, "a", "Constant", {{"type", "I16"}});
     add(mixed, "b", "Constant", {{"type", "F32"}});
     add(mixed, "sum", "Adder");
@@ -114,28 +119,33 @@ void test_conflicts_and_errors()
     expect_error(mixed, "Insert a Convert element", "conflict suggests Convert");
 
     s7::Schema unsupported{"unsupported"};
+    unsupported.set_rate(s7::Rate::from_hz(1));
     add(unsupported, "iq", "Constant", {{"type", "CU8"}, {"value", json::array{128, 128}}});
     add(unsupported, "gain", "Gain");
     unsupported.connect("iq", 0, "gain", 0);
     expect_error(unsupported, "Type conflict", "Gain has no CU8 arithmetic");
 
     s7::Schema pinned_unsupported{"pinned"};
+    pinned_unsupported.set_rate(s7::Rate::from_hz(1));
     add(pinned_unsupported, "gain", "Gain", {{"type", "CU8"}});
     expect_error(pinned_unsupported, "is not supported", "pinning an unsupported type");
 
     s7::Schema concrete{"concrete"};
+    concrete.set_rate(s7::Rate::from_hz(1));
     add(concrete, "byte", "Constant", {{"type", "I8"}});
     concrete.add_element("legacy", [] { return std::make_unique<s7::Gain>(2.0); });
     concrete.connect("byte", 0, "legacy", 0);
     expect_error(concrete, "requires {F64}", "concrete F64 element seeds its type");
 
     s7::Schema bad_value{"bad_value"};
+    bad_value.set_rate(s7::Rate::from_hz(1));
     add(bad_value, "gain", "Gain", {{"type", "U8"}, {"factor", -1}});
     add(bad_value, "source", "Constant");
     bad_value.connect("source", 0, "gain", 0);
     expect_error(bad_value, "negative value for unsigned U8", "parameters convert exactly");
 
     s7::Schema fractional{"fractional"};
+    fractional.set_rate(s7::Rate::from_hz(1));
     add(fractional, "c", "Constant", {{"type", "I32"}, {"value", 1.5}});
     expect_error(fractional, "expected an integer", "no rounding of integer parameters");
 }
@@ -143,6 +153,7 @@ void test_conflicts_and_errors()
 void test_wide_and_complex_types()
 {
     s7::Schema wide{"wide"};
+    wide.set_rate(s7::Rate::from_hz(1));
     add(wide, "big", "Constant", {{"type", "I128"}, {"value", "170141183460469231731687303715884105727"}});
     add(wide, "double_it", "Gain", {{"factor", 2}});
     add(wide, "third", "Constant", {{"type", "F128"}, {"value", 3}});
@@ -156,6 +167,7 @@ void test_wide_and_complex_types()
 
     // Raw SDR-style I/Q: (100 + 100i)^2 = 0 + 20000i saturates to (0, 127) in CI8.
     s7::Schema iq{"iq"};
+    iq.set_rate(s7::Rate::from_hz(1));
     add(iq, "sample", "Constant", {{"type", "CI8"}, {"value", json::array{100, 100}}});
     add(iq, "square", "Multiply");
     iq.connect("sample", 0, "square", 0);
@@ -171,6 +183,7 @@ void test_integrators()
     // Rectangle rule on a constant and trapezoid rule on the resulting ramp:
     // x[n] = n*dt, and the trapezoid rule is exact for linear input: y[n] = (n*dt)^2 / 2.
     s7::Schema schema{"integrators"};
+    schema.set_rate(s7::Rate::from_hz(1));
     add(schema, "one", "Constant", {{"value", 1}});
     add(schema, "ramp", "EulerIntegrator", {{"dt", 0.5}});
     add(schema, "area", "TrapezoidIntegrator", {{"dt", 0.5}});
@@ -187,6 +200,7 @@ void test_integrators()
     // x' = v, v' = -x closed through two EulerIntegrators, no Delay, in F128.
     // Forward Euler multiplies x^2 + v^2 by exactly (1 + dt^2) per step.
     s7::Schema ode{"harmonic"};
+    ode.set_rate(s7::Rate::from_hz(1));
     add(ode, "x", "EulerIntegrator", {{"type", "F128"}, {"dt", 0.001}, {"initial_value", 1}});
     add(ode, "v", "EulerIntegrator", {{"dt", 0.001}});
     add(ode, "minus", "Gain", {{"factor", -1}});
@@ -211,6 +225,7 @@ void test_integrators()
 
     // A loop closed only through TrapezoidIntegrator has no causal memory.
     s7::Schema algebraic{"algebraic"};
+    algebraic.set_rate(s7::Rate::from_hz(1));
     add(algebraic, "y", "TrapezoidIntegrator", {{"dt", 0.1}});
     add(algebraic, "minus", "Gain", {{"factor", -1}});
     algebraic.connect("y", 0, "minus", 0);
@@ -295,6 +310,7 @@ void test_convert()
     // In a graph: CI8 I/Q widened to CI32 so the product does not saturate;
     // the Convert's output type is inferred from the pinned Multiply.
     s7::Schema widen{"widen"};
+    widen.set_rate(s7::Rate::from_hz(1));
     add(widen, "sample", "Constant", {{"type", "CI8"}, {"value", json::array{100, 100}}});
     add(widen, "wide", "Convert", {{"mode", "value"}});
     add(widen, "square", "Multiply", {{"type", "CI32"}});
@@ -308,6 +324,7 @@ void test_convert()
     expect(runtime.output_type_of("wide") == SignalType::CI32, "Convert output type inferred");
 
     s7::Schema no_mode{"no_mode"};
+    no_mode.set_rate(s7::Rate::from_hz(1));
     add(no_mode, "c", "Convert", {{"from", "I16"}, {"to", "F32"}});
     expect_error(no_mode, "parameter 'mode' is required", "Convert requires a mode");
 }
@@ -324,6 +341,7 @@ void test_accumulator_type()
     // A hardware-style FIR: CI8 samples, CI32 accumulator. Without it, CI8 saturates.
     for (const bool wide : {false, true}) {
         s7::Schema schema{"fir"};
+        schema.set_rate(s7::Rate::from_hz(1));
         add(schema, "iq", "Constant", {{"type", "CI8"}, {"value", json::array{100, 100}}});
         json::object fir{{"taps", json::array{1, 1, 1}}};
         if (wide) {
@@ -347,6 +365,7 @@ void test_accumulator_type()
 
     // Accumulator over I8 samples accumulating in I64; Adder of I16 inputs in F32.
     s7::Schema schema{"accumulate"};
+    schema.set_rate(s7::Rate::from_hz(1));
     add(schema, "step", "Constant", {{"type", "I8"}, {"value", 100}});
     add(schema, "total", "Accumulator", {{"accumulator_type", "I64"}});
     add(schema, "a", "Constant", {{"type", "I16"}, {"value", 3}});
@@ -363,6 +382,7 @@ void test_accumulator_type()
     expect(runtime.output_of<SignalType::F32>("mix") == 2.5f, "I16 summed in F32 with F32 weights");
 
     s7::Schema narrow{"narrow"};
+    narrow.set_rate(s7::Rate::from_hz(1));
     add(narrow, "x", "Constant", {{"type", "I16"}});
     add(narrow, "sum", "Accumulator", {{"accumulator_type", "I8"}});
     narrow.connect("x", 0, "sum", 0);
@@ -390,6 +410,7 @@ void test_parameter_checks()
     }
     auto single = [](const std::string& type, json::object params) {
         s7::Schema schema{"params"};
+        schema.set_rate(s7::Rate::from_hz(1));
         add(schema, "e", type, std::move(params));
         return schema;
     };
@@ -421,6 +442,7 @@ void test_parameter_checks()
     // Declared defaults are applied: a Gain without parameters has factor 1,
     // an AnalogOscillator its declared amplitude and rates.
     s7::Schema defaults{"defaults"};
+    defaults.set_rate(s7::Rate::from_hz(1));
     add(defaults, "one", "Constant", {{"value", 3.0}});
     add(defaults, "gain", "Gain");
     defaults.connect("one", 0, "gain", 0);
@@ -452,6 +474,7 @@ void test_single_instantiation()
     concrete_calls = 0;
     generic_calls = 0;
     s7::Schema schema{"once"};
+    schema.set_rate(s7::Rate::from_hz(1));
     schema.add_element("source", [] {
         ++concrete_calls;
         return std::make_unique<s7::Constant>(2.0);

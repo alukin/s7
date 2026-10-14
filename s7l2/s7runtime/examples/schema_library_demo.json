@@ -10,6 +10,7 @@
       "version": "1.0.0",
       "schema": {
         "name": "double_gain",
+        "dt": 1.0,
         "elements": [
           {
             "id": "gain",
@@ -46,6 +47,7 @@
       "version": "1.0.0",
       "schema": {
         "name": "half_gain",
+        "dt": 1.0,
         "elements": [
           {
             "id": "gain",

@@ -47,6 +47,7 @@ try {
         const auto consumer = endpoint->open_consumer(config);
 
         s7::Schema schema{"sink"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.25); });
         schema.add_element("sink", [config] { return std::make_unique<s7::NetSink>(config); });
         schema.connect("source", 0, "sink", 0);
@@ -66,11 +67,13 @@ try {
         s7::RuntimeNetContext::set_endpoint(endpoint);
 
         s7::Schema producer{"producer"};
+        producer.set_rate(s7::Rate::from_hz(1));
         add(producer, "x", "Constant", {{"type", "I16"}, {"value", -1234}});
         add(producer, "out", "NetSink", {{"stream_id", kStream}, {"max_elements_per_packet", 4}});
         producer.connect("x", 0, "out", 0);
 
         s7::Schema consumer{"consumer"};
+        consumer.set_rate(s7::Rate::from_hz(1));
         add(consumer, "in", "NetSource", {{"stream_id", kStream}});
         add(consumer, "double_it", "Gain", {{"type", "I16"}, {"factor", 2}});
         consumer.connect("in", 0, "double_it", 0);
@@ -94,6 +97,7 @@ try {
         auto config = s7::net_stream_config(kStream);
         const auto producer = endpoint->open_producer(config);
         s7::Schema schema{"waiting"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("in", [config] { return std::make_unique<s7::NetSource>(config); });
         s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
         std::thread later([&] {
@@ -117,6 +121,7 @@ try {
         auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
         s7::RuntimeNetContext::set_endpoint(endpoint);
         s7::Schema schema{"starved"};
+        schema.set_rate(s7::Rate::from_hz(1));
         add(schema, "in", "NetSource", {{"stream_id", kStream}, {"max_wait_ms", 30}});
         s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
         std::string error;
@@ -132,6 +137,7 @@ try {
 
     {
         s7::Schema schema{"no_id"};
+        schema.set_rate(s7::Rate::from_hz(1));
         add(schema, "out", "NetSink");
         add(schema, "x", "Constant");
         schema.connect("x", 0, "out", 0);

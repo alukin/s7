@@ -181,6 +181,7 @@ const std::vector<Connection>& Schema::connections() const {
 
 void Schema::set_rate(const Rate rate) {
     rate_ = rate;
+    invalidate_compiled_runtime();
 }
 
 std::optional<Rate> Schema::rate() const {
@@ -200,6 +201,9 @@ void Schema::ensure_compiled_runtime()
     }
 
     Schema executable{name_};
+    if (rate_) {
+        executable.set_rate(*rate_);
+    }
     for (const auto& spec : elements_) {
         executable.add_element(spec);
     }

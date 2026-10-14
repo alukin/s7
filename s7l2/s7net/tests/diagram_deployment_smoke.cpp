@@ -65,6 +65,7 @@ s7::Schema build(const json::object& schema_json)
 {
     auto& registry = s7::ElementRegistry::instance();
     s7::Schema schema{std::string(schema_json.at("name").as_string())};
+    schema.set_rate(s7::Rate::from_hz(1));
     for (const auto& value : schema_json.at("elements").as_array()) {
         const auto& element = value.as_object();
         const auto* descriptor = registry.find(std::string(element.at("type").as_string()));

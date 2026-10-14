@@ -85,6 +85,11 @@ struct RuntimeSchemaDefinition;
 
 struct RuntimeSchemaDefinition {
     std::string name;
+    // The schema's own model-time step in seconds (doc/S7_Sample_Rate_Model.md):
+    // "dt": 0.001, seeding Schema::set_rate() with no other effect (unlike
+    // execution.step_rate_hz/simulation.sample_rate_hz, which also pace real-time
+    // serving and are used as a fallback seed when this is absent).
+    std::optional<double> dt;
     std::vector<JsonElementDefinition> elements;
     std::vector<JsonConnectionDefinition> connections;
     std::vector<SchemaPortBinding> exposed_inputs;

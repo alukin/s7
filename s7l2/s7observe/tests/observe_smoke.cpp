@@ -13,6 +13,7 @@
 int main() try
 {
     s7::Schema schema{"observe_smoke"};
+    schema.set_rate(s7::Rate::from_hz(1));
     schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
     schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
     schema.add_element("memory", [] { return std::make_unique<s7::Delay>(0.0); });
@@ -51,6 +52,7 @@ int main() try
     // Outputs keep their exact type; reading them as another type is refused.
     {
         s7::Schema typed{"typed"};
+        typed.set_rate(s7::Rate::from_hz(1));
         typed.add_element("x", [] { return std::make_unique<s7::Constant>(0.75); });
         typed.add_element("q", [] { return std::make_unique<s7::ConvertT<s7::SignalType::F64, s7::SignalType::I12>>(s7::ConvertOptions{s7::ConvertMode::Normalized}); });
         typed.connect("x", 0, "q", 0);

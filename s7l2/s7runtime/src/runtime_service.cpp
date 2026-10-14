@@ -165,6 +165,12 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
 
     RuntimeSchemaDefinition definition;
     definition.name = expect_string(root, "name");
+    if (const auto* dt = root.if_contains("dt")) {
+        if (!dt->is_number()) {
+            throw std::invalid_argument("'dt' must be a positive number of seconds.");
+        }
+        definition.dt = dt->to_number<double>();
+    }
     definition.exposed_inputs = parse_schema_port_bindings(root, "exposed_inputs");
     definition.exposed_outputs = parse_schema_port_bindings(root, "exposed_outputs");
 
@@ -309,6 +315,18 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 {
     auto schema = std::make_unique<s7::Schema>(definition.name);
     auto& registry = s7::ElementRegistry::instance();
+
+    // Seeds every element with no rate of its own (doc/S7_Sample_Rate_Model.md):
+    // the schema's own declared "dt", or else the rate a continuously served
+    // node actually steps its graph at, or (when not served that way) the
+    // rate a "simulation" block steps it at.
+    if (definition.dt) {
+        schema->set_rate(s7::Rate::from_seconds(*definition.dt));
+    } else if (definition.execution.step_rate_hz > 0.0) {
+        schema->set_rate(s7::Rate::from_hz(definition.execution.step_rate_hz));
+    } else if (definition.simulation.enabled && definition.simulation.sample_rate_hz > 0) {
+        schema->set_rate(s7::Rate::from_hz(static_cast<double>(definition.simulation.sample_rate_hz)));
+    }
 
     for (const auto& element : definition.elements) {
         const auto& params = element.params;
@@ -715,6 +733,14 @@ public:
         }
         const auto definition = JsonSchemaLoader::load_from_json(node_schema);
         const auto schema = build_schema_from_definition(definition);
+        // The diagram's model-time step (doc/S7_Sample_Rate_Model.md): seeds
+        // every element on this node with no rate of its own. Exact (an
+        // integer step count), unlike build_schema_from_definition's own
+        // execution.step_rate_hz seed, which a deployed graph may not carry
+        // (node settings stay with the node, checked above).
+        if (part.model_time_step_ns && *part.model_time_step_ns > 0) {
+            schema->set_rate(Rate::reduced(1'000'000'000ull, static_cast<std::uint64_t>(*part.model_time_step_ns)));
+        }
         auto staged = std::make_unique<StagedGraph>();
         staged->runtime = std::make_unique<NodeRuntime>(
             Compiler::compile(*schema, service_.runtime_instance_uuid_, create_schema_instance_uuid()));

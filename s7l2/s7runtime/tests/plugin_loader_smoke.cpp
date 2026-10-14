@@ -43,6 +43,7 @@ try {
     expect(descriptor != nullptr, "its element is registered");
     {
         s7::Schema schema{"plugin"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element(s7::make_element_spec("c", *descriptor, {}));
         s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
         runtime.step();

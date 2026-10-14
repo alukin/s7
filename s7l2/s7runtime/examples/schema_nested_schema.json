@@ -38,7 +38,10 @@
             "element": "gain",
             "port": 0
           }
-        ]
+        ],
+        "execution": {
+          "step_rate_hz": 1
+        }
       }
     },
     {

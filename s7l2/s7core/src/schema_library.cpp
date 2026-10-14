@@ -169,6 +169,15 @@ auto build_schema_from_object(const boost::json::object& root, const ElementRegi
 {
     const auto name = string_value(root, "name", "schema");
     Schema schema{name};
+    // "dt": 0.001 seeds every element with no rate of its own
+    // (doc/S7_Sample_Rate_Model.md), the same field name/meaning as the
+    // runtime's own schema JSON (s7runtime/src/runtime_service.cpp).
+    if (const auto* dt = root.if_contains("dt")) {
+        if (!dt->is_number()) {
+            throw std::invalid_argument("'dt' must be a positive number of seconds.");
+        }
+        schema.set_rate(Rate::from_seconds(dt->to_number<double>()));
+    }
 
     const auto& elements = expect_array(root, "elements");
     for (const auto& element_value : elements) {

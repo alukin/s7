@@ -252,6 +252,7 @@ int main()
         const auto receiver = endpoint->open_consumer(config);
 
         s7::Schema schema{"step_loop"};
+        schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(7.0); });
         schema.add_element("sink", [config] { return std::make_unique<s7::NetSink>(config); });
         schema.connect("source", 0, "sink", 0);

@@ -1,4 +1,5 @@
 #include "s7/core.hpp"
+#include "s7/rate_inference.hpp"
 #include "s7/type_inference.hpp"
 
 #include <algorithm>
@@ -285,6 +286,12 @@ CheckedSchema check_schema(const Schema& schema) {
     ConnectionRulesValidator::validate(schema, prototypes, instances, checked.errors);
     if (checked.errors.empty()) {
         CycleRulesValidator::validate(schema, prototypes, checked.errors);
+    }
+    if (checked.errors.empty()) {
+        auto rates = RateResolver::resolve(schema, instances);
+        if (!rates.ok()) {
+            checked.errors.insert(checked.errors.end(), rates.errors.begin(), rates.errors.end());
+        }
     }
     return checked;
 }
