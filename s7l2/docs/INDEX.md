@@ -9,6 +9,7 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. `OPEN_PROBLEMS.md` — unsolved problems, open design decisions, and documented MVP limits, prioritized.
 3. `DEVELOPMENT_PLAN.md` — the phased sequence for addressing them.
+4. `VISUAL_NUMERICAL_TESTS_PLAN.md` — the diagram-based, visualized numerical-validation test track (companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md`).
 
 ## Implementation architecture
 
