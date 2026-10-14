@@ -15,6 +15,7 @@ Paths such as `s7l2/s7runtime/...` in these documents are relative to the reposi
 | [S7_Architectural_Decisions.md](S7_Architectural_Decisions.md) | ADR log (ADR-001 … ADR-018) |
 | [S7_Runtime_Architecture.md](S7_Runtime_Architecture.md) | Runtime pipeline: validate → compile → execute → observe |
 | [S7_Observation_Architecture.md](S7_Observation_Architecture.md) | Read-only observation subsystem, probes, Studio as observation client |
+| [S7_Sample_Rate_Model.md](S7_Sample_Rate_Model.md) | Proposed design: rate/`dt` as an inferred port property, mirroring the type system (not implemented) |
 
 ## Distributed runtime and protocols
 
