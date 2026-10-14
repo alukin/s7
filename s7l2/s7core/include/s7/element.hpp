@@ -8,11 +8,13 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "s7/rate.hpp"
 #include "s7/signal_types.hpp"
 
 namespace s7 {
@@ -86,6 +88,12 @@ public:
     [[nodiscard]] bool has_state() const { return has_state_; }
     [[nodiscard]] Feedthrough feedthrough() const { return feedthrough_; }
     [[nodiscard]] bool has_causal_memory() const { return feedthrough_ == Feedthrough::None; }
+
+    // This element's own rate, pinned by one of its parameters (an
+    // integrator's "dt", an oscillator's "sample_rate_hz"); nullopt for an
+    // element with no such parameter, whose rate is purely inferred from its
+    // connections (doc/S7_Sample_Rate_Model.md section 3, s7/rate_inference.hpp).
+    [[nodiscard]] virtual std::optional<Rate> declared_rate() const { return std::nullopt; }
 
     [[nodiscard]] std::size_t input_count() const { return input_ports_.size(); }
     [[nodiscard]] std::size_t output_count() const { return output_ports_.size(); }

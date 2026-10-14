@@ -1,6 +1,6 @@
 # S7 Sample Rate Model
 
-Status: proposed design, not implemented. Written to settle the open rate/`dt` questions raised while planning numerical-modeling validation tests, before any such test work proceeds.
+Status: first increment implemented (section 7). Written to settle the open rate/`dt` questions raised while planning numerical-modeling validation tests, before any such test work proceeds.
 
 ## 1. The problem
 
@@ -48,4 +48,4 @@ The wire protocol already has the right discipline for this, just scoped to the 
 
 ## 7. Status and what this changes
 
-Not implemented. This is a design document (schema/type-system extension, `s7core`), the same "document now, build later" status as the `Trig` element and the resample-element item it sharpens. It supersedes the ad hoc "propagate one `dt` value by hand" approach in `VISUAL_NUMERICAL_TESTS_PLAN.md` section 1.3 as the target design, and consolidates the dt-propagation-duplication and rate/resample entries already in `s7l2/docs/OPEN_PROBLEMS.md`.
+**First increment implemented (2026-10-14).** Section 3's resolver exists in `s7core`: `Rate` (`s7core/include/s7/rate.hpp`), `Element::declared_rate()` (overridden by `EulerIntegratorT`/`TrapezoidIntegratorT`/`AnalogOscillatorT`), `Schema::rate()`/`set_rate()` (the schema-level seed), and `RateResolver::resolve()` (`s7core/include/s7/rate_inference.hpp`), tested by `s7core_rate_inference_smoke`. It covers the degenerate case this document's section 6 already identified as necessary and sufficient for `VISUAL_NUMERICAL_TESTS_PLAN.md`: one rate per element, shared by every one of its ports — true of every element that exists today. The `PortRateRule::RatioOf` kind (an element with input/output ports at different, explicitly related rates — what the not-yet-existing rate-changing element needs) is not yet built; nothing needs it until that element exists. The resolver is also not yet wired into `Validator::validate()`/`Compiler::compile()` as a mandatory gate — doing so would newly fail every schema that has no rate-pinning element and no seed, which is most schemas today, so that wiring is a separate, deliberate follow-up (tracked in `s7l2/docs/OPEN_PROBLEMS.md` and `DEVELOPMENT_PLAN.md` Phase 1), not an oversight. It supersedes the ad hoc "propagate one `dt` value by hand" approach in `VISUAL_NUMERICAL_TESTS_PLAN.md` section 1.3 as the target design, and consolidates the dt-propagation-duplication and rate/resample entries already in `s7l2/docs/OPEN_PROBLEMS.md`.

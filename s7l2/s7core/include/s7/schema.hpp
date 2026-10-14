@@ -2,11 +2,13 @@
 #define S7CORE_INCLUDE_S7_SCHEMA_HPP
 
 #include "s7/element.hpp"
+#include "s7/rate.hpp"
 #include "s7/type_inference.hpp"
 
 #include <cstddef>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -61,6 +63,12 @@ public:
     [[nodiscard]] const std::vector<ElementSpec>& elements() const;
     [[nodiscard]] const std::vector<Connection>& connections() const;
 
+    // Schema-wide rate seed (doc/S7_Sample_Rate_Model.md section 3): used by
+    // RateResolver for every connected set of elements with no rate of its
+    // own (no element in it pins one). Unset by default.
+    void set_rate(Rate rate);
+    [[nodiscard]] std::optional<Rate> rate() const;
+
 private:
     struct ExposedInput {
         std::string name;
@@ -86,6 +94,7 @@ private:
     void ensure_compiled_runtime();
 
     std::string name_;
+    std::optional<Rate> rate_;
     std::vector<ElementSpec> elements_;
     std::vector<Connection> connections_;
     std::deque<ExposedInput> exposed_inputs_;

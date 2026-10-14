@@ -179,6 +179,14 @@ const std::vector<Connection>& Schema::connections() const {
     return connections_;
 }
 
+void Schema::set_rate(const Rate rate) {
+    rate_ = rate;
+}
+
+std::optional<Rate> Schema::rate() const {
+    return rate_;
+}
+
 void Schema::invalidate_compiled_runtime()
 {
     compiled_runtime_.reset();

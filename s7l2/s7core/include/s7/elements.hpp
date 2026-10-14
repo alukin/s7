@@ -268,6 +268,8 @@ public:
         output_value_ = output_value_ + read_input<value_type>(0) * dt_;
     }
 
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_seconds(static_cast<double>(dt_)); }
+
 private:
     step_type dt_;
     value_type output_value_;
@@ -300,6 +302,11 @@ public:
         }
         previous_input_ = x;
         has_previous_ = true;
+    }
+
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        return Rate::from_seconds(static_cast<double>(half_dt_) * 2.0);
     }
 
 private:
@@ -394,6 +401,7 @@ public:
         : Element("AnalogOscillator", true)
         , amplitude_(amplitude)
         , phase_(phase)
+        , sample_rate_hz_(sample_rate_hz)
     {
         if (!(sample_rate_hz > value_type(0))) {
             throw std::invalid_argument("AnalogOscillator requires a positive sample rate.");
@@ -412,9 +420,12 @@ public:
         }
     }
 
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(static_cast<double>(sample_rate_hz_)); }
+
 private:
     value_type amplitude_;
     value_type phase_;
+    value_type sample_rate_hz_;
     value_type phase_increment_{};
     value_type output_value_{};
 };
