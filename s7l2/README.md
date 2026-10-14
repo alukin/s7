@@ -4,7 +4,7 @@ S7 is a platform for constructing, executing, and observing distributed causal s
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
 
-Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, architecture, protocols) is in `../doc/README.md`. Known defects and planned fixes: `docs/CODE_REVIEW_REQUIRED_FIXES.md`.
+Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, architecture, protocols) is in `../doc/README.md`. Unsolved problems and open design decisions: `docs/OPEN_PROBLEMS.md`.
 
 ## Repository layout
 

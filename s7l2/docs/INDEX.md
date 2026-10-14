@@ -7,8 +7,8 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 ## Start here
 
 1. `../README.md` — what this implementation contains, how to build and run it.
-2. `PROJECT_STATUS_AND_PLAN_2026-09-20.md` — current priorities.
-3. `CODE_REVIEW_REQUIRED_FIXES.md` — known defects and required fixes, prioritized.
+2. `OPEN_PROBLEMS.md` — unsolved problems, open design decisions, and documented MVP limits, prioritized.
+3. `DEVELOPMENT_PLAN.md` — the phased sequence for addressing them.
 
 ## Implementation architecture
 
