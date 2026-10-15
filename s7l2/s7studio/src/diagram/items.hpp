@@ -205,6 +205,10 @@ public:
     // A problem of the wire's net (drawn red, tooltip).
     void setProblem(const QString& problem);
     [[nodiscard]] const QString& problem() const { return problem_; }
+    // Name of the probe tapping this net's driving output, shown as a marker
+    // partway along the wire; empty when the net has none (DiagramProbe).
+    void setProbeLabel(const QString& name);
+    [[nodiscard]] const QString& probeLabel() const { return probeLabel_; }
 
     std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
     QRectF boundingRect() const override;
@@ -222,6 +226,7 @@ private:
     QString typeLabel_;
     bool typeOk_ = true;
     QString problem_;
+    QString probeLabel_;
 };
 
 } // namespace s7studio::diagram

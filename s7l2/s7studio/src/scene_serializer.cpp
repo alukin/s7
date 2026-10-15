@@ -216,6 +216,7 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
     if (!options.includeDiagram) {
         return doc;
     }
+    doc.probes = scene.probes();
 
     boost::json::array nodes;
     for (const auto& node : scene.elementNodes()) {
@@ -492,6 +493,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
         }
     }
     scene.rerouteAll();
+    scene.setProbes(document.probes);
 }
 
 } // namespace s7studio::diagram

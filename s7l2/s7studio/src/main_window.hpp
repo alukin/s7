@@ -17,6 +17,7 @@
 #include <memory>
 #include <functional>
 #include <thread>
+#include <vector>
 
 class QAction;
 class QActionGroup;
@@ -42,12 +43,13 @@ class DiagramEditor;
 namespace ui {
 class ToolWindows;
 class ScopeViewWindow;
+class PhasePortraitViewWindow;
 class ElementPickerPanel;
 class HeadlessNodesPanel;
+class ProbesPanel;
 }
 
 struct ScopeSamplePoint {
-    int channel = 0;
     double timeSeconds = 0.0;
     double value = 0.0;
 };
@@ -68,9 +70,13 @@ private slots:
     void onStatusChanged(const QString& status);
     void onRunCompleted(bool success, const QString& error);
     void onTickProgress(long completed, long total);
-    void onScopeNodeDoubleClicked(const QString& scopeId, int channelCount);
     void onElementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
     void onScopeSamplesAvailable();
+    void onProbesChanged();
+    void onProbeOpenScopeRequested(const QString& probeName);
+    void onProbeOpenPhasePortraitRequested(const QString& xProbeName, const QString& yProbeName);
+    void onProbeRenameRequested(const QString& probeName, const QString& newName);
+    void onProbeDeleteRequested(const QString& probeName);
     void refreshWireTypeLabels();
     void openDocumentFile();
     void closeCurrentDiagram();
@@ -107,10 +113,14 @@ private:
     void buildActions();
     void connectRunnerSignals();
     void refreshActions();
-    void openScopeWindow(const QString& scopeId, int channelCount);
+    void openScopeWindow(const QString& probeName);
+    void openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName);
     void closeScopeWindows();
     void clearScopeSamples();
-    void replayScopeSamples(const QString& scopeId, ui::ScopeViewWindow& window);
+    void replayScopeSamples(const QString& probeName, ui::ScopeViewWindow& window);
+    void refreshProbesPanel();
+    // The RunProbe list the runner should sample for the current scene.
+    [[nodiscard]] auto currentRunProbes() const -> std::vector<RunProbe>;
     void applyPaperSize(double widthMm, double heightMm);
     void syncPageActions();
     void openJsonDocument(const QString& dialogTitle,
@@ -209,10 +219,12 @@ private:
     ui::LogPanel* logPanel_ = nullptr;
     ui::RunPanel* runPanel_ = nullptr;
     ui::DeployPanel* deployPanel_ = nullptr;
+    ui::ProbesPanel* probesPanel_ = nullptr;
     QDockWidget* problemsDock_ = nullptr;
     QDockWidget* logDock_ = nullptr;
     QDockWidget* runDock_ = nullptr;
     QDockWidget* deployDock_ = nullptr;
+    QDockWidget* probesDock_ = nullptr;
     QToolButton* problemsStatus_ = nullptr;
     // Warnings from loading the diagram (e.g. another plugin version), shown under Problems.
     std::vector<QString> loadWarnings_;
@@ -223,6 +235,8 @@ private:
     std::unique_ptr<s7::PluginLoader> pluginLoader_;
     QString currentDiagramPath_;
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
+    // Keyed by "xProbe|yProbe".
+    QHash<QString, QPointer<ui::PhasePortraitViewWindow>> phasePortraitWindows_;
     QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
     std::uint64_t scopeSamplesDropped_ = 0;
     class QTimer* wireTypeTimer_ = nullptr;

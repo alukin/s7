@@ -33,13 +33,6 @@
         "id": "summator",
         "type": "Adder",
         "params": {}
-      },
-      {
-        "id": "scope_main",
-        "type": "Scope",
-        "params": {
-          "channel_count": 1
-        }
       }
     ],
     "connections": [
@@ -54,12 +47,6 @@
         "from_port": 0,
         "to_element": "summator",
         "to_port": 1
-      },
-      {
-        "from_element": "summator",
-        "from_port": 0,
-        "to_element": "scope_main",
-        "to_port": 0
       }
     ],
     "requires": [
@@ -96,13 +83,6 @@
         "id": "summator",
         "position": [
           17,
-          8
-        ]
-      },
-      {
-        "id": "scope_main",
-        "position": [
-          34,
           8
         ]
       }
@@ -143,26 +123,16 @@
           ]
         },
         "bends": []
-      },
-      {
-        "id": "w3",
-        "from": {
-          "port": [
-            "summator",
-            "out",
-            0
-          ]
-        },
-        "to": {
-          "port": [
-            "scope_main",
-            "in",
-            0
-          ]
-        },
-        "bends": []
       }
     ],
     "text_frames": []
-  }
+  },
+  "probes": [
+    {
+      "element": "summator",
+      "port": 0,
+      "name": "sum",
+      "unit": ""
+    }
+  ]
 }

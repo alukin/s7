@@ -27,6 +27,18 @@ struct NetConnection {
     SignalWire* wire = nullptr; // the wire ending at `to`
 };
 
+// A read-only tap on an existing element's output port (doc/S7_Numerical_Modeling_Test_Plan.md,
+// S7_Architectural_Decisions.md ADR-011/012: observation points are not
+// Functional Graph elements). Identity is `point` (stable across saves and
+// re-routing); `name`/`unit` are display-only.
+struct DiagramProbe {
+    PortRef point;
+    QString name;
+    QString unit;
+
+    bool operator==(const DiagramProbe&) const = default;
+};
+
 // The connections of a diagram, read from its wire trees: every wire ending
 // at an input connects the output driving its tree to that input.
 class NetModel

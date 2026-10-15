@@ -14,12 +14,6 @@ namespace s7studio {
 
 namespace {
 
-// Types built into Studio itself (not runtime elements).
-bool studioOnly(const std::string& type)
-{
-    return type == "Scope";
-}
-
 struct TypeUse {
     std::string type;
     std::string topLevelElement; // the schema element using it (directly or in its nested schema)
@@ -45,7 +39,7 @@ void collectTypes(const boost::json::object& schema, const std::string* topLevel
             continue;
         }
         const auto type = json_utils::stringValue(element, "type");
-        if (!type.empty() && !studioOnly(type)) {
+        if (!type.empty()) {
             uses.push_back({type, owner});
         }
     }

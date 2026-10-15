@@ -35,23 +35,26 @@ Two consequences worth stating explicitly:
 
 ### 1.1 Observation points are probes, not elements
 
-The project's own architecture already settles this, and current code (Studio's `Scope`) does not follow it — see the new `OPEN_PROBLEMS.md` entry "Observation architecture: Studio's `Scope` contradicts ADR-011/012". For this plan, a probe is:
+The project's own architecture already settled this; Studio's `Scope` used not to follow it, and now does — see `OPEN_PROBLEMS.md`'s "Observation architecture: Studio's `Scope` contradicted ADR-011/012 — fixed". For this plan, a probe is:
 
 - a read-only tap on an existing element's output port (`ObservationService`'s existing `ProbePoint{element_id, port}` concept), not a graph element;
-- visible on a diagram as its own thing (a tap symbol with a thin line to the wire it reads), distinct from functional elements — a Studio rendering concern, not solved by this plan (see section 5);
+- visible on a diagram as its own thing, distinct from functional elements — implemented in Studio (2026-10-15) as a small marker drawn partway along the tapped wire, the same decoration mechanism `SignalWire` already used for its type label, placed via a wire's right-click menu ("Add Probe Here");
 - zero effect on validation, type inference, compilation, causal-cycle requirements, or execution order — attaching or removing a probe never changes what the functional graph computes;
-- attachable and movable to a different wire while a diagram is running, without recompiling the graph (consistent with `S7_Observation_Architecture.md`);
 - read as discrete per-step values — the existing `ObservationSample`/`ObservationSnapshot` model (step, optional `model_time_ns`, typed value) is sufficient; there is no analog/continuous sampling to add;
 - never multiplexed onto the inter-node data stream if the probed wire is ever on a remote node — remote observation is explicitly out of scope for this plan (see `OPEN_PROBLEMS.md` P3) and must get its own contract later, not reuse `NetSource`/`NetSink`'s stream protocol.
 
-### 1.2 Probe list format: a sidecar file, not embedded in `.s7diagram`
+Not implemented: moving a placed probe to a different wire (today it is remove-and-re-add); this plan's own headless runner has no notion of "while a diagram is running" at all, so this only matters for Studio's interactive case, and is a small follow-up, not a design gap.
 
-Checked directly against `s7studio/src/diagram_document.cpp`: `DiagramDocument::toJson()` rebuilds the top-level JSON object from only the fields it knows (`id`, `dt`, `document_kind`, `diagram_version`, `sheet`, `schema`, `diagram`, `runtime_nodes`, `streams`). A new top-level `"probes"` key would be silently dropped the next time Studio opens and re-saves a diagram. So, until Studio is taught about probes (section 5), each test diagram's probe list lives in a separate file: `<case>.s7diagram` next to `<case>.probes.json`.
+### 1.2 Probe list format: a sidecar file for this plan; Studio now has its own native format
 
-That sidecar has two top-level arrays:
+Checked directly against `s7studio/src/diagram_document.cpp`: `DiagramDocument::toJson()` rebuilds the top-level JSON object from only the fields it knows (`id`, `dt`, `document_kind`, `diagram_version`, `sheet`, `schema`, `diagram`, `runtime_nodes`, `streams`, and — since 2026-10-15 — `probes`). A new unknown top-level key would have been silently dropped the next time Studio opened and re-saved a diagram, which was the original reason this plan's own test diagrams use a separate sidecar file instead: `<case>.s7diagram` next to `<case>.probes.json`, read directly by `s7tests/diagram_harness.hpp`, independent of Studio.
+
+Studio itself is now taught about probes natively (`OPEN_PROBLEMS.md`, "Observation architecture: Studio's Scope contradicted ADR-011/012 — fixed"): `DiagramDocument::probes`, a `std::vector<DiagramProbe>`, serialized as the diagram's own top-level `"probes"` array — the same per-probe shape as this plan's sidecar (`element`, `port`, `name`, `unit`), just embedded rather than alongside. **The two are not yet unified**: a diagram authored in Studio carries its probes inline; a diagram authored for this plan's headless runner still uses the sidecar. Converting between them is a one-line transform (lift the array out, or embed it in), but nothing automates it yet — a real follow-up, not done in this pass.
+
+The sidecar (and Studio's embedded array) each have the probe entries themselves:
 
 - `"probes"`: `{"name": ..., "element": ..., "port": ..., "unit": ...}` objects. `name` is for labeling and need not match the element id; `unit` (optional, e.g. `"rad"`, `"m/s"`) is for plot axis labels only, nothing else reads it.
-- `"views"`: which plots section 3's driver should generate for this case, referencing probes by `name` — e.g. `{"type": "phase_portrait", "x": "position", "y": "velocity"}`, `{"type": "attractor3d", "x": "x", "y": "y", "z": "z"}`. Explicit per case, not auto-generated from every probe combination — matching the project's general preference for explicit over inferred behavior (explicit network boundaries, explicit type conversion; "prefer explicit errors over silent coercion" in `AGENTS.md`'s guardrails).
+- `"views"` (sidecar only; Studio has no equivalent concept yet, since it opens live windows interactively instead of generating plots from a file): which plots section 3's driver should generate for this case, referencing probes by `name` — e.g. `{"type": "phase_portrait", "x": "position", "y": "velocity"}`, `{"type": "attractor3d", "x": "x", "y": "y", "z": "z"}`. Explicit per case, not auto-generated from every probe combination — matching the project's general preference for explicit over inferred behavior (explicit network boundaries, explicit type conversion; "prefer explicit errors over silent coercion" in `AGENTS.md`'s guardrails).
 
 ### 1.3 dt/rate is governed by `S7_Sample_Rate_Model.md`, not hand propagation — a blocking prerequisite
 
@@ -141,7 +144,7 @@ Time-series and phase-portrait/attractor views are deliberately separate templat
 
 ## 5. Explicitly deferred, not part of this plan
 
-- Migrating Studio's `Scope` off `ScopeElement` onto a real Observation Client / fixing the ADR-011/012 violation, and drawing probes as a distinct visual symbol in the diagram editor. Tracked in `OPEN_PROBLEMS.md`. This plan's diagrams work today without that fix (sidecar probe files, headless-only runner); doing the Studio-side fix later would let Studio open the same `.s7diagram` + `.probes.json` pair and show live probe readings natively, and would let a human place/move probes in the editor instead of hand-editing the sidecar JSON.
+- **Done, no longer deferred:** migrating Studio's `Scope` off `ScopeElement` onto a real Observation Client / fixing the ADR-011/012 violation, and drawing probes as a distinct visual symbol in the diagram editor (2026-10-15, `OPEN_PROBLEMS.md`). Unifying Studio's native embedded `"probes"` array with this plan's own sidecar-file convention (section 1.2) is a small follow-up, not done.
 - How a genuinely multi-rate graph would *execute* (as opposed to the rate resolver's inference/validation, which is a blocking prerequisite below, not deferred) — a Functional Graph resample element, and the scheduling question behind it, for models that actually need more than one rate domain (`../../doc/S7_Sample_Rate_Model.md` section 6). Tracked as a `DEVELOPMENT_PLAN.md` Phase 5 item.
 - Remote observation (section 1.1's last point). Already tracked in `OPEN_PROBLEMS.md` P3.
 

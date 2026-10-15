@@ -27,7 +27,7 @@ public:
     explicit LocalSchemaRunner(QObject* parent = nullptr);
     ~LocalSchemaRunner() override;
 
-    void run(const boost::json::value& schemaJson, double dt, long ticks) override;
+    void run(const boost::json::value& schemaJson, double dt, long ticks, std::vector<RunProbe> probes) override;
     void pause() override;
     void resume() override;
     void stop() override;
@@ -49,12 +49,6 @@ signals:
     void scopeSamplesAvailable();
 
 private:
-    struct ScopeConfig {
-        std::string id;
-        std::size_t channelCount = 1;
-    };
-
-    void parseScopeConfigs(const boost::json::value& schemaJson);
     void emitScopeSamples();
     void requestStop();
     auto prepareRuntime(const boost::json::value& schemaJson) -> bool;
@@ -68,7 +62,7 @@ private:
     std::unique_ptr<s7::NodeRuntime> runtime_;
     s7::transport::RuntimeNetEndpointPtr netEndpoint_;
     std::thread worker_;
-    std::vector<ScopeConfig> scopeConfigs_;
+    std::vector<RunProbe> probes_;
     double dt_ = 0.001;
     long totalTicks_ = 0;
     std::atomic<long> completedTicks_{0};
@@ -76,7 +70,7 @@ private:
     std::atomic<bool> paused_{false};
     std::atomic<bool> stopRequested_{false};
     ScopeSampleMailbox scopeMailbox_;
-    std::set<std::string> unreadableScopeChannels_; // worker thread only
+    std::set<std::string> unreadableProbes_; // worker thread only
 };
 
 } // namespace s7studio

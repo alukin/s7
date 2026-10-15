@@ -5,7 +5,10 @@
 #include <QAction>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QMenu>
 #include <QPlainTextEdit>
 #include <QToolBar>
 #include <QTreeWidget>
@@ -226,6 +229,90 @@ void DeployPanel::setResult(const QString& summary, const bool ok, const std::ve
     }
     for (int column = 0; column < 3; ++column) {
         nodes_->resizeColumnToContents(column);
+    }
+}
+
+// ProbesPanel
+
+ProbesPanel::ProbesPanel(QWidget* parent)
+    : QWidget(parent)
+    , list_(new QTreeWidget(this))
+{
+    list_->setColumnCount(3);
+    list_->setHeaderLabels({QStringLiteral("Probe"), QStringLiteral("Taps"), QStringLiteral("Unit")});
+    list_->setRootIsDecorated(false);
+    list_->setUniformRowHeights(true);
+    list_->setContextMenuPolicy(Qt::CustomContextMenu);
+    list_->header()->setStretchLastSection(false);
+    list_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    list_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    list_->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+
+    connect(list_, &QTreeWidget::itemActivated, this, [this](QTreeWidgetItem* item) {
+        const auto index = list_->indexOfTopLevelItem(item);
+        if (index >= 0 && index < static_cast<int>(probes_.size())) {
+            Q_EMIT openScopeRequested(probes_[static_cast<std::size_t>(index)].name);
+        }
+    });
+    connect(list_, &QTreeWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        auto* item = list_->itemAt(pos);
+        const auto index = item ? list_->indexOfTopLevelItem(item) : -1;
+        if (index < 0 || index >= static_cast<int>(probes_.size())) {
+            return;
+        }
+        const auto& probe = probes_[static_cast<std::size_t>(index)];
+
+        QMenu menu(list_);
+        auto* openScope = menu.addAction(QStringLiteral("Open Scope"));
+        QMenu* phasePortraitMenu = nullptr;
+        if (probes_.size() > 1) {
+            phasePortraitMenu = menu.addMenu(QStringLiteral("Open Phase Portrait vs"));
+            for (const auto& other : probes_) {
+                if (other.name != probe.name) {
+                    phasePortraitMenu->addAction(other.name);
+                }
+            }
+        }
+        menu.addSeparator();
+        auto* rename = menu.addAction(QStringLiteral("Rename..."));
+        auto* remove = menu.addAction(QStringLiteral("Delete"));
+
+        const auto* chosen = menu.exec(list_->viewport()->mapToGlobal(pos));
+        if (!chosen) {
+            return;
+        }
+        if (chosen == openScope) {
+            Q_EMIT openScopeRequested(probe.name);
+        } else if (chosen == rename) {
+            bool accepted = false;
+            const auto name = QInputDialog::getText(this, QStringLiteral("Rename Probe"), QStringLiteral("Name"),
+                                                     QLineEdit::Normal, probe.name, &accepted);
+            if (accepted && !name.isEmpty()) {
+                Q_EMIT renameRequested(probe.name, name);
+            }
+        } else if (chosen == remove) {
+            Q_EMIT deleteRequested(probe.name);
+        } else if (phasePortraitMenu && phasePortraitMenu->actions().contains(const_cast<QAction*>(chosen))) {
+            Q_EMIT openPhasePortraitRequested(probe.name, chosen->text());
+        }
+    });
+
+    auto* content = new QWidget(this);
+    auto* layout = new QVBoxLayout(content);
+    layout->setContentsMargins(6, 4, 0, 0);
+    layout->addWidget(list_, 1);
+    withActionBar(this, {}, content);
+}
+
+void ProbesPanel::setProbes(std::vector<ProbeRow> probes)
+{
+    probes_ = std::move(probes);
+    list_->clear();
+    for (const auto& probe : probes_) {
+        auto* item = new QTreeWidgetItem(list_);
+        item->setText(0, probe.name);
+        item->setText(1, QStringLiteral("%1.%2").arg(QString::fromStdString(probe.element)).arg(probe.port));
+        item->setText(2, probe.unit);
     }
 }
 

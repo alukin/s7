@@ -35,13 +35,6 @@
         "params": {}
       },
       {
-        "id": "scope_main",
-        "type": "Scope",
-        "params": {
-          "channel_count": 2
-        }
-      },
-      {
         "id": "eulerintegrator_1",
         "type": "EulerIntegrator",
         "params": {
@@ -66,19 +59,7 @@
       {
         "from_element": "summator",
         "from_port": 0,
-        "to_element": "scope_main",
-        "to_port": 1
-      },
-      {
-        "from_element": "summator",
-        "from_port": 0,
         "to_element": "eulerintegrator_1",
-        "to_port": 0
-      },
-      {
-        "from_element": "eulerintegrator_1",
-        "from_port": 0,
-        "to_element": "scope_main",
         "to_port": 0
       }
     ],
@@ -116,13 +97,6 @@
         "id": "summator",
         "position": [
           17,
-          8
-        ]
-      },
-      {
-        "id": "scope_main",
-        "position": [
-          43,
           8
         ]
       },
@@ -188,44 +162,22 @@
           ]
         },
         "bends": []
-      },
-      {
-        "id": "w4",
-        "from": {
-          "port": [
-            "eulerintegrator_1",
-            "out",
-            0
-          ]
-        },
-        "to": {
-          "port": [
-            "scope_main",
-            "in",
-            0
-          ]
-        },
-        "bends": []
-      },
-      {
-        "id": "w5",
-        "from": {
-          "wire": "w3",
-          "at": [
-            29,
-            10
-          ]
-        },
-        "to": {
-          "port": [
-            "scope_main",
-            "in",
-            1
-          ]
-        },
-        "bends": []
       }
     ],
     "text_frames": []
-  }
+  },
+  "probes": [
+    {
+      "element": "eulerintegrator_1",
+      "port": 0,
+      "name": "integrated",
+      "unit": ""
+    },
+    {
+      "element": "summator",
+      "port": 0,
+      "name": "sum",
+      "unit": ""
+    }
+  ]
 }

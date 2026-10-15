@@ -246,6 +246,10 @@ void DiagramScene::clearDiagram()
     clear();
     knownPositions_.clear();
     typesResolve_.reset();
+    if (!probes_.empty()) {
+        probes_.clear();
+        Q_EMIT probesChanged();
+    }
 }
 
 void DiagramScene::addNodeItem(const std::shared_ptr<QSchematic::Items::Node>& node)
@@ -1230,6 +1234,19 @@ void DiagramScene::showWireMenu(SignalWire& wire, const QPointF scenePos, const 
         reroute = menu.addAction(QStringLiteral("Re-route (Remove Hand-Placed Bends)"));
     }
     menu.addSeparator();
+    // A probe taps the net's driving output (the same output every wire of
+    // this net shares), not this particular wire segment (doc/
+    // S7_Numerical_Modeling_Test_Plan.md section 1.1: a probe reads an
+    // element's output port, never a graph element of its own).
+    const auto driver = NetModel::driverOf(wire);
+    QAction* addProbeAction = nullptr;
+    QAction* removeProbeAction = nullptr;
+    if (driver) {
+        const bool hasProbe = std::ranges::any_of(probes_, [&](const auto& probe) { return probe.point == *driver; });
+        addProbeAction = hasProbe ? nullptr : menu.addAction(QStringLiteral("Add Probe Here"));
+        removeProbeAction = hasProbe ? menu.addAction(QStringLiteral("Remove Probe")) : nullptr;
+    }
+    menu.addSeparator();
     auto* erase = menu.addAction(QStringLiteral("Delete Wire"));
     const auto* chosen = menu.exec(screenPos);
     if (chosen == add) {
@@ -1250,9 +1267,50 @@ void DiagramScene::showWireMenu(SignalWire& wire, const QPointF scenePos, const 
         setUserBends(shared, bends);
     } else if (reroute && chosen == reroute) {
         setUserBends(shared, {});
+    } else if (addProbeAction && chosen == addProbeAction) {
+        addProbe(*driver, QStringLiteral("%1_%2").arg(QString::fromStdString(driver->element)).arg(driver->port));
+    } else if (removeProbeAction && chosen == removeProbeAction) {
+        removeProbe(*driver);
     } else if (chosen == erase) {
         deleteWire(shared);
     }
+}
+
+bool DiagramScene::addProbe(PortRef point, QString name, QString unit)
+{
+    if (std::ranges::any_of(probes_, [&](const auto& probe) { return probe.point == point; })) {
+        return false;
+    }
+    probes_.push_back(DiagramProbe{std::move(point), std::move(name), std::move(unit)});
+    Q_EMIT probesChanged();
+    return true;
+}
+
+void DiagramScene::removeProbe(const PortRef& point)
+{
+    const auto before = probes_.size();
+    std::erase_if(probes_, [&](const auto& probe) { return probe.point == point; });
+    if (probes_.size() != before) {
+        Q_EMIT probesChanged();
+    }
+}
+
+bool DiagramScene::renameProbe(const PortRef& point, QString name)
+{
+    for (auto& probe : probes_) {
+        if (probe.point == point) {
+            probe.name = std::move(name);
+            Q_EMIT probesChanged();
+            return true;
+        }
+    }
+    return false;
+}
+
+void DiagramScene::setProbes(std::vector<DiagramProbe> probes)
+{
+    probes_ = std::move(probes);
+    Q_EMIT probesChanged();
 }
 
 void DiagramScene::mousePressEvent(QGraphicsSceneMouseEvent* event)

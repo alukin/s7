@@ -1,7 +1,11 @@
 #pragma once
 
+#include "diagram/net_model.hpp"
+
 #include <QString>
 #include <boost/json.hpp>
+
+#include <vector>
 
 namespace s7studio::diagram {
 
@@ -35,6 +39,9 @@ struct DiagramDocument {
     // and the streams between them, kept so redeployments continue them.
     boost::json::array runtimeNodes;
     boost::json::array streams;
+    // Observation points (DiagramProbe, ADR-011/012): not part of the
+    // Functional Graph, so not inside `schema`.
+    std::vector<DiagramProbe> probes;
 
     static auto fromJson(const boost::json::value& json) -> DiagramDocument;
     auto toJson() const -> boost::json::value;

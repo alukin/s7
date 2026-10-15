@@ -6,8 +6,7 @@
     { "id": "g1", "type": "Gain", "params": { "factor": 0.5 } },
     { "id": "g2", "type": "Gain", "params": { "factor": 0.5 } },
     { "id": "d", "type": "Delay", "params": { "initial_value": 0.0 } },
-    { "id": "side", "type": "Gain", "params": { "factor": 2.0 } },
-    { "id": "scope", "type": "Scope", "params": { "channel_count": 3 } }
+    { "id": "side", "type": "Gain", "params": { "factor": 2.0 } }
   ],
   "connections": [
     { "from_element": "src", "from_port": 0, "to_element": "add", "to_port": 0 },
@@ -15,9 +14,6 @@
     { "from_element": "add", "from_port": 0, "to_element": "g1", "to_port": 0 },
     { "from_element": "g1", "from_port": 0, "to_element": "g2", "to_port": 0 },
     { "from_element": "g2", "from_port": 0, "to_element": "d", "to_port": 0 },
-    { "from_element": "src", "from_port": 0, "to_element": "side", "to_port": 0 },
-    { "from_element": "side", "from_port": 0, "to_element": "scope", "to_port": 0 },
-    { "from_element": "g2", "from_port": 0, "to_element": "scope", "to_port": 1 },
-    { "from_element": "add", "from_port": 0, "to_element": "scope", "to_port": 2 }
+    { "from_element": "src", "from_port": 0, "to_element": "side", "to_port": 0 }
   ]
 }

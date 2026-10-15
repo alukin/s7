@@ -160,12 +160,10 @@ int runSmoke()
                             { "name": "out", "type": "F64", "element": "g2", "port": 0 }
                         ]
                     }
-                },
-                { "id": "scope_main", "type": "Scope", "params": { "channel_count": 1 } }
+                }
             ],
             "connections": [
-                { "from_element": "source", "from_port": 0, "to_element": "nested", "to_port": 0 },
-                { "from_element": "nested", "from_port": 0, "to_element": "scope_main", "to_port": 0 }
+                { "from_element": "source", "from_port": 0, "to_element": "nested", "to_port": 0 }
             ]
         })json";
         boost::system::error_code ec;
@@ -189,7 +187,7 @@ int runSmoke()
             bool notified = false;
             int notifications = 0;
             for (long step = 0; step < 10; ++step) {
-                notified = mailbox.push(s7studio::ScopeSample{"scope", 0, step, 0.001 * step, static_cast<double>(step)});
+                notified = mailbox.push(s7studio::ScopeSample{"probe", step, 0.001 * step, static_cast<double>(step)});
                 notifications += notified ? 1 : 0;
             }
             assert(notifications == 1);
@@ -198,18 +196,10 @@ int runSmoke()
             for (std::size_t index = 0; index < batch.samples.size(); ++index) {
                 assert(batch.samples[index].step == static_cast<long>(6 + index));
             }
-            [[maybe_unused]] const bool pushed = mailbox.push(s7studio::ScopeSample{"scope", 0, 10, 0.01, 10.0});
+            [[maybe_unused]] const bool pushed = mailbox.push(s7studio::ScopeSample{"probe", 10, 0.01, 10.0});
             assert(pushed);
             batch = mailbox.take();
             assert(batch.samples.size() == 1 && batch.dropped == 0);
-        }
-
-        const s7studio::runtime::detail::ScopeElement scope3{3};
-        assert(scope3.input_ports().size() == 3 && scope3.output_ports().size() == 3);
-        for (std::size_t channel = 0; channel < 3; ++channel) {
-            const std::string expected = "ch" + std::to_string(channel);
-            assert(scope3.input_ports()[channel].name == expected);
-            assert(scope3.output_ports()[channel].name == expected);
         }
 
         std::cout << "s7studio smoke\n";
@@ -253,15 +243,15 @@ int runSmoke()
             // the mailbox capacity; the rest is counted as dropped.
             const auto scopeSchema = boost::json::parse(R"json({
                 "name": "scope_backlog",
+                "dt": 0.001,
                 "elements": [
-                    { "id": "source", "type": "Constant", "params": { "value": 1.0 } },
-                    { "id": "scope", "type": "Scope", "params": { "channel_count": 1 } }
+                    { "id": "source", "type": "Constant", "params": { "value": 1.0 } }
                 ],
-                "connections": [ { "from_element": "source", "from_port": 0, "to_element": "scope", "to_port": 0 } ]
+                "connections": []
             })json");
             s7studio::LocalSchemaRunner runner;
             constexpr long ticks = 300'000;
-            runner.run(scopeSchema, 0.001, ticks);
+            runner.run(scopeSchema, 0.001, ticks, {s7studio::RunProbe{"probe", "source", 0}});
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
             while (runner.isRunning() && std::chrono::steady_clock::now() < deadline) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));

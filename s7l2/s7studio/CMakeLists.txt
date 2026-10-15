@@ -70,6 +70,8 @@ add_executable(s7studio
     src/main_window_builder.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
+    src/phase_portrait_view_window.cpp
+    src/phase_portrait_view_window.hpp
     src/model_run_controller.cpp
     src/is_schema_runner.hpp
     src/model_run_controller.hpp

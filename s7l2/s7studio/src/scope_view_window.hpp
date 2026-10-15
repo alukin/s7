@@ -16,31 +16,27 @@ class QCustomPlot;
 
 namespace s7studio::ui {
 
+// A time-series view of one probe (ADR-011/012: the probe is a read-only tap,
+// not a graph element; one scope window per probe, like an oscilloscope
+// channel clipped onto a signal -- VISUAL_NUMERICAL_TESTS_PLAN.md section 1.0).
 class ScopeViewWindow : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit ScopeViewWindow(QString scopeId,
-                             int channelCount,
+    explicit ScopeViewWindow(QString probeName,
                              QWidget* parent = nullptr,
                              Qt::WindowFlags flags = Qt::WindowFlags());
 
-    [[nodiscard]] auto scopeId() const -> QString;
-    [[nodiscard]] auto channelCount() const -> int;
-    void setChannelCount(int channelCount);
+    [[nodiscard]] auto probeName() const -> QString;
 
-    void appendSample(int channel, double timeSeconds, double value);
+    void appendSample(double timeSeconds, double value);
     void clearSamples();
     // Samples the runtime produced but the UI dropped because it fell behind.
     void setDroppedSampleCount(std::uint64_t dropped);
 
-    // Recording keeps at most this many samples per channel (16 bytes each),
-    // then stops by itself.
-    static constexpr int kMaxRecordedSamplesPerChannel = 2'000'000;
-
-signals:
-    void configureRequested(const QString& scopeId, int channelCount);
+    // Recording keeps at most this many samples (16 bytes each), then stops by itself.
+    static constexpr int kMaxRecordedSamples = 2'000'000;
 
 private slots:
     void clearBuffers();
@@ -49,7 +45,7 @@ private slots:
     void refreshPlot();
 
 private:
-    struct ChannelSeries {
+    struct Series {
         QVector<double> time;
         QVector<double> value;
         QVector<double> recordedTime;
@@ -59,16 +55,15 @@ private:
     void configurePlot();
     void setRecording(bool recording);
     void updateStatus();
-    void trimVisibleBuffer(ChannelSeries& channel, double minTime);
+    void trimVisibleBuffer(double minTime);
 
-    QString scopeId_;
-    int channelCount_ = 1;
+    QString probeName_;
     bool recording_ = false;
     bool recordingLimitReached_ = false;
     std::uint64_t droppedSamples_ = 0;
     bool dirty_ = false;
 
-    QVector<ChannelSeries> channels_;
+    Series series_;
 
     QCustomPlot* plot_ = nullptr;
     QDoubleSpinBox* windowSecondsSpin_ = nullptr;
@@ -76,10 +71,8 @@ private:
     QPushButton* recordButton_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
-    QPushButton* configureButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QTimer* repaintTimer_ = nullptr;
 };
 
 } // namespace s7studio::ui
-

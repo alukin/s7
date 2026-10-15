@@ -13,6 +13,7 @@
 #include <QGraphicsSceneContextMenuEvent>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsSimpleTextItem>
+#include <QLineF>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPen>
@@ -20,6 +21,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <optional>
 
 namespace s7studio::diagram {
 
@@ -36,6 +38,8 @@ const QColor kSelected(0x1e, 0x5b, 0xd8);
 const QColor kWire(0x20, 0x20, 0x20);
 const QColor kProblem(0xc6, 0x28, 0x28);
 const QColor kTypeLabel(0x30, 0x30, 0x90);
+const QColor kProbeMarker(0x2e, 0x7d, 0x32);
+constexpr double kProbeMarkerRadius = 3.5;
 
 // Grid rows of an element `rows` high holding `count` ports: two rows apart
 // where they fit, centred.
@@ -424,6 +428,15 @@ void SignalWire::setProblem(const QString& problem)
     }
 }
 
+void SignalWire::setProbeLabel(const QString& name)
+{
+    if (name != probeLabel_) {
+        prepareGeometryChange();
+        probeLabel_ = name;
+        update();
+    }
+}
+
 std::shared_ptr<QSchematic::Items::Item> SignalWire::deepCopy() const
 {
     auto clone = std::make_shared<SignalWire>();
@@ -461,11 +474,50 @@ auto labelRect(const QVector<QPointF>& points, const QString& text) -> QRectF
     return {points[0] + QPointF(4.0, -size.height() - 1.0), size};
 }
 
+// The point halfway along the route by path length, for the probe marker.
+auto midpointOfRoute(const QVector<QPointF>& points) -> std::optional<QPointF>
+{
+    if (points.size() < 2) {
+        return std::nullopt;
+    }
+    double total = 0.0;
+    for (int index = 0; index + 1 < points.size(); ++index) {
+        total += QLineF(points[index], points[index + 1]).length();
+    }
+    if (total <= 0.0) {
+        return points[0];
+    }
+    double walked = 0.0;
+    for (int index = 0; index + 1 < points.size(); ++index) {
+        const QLineF segment(points[index], points[index + 1]);
+        const double length = segment.length();
+        if (walked + length >= total / 2.0) {
+            return segment.pointAt(length > 0.0 ? (total / 2.0 - walked) / length : 0.0);
+        }
+        walked += length;
+    }
+    return points.last();
+}
+
+auto probeMarkerRect(const QVector<QPointF>& points, const QString& name) -> QRectF
+{
+    const auto center = midpointOfRoute(points);
+    if (!center || name.isEmpty()) {
+        return {};
+    }
+    const QFontMetricsF metrics(labelFont());
+    const QSizeF size(metrics.horizontalAdvance(name) + 2.0, metrics.height());
+    return {*center + QPointF(kProbeMarkerRadius + 3.0, -size.height() / 2.0), size};
+}
+
 } // namespace
 
 QRectF SignalWire::boundingRect() const
 {
-    return Wire::boundingRect().united(labelRect(pointsRelative(), typeLabel_)).adjusted(-kHandle, -kHandle, kHandle, kHandle);
+    return Wire::boundingRect()
+        .united(labelRect(pointsRelative(), typeLabel_))
+        .united(probeMarkerRect(pointsRelative(), probeLabel_))
+        .adjusted(-kHandle, -kHandle, kHandle, kHandle);
 }
 
 void SignalWire::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*)
@@ -500,6 +552,19 @@ void SignalWire::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidg
         painter->setFont(labelFont());
         painter->setPen(typeOk_ ? kTypeLabel : kProblem);
         painter->drawText(rect, Qt::AlignLeft | Qt::AlignVCenter, typeLabel_);
+    }
+
+    if (!probeLabel_.isEmpty()) {
+        if (const auto center = midpointOfRoute(points)) {
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(kProbeMarker);
+            painter->drawEllipse(*center, kProbeMarkerRadius, kProbeMarkerRadius);
+            if (const auto rect = probeMarkerRect(points, probeLabel_); !rect.isEmpty()) {
+                painter->setFont(labelFont());
+                painter->setPen(kProbeMarker);
+                painter->drawText(rect, Qt::AlignLeft | Qt::AlignVCenter, probeLabel_);
+            }
+        }
     }
 }
 

@@ -61,6 +61,17 @@ auto updateWireTypeLabels(DiagramScene& scene, QString* error) -> std::vector<Wi
         const auto driver = wire->upstream.isOutput() ? NetModel::driverOf(*wire) : std::nullopt;
         const auto type = driver ? typeOf(*driver) : QString();
         wire->setTypeLabel(type, type != QStringLiteral("?"));
+
+        QString probeLabel;
+        if (driver) {
+            for (const auto& probe : scene.probes()) {
+                if (probe.point == *driver) {
+                    probeLabel = probe.name;
+                    break;
+                }
+            }
+        }
+        wire->setProbeLabel(probeLabel);
     }
     return labels;
 }

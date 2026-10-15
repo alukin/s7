@@ -300,11 +300,7 @@ bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
                     const QString elementId = QString::fromStdString(node->id());
                     const QString type = QString::fromStdString(node->element().type);
                     const int channelCount = static_cast<int>(std::max<std::size_t>(1, node->inputs().size()));
-                    if (type == QStringLiteral("Scope")) {
-                        emit scopeNodeDoubleClicked(elementId, channelCount);
-                    } else {
-                        emit elementNodeDoubleClicked(elementId, type, channelCount);
-                    }
+                    emit elementNodeDoubleClicked(elementId, type, channelCount);
                     break;
                 }
                 if (const auto* frame = dynamic_cast<TextFrameNode*>(item)) {

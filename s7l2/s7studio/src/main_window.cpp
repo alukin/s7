@@ -14,6 +14,7 @@
 #include "ui_icons.hpp"
 #include "scene_serializer.hpp"
 #include "scope_view_window.hpp"
+#include "phase_portrait_view_window.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_catalog.hpp>
@@ -214,7 +215,6 @@ auto elementDescriptionForType(const QString& type) -> QString
     if (type == "EulerIntegrator") return QStringLiteral("Euler integrator: rectangle rule y[n+1] = y[n] + dt*x[n]; can close feedback loops.");
     if (type == "TrapezoidIntegrator") return QStringLiteral("Trapezoid integrator: y[n] = y[n-1] + dt/2*(x[n] + x[n-1]).");
     if (type == "AnalogOscillator") return QStringLiteral("Analog oscillator: sinusoidal source.");
-    if (type == "Scope") return QStringLiteral("Scope observer: records selected channels for plotting.");
     if (type == "FirFilter") return QStringLiteral("FIR filter: finite impulse response filter.");
     if (type == "IirFilter") return QStringLiteral("IIR filter: recursive filter.");
     if (type == "PreviousValue") return QStringLiteral("PreviousValue: unit-delay output element.");
@@ -227,9 +227,6 @@ auto elementDescriptionForType(const QString& type) -> QString
 
 auto elementLibraryForType(const QString& type) -> QString
 {
-    if (type == "Scope") {
-        return QStringLiteral("s7studio (embedded observer in executable)");
-    }
     if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
         const auto& metadata = descriptor->metadata();
         if (metadata.schema_definition.has_value()) {
@@ -359,9 +356,6 @@ MainWindow::MainWindow(QWidget* parent)
 
     connectRunnerSignals();
     if (diagramEditor_) {
-        connect(diagramEditor_, &diagram::DiagramEditor::scopeNodeDoubleClicked,
-                this,
-                &MainWindow::onScopeNodeDoubleClicked);
         connect(diagramEditor_, &diagram::DiagramEditor::elementNodeDoubleClicked,
                 this,
                 &MainWindow::onElementNodeDoubleClicked);
@@ -704,9 +698,6 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     if (descriptor && descriptor->metadata().schema_definition.has_value()) {
         element.schema = *descriptor->metadata().schema_definition;
     }
-    if (elementType == QStringLiteral("Scope")) {
-        element.params["channel_count"] = 1;
-    }
     scene->addElement(element, suggestedNewNodePosition(*scene));
     setDiagramMode(QSchematic::Scene::NormalMode);
     refreshPlacementLabels();
@@ -742,6 +733,14 @@ void MainWindow::buildToolWindows()
     logPanel_ = new ui::LogPanel(this);
     logDock_ = toolWindows_->add(QStringLiteral("log"), QStringLiteral("Log"), QStringLiteral("file-text"), logPanel_,
                                  Qt::BottomDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_7));
+
+    probesPanel_ = new ui::ProbesPanel(this);
+    connect(probesPanel_, &ui::ProbesPanel::openScopeRequested, this, &MainWindow::onProbeOpenScopeRequested);
+    connect(probesPanel_, &ui::ProbesPanel::openPhasePortraitRequested, this, &MainWindow::onProbeOpenPhasePortraitRequested);
+    connect(probesPanel_, &ui::ProbesPanel::renameRequested, this, &MainWindow::onProbeRenameRequested);
+    connect(probesPanel_, &ui::ProbesPanel::deleteRequested, this, &MainWindow::onProbeDeleteRequested);
+    probesDock_ = toolWindows_->add(QStringLiteral("probes"), QStringLiteral("Probes"), QStringLiteral("pointer"), probesPanel_,
+                                    Qt::RightDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_3));
 
     // Problem count in the status bar; a click opens Problems.
     problemsStatus_ = new QToolButton(this);
@@ -878,14 +877,9 @@ void MainWindow::onTickProgress(const long completed, const long total)
     }
 }
 
-void MainWindow::onScopeNodeDoubleClicked(const QString& scopeId, const int channelCount)
-{
-    openScopeWindow(scopeId, channelCount);
-}
-
 void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
                                             const QString& elementType,
-                                            const int channelCount)
+                                            const int /*channelCount*/)
 {
     auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
     if (!scene) {
@@ -1033,13 +1027,6 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         auto element = elementNode->element();
         element.params = paramsObject;
         element.placement = nodeCombo->currentData().toString().toStdString();
-        if (elementType == QStringLiteral("Scope")) {
-            const int updatedChannels = std::max(1, json_utils::intValue(paramsObject, "channel_count", channelCount));
-            if (const auto window = scopeWindows_.value(elementId); window && window->channelCount() != updatedChannels) {
-                window->setChannelCount(updatedChannels);
-                replayScopeSamples(elementId, *window);
-            }
-        }
         scene->changeElement(elementNode, element);
         refreshPlacementLabels();
 
@@ -1057,11 +1044,23 @@ void MainWindow::onScopeSamplesAvailable()
 
     QHash<QString, int> touched;
     for (const auto& sample : batch.samples) {
-        const auto scopeId = QString::fromStdString(sample.scopeId);
-        scopeSampleHistory_[scopeId].push_back(ScopeSamplePoint{sample.channel, sample.timeSeconds, sample.value});
-        touched.insert(scopeId, 0);
-        if (const auto window = scopeWindows_.value(scopeId)) {
-            window->appendSample(sample.channel, sample.timeSeconds, sample.value);
+        const auto probeName = QString::fromStdString(sample.probeName);
+        scopeSampleHistory_[probeName].push_back(ScopeSamplePoint{sample.timeSeconds, sample.value});
+        touched.insert(probeName, 0);
+        if (const auto window = scopeWindows_.value(probeName)) {
+            window->appendSample(sample.timeSeconds, sample.value);
+        }
+        for (auto it = phasePortraitWindows_.cbegin(); it != phasePortraitWindows_.cend(); ++it) {
+            const auto& window = it.value();
+            if (!window) {
+                continue;
+            }
+            if (window->xProbeName() == probeName) {
+                window->appendXSample(sample.step, sample.value);
+            }
+            if (window->yProbeName() == probeName) {
+                window->appendYSample(sample.step, sample.value);
+            }
         }
     }
     for (auto it = touched.cbegin(); it != touched.cend(); ++it) {
@@ -1075,6 +1074,11 @@ void MainWindow::onScopeSamplesAvailable()
         // The runtime produced samples faster than the UI took them; the oldest were dropped.
         scopeSamplesDropped_ += batch.dropped;
         for (const auto& window : std::as_const(scopeWindows_)) {
+            if (window) {
+                window->setDroppedSampleCount(scopeSamplesDropped_);
+            }
+        }
+        for (const auto& window : std::as_const(phasePortraitWindows_)) {
             if (window) {
                 window->setDroppedSampleCount(scopeSamplesDropped_);
             }
@@ -1166,7 +1170,14 @@ void MainWindow::connectSceneSignals()
     }
     connect(scene, &diagram::DiagramScene::diagramChanged, wireTypeTimer_, qOverload<>(&QTimer::start),
             Qt::UniqueConnection);
+    // A probe's wire label depends on resolved types too (it is drawn on the
+    // net's first wire, same as the type label), so probe changes go through
+    // the same debounced refresh.
+    connect(scene, &diagram::DiagramScene::probesChanged, wireTypeTimer_, qOverload<>(&QTimer::start),
+            Qt::UniqueConnection);
+    connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::onProbesChanged, Qt::UniqueConnection);
     wireTypeTimer_->start();
+    onProbesChanged();
 }
 
 void MainWindow::refreshWireTypeLabels()
@@ -1183,6 +1194,74 @@ void MainWindow::refreshWireTypeLabels()
         }
     }
     refreshProblems();
+}
+
+void MainWindow::onProbesChanged()
+{
+    refreshProbesPanel();
+}
+
+void MainWindow::refreshProbesPanel()
+{
+    if (!probesPanel_) {
+        return;
+    }
+    std::vector<ui::ProbeRow> rows;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        for (const auto& probe : diagramEditor_->scene()->probes()) {
+            rows.push_back(ui::ProbeRow{probe.name, probe.point.element, probe.point.port, probe.unit});
+        }
+    }
+    probesPanel_->setProbes(std::move(rows));
+}
+
+auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
+{
+    std::vector<RunProbe> probes;
+    if (diagramEditor_ && diagramEditor_->scene()) {
+        for (const auto& probe : diagramEditor_->scene()->probes()) {
+            probes.push_back(RunProbe{probe.name.toStdString(), probe.point.element, probe.point.port});
+        }
+    }
+    return probes;
+}
+
+void MainWindow::onProbeOpenScopeRequested(const QString& probeName)
+{
+    openScopeWindow(probeName);
+}
+
+void MainWindow::onProbeOpenPhasePortraitRequested(const QString& xProbeName, const QString& yProbeName)
+{
+    openPhasePortraitWindow(xProbeName, yProbeName);
+}
+
+void MainWindow::onProbeRenameRequested(const QString& probeName, const QString& newName)
+{
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (!scene) {
+        return;
+    }
+    for (const auto& probe : scene->probes()) {
+        if (probe.name == probeName) {
+            scene->renameProbe(probe.point, newName);
+            return;
+        }
+    }
+}
+
+void MainWindow::onProbeDeleteRequested(const QString& probeName)
+{
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    if (!scene) {
+        return;
+    }
+    for (const auto& probe : scene->probes()) {
+        if (probe.name == probeName) {
+            scene->removeProbe(probe.point);
+            return;
+        }
+    }
 }
 
 void MainWindow::addTextFrame()
@@ -1388,17 +1467,14 @@ void MainWindow::syncPageActions()
     landscapePageAction_->setChecked(pageLayout.orientation == diagram::PageOrientation::Landscape);
 }
 
-void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
+void MainWindow::openScopeWindow(const QString& probeName)
 {
-    if (scopeId.isEmpty()) {
+    if (probeName.isEmpty()) {
         return;
     }
 
-    if (const auto existing = scopeWindows_.value(scopeId)) {
-        if (existing->channelCount() != channelCount) {
-            existing->setChannelCount(channelCount);
-        }
-        replayScopeSamples(scopeId, *existing);
+    if (const auto existing = scopeWindows_.value(probeName)) {
+        replayScopeSamples(probeName, *existing);
         existing->show();
         existing->raise();
         existing->activateWindow();
@@ -1406,16 +1482,38 @@ void MainWindow::openScopeWindow(const QString& scopeId, const int channelCount)
     }
 
     auto* window = new ui::ScopeViewWindow(
-        scopeId,
-        channelCount,
+        probeName,
         nullptr,
         Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
     window->setAttribute(Qt::WA_DeleteOnClose, true);
-    scopeWindows_.insert(scopeId, window);
-    connect(window, &ui::ScopeViewWindow::configureRequested, this, [this](const QString& id, const int channels) {
-        onElementNodeDoubleClicked(id, QStringLiteral("Scope"), channels);
-    });
-    replayScopeSamples(scopeId, *window);
+    scopeWindows_.insert(probeName, window);
+    replayScopeSamples(probeName, *window);
+    window->show();
+    window->raise();
+    window->activateWindow();
+}
+
+void MainWindow::openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName)
+{
+    if (xProbeName.isEmpty() || yProbeName.isEmpty() || xProbeName == yProbeName) {
+        return;
+    }
+    const auto key = QStringLiteral("%1|%2").arg(xProbeName, yProbeName);
+
+    if (const auto existing = phasePortraitWindows_.value(key)) {
+        existing->show();
+        existing->raise();
+        existing->activateWindow();
+        return;
+    }
+
+    auto* window = new ui::PhasePortraitViewWindow(
+        xProbeName,
+        yProbeName,
+        nullptr,
+        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    window->setAttribute(Qt::WA_DeleteOnClose, true);
+    phasePortraitWindows_.insert(key, window);
     window->show();
     window->raise();
     window->activateWindow();
@@ -1426,6 +1524,13 @@ void MainWindow::closeScopeWindows()
     const auto existingWindows = scopeWindows_.values();
     scopeWindows_.clear();
     for (const auto& window : existingWindows) {
+        if (window) {
+            window->close();
+        }
+    }
+    const auto existingPhasePortraits = phasePortraitWindows_.values();
+    phasePortraitWindows_.clear();
+    for (const auto& window : existingPhasePortraits) {
         if (window) {
             window->close();
         }
@@ -1441,18 +1546,23 @@ void MainWindow::clearScopeSamples()
             window->clearSamples();
         }
     }
+    for (const auto& window : phasePortraitWindows_) {
+        if (window) {
+            window->clearSamples();
+        }
+    }
 }
 
-void MainWindow::replayScopeSamples(const QString& scopeId, ui::ScopeViewWindow& window)
+void MainWindow::replayScopeSamples(const QString& probeName, ui::ScopeViewWindow& window)
 {
     window.clearSamples();
-    const auto historyIt = scopeSampleHistory_.find(scopeId);
+    const auto historyIt = scopeSampleHistory_.find(probeName);
     if (historyIt == scopeSampleHistory_.end()) {
         return;
     }
 
     for (const auto& point : historyIt.value()) {
-        window.appendSample(point.channel, point.timeSeconds, point.value);
+        window.appendSample(point.timeSeconds, point.value);
     }
 }
 
@@ -1581,7 +1691,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
         updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
     }
 
-    controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_});
+    controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_}, currentRunProbes());
     refreshActions();
 }
 

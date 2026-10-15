@@ -12,8 +12,7 @@
 namespace s7studio {
 
 struct ScopeSample {
-    std::string scopeId;
-    int channel = 0;
+    std::string probeName;
     long step = 0;
     double timeSeconds = 0.0;
     double value = 0.0;

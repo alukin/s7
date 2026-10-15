@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace s7studio::ui {
 
@@ -53,10 +54,12 @@ public:
 
     void run(const boost::json::value& runtimeJson,
              double dt,
-             const RunDuration& duration) const;
+             const RunDuration& duration,
+             std::vector<RunProbe> probes) const;
     void run(const boost::json::value& runtimeJson,
              double dt,
-             const RunExecutionConfig& config) const;
+             const RunExecutionConfig& config,
+             std::vector<RunProbe> probes) const;
     void pause() const;
     void resume() const;
     void stop() const;

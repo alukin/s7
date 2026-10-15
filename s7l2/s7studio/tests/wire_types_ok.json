@@ -3,16 +3,17 @@
   "elements": [
     { "id": "src", "type": "Constant", "params": { "type": "I16", "value": 100 } },
     { "id": "gain", "type": "Gain", "params": { "factor": 3 } },
+    { "id": "sink", "type": "Gain", "params": { "factor": 1 } },
     { "id": "iq", "type": "Constant", "params": { "type": "CI8", "value": [1, 2] } },
     { "id": "conv", "type": "Convert", "params": { "to": "C32", "mode": "normalized" } },
     { "id": "split", "type": "ComplexToReIm" },
-    { "id": "scope", "type": "Scope", "params": { "channel_count": 2 } }
+    { "id": "re_sink", "type": "Gain", "params": { "factor": 1 } }
   ],
   "connections": [
     { "from_element": "src", "from_port": 0, "to_element": "gain", "to_port": 0 },
-    { "from_element": "gain", "from_port": 0, "to_element": "scope", "to_port": 0 },
+    { "from_element": "gain", "from_port": 0, "to_element": "sink", "to_port": 0 },
     { "from_element": "iq", "from_port": 0, "to_element": "conv", "to_port": 0 },
     { "from_element": "conv", "from_port": 0, "to_element": "split", "to_port": 0 },
-    { "from_element": "split", "from_port": 0, "to_element": "scope", "to_port": 1 }
+    { "from_element": "split", "from_port": 0, "to_element": "re_sink", "to_port": 0 }
   ]
 }

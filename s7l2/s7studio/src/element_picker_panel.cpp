@@ -90,25 +90,10 @@ void ElementPickerPanel::buildCategoryTree() {
 
     // Get all categories
     auto categories = catalog.categories();
-    if (std::find(categories.begin(), categories.end(), "observation") == categories.end()) {
-        categories.push_back("observation"); // Studio-only elements are not in the runtime registry.
-    }
     std::sort(categories.begin(), categories.end());
 
     for (const auto& category : categories) {
         auto elements = catalog.elements_in_category(category);
-        if (category == "observation") {
-            elements.push_back({
-                "Scope",
-                "Scope",
-                "Scope observer: records selected channels for plotting.",
-                "observation",
-                "",
-                1,
-                0,
-            });
-        }
-
         if (elements.empty()) {
             continue;
         }

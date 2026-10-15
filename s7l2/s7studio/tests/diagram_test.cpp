@@ -376,10 +376,10 @@ int main(int argc, char** argv)
             loader, registry);
         check(missingElement.errors.size() == 1 && missingElement.errors[0].contains("does not provide"),
               "an element type the plugin does not provide is reported");
-        auto unknown = s7studio::ensureElementTypes(parse(R"({"elements": [ { "id": "x", "type": "Nope" }, { "id": "s", "type": "Scope" } ]})"),
+        auto unknown = s7studio::ensureElementTypes(parse(R"({"elements": [ { "id": "x", "type": "Nope" } ]})"),
                                                     loader, registry);
-        check(unknown.errors.size() == 1 && unknown.elementProblems.contains("x") && !unknown.elementProblems.contains("s"),
-              "an unknown type without a plugin is reported (Studio's Scope is not)");
+        check(unknown.errors.size() == 1 && unknown.elementProblems.contains("x"),
+              "an unknown type without a plugin is reported");
         auto version = s7studio::ensureElementTypes(
             parse(R"({"elements": [ { "id": "w", "type": "WhiteNoiseGenerator" } ],
                       "requires": [ { "plugin": "s7noise", "version": "0.0.1", "elements": ["WhiteNoiseGenerator"] } ]})"),

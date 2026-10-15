@@ -1,10 +1,11 @@
 #pragma once
 
-// Contents of the bottom tool windows: Problems, Log, Run, Deploy.
+// Contents of the bottom tool windows: Problems, Log, Run, Deploy, Probes.
 
 #include <QString>
 #include <QWidget>
 
+#include <string>
 #include <vector>
 
 class QAction;
@@ -96,6 +97,39 @@ public:
 private:
     QLabel* summary_;
     QTreeWidget* nodes_;
+};
+
+// A probe placed on the diagram (DiagramProbe, without the QGraphicsScene
+// dependency this panel doesn't need).
+struct ProbeRow {
+    QString name;
+    std::string element;
+    int port = 0;
+    QString unit;
+};
+
+// Every probe on the open diagram; double-click (or Enter) opens a Scope
+// window for it. Right-click offers renaming, deleting, and opening a phase
+// portrait against another probe.
+class ProbesPanel final : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit ProbesPanel(QWidget* parent = nullptr);
+
+    void setProbes(std::vector<ProbeRow> probes);
+    [[nodiscard]] const std::vector<ProbeRow>& probes() const { return probes_; }
+
+Q_SIGNALS:
+    void openScopeRequested(const QString& probeName);
+    void openPhasePortraitRequested(const QString& xProbeName, const QString& yProbeName);
+    void renameRequested(const QString& probeName, const QString& newName);
+    void deleteRequested(const QString& probeName);
+
+private:
+    QTreeWidget* list_;
+    std::vector<ProbeRow> probes_;
 };
 
 } // namespace s7studio::ui

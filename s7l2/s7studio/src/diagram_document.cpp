@@ -72,7 +72,29 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
     if (auto it = root.find("streams"); it != root.end() && it->value().is_array()) {
         doc.streams = it->value().as_array();
     }
-    
+    if (auto it = root.find("probes"); it != root.end() && it->value().is_array()) {
+        for (const auto& value : it->value().as_array()) {
+            if (!value.is_object()) {
+                continue;
+            }
+            const auto& object = value.as_object();
+            DiagramProbe probe;
+            if (const auto* element = object.if_contains("element"); element && element->is_string()) {
+                probe.point.element = element->as_string().c_str();
+            }
+            if (const auto* port = object.if_contains("port"); port && port->is_number()) {
+                probe.point.port = static_cast<int>(port->to_number<double>());
+            }
+            if (const auto* name = object.if_contains("name"); name && name->is_string()) {
+                probe.name = QString::fromStdString(name->as_string().c_str());
+            }
+            if (const auto* unit = object.if_contains("unit"); unit && unit->is_string()) {
+                probe.unit = QString::fromStdString(unit->as_string().c_str());
+            }
+            doc.probes.push_back(std::move(probe));
+        }
+    }
+
     // Store the runtime schema (or reconstruct from diagram if needed)
     if (auto it = root.find("schema"); it != root.end()) {
         doc.runtimeSchema = it->value();
@@ -105,7 +127,19 @@ auto DiagramDocument::toJson() const -> boost::json::value {
     if (!streams.empty()) {
         root["streams"] = streams;
     }
-    
+    if (!probes.empty()) {
+        boost::json::array probesJson;
+        for (const auto& probe : probes) {
+            probesJson.push_back(boost::json::object{
+                {"element", probe.point.element},
+                {"port", probe.point.port},
+                {"name", probe.name.toStdString()},
+                {"unit", probe.unit.toStdString()},
+            });
+        }
+        root["probes"] = std::move(probesJson);
+    }
+
     return root;
 }
 

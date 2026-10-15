@@ -62,10 +62,6 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
         return {exposedNames(nestedSchema.as_object(), "exposed_inputs", "in"),
                 exposedNames(nestedSchema.as_object(), "exposed_outputs", "out")};
     }
-    if (type == "Scope") {
-        return {numbered("ch", std::max(1, json_utils::intValue(params, "channel_count", 1))), {}};
-    }
-
     int variadicInputs = 0;
     if (type == "Adder") {
         variadicInputs = std::max(2, arraySize(params, "weights"));

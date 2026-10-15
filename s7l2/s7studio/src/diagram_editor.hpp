@@ -49,7 +49,6 @@ public:
     [[nodiscard]] const DiagramScene* scene() const;
 
 signals:
-    void scopeNodeDoubleClicked(const QString& scopeId, int channelCount);
     void elementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
 
 private:

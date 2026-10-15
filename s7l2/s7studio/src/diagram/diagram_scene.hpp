@@ -1,6 +1,7 @@
 #pragma once
 
 #include "diagram/items.hpp"
+#include "diagram/net_model.hpp"
 
 #include <qschematic/scene.hpp>
 
@@ -70,6 +71,18 @@ public:
     [[nodiscard]] auto signalWires() const -> std::vector<std::shared_ptr<SignalWire>>;
     [[nodiscard]] auto sharedWire(const SignalWire* wire) const -> std::shared_ptr<SignalWire>;
 
+    // Probes (non-invasive output taps, not Functional Graph elements; see
+    // DiagramProbe). Not part of the undo stack: adding/removing/renaming a
+    // probe never changes what the diagram computes.
+    [[nodiscard]] const std::vector<DiagramProbe>& probes() const { return probes_; }
+    // False if `point` already has a probe.
+    bool addProbe(PortRef point, QString name, QString unit = {});
+    void removeProbe(const PortRef& point);
+    // False if `point` has no probe.
+    bool renameProbe(const PortRef& point, QString name);
+    // Bulk-load (opening a document); replaces every existing probe.
+    void setProbes(std::vector<DiagramProbe> probes);
+
     // Building without undo (loading). rerouteAll() routes every wire.
     void clearDiagram();
     void addNodeItem(const std::shared_ptr<QSchematic::Items::Node>& node);
@@ -105,6 +118,8 @@ Q_SIGNALS:
     // Elements, wires, params or placement changed (not plain moves).
     void diagramChanged();
     void statusMessage(const QString& message);
+    // A probe was added, removed or renamed.
+    void probesChanged();
 
 protected:
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
@@ -151,6 +166,7 @@ private:
     std::unique_ptr<Gesture> gesture_;
     QGraphicsPathItem* preview_ = nullptr;
     std::unordered_map<const QSchematic::Items::Item*, QPointF> knownPositions_;
+    std::vector<DiagramProbe> probes_;
     bool applying_ = false;
     bool mouseDown_ = false;
     // Whether the diagram's types resolved before the edit being checked
