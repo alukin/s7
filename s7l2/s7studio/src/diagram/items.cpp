@@ -29,7 +29,6 @@ namespace {
 
 constexpr double kPortMarker = 5.0;  // half size of the port symbol
 constexpr double kPortHitArea = 8.0; // half size of the area a press on the port hits
-constexpr int kElementWidthSteps = 9;
 constexpr double kHandle = 3.5;
 
 const QColor kNodeFill(0xf3, 0xf6, 0xfb);

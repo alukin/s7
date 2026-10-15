@@ -46,8 +46,9 @@ public:
     void setPageLayout(const DiagramPageLayout& pageLayout);
     [[nodiscard]] auto pageLayout() const -> DiagramPageLayout;
 
-    // A free spot on the page, preferring the part currently visible in the view, for a new element.
-    [[nodiscard]] auto suggestedNewItemPosition() const -> QPointF;
+    // A free spot for a new item of the given size: grid-aligned, not overlapping an existing node and
+    // inside the part of the page currently visible in the view (the whole page if nothing is visible).
+    [[nodiscard]] auto suggestedNewItemPosition(QSizeF itemSize) const -> QPointF;
 
     [[nodiscard]] DiagramScene* scene();
     [[nodiscard]] const DiagramScene* scene() const;

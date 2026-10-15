@@ -377,25 +377,19 @@ void DiagramEditor::rebuildPageFrame()
     updateRulers();
 }
 
-auto DiagramEditor::suggestedNewItemPosition() const -> QPointF
+auto DiagramEditor::suggestedNewItemPosition(const QSizeF itemSize) const -> QPointF
 {
-    constexpr double kStepX = 240.0;
-    constexpr double kStepY = 120.0;
-    constexpr QSizeF kItemSize(220.0, 100.0);
+    constexpr double kGrid = kGridStep;
+    constexpr double kMargin = kGrid;
 
     const QRectF page = orientedPageRect(pageLayout_);
     QRectF area = page;
     if (_view && _view->viewport()) {
-        const QRectF visible = _view->mapToScene(_view->viewport()->rect()).boundingRect();
-        const QRectF clipped = visible.intersected(page);
-        if (clipped.width() >= kItemSize.width() && clipped.height() >= kItemSize.height()) {
+        const QRectF clipped = _view->mapToScene(_view->viewport()->rect()).boundingRect().intersected(page);
+        if (clipped.width() > 0.0 && clipped.height() > 0.0) {
             area = clipped;
         }
     }
-
-    const double margin = 20.0;
-    const double x0 = std::ceil((area.left() + margin) / 20.0) * 20.0;
-    const double y0 = std::ceil((area.top() + margin) / 20.0) * 20.0;
 
     QList<QRectF> occupied;
     if (_scene) {
@@ -406,9 +400,15 @@ auto DiagramEditor::suggestedNewItemPosition() const -> QPointF
         }
     }
 
-    for (double y = y0; y + kItemSize.height() <= area.bottom(); y += kStepY) {
-        for (double x = x0; x + kItemSize.width() <= area.right(); x += kStepX) {
-            const QRectF candidate(QPointF(x, y), kItemSize);
+    const auto snapUp = [](const double value) { return std::ceil(value / kGrid) * kGrid; };
+    const double x0 = snapUp(area.left() + kMargin);
+    const double y0 = snapUp(area.top() + kMargin);
+    const double xMax = area.right() - itemSize.width();
+    const double yMax = area.bottom() - itemSize.height();
+
+    for (double y = y0; y <= yMax; y += kGrid) {
+        for (double x = x0; x <= xMax; x += kGrid) {
+            const QRectF candidate(QPointF(x, y), itemSize);
             const bool free = std::none_of(occupied.begin(), occupied.end(),
                                            [&](const QRectF& r) { return r.intersects(candidate); });
             if (free) {
@@ -416,7 +416,9 @@ auto DiagramEditor::suggestedNewItemPosition() const -> QPointF
             }
         }
     }
-    return QPointF(x0, y0);
+
+    // No free spot: stay inside the visible area (as far as the item fits) rather than jumping elsewhere.
+    return QPointF(std::max(area.left(), std::min(x0, xMax)), std::max(area.top(), std::min(y0, yMax)));
 }
 
 void DiagramEditor::updateSceneRectFromPage()

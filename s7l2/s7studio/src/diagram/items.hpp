@@ -31,6 +31,7 @@ enum ItemType {
 // Scene units per grid step. Diagram files store whole grid steps; nodes,
 // ports, wire points and bends always lie on the grid.
 constexpr int kGridStep = 20;
+constexpr int kElementWidthSteps = 9;
 
 enum class PortDirection { Input, Output };
 
