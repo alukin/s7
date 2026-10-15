@@ -23,10 +23,6 @@
 
 namespace s7studio::ui {
 
-namespace {
-const QColor kSeriesColor("#1f77b4");
-} // namespace
-
 ScopeViewWindow::ScopeViewWindow(QString probeName,
                                  QWidget* parent,
                                  const Qt::WindowFlags flags)
@@ -91,20 +87,37 @@ auto ScopeViewWindow::probeName() const -> QString
 
 void ScopeViewWindow::appendSample(const double timeSeconds, const double value)
 {
-    series_.time.push_back(timeSeconds);
-    series_.value.push_back(value);
+    appendSample(probeName_, timeSeconds, value);
+}
+
+void ScopeViewWindow::appendSample(const QString& channel, const double timeSeconds, const double value)
+{
+    auto& series = series_[channel];
+    if (series.graphIndex < 0) {
+        plot_->addGraph();
+        series.graphIndex = plot_->graphCount() - 1;
+        auto* graph = plot_->graph(series.graphIndex);
+        graph->setName(channel);
+        static const QVector<QColor> colors{QColor("#1f77b4"), QColor("#d62728"), QColor("#2ca02c"),
+                                            QColor("#9467bd"), QColor("#ff7f0e"), QColor("#17becf")};
+        QPen pen(colors[(series_.size() - 1) % colors.size()]);
+        pen.setWidthF(1.6);
+        graph->setPen(pen);
+    }
+    series.time.push_back(timeSeconds);
+    series.value.push_back(value);
     if (recording_) {
-        if (series_.recordedTime.size() >= kMaxRecordedSamples) {
+        if (series.recordedTime.size() >= kMaxRecordedSamples) {
             recordingLimitReached_ = true;
             setRecording(false);
         } else {
-            series_.recordedTime.push_back(timeSeconds);
-            series_.recordedValue.push_back(value);
+            series.recordedTime.push_back(timeSeconds);
+            series.recordedValue.push_back(value);
         }
     }
 
     const double minTime = std::max(0.0, timeSeconds - windowSecondsSpin_->value());
-    trimVisibleBuffer(minTime);
+    trimVisibleBuffer(series, minTime);
     dirty_ = true;
 }
 
@@ -142,16 +155,14 @@ void ScopeViewWindow::updateStatus()
 
 void ScopeViewWindow::clearBuffers()
 {
-    series_.time.clear();
-    series_.value.clear();
-    series_.recordedTime.clear();
-    series_.recordedValue.clear();
+    series_.clear();
+    plot_->clearGraphs();
     recordingLimitReached_ = false;
     droppedSamples_ = 0;
     updateStatus();
 
-    if (auto* graph = plot_->graph(0)) {
-        graph->data()->clear();
+    for (int index = 0; index < plot_->graphCount(); ++index) {
+        plot_->graph(index)->data()->clear();
     }
 
     dirty_ = true;
@@ -176,10 +187,13 @@ void ScopeViewWindow::exportRecordedCsv()
     }
 
     QTextStream out(&file);
-    out << "probe,time_s,value\n";
-    const int sampleCount = std::min(series_.recordedTime.size(), series_.recordedValue.size());
-    for (int i = 0; i < sampleCount; ++i) {
-        out << probeName_ << ',' << series_.recordedTime[i] << ',' << series_.recordedValue[i] << '\n';
+    out << "scope,channel,time_s,value\n";
+    for (auto it = series_.cbegin(); it != series_.cend(); ++it) {
+        const auto& series = it.value();
+        const int sampleCount = std::min(series.recordedTime.size(), series.recordedValue.size());
+        for (int i = 0; i < sampleCount; ++i) {
+            out << probeName_ << ',' << it.key() << ',' << series.recordedTime[i] << ',' << series.recordedValue[i] << '\n';
+        }
     }
 }
 
@@ -198,12 +212,21 @@ void ScopeViewWindow::refreshPlot()
     }
 
     dirty_ = false;
-    if (auto* graph = plot_->graph(0)) {
-        graph->setData(series_.time, series_.value, true);
+    double minTime = std::numeric_limits<double>::max();
+    double maxTime = std::numeric_limits<double>::lowest();
+    for (auto it = series_.cbegin(); it != series_.cend(); ++it) {
+        const auto& series = it.value();
+        if (auto* graph = plot_->graph(series.graphIndex)) {
+            graph->setName(it.key());
+            graph->setData(series.time, series.value, true);
+        }
+        if (!series.time.isEmpty()) {
+            minTime = std::min(minTime, series.time.front());
+            maxTime = std::max(maxTime, series.time.back());
+        }
     }
-
-    if (!series_.time.isEmpty()) {
-        plot_->xAxis->setRange(series_.time.front(), series_.time.back());
+    if (minTime <= maxTime) {
+        plot_->xAxis->setRange(minTime, maxTime);
     }
 
     if (autoScaleYCheck_->isChecked()) {
@@ -220,24 +243,18 @@ void ScopeViewWindow::configurePlot()
     plot_->xAxis->setLabel(QStringLiteral("time (s)"));
     plot_->yAxis->setLabel(probeName_);
 
-    plot_->addGraph();
-    auto* graph = plot_->graph(0);
-    graph->setName(probeName_);
-    QPen pen(kSeriesColor);
-    pen.setWidthF(1.6);
-    graph->setPen(pen);
 }
 
-void ScopeViewWindow::trimVisibleBuffer(const double minTime)
+void ScopeViewWindow::trimVisibleBuffer(Series& series, const double minTime)
 {
     int trimCount = 0;
-    const int total = series_.time.size();
-    while (trimCount < total && series_.time[trimCount] < minTime) {
+    const int total = series.time.size();
+    while (trimCount < total && series.time[trimCount] < minTime) {
         ++trimCount;
     }
     if (trimCount > 0) {
-        series_.time.erase(series_.time.begin(), series_.time.begin() + trimCount);
-        series_.value.erase(series_.value.begin(), series_.value.begin() + trimCount);
+        series.time.erase(series.time.begin(), series.time.begin() + trimCount);
+        series.value.erase(series.value.begin(), series.value.begin() + trimCount);
     }
 }
 

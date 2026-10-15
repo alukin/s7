@@ -106,6 +106,22 @@
           30,
           8
         ]
+      },
+      {
+        "id": "scope_1",
+        "position": [
+          43,
+          8
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "integrated",
+            "sum"
+          ]
+        }
       }
     ],
     "wires": [
@@ -162,22 +178,44 @@
           ]
         },
         "bends": []
+      },
+      {
+        "id": "obs4",
+        "from": {
+          "port": [
+            "eulerintegrator_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs5",
+        "from": {
+          "wire": "w3",
+          "at": [
+            43,
+            8
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_1",
+            "in",
+            1
+          ]
+        },
+        "bends": []
       }
     ],
     "text_frames": []
-  },
-  "probes": [
-    {
-      "element": "eulerintegrator_1",
-      "port": 0,
-      "name": "integrated",
-      "unit": ""
-    },
-    {
-      "element": "summator",
-      "port": 0,
-      "name": "sum",
-      "unit": ""
-    }
-  ]
+  }
 }

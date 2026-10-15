@@ -85,6 +85,21 @@
           17,
           8
         ]
+      },
+      {
+        "id": "scope_1",
+        "position": [
+          30,
+          8
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "sum"
+          ]
+        }
       }
     ],
     "wires": [
@@ -123,16 +138,26 @@
           ]
         },
         "bends": []
+      },
+      {
+        "id": "obs3",
+        "from": {
+          "port": [
+            "summator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
       }
     ],
     "text_frames": []
-  },
-  "probes": [
-    {
-      "element": "summator",
-      "port": 0,
-      "name": "sum",
-      "unit": ""
-    }
-  ]
+  }
 }

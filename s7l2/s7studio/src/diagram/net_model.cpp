@@ -93,7 +93,12 @@ NetModel::NetModel(const DiagramScene& scene)
             problems_.emplace_back(wire.get(), QStringLiteral("Input %1 is fed by two wires.").arg(portName(wire->downstream)));
             continue;
         }
-        connections_.push_back(NetConnection{*driver, to, wire.get()});
+        const auto connection = NetConnection{*driver, to, wire.get()};
+        if (target->element().type == "Scope") {
+            observationConnections_.push_back(connection);
+        } else {
+            connections_.push_back(connection);
+        }
     }
     auto rank = [&](const PortRef& port) { return std::make_pair(order.contains(port.element) ? order.at(port.element) : order.size(), port.port); };
     std::stable_sort(connections_.begin(), connections_.end(), [&](const NetConnection& a, const NetConnection& b) {
@@ -106,6 +111,9 @@ auto NetModel::schemaJson(const std::string& name) const -> boost::json::object
     boost::json::array elements;
     for (const auto& node : scene_.elementNodes()) {
         const auto& element = node->element();
+        if (element.type == "Scope") {
+            continue;
+        }
         boost::json::object object{{"id", element.id}, {"type", element.type}, {"params", element.params}};
         if (!element.placement.empty()) {
             object["node"] = element.placement;

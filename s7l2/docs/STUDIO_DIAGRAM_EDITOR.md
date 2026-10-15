@@ -7,7 +7,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | File | Role |
 |---|---|
 | `s7studio/src/diagram/items.*` | Scene items, QSchematic subclasses: `ElementNode` (element id, type, params, nested schema, placement, title as typed members; one `PortConnector` per port), `PortConnector` (direction, index, name), `TextFrameNode`, `SignalWire` (its two `WireEnd`s and the bends placed by hand) |
-| `s7studio/src/diagram/element_ports.*` | The ports an element shows: nested schema `exposed_inputs`/`exposed_outputs`, registry metadata, `Adder` `weights`, `Multiply` `factors`, `Scope` `channel_count` |
+| `s7studio/src/diagram/element_ports.*` | The ports an element shows: nested schema `exposed_inputs`/`exposed_outputs`, registry metadata, `Adder` `weights`, `Multiply` `factors`, observer `Scope` channels |
 | `s7studio/src/diagram/diagram_scene.*` | `DiagramScene` (a `QSchematic::Scene`): connection rules, gestures, undoable edits (`DiagramChange`), routing of changed wires, junction placement |
 | `s7studio/src/diagram/net_model.*` | Connections read from the wire trees, wires that connect nothing, the runtime schema of the scene |
 | `s7studio/src/diagram/wire_router.*` | Orthogonal A* router on the grid |
@@ -21,7 +21,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 | `s7studio/src/tool_windows.*` | JetBrains-style tool windows: docks with stripe buttons, one window per area, Alt+number toggles, Hide All Tool Windows |
 | `s7studio/src/tool_panels.*` | Tool window contents: Problems, Log, Run, Deploy |
 | `s7studio/src/ui_icons.*` | Tabler icons (`resources/icons/tabler`, MIT) drawn in the palette's text color or a given color |
-| `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp`, `scope_sample_mailbox.hpp` | Embedded runtime: builds the schema through the registry, runs it on a worker thread, hands Scope samples to the UI through a bounded mailbox (oldest dropped and counted when the UI falls behind) |
+| `s7studio/src/local_schema_runner.*`, `local_runtime_v2.hpp`, `scope_sample_mailbox.hpp` | Embedded runtime: builds the functional schema through the registry, runs it on a worker thread, and hands observer samples to the UI through a bounded mailbox (oldest dropped and counted when the UI falls behind) |
 
 The diagram sources build as the `s7studio_diagram` library, shared by `s7studio` and `s7studio_diagram_test`.
 
@@ -51,7 +51,7 @@ The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills 
 - **Connections come from the trees:** each wire ending at an input connects the driver of its tree to that input (`NetModel`). Nothing is guessed from geometry.
 - **Routes are derived.** A wire's route runs from its upstream end through its user bends to its downstream end; `WireRouter` routes each leg between them. Only the bends are saved. Routes are recomputed for the wires an edit touches, for the wires of moved elements (after the move, including undo/redo of moves), and for any wire whose route no longer fits (an end off its port, a junction off its trunk, a segment through an element).
 - **Junction placement:** a junction keeps its point while that point is on its trunk (not at the trunk's ends); otherwise it moves to the trunk point nearest to where the branch goes next.
-- **Elements:** inputs on the left edge, outputs on the right, no rotation. Width 9 grid steps, height `max(5, 2 × ports + 1)` steps; ports two steps apart where they fit, centred. All positions, ports, bends and junctions are on the 20-unit grid. `Scope` is a Studio-only observer element (`local_runtime_v2.hpp`) with `channel_count` inputs of any real type. `TextFrame`s are diagram-only and not part of the runtime schema.
+- **Elements and observers:** inputs on the left edge, outputs on the right, no rotation. Width 9 grid steps, height `max(5, 2 × ports + 1)` steps; ports two steps apart where they fit, centred. All positions, ports, bends and junctions are on the 20-unit grid. The **Observers** library category contains `Scope`, a diagram-only observation client with variable signal inputs; connecting to its final `+` port adds another input. Observation wires are green and dashed, while functional signal wires remain black. Scope nodes and their wires persist in the diagram layout but are excluded from the runtime schema. Existing probe markers are not converted while a diagram loads. `TextFrame`s are diagram-only and not part of the runtime schema.
 - **Undo:** every edit is a `DiagramChange` (nodes and wires added or removed, wires re-hung, bends, element edits) pushed as one command on the scene's `QUndoStack`; element moves use QSchematic's `ItemMove`. Edit > Undo/Redo. Text frame text and style edits and run-configuration params (`sample_rate_hz`, `dt`) are applied directly.
 
 ## Element types and plugins
@@ -79,7 +79,7 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - **Drag from a port** to a port or a wire: valid targets are marked with a green ring, refused ones are dimmed, and the routed wire is previewed. Alt+drag starts from a wire (a junction). Releasing anywhere else connects nothing.
 - **Click by click (Wire Draw, `Ctrl+W`, or a click on a port without dragging):** click a port or a wire to start, click empty canvas to place bends, click a port or a wire to finish. Escape cancels the wire, then leaves the mode; Backspace/Delete removes the last bend; right-click cancels.
 - **Editing a wire:** select it; drag a bend handle (filled: placed by hand, hollow: routed) or drag a straight segment. Context menu: Add Bend Here, Remove Bend, Re-route (remove hand-placed bends), Delete Wire.
-- **Elements:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click: element properties dialog (ports, parameter specs, editable parameter JSON, Node placement); `Scope` opens its plot window; `TextFrame` edits text.
+- **Elements and observers:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click: element properties dialog (ports, parameter specs, editable parameter JSON, Node placement); `Scope` opens a multi-channel plot window; `TextFrame` edits text.
 - **Element Library tool window:** double-click adds an element; schema libraries can be loaded and saved from the File menu.
 - **Placement:** the element properties dialog has a Node field listing the nodes found in the Headless Nodes tool window; placed elements show `@ <node>` under them.
 - Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes tool window (the Studio certificate pinned by the nodes). It runs off the UI thread; the Deploy tool window shows each node's outcome; nothing is committed unless every node is ready.

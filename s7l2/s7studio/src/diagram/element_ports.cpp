@@ -58,6 +58,12 @@ auto arraySize(const boost::json::object& params, const char* key) -> int
 auto elementPorts(const std::string_view type, const boost::json::object& params, const boost::json::value& nestedSchema)
     -> ElementPorts
 {
+    if (type == "Scope") {
+        const int count = std::max(0, json_utils::intValue(params, "channel_count", 0));
+        auto inputs = numbered("signal", count);
+        inputs.push_back(QStringLiteral("+")); // connection target that grows the observer
+        return {std::move(inputs), {}};
+    }
     if (nestedSchema.is_object()) {
         return {exposedNames(nestedSchema.as_object(), "exposed_inputs", "in"),
                 exposedNames(nestedSchema.as_object(), "exposed_outputs", "out")};

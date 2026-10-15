@@ -131,6 +131,20 @@ void ElementPickerPanel::buildCategoryTree() {
         categoryNodes_.push_back(node);
     }
 
+    // Observers are Studio diagram items, not runtime element registry entries.
+    auto* observerCategory = new QTreeWidgetItem();
+    observerCategory->setText(0, QStringLiteral("Observers"));
+    observerCategory->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
+    QFont observerFont = observerCategory->font(0);
+    observerFont.setBold(true);
+    observerCategory->setFont(0, observerFont);
+    auto* scopeItem = new QTreeWidgetItem(observerCategory);
+    scopeItem->setText(0, QStringLiteral("Scope"));
+    scopeItem->setText(1, QStringLiteral("N→plot"));
+    scopeItem->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:Scope"));
+    scopeItem->setData(0, Qt::UserRole + 1, QStringLiteral("Plots one or more observed signals over time."));
+    elementTree_->addTopLevelItem(observerCategory);
+
     elementTree_->expandAll();
     elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count() + 1));
 }

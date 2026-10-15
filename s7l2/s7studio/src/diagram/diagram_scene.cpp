@@ -572,6 +572,9 @@ auto DiagramScene::typeProblem(const WireEnd& driver, const WireEnd& input) cons
     if (!from || !to) {
         return {};
     }
+    if (to->element().type == "Scope") {
+        return {}; // observation inputs accept any signal type
+    }
     // The resolver's first error, empty if the schema resolves; unknown
     // element types (plugins not loaded) count as not resolving.
     auto resolveError = [](const boost::json::object& schema) -> std::optional<QString> {
@@ -675,6 +678,12 @@ auto DiagramScene::connectEnds(const WireEnd& a, const WireEnd& b, QVector<QPoin
     DiagramChange change;
     change.addedWires.push_back(wire);
     applyChange(change, QStringLiteral("Connect"));
+    if (const auto target = downstream.node.lock(); target && target->element().type == "Scope" &&
+        downstream.index == static_cast<int>(target->inputs().size()) - 1) {
+        auto element = target->element();
+        element.params["channel_count"] = static_cast<int>(target->inputs().size());
+        changeElement(target, std::move(element));
+    }
     return {};
 }
 

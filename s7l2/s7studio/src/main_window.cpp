@@ -4,6 +4,7 @@
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
 #include "diagram/diagram_scene.hpp"
+#include "diagram/net_model.hpp"
 #include "diagram/element_ports.hpp"
 #include "element_picker_panel.hpp"
 #include "element_requirements.hpp"
@@ -691,17 +692,23 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     if (elementType.isEmpty() || !scene) {
         return;
     }
-    const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
+    const bool observer = elementType == QStringLiteral("StudioObserver:Scope");
+    const QString actualType = observer ? QStringLiteral("Scope") : elementType;
+    const auto* descriptor = observer ? nullptr : s7::ElementRegistry::instance().find(actualType.toStdString());
     diagram::ElementNode::Element element;
-    element.id = nextElementId(*scene, elementType).toStdString();
-    element.type = elementType.toStdString();
+    element.id = nextElementId(*scene, actualType).toStdString();
+    element.type = actualType.toStdString();
+    if (observer) {
+        element.params["channel_count"] = 0;
+    }
     if (descriptor && descriptor->metadata().schema_definition.has_value()) {
         element.schema = *descriptor->metadata().schema_definition;
     }
     scene->addElement(element, suggestedNewNodePosition(*scene));
     setDiagramMode(QSchematic::Scene::NormalMode);
     refreshPlacementLabels();
-    appendLog(QStringLiteral("[studio] added element %1 (%2)").arg(QString::fromStdString(element.id), elementType));
+    appendLog(QStringLiteral("[studio] added %1 %2").arg(observer ? QStringLiteral("observer") : QStringLiteral("element"),
+                                                               QString::fromStdString(element.id)));
 }
 
 void MainWindow::onHeadlessNodeActivated(const QString& endpoint,
@@ -914,6 +921,11 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         return;
     }
 
+    if (elementType == QStringLiteral("Scope")) {
+        openScopeWindow(QString::fromStdString(elementNode->id()));
+        return;
+    }
+
     const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
 
     QDialog dialog(this);
@@ -1047,8 +1059,11 @@ void MainWindow::onScopeSamplesAvailable()
         const auto probeName = QString::fromStdString(sample.probeName);
         scopeSampleHistory_[probeName].push_back(ScopeSamplePoint{sample.timeSeconds, sample.value});
         touched.insert(probeName, 0);
-        if (const auto window = scopeWindows_.value(probeName)) {
-            window->appendSample(sample.timeSeconds, sample.value);
+        const auto separator = probeName.indexOf(QLatin1Char('/'));
+        const auto scopeId = separator < 0 ? probeName : probeName.left(separator);
+        if (const auto window = scopeWindows_.value(scopeId)) {
+            const auto channel = separator < 0 ? probeName : probeName.mid(separator + 1);
+            window->appendSample(channel, sample.timeSeconds, sample.value);
         }
         for (auto it = phasePortraitWindows_.cbegin(); it != phasePortraitWindows_.cend(); ++it) {
             const auto& window = it.value();
@@ -1219,8 +1234,21 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
 {
     std::vector<RunProbe> probes;
     if (diagramEditor_ && diagramEditor_->scene()) {
-        for (const auto& probe : diagramEditor_->scene()->probes()) {
+        const auto* scene = diagramEditor_->scene();
+        for (const auto& probe : scene->probes()) {
             probes.push_back(RunProbe{probe.name.toStdString(), probe.point.element, probe.point.port});
+        }
+        const diagram::NetModel model(*scene);
+        for (const auto& connection : model.observationConnections()) {
+            auto channelName = std::string("signal") + std::to_string(connection.to.port);
+            if (const auto scope = scene->elementNode(connection.to.element)) {
+                const auto* names = json_utils::findObjectValue(scope->element().params, "channel_names");
+                if (names && names->is_array() && connection.to.port < static_cast<int>(names->as_array().size()) &&
+                    names->as_array()[connection.to.port].is_string()) {
+                    channelName = names->as_array()[connection.to.port].as_string().c_str();
+                }
+            }
+            probes.push_back(RunProbe{connection.to.element + "/" + channelName, connection.from.element, connection.from.port});
         }
     }
     return probes;
@@ -1556,13 +1584,16 @@ void MainWindow::clearScopeSamples()
 void MainWindow::replayScopeSamples(const QString& probeName, ui::ScopeViewWindow& window)
 {
     window.clearSamples();
-    const auto historyIt = scopeSampleHistory_.find(probeName);
-    if (historyIt == scopeSampleHistory_.end()) {
-        return;
-    }
-
-    for (const auto& point : historyIt.value()) {
-        window.appendSample(point.timeSeconds, point.value);
+    for (auto it = scopeSampleHistory_.cbegin(); it != scopeSampleHistory_.cend(); ++it) {
+        const auto separator = it.key().indexOf(QLatin1Char('/'));
+        const auto owner = separator < 0 ? it.key() : it.key().left(separator);
+        if (owner != probeName) {
+            continue;
+        }
+        for (const auto& point : it.value()) {
+            const auto channel = separator < 0 ? it.key() : it.key().mid(separator + 1);
+            window.appendSample(channel, point.timeSeconds, point.value);
+        }
     }
 }
 

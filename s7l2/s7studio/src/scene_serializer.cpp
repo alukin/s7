@@ -221,6 +221,11 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
     boost::json::array nodes;
     for (const auto& node : scene.elementNodes()) {
         boost::json::object object{{"id", node->id()}, {"position", gridJson(node->pos())}};
+        if (node->element().type == "Scope") {
+            object["observer"] = true;
+            object["type"] = "Scope";
+            object["params"] = node->element().params;
+        }
         if (!node->element().title.isEmpty()) {
             object["title"] = node->element().title.toStdString();
         }
@@ -357,7 +362,20 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
         for (const auto& value : nodes->as_array()) {
             const auto& object = value.is_object() ? value.as_object() : boost::json::object{};
             const auto id = json_utils::stringValue(object, "id");
-            const auto it = index.find(id);
+            auto it = index.find(id);
+            const auto* observerFlag = json_utils::findObjectValue(object, "observer");
+            if (it == index.end() && observerFlag && observerFlag->is_bool() && observerFlag->as_bool() &&
+                json_utils::stringValue(object, "type") == "Scope") {
+                Model observer;
+                observer.element.id = id;
+                observer.element.type = "Scope";
+                if (const auto* params = json_utils::findObjectValue(object, "params"); params && params->is_object()) {
+                    observer.element.params = params->as_object();
+                }
+                index.emplace(id, models.size());
+                models.push_back(std::move(observer));
+                it = index.find(id);
+            }
             if (it == index.end()) {
                 throw error("layout node '" + id + "' is not an element of the schema");
             }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QVector>
+#include <QMap>
 
 #include <cstdint>
 #include <Qt>
@@ -16,9 +17,8 @@ class QCustomPlot;
 
 namespace s7studio::ui {
 
-// A time-series view of one probe (ADR-011/012: the probe is a read-only tap,
-// not a graph element; one scope window per probe, like an oscilloscope
-// channel clipped onto a signal -- VISUAL_NUMERICAL_TESTS_PLAN.md section 1.0).
+// A time-series view for one Studio Scope observer. Each connected observer
+// input is a separate plotted channel; observation is outside the runtime graph.
 class ScopeViewWindow : public QWidget
 {
     Q_OBJECT
@@ -31,6 +31,7 @@ public:
     [[nodiscard]] auto probeName() const -> QString;
 
     void appendSample(double timeSeconds, double value);
+    void appendSample(const QString& channel, double timeSeconds, double value);
     void clearSamples();
     // Samples the runtime produced but the UI dropped because it fell behind.
     void setDroppedSampleCount(std::uint64_t dropped);
@@ -46,6 +47,7 @@ private slots:
 
 private:
     struct Series {
+        int graphIndex = -1;
         QVector<double> time;
         QVector<double> value;
         QVector<double> recordedTime;
@@ -55,7 +57,7 @@ private:
     void configurePlot();
     void setRecording(bool recording);
     void updateStatus();
-    void trimVisibleBuffer(double minTime);
+    void trimVisibleBuffer(Series& series, double minTime);
 
     QString probeName_;
     bool recording_ = false;
@@ -63,7 +65,7 @@ private:
     std::uint64_t droppedSamples_ = 0;
     bool dirty_ = false;
 
-    Series series_;
+    QMap<QString, Series> series_;
 
     QCustomPlot* plot_ = nullptr;
     QDoubleSpinBox* windowSecondsSpin_ = nullptr;

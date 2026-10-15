@@ -48,6 +48,8 @@ public:
 
     // In element order (scene order of the elements, then ports).
     [[nodiscard]] const std::vector<NetConnection>& connections() const { return connections_; }
+    // Observation-only links from functional outputs into Studio observer inputs.
+    [[nodiscard]] const std::vector<NetConnection>& observationConnections() const { return observationConnections_; }
     // Wires that connect nothing valid, and why.
     [[nodiscard]] const std::vector<std::pair<SignalWire*, QString>>& problems() const { return problems_; }
 
@@ -65,6 +67,7 @@ public:
 private:
     const DiagramScene& scene_;
     std::vector<NetConnection> connections_;
+    std::vector<NetConnection> observationConnections_;
     std::vector<std::pair<SignalWire*, QString>> problems_;
 };
 
