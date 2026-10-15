@@ -25,6 +25,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace s7studio::diagram {
 
@@ -374,6 +375,48 @@ void DiagramEditor::rebuildPageFrame()
     pageFrame_->setFlag(QGraphicsItem::ItemIsSelectable, false);
     updateSceneRectFromPage();
     updateRulers();
+}
+
+auto DiagramEditor::suggestedNewItemPosition() const -> QPointF
+{
+    constexpr double kStepX = 240.0;
+    constexpr double kStepY = 120.0;
+    constexpr QSizeF kItemSize(220.0, 100.0);
+
+    const QRectF page = orientedPageRect(pageLayout_);
+    QRectF area = page;
+    if (_view && _view->viewport()) {
+        const QRectF visible = _view->mapToScene(_view->viewport()->rect()).boundingRect();
+        const QRectF clipped = visible.intersected(page);
+        if (clipped.width() >= kItemSize.width() && clipped.height() >= kItemSize.height()) {
+            area = clipped;
+        }
+    }
+
+    const double margin = 20.0;
+    const double x0 = std::ceil((area.left() + margin) / 20.0) * 20.0;
+    const double y0 = std::ceil((area.top() + margin) / 20.0) * 20.0;
+
+    QList<QRectF> occupied;
+    if (_scene) {
+        for (const auto& node : _scene->items<QSchematic::Items::Node>()) {
+            if (node) {
+                occupied.append(node->sceneBoundingRect());
+            }
+        }
+    }
+
+    for (double y = y0; y + kItemSize.height() <= area.bottom(); y += kStepY) {
+        for (double x = x0; x + kItemSize.width() <= area.right(); x += kStepX) {
+            const QRectF candidate(QPointF(x, y), kItemSize);
+            const bool free = std::none_of(occupied.begin(), occupied.end(),
+                                           [&](const QRectF& r) { return r.intersects(candidate); });
+            if (free) {
+                return QPointF(x, y);
+            }
+        }
+    }
+    return QPointF(x0, y0);
 }
 
 void DiagramEditor::updateSceneRectFromPage()
