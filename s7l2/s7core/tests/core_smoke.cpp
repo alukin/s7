@@ -676,6 +676,67 @@ int main() try
         }
     }
 
+    {
+        // Direct construction: each function against its std:: reference.
+        auto check = [](s7::TrigFunction function, const double x, const double expected) {
+            s7::TrigT<s7::SignalType::F64> trig{function};
+            const s7::RealValue input{x};
+            const std::array<s7::InputBinding, 1> binding{s7::bind_input<s7::SignalType::F64>(input)};
+            trig.bind_inputs({binding.data(), binding.size()});
+            trig.step();
+            assert(std::abs(s7::bound_value<s7::SignalType::F64>(trig.outputs()[0]) - expected) < 1e-12);
+        };
+        check(s7::TrigFunction::Sin, 0.5, std::sin(0.5));
+        check(s7::TrigFunction::Cos, 0.5, std::cos(0.5));
+        check(s7::TrigFunction::Tan, 0.5, std::tan(0.5));
+        check(s7::TrigFunction::Asin, 0.5, std::asin(0.5));
+        check(s7::TrigFunction::Acos, 0.5, std::acos(0.5));
+        check(s7::TrigFunction::Atan, 0.5, std::atan(0.5));
+        check(s7::TrigFunction::Sinh, 0.5, std::sinh(0.5));
+        check(s7::TrigFunction::Cosh, 0.5, std::cosh(0.5));
+        check(s7::TrigFunction::Tanh, 0.5, std::tanh(0.5));
+
+        bool threw = false;
+        try {
+            static_cast<void>(s7::trig_function_from_name("bogus"));
+        } catch (const std::invalid_argument&) {
+            threw = true;
+        }
+        if (!threw) {
+            throw std::runtime_error("Expected an unknown Trig function name to be rejected.");
+        }
+    }
+
+    {
+        // Through the registry: the mathematical pendulum's v' = -omega0^2 * sin(x) needs exactly this.
+        auto& registry = s7::ElementRegistry::instance();
+        s7::register_builtin_elements(registry);
+        const auto* trig = registry.find("Trig");
+        assert(trig != nullptr);
+
+        s7::Schema schema{"pendulum_term"};
+        schema.set_rate(s7::Rate::from_hz(1));
+        schema.add_element("x", [] { return std::make_unique<s7::Constant>(0.3); });
+        schema.add_element(s7::make_element_spec("sin_x", *trig, {{"function", "sin"}}));
+        schema.connect("x", 0, "sin_x", 0);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step();
+        assert(std::abs(runtime.real_output_of("sin_x") - std::sin(0.3)) < 1e-12);
+
+        // Pinned to an integer type: no sensible sin/cos, so refused like any
+        // other element outside its allowed type set.
+        s7::Schema intSchema{"int_trig"};
+        intSchema.set_rate(s7::Rate::from_hz(1));
+        intSchema.add_element("x", [] { return std::make_unique<s7::ConstantT<s7::SignalType::I32>>(1); });
+        intSchema.add_element(s7::make_element_spec("f", *trig, {{"type", "I32"}}));
+        intSchema.connect("x", 0, "f", 0);
+        const auto intValidation = s7::Validator::validate(intSchema);
+        if (intValidation.ok()) {
+            throw std::runtime_error("Expected Trig pinned to I32 to be rejected.");
+        }
+    }
+
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core smoke: fatal error: " << ex.what() << '\n';

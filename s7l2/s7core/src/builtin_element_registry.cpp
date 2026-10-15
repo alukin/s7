@@ -124,6 +124,18 @@ SignalTypeSet floating_types()
     return SignalTypeSet::where([](const SignalType type) { return signal_type_info(type).is_floating(); });
 }
 
+// Real floating-point types only, no complex component (Trig: s7::math has no
+// complex-analytic sin/cos/... yet, s7/float_types.hpp).
+SignalTypeSet real_floating_types()
+{
+    return SignalTypeSet::where([](const SignalType type) { return signal_type_info(type).kind == SignalKind::Float; });
+}
+
+TrigFunction trig_function_param(const ElementCreationContext& ctx)
+{
+    return ctx.has_param("function") ? trig_function_from_name(ctx.get_string("function")) : TrigFunction::Sin;
+}
+
 // Accumulating elements: input type T and accumulator type A (A defaults to T).
 void add_accumulator_variable(ElementMetadata& metadata)
 {
@@ -314,6 +326,26 @@ void register_builtin_elements(ElementRegistry& registry)
                                            "filters", 1, 1, floating_types());
             m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
             m.parameters.push_back({"initial_value", "value", "y[0]", 0, std::nullopt, std::nullopt, {}, false});
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "Trig",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    return std::make_unique<TrigT<T>>(trig_function_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("Trig", "Trigonometric Function",
+                                           "y = f(x): sin, cos, tan, asin, acos, atan, sinh, cosh or tanh of an arbitrary input",
+                                           "filters", 1, 1, real_floating_types());
+            m.parameters.push_back({"function", "enum", "Which function to apply", "sin", std::nullopt, std::nullopt,
+                                    {"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh"}, false});
             return m;
         }()));
 

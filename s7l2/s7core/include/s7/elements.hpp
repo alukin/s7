@@ -511,6 +511,48 @@ private:
     part_type phase_{};
 };
 
+/// Trig's "function" parameter. "T", "f(T)" in element docs/messages below.
+enum class TrigFunction : std::uint8_t { Sin, Cos, Tan, Asin, Acos, Atan, Sinh, Cosh, Tanh };
+
+// "sin", "cos", ...; throws std::invalid_argument otherwise.
+[[nodiscard]] TrigFunction trig_function_from_name(std::string_view name);
+
+/// Trig: y = f(x), f selected by the "function" parameter (sin, cos, tan,
+/// asin, acos, atan, sinh, cosh, tanh), computed in the element's type.
+/// Real floating-point types: s7::math has no complex-analytic version of
+/// these yet (s7/float_types.hpp).
+template <SignalType Type>
+class TrigT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    explicit TrigT(TrigFunction function = TrigFunction::Sin) : Element("Trig"), function_(function)
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto x = read_input<value_type>(0);
+        switch (function_) {
+            case TrigFunction::Sin: output_value_ = math::sin(x); break;
+            case TrigFunction::Cos: output_value_ = math::cos(x); break;
+            case TrigFunction::Tan: output_value_ = math::tan(x); break;
+            case TrigFunction::Asin: output_value_ = math::asin(x); break;
+            case TrigFunction::Acos: output_value_ = math::acos(x); break;
+            case TrigFunction::Atan: output_value_ = math::atan(x); break;
+            case TrigFunction::Sinh: output_value_ = math::sinh(x); break;
+            case TrigFunction::Cosh: output_value_ = math::cosh(x); break;
+            case TrigFunction::Tanh: output_value_ = math::tanh(x); break;
+        }
+    }
+
+private:
+    TrigFunction function_;
+    value_type output_value_{};
+};
+
 using Accumulator = AccumulatorT<SignalType::F64>;
 using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
 using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
@@ -520,6 +562,7 @@ using AnalogOscillator = AnalogOscillatorT<SignalType::F64>;
 using ReImToComplex = ReImToComplexT<SignalType::C64>;
 using ComplexToReIm = ComplexToReImT<SignalType::C64>;
 using ComplexToMagnitudePhase = ComplexToMagnitudePhaseT<SignalType::C64>;
+using Trig = TrigT<SignalType::F64>;
 
 /// PreviousValue: the F64 unit delay under its own element name.
 class PreviousValue final : public Element {

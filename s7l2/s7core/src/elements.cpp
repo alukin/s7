@@ -34,4 +34,23 @@ void PreviousValue::step() {
 // Type conversion elements
 // ============================================================================
 
+// ============================================================================
+// Math elements
+// ============================================================================
+
+TrigFunction trig_function_from_name(const std::string_view name)
+{
+    if (name == "sin") return TrigFunction::Sin;
+    if (name == "cos") return TrigFunction::Cos;
+    if (name == "tan") return TrigFunction::Tan;
+    if (name == "asin") return TrigFunction::Asin;
+    if (name == "acos") return TrigFunction::Acos;
+    if (name == "atan") return TrigFunction::Atan;
+    if (name == "sinh") return TrigFunction::Sinh;
+    if (name == "cosh") return TrigFunction::Cosh;
+    if (name == "tanh") return TrigFunction::Tanh;
+    throw std::invalid_argument("Trig function must be one of sin, cos, tan, asin, acos, atan, sinh, cosh, tanh, got '" +
+                                std::string(name) + "'.");
+}
+
 } // namespace s7

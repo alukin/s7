@@ -147,14 +147,14 @@ Time-series and phase-portrait/attractor views are deliberately separate templat
 
 Follows `doc/S7_Numerical_Modeling_Test_Plan.md` section 12, with the diagram+probes+visualization track layered on from Stage 1.2 onward (Stage 1.1 needs no diagram or phase portrait — one scalar trajectory against a closed form needs no visual story):
 
-1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1:** implement `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model"). Not yet designed in code, not part of this plan to implement, but nothing after this point should be treated as validated until it exists.
+1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1 — done.** `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` is implemented and mandatory in `Validator::validate()`/`Compiler::compile()` (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model"). Nothing built before this point (Stage 0, Stage 1.1) has been re-run against it yet.
 2. Stage 0 harness — done (`numerical_harness.hpp`), but built before the resolver existed.
 3. Stage 1.1 scalar linear — passing (`linear_scalar_smoke.cpp`: `EulerIntegrator` vs. analytical decay, convergence order, forced-response steady state), but likewise predates the resolver; revisit once step 1 lands rather than treating this as settled.
 4. Headless diagram runner (section 2) — build next (running every schema through the resolver from step 1, not hand-propagating `dt`), validated against a re-expression of 1.1 as a diagram before any new case depends on it.
 5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes — first phase-portrait case.
 6. Stage 1.3 coupled linear systems of increasing size, against the matrix exponential.
 7. Stage 1.6 larger-graph/performance checks (kept numeric-only, no visualization story).
-8. **Blocking prerequisite for Stage 2 onward:** a generic `Trig` element in `s7core` (section 1.5, `OPEN_PROBLEMS.md`). Van der Pol and Lorenz need nothing beyond the existing `Multiply`, but the pendulum's own dynamics cannot be built without it.
+8. **Blocking prerequisite for Stage 2 onward — done.** A generic `Trig` element exists in `s7core` (section 1.5, `OPEN_PROBLEMS.md`), real floating types, `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`sinh`/`cosh`/`tanh`. Van der Pol and Lorenz need nothing beyond the existing `Multiply`; the pendulum's own dynamics needed this.
 9. Stage 2 pendulum — dynamics and energy both built from ordinary elements (section 1.5); energy-drift plot, phase portrait, multiple amplitudes.
 10. Stage 3 Van der Pol — limit-cycle phase portrait.
 11. Stage 4 Lorenz — 3D attractor projections, statistical/geometric checks.
