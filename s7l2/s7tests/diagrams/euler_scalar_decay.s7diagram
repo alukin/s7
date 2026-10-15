@@ -1,0 +1,15 @@
+{
+  "document_kind": "s7.diagram",
+  "dt": 0.01,
+  "schema": {
+    "name": "euler_scalar_decay",
+    "elements": [
+      { "id": "x", "type": "EulerIntegrator", "params": { "dt": 0.01, "initial_value": 1.0 } },
+      { "id": "ax", "type": "Gain", "params": { "factor": -1.0 } }
+    ],
+    "connections": [
+      { "from_element": "x", "from_port": 0, "to_element": "ax", "to_port": 0 },
+      { "from_element": "ax", "from_port": 0, "to_element": "x", "to_port": 0 }
+    ]
+  }
+}

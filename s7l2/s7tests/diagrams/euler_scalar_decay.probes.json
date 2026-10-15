@@ -1,0 +1,8 @@
+{
+  "probes": [
+    { "name": "x", "element": "x", "port": 0, "unit": "" }
+  ],
+  "views": [
+    { "type": "time_series", "y": "x" }
+  ]
+}

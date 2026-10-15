@@ -10,3 +10,12 @@
 add_executable(s7tests_linear_scalar_smoke linear_scalar_smoke.cpp)
 target_link_libraries(s7tests_linear_scalar_smoke PRIVATE s7core)
 add_test(NAME s7tests_linear_scalar_smoke COMMAND s7tests_linear_scalar_smoke)
+
+# Headless .s7diagram + probe-sidecar runner (diagram_harness.hpp,
+# ../docs/VISUAL_NUMERICAL_TESTS_PLAN.md section 2); diagrams/*.s7diagram are
+# Studio-openable.
+add_executable(s7tests_diagram_harness_smoke diagram_harness_smoke.cpp)
+target_link_libraries(s7tests_diagram_harness_smoke PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_diagram_harness_smoke PRIVATE
+    S7TESTS_DIAGRAM_DIR="${CMAKE_CURRENT_SOURCE_DIR}/diagrams")
+add_test(NAME s7tests_diagram_harness_smoke COMMAND s7tests_diagram_harness_smoke)

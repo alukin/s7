@@ -5,7 +5,7 @@ Status: living document — update in place as stages complete or the design cha
 
 Companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md` (the language-neutral validation methodology: stages, reference-solution discipline, metrics, acceptance criteria) and to `DEVELOPMENT_PLAN.md`/`OPEN_PROBLEMS.md`. This document is the S7L2-specific (C++) implementation plan for that methodology, extended with a visual/diagram-based test track: each numerical test case is represented as an actual diagram with explicit observation points, runnable both headlessly (for pass/fail) and visually in Studio (for human inspection), with generated plots (time series, phase portraits, attractor projections, convergence) as reviewable artifacts.
 
-No code from this plan has been written yet except the Stage 0 harness and first Stage 1.1 test described in section 2, which already exist and pass.
+Code written so far: the Stage 0 harness and first Stage 1.1 test (`s7tests/numerical_harness.hpp`, `linear_scalar_smoke.cpp`), and the headless `.s7diagram` + probe-sidecar runner itself (section 2, `s7tests/diagram_harness.hpp`), validated by re-expressing that same Stage 1.1 case as a diagram (`s7tests/diagrams/euler_scalar_decay.s7diagram`, `diagram_harness_smoke.cpp`) and confirming it reproduces the identical numbers. The visualization pipeline (section 3) and every stage from 1.2 onward are not built yet.
 
 ## 1. Design decided so far
 
@@ -83,19 +83,21 @@ Not needed by any stage currently planned (Stages 1–5's state signals are all 
 - An I/Q constellation or complex-plane trajectory view is the existing phase-portrait template (section 3) applied to one probe's `.re`/`.im` columns instead of two separate probes — no new plotting mechanism, just this reuse.
 - A spectrum/frequency-domain view is out of scope until `s7spectral` gets frame/block signal types (`OPEN_PROBLEMS.md` P3); `WindowedFFT` currently outputs only a scalar dominant frequency/amplitude, so there is no spectrum to plot yet.
 
-## 2. Headless diagram runner (new)
+## 2. Headless diagram runner — implemented (2026-10-15)
 
-A small, Qt-free addition to `s7tests/`, extending the existing `numerical_harness.hpp`/`linear_scalar_smoke.cpp` pattern rather than replacing it:
+A small, Qt-free addition to `s7tests/` (`diagram_harness.hpp`), extending the existing `numerical_harness.hpp`/`linear_scalar_smoke.cpp` pattern rather than replacing it:
 
 1. Parse a `.s7diagram` file (`boost::json`, already a dependency); take its `schema` object and top-level `dt`.
 2. Build the `s7::Schema` from `schema.elements`/`connections` the same way `s7core/tests/type_inference_smoke.cpp` already does for JSON-parameterized elements (`ElementRegistry::find(type)` + `make_element_spec`), not by hand-constructing C++ objects — this is what lets the same diagram run unmodified whether it came from Studio or was hand-written.
-3. Propagate `dt` into element parameters and `set_model_time_step_ns`, per 1.3.
+3. Seed `Schema::set_rate()` from the diagram's top-level `dt` and call `NodeRuntime::set_model_time_step_ns()` with it, per 1.3 — no per-element propagation: RateResolver (run inside step 4 below) is what actually proves every element's own rate (if it has one) agrees, rather than this step rewriting it by hand.
 4. `Validator::validate` / `Compiler::compile` / `NodeRuntime`, exactly as today.
 5. Parse the matching `.probes.json` sidecar into `ProbePoint`s; construct one `ObservationService`.
 6. Step loop: step the runtime, `snapshot()` the probes (optionally strided, per 1.4), append to an in-memory trace.
 7. Two outputs from the same run:
    - pass/fail checks against an independently-computed reference (closed form, matrix exponential, conserved quantity, limit-cycle measure, or statistics, per the stage — see `doc/S7_Numerical_Modeling_Test_Plan.md` section 3.2/3.3), asserted the same hand-rolled way as `linear_scalar_smoke.cpp` (`assert`/`throw`, no framework);
-   - optionally (env var or CLI flag, off by default so `ctest` stays fast), a full trace dump to a plain text table (`step model_time_s <probe name> <probe name> ...`), one row per sampled step, for visualization. A complex-typed probe contributes two columns (`<name>.re`, `<name>.im`), per section 1.6, not one.
+   - optionally (`S7TESTS_DUMP_TRACE` env var, off by default so `ctest` stays fast), a full trace dump to a plain text table (`step model_time_s <probe name> <probe name> ...`), one row per sampled step, for visualization. A complex-typed probe contributes two columns (`<name>.re`, `<name>.im`), per section 1.6, not one.
+
+Validated against a re-expression of Stage 1.1 as a diagram, per section 6 step 4: `s7tests/diagrams/euler_scalar_decay.s7diagram` + `.probes.json`, run through `diagram_harness_smoke.cpp`, reproduces `linear_scalar_smoke.cpp`'s own result bit-for-bit (`max abs error=0.00995017` in both). Verified on both the native Linux build and the Windows cross-build (`ctest` under Wine).
 
 This is additive to what exists: `linear_scalar_smoke.cpp`'s hand-built-in-C++ schema stays as-is (it is a fine, lighter-weight pattern for a single small case); the diagram runner is for cases worth keeping as an actual, Studio-openable artifact (any case with a probe-point/visual-inspection story — in practice, Stage 1.2 onward).
 
@@ -132,10 +134,10 @@ Time-series and phase-portrait/attractor views are deliberately separate templat
 
 ## 4. Layout
 
-- `s7tests/diagrams/<case>.s7diagram`, `s7tests/diagrams/<case>.probes.json` — one pair per test case, Studio-openable.
-- `s7tests/diagram_harness.hpp` (or folded into `numerical_harness.hpp`) — the loader/runner from section 2.
-- `s7tests/visualize/*.gp` — gnuplot templates from section 3, plus one small driver script.
-- `s7tests/<stage>_<case>_smoke.cpp` — one `ctest`-registered executable per case, following the existing `s7tests_linear_scalar_smoke` naming and registration pattern in `s7tests/CMakeLists.txt`.
+- `s7tests/diagrams/<case>.s7diagram`, `s7tests/diagrams/<case>.probes.json` — one pair per test case, Studio-openable. `euler_scalar_decay` exists (the runner's own validation case, section 2).
+- `s7tests/diagram_harness.hpp` — the loader/runner from section 2. Done.
+- `s7tests/visualize/*.gp` — gnuplot templates from section 3, plus one small driver script. Not done.
+- `s7tests/<stage>_<case>_smoke.cpp` — one `ctest`-registered executable per case, following the existing `s7tests_linear_scalar_smoke` naming and registration pattern in `s7tests/CMakeLists.txt`. `diagram_harness_smoke.cpp` exists (the runner's own validation, not yet a numbered stage).
 
 ## 5. Explicitly deferred, not part of this plan
 
@@ -150,8 +152,8 @@ Follows `doc/S7_Numerical_Modeling_Test_Plan.md` section 12, with the diagram+pr
 1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1 — done.** `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` is implemented and mandatory in `Validator::validate()`/`Compiler::compile()` (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model").
 2. Stage 0 harness — done (`numerical_harness.hpp`).
 3. **Stage 1.1 scalar linear — re-confirmed against the resolver (2026-10-15), not just re-passing by inspection.** `linear_scalar_smoke.cpp` (`EulerIntegrator` vs. analytical decay, convergence order, forced-response steady state) now has a `test_rate_resolver_confirms_one_rate()` check that calls `RateResolver::resolve()` directly and asserts it resolves exactly 1/`dt` Hz for every element in the integrator loop — the schema needed no `Schema::set_rate()` seed, since its one `EulerIntegrator` already pins its one connected component.
-4. Headless diagram runner (section 2) — build next (running every schema through the resolver from step 1, not hand-propagating `dt`), validated against a re-expression of 1.1 as a diagram before any new case depends on it.
-5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes — first phase-portrait case.
+4. **Headless diagram runner (section 2) — done (2026-10-15).** Runs every schema through the resolver from step 1 (not hand-propagating `dt`); validated against a re-expression of 1.1 as a diagram (`diagrams/euler_scalar_decay.s7diagram`, `diagram_harness_smoke.cpp`) reproducing its result bit-for-bit.
+5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes — first phase-portrait case. Build next.
 6. Stage 1.3 coupled linear systems of increasing size, against the matrix exponential.
 7. Stage 1.6 larger-graph/performance checks (kept numeric-only, no visualization story).
 8. **Blocking prerequisite for Stage 2 onward — done.** A generic `Trig` element exists in `s7core` (section 1.5, `OPEN_PROBLEMS.md`), real floating types, `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`sinh`/`cosh`/`tanh`. Van der Pol and Lorenz need nothing beyond the existing `Multiply`; the pendulum's own dynamics needed this.
