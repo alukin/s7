@@ -11,6 +11,8 @@
 
 #include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
+#include <QElapsedTimer>
+#include <QLoggingCategory>
 #include <QMenu>
 #include <QPainterPath>
 #include <QPen>
@@ -24,6 +26,8 @@
 namespace s7studio::diagram {
 
 namespace {
+
+Q_LOGGING_CATEGORY(lcDiagramPerformance, "s7studio.diagram.performance")
 
 constexpr double kHandleHit = 6.0;  // a press this close to a bend grabs it
 constexpr double kSegmentHit = 4.0; // a press this close to a segment grabs it
@@ -179,6 +183,12 @@ struct DiagramScene::Gesture {
     bool segment = false;
 };
 
+struct DiagramScene::MoveGesture {
+    QPointF press;
+    std::vector<std::pair<std::shared_ptr<QSchematic::Items::Item>, QPointF>> items;
+    std::vector<std::shared_ptr<SignalWire>> incidentWires;
+};
+
 DiagramScene::DiagramScene(QObject* parent)
     : Scene(parent)
 {
@@ -274,6 +284,46 @@ void DiagramScene::rerouteAll()
     }
     repairRoutes(all);
     rememberPositions();
+}
+
+void DiagramScene::restoreRoutes(const std::function<void(int)>& progress)
+{
+    QElapsedTimer timer;
+    timer.start();
+    std::vector<SignalWire*> invalid;
+    const auto wires = signalWires();
+    for (std::size_t index = 0; index < wires.size(); ++index) {
+        const auto& wire = wires[index];
+        attach(*wire);
+        // A saved route is a display cache for the current node positions.
+        // Existing diagrams may intentionally contain overlaps that the
+        // automatic router cannot eliminate, so only structural cache
+        // validity is checked during load.
+        if (!routeIsValid(*wire, false)) {
+            invalid.push_back(wire.get());
+        }
+        if (progress) {
+            progress(wires.empty() ? 30 : static_cast<int>((index + 1) * 30 / wires.size()));
+        }
+    }
+    const auto cacheMisses = invalid.size();
+    const int routesToRepair = std::max(1, static_cast<int>(invalid.size()));
+    int routed = 0;
+    const auto routeProgress = [&] {
+        ++routed;
+        if (progress) {
+            progress(30 + std::min(60, routed * 60 / routesToRepair));
+        }
+    };
+    if (!invalid.empty()) {
+        repairRoutes(std::move(invalid), routeProgress);
+    }
+    if (progress) {
+        progress(100);
+    }
+    rememberPositions();
+    qCDebug(lcDiagramPerformance) << "route restore: wires=" << wires.size() << "cache_misses=" << cacheMisses
+                                  << "elapsed_ms=" << timer.elapsed();
 }
 
 // Undoable edits
@@ -759,42 +809,70 @@ auto DiagramScene::placeJunction(const SignalWire& branch) const -> std::optiona
     return best ? best : std::optional<QPointF>(route.front());
 }
 
-bool DiagramScene::routeIsValid(const SignalWire& wire) const
+bool DiagramScene::routeIsValid(const SignalWire& wire, const bool checkObstacles) const
 {
     const auto route = wire.pointsAbsolute();
-    if (route.size() < 2) {
+    const auto invalid = [&](const char* reason) {
+        if (lcDiagramPerformance().isDebugEnabled()) {
+            const auto endName = [](const WireEnd& end) {
+                if (const auto node = end.node.lock()) {
+                    return QString::fromStdString(node->id());
+                }
+                return end.isJunction() ? QStringLiteral("junction") : QStringLiteral("missing");
+            };
+            qCDebug(lcDiagramPerformance) << "invalid route:" << reason << endName(wire.upstream) << "->"
+                                          << endName(wire.downstream) << "points=" << route.size();
+        }
         return false;
+    };
+    if (route.isEmpty()) {
+        return invalid("empty");
     }
     const auto start = anchorOf(wire.upstream);
     const auto end = anchorOf(wire.downstream);
     if (!start || !end || !same(route.front(), *start) || !same(route.back(), *end)) {
-        return false;
+        return invalid("endpoints");
+    }
+    // Coincident port endpoints are represented by one point. Accept that
+    // degenerate route so loading and repair do not repeatedly try to route
+    // a path whose start and goal are identical.
+    if (route.size() == 1) {
+        if (!wire.upstream.isJunction() && wire.userBends.isEmpty() && same(*start, *end)) {
+            return true;
+        }
+        return invalid("unsupported-single-point");
     }
     if (wire.upstream.isJunction()) {
         const auto trunk = wire.upstream.wire.lock();
         const auto trunkRoute = trunk ? trunk->pointsAbsolute() : QVector<QPointF>{};
         if (trunkRoute.size() < 2 || !onRoute(*start, trunkRoute) || same(*start, trunkRoute.front()) || same(*start, trunkRoute.back())) {
-            return false;
+            return invalid("junction");
         }
     }
+    const auto obstacles = checkObstacles ? nodeRects() : std::vector<QRectF>{};
     for (int index = 0; index + 1 < route.size(); ++index) {
         const QPointF a = route[index];
         const QPointF b = route[index + 1];
         if (std::abs(a.x() - b.x()) > 0.5 && std::abs(a.y() - b.y()) > 0.5) {
-            return false;
+            return invalid("diagonal");
         }
-        const QRectF segment = QRectF(a, b).normalized();
-        for (const auto& rect : nodeRects()) {
-            const QRectF inner = rect.adjusted(1.0, 1.0, -1.0, -1.0);
-            if (segment.right() >= inner.left() && segment.left() <= inner.right() && segment.bottom() >= inner.top() &&
-                segment.top() <= inner.bottom()) {
-                return false;
+        if (checkObstacles) {
+            const QRectF segment = QRectF(a, b).normalized();
+            for (const auto& rect : obstacles) {
+                const QRectF inner = rect.adjusted(1.0, 1.0, -1.0, -1.0);
+                if (segment.right() >= inner.left() && segment.left() <= inner.right() && segment.bottom() >= inner.top() &&
+                    segment.top() <= inner.bottom()) {
+                    if (lcDiagramPerformance().isDebugEnabled()) {
+                        qCDebug(lcDiagramPerformance) << "route obstacle detail: segment=" << a << b << "node=" << inner;
+                    }
+                    return invalid("obstacle");
+                }
             }
         }
     }
     for (const auto& bend : wire.userBends) {
         if (!onRoute(bend, route)) {
-            return false;
+            return invalid("bend");
         }
     }
     return true;
@@ -829,7 +907,7 @@ void DiagramScene::attach(SignalWire& wire)
     }
 }
 
-void DiagramScene::route(std::vector<SignalWire*> forced)
+void DiagramScene::route(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress)
 {
     if (forced.empty()) {
         return;
@@ -923,26 +1001,71 @@ void DiagramScene::route(std::vector<SignalWire*> forced)
         wire->setRoute(points);
         attach(*wire);
         router.addWire(path, request.net);
+        if (routeProgress) {
+            routeProgress();
+        }
     }
 }
 
-void DiagramScene::repairRoutes(std::vector<SignalWire*> forced)
+void DiagramScene::repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress)
 {
-    route(std::move(forced));
+    if (forced.empty()) {
+        return;
+    }
+
+    QElapsedTimer timer;
+    timer.start();
+    const auto initiallyForced = forced.size();
+    std::size_t checkedRoutes = 0;
+    std::size_t reroutedRoutes = forced.size();
+    int validationPasses = 0;
+    std::unordered_set<const SignalWire*> affectedRoots;
+    for (const auto* wire : forced) {
+        if (wire) {
+            const auto* root = NetModel::rootOf(*wire);
+            affectedRoots.insert(root ? root : wire);
+        }
+    }
+    std::vector<SignalWire*> candidates;
+    for (const auto& wire : signalWires()) {
+        const auto* root = NetModel::rootOf(*wire);
+        if (affectedRoots.contains(root ? root : wire.get())) {
+            candidates.push_back(wire.get());
+        }
+    }
+    route(std::move(forced), routeProgress);
     // Rerouted wires may leave others invalid (a junction off its trunk, a
     // wire under a moved element); a few passes settle every tree.
     for (int pass = 0; pass < 4; ++pass) {
         std::vector<SignalWire*> invalid;
-        for (const auto& wire : signalWires()) {
+        ++validationPasses;
+        checkedRoutes += candidates.size();
+        for (auto* wire : candidates) {
             if (!routeIsValid(*wire) && anchorOf(wire->downstream) && (wire->upstream.isJunction() || anchorOf(wire->upstream))) {
-                invalid.push_back(wire.get());
+                invalid.push_back(wire);
             }
         }
         if (invalid.empty()) {
             break;
         }
-        route(std::move(invalid));
+        std::vector<QVector<QPointF>> before;
+        before.reserve(invalid.size());
+        for (const auto* wire : invalid) {
+            before.push_back(wire->pointsAbsolute());
+        }
+        reroutedRoutes += invalid.size();
+        route(invalid, routeProgress);
+        bool changed = false;
+        for (std::size_t index = 0; index < invalid.size(); ++index) {
+            changed = changed || invalid[index]->pointsAbsolute() != before[index];
+        }
+        if (!changed) {
+            break;
+        }
     }
+    qCDebug(lcDiagramPerformance) << "route repair: forced=" << initiallyForced << "rerouted=" << reroutedRoutes
+                                  << "validated=" << checkedRoutes << "passes=" << validationPasses
+                                  << "elapsed_ms=" << timer.elapsed();
 }
 
 void DiagramScene::rememberPositions()
@@ -1324,6 +1447,7 @@ void DiagramScene::setProbes(std::vector<DiagramProbe> probes)
 
 void DiagramScene::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
+    moveGesture_.reset();
     const QPointF pos = event->scenePos();
     if (event->button() == Qt::LeftButton) {
         mouseDown_ = true;
@@ -1375,6 +1499,7 @@ void DiagramScene::mousePressEvent(QGraphicsSceneMouseEvent* event)
         return;
     }
 
+    QSchematic::Items::Node* moveTarget = nullptr;
     if (mode() == NormalMode && event->button() == Qt::LeftButton) {
         // Editing the bends of a selected wire (a press on a port connects instead).
         if (const auto wire = wireAt(pos); wire && wire->isSelected() && !portAt(pos)) {
@@ -1424,8 +1549,34 @@ void DiagramScene::mousePressEvent(QGraphicsSceneMouseEvent* event)
             event->accept();
             return;
         }
+        if (auto* item = itemAt(pos, QTransform())) {
+            if (auto* node = dynamic_cast<QSchematic::Items::Node*>(item);
+                node && node->mode() == QSchematic::Items::Node::Mode::None) {
+                moveTarget = node;
+            }
+        }
     }
     Scene::mousePressEvent(event);
+    if (moveTarget) {
+        auto move = std::make_unique<MoveGesture>();
+        move->press = pos;
+        std::unordered_set<SignalWire*> seen;
+        for (const auto& item : selectedTopLevelItems()) {
+            if (item && item->isMovable()) {
+                move->items.emplace_back(item, item->pos());
+                if (const auto node = std::dynamic_pointer_cast<ElementNode>(item)) {
+                    for (const auto& wire : wiresOf(*node)) {
+                        if (seen.insert(wire.get()).second) {
+                            move->incidentWires.push_back(wire);
+                        }
+                    }
+                }
+            }
+        }
+        if (!move->items.empty()) {
+            moveGesture_ = std::move(move);
+        }
+    }
 }
 
 void DiagramScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
@@ -1485,6 +1636,19 @@ void DiagramScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
         event->accept();
         return;
     }
+    if (moveGesture_ && event->buttons().testFlag(Qt::LeftButton)) {
+        const QPointF delta = pos - moveGesture_->press;
+        for (const auto& [item, initialPosition] : moveGesture_->items) {
+            item->setPos(initialPosition + delta);
+        }
+        // Maintain the active connection geometry without simplifying every
+        // unrelated wire on every pointer event.
+        for (const auto& wire : moveGesture_->incidentWires) {
+            wire->simplify();
+        }
+        event->accept();
+        return;
+    }
     Scene::mouseMoveEvent(event);
 }
 
@@ -1529,6 +1693,7 @@ void DiagramScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
         return;
     }
     Scene::mouseReleaseEvent(event);
+    moveGesture_.reset();
     checkMovedNodes();
 }
 

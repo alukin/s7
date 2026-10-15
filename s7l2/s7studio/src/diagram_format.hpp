@@ -33,9 +33,9 @@ namespace s7studio::diagram {
 //       { "id": "delay1", "position": [30, 4] }
 //     ],
 //     "wires": [
-//       { "id": "w1", "from": { "port": ["const1", "out", 0] }, "to": { "port": ["add1", "in", 0] }, "bends": [] },
+//       { "id": "w1", "from": { "port": ["const1", "out", 0] }, "to": { "port": ["add1", "in", 0] }, "bends": [], "route": [[11, 6], [15, 6], [15, 12], [25, 12]] },
 //       { "id": "w2", "from": { "port": ["delay1", "out", 0] }, "to": { "port": ["add1", "in", 1] },
-//         "bends": [[41, 12], [14, 12]] },
+//         "bends": [[41, 12], [14, 12]], "route": [[30, 6], [41, 6], [41, 12], [14, 12], [14, 20]] },
 //       { "id": "w3", "from": { "port": ["add1", "out", 0] }, "to": { "port": ["delay1", "in", 0] }, "bends": [] }
 //     ],
 //     "text_frames": []
@@ -46,8 +46,9 @@ namespace s7studio::diagram {
 //   layout only. Coordinates are whole grid steps.
 // - A wire runs from an output port, or from a junction `at` a point of
 //   another wire of the same net ("from": { "wire": "w1", "at": [x, y] }),
-//   to an input port. `bends` are the bends placed by hand; routes are
-//   recomputed on load.
+//   to an input port. `bends` are the bends placed by hand; optional `route`
+//   points cache the current path to avoid rerouting on load;
+//   missing or invalid cached routes are recomputed.
 // - The connections the wires make must equal `schema.connections`. Without
 //   `wires` (or without `diagram`) Studio wires and lays the schema out itself.
 

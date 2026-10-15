@@ -88,6 +88,17 @@ auto orientedPageRect(const DiagramPageLayout& pageLayout) -> QRectF
     return {0.0, 0.0, sceneUnitsFromMm(rectMm.width()), sceneUnitsFromMm(rectMm.height())};
 }
 
+void fitRectInView(QSchematic::View* view, const QRectF& rect)
+{
+    if (!view || rect.isEmpty() || view->viewport()->width() < 32 || view->viewport()->height() < 32) {
+        return;
+    }
+
+    const double scale = std::min(view->viewport()->width() / rect.width(), view->viewport()->height() / rect.height());
+    view->setZoomValue(std::clamp(scale, static_cast<double>(view->zoom_factor_min), static_cast<double>(view->zoom_factor_max)));
+    view->centerOn(rect.center());
+}
+
 } // namespace
 
 DiagramEditor::DiagramEditor(QWidget* parent)
@@ -145,11 +156,11 @@ void DiagramEditor::clearDiagram()
     rebuildPageFrame();
 }
 
-void DiagramEditor::loadDocument(const DiagramDocument& document)
+void DiagramEditor::loadDocument(const DiagramDocument& document, const std::function<void(int)>& progress)
 {
     pageFrame_ = nullptr; // deleted with the scene's content
     try {
-        SceneSerializer{}.deserialize(document, *_scene);
+        SceneSerializer{}.deserialize(document, *_scene, progress);
     } catch (...) {
         clearDiagram();
         throw;
@@ -185,7 +196,7 @@ void DiagramEditor::showItem(QGraphicsItem* item)
 
 void DiagramEditor::fitToContents()
 {
-    fitPageInView();
+    fitDiagramInView();
 }
 
 void DiagramEditor::fitPageInView()
@@ -201,7 +212,7 @@ void DiagramEditor::fitPageInView()
 
     const auto pageRect = orientedPageRect(pageLayout_);
     updateSceneRectFromPage();
-    _view->QGraphicsView::fitInView(pageRect.adjusted(-4.0, -4.0, 4.0, 4.0), Qt::KeepAspectRatio);
+    fitRectInView(_view, pageRect.adjusted(-4.0, -4.0, 4.0, 4.0));
     _pendingFitToContents = false;
     updateRulers();
 }
@@ -226,7 +237,7 @@ void DiagramEditor::fitDiagramInView()
         return;
     }
     const double margin = 2.0 * kGridStep;
-    _view->QGraphicsView::fitInView(content.adjusted(-margin, -margin, margin, margin), Qt::KeepAspectRatio);
+    fitRectInView(_view, content.adjusted(-margin, -margin, margin, margin));
     updateRulers();
 }
 

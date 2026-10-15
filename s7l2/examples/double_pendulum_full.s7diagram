@@ -341,9 +341,57 @@
         "to_port": 0
       },
       {
+        "from_element": "theta1",
+        "from_port": 0,
+        "to_element": "sin_theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "omega1_squared",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "omega1_squared",
+        "to_port": 1
+      },
+      {
         "from_element": "theta2",
         "from_port": 0,
         "to_element": "angle_difference",
+        "to_port": 1
+      },
+      {
+        "from_element": "theta2",
+        "from_port": 0,
+        "to_element": "sin_theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "omega2_squared",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "omega2_squared",
         "to_port": 1
       },
       {
@@ -359,42 +407,6 @@
         "to_port": 0
       },
       {
-        "from_element": "theta1",
-        "from_port": 0,
-        "to_element": "sin_theta1",
-        "to_port": 0
-      },
-      {
-        "from_element": "theta2",
-        "from_port": 0,
-        "to_element": "sin_theta2",
-        "to_port": 0
-      },
-      {
-        "from_element": "omega1",
-        "from_port": 0,
-        "to_element": "omega1_squared",
-        "to_port": 0
-      },
-      {
-        "from_element": "omega1",
-        "from_port": 0,
-        "to_element": "omega1_squared",
-        "to_port": 1
-      },
-      {
-        "from_element": "omega2",
-        "from_port": 0,
-        "to_element": "omega2_squared",
-        "to_port": 0
-      },
-      {
-        "from_element": "omega2",
-        "from_port": 0,
-        "to_element": "omega2_squared",
-        "to_port": 1
-      },
-      {
         "from_element": "sin_delta",
         "from_port": 0,
         "to_element": "sin_delta_squared",
@@ -405,6 +417,96 @@
         "from_port": 0,
         "to_element": "sin_delta_squared",
         "to_port": 1
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "theta1_term2_product",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "omega1_sin_delta",
+        "to_port": 1
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "omega2_cross_term",
+        "to_port": 1
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "theta1_term1_product",
+        "to_port": 1
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "omega1_cos_delta",
+        "to_port": 1
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "sin_theta1_cos_delta",
+        "to_port": 1
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "omega2_cross_term",
+        "to_port": 2
+      },
+      {
+        "from_element": "sin_theta1",
+        "from_port": 0,
+        "to_element": "theta1_term3",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta1",
+        "from_port": 0,
+        "to_element": "sin_theta1_cos_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta2",
+        "from_port": 0,
+        "to_element": "theta1_term1_product",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta2",
+        "from_port": 0,
+        "to_element": "gravity_theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1_squared",
+        "from_port": 0,
+        "to_element": "omega1_cos_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1_squared",
+        "from_port": 0,
+        "to_element": "omega1_sin_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2_squared",
+        "from_port": 0,
+        "to_element": "omega2_length_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2_squared",
+        "from_port": 0,
+        "to_element": "omega2_cross_term",
+        "to_port": 0
       },
       {
         "from_element": "sin_delta_squared",
@@ -413,16 +515,16 @@
         "to_port": 0
       },
       {
-        "from_element": "mass1_constant",
-        "from_port": 0,
-        "to_element": "mass_denominator",
-        "to_port": 0
-      },
-      {
         "from_element": "m2_sin_delta_squared",
         "from_port": 0,
         "to_element": "mass_denominator",
         "to_port": 1
+      },
+      {
+        "from_element": "mass1_constant",
+        "from_port": 0,
+        "to_element": "mass_denominator",
+        "to_port": 0
       },
       {
         "from_element": "mass_denominator",
@@ -437,15 +539,15 @@
         "to_port": 0
       },
       {
-        "from_element": "sin_theta2",
+        "from_element": "denominator1",
         "from_port": 0,
-        "to_element": "theta1_term1_product",
-        "to_port": 0
+        "to_element": "alpha1",
+        "to_port": 1
       },
       {
-        "from_element": "cos_delta",
+        "from_element": "denominator2",
         "from_port": 0,
-        "to_element": "theta1_term1_product",
+        "to_element": "alpha2",
         "to_port": 1
       },
       {
@@ -455,27 +557,15 @@
         "to_port": 0
       },
       {
-        "from_element": "omega1_squared",
+        "from_element": "theta1_term1",
         "from_port": 0,
-        "to_element": "omega1_cos_delta",
+        "to_element": "theta1_numerator",
         "to_port": 0
-      },
-      {
-        "from_element": "cos_delta",
-        "from_port": 0,
-        "to_element": "omega1_cos_delta",
-        "to_port": 1
       },
       {
         "from_element": "omega1_cos_delta",
         "from_port": 0,
         "to_element": "omega1_length_term",
-        "to_port": 0
-      },
-      {
-        "from_element": "omega2_squared",
-        "from_port": 0,
-        "to_element": "omega2_length_term",
         "to_port": 0
       },
       {
@@ -491,12 +581,6 @@
         "to_port": 1
       },
       {
-        "from_element": "sin_delta",
-        "from_port": 0,
-        "to_element": "theta1_term2_product",
-        "to_port": 0
-      },
-      {
         "from_element": "centripetal_sum",
         "from_port": 0,
         "to_element": "theta1_term2_product",
@@ -506,18 +590,6 @@
         "from_element": "theta1_term2_product",
         "from_port": 0,
         "to_element": "theta1_term2",
-        "to_port": 0
-      },
-      {
-        "from_element": "sin_theta1",
-        "from_port": 0,
-        "to_element": "theta1_term3",
-        "to_port": 0
-      },
-      {
-        "from_element": "theta1_term1",
-        "from_port": 0,
-        "to_element": "theta1_numerator",
         "to_port": 0
       },
       {
@@ -539,51 +611,15 @@
         "to_port": 0
       },
       {
-        "from_element": "denominator1",
+        "from_element": "alpha1",
         "from_port": 0,
-        "to_element": "alpha1",
-        "to_port": 1
-      },
-      {
-        "from_element": "omega1_squared",
-        "from_port": 0,
-        "to_element": "omega1_sin_delta",
+        "to_element": "omega1",
         "to_port": 0
-      },
-      {
-        "from_element": "sin_delta",
-        "from_port": 0,
-        "to_element": "omega1_sin_delta",
-        "to_port": 1
       },
       {
         "from_element": "omega1_sin_delta",
         "from_port": 0,
         "to_element": "omega1_rotational_term",
-        "to_port": 0
-      },
-      {
-        "from_element": "sin_theta2",
-        "from_port": 0,
-        "to_element": "gravity_theta2",
-        "to_port": 0
-      },
-      {
-        "from_element": "sin_theta1",
-        "from_port": 0,
-        "to_element": "sin_theta1_cos_delta",
-        "to_port": 0
-      },
-      {
-        "from_element": "cos_delta",
-        "from_port": 0,
-        "to_element": "sin_theta1_cos_delta",
-        "to_port": 1
-      },
-      {
-        "from_element": "sin_theta1_cos_delta",
-        "from_port": 0,
-        "to_element": "gravity_theta1",
         "to_port": 0
       },
       {
@@ -599,6 +635,12 @@
         "to_port": 1
       },
       {
+        "from_element": "sin_theta1_cos_delta",
+        "from_port": 0,
+        "to_element": "gravity_theta1",
+        "to_port": 0
+      },
+      {
         "from_element": "gravity_theta1",
         "from_port": 0,
         "to_element": "theta2_inner_sum",
@@ -611,33 +653,15 @@
         "to_port": 0
       },
       {
-        "from_element": "omega2_squared",
+        "from_element": "theta2_main_term",
         "from_port": 0,
-        "to_element": "omega2_cross_term",
+        "to_element": "theta2_numerator",
         "to_port": 0
-      },
-      {
-        "from_element": "sin_delta",
-        "from_port": 0,
-        "to_element": "omega2_cross_term",
-        "to_port": 1
-      },
-      {
-        "from_element": "cos_delta",
-        "from_port": 0,
-        "to_element": "omega2_cross_term",
-        "to_port": 2
       },
       {
         "from_element": "omega2_cross_term",
         "from_port": 0,
         "to_element": "theta2_rotation_term",
-        "to_port": 0
-      },
-      {
-        "from_element": "theta2_main_term",
-        "from_port": 0,
-        "to_element": "theta2_numerator",
         "to_port": 0
       },
       {
@@ -650,30 +674,6 @@
         "from_element": "theta2_numerator",
         "from_port": 0,
         "to_element": "alpha2",
-        "to_port": 0
-      },
-      {
-        "from_element": "denominator2",
-        "from_port": 0,
-        "to_element": "alpha2",
-        "to_port": 1
-      },
-      {
-        "from_element": "omega1",
-        "from_port": 0,
-        "to_element": "theta1",
-        "to_port": 0
-      },
-      {
-        "from_element": "alpha1",
-        "from_port": 0,
-        "to_element": "omega1",
-        "to_port": 0
-      },
-      {
-        "from_element": "omega2",
-        "from_port": 0,
-        "to_element": "theta2",
         "to_port": 0
       },
       {
@@ -1038,7 +1038,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            87,
+            7
+          ],
+          [
+            88,
+            7
+          ],
+          [
+            88,
+            10
+          ],
+          [
+            95,
+            10
+          ],
+          [
+            95,
+            1
+          ],
+          [
+            11,
+            1
+          ],
+          [
+            11,
+            4
+          ],
+          [
+            12,
+            4
+          ]
+        ]
       },
       {
         "id": "w2",
@@ -1056,7 +1090,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            87,
+            33
+          ],
+          [
+            88,
+            33
+          ],
+          [
+            88,
+            11
+          ],
+          [
+            11,
+            11
+          ],
+          [
+            11,
+            6
+          ],
+          [
+            12,
+            6
+          ]
+        ]
       },
       {
         "id": "w3",
@@ -1074,7 +1134,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            5
+          ]
+        ]
       },
       {
         "id": "w4",
@@ -1092,7 +1158,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            5
+          ],
+          [
+            22,
+            5
+          ],
+          [
+            22,
+            0
+          ],
+          [
+            1,
+            0
+          ],
+          [
+            1,
+            10
+          ],
+          [
+            20,
+            10
+          ],
+          [
+            20,
+            15
+          ],
+          [
+            21,
+            15
+          ]
+        ]
       },
       {
         "id": "w5",
@@ -1110,7 +1210,49 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            87,
+            7
+          ],
+          [
+            89,
+            7
+          ],
+          [
+            89,
+            12
+          ],
+          [
+            73,
+            12
+          ],
+          [
+            73,
+            10
+          ],
+          [
+            21,
+            10
+          ],
+          [
+            21,
+            12
+          ],
+          [
+            11,
+            12
+          ],
+          [
+            11,
+            15
+          ],
+          [
+            12,
+            15
+          ]
+        ]
       },
       {
         "id": "w6",
@@ -1128,7 +1270,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            87,
+            33
+          ],
+          [
+            89,
+            33
+          ],
+          [
+            89,
+            40
+          ],
+          [
+            10,
+            40
+          ],
+          [
+            10,
+            25
+          ],
+          [
+            12,
+            25
+          ]
+        ]
       },
       {
         "id": "w7",
@@ -1146,7 +1314,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            19
+          ],
+          [
+            76,
+            19
+          ],
+          [
+            76,
+            31
+          ],
+          [
+            11,
+            31
+          ],
+          [
+            11,
+            34
+          ],
+          [
+            12,
+            34
+          ]
+        ]
       },
       {
         "id": "w8",
@@ -1164,7 +1358,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            19
+          ],
+          [
+            77,
+            19
+          ],
+          [
+            77,
+            41
+          ],
+          [
+            11,
+            41
+          ],
+          [
+            11,
+            36
+          ],
+          [
+            12,
+            36
+          ]
+        ]
       },
       {
         "id": "w9",
@@ -1182,7 +1402,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            45
+          ],
+          [
+            76,
+            45
+          ],
+          [
+            76,
+            50
+          ],
+          [
+            10,
+            50
+          ],
+          [
+            10,
+            44
+          ],
+          [
+            12,
+            44
+          ]
+        ]
       },
       {
         "id": "w10",
@@ -1200,7 +1446,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            45
+          ],
+          [
+            77,
+            45
+          ],
+          [
+            77,
+            51
+          ],
+          [
+            11,
+            51
+          ],
+          [
+            11,
+            46
+          ],
+          [
+            12,
+            46
+          ]
+        ]
       },
       {
         "id": "w11",
@@ -1218,7 +1490,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            5
+          ],
+          [
+            31,
+            5
+          ],
+          [
+            31,
+            2
+          ],
+          [
+            29,
+            2
+          ],
+          [
+            29,
+            4
+          ],
+          [
+            30,
+            4
+          ]
+        ]
       },
       {
         "id": "w12",
@@ -1236,7 +1534,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            5
+          ],
+          [
+            31,
+            5
+          ],
+          [
+            31,
+            7
+          ],
+          [
+            29,
+            7
+          ],
+          [
+            29,
+            6
+          ],
+          [
+            30,
+            6
+          ]
+        ]
       },
       {
         "id": "w13",
@@ -1254,7 +1578,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            39,
+            5
+          ]
+        ]
       },
       {
         "id": "w14",
@@ -1272,7 +1602,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            12,
+            5
+          ],
+          [
+            13,
+            5
+          ],
+          [
+            13,
+            -1
+          ],
+          [
+            47,
+            -1
+          ],
+          [
+            47,
+            4
+          ],
+          [
+            48,
+            4
+          ]
+        ]
       },
       {
         "id": "w15",
@@ -1290,7 +1646,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            48,
+            5
+          ],
+          [
+            49,
+            5
+          ],
+          [
+            49,
+            7
+          ],
+          [
+            47,
+            7
+          ],
+          [
+            47,
+            6
+          ],
+          [
+            48,
+            6
+          ]
+        ]
       },
       {
         "id": "w16",
@@ -1308,7 +1690,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            57,
+            5
+          ]
+        ]
       },
       {
         "id": "w17",
@@ -1326,7 +1714,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            57,
+            5
+          ],
+          [
+            58,
+            5
+          ],
+          [
+            58,
+            -2
+          ],
+          [
+            2,
+            -2
+          ],
+          [
+            2,
+            9
+          ],
+          [
+            56,
+            9
+          ],
+          [
+            56,
+            15
+          ],
+          [
+            57,
+            15
+          ]
+        ]
       },
       {
         "id": "w18",
@@ -1344,7 +1766,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            25
+          ],
+          [
+            22,
+            25
+          ],
+          [
+            22,
+            20
+          ],
+          [
+            29,
+            20
+          ],
+          [
+            29,
+            14
+          ],
+          [
+            30,
+            14
+          ]
+        ]
       },
       {
         "id": "w19",
@@ -1362,7 +1810,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            15
+          ],
+          [
+            31,
+            15
+          ],
+          [
+            31,
+            17
+          ],
+          [
+            28,
+            17
+          ],
+          [
+            28,
+            16
+          ],
+          [
+            30,
+            16
+          ]
+        ]
       },
       {
         "id": "w20",
@@ -1380,7 +1854,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            39,
+            15
+          ]
+        ]
       },
       {
         "id": "w21",
@@ -1398,7 +1878,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            35
+          ],
+          [
+            22,
+            35
+          ],
+          [
+            22,
+            30
+          ],
+          [
+            11,
+            30
+          ],
+          [
+            11,
+            21
+          ],
+          [
+            29,
+            21
+          ],
+          [
+            29,
+            24
+          ],
+          [
+            30,
+            24
+          ]
+        ]
       },
       {
         "id": "w22",
@@ -1416,7 +1930,49 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            15
+          ],
+          [
+            32,
+            15
+          ],
+          [
+            32,
+            19
+          ],
+          [
+            21,
+            19
+          ],
+          [
+            21,
+            20
+          ],
+          [
+            9,
+            20
+          ],
+          [
+            9,
+            29
+          ],
+          [
+            29,
+            29
+          ],
+          [
+            29,
+            26
+          ],
+          [
+            30,
+            26
+          ]
+        ]
       },
       {
         "id": "w23",
@@ -1434,7 +1990,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            39,
+            25
+          ]
+        ]
       },
       {
         "id": "w24",
@@ -1452,7 +2014,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            45
+          ],
+          [
+            22,
+            45
+          ],
+          [
+            22,
+            42
+          ],
+          [
+            8,
+            42
+          ],
+          [
+            8,
+            22
+          ],
+          [
+            20,
+            22
+          ],
+          [
+            20,
+            25
+          ],
+          [
+            21,
+            25
+          ]
+        ]
       },
       {
         "id": "w25",
@@ -1470,7 +2066,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            48,
+            25
+          ],
+          [
+            49,
+            25
+          ],
+          [
+            49,
+            20
+          ],
+          [
+            47,
+            20
+          ],
+          [
+            47,
+            14
+          ],
+          [
+            48,
+            14
+          ]
+        ]
       },
       {
         "id": "w26",
@@ -1488,7 +2110,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            25
+          ],
+          [
+            31,
+            25
+          ],
+          [
+            31,
+            20
+          ],
+          [
+            46,
+            20
+          ],
+          [
+            46,
+            16
+          ],
+          [
+            48,
+            16
+          ]
+        ]
       },
       {
         "id": "w27",
@@ -1506,7 +2154,57 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            5
+          ],
+          [
+            32,
+            5
+          ],
+          [
+            32,
+            -3
+          ],
+          [
+            0,
+            -3
+          ],
+          [
+            0,
+            19
+          ],
+          [
+            20,
+            19
+          ],
+          [
+            20,
+            22
+          ],
+          [
+            30,
+            22
+          ],
+          [
+            30,
+            21
+          ],
+          [
+            56,
+            21
+          ],
+          [
+            56,
+            24
+          ],
+          [
+            57,
+            24
+          ]
+        ]
       },
       {
         "id": "w28",
@@ -1524,7 +2222,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            57,
+            15
+          ],
+          [
+            58,
+            15
+          ],
+          [
+            58,
+            20
+          ],
+          [
+            55,
+            20
+          ],
+          [
+            55,
+            26
+          ],
+          [
+            57,
+            26
+          ]
+        ]
       },
       {
         "id": "w29",
@@ -1542,7 +2266,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            66,
+            25
+          ],
+          [
+            89,
+            25
+          ],
+          [
+            89,
+            13
+          ],
+          [
+            96,
+            13
+          ],
+          [
+            96,
+            0
+          ],
+          [
+            65,
+            0
+          ],
+          [
+            65,
+            5
+          ],
+          [
+            66,
+            5
+          ]
+        ]
       },
       {
         "id": "w30",
@@ -1560,7 +2318,49 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            15
+          ],
+          [
+            22,
+            15
+          ],
+          [
+            22,
+            12
+          ],
+          [
+            23,
+            12
+          ],
+          [
+            23,
+            -4
+          ],
+          [
+            -1,
+            -4
+          ],
+          [
+            -1,
+            32
+          ],
+          [
+            20,
+            32
+          ],
+          [
+            20,
+            35
+          ],
+          [
+            21,
+            35
+          ]
+        ]
       },
       {
         "id": "w31",
@@ -1578,7 +2378,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            48,
+            15
+          ],
+          [
+            49,
+            15
+          ],
+          [
+            49,
+            12
+          ],
+          [
+            72,
+            12
+          ],
+          [
+            72,
+            9
+          ],
+          [
+            74,
+            9
+          ],
+          [
+            74,
+            4
+          ],
+          [
+            75,
+            4
+          ]
+        ]
       },
       {
         "id": "w32",
@@ -1596,7 +2430,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            5
+          ],
+          [
+            76,
+            5
+          ],
+          [
+            76,
+            7
+          ],
+          [
+            73,
+            7
+          ],
+          [
+            73,
+            6
+          ],
+          [
+            75,
+            6
+          ]
+        ]
       },
       {
         "id": "w33",
@@ -1614,7 +2474,57 @@
             2
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            35
+          ],
+          [
+            31,
+            35
+          ],
+          [
+            31,
+            32
+          ],
+          [
+            72,
+            32
+          ],
+          [
+            72,
+            24
+          ],
+          [
+            86,
+            24
+          ],
+          [
+            86,
+            14
+          ],
+          [
+            97,
+            14
+          ],
+          [
+            97,
+            -1
+          ],
+          [
+            72,
+            -1
+          ],
+          [
+            72,
+            8
+          ],
+          [
+            75,
+            8
+          ]
+        ]
       },
       {
         "id": "w34",
@@ -1632,7 +2542,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            84,
+            6
+          ],
+          [
+            85,
+            6
+          ],
+          [
+            85,
+            5
+          ],
+          [
+            83,
+            5
+          ],
+          [
+            83,
+            4
+          ],
+          [
+            84,
+            4
+          ]
+        ]
       },
       {
         "id": "w35",
@@ -1650,7 +2586,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            66,
+            5
+          ],
+          [
+            67,
+            5
+          ],
+          [
+            67,
+            2
+          ],
+          [
+            82,
+            2
+          ],
+          [
+            82,
+            6
+          ],
+          [
+            84,
+            6
+          ]
+        ]
       },
       {
         "id": "w36",
@@ -1668,7 +2630,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            35
+          ],
+          [
+            23,
+            35
+          ],
+          [
+            23,
+            32
+          ],
+          [
+            29,
+            32
+          ],
+          [
+            29,
+            34
+          ],
+          [
+            30,
+            34
+          ]
+        ]
       },
       {
         "id": "w37",
@@ -1686,7 +2674,41 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            5
+          ],
+          [
+            33,
+            5
+          ],
+          [
+            33,
+            -5
+          ],
+          [
+            -2,
+            -5
+          ],
+          [
+            -2,
+            39
+          ],
+          [
+            29,
+            39
+          ],
+          [
+            29,
+            36
+          ],
+          [
+            30,
+            36
+          ]
+        ]
       },
       {
         "id": "w38",
@@ -1704,7 +2726,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            39,
+            35
+          ]
+        ]
       },
       {
         "id": "w39",
@@ -1722,7 +2750,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            25
+          ],
+          [
+            23,
+            25
+          ],
+          [
+            23,
+            30
+          ],
+          [
+            49,
+            30
+          ],
+          [
+            49,
+            49
+          ],
+          [
+            20,
+            49
+          ],
+          [
+            20,
+            45
+          ],
+          [
+            21,
+            45
+          ]
+        ]
       },
       {
         "id": "w40",
@@ -1740,7 +2802,49 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            15
+          ],
+          [
+            24,
+            15
+          ],
+          [
+            24,
+            -6
+          ],
+          [
+            -3,
+            -6
+          ],
+          [
+            -3,
+            52
+          ],
+          [
+            50,
+            52
+          ],
+          [
+            50,
+            42
+          ],
+          [
+            29,
+            42
+          ],
+          [
+            29,
+            44
+          ],
+          [
+            30,
+            44
+          ]
+        ]
       },
       {
         "id": "w41",
@@ -1758,7 +2862,49 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            15
+          ],
+          [
+            31,
+            15
+          ],
+          [
+            31,
+            12
+          ],
+          [
+            28,
+            12
+          ],
+          [
+            28,
+            -7
+          ],
+          [
+            -4,
+            -7
+          ],
+          [
+            -4,
+            53
+          ],
+          [
+            29,
+            53
+          ],
+          [
+            29,
+            46
+          ],
+          [
+            30,
+            46
+          ]
+        ]
       },
       {
         "id": "w42",
@@ -1776,7 +2922,13 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            39,
+            45
+          ]
+        ]
       },
       {
         "id": "w43",
@@ -1794,7 +2946,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            48,
+            35
+          ],
+          [
+            55,
+            35
+          ],
+          [
+            55,
+            39
+          ],
+          [
+            67,
+            39
+          ],
+          [
+            67,
+            22
+          ],
+          [
+            47,
+            22
+          ],
+          [
+            47,
+            24
+          ],
+          [
+            48,
+            24
+          ]
+        ]
       },
       {
         "id": "w44",
@@ -1812,7 +2998,41 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            45
+          ],
+          [
+            31,
+            45
+          ],
+          [
+            31,
+            39
+          ],
+          [
+            50,
+            39
+          ],
+          [
+            50,
+            33
+          ],
+          [
+            47,
+            33
+          ],
+          [
+            47,
+            26
+          ],
+          [
+            48,
+            26
+          ]
+        ]
       },
       {
         "id": "w45",
@@ -1830,7 +3050,33 @@
             2
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            48,
+            45
+          ],
+          [
+            51,
+            45
+          ],
+          [
+            51,
+            34
+          ],
+          [
+            46,
+            34
+          ],
+          [
+            46,
+            28
+          ],
+          [
+            48,
+            28
+          ]
+        ]
       },
       {
         "id": "w46",
@@ -1848,7 +3094,41 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            57,
+            26
+          ],
+          [
+            58,
+            26
+          ],
+          [
+            58,
+            30
+          ],
+          [
+            68,
+            30
+          ],
+          [
+            68,
+            42
+          ],
+          [
+            56,
+            42
+          ],
+          [
+            56,
+            35
+          ],
+          [
+            57,
+            35
+          ]
+        ]
       },
       {
         "id": "w47",
@@ -1866,7 +3146,25 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            21,
+            45
+          ],
+          [
+            23,
+            45
+          ],
+          [
+            23,
+            54
+          ],
+          [
+            30,
+            54
+          ]
+        ]
       },
       {
         "id": "w48",
@@ -1884,7 +3182,33 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            5
+          ],
+          [
+            31,
+            5
+          ],
+          [
+            31,
+            -8
+          ],
+          [
+            -5,
+            -8
+          ],
+          [
+            -5,
+            56
+          ],
+          [
+            30,
+            56
+          ]
+        ]
       },
       {
         "id": "w49",
@@ -1902,7 +3226,57 @@
             2
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            30,
+            15
+          ],
+          [
+            33,
+            15
+          ],
+          [
+            33,
+            19
+          ],
+          [
+            65,
+            19
+          ],
+          [
+            65,
+            23
+          ],
+          [
+            69,
+            23
+          ],
+          [
+            69,
+            39
+          ],
+          [
+            78,
+            39
+          ],
+          [
+            78,
+            62
+          ],
+          [
+            29,
+            62
+          ],
+          [
+            29,
+            58
+          ],
+          [
+            30,
+            58
+          ]
+        ]
       },
       {
         "id": "w50",
@@ -1920,7 +3294,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            39,
+            56
+          ],
+          [
+            40,
+            56
+          ],
+          [
+            40,
+            57
+          ],
+          [
+            38,
+            57
+          ],
+          [
+            38,
+            55
+          ],
+          [
+            39,
+            55
+          ]
+        ]
       },
       {
         "id": "w51",
@@ -1938,7 +3338,49 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            66,
+            35
+          ],
+          [
+            72,
+            35
+          ],
+          [
+            72,
+            38
+          ],
+          [
+            102,
+            38
+          ],
+          [
+            102,
+            -2
+          ],
+          [
+            64,
+            -2
+          ],
+          [
+            64,
+            9
+          ],
+          [
+            65,
+            9
+          ],
+          [
+            65,
+            14
+          ],
+          [
+            66,
+            14
+          ]
+        ]
       },
       {
         "id": "w52",
@@ -1956,7 +3398,49 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            48,
+            55
+          ],
+          [
+            103,
+            55
+          ],
+          [
+            103,
+            21
+          ],
+          [
+            90,
+            21
+          ],
+          [
+            90,
+            23
+          ],
+          [
+            71,
+            23
+          ],
+          [
+            71,
+            24
+          ],
+          [
+            64,
+            24
+          ],
+          [
+            64,
+            16
+          ],
+          [
+            66,
+            16
+          ]
+        ]
       },
       {
         "id": "w53",
@@ -1974,7 +3458,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            15
+          ],
+          [
+            76,
+            15
+          ],
+          [
+            76,
+            16
+          ],
+          [
+            74,
+            16
+          ],
+          [
+            74,
+            14
+          ],
+          [
+            75,
+            14
+          ]
+        ]
       },
       {
         "id": "w54",
@@ -1992,7 +3502,25 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            66,
+            15
+          ],
+          [
+            73,
+            15
+          ],
+          [
+            73,
+            16
+          ],
+          [
+            75,
+            16
+          ]
+        ]
       },
       {
         "id": "w55",
@@ -2010,7 +3538,33 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            19
+          ],
+          [
+            98,
+            19
+          ],
+          [
+            98,
+            -3
+          ],
+          [
+            77,
+            -3
+          ],
+          [
+            77,
+            7
+          ],
+          [
+            78,
+            7
+          ]
+        ]
       },
       {
         "id": "w56",
@@ -2028,7 +3582,49 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            93,
+            5
+          ],
+          [
+            94,
+            5
+          ],
+          [
+            94,
+            20
+          ],
+          [
+            78,
+            20
+          ],
+          [
+            78,
+            26
+          ],
+          [
+            68,
+            26
+          ],
+          [
+            68,
+            21
+          ],
+          [
+            63,
+            21
+          ],
+          [
+            63,
+            19
+          ],
+          [
+            66,
+            19
+          ]
+        ]
       },
       {
         "id": "w57",
@@ -2046,7 +3642,25 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            45
+          ],
+          [
+            76,
+            45
+          ],
+          [
+            76,
+            33
+          ],
+          [
+            78,
+            33
+          ]
+        ]
       },
       {
         "id": "w58",
@@ -2064,10 +3678,44 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            84,
+            15
+          ],
+          [
+            87,
+            15
+          ],
+          [
+            87,
+            29
+          ],
+          [
+            90,
+            29
+          ],
+          [
+            90,
+            49
+          ],
+          [
+            65,
+            49
+          ],
+          [
+            65,
+            45
+          ],
+          [
+            66,
+            45
+          ]
+        ]
       },
       {
-        "id": "obs_theta1",
+        "id": "w59",
         "from": {
           "port": [
             "theta1",
@@ -2082,10 +3730,52 @@
             0
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            87,
+            7
+          ],
+          [
+            90,
+            7
+          ],
+          [
+            90,
+            18
+          ],
+          [
+            91,
+            18
+          ],
+          [
+            91,
+            22
+          ],
+          [
+            84,
+            22
+          ],
+          [
+            84,
+            26
+          ],
+          [
+            90,
+            26
+          ],
+          [
+            90,
+            24
+          ],
+          [
+            91,
+            24
+          ]
+        ]
       },
       {
-        "id": "obs_omega1",
+        "id": "w60",
         "from": {
           "port": [
             "omega1",
@@ -2100,10 +3790,44 @@
             1
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            19
+          ],
+          [
+            76,
+            19
+          ],
+          [
+            76,
+            21
+          ],
+          [
+            85,
+            21
+          ],
+          [
+            85,
+            27
+          ],
+          [
+            90,
+            27
+          ],
+          [
+            90,
+            26
+          ],
+          [
+            91,
+            26
+          ]
+        ]
       },
       {
-        "id": "obs_theta2",
+        "id": "w61",
         "from": {
           "port": [
             "theta2",
@@ -2118,10 +3842,36 @@
             2
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            87,
+            33
+          ],
+          [
+            88,
+            33
+          ],
+          [
+            88,
+            37
+          ],
+          [
+            74,
+            37
+          ],
+          [
+            74,
+            28
+          ],
+          [
+            91,
+            28
+          ]
+        ]
       },
       {
-        "id": "obs_omega2",
+        "id": "w62",
         "from": {
           "port": [
             "omega2",
@@ -2136,7 +3886,41 @@
             3
           ]
         },
-        "bends": []
+        "bends": [],
+        "route": [
+          [
+            75,
+            45
+          ],
+          [
+            80,
+            45
+          ],
+          [
+            80,
+            42
+          ],
+          [
+            73,
+            42
+          ],
+          [
+            73,
+            29
+          ],
+          [
+            86,
+            29
+          ],
+          [
+            86,
+            30
+          ],
+          [
+            91,
+            30
+          ]
+        ]
       }
     ],
     "text_frames": [

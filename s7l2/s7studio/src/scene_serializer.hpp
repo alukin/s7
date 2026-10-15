@@ -4,6 +4,8 @@
 
 #include <QString>
 
+#include <functional>
+
 namespace s7studio::diagram {
 
 class DiagramScene;
@@ -26,7 +28,7 @@ public:
     // runtime schema) is laid out by data flow and wired automatically, as
     // is a layout without `wires`. Throws std::runtime_error when the layout
     // does not match the schema.
-    void deserialize(const DiagramDocument& document, DiagramScene& scene) const;
+    void deserialize(const DiagramDocument& document, DiagramScene& scene, const std::function<void(int)>& progress = {}) const;
 };
 
 } // namespace s7studio::diagram

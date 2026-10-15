@@ -4,6 +4,7 @@
 
 #include <QWidget>
 #include <boost/json.hpp>
+#include <functional>
 #include <memory>
 
 class QGraphicsItem;
@@ -31,7 +32,7 @@ public:
     void clearDiagram();
     // Both throw std::runtime_error when the document cannot be laid out;
     // the editor is then empty.
-    void loadDocument(const DiagramDocument& document);
+    void loadDocument(const DiagramDocument& document, const std::function<void(int)>& progress = {});
     void loadRuntimeSchema(const boost::json::value& schemaJson);
     // Selects the item and scrolls it into the middle of the view.
     void showItem(QGraphicsItem* item);

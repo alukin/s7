@@ -10,6 +10,7 @@
 #include <QVector>
 
 #include <memory>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -88,6 +89,8 @@ public:
     void addNodeItem(const std::shared_ptr<QSchematic::Items::Node>& node);
     void addWireItem(const std::shared_ptr<SignalWire>& wire);
     void rerouteAll();
+    // Restore saved wire paths, rerouting only paths that are absent or stale.
+    void restoreRoutes(const std::function<void(int)>& progress = {});
 
     // Undoable edits.
     void applyChange(const DiagramChange& change, const QString& text);
@@ -129,11 +132,12 @@ protected:
 
 private:
     struct Gesture;
+    struct MoveGesture;
 
     // Routing.
-    void route(std::vector<SignalWire*> forced);
-    void repairRoutes(std::vector<SignalWire*> forced);
-    [[nodiscard]] bool routeIsValid(const SignalWire& wire) const;
+    void route(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {});
+    void repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {});
+    [[nodiscard]] bool routeIsValid(const SignalWire& wire, bool checkObstacles = true) const;
     [[nodiscard]] auto anchorOf(const WireEnd& end) const -> std::optional<QPointF>;
     [[nodiscard]] auto placeJunction(const SignalWire& branch) const -> std::optional<QPointF>;
     [[nodiscard]] auto previewRoute(const WireEnd& start, const QVector<QPointF>& bends, QPointF end, const WireEnd* target) const
@@ -164,6 +168,7 @@ private:
     void updateDrawingPreview(QPointF scenePos);
 
     std::unique_ptr<Gesture> gesture_;
+    std::unique_ptr<MoveGesture> moveGesture_;
     QGraphicsPathItem* preview_ = nullptr;
     std::unordered_map<const QSchematic::Items::Item*, QPointF> knownPositions_;
     std::vector<DiagramProbe> probes_;

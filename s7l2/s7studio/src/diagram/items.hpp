@@ -180,7 +180,8 @@ struct WireEnd {
 // A wire of a net. Every net is a tree: its first wire runs from the driving
 // output to an input; every further wire starts at a junction on a wire of the
 // net (upstream) and ends at an input (downstream). The route is derived from
-// the ends and the user bends (WireRouter); only the bends are saved.
+// the ends and the user bends (WireRouter); the current route is saved as a
+// cache so opening a diagram does not need to route every wire again.
 class SignalWire final : public QSchematic::Items::Wire
 {
     Q_OBJECT

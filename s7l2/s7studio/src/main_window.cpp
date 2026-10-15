@@ -67,6 +67,7 @@
 #include <QPen>
 #include <QPalette>
 #include <QPushButton>
+#include <QProgressDialog>
 #include <QStringList>
 #include <QSpinBox>
 #include <QStatusBar>
@@ -1839,6 +1840,24 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     closeScopeWindows();
     clearScopeSamples();
 
+    QProgressDialog loading(QStringLiteral("Preparing diagram…"), QString(), 0, 100, this);
+    loading.setWindowTitle(QStringLiteral("Loading diagram"));
+    loading.setWindowModality(Qt::WindowModal);
+    loading.setCancelButton(nullptr);
+    loading.setMinimumDuration(0);
+    loading.setAutoClose(false);
+    loading.setAutoReset(false);
+    loading.show();
+    int lastProgress = -1;
+    const auto updateProgress = [&](const int value) {
+        const int bounded = std::clamp(value, 0, 100);
+        if (bounded != lastProgress) {
+            lastProgress = bounded;
+            loading.setValue(bounded);
+        }
+    };
+    updateProgress(0);
+
     const auto document = diagram::DiagramDocument::fromJson(diagramJson);
     runtimeSchema_ = document.runtimeSchema;
     deploymentRuntimeNodes_ = document.runtimeNodes;
@@ -1849,18 +1868,23 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     }
 
     const auto elementCheck = prepareElementTypes(document.runtimeSchema);
+    loading.setLabelText(QStringLiteral("Building diagram and restoring wire routes…"));
+    updateProgress(8);
     if (diagramEditor_) {
-        diagramEditor_->loadDocument(document);
+        diagramEditor_->loadDocument(document, [&](const int value) { updateProgress(8 + value * 87 / 100); });
         syncPageActions();
         syncTextFrameStyleControls();
         refreshPlacementLabels();
     }
+    updateProgress(97);
     reportElementTypes(elementCheck, sourceLabel);
 
     const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded diagram: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded diagram: %1").arg(name), 5000);
     setWindowTitle(QString("s7studio - %1").arg(name));
+    updateProgress(100);
+    loading.close();
 }
 
 void MainWindow::openDocumentFile()

@@ -260,11 +260,16 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
         for (const auto& bend : wire->userBends) {
             bends.push_back(gridJson(bend));
         }
+        boost::json::array route;
+        for (const auto& point : wire->pointsAbsolute()) {
+            route.push_back(gridJson(point));
+        }
         wires.push_back(boost::json::object{
             {"id", id->second},
             {"from", std::move(from)},
             {"to", boost::json::object{{"port", boost::json::array{wire->downstream.node.lock()->id(), "in", wire->downstream.index}}}},
             {"bends", std::move(bends)},
+            {"route", std::move(route)},
         });
     }
 
@@ -282,9 +287,12 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
     return doc;
 }
 
-void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene& scene) const
+void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene& scene, const std::function<void(int)>& progress) const
 {
     scene.clearDiagram();
+    if (progress) {
+        progress(0);
+    }
     // A layout of another version is refused unless it lays nothing out
     // (documents written by tools carry an empty one).
     static const boost::json::object noLayout;
@@ -356,6 +364,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             }
         }
     }
+    if (progress) {
+        progress(8);
+    }
 
     // Layout: positions and titles.
     if (const auto* nodes = json_utils::findObjectValue(layout, "nodes"); nodes && nodes->is_array()) {
@@ -424,6 +435,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
     for (std::size_t at = 0; at < models.size(); ++at) {
         nodes[at]->setPos(scenePoint(*models[at].position));
         scene.addNodeItem(nodes[at]);
+        if (progress) {
+            progress(8 + (models.empty() ? 0 : static_cast<int>((at + 1) * 20 / models.size())));
+        }
     }
 
     if (const auto* frames = json_utils::findObjectValue(layout, "text_frames"); frames && frames->is_array()) {
@@ -436,6 +450,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             frame->setPos(scenePoint(position ? gridPoint(*position, "text frame position") : QPoint(2, 2)));
             scene.addNodeItem(frame);
         }
+    }
+    if (progress) {
+        progress(32);
     }
 
     // Wires: as the layout has them, or one tree per output.
@@ -453,6 +470,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             }
             ordered.emplace_back(wire, &value.as_object());
         }
+        std::size_t wireIndex = 0;
         for (const auto& [wire, object] : ordered) {
             const auto id = json_utils::stringValue(*object, "id");
             const auto* from = object->if_contains("from");
@@ -464,7 +482,26 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
                     wire->userBends.append(scenePoint(gridPoint(bend, "a bend of wire " + id)));
                 }
             }
+            if (const auto* route = object->if_contains("route"); route && route->is_array() && !route->as_array().empty()) {
+                QVector<QPointF> points;
+                bool valid = true;
+                for (const auto& point : route->as_array()) {
+                    if (!point.is_array() || point.as_array().size() != 2 || !point.as_array()[0].is_number() ||
+                        !point.as_array()[1].is_number()) {
+                        valid = false;
+                        break;
+                    }
+                    points.append(scenePoint(gridPoint(point, "a cached route point of wire " + id)));
+                }
+                if (valid) {
+                    wire->setRoute(points);
+                }
+            }
             scene.addWireItem(wire);
+            ++wireIndex;
+            if (progress) {
+                progress(32 + (ordered.empty() ? 0 : static_cast<int>(wireIndex * 18 / ordered.size())));
+            }
         }
         const NetModel model(scene);
         if (!model.problems().empty()) {
@@ -492,6 +529,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
     } else {
         std::set<std::pair<std::string, int>> fed;
         std::map<std::pair<std::string, int>, std::shared_ptr<SignalWire>> trunks;
+        std::size_t connectionIndex = 0;
         for (const auto& connection : connections) {
             const auto from = scene.elementNode(connection.fromElement);
             const auto to = scene.elementNode(connection.toElement);
@@ -508,10 +546,24 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             }
             wire->downstream = WireEnd::onPort(to, PortDirection::Input, connection.toPort);
             scene.addWireItem(wire);
+            ++connectionIndex;
+            if (progress) {
+                progress(32 + (connections.empty() ? 0 : static_cast<int>(connectionIndex * 18 / connections.size())));
+            }
         }
     }
-    scene.rerouteAll();
+    if (progress) {
+        progress(52);
+    }
+    scene.restoreRoutes([&](const int percent) {
+        if (progress) {
+            progress(52 + percent * 48 / 100);
+        }
+    });
     scene.setProbes(document.probes);
+    if (progress) {
+        progress(100);
+    }
 }
 
 } // namespace s7studio::diagram

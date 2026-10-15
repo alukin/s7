@@ -6,7 +6,7 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 
 | File | Role |
 |---|---|
-| `s7studio/src/diagram/items.*` | Scene items, QSchematic subclasses: `ElementNode` (element id, type, params, nested schema, placement, title as typed members; one `PortConnector` per port), `PortConnector` (direction, index, name), `TextFrameNode`, `SignalWire` (its two `WireEnd`s and the bends placed by hand) |
+| `s7studio/src/diagram/items.*` | Scene items, QSchematic subclasses: `ElementNode` (element id, type, params, nested schema, placement, title as typed members; one `PortConnector` per port), `PortConnector` (direction, index, name), `TextFrameNode`, `SignalWire` (its two `WireEnd`s, the bends placed by hand, and its current routed path) |
 | `s7studio/src/diagram/element_ports.*` | The ports an element shows: nested schema `exposed_inputs`/`exposed_outputs`, registry metadata, `Adder` `weights`, `Multiply` `factors`, observer `Scope` channels |
 | `s7studio/src/diagram/diagram_scene.*` | `DiagramScene` (a `QSchematic::Scene`): connection rules, gestures, undoable edits (`DiagramChange`), routing of changed wires, junction placement |
 | `s7studio/src/diagram/net_model.*` | Connections read from the wire trees, wires that connect nothing, the runtime schema of the scene |
@@ -49,7 +49,7 @@ The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills 
 
 - **Nets are trees.** A net has one driver, an output port. Its first wire (the trunk) runs from that output to an input; every further wire starts at a junction on a wire of the same net and ends at an input. A `WireEnd` is either a port (`node`, `direction`, `index`) or a junction (`wire`, `at`). Junctions are drawn as dots; wires that only cross are not connected. Wires refer to ports by element and index, so ports rebuilt after a parameter change keep their wires.
 - **Connections come from the trees:** each wire ending at an input connects the driver of its tree to that input (`NetModel`). Nothing is guessed from geometry.
-- **Routes are derived.** A wire's route runs from its upstream end through its user bends to its downstream end; `WireRouter` routes each leg between them. Only the bends are saved. Routes are recomputed for the wires an edit touches, for the wires of moved elements (after the move, including undo/redo of moves), and for any wire whose route no longer fits (an end off its port, a junction off its trunk, a segment through an element).
+- **Routes are cached.** A wire's route runs from its upstream end through its user bends to its downstream end; `WireRouter` routes each leg between them. Saves include both user bends and the current routed points. On load, Studio restores cached paths and reroutes only paths that are missing or structurally invalid (an end off its port, a junction off its trunk, a diagonal segment, or a missing user bend). Existing routes through overlapping elements are preserved because the router cannot resolve those collisions on load. Edits reroute the wires they touch, and moving elements reroutes their wires (including undo/redo of moves).
 - **Junction placement:** a junction keeps its point while that point is on its trunk (not at the trunk's ends); otherwise it moves to the trunk point nearest to where the branch goes next.
 - **Elements and observers:** inputs on the left edge, outputs on the right, no rotation. Width 9 grid steps, height `max(5, 2 × ports + 1)` steps; ports two steps apart where they fit, centred. All positions, ports, bends and junctions are on the 20-unit grid. The **Observers** library category contains `Scope`, a diagram-only observation client with variable signal inputs; connecting to its final `+` port adds another input. Observation wires are green and dashed, while functional signal wires remain black. Scope nodes and their wires persist in the diagram layout but are excluded from the runtime schema. Existing probe markers are not converted while a diagram loads. `TextFrame`s are diagram-only and not part of the runtime schema.
 - **Undo:** every edit is a `DiagramChange` (nodes and wires added or removed, wires re-hung, bends, element edits) pushed as one command on the scene's `QUndoStack`; element moves use QSchematic's `ItemMove`. Edit > Undo/Redo. Text frame text and style edits and run-configuration params (`sample_rate_hz`, `dt`) are applied directly.
@@ -99,8 +99,8 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
     "grid": { "step": 20, "mm_per_step": 5.2917 },
     "nodes": [ { "id": "add1", "position": [17, 8], "title": "Sum" } ],
     "wires": [
-      { "id": "w1", "from": { "port": ["c1", "out", 0] }, "to": { "port": ["add1", "in", 0] }, "bends": [] },
-      { "id": "w2", "from": { "wire": "w1", "at": [12, 10] }, "to": { "port": ["d1", "in", 0] }, "bends": [[12, 16], [30, 16]] }
+      { "id": "w1", "from": { "port": ["c1", "out", 0] }, "to": { "port": ["add1", "in", 0] }, "bends": [], "route": [[11, 6], [15, 6], [15, 12], [25, 12]] },
+      { "id": "w2", "from": { "wire": "w1", "at": [12, 10] }, "to": { "port": ["d1", "in", 0] }, "bends": [[12, 16], [30, 16]], "route": [[12, 10], [12, 16], [30, 16], [32, 16]] }
     ],
     "text_frames": [ { "id": "text_frame_1", "position": [2, 20], "params": { "text": "...", "width": 260.0, "height": 120.0 } } ]
   }
@@ -110,7 +110,7 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - `schema` is the runtime schema and the source of semantics; element params live there. `diagram` is layout only.
 - `schema.requires` lists the plugins the element types come from (see "Element types and plugins").
 - Coordinates are whole grid steps (`grid.step` scene units each; scene units are 96 per inch, so a step is 5.29 mm on the sheet). Text frame sizes are in scene units in their params.
-- A wire's `from` is an output port or a junction on another wire; `to` is an input port. `bends` are the bends placed by hand; routed points are not saved.
+- A wire's `from` is an output port or a junction on another wire; `to` is an input port. `bends` are the bends placed by hand. Optional `route` points are the current routed path in grid coordinates and act as a cache; older diagrams without them remain valid and Studio routes their wires on load. Structurally invalid cached routes are rerouted.
 - On load the connections the wires make must equal `schema.connections`, otherwise loading fails naming the connection. A layout without `wires` is wired automatically (one trunk per output, further connections as branches); a document without `diagram` (a plain runtime schema) is also laid out by data flow (columns from inputs to outputs, rows by the mean row of the inputs).
 - A layout of another `diagram_version` is refused unless it is empty. `s7studio --normalize <in> <out>` loads a diagram or schema and writes it as Studio saves it.
 - Deployment: each schema element may carry `node` (the node_uuid it runs on); the root keeps `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and `streams` (stream descriptors, so redeployments continue the streams). See `S7_Network_Wire_Protocol_v1.md`, section 12.1, items 1 and 6.
