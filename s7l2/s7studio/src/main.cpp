@@ -137,6 +137,7 @@ int runSmoke()
 
         static constexpr std::string_view smokeSchema = R"json({
             "name": "s7studio_smoke",
+            "dt": 1.0,
             "elements": [
                 { "id": "source", "type": "Constant", "params": { "value": 3.0 } },
                 {
@@ -144,6 +145,7 @@ int runSmoke()
                     "type": "Schema",
                     "schema": {
                         "name": "nested_gain_chain",
+                        "dt": 1.0,
                         "elements": [
                             { "id": "g1", "type": "Gain", "params": { "factor": 2.0 } },
                             { "id": "g2", "type": "Gain", "params": { "factor": 5.0 } }
@@ -228,6 +230,7 @@ int runSmoke()
 
         static constexpr std::string_view netSchema = R"json({
             "name": "s7studio_net_smoke",
+            "dt": 1.0,
             "elements": [
                 { "id": "net_in", "type": "NetSource", "params": { "stream_id": "5b3a9f6e-2c4d-4e8a-b1f0-9d8c7b6a5f4e" } }
             ],

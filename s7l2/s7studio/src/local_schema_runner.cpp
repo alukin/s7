@@ -88,6 +88,12 @@ auto LocalSchemaRunner::prepareRuntime(const boost::json::value& schemaJson) -> 
         netEndpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
         s7::RuntimeNetContext::set_endpoint(netEndpoint_);
         schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(schemaJson));
+        // The run's own dt is authoritative over whatever (if anything) the
+        // schema JSON's own top-level "dt" said, the same way it already
+        // overrides the discretization control's previous value.
+        if (dt_ > 0.0) {
+            schema_->set_rate(s7::Rate::from_seconds(dt_));
+        }
         runtime::validateSchema(*schema_);
         auto graph = s7::Compiler::compile(*schema_);
         runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));

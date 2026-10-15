@@ -266,6 +266,17 @@ inline s7::Schema buildSchema(const boost::json::value& schemaJson)
         : std::string{"s7studio_demo"};
 
     s7::Schema schema{name};
+    // "dt": 0.001 seeds every element with no rate of its own
+    // (doc/S7_Sample_Rate_Model.md), the same field name/meaning as
+    // s7runtime's and s7core's schema-library JSON formats. A nested
+    // "Schema" element's own schema object (addNestedSchemaElement above)
+    // needs its own "dt" the same way -- nothing propagates one down to it.
+    if (const auto* dt = root.if_contains("dt")) {
+        if (!dt->is_number()) {
+            throw std::invalid_argument("'dt' must be a positive number of seconds.");
+        }
+        schema.set_rate(s7::Rate::from_seconds(dt->to_number<double>()));
+    }
 
     const auto elementsIt = root.find("elements");
     if (elementsIt == root.end()) {
