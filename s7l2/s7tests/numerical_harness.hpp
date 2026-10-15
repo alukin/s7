@@ -6,16 +6,24 @@
 // matching s7core/tests/core_smoke.cpp. This header only factors out the
 // comparison/convergence math so every stage test uses the same definitions.
 //
-// Note on dt: s7::Schema has no schema-wide discretization field. Studio
-// reconstructs one for diagrams edited through its own UI by rewriting every
-// element's "dt" parameter when its discretization control changes
-// (MainWindow::updateSchemaDiscretizationParams); a hand-built schema, such
-// as the ones these tests construct directly in C++, has no such step. Each
-// test here therefore picks one `dt`, in simulated seconds, and passes it
-// explicitly to every element constructor that needs it (and, where a test
-// cares about the model-time axis rather than only the step index, to
-// NodeRuntime::set_model_time_step_ns). Do not let a test default an
-// element's own dt and assume it matches another element's or the runtime's.
+// Note on dt: each test here picks one `dt`, in simulated seconds, and
+// passes it explicitly to every element constructor that needs it (and,
+// where a test cares about the model-time axis rather than only the step
+// index, to NodeRuntime::set_model_time_step_ns) -- s7::Schema still has no
+// implicit propagation, by design (doc/S7_Sample_Rate_Model.md section 4:
+// nothing converts or resamples implicitly, the same rule as SignalType).
+//
+// What changed since this comment was first written: two integrators
+// silently disagreeing on dt is no longer just a convention a test author
+// has to uphold by discipline. RateResolver (s7/rate_inference.hpp) is wired
+// into Validator::validate()/Compiler::compile() as a mandatory check: an
+// EulerIntegrator's own "dt" parameter pins its connected component's rate
+// (Element::declared_rate()), and every schema below has exactly one
+// integrator in its one connected component, so nothing here needs an
+// explicit Schema::set_rate() seed -- the resolver already proves these
+// schemas have one consistent rate, not merely infers it. A schema that
+// mixed two differently-pinned elements with no rate-changing element
+// between them would now fail validation instead of running silently wrong.
 
 #include <algorithm>
 #include <cmath>

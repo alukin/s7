@@ -147,9 +147,9 @@ Time-series and phase-portrait/attractor views are deliberately separate templat
 
 Follows `doc/S7_Numerical_Modeling_Test_Plan.md` section 12, with the diagram+probes+visualization track layered on from Stage 1.2 onward (Stage 1.1 needs no diagram or phase portrait — one scalar trajectory against a closed form needs no visual story):
 
-1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1 — done.** `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` is implemented and mandatory in `Validator::validate()`/`Compiler::compile()` (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model"). Nothing built before this point (Stage 0, Stage 1.1) has been re-run against it yet.
-2. Stage 0 harness — done (`numerical_harness.hpp`), but built before the resolver existed.
-3. Stage 1.1 scalar linear — passing (`linear_scalar_smoke.cpp`: `EulerIntegrator` vs. analytical decay, convergence order, forced-response steady state), but likewise predates the resolver; revisit once step 1 lands rather than treating this as settled.
+1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1 — done.** `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` is implemented and mandatory in `Validator::validate()`/`Compiler::compile()` (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model").
+2. Stage 0 harness — done (`numerical_harness.hpp`).
+3. **Stage 1.1 scalar linear — re-confirmed against the resolver (2026-10-15), not just re-passing by inspection.** `linear_scalar_smoke.cpp` (`EulerIntegrator` vs. analytical decay, convergence order, forced-response steady state) now has a `test_rate_resolver_confirms_one_rate()` check that calls `RateResolver::resolve()` directly and asserts it resolves exactly 1/`dt` Hz for every element in the integrator loop — the schema needed no `Schema::set_rate()` seed, since its one `EulerIntegrator` already pins its one connected component.
 4. Headless diagram runner (section 2) — build next (running every schema through the resolver from step 1, not hand-propagating `dt`), validated against a re-expression of 1.1 as a diagram before any new case depends on it.
 5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes — first phase-portrait case.
 6. Stage 1.3 coupled linear systems of increasing size, against the matrix exponential.

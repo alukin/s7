@@ -20,6 +20,12 @@
 // Stage 5 hypothesis about integrators gaining dynamics from how they are
 // wired as causal graph elements, not from their nominal accuracy order).
 // That case is follow-up work, not this test.
+//
+// test_rate_resolver_confirms_one_rate() revisits this schema's rate claim
+// now that RateResolver (s7/rate_inference.hpp) is a mandatory part of
+// validation (numerical_harness.hpp's note): it checks that the resolver
+// actually proves the integrator loop has one consistent rate, rather than
+// the schema merely happening to validate.
 
 #include <cassert>
 #include <cmath>
@@ -27,6 +33,8 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "s7/core.hpp"
@@ -59,6 +67,38 @@ std::vector<double> analytical_decay(double a, double x0, double dt, std::size_t
         reference.push_back(x0 * std::exp(a * static_cast<double>(n) * dt));
     }
     return reference;
+}
+
+// Confirms, rather than assumes, that these schemas have one consistent
+// rate now that RateResolver is a mandatory part of validation: the
+// EulerIntegrator's own "dt" parameter should resolve to exactly 1/dt Hz for
+// every element in its connected component (numerical_harness.hpp's note).
+void test_rate_resolver_confirms_one_rate()
+{
+    const double dt = 0.01;
+    s7::Schema schema{"euler_scalar_decay_rate_check"};
+    schema.add_element("x", [=] { return std::make_unique<s7::EulerIntegrator>(dt, 1.0); });
+    schema.add_element("ax", [=] { return std::make_unique<s7::Gain>(-1.0); });
+    schema.connect("x", 0, "ax", 0);
+    schema.connect("ax", 0, "x", 0);
+
+    auto checked = s7::detail::check_schema(schema);
+    if (!checked.errors.empty()) {
+        throw std::runtime_error("euler_scalar_decay_rate_check failed validation");
+    }
+    std::unordered_map<std::string, const s7::Element*> instances;
+    const auto& elements = schema.elements();
+    for (std::size_t index = 0; index < elements.size(); ++index) {
+        instances.emplace(elements[index].id, checked.elements[index].get());
+    }
+    const auto resolved = s7::RateResolver::resolve(schema, instances);
+    if (!resolved.ok()) {
+        throw std::runtime_error("RateResolver did not resolve the integrator loop's rate");
+    }
+    const auto expected = s7::Rate::from_seconds(dt);
+    if (!(resolved.rates.at("x") == expected) || !(resolved.rates.at("ax") == expected)) {
+        throw std::runtime_error("RateResolver did not resolve 1/dt for every element in the loop");
+    }
 }
 
 // Stage 0: the same model, run twice, must produce identical traces.
@@ -177,6 +217,7 @@ void test_euler_forced_response()
 } // namespace
 
 int main() try {
+    test_rate_resolver_confirms_one_rate();
     test_deterministic_repeat();
     test_euler_matches_analytical_and_converges_first_order();
     test_euler_forced_response();
