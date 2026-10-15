@@ -2,18 +2,20 @@
 
 #include <QVector>
 #include <QMap>
+#include <QSharedPointer>
 
 #include <cstdint>
 #include <Qt>
 #include <QWidget>
 
 class QCheckBox;
-class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QTimer;
 class QVBoxLayout;
 class QCustomPlot;
+class QTemporaryFile;
+class QScrollBar;
 
 namespace s7studio::ui {
 
@@ -36,41 +38,54 @@ public:
     // Samples the runtime produced but the UI dropped because it fell behind.
     void setDroppedSampleCount(std::uint64_t dropped);
 
-    // Recording keeps at most this many samples (16 bytes each), then stops by itself.
-    static constexpr int kMaxRecordedSamples = 2'000'000;
+    static constexpr int kMaxInMemorySamplesPerSeries = 20'000;
 
 private slots:
     void clearBuffers();
     void exportRecordedCsv();
-    void toggleRecording();
     void refreshPlot();
 
 private:
     struct Series {
+        struct SpillIndexEntry {
+            double timeSeconds = 0.0;
+            qint64 byteOffset = 0;
+        };
         int graphIndex = -1;
         QVector<double> time;
         QVector<double> value;
-        QVector<double> recordedTime;
-        QVector<double> recordedValue;
+        QVector<SpillIndexEntry> spillIndex;
+        QSharedPointer<QTemporaryFile> spillFile;
+        qint64 spilledSamples = 0;
+        double firstTime = 0.0;
+        double lastTime = 0.0;
+        bool hasSamples = false;
     };
 
     void configurePlot();
-    void setRecording(bool recording);
+    auto spillSeries(Series& series) -> bool;
+    auto appendToSpill(Series& series, double timeSeconds, double value) -> bool;
+    void decimatePlotBuffer(Series& series);
+    void setVisibleGraphData(Series& series, double lowerTime, double upperTime, bool fitFullRun);
     void updateStatus();
-    void trimVisibleBuffer(Series& series, double minTime);
-
+    void updateTimeScrollBar();
+    void scrollToTimePosition(int position);
     QString probeName_;
-    bool recording_ = false;
-    bool recordingLimitReached_ = false;
     std::uint64_t droppedSamples_ = 0;
+    QString temporaryDirectory_;
+    QString temporaryWriteError_;
     bool dirty_ = false;
+    bool updatingTimeScrollBar_ = false;
+    bool hasTimeRange_ = false;
+    double dataMinTime_ = 0.0;
+    double dataMaxTime_ = 0.0;
 
     QMap<QString, Series> series_;
 
     QCustomPlot* plot_ = nullptr;
-    QDoubleSpinBox* windowSecondsSpin_ = nullptr;
     QCheckBox* autoScaleYCheck_ = nullptr;
-    QPushButton* recordButton_ = nullptr;
+    QCheckBox* fitAllTimeCheck_ = nullptr;
+    QScrollBar* timeScrollBar_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;

@@ -64,6 +64,12 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
         inputs.push_back(QStringLiteral("+")); // connection target that grows the observer
         return {std::move(inputs), {}};
     }
+    if (type == "PhasePortrait") {
+        return {{QStringLiteral("x"), QStringLiteral("y")}, {}};
+    }
+    if (type == "PhaseTrajectory3D") {
+        return {{QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}, {}};
+    }
     if (nestedSchema.is_object()) {
         return {exposedNames(nestedSchema.as_object(), "exposed_inputs", "in"),
                 exposedNames(nestedSchema.as_object(), "exposed_outputs", "out")};

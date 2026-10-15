@@ -16,6 +16,7 @@
 #include "scene_serializer.hpp"
 #include "scope_view_window.hpp"
 #include "phase_portrait_view_window.hpp"
+#include "phase_trajectory_3d_view_window.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_catalog.hpp>
@@ -82,6 +83,7 @@
 #include <s7/deployment_client.hpp>
 
 #include <algorithm>
+#include <array>
 #include <boost/system/error_code.hpp>
 #include <cmath>
 #include <string>
@@ -619,6 +621,11 @@ void MainWindow::buildUi()
     pageMenu->addAction(portraitPageAction_);
     pageMenu->addAction(landscapePageAction_);
 
+    auto* settingsMenu = menuBar()->addMenu("&Settings");
+    auto* scopeTempDirectoryAction = settingsMenu->addAction(QStringLiteral("Scope temporary data directory…"));
+    connect(scopeTempDirectoryAction, &QAction::triggered,
+            this, &MainWindow::chooseScopeTemporaryDirectory);
+
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
     if (diagramEditor_ && diagramEditor_->scene()) {
@@ -693,13 +700,18 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     if (elementType.isEmpty() || !scene) {
         return;
     }
-    const bool observer = elementType == QStringLiteral("StudioObserver:Scope");
-    const QString actualType = observer ? QStringLiteral("Scope") : elementType;
+    const bool scopeObserver = elementType == QStringLiteral("StudioObserver:Scope");
+    const bool phasePortraitObserver = elementType == QStringLiteral("StudioObserver:PhasePortrait");
+    const bool phaseTrajectory3DObserver = elementType == QStringLiteral("StudioObserver:PhaseTrajectory3D");
+    const bool observer = scopeObserver || phasePortraitObserver || phaseTrajectory3DObserver;
+    const QString actualType = scopeObserver ? QStringLiteral("Scope")
+                              : phasePortraitObserver ? QStringLiteral("PhasePortrait")
+                              : phaseTrajectory3DObserver ? QStringLiteral("PhaseTrajectory3D") : elementType;
     const auto* descriptor = observer ? nullptr : s7::ElementRegistry::instance().find(actualType.toStdString());
     diagram::ElementNode::Element element;
     element.id = nextElementId(*scene, actualType).toStdString();
     element.type = actualType.toStdString();
-    if (observer) {
+    if (scopeObserver) {
         element.params["channel_count"] = 0;
     }
     if (descriptor && descriptor->metadata().schema_definition.has_value()) {
@@ -848,6 +860,25 @@ void MainWindow::restoreWindowLayout()
     toolWindows_->normalize();
 }
 
+void MainWindow::chooseScopeTemporaryDirectory()
+{
+    QSettings settings;
+    const auto currentDirectory = settings.value(
+        QStringLiteral("scope/temporaryDirectory"), QDir::tempPath()).toString();
+    const auto directory = QFileDialog::getExistingDirectory(
+        this, QStringLiteral("Choose Scope temporary data directory"), currentDirectory);
+    if (directory.isEmpty()) {
+        return;
+    }
+    if (!QDir(directory).exists()) {
+        QMessageBox::critical(this, QStringLiteral("Invalid directory"),
+                              QStringLiteral("The selected Scope temporary data directory does not exist."));
+        return;
+    }
+    settings.setValue(QStringLiteral("scope/temporaryDirectory"), directory);
+    statusBar()->showMessage(QStringLiteral("Scope temporary data directory set to %1").arg(directory), 5000);
+}
+
 void MainWindow::appendLog(const QString& message)
 {
     if (logPanel_) {
@@ -924,6 +955,17 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
 
     if (elementType == QStringLiteral("Scope")) {
         openScopeWindow(QString::fromStdString(elementNode->id()));
+        return;
+    }
+    if (elementType == QStringLiteral("PhasePortrait")) {
+        const auto id = QString::fromStdString(elementNode->id());
+        openPhasePortraitWindow(id + QStringLiteral("/x"), id + QStringLiteral("/y"));
+        return;
+    }
+    if (elementType == QStringLiteral("PhaseTrajectory3D")) {
+        const auto id = QString::fromStdString(elementNode->id());
+        openPhaseTrajectory3DWindow(id + QStringLiteral("/x"), id + QStringLiteral("/y"),
+                                    id + QStringLiteral("/z"));
         return;
     }
 
@@ -1055,11 +1097,9 @@ void MainWindow::onScopeSamplesAvailable()
     }
     const auto batch = runner_->takeScopeSamples();
 
-    QHash<QString, int> touched;
     for (const auto& sample : batch.samples) {
         const auto probeName = QString::fromStdString(sample.probeName);
         scopeSampleHistory_[probeName].push_back(ScopeSamplePoint{sample.timeSeconds, sample.value});
-        touched.insert(probeName, 0);
         const auto separator = probeName.indexOf(QLatin1Char('/'));
         const auto scopeId = separator < 0 ? probeName : probeName.left(separator);
         if (const auto window = scopeWindows_.value(scopeId)) {
@@ -1078,14 +1118,28 @@ void MainWindow::onScopeSamplesAvailable()
                 window->appendYSample(sample.step, sample.value);
             }
         }
+        for (auto it = phaseTrajectory3DWindows_.cbegin(); it != phaseTrajectory3DWindows_.cend(); ++it) {
+            const auto& window = it.value();
+            if (!window) {
+                continue;
+            }
+            if (window->xProbeName() == probeName) {
+                window->appendXSample(sample.step, sample.value);
+            }
+            if (window->yProbeName() == probeName) {
+                window->appendYSample(sample.step, sample.value);
+            }
+            if (window->zProbeName() == probeName) {
+                window->appendZSample(sample.step, sample.value);
+            }
+        }
     }
-    for (auto it = touched.cbegin(); it != touched.cend(); ++it) {
-        auto& history = scopeSampleHistory_[it.key()];
+    for (auto it = scopeSampleHistory_.begin(); it != scopeSampleHistory_.end(); ++it) {
+        auto& history = it.value();
         if (history.size() > kMaxScopeHistoryPointsPerScope) {
             history.erase(history.begin(), history.begin() + (history.size() - kMaxScopeHistoryPointsPerScope));
         }
     }
-
     if (batch.dropped > 0) {
         // The runtime produced samples faster than the UI took them; the oldest were dropped.
         scopeSamplesDropped_ += batch.dropped;
@@ -1095,6 +1149,11 @@ void MainWindow::onScopeSamplesAvailable()
             }
         }
         for (const auto& window : std::as_const(phasePortraitWindows_)) {
+            if (window) {
+                window->setDroppedSampleCount(scopeSamplesDropped_);
+            }
+        }
+        for (const auto& window : std::as_const(phaseTrajectory3DWindows_)) {
             if (window) {
                 window->setDroppedSampleCount(scopeSamplesDropped_);
             }
@@ -1243,8 +1302,15 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
         for (const auto& connection : model.observationConnections()) {
             auto channelName = std::string("signal") + std::to_string(connection.to.port);
             if (const auto scope = scene->elementNode(connection.to.element)) {
+                if (scope->element().type == "PhasePortrait" || scope->element().type == "PhaseTrajectory3D") {
+                    static const std::array<std::string, 3> axes{"x", "y", "z"};
+                    if (connection.to.port >= 0 && connection.to.port < static_cast<int>(axes.size())) {
+                        channelName = axes[static_cast<std::size_t>(connection.to.port)];
+                    }
+                }
                 const auto* names = json_utils::findObjectValue(scope->element().params, "channel_names");
-                if (names && names->is_array() && connection.to.port < static_cast<int>(names->as_array().size()) &&
+                if (scope->element().type != "PhasePortrait" && scope->element().type != "PhaseTrajectory3D" &&
+                    names && names->is_array() && connection.to.port < static_cast<int>(names->as_array().size()) &&
                     names->as_array()[connection.to.port].is_string()) {
                     channelName = names->as_array()[connection.to.port].as_string().c_str();
                 }
@@ -1548,6 +1614,32 @@ void MainWindow::openPhasePortraitWindow(const QString& xProbeName, const QStrin
     window->activateWindow();
 }
 
+void MainWindow::openPhaseTrajectory3DWindow(const QString& xProbeName,
+                                             const QString& yProbeName,
+                                             const QString& zProbeName)
+{
+    if (xProbeName.isEmpty() || yProbeName.isEmpty() || zProbeName.isEmpty() ||
+        xProbeName == yProbeName || xProbeName == zProbeName || yProbeName == zProbeName) {
+        return;
+    }
+    const auto key = QStringLiteral("%1|%2|%3").arg(xProbeName, yProbeName, zProbeName);
+    if (const auto existing = phaseTrajectory3DWindows_.value(key)) {
+        existing->show();
+        existing->raise();
+        existing->activateWindow();
+        return;
+    }
+    auto* window = new ui::PhaseTrajectory3DViewWindow(
+        xProbeName, yProbeName, zProbeName, nullptr,
+        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |
+            Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    window->setAttribute(Qt::WA_DeleteOnClose, true);
+    phaseTrajectory3DWindows_.insert(key, window);
+    window->show();
+    window->raise();
+    window->activateWindow();
+}
+
 void MainWindow::closeScopeWindows()
 {
     const auto existingWindows = scopeWindows_.values();
@@ -1564,6 +1656,13 @@ void MainWindow::closeScopeWindows()
             window->close();
         }
     }
+    const auto existingPhaseTrajectories3D = phaseTrajectory3DWindows_.values();
+    phaseTrajectory3DWindows_.clear();
+    for (const auto& window : existingPhaseTrajectories3D) {
+        if (window) {
+            window->close();
+        }
+    }
 }
 
 void MainWindow::clearScopeSamples()
@@ -1576,6 +1675,11 @@ void MainWindow::clearScopeSamples()
         }
     }
     for (const auto& window : phasePortraitWindows_) {
+        if (window) {
+            window->clearSamples();
+        }
+    }
+    for (const auto& window : phaseTrajectory3DWindows_) {
         if (window) {
             window->clearSamples();
         }

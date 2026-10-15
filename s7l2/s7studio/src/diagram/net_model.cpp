@@ -94,7 +94,8 @@ NetModel::NetModel(const DiagramScene& scene)
             continue;
         }
         const auto connection = NetConnection{*driver, to, wire.get()};
-        if (target->element().type == "Scope") {
+        if (target->element().type == "Scope" || target->element().type == "PhasePortrait" ||
+            target->element().type == "PhaseTrajectory3D") {
             observationConnections_.push_back(connection);
         } else {
             connections_.push_back(connection);
@@ -111,7 +112,8 @@ auto NetModel::schemaJson(const std::string& name) const -> boost::json::object
     boost::json::array elements;
     for (const auto& node : scene_.elementNodes()) {
         const auto& element = node->element();
-        if (element.type == "Scope") {
+        if (element.type == "Scope" || element.type == "PhasePortrait" ||
+            element.type == "PhaseTrajectory3D") {
             continue;
         }
         boost::json::object object{{"id", element.id}, {"type", element.type}, {"params", element.params}};

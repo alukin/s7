@@ -12,6 +12,7 @@ class QLabel;
 class QPushButton;
 class QTimer;
 class QCustomPlot;
+class QCPCurve;
 
 namespace s7studio::ui {
 
@@ -66,6 +67,7 @@ private:
     QVector<double> yValues_;
 
     QCustomPlot* plot_ = nullptr;
+    QCPCurve* curve_ = nullptr;
     QCheckBox* autoScaleCheck_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;

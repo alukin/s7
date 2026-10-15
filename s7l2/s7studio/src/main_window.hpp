@@ -44,6 +44,7 @@ namespace ui {
 class ToolWindows;
 class ScopeViewWindow;
 class PhasePortraitViewWindow;
+class PhaseTrajectory3DViewWindow;
 class ElementPickerPanel;
 class HeadlessNodesPanel;
 class ProbesPanel;
@@ -96,6 +97,7 @@ private slots:
     void setPaperLetter();
     void setPagePortrait();
     void setPageLandscape();
+    void chooseScopeTemporaryDirectory();
     void onElementRequested(const QString& elementType, const QString& displayName);
     void onHeadlessNodeActivated(const QString& endpoint, const QString& nodeUuid, const QString& nodeName);
     void addTextFrame();
@@ -115,6 +117,7 @@ private:
     void refreshActions();
     void openScopeWindow(const QString& probeName);
     void openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName);
+    void openPhaseTrajectory3DWindow(const QString& xProbeName, const QString& yProbeName, const QString& zProbeName);
     void closeScopeWindows();
     void clearScopeSamples();
     void replayScopeSamples(const QString& probeName, ui::ScopeViewWindow& window);
@@ -237,6 +240,7 @@ private:
     QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
     // Keyed by "xProbe|yProbe".
     QHash<QString, QPointer<ui::PhasePortraitViewWindow>> phasePortraitWindows_;
+    QHash<QString, QPointer<ui::PhaseTrajectory3DViewWindow>> phaseTrajectory3DWindows_;
     QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
     std::uint64_t scopeSamplesDropped_ = 0;
     class QTimer* wireTypeTimer_ = nullptr;

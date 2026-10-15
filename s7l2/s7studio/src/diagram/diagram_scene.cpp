@@ -622,7 +622,8 @@ auto DiagramScene::typeProblem(const WireEnd& driver, const WireEnd& input) cons
     if (!from || !to) {
         return {};
     }
-    if (to->element().type == "Scope") {
+    if (to->element().type == "Scope" || to->element().type == "PhasePortrait" ||
+        to->element().type == "PhaseTrajectory3D") {
         return {}; // observation inputs accept any signal type
     }
     // The resolver's first error, empty if the schema resolves; unknown

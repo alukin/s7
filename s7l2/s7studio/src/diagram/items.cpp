@@ -528,7 +528,9 @@ void SignalWire::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidg
     }
     painter->setRenderHint(QPainter::Antialiasing);
     const auto target = downstream.node.lock();
-    const bool observationLink = target && target->element().type == "Scope";
+    const bool observationLink = target &&
+        (target->element().type == "Scope" || target->element().type == "PhasePortrait" ||
+         target->element().type == "PhaseTrajectory3D");
     const QColor color = !problem_.isEmpty() ? kProblem : (isSelected() ? kSelected : (observationLink ? kProbeMarker : kWire));
     painter->setPen(QPen(color, isSelected() ? 2.0 : 1.4, observationLink ? Qt::DashLine : Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter->setBrush(Qt::NoBrush);

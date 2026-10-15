@@ -221,9 +221,10 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
     boost::json::array nodes;
     for (const auto& node : scene.elementNodes()) {
         boost::json::object object{{"id", node->id()}, {"position", gridJson(node->pos())}};
-        if (node->element().type == "Scope") {
+        if (node->element().type == "Scope" || node->element().type == "PhasePortrait" ||
+            node->element().type == "PhaseTrajectory3D") {
             object["observer"] = true;
-            object["type"] = "Scope";
+            object["type"] = node->element().type;
             object["params"] = node->element().params;
         }
         if (!node->element().title.isEmpty()) {
@@ -375,11 +376,13 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             const auto id = json_utils::stringValue(object, "id");
             auto it = index.find(id);
             const auto* observerFlag = json_utils::findObjectValue(object, "observer");
+            const auto observerType = json_utils::stringValue(object, "type");
             if (it == index.end() && observerFlag && observerFlag->is_bool() && observerFlag->as_bool() &&
-                json_utils::stringValue(object, "type") == "Scope") {
+                (observerType == "Scope" || observerType == "PhasePortrait" ||
+                 observerType == "PhaseTrajectory3D")) {
                 Model observer;
                 observer.element.id = id;
-                observer.element.type = "Scope";
+                observer.element.type = observerType;
                 if (const auto* params = json_utils::findObjectValue(object, "params"); params && params->is_object()) {
                     observer.element.params = params->as_object();
                 }

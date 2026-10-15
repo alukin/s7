@@ -79,13 +79,12 @@ void PhasePortraitViewWindow::configurePlot()
     plot_->xAxis->setLabel(xProbeName_);
     plot_->yAxis->setLabel(yProbeName_);
 
-    plot_->addGraph();
-    auto* graph = plot_->graph(0);
-    graph->setLineStyle(QCPGraph::lsLine);
-    graph->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssNone));
+    curve_ = new QCPCurve(plot_->xAxis, plot_->yAxis);
+    curve_->setLineStyle(QCPCurve::lsLine);
+    curve_->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssNone));
     QPen pen(kTrajectoryColor);
     pen.setWidthF(1.4);
-    graph->setPen(pen);
+    curve_->setPen(pen);
 }
 
 void PhasePortraitViewWindow::appendXSample(const long step, const double value)
@@ -155,9 +154,7 @@ void PhasePortraitViewWindow::clearBuffers()
     droppedSamples_ = 0;
     updateStatus();
 
-    if (auto* graph = plot_->graph(0)) {
-        graph->data()->clear();
-    }
+    curve_->data()->clear();
 
     dirty_ = true;
     plot_->replot(QCustomPlot::rpQueuedReplot);
@@ -195,9 +192,7 @@ void PhasePortraitViewWindow::refreshPlot()
     }
 
     dirty_ = false;
-    if (auto* graph = plot_->graph(0)) {
-        graph->setData(xValues_, yValues_, true);
-    }
+    curve_->setData(xValues_, yValues_);
 
     if (autoScaleCheck_->isChecked()) {
         plot_->rescaleAxes(true);
