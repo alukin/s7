@@ -1,6 +1,7 @@
 #include "scene_serializer.hpp"
 
 #include "diagram/diagram_scene.hpp"
+#include "diagram/element_ports.hpp"
 #include "diagram/net_model.hpp"
 #include "json_utils.hpp"
 
@@ -221,8 +222,7 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
     boost::json::array nodes;
     for (const auto& node : scene.elementNodes()) {
         boost::json::object object{{"id", node->id()}, {"position", gridJson(node->pos())}};
-        if (node->element().type == "Scope" || node->element().type == "PhasePortrait" ||
-            node->element().type == "PhaseTrajectory3D") {
+        if (isObserverElementType(node->element().type)) {
             object["observer"] = true;
             object["type"] = node->element().type;
             object["params"] = node->element().params;
@@ -378,8 +378,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             const auto* observerFlag = json_utils::findObjectValue(object, "observer");
             const auto observerType = json_utils::stringValue(object, "type");
             if (it == index.end() && observerFlag && observerFlag->is_bool() && observerFlag->as_bool() &&
-                (observerType == "Scope" || observerType == "PhasePortrait" ||
-                 observerType == "PhaseTrajectory3D")) {
+                isObserverElementType(observerType)) {
                 Model observer;
                 observer.element.id = id;
                 observer.element.type = observerType;

@@ -55,6 +55,16 @@ auto arraySize(const boost::json::object& params, const char* key) -> int
 
 } // namespace
 
+bool isAxisObserverElementType(const std::string_view type)
+{
+    return type == "PhasePortrait" || type == "PhaseTrajectory3D";
+}
+
+bool isObserverElementType(const std::string_view type)
+{
+    return type == "Scope" || isAxisObserverElementType(type);
+}
+
 auto elementPorts(const std::string_view type, const boost::json::object& params, const boost::json::value& nestedSchema)
     -> ElementPorts
 {

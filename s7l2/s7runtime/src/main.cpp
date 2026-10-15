@@ -199,8 +199,18 @@ int main(int argc, char** argv) {
 
         if (service.has_simulation()) {
             const auto step_count = service.simulation_step_count();
-            for (std::uint64_t step = 0; step < step_count; ++step) {
-                service.step();
+            std::uint64_t executed_steps = 0;
+            try {
+                for (; executed_steps < step_count; ++executed_steps) {
+                    service.step();
+                }
+            } catch (const std::exception& ex) {
+                std::cout << "runtime.executed_steps=" << executed_steps << '\n';
+                for (const auto& file : service.output_files()) {
+                    std::cout << "runtime.output_file=" << file.string() << '\n';
+                }
+                std::cerr << "runtime.execution.error=" << ex.what() << '\n';
+                return 1;
             }
             std::cout << "runtime.executed_steps=" << step_count << '\n';
             for (const auto& file : service.output_files()) {

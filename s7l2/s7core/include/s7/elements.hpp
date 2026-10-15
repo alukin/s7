@@ -114,9 +114,19 @@ public:
     {
         const auto input = read_input<value_type>(0);
         switch (function_) {
-            case MathFunctionOperation::Sqrt: output_value_ = math::sqrt(input); break;
+            case MathFunctionOperation::Sqrt:
+                if (input < value_type{}) {
+                    throw std::domain_error("MathFunction sqrt input is negative.");
+                }
+                output_value_ = math::sqrt(input);
+                break;
             case MathFunctionOperation::Exp: output_value_ = math::exp(input); break;
-            case MathFunctionOperation::Log: output_value_ = math::log(input); break;
+            case MathFunctionOperation::Log:
+                if (input <= value_type{}) {
+                    throw std::domain_error("MathFunction log input must be positive.");
+                }
+                output_value_ = math::log(input);
+                break;
             case MathFunctionOperation::Pow: output_value_ = math::pow(input, exponent_); break;
             case MathFunctionOperation::Abs: output_value_ = math::abs(input); break;
             case MathFunctionOperation::Reciprocal:
@@ -205,10 +215,12 @@ public:
         for (std::size_t index = 1; index < input_ports().size(); ++index) {
             const auto value = read_input<value_type>(index);
             if constexpr (signal_type_info(Type).kind == SignalKind::Float) {
-                if (math::isnan(output_value_)) {
+                // NaN is ignored while another input is valid; it propagates
+                // only if every input seen so far has been NaN.
+                if (math::isnan(value)) {
                     continue;
                 }
-                if (math::isnan(value)) {
+                if (math::isnan(output_value_)) {
                     output_value_ = value;
                     continue;
                 }

@@ -22,6 +22,8 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -140,12 +142,19 @@ void ScopeViewWindow::appendSample(const QString& channel, const double timeSeco
     series.value.push_back(value);
     if (series.spillFile) {
         if (!appendToSpill(series, timeSeconds, value)) {
-            temporaryWriteError_ = QStringLiteral("temporary data write failed; samples may be incomplete");
+            series.spillFailed = true;
+            temporaryWriteError_ = QStringLiteral("temporary data write failed; recorded samples beyond this point are not full resolution");
             updateStatus();
         }
-    } else if (series.time.size() >= kMaxInMemorySamplesPerSeries && spillSeries(series)) {
-        // spillSeries writes the complete in-memory series, including this sample.
+    } else if (!series.spillFailed && series.time.size() >= kMaxInMemorySamplesPerSeries && !spillSeries(series)) {
+        // spillSeries already set temporaryWriteError_ and called updateStatus()
+        // on failure; spillFailed stops retrying it on every further sample.
+        series.spillFailed = true;
     }
+    // The in-memory buffer is bounded either way so memory stays flat; once
+    // spilling has failed there is no disk backup, so decimating here is
+    // irreversible data loss, not a safe trim, which is why spillFailed also
+    // keeps the warning above on screen instead of clearing after one retry.
     if (series.time.size() > kMaxInMemorySamplesPerSeries) {
         decimatePlotBuffer(series);
     }
@@ -168,11 +177,16 @@ void ScopeViewWindow::updateStatus()
 {
     QStringList parts;
     bool spilled = false;
+    bool spillFailed = false;
     for (auto it = series_.cbegin(); it != series_.cend(); ++it) {
         spilled |= static_cast<bool>(it->spillFile);
+        spillFailed |= it->spillFailed;
     }
     if (spilled) {
         parts << QStringLiteral("temporary disk buffer active");
+    }
+    if (spillFailed) {
+        parts << QStringLiteral("WARNING: temporary disk buffer unavailable; recording is no longer full resolution");
     }
     if (droppedSamples_ > 0) {
         parts << QStringLiteral("display dropped %1 samples").arg(droppedSamples_);
@@ -203,6 +217,15 @@ void ScopeViewWindow::clearBuffers()
 
 void ScopeViewWindow::exportRecordedCsv()
 {
+    const bool anySpillFailed = std::any_of(series_.cbegin(), series_.cend(),
+                                            [](const Series& series) { return series.spillFailed; });
+    if (anySpillFailed) {
+        QMessageBox::warning(this, QStringLiteral("Export may be incomplete"),
+                             QStringLiteral("The temporary disk buffer failed during this recording, so some "
+                                            "channels were decimated in memory and this export is not full "
+                                            "resolution for the affected time range."));
+    }
+
     const QString filePath = QFileDialog::getSaveFileName(
         this,
         QStringLiteral("Export scope data"),

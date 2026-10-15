@@ -88,15 +88,16 @@ auto orientedPageRect(const DiagramPageLayout& pageLayout) -> QRectF
     return {0.0, 0.0, sceneUnitsFromMm(rectMm.width()), sceneUnitsFromMm(rectMm.height())};
 }
 
-void fitRectInView(QSchematic::View* view, const QRectF& rect)
+bool fitRectInView(QSchematic::View* view, const QRectF& rect)
 {
     if (!view || rect.isEmpty() || view->viewport()->width() < 32 || view->viewport()->height() < 32) {
-        return;
+        return false;
     }
 
     const double scale = std::min(view->viewport()->width() / rect.width(), view->viewport()->height() / rect.height());
     view->setZoomValue(std::clamp(scale, static_cast<double>(view->zoom_factor_min), static_cast<double>(view->zoom_factor_max)));
     view->centerOn(rect.center());
+    return true;
 }
 
 } // namespace
@@ -237,7 +238,9 @@ void DiagramEditor::fitDiagramInView()
         return;
     }
     const double margin = 2.0 * kGridStep;
-    fitRectInView(_view, content.adjusted(-margin, -margin, margin, margin));
+    if (fitRectInView(_view, content.adjusted(-margin, -margin, margin, margin))) {
+        _pendingFitToContents = false;
+    }
     updateRulers();
 }
 

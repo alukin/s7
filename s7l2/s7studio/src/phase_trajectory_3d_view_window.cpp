@@ -129,6 +129,7 @@ void PhaseTrajectory3DViewWindow::addCoordinate(const long step, const double va
     }
     while (pending_.size() > 8) {
         pending_.erase(pending_.begin());
+        ++incompletePointsDropped_;
     }
 }
 
@@ -149,8 +150,8 @@ void PhaseTrajectory3DViewWindow::updateStatus()
     if (points_.size() >= kMaxPoints) {
         parts << QStringLiteral("trajectory trimmed to %1 points").arg(kMaxPoints);
     }
-    if (droppedSamples_ > 0) {
-        parts << QStringLiteral("display dropped %1 samples").arg(droppedSamples_);
+    if (const auto totalDropped = droppedSamples_ + incompletePointsDropped_; totalDropped > 0) {
+        parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
     }
     statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
@@ -160,6 +161,7 @@ void PhaseTrajectory3DViewWindow::clearBuffers()
     points_.clear();
     pending_.clear();
     droppedSamples_ = 0;
+    incompletePointsDropped_ = 0;
     updateStatus();
     for (auto* plot : {xyPlot_, xzPlot_, yzPlot_}) {
         auto* curve = plot == xyPlot_ ? xyCurve_ : (plot == xzPlot_ ? xzCurve_ : yzCurve_);

@@ -21,6 +21,16 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
         }
         memory_output_ranges_.push_back(MemoryOutputRange{begin, memory_outputs_.size()});
     }
+
+    for (const auto& id : graph_.causal_order) {
+        const auto& element = graph_.elements.at(id);
+        for (const auto& port : element->output_ports()) {
+            causal_outputs_.push_back(CausalOutput{
+                .value_ptr = port.value_ptr,
+                .bytes = signal_type_info(port.type).storage_bytes,
+            });
+        }
+    }
 }
 
 void NodeRuntime::set_model_time_step_ns(const std::optional<std::int64_t> step_ns) {
@@ -43,15 +53,46 @@ std::thread::id NodeRuntime::stepping_thread() const {
 
 void NodeRuntime::step() {
     stepping_thread_.store(std::this_thread::get_id());
-    if (memory_outputs_staged_) {
+    const bool publishing = memory_outputs_staged_;
+    if (publishing) {
+        // Back up each memory output's pre-publish (previous step's) value
+        // in its MemoryOutput::snapshot, reused below only for this purpose:
+        // the per-element catch further down overwrites it fresh, after
+        // this function either returns normally or has already rethrown.
         for (auto& output : memory_outputs_) {
+            std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
             std::memcpy(output.value_ptr, output.staged.data(), output.bytes);
         }
         memory_outputs_staged_ = false;
     }
 
-    for (const auto& id : graph_.causal_order) {
-        graph_.elements.at(id)->step();
+    for (auto& output : causal_outputs_) {
+        std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
+    }
+    try {
+        for (const auto& id : graph_.causal_order) {
+            graph_.elements.at(id)->step();
+        }
+    } catch (...) {
+        // A causal-order element faulted partway through: restore every
+        // causal output, and the memory outputs just published above, to
+        // their pre-step values, so the step is all-or-nothing instead of a
+        // mix of this step's and the previous step's outputs. The staged
+        // values survive (only the flag was cleared) so a later successful
+        // step() republishes the same values rather than skipping them.
+        // This covers only elements' published outputs, not any further
+        // private state (e.g. a filter's internal delay line) a causal
+        // element may have already advanced before the fault.
+        for (auto& output : causal_outputs_) {
+            std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
+        }
+        if (publishing) {
+            for (auto& output : memory_outputs_) {
+                std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
+            }
+            memory_outputs_staged_ = true;
+        }
+        throw;
     }
 
     // Each causal-memory element computes its next output from this step's

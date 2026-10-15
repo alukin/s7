@@ -737,6 +737,184 @@ int main() try
         }
     }
 
+    {
+        // A causal-order element that faults (Divider's zero-denominator
+        // check) must not leave an earlier causal element's published output
+        // partially advanced: the whole step is reverted, not torn.
+        s7::Schema schema{"causal_atomicity"};
+        schema.set_rate(s7::Rate::from_hz(1));
+        schema.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
+        schema.add_element("accum", [] { return std::make_unique<s7::Accumulator>(0.0); });
+        schema.add_element("num", [] { return std::make_unique<s7::ConstantT<s7::SignalType::F64>>(1.0); });
+        schema.add_element("zero", [] { return std::make_unique<s7::ConstantT<s7::SignalType::F64>>(0.0); });
+        schema.add_element("div", [] { return std::make_unique<s7::DividerT<s7::SignalType::F64>>(); });
+        schema.connect("source", 0, "accum", 0);
+        schema.connect("num", 0, "div", 0);
+        schema.connect("zero", 0, "div", 1);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        for (int attempt = 0; attempt < 2; ++attempt) {
+            bool threw = false;
+            try {
+                runtime.step();
+            } catch (const std::domain_error&) {
+                threw = true;
+            }
+            if (!threw) {
+                throw std::runtime_error("Expected the zero-denominator Divider to fault the step.");
+            }
+            // 'accum' runs before 'div' in causal order; its output must stay
+            // at its pre-step value, not the sum it computed before the fault.
+            if (runtime.real_output_of("accum") != 0.0) {
+                throw std::runtime_error("A faulted step left a torn (partially updated) causal output.");
+            }
+        }
+    }
+
+    {
+        // The outputs NodeRuntime::step() publishes from the *previous*
+        // step's memory_order results, right before causal_order runs, must
+        // also be reverted on a causal fault: otherwise a memory element
+        // (Delay here) shows the new step while causal elements still show
+        // the old one.
+        s7::Schema schema{"memory_publish_atomicity"};
+        schema.set_rate(s7::Rate::from_hz(1));
+        schema.add_element("zero", [] { return std::make_unique<s7::Constant>(0.0); });
+        schema.add_element("delay", [] { return std::make_unique<s7::Delay>(1.0); });
+        schema.add_element("num", [] { return std::make_unique<s7::ConstantT<s7::SignalType::F64>>(1.0); });
+        schema.add_element("div", [] { return std::make_unique<s7::DividerT<s7::SignalType::F64>>(); });
+        schema.connect("zero", 0, "delay", 0);
+        schema.connect("num", 0, "div", 0);
+        schema.connect("delay", 0, "div", 1);
+
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        runtime.step(); // delay outputs its initial_value (1.0); div = 1/1, no fault.
+        if (runtime.real_output_of("delay") != 1.0 || runtime.real_output_of("div") != 1.0) {
+            throw std::runtime_error("Unexpected first-step Delay/Divider output.");
+        }
+
+        // Step 2 publishes delay's queued 0.0 before causal_order runs, so
+        // div's denominator is 0 and the step faults.
+        bool threw = false;
+        try {
+            runtime.step();
+        } catch (const std::domain_error&) {
+            threw = true;
+        }
+        if (!threw) {
+            throw std::runtime_error("Expected the second step's zero denominator to fault.");
+        }
+        if (runtime.real_output_of("delay") != 1.0) {
+            throw std::runtime_error("A faulted step left Delay's output published to the next step's value.");
+        }
+        if (runtime.real_output_of("div") != 1.0) {
+            throw std::runtime_error("A faulted step left a torn (partially updated) causal output.");
+        }
+
+        // The reverted step must be retried in full on the next call, not
+        // skipped: it should fault again with the same (still-staged) values.
+        threw = false;
+        try {
+            runtime.step();
+        } catch (const std::domain_error&) {
+            threw = true;
+        }
+        if (!threw) {
+            throw std::runtime_error("Expected the retried step to fault again with the same staged values.");
+        }
+    }
+
+    {
+        // Sqrt and Log fail fast on out-of-domain input, like Reciprocal,
+        // instead of silently producing NaN/-inf.
+        auto sqrtFn = std::make_unique<s7::MathFunctionT<s7::SignalType::F64>>(s7::MathFunctionOperation::Sqrt);
+        const double negative = -4.0;
+        const std::array<s7::InputBinding, 1> sqrtBinding{s7::bind_input<s7::SignalType::F64>(negative)};
+        sqrtFn->bind_inputs({sqrtBinding.data(), sqrtBinding.size()});
+        bool threw = false;
+        try {
+            sqrtFn->step();
+        } catch (const std::domain_error&) {
+            threw = true;
+        }
+        if (!threw) {
+            throw std::runtime_error("Expected MathFunction sqrt of a negative input to be rejected.");
+        }
+
+        auto logFn = std::make_unique<s7::MathFunctionT<s7::SignalType::F64>>(s7::MathFunctionOperation::Log);
+        const double nonPositive = 0.0;
+        const std::array<s7::InputBinding, 1> logBinding{s7::bind_input<s7::SignalType::F64>(nonPositive)};
+        logFn->bind_inputs({logBinding.data(), logBinding.size()});
+        threw = false;
+        try {
+            logFn->step();
+        } catch (const std::domain_error&) {
+            threw = true;
+        }
+        if (!threw) {
+            throw std::runtime_error("Expected MathFunction log of a non-positive input to be rejected.");
+        }
+    }
+
+    {
+        // MinMax ignores a NaN input while another input is valid, and
+        // propagates NaN only when every input is NaN.
+        const double nanValue = std::nan("");
+        const double low = 1.0;
+        const double high = 2.0;
+
+        auto minOfThree = std::make_unique<s7::MinMaxT<s7::SignalType::F64>>(3, false);
+        const std::array<s7::InputBinding, 3> minBindings{
+            s7::bind_input<s7::SignalType::F64>(nanValue),
+            s7::bind_input<s7::SignalType::F64>(low),
+            s7::bind_input<s7::SignalType::F64>(high),
+        };
+        minOfThree->bind_inputs({minBindings.data(), minBindings.size()});
+        minOfThree->step();
+        if (s7::bound_value<s7::SignalType::F64>(minOfThree->outputs()[0]) != low) {
+            throw std::runtime_error("Expected MinMax to ignore a leading NaN input.");
+        }
+
+        auto allNan = std::make_unique<s7::MinMaxT<s7::SignalType::F64>>(2, true);
+        const std::array<s7::InputBinding, 2> nanBindings{
+            s7::bind_input<s7::SignalType::F64>(nanValue),
+            s7::bind_input<s7::SignalType::F64>(nanValue),
+        };
+        allNan->bind_inputs({nanBindings.data(), nanBindings.size()});
+        allNan->step();
+        if (!std::isnan(s7::bound_value<s7::SignalType::F64>(allNan->outputs()[0]))) {
+            throw std::runtime_error("Expected MinMax of all-NaN inputs to be NaN.");
+        }
+    }
+
+    {
+        // A cross-parameter invariant checked in an element's constructor
+        // (Saturation's lower <= upper, which a single ParameterSpec cannot
+        // express) is still reported with the element's id and type, like
+        // every other parameter-validation error.
+        auto& registry = s7::ElementRegistry::instance();
+        s7::register_builtin_elements(registry);
+        const auto* saturation = registry.find("Saturation");
+        assert(saturation != nullptr);
+
+        s7::Schema schema{"bad_saturation"};
+        schema.set_rate(s7::Rate::from_hz(1));
+        schema.add_element("x", [] { return std::make_unique<s7::Constant>(0.5); });
+        schema.add_element(s7::make_element_spec("sat1", *saturation, {{"type", "F64"}, {"lower_limit", 1.0}, {"upper_limit", 0.0}}));
+        schema.connect("x", 0, "sat1", 0);
+
+        const auto validation = s7::Validator::validate(schema);
+        if (validation.ok()) {
+            throw std::runtime_error("Expected Saturation with lower_limit > upper_limit to be rejected.");
+        }
+        const auto hasIdPrefixedError = std::ranges::any_of(validation.errors, [](const std::string& error) {
+            return error.find("Element 'sat1'") != std::string::npos && error.find("lower_limit") != std::string::npos;
+        });
+        if (!hasIdPrefixedError) {
+            throw std::runtime_error("Expected the Saturation limit error to name element 'sat1'.");
+        }
+    }
+
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core smoke: fatal error: " << ex.what() << '\n';

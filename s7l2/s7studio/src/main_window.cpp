@@ -1302,14 +1302,14 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
         for (const auto& connection : model.observationConnections()) {
             auto channelName = std::string("signal") + std::to_string(connection.to.port);
             if (const auto scope = scene->elementNode(connection.to.element)) {
-                if (scope->element().type == "PhasePortrait" || scope->element().type == "PhaseTrajectory3D") {
+                if (diagram::isAxisObserverElementType(scope->element().type)) {
                     static const std::array<std::string, 3> axes{"x", "y", "z"};
                     if (connection.to.port >= 0 && connection.to.port < static_cast<int>(axes.size())) {
                         channelName = axes[static_cast<std::size_t>(connection.to.port)];
                     }
                 }
                 const auto* names = json_utils::findObjectValue(scope->element().params, "channel_names");
-                if (scope->element().type != "PhasePortrait" && scope->element().type != "PhaseTrajectory3D" &&
+                if (!diagram::isAxisObserverElementType(scope->element().type) &&
                     names && names->is_array() && connection.to.port < static_cast<int>(names->as_array().size()) &&
                     names->as_array()[connection.to.port].is_string()) {
                     channelName = names->as_array()[connection.to.port].as_string().c_str();

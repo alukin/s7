@@ -68,11 +68,21 @@ private:
         std::size_t end{};
     };
 
+    // Output of a causal-order element, snapshotted before causal_order runs
+    // so a throwing element leaves no torn step: either every causal output
+    // reflects this step, or (on exception) none of them do.
+    struct CausalOutput {
+        void* value_ptr{};
+        std::size_t bytes{};
+        std::array<std::byte, 32> snapshot{};
+    };
+
     void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
     ExecutableGraph graph_;
     std::vector<MemoryOutput> memory_outputs_;
     std::vector<MemoryOutputRange> memory_output_ranges_;
+    std::vector<CausalOutput> causal_outputs_;
     bool memory_outputs_staged_{};
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<std::int64_t> model_time_step_ns_;

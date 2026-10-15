@@ -60,6 +60,10 @@ private:
         double firstTime = 0.0;
         double lastTime = 0.0;
         bool hasSamples = false;
+        // Set once spilling to disk fails; stops retrying it on every sample
+        // and marks that decimation below is now discarding full-resolution
+        // data rather than trimming a disk-backed copy.
+        bool spillFailed = false;
     };
 
     void configurePlot();

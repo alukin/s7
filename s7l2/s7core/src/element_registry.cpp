@@ -204,7 +204,15 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     if (metadata.type_variables.empty()) {
         return ElementSpec{id,
                            [shared, id, params = std::move(params)] {
-                               return shared->create(ElementCreationContext{shared->metadata(), checked_params(id, shared->metadata(), params)});
+                               // Named, not a temporary bound straight into ctx: ElementCreationContext
+                               // only holds a reference, and ctx outlives the statement that builds it.
+                               const auto checked = checked_params(id, shared->metadata(), params);
+                               auto ctx = ElementCreationContext{shared->metadata(), checked};
+                               try {
+                                   return shared->create(ctx);
+                               } catch (const std::exception& ex) {
+                                   throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
+                               }
                            },
                            {}};
     }
@@ -289,7 +297,13 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
         for (std::size_t index = 0; index < effective.size(); ++index) {
             effective[index] = types[alias[index]];
         }
-        return shared->create(ElementCreationContext{shared->metadata(), checked_params(id, shared->metadata(), params), effective});
+        const auto checked = checked_params(id, shared->metadata(), params);
+        auto ctx = ElementCreationContext{shared->metadata(), checked, effective};
+        try {
+            return shared->create(ctx);
+        } catch (const std::exception& ex) {
+            throw std::invalid_argument("Element '" + id + "' (" + shared->metadata().type_name + "): " + ex.what());
+        }
     };
     return ElementSpec{std::move(id), {}, std::move(generic)};
 }

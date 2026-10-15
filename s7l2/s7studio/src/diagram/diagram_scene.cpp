@@ -622,8 +622,7 @@ auto DiagramScene::typeProblem(const WireEnd& driver, const WireEnd& input) cons
     if (!from || !to) {
         return {};
     }
-    if (to->element().type == "Scope" || to->element().type == "PhasePortrait" ||
-        to->element().type == "PhaseTrajectory3D") {
+    if (isObserverElementType(to->element().type)) {
         return {}; // observation inputs accept any signal type
     }
     // The resolver's first error, empty if the schema resolves; unknown
@@ -1020,21 +1019,14 @@ void DiagramScene::repairRoutes(std::vector<SignalWire*> forced, const std::func
     std::size_t checkedRoutes = 0;
     std::size_t reroutedRoutes = forced.size();
     int validationPasses = 0;
-    std::unordered_set<const SignalWire*> affectedRoots;
-    for (const auto* wire : forced) {
-        if (wire) {
-            const auto* root = NetModel::rootOf(*wire);
-            affectedRoots.insert(root ? root : wire);
-        }
-    }
+    route(std::move(forced), routeProgress);
+    // A moved element can invalidate any wire's route, not just those on
+    // forced's own nets (e.g. a dragged element now overlapping an unrelated
+    // wire), so the settle passes below re-check every wire in the scene.
     std::vector<SignalWire*> candidates;
     for (const auto& wire : signalWires()) {
-        const auto* root = NetModel::rootOf(*wire);
-        if (affectedRoots.contains(root ? root : wire.get())) {
-            candidates.push_back(wire.get());
-        }
+        candidates.push_back(wire.get());
     }
-    route(std::move(forced), routeProgress);
     // Rerouted wires may leave others invalid (a junction off its trunk, a
     // wire under a moved element); a few passes settle every tree.
     for (int pass = 0; pass < 4; ++pass) {

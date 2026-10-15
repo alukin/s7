@@ -67,6 +67,7 @@ private:
     std::map<long, PendingPoint> pending_;
     QVector<Point3D> points_;
     std::uint64_t droppedSamples_ = 0;
+    std::uint64_t incompletePointsDropped_ = 0;
     bool dirty_ = false;
 
     QCheckBox* autoScaleCheck_ = nullptr;
