@@ -278,6 +278,10 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
         }
         if (sizing && sizing->is_array()) {
             generic.input_count = sizing->as_array().size();
+        } else if (sizing && sizing->is_int64() && sizing->get_int64() >= 0) {
+            generic.input_count = static_cast<std::size_t>(sizing->get_int64());
+        } else if (sizing && sizing->is_uint64()) {
+            generic.input_count = static_cast<std::size_t>(sizing->get_uint64());
         }
     }
     generic.create = [shared, alias, id, params = std::move(params)](const std::span<const SignalType> types) {

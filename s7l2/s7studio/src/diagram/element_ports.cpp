@@ -77,7 +77,27 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
 
     if (const auto* descriptor = s7::ElementRegistry::instance().find(std::string(type))) {
         const auto& metadata = descriptor->metadata();
-        return {metadataNames(metadata.input_ports, "in", variadicInputs), metadataNames(metadata.output_ports, "out", 0)};
+        int inputCount = static_cast<int>(metadata.input_ports.size());
+        if (metadata.variadic_inputs.enabled && !metadata.variadic_inputs.count_parameter.empty()) {
+            const auto& parameter = metadata.variadic_inputs.count_parameter;
+            const auto* sizing = json_utils::findObjectValue(params, parameter.c_str());
+            if (sizing && sizing->is_array()) {
+                inputCount = static_cast<int>(sizing->as_array().size());
+            } else if (sizing && sizing->is_number()) {
+                inputCount = json_utils::intValue(params, parameter.c_str(), inputCount);
+            } else if (!sizing) {
+                const auto spec = std::find_if(metadata.parameters.begin(), metadata.parameters.end(),
+                                               [&](const s7::ParameterSpec& item) { return item.name == parameter; });
+                if (spec != metadata.parameters.end()) {
+                    if (spec->default_value.is_array()) {
+                        inputCount = static_cast<int>(spec->default_value.as_array().size());
+                    } else if (spec->default_value.is_number()) {
+                        inputCount = static_cast<int>(json_utils::numberValue(spec->default_value));
+                    }
+                }
+            }
+        }
+        return {metadataNames(metadata.input_ports, "in", inputCount), metadataNames(metadata.output_ports, "out", 0)};
     }
 
     // Built-ins described here for diagrams opened before (or without) the
@@ -85,9 +105,15 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
     if (type == "Constant" || type == "AnalogOscillator") {
         return {{}, numbered("out", 1)};
     }
-    if (type == "Gain" || type == "Delay" || type == "Accumulator" || type == "FirFilter" || type == "IirFilter" ||
-        type == "PreviousValue" || type == "Convert") {
+    if (type == "MathFunction" || type == "Saturation" || type == "Sign" || type == "Gain" || type == "Delay" ||
+        type == "Accumulator" || type == "FirFilter" || type == "IirFilter" || type == "PreviousValue" || type == "Convert") {
         return {numbered("in", 1), numbered("out", 1)};
+    }
+    if (type == "Divider" || type == "Power") {
+        return {numbered("in", 2), numbered("out", 1)};
+    }
+    if (type == "MinMax") {
+        return {numbered("in", std::max(2, json_utils::intValue(params, "input_count", 2))), numbered("out", 1)};
     }
     if (variadicInputs > 0) {
         return {numbered("in", variadicInputs), numbered("out", 1)};

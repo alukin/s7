@@ -67,6 +67,198 @@ private:
     value_type output_value_{};
 };
 
+/// Divider: out = numerator / denominator. Real floating-point types.
+/// A zero denominator is an execution error rather than an infinite output.
+template <SignalType Type>
+class DividerT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    DividerT() : Element("Divider")
+    {
+        register_input(0, "numerator", Type, nullptr);
+        register_input(1, "denominator", Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto numerator = read_input<value_type>(0);
+        const auto denominator = read_input<value_type>(1);
+        if (denominator == value_type{}) {
+            throw std::domain_error("Divider denominator is zero.");
+        }
+        output_value_ = numerator / denominator;
+    }
+
+private:
+    value_type output_value_{};
+};
+
+enum class MathFunctionOperation : std::uint8_t { Sqrt, Exp, Log, Pow, Abs, Reciprocal };
+
+/// MathFunction: one common real floating-point function selected by a parameter.
+template <SignalType Type>
+class MathFunctionT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    explicit MathFunctionT(const MathFunctionOperation function, const value_type exponent = value_type{2})
+        : Element("MathFunction"), function_(function), exponent_(exponent)
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto input = read_input<value_type>(0);
+        switch (function_) {
+            case MathFunctionOperation::Sqrt: output_value_ = math::sqrt(input); break;
+            case MathFunctionOperation::Exp: output_value_ = math::exp(input); break;
+            case MathFunctionOperation::Log: output_value_ = math::log(input); break;
+            case MathFunctionOperation::Pow: output_value_ = math::pow(input, exponent_); break;
+            case MathFunctionOperation::Abs: output_value_ = math::abs(input); break;
+            case MathFunctionOperation::Reciprocal:
+                if (input == value_type{}) {
+                    throw std::domain_error("MathFunction reciprocal input is zero.");
+                }
+                output_value_ = value_type{1} / input;
+                break;
+        }
+    }
+
+private:
+    MathFunctionOperation function_;
+    value_type exponent_;
+    value_type output_value_{};
+};
+
+/// Power: out = base ^ exponent. Real floating-point types.
+template <SignalType Type>
+class PowerT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    PowerT() : Element("Power")
+    {
+        register_input(0, "base", Type, nullptr);
+        register_input(1, "exponent", Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override { output_value_ = math::pow(read_input<value_type>(0), read_input<value_type>(1)); }
+
+private:
+    value_type output_value_{};
+};
+
+/// Saturation: clamp a real numeric input to inclusive lower and upper limits.
+template <SignalType Type>
+class SaturationT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    SaturationT(const value_type lower, const value_type upper)
+        : Element("Saturation"), lower_(lower), upper_(upper)
+    {
+        if (!(lower_ <= upper_)) {
+            throw std::invalid_argument("Saturation upper_limit must be at least lower_limit.");
+        }
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto input = read_input<value_type>(0);
+        output_value_ = input < lower_ ? lower_ : (upper_ < input ? upper_ : input);
+    }
+
+private:
+    value_type lower_;
+    value_type upper_;
+    value_type output_value_{};
+};
+
+/// MinMax: minimum or maximum of two or more real numeric inputs.
+template <SignalType Type>
+class MinMaxT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    MinMaxT(const std::size_t input_count, const bool maximum)
+        : Element("MinMax"), maximum_(maximum)
+    {
+        if (input_count < 2 || input_count > 64) {
+            throw std::invalid_argument("MinMax input_count must be between 2 and 64.");
+        }
+        for (std::size_t index = 0; index < input_count; ++index) {
+            register_input(index, "in" + std::to_string(index), Type, nullptr);
+        }
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        output_value_ = read_input<value_type>(0);
+        for (std::size_t index = 1; index < input_ports().size(); ++index) {
+            const auto value = read_input<value_type>(index);
+            if constexpr (signal_type_info(Type).kind == SignalKind::Float) {
+                if (math::isnan(output_value_)) {
+                    continue;
+                }
+                if (math::isnan(value)) {
+                    output_value_ = value;
+                    continue;
+                }
+            }
+            if ((maximum_ && output_value_ < value) || (!maximum_ && value < output_value_)) {
+                output_value_ = value;
+            }
+        }
+    }
+
+private:
+    bool maximum_;
+    value_type output_value_{};
+};
+
+/// Sign: -1, 0 or 1 for real values (unsigned values produce 0 or 1).
+template <SignalType Type>
+class SignT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    SignT() : Element("Sign")
+    {
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto input = read_input<value_type>(0);
+        if constexpr (signal_type_info(Type).kind == SignalKind::Float) {
+            if (math::isnan(input)) {
+                output_value_ = input;
+                return;
+            }
+        }
+        if (value_type{} < input) {
+            output_value_ = value_type{1};
+        } else if constexpr (signal_type_info(Type).kind == SignalKind::SignedInteger ||
+                             signal_type_info(Type).kind == SignalKind::Float) {
+            output_value_ = input < value_type{} ? value_type{-1} : value_type{};
+        } else {
+            output_value_ = value_type{};
+        }
+    }
+
+private:
+    value_type output_value_{};
+};
+
 // Exact widening of a value into an accumulator type (see widens_exactly()).
 template <SignalType From, SignalType To>
 [[nodiscard]] constexpr signal_storage_t<To> widen(const signal_storage_t<From>& value)
@@ -554,6 +746,12 @@ private:
 };
 
 using Accumulator = AccumulatorT<SignalType::F64>;
+using Divider = DividerT<SignalType::F64>;
+using MathFunction = MathFunctionT<SignalType::F64>;
+using Power = PowerT<SignalType::F64>;
+using Saturation = SaturationT<SignalType::F64>;
+using MinMax = MinMaxT<SignalType::F64>;
+using Sign = SignT<SignalType::F64>;
 using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
 using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
 using FirFilter = FirFilterT<SignalType::F64>;

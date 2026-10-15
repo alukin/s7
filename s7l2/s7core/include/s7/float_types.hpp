@@ -50,8 +50,10 @@ __extension__ typedef __float128 float128_t;
 extern "C" {
 __float128* s7_atan2q(__float128*, const __float128*, const __float128*) __asm__("atan2q");
 __float128* s7_copysignq(__float128*, const __float128*, const __float128*) __asm__("copysignq");
+__float128* s7_expq(__float128*, const __float128*) __asm__("expq");
 __float128* s7_fmodq(__float128*, const __float128*, const __float128*) __asm__("fmodq");
 __float128* s7_hypotq(__float128*, const __float128*, const __float128*) __asm__("hypotq");
+__float128* s7_logq(__float128*, const __float128*) __asm__("logq");
 __float128* s7_ldexpq(__float128*, const __float128*, int) __asm__("ldexpq");
 __float128* s7_nearbyintq(__float128*, const __float128*) __asm__("nearbyintq");
 __float128* s7_sinq(__float128*, const __float128*) __asm__("sinq");
@@ -65,6 +67,7 @@ __float128* s7_coshq(__float128*, const __float128*) __asm__("coshq");
 __float128* s7_tanhq(__float128*, const __float128*) __asm__("tanhq");
 __float128* s7_sqrtq(__float128*, const __float128*) __asm__("sqrtq");
 __float128* s7_truncq(__float128*, const __float128*) __asm__("truncq");
+__float128* s7_powq(__float128*, const __float128*, const __float128*) __asm__("powq");
 }
 
 namespace s7::math::quadmath {
@@ -140,11 +143,14 @@ using std::atan2;
 using std::copysign;
 using std::cos;
 using std::cosh;
+using std::exp;
 using std::fmod;
 using std::isinf;
 using std::isnan;
 using std::ldexp;
 using std::nearbyint;
+using std::log;
+using std::pow;
 using std::sin;
 using std::sinh;
 using std::sqrt;
@@ -180,6 +186,12 @@ inline float16_t acos(const float16_t x) { return static_cast<float16_t>(std::ac
 inline float16_t atan(const float16_t x) { return static_cast<float16_t>(std::atan(static_cast<float>(x))); }
 inline float16_t sinh(const float16_t x) { return static_cast<float16_t>(std::sinh(static_cast<float>(x))); }
 inline float16_t cosh(const float16_t x) { return static_cast<float16_t>(std::cosh(static_cast<float>(x))); }
+inline float16_t exp(const float16_t x) { return static_cast<float16_t>(std::exp(static_cast<float>(x))); }
+inline float16_t log(const float16_t x) { return static_cast<float16_t>(std::log(static_cast<float>(x))); }
+inline float16_t pow(const float16_t x, const float16_t y)
+{
+    return static_cast<float16_t>(std::pow(static_cast<float>(x), static_cast<float>(y)));
+}
 inline float16_t tanh(const float16_t x) { return static_cast<float16_t>(std::tanh(static_cast<float>(x))); }
 inline float16_t sqrt(const float16_t x) { return static_cast<float16_t>(std::sqrt(static_cast<float>(x))); }
 inline float16_t fmod(const float16_t x, const float16_t y)
@@ -198,6 +210,10 @@ inline float16_t arg(const std::complex<float16_t>& z) { return atan2(z.imag(), 
 
 inline bool isnan(const float128_t x) { return __builtin_isnan(x); }
 inline bool isinf(const float128_t x) { return __builtin_isinf(x); }
+inline float128_t abs(const float128_t x)
+{
+    return x == float128_t{} ? float128_t{} : (x < float128_t{} ? -x : x);
+}
 inline float128_t copysign(const float128_t x, const float128_t y) { return S7_F128_MATH(copysign, x, y); }
 inline float128_t ldexp(const float128_t x, const int e) { return S7_F128_MATH(ldexp, x, e); }
 inline float128_t nearbyint(const float128_t x) { return S7_F128_MATH(nearbyint, x); }
@@ -210,6 +226,9 @@ inline float128_t acos(const float128_t x) { return S7_F128_MATH(acos, x); }
 inline float128_t atan(const float128_t x) { return S7_F128_MATH(atan, x); }
 inline float128_t sinh(const float128_t x) { return S7_F128_MATH(sinh, x); }
 inline float128_t cosh(const float128_t x) { return S7_F128_MATH(cosh, x); }
+inline float128_t exp(const float128_t x) { return S7_F128_MATH(exp, x); }
+inline float128_t log(const float128_t x) { return S7_F128_MATH(log, x); }
+inline float128_t pow(const float128_t x, const float128_t y) { return S7_F128_MATH(pow, x, y); }
 inline float128_t tanh(const float128_t x) { return S7_F128_MATH(tanh, x); }
 inline float128_t sqrt(const float128_t x) { return S7_F128_MATH(sqrt, x); }
 inline float128_t fmod(const float128_t x, const float128_t y) { return S7_F128_MATH(fmod, x, y); }

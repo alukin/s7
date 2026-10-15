@@ -1,0 +1,2162 @@
+{
+  "id": "double_pendulum_full",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 650.0,
+    "height_mm": 560.0
+  },
+  "schema": {
+    "name": "double_pendulum_full",
+    "elements": [
+      {
+        "id": "theta1",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 2.0
+        }
+      },
+      {
+        "id": "omega1",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.0
+        }
+      },
+      {
+        "id": "theta2",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 1.5
+        }
+      },
+      {
+        "id": "omega2",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.0
+        }
+      },
+      {
+        "id": "angle_difference",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            -1.0
+          ]
+        }
+      },
+      {
+        "id": "sin_delta",
+        "type": "Trig",
+        "params": {
+          "function": "sin"
+        }
+      },
+      {
+        "id": "cos_delta",
+        "type": "Trig",
+        "params": {
+          "function": "cos"
+        }
+      },
+      {
+        "id": "sin_theta1",
+        "type": "Trig",
+        "params": {
+          "function": "sin"
+        }
+      },
+      {
+        "id": "sin_theta2",
+        "type": "Trig",
+        "params": {
+          "function": "sin"
+        }
+      },
+      {
+        "id": "omega1_squared",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "omega2_squared",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "sin_delta_squared",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "m2_sin_delta_squared",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "mass1_constant",
+        "type": "Constant",
+        "params": {
+          "value": 1.0
+        }
+      },
+      {
+        "id": "mass_denominator",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "denominator1",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "denominator2",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "theta1_term1_product",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "theta1_term1",
+        "type": "Gain",
+        "params": {
+          "factor": 9.81
+        }
+      },
+      {
+        "id": "omega1_cos_delta",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "omega1_length_term",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "omega2_length_term",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "centripetal_sum",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "theta1_term2_product",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "theta1_term2",
+        "type": "Gain",
+        "params": {
+          "factor": -1.0
+        }
+      },
+      {
+        "id": "theta1_term3",
+        "type": "Gain",
+        "params": {
+          "factor": -19.62
+        }
+      },
+      {
+        "id": "theta1_numerator",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "alpha1",
+        "type": "Divider",
+        "params": {}
+      },
+      {
+        "id": "omega1_sin_delta",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "omega1_rotational_term",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "gravity_theta2",
+        "type": "Gain",
+        "params": {
+          "factor": -9.81
+        }
+      },
+      {
+        "id": "sin_theta1_cos_delta",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "gravity_theta1",
+        "type": "Gain",
+        "params": {
+          "factor": 9.81
+        }
+      },
+      {
+        "id": "theta2_inner_sum",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "theta2_main_term",
+        "type": "Gain",
+        "params": {
+          "factor": 2.0
+        }
+      },
+      {
+        "id": "omega2_cross_term",
+        "type": "Multiply",
+        "params": {
+          "factors": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "theta2_rotation_term",
+        "type": "Gain",
+        "params": {
+          "factor": 1.0
+        }
+      },
+      {
+        "id": "theta2_numerator",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "alpha2",
+        "type": "Divider",
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "theta1",
+        "from_port": 0,
+        "to_element": "angle_difference",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2",
+        "from_port": 0,
+        "to_element": "angle_difference",
+        "to_port": 1
+      },
+      {
+        "from_element": "angle_difference",
+        "from_port": 0,
+        "to_element": "sin_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "angle_difference",
+        "from_port": 0,
+        "to_element": "cos_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1",
+        "from_port": 0,
+        "to_element": "sin_theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2",
+        "from_port": 0,
+        "to_element": "sin_theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "omega1_squared",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "omega1_squared",
+        "to_port": 1
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "omega2_squared",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "omega2_squared",
+        "to_port": 1
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "sin_delta_squared",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "sin_delta_squared",
+        "to_port": 1
+      },
+      {
+        "from_element": "sin_delta_squared",
+        "from_port": 0,
+        "to_element": "m2_sin_delta_squared",
+        "to_port": 0
+      },
+      {
+        "from_element": "mass1_constant",
+        "from_port": 0,
+        "to_element": "mass_denominator",
+        "to_port": 0
+      },
+      {
+        "from_element": "m2_sin_delta_squared",
+        "from_port": 0,
+        "to_element": "mass_denominator",
+        "to_port": 1
+      },
+      {
+        "from_element": "mass_denominator",
+        "from_port": 0,
+        "to_element": "denominator1",
+        "to_port": 0
+      },
+      {
+        "from_element": "mass_denominator",
+        "from_port": 0,
+        "to_element": "denominator2",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta2",
+        "from_port": 0,
+        "to_element": "theta1_term1_product",
+        "to_port": 0
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "theta1_term1_product",
+        "to_port": 1
+      },
+      {
+        "from_element": "theta1_term1_product",
+        "from_port": 0,
+        "to_element": "theta1_term1",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1_squared",
+        "from_port": 0,
+        "to_element": "omega1_cos_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "omega1_cos_delta",
+        "to_port": 1
+      },
+      {
+        "from_element": "omega1_cos_delta",
+        "from_port": 0,
+        "to_element": "omega1_length_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2_squared",
+        "from_port": 0,
+        "to_element": "omega2_length_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1_length_term",
+        "from_port": 0,
+        "to_element": "centripetal_sum",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2_length_term",
+        "from_port": 0,
+        "to_element": "centripetal_sum",
+        "to_port": 1
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "theta1_term2_product",
+        "to_port": 0
+      },
+      {
+        "from_element": "centripetal_sum",
+        "from_port": 0,
+        "to_element": "theta1_term2_product",
+        "to_port": 1
+      },
+      {
+        "from_element": "theta1_term2_product",
+        "from_port": 0,
+        "to_element": "theta1_term2",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta1",
+        "from_port": 0,
+        "to_element": "theta1_term3",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1_term1",
+        "from_port": 0,
+        "to_element": "theta1_numerator",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1_term2",
+        "from_port": 0,
+        "to_element": "theta1_numerator",
+        "to_port": 1
+      },
+      {
+        "from_element": "theta1_term3",
+        "from_port": 0,
+        "to_element": "theta1_numerator",
+        "to_port": 2
+      },
+      {
+        "from_element": "theta1_numerator",
+        "from_port": 0,
+        "to_element": "alpha1",
+        "to_port": 0
+      },
+      {
+        "from_element": "denominator1",
+        "from_port": 0,
+        "to_element": "alpha1",
+        "to_port": 1
+      },
+      {
+        "from_element": "omega1_squared",
+        "from_port": 0,
+        "to_element": "omega1_sin_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "omega1_sin_delta",
+        "to_port": 1
+      },
+      {
+        "from_element": "omega1_sin_delta",
+        "from_port": 0,
+        "to_element": "omega1_rotational_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta2",
+        "from_port": 0,
+        "to_element": "gravity_theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta1",
+        "from_port": 0,
+        "to_element": "sin_theta1_cos_delta",
+        "to_port": 0
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "sin_theta1_cos_delta",
+        "to_port": 1
+      },
+      {
+        "from_element": "sin_theta1_cos_delta",
+        "from_port": 0,
+        "to_element": "gravity_theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega1_rotational_term",
+        "from_port": 0,
+        "to_element": "theta2_inner_sum",
+        "to_port": 0
+      },
+      {
+        "from_element": "gravity_theta2",
+        "from_port": 0,
+        "to_element": "theta2_inner_sum",
+        "to_port": 1
+      },
+      {
+        "from_element": "gravity_theta1",
+        "from_port": 0,
+        "to_element": "theta2_inner_sum",
+        "to_port": 2
+      },
+      {
+        "from_element": "theta2_inner_sum",
+        "from_port": 0,
+        "to_element": "theta2_main_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2_squared",
+        "from_port": 0,
+        "to_element": "omega2_cross_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_delta",
+        "from_port": 0,
+        "to_element": "omega2_cross_term",
+        "to_port": 1
+      },
+      {
+        "from_element": "cos_delta",
+        "from_port": 0,
+        "to_element": "omega2_cross_term",
+        "to_port": 2
+      },
+      {
+        "from_element": "omega2_cross_term",
+        "from_port": 0,
+        "to_element": "theta2_rotation_term",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2_main_term",
+        "from_port": 0,
+        "to_element": "theta2_numerator",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2_rotation_term",
+        "from_port": 0,
+        "to_element": "theta2_numerator",
+        "to_port": 1
+      },
+      {
+        "from_element": "theta2_numerator",
+        "from_port": 0,
+        "to_element": "alpha2",
+        "to_port": 0
+      },
+      {
+        "from_element": "denominator2",
+        "from_port": 0,
+        "to_element": "alpha2",
+        "to_port": 1
+      },
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "alpha1",
+        "from_port": 0,
+        "to_element": "omega1",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "alpha2",
+        "from_port": 0,
+        "to_element": "omega2",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "theta1",
+        "position": [
+          78,
+          5
+        ],
+        "title": "θ1 angle (rad)"
+      },
+      {
+        "id": "omega1",
+        "position": [
+          66,
+          17
+        ],
+        "title": "ω1 angular velocity"
+      },
+      {
+        "id": "theta2",
+        "position": [
+          78,
+          31
+        ],
+        "title": "θ2 angle (rad)"
+      },
+      {
+        "id": "omega2",
+        "position": [
+          66,
+          43
+        ],
+        "title": "ω2 angular velocity"
+      },
+      {
+        "id": "angle_difference",
+        "position": [
+          12,
+          3
+        ],
+        "title": "δ = θ1 − θ2"
+      },
+      {
+        "id": "sin_delta",
+        "position": [
+          21,
+          3
+        ],
+        "title": "sin(δ)"
+      },
+      {
+        "id": "cos_delta",
+        "position": [
+          21,
+          13
+        ],
+        "title": "cos(δ)"
+      },
+      {
+        "id": "sin_theta1",
+        "position": [
+          12,
+          13
+        ],
+        "title": "sin(θ1)"
+      },
+      {
+        "id": "sin_theta2",
+        "position": [
+          12,
+          23
+        ],
+        "title": "sin(θ2)"
+      },
+      {
+        "id": "omega1_squared",
+        "position": [
+          12,
+          33
+        ],
+        "title": "ω1²"
+      },
+      {
+        "id": "omega2_squared",
+        "position": [
+          12,
+          43
+        ],
+        "title": "ω2²"
+      },
+      {
+        "id": "sin_delta_squared",
+        "position": [
+          30,
+          3
+        ],
+        "title": "sin²(δ)"
+      },
+      {
+        "id": "m2_sin_delta_squared",
+        "position": [
+          39,
+          3
+        ],
+        "title": "m2 sin²(δ)"
+      },
+      {
+        "id": "mass1_constant",
+        "position": [
+          3,
+          3
+        ],
+        "title": "m1 = 1 kg"
+      },
+      {
+        "id": "mass_denominator",
+        "position": [
+          48,
+          3
+        ],
+        "title": "m1 + m2 sin²(δ)"
+      },
+      {
+        "id": "denominator1",
+        "position": [
+          57,
+          3
+        ],
+        "title": "l1 × denominator"
+      },
+      {
+        "id": "denominator2",
+        "position": [
+          57,
+          13
+        ],
+        "title": "l2 × denominator"
+      },
+      {
+        "id": "theta1_term1_product",
+        "position": [
+          30,
+          13
+        ],
+        "title": "sin(θ2) cos(δ)"
+      },
+      {
+        "id": "theta1_term1",
+        "position": [
+          39,
+          13
+        ],
+        "title": "m2 g sin(θ2) cos(δ)"
+      },
+      {
+        "id": "omega1_cos_delta",
+        "position": [
+          30,
+          23
+        ],
+        "title": "ω1² cos(δ)"
+      },
+      {
+        "id": "omega1_length_term",
+        "position": [
+          39,
+          23
+        ],
+        "title": "l1 ω1² cos(δ)"
+      },
+      {
+        "id": "omega2_length_term",
+        "position": [
+          21,
+          23
+        ],
+        "title": "l2 ω2²"
+      },
+      {
+        "id": "centripetal_sum",
+        "position": [
+          48,
+          13
+        ],
+        "title": "l1 ω1² cos(δ) + l2 ω2²"
+      },
+      {
+        "id": "theta1_term2_product",
+        "position": [
+          57,
+          23
+        ],
+        "title": "sin(δ) × centripetal sum"
+      },
+      {
+        "id": "theta1_term2",
+        "position": [
+          66,
+          3
+        ],
+        "title": "−m2 sin(δ)(...)"
+      },
+      {
+        "id": "theta1_term3",
+        "position": [
+          21,
+          33
+        ],
+        "title": "−(m1+m2)g sin(θ1)"
+      },
+      {
+        "id": "theta1_numerator",
+        "position": [
+          75,
+          3
+        ],
+        "title": "θ1 acceleration numerator"
+      },
+      {
+        "id": "alpha1",
+        "position": [
+          84,
+          3
+        ],
+        "title": "α1 = θ1″"
+      },
+      {
+        "id": "omega1_sin_delta",
+        "position": [
+          30,
+          33
+        ],
+        "title": "ω1² sin(δ)"
+      },
+      {
+        "id": "omega1_rotational_term",
+        "position": [
+          39,
+          33
+        ],
+        "title": "l1 ω1² sin(δ)"
+      },
+      {
+        "id": "gravity_theta2",
+        "position": [
+          21,
+          43
+        ],
+        "title": "−g sin(θ2)"
+      },
+      {
+        "id": "sin_theta1_cos_delta",
+        "position": [
+          30,
+          43
+        ],
+        "title": "sin(θ1) cos(δ)"
+      },
+      {
+        "id": "gravity_theta1",
+        "position": [
+          39,
+          43
+        ],
+        "title": "g sin(θ1) cos(δ)"
+      },
+      {
+        "id": "theta2_inner_sum",
+        "position": [
+          48,
+          23
+        ],
+        "title": "θ2 numerator inner sum"
+      },
+      {
+        "id": "theta2_main_term",
+        "position": [
+          57,
+          33
+        ],
+        "title": "(m1+m2)(...)"
+      },
+      {
+        "id": "omega2_cross_term",
+        "position": [
+          30,
+          53
+        ],
+        "title": "ω2² sin(δ) cos(δ)"
+      },
+      {
+        "id": "theta2_rotation_term",
+        "position": [
+          39,
+          53
+        ],
+        "title": "m2 l2 ω2² sin(δ) cos(δ)"
+      },
+      {
+        "id": "theta2_numerator",
+        "position": [
+          66,
+          13
+        ],
+        "title": "θ2 acceleration numerator"
+      },
+      {
+        "id": "alpha2",
+        "position": [
+          75,
+          13
+        ],
+        "title": "α2 = θ2″"
+      },
+      {
+        "id": "scope_states",
+        "position": [
+          91,
+          23
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "θ1 (rad)",
+            "ω1 (rad/s)",
+            "θ2 (rad)",
+            "ω2 (rad/s)"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "angle_difference",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "angle_difference",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "angle_difference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_delta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "angle_difference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cos_delta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_theta1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_theta2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "omega1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_squared",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "omega1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_squared",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "omega2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2_squared",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "omega2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2_squared",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "sin_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_delta_squared",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "sin_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_delta_squared",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "sin_delta_squared",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "m2_sin_delta_squared",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "mass1_constant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mass_denominator",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "m2_sin_delta_squared",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mass_denominator",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "mass_denominator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "denominator1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "mass_denominator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "denominator2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "sin_theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term1_product",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "cos_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term1_product",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "theta1_term1_product",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "omega1_squared",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_cos_delta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "cos_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_cos_delta",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "omega1_cos_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_length_term",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "omega2_squared",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2_length_term",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "omega1_length_term",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "centripetal_sum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "omega2_length_term",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "centripetal_sum",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "sin_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term2_product",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "centripetal_sum",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term2_product",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "theta1_term2_product",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w30",
+        "from": {
+          "port": [
+            "sin_theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_term3",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w31",
+        "from": {
+          "port": [
+            "theta1_term1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_numerator",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w32",
+        "from": {
+          "port": [
+            "theta1_term2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_numerator",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w33",
+        "from": {
+          "port": [
+            "theta1_term3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_numerator",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w34",
+        "from": {
+          "port": [
+            "theta1_numerator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "alpha1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w35",
+        "from": {
+          "port": [
+            "denominator1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "alpha1",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w36",
+        "from": {
+          "port": [
+            "omega1_squared",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_sin_delta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w37",
+        "from": {
+          "port": [
+            "sin_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_sin_delta",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w38",
+        "from": {
+          "port": [
+            "omega1_sin_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1_rotational_term",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w39",
+        "from": {
+          "port": [
+            "sin_theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "gravity_theta2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w40",
+        "from": {
+          "port": [
+            "sin_theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_theta1_cos_delta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w41",
+        "from": {
+          "port": [
+            "cos_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_theta1_cos_delta",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w42",
+        "from": {
+          "port": [
+            "sin_theta1_cos_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "gravity_theta1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w43",
+        "from": {
+          "port": [
+            "omega1_rotational_term",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_inner_sum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w44",
+        "from": {
+          "port": [
+            "gravity_theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_inner_sum",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w45",
+        "from": {
+          "port": [
+            "gravity_theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_inner_sum",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w46",
+        "from": {
+          "port": [
+            "theta2_inner_sum",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_main_term",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w47",
+        "from": {
+          "port": [
+            "omega2_squared",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2_cross_term",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w48",
+        "from": {
+          "port": [
+            "sin_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2_cross_term",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w49",
+        "from": {
+          "port": [
+            "cos_delta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2_cross_term",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w50",
+        "from": {
+          "port": [
+            "omega2_cross_term",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_rotation_term",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w51",
+        "from": {
+          "port": [
+            "theta2_main_term",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_numerator",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w52",
+        "from": {
+          "port": [
+            "theta2_rotation_term",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_numerator",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w53",
+        "from": {
+          "port": [
+            "theta2_numerator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "alpha2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w54",
+        "from": {
+          "port": [
+            "denominator2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "alpha2",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w55",
+        "from": {
+          "port": [
+            "omega1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w56",
+        "from": {
+          "port": [
+            "alpha1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w57",
+        "from": {
+          "port": [
+            "omega2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w58",
+        "from": {
+          "port": [
+            "alpha2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs_theta1",
+        "from": {
+          "port": [
+            "theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs_omega1",
+        "from": {
+          "port": [
+            "omega1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs_theta2",
+        "from": {
+          "port": [
+            "theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs_omega2",
+        "from": {
+          "port": [
+            "omega2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "equation_notes",
+        "position": [
+          3,
+          74
+        ],
+        "params": {
+          "text": "FULL NONLINEAR DOUBLE PENDULUM  |  m1=m2=1 kg, l1=l2=1 m, g=9.81 m/s²\nAngles are measured from the downward vertical; δ = θ1 − θ2.\nα1 = [m2 g sinθ2 cosδ − m2 sinδ(l1 ω1² cosδ + l2 ω2²) − (m1+m2)g sinθ1] / [l1(m1+m2 sin²δ)]\nα2 = [(m1+m2)(l1 ω1² sinδ − g sinθ2 + g sinθ1 cosδ) + m2 l2 ω2² sinδ cosδ] / [l2(m1+m2 sin²δ)]\nForward Euler integration, dt=1 ms. Initial state: θ1=2 rad, θ2=1.5 rad, ω1=ω2=0. Scope plots both angles and angular velocities.",
+          "text_color": "#202020",
+          "line_color": "#58738a",
+          "fill_color": "#eef6fb",
+          "font_family": "Sans Serif",
+          "font_size": 10,
+          "width": 980.0,
+          "height": 170.0
+        }
+      }
+    ]
+  }
+}

@@ -74,7 +74,7 @@ Energy, residuals, modal measures, and similar derived quantities are *not* an O
 
 This is a stronger and simpler answer than this plan's first draft proposed (computing derived columns ad hoc in the C++ harness): it generalizes to real models, not just test diagnostics, and it means a probe is always just `{element, port}` (section 1.2) with nothing special about a "derived" probe.
 
-**It also surfaced a real prerequisite, not just a design preference.** Checking what each later stage's dynamics need against `s7core/include/s7/elements.hpp`'s current element set: Van der Pol's `(1−x²)` term and Lorenz's `xy`/`xz` terms need only `Multiply`, already available — but the pendulum's own dynamics, `v̇ = −ω₀²·sin(x)`, cannot be expressed as an S7 graph at all today, because no element applies a nonlinear scalar function (sin, cos, ...) to an arbitrary wired input (`AnalogOscillator` computes `sin` only on its own internal phase accumulator, not on a general input). This is recorded as its own entry in `OPEN_PROBLEMS.md` ("No generic trigonometric/math element blocks nonlinear modeling"), since it is a real `s7core` gap useful well beyond this test plan, not something to special-case here. It is **not implemented in this session** (documents only); Stage 2 is blocked on it — see section 6.
+**The pendulum exposed two core math requirements.** `Trig` now applies nonlinear functions such as `sin` and `cos` to arbitrary inputs, and `Divider` provides real floating-point division for the full equations' state-dependent denominators. The complete nonlinear double-pendulum graph is in `examples/double_pendulum_full.s7diagram`; the small-angle linear model is in `examples/double_pendulum_small_angle.s7diagram`.
 
 ### 1.6 Complex-valued probes
 
@@ -159,7 +159,7 @@ Follows `doc/S7_Numerical_Modeling_Test_Plan.md` section 12, with the diagram+pr
 5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes — first phase-portrait case. Build next.
 6. Stage 1.3 coupled linear systems of increasing size, against the matrix exponential.
 7. Stage 1.6 larger-graph/performance checks (kept numeric-only, no visualization story).
-8. **Blocking prerequisite for Stage 2 onward — done.** A generic `Trig` element exists in `s7core` (section 1.5, `OPEN_PROBLEMS.md`), real floating types, `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`sinh`/`cosh`/`tanh`. Van der Pol and Lorenz need nothing beyond the existing `Multiply`; the pendulum's own dynamics needed this.
+8. **Blocking math prerequisites for Stage 2 onward — implemented.** `Trig` supplies real floating-point trigonometric functions and `Divider` supplies real floating-point division. Van der Pol and Lorenz also use the existing `Multiply`; the full pendulum additionally uses `Divider` for its nonlinear denominators.
 9. Stage 2 pendulum — dynamics and energy both built from ordinary elements (section 1.5); energy-drift plot, phase portrait, multiple amplitudes.
 10. Stage 3 Van der Pol — limit-cycle phase portrait.
 11. Stage 4 Lorenz — 3D attractor projections, statistical/geometric checks.

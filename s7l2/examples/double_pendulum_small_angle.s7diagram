@@ -1,0 +1,547 @@
+{
+  "id": "double_pendulum_small_angle",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "schema": {
+    "name": "double_pendulum_small_angle",
+    "elements": [
+      {
+        "id": "theta1",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.2
+        }
+      },
+      {
+        "id": "omega1",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.0
+        }
+      },
+      {
+        "id": "theta2",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.1
+        }
+      },
+      {
+        "id": "omega2",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.0
+        }
+      },
+      {
+        "id": "theta1_accel_from_theta1",
+        "type": "Gain",
+        "params": {
+          "factor": -19.62
+        }
+      },
+      {
+        "id": "theta1_accel_from_theta2",
+        "type": "Gain",
+        "params": {
+          "factor": 9.81
+        }
+      },
+      {
+        "id": "theta1_acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "theta2_accel_from_theta1",
+        "type": "Gain",
+        "params": {
+          "factor": 19.62
+        }
+      },
+      {
+        "id": "theta2_accel_from_theta2",
+        "type": "Gain",
+        "params": {
+          "factor": -19.62
+        }
+      },
+      {
+        "id": "theta2_acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "omega1",
+        "from_port": 0,
+        "to_element": "theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1_acceleration",
+        "from_port": 0,
+        "to_element": "omega1",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega2",
+        "from_port": 0,
+        "to_element": "theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2_acceleration",
+        "from_port": 0,
+        "to_element": "omega2",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1",
+        "from_port": 0,
+        "to_element": "theta1_accel_from_theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2",
+        "from_port": 0,
+        "to_element": "theta1_accel_from_theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1_accel_from_theta1",
+        "from_port": 0,
+        "to_element": "theta1_acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta1_accel_from_theta2",
+        "from_port": 0,
+        "to_element": "theta1_acceleration",
+        "to_port": 1
+      },
+      {
+        "from_element": "theta1",
+        "from_port": 0,
+        "to_element": "theta2_accel_from_theta1",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2",
+        "from_port": 0,
+        "to_element": "theta2_accel_from_theta2",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2_accel_from_theta1",
+        "from_port": 0,
+        "to_element": "theta2_acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta2_accel_from_theta2",
+        "from_port": 0,
+        "to_element": "theta2_acceleration",
+        "to_port": 1
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "theta1",
+        "position": [
+          35,
+          7
+        ],
+        "title": "Angle 1 (rad)"
+      },
+      {
+        "id": "omega1",
+        "position": [
+          49,
+          7
+        ],
+        "title": "Angular velocity 1 (rad/s)"
+      },
+      {
+        "id": "theta2",
+        "position": [
+          35,
+          25
+        ],
+        "title": "Angle 2 (rad)"
+      },
+      {
+        "id": "omega2",
+        "position": [
+          49,
+          25
+        ],
+        "title": "Angular velocity 2 (rad/s)"
+      },
+      {
+        "id": "theta1_accel_from_theta1",
+        "position": [
+          7,
+          12
+        ],
+        "title": "-2g \u00d7 \u03b81"
+      },
+      {
+        "id": "theta1_accel_from_theta2",
+        "position": [
+          21,
+          12
+        ],
+        "title": "g \u00d7 \u03b82"
+      },
+      {
+        "id": "theta1_acceleration",
+        "position": [
+          35,
+          12
+        ],
+        "title": "\u03b81 acceleration"
+      },
+      {
+        "id": "theta2_accel_from_theta1",
+        "position": [
+          7,
+          29
+        ],
+        "title": "2g \u00d7 \u03b81"
+      },
+      {
+        "id": "theta2_accel_from_theta2",
+        "position": [
+          21,
+          29
+        ],
+        "title": "-2g \u00d7 \u03b82"
+      },
+      {
+        "id": "theta2_acceleration",
+        "position": [
+          35,
+          29
+        ],
+        "title": "\u03b82 acceleration"
+      },
+      {
+        "id": "scope_angles",
+        "position": [
+          64,
+          16
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "theta1 (rad)",
+            "theta2 (rad)"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "omega1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "theta1_acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "omega2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "theta2_acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_accel_from_theta1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_accel_from_theta2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "theta1_accel_from_theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "theta1_accel_from_theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta1_acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_accel_from_theta1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_accel_from_theta2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "theta2_accel_from_theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "theta2_accel_from_theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta2_acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs_theta1",
+        "from": {
+          "port": [
+            "theta1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_angles",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs_theta2",
+        "from": {
+          "port": [
+            "theta2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_angles",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "model_notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "SMALL-ANGLE DOUBLE PENDULUM (m1=m2=l1=l2=1, g=9.81)\nLinearized equations: \u03b81\u2033 = -2g\u00b7\u03b81 + g\u00b7\u03b82; \u03b82\u2033 = 2g\u00b7\u03b81 - 2g\u00b7\u03b82.\nEuler step: 1 ms. Initial angles: \u03b81=0.2 rad, \u03b82=0.1 rad. Scope plots both angles.\nThis is the small-angle linear model; the full nonlinear equations require signal division.",
+          "text_color": "#202020",
+          "line_color": "#58738a",
+          "fill_color": "#eef6fb",
+          "font_family": "Sans Serif",
+          "font_size": 10,
+          "width": 500.0,
+          "height": 96.0
+        }
+      }
+    ]
+  }
+}

@@ -136,6 +136,26 @@ TrigFunction trig_function_param(const ElementCreationContext& ctx)
     return ctx.has_param("function") ? trig_function_from_name(ctx.get_string("function")) : TrigFunction::Sin;
 }
 
+MathFunctionOperation math_function_param(const ElementCreationContext& ctx)
+{
+    const auto function = ctx.get_string("function");
+    if (function == "sqrt") return MathFunctionOperation::Sqrt;
+    if (function == "exp") return MathFunctionOperation::Exp;
+    if (function == "log") return MathFunctionOperation::Log;
+    if (function == "pow") return MathFunctionOperation::Pow;
+    if (function == "abs") return MathFunctionOperation::Abs;
+    if (function == "reciprocal") return MathFunctionOperation::Reciprocal;
+    throw std::invalid_argument("MathFunction function must be sqrt, exp, log, pow, abs or reciprocal.");
+}
+
+bool minmax_is_maximum(const ElementCreationContext& ctx)
+{
+    const auto operation = ctx.get_string("operation");
+    if (operation == "max") return true;
+    if (operation == "min") return false;
+    throw std::invalid_argument("MinMax operation must be min or max.");
+}
+
 // Accumulating elements: input type T and accumulator type A (A defaults to T).
 void add_accumulator_variable(ElementMetadata& metadata)
 {
@@ -209,6 +229,126 @@ void register_builtin_elements(ElementRegistry& registry)
             m.parameters.push_back({"factor", "value", "Gain factor, of the element's type", 1, std::nullopt, std::nullopt, {}, false});
             add_overflow_parameter(m);
             return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "Divider",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    return std::make_unique<DividerT<T>>();
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("Divider", "Divider", "Divide numerator by denominator", "basic", 2, 1,
+                                           real_floating_types());
+            m.input_ports[0].name = "numerator";
+            m.input_ports[1].name = "denominator";
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "MathFunction",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    return std::make_unique<MathFunctionT<T>>(math_function_param(ctx),
+                                                              param_value<T>(ctx, "exponent", signal_storage_t<T>{2}));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("MathFunction", "Math Function", "Apply a scalar math function", "basic", 1, 1,
+                                           real_floating_types());
+            m.parameters.push_back({"function", "enum", "Function applied to the input", "sqrt", std::nullopt,
+                                    std::nullopt, {"sqrt", "exp", "log", "pow", "abs", "reciprocal"}, false});
+            m.parameters.push_back({"exponent", "value", "Exponent used when function is pow", 2, std::nullopt,
+                                    std::nullopt, {}, false});
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "Power",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    return std::make_unique<PowerT<T>>();
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("Power", "Power", "Raise the base input to the exponent input", "basic", 2, 1,
+                                           real_floating_types());
+            m.input_ports[0].name = "base";
+            m.input_ports[1].name = "exponent";
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "Saturation",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (!signal_type_info(T).is_complex()) {
+                    return std::make_unique<SaturationT<T>>(param_value<T>(ctx, "lower_limit", signal_storage_t<T>{}),
+                                                           param_value<T>(ctx, "upper_limit", signal_storage_t<T>{1}));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("Saturation", "Saturation", "Clamp an input between inclusive limits", "basic", 1, 1,
+                                           signal_type_sets::real);
+            m.parameters.push_back({"lower_limit", "value", "Inclusive lower output limit", 0, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"upper_limit", "value", "Inclusive upper output limit", 1, std::nullopt, std::nullopt, {}, false});
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "MinMax",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (!signal_type_info(T).is_complex()) {
+                    return std::make_unique<MinMaxT<T>>(static_cast<std::size_t>(ctx.get_int("input_count")),
+                                                        minmax_is_maximum(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("MinMax", "MinMax", "Select the minimum or maximum of its inputs", "basic", 2, 1,
+                                           signal_type_sets::real);
+            m.parameters.push_back({"operation", "enum", "Select minimum or maximum", "min", std::nullopt, std::nullopt,
+                                    {"min", "max"}, false});
+            m.parameters.push_back({"input_count", "int", "Number of input ports", 2, 2, 64, {}, false});
+            m.input_ports[0].name = "in0";
+            m.input_ports[1].name = "in1";
+            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T", "input_count"};
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "Sign",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (!signal_type_info(T).is_complex()) {
+                    return std::make_unique<SignT<T>>();
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            return make_generic_metadata("Sign", "Sign", "Return -1, 0 or 1 according to the input sign", "basic", 1, 1,
+                                         signal_type_sets::real);
         }()));
 
     registry.register_element(ElementDescriptor(
