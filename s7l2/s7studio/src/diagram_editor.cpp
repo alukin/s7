@@ -25,6 +25,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <cmath>
 
 namespace s7studio::diagram {
 
@@ -374,6 +375,50 @@ void DiagramEditor::rebuildPageFrame()
     pageFrame_->setFlag(QGraphicsItem::ItemIsSelectable, false);
     updateSceneRectFromPage();
     updateRulers();
+}
+
+auto DiagramEditor::suggestedNewItemPosition(const QSizeF itemSize) const -> QPointF
+{
+    constexpr double kGrid = kGridStep;
+    constexpr double kMargin = kGrid;
+
+    const QRectF page = orientedPageRect(pageLayout_);
+    QRectF area = page;
+    if (_view && _view->viewport()) {
+        const QRectF clipped = _view->mapToScene(_view->viewport()->rect()).boundingRect().intersected(page);
+        if (clipped.width() > 0.0 && clipped.height() > 0.0) {
+            area = clipped;
+        }
+    }
+
+    QList<QRectF> occupied;
+    if (_scene) {
+        for (const auto& node : _scene->items<QSchematic::Items::Node>()) {
+            if (node) {
+                occupied.append(node->sceneBoundingRect());
+            }
+        }
+    }
+
+    const auto snapUp = [](const double value) { return std::ceil(value / kGrid) * kGrid; };
+    const double x0 = snapUp(area.left() + kMargin);
+    const double y0 = snapUp(area.top() + kMargin);
+    const double xMax = area.right() - itemSize.width();
+    const double yMax = area.bottom() - itemSize.height();
+
+    for (double y = y0; y <= yMax; y += kGrid) {
+        for (double x = x0; x <= xMax; x += kGrid) {
+            const QRectF candidate(QPointF(x, y), itemSize);
+            const bool free = std::none_of(occupied.begin(), occupied.end(),
+                                           [&](const QRectF& r) { return r.intersects(candidate); });
+            if (free) {
+                return QPointF(x, y);
+            }
+        }
+    }
+
+    // No free spot: stay inside the visible area (as far as the item fits) rather than jumping elsewhere.
+    return QPointF(std::max(area.left(), std::min(x0, xMax)), std::max(area.top(), std::min(y0, yMax)));
 }
 
 void DiagramEditor::updateSceneRectFromPage()

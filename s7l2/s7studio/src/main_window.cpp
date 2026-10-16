@@ -255,31 +255,6 @@ auto nextElementId(const diagram::DiagramScene& scene, const QString& elementTyp
     return candidate;
 }
 
-auto suggestedNewNodePosition(const QSchematic::Scene& scene) -> QPointF
-{
-    constexpr double kOffsetX = 240.0;
-
-    const auto nodes = scene.items<QSchematic::Items::Node>();
-    if (nodes.empty()) {
-        return QPointF(40.0, 40.0);
-    }
-
-    double maxX = 40.0;
-    double yAtMaxX = 40.0;
-    for (const auto& node : nodes) {
-        if (!node) {
-            continue;
-        }
-
-        if (node->pos().x() >= maxX) {
-            maxX = node->pos().x();
-            yAtMaxX = node->pos().y();
-        }
-    }
-
-    return QPointF(maxX + kOffsetX, yAtMaxX);
-}
-
 auto parseEditableParams(const QString& text, boost::json::object& paramsOut, QString& error) -> bool
 {
     boost::system::error_code ec;
@@ -717,7 +692,11 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     if (descriptor && descriptor->metadata().schema_definition.has_value()) {
         element.schema = *descriptor->metadata().schema_definition;
     }
-    scene->addElement(element, suggestedNewNodePosition(*scene));
+    const auto ports = diagram::elementPorts(element.type, element.params, element.schema);
+    const int portRows = static_cast<int>(std::max(ports.inputs.size(), ports.outputs.size()));
+    const QSizeF size(diagram::kElementWidthSteps * diagram::kGridStep,
+                      std::max(5, 2 * portRows + 1) * diagram::kGridStep);
+    scene->addElement(element, diagramEditor_->suggestedNewItemPosition(size));
     setDiagramMode(QSchematic::Scene::NormalMode);
     refreshPlacementLabels();
     appendLog(QStringLiteral("[studio] added %1 %2").arg(observer ? QStringLiteral("observer") : QStringLiteral("element"),
@@ -1366,7 +1345,9 @@ void MainWindow::addTextFrame()
         return;
     }
     const auto frameId = nextTextFrameId(*scene);
-    const auto frame = scene->addTextFrame(frameId, diagram::TextFrameNode::defaultParams(), suggestedNewNodePosition(*scene));
+    const auto params = diagram::TextFrameNode::defaultParams();
+    const QSizeF size(params.at("width").to_number<double>(), params.at("height").to_number<double>());
+    const auto frame = scene->addTextFrame(frameId, params, diagramEditor_->suggestedNewItemPosition(size));
     scene->clearSelection();
     frame->setSelected(true);
     setDiagramMode(QSchematic::Scene::NormalMode);
