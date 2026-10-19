@@ -1093,6 +1093,10 @@ void MainWindow::onScopeSamplesAvailable()
             if (node && node->element().type == "PhasePortrait") {
                 static_cast<void>(ensurePhasePortraitWindow(scopeId + QStringLiteral("/x"), scopeId + QStringLiteral("/y")));
                 scopeTargets.insert(scopeId, nullptr);
+            } else if (node && node->element().type == "PhaseTrajectory3D") {
+                static_cast<void>(ensurePhaseTrajectory3DWindow(scopeId + QStringLiteral("/x"),
+                    scopeId + QStringLiteral("/y"), scopeId + QStringLiteral("/z")));
+                scopeTargets.insert(scopeId, nullptr);
             } else {
                 scopeTargets.insert(scopeId, ensureScopeWindow(scopeId));
             }
@@ -1602,30 +1606,32 @@ void MainWindow::openPhasePortraitWindow(const QString& xProbeName, const QStrin
     }
 }
 
-void MainWindow::openPhaseTrajectory3DWindow(const QString& xProbeName,
-                                             const QString& yProbeName,
-                                             const QString& zProbeName)
+auto MainWindow::ensurePhaseTrajectory3DWindow(const QString& xProbeName,
+                                               const QString& yProbeName,
+                                               const QString& zProbeName) -> ui::PhaseTrajectory3DViewWindow*
 {
     if (xProbeName.isEmpty() || yProbeName.isEmpty() || zProbeName.isEmpty() ||
-        xProbeName == yProbeName || xProbeName == zProbeName || yProbeName == zProbeName) {
-        return;
-    }
+        xProbeName == yProbeName || xProbeName == zProbeName || yProbeName == zProbeName) return nullptr;
     const auto key = QStringLiteral("%1|%2|%3").arg(xProbeName, yProbeName, zProbeName);
-    if (const auto existing = phaseTrajectory3DWindows_.value(key)) {
-        existing->show();
-        existing->raise();
-        existing->activateWindow();
-        return;
-    }
+    if (const auto existing = phaseTrajectory3DWindows_.value(key)) return existing;
     auto* window = new ui::PhaseTrajectory3DViewWindow(
         xProbeName, yProbeName, zProbeName, nullptr,
         Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |
             Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    window->setAttribute(Qt::WA_DeleteOnClose, true);
     phaseTrajectory3DWindows_.insert(key, window);
-    window->show();
-    window->raise();
-    window->activateWindow();
+    window->setDroppedSampleCount(scopeSamplesDropped_);
+    return window;
+}
+
+void MainWindow::openPhaseTrajectory3DWindow(const QString& xProbeName,
+                                             const QString& yProbeName,
+                                             const QString& zProbeName)
+{
+    if (auto* window = ensurePhaseTrajectory3DWindow(xProbeName, yProbeName, zProbeName)) {
+        window->show();
+        window->raise();
+        window->activateWindow();
+    }
 }
 
 void MainWindow::closeScopeWindows()
@@ -1645,9 +1651,7 @@ void MainWindow::closeScopeWindows()
     const auto existingPhaseTrajectories3D = phaseTrajectory3DWindows_.values();
     phaseTrajectory3DWindows_.clear();
     for (const auto& window : existingPhaseTrajectories3D) {
-        if (window) {
-            window->close();
-        }
+        if (window) delete window.data();
     }
 }
 

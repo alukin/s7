@@ -193,7 +193,7 @@ void PhaseTrajectory3DViewWindow::exportCsv()
 
 void PhaseTrajectory3DViewWindow::refreshPlots()
 {
-    if (!dirty_) {
+    if (!dirty_ || !isVisible()) {
         return;
     }
     dirty_ = false;

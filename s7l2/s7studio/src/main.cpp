@@ -4,6 +4,7 @@
 #include "main_window.hpp"
 #include "scope_view_window.hpp"
 #include "phase_portrait_view_window.hpp"
+#include "phase_trajectory_3d_view_window.hpp"
 #include "qcp.h"
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
@@ -848,6 +849,155 @@ int runPhasePortraitCheck(int argc, char** argv)
     return 0;
 }
 
+int runPhaseTrajectory3DCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    QTemporaryDir directory;
+    if (!directory.isValid()) throw std::runtime_error("Cannot create 3D Phase Trajectory fixture");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, directory.path());
+    QApplication::setOrganizationName(QStringLiteral("s7-test"));
+    QApplication::setApplicationName(QStringLiteral("phase-trajectory-3d"));
+    QSettings{}.setValue(QStringLiteral("scope/temporaryDirectory"), directory.path());
+    registerElements();
+    const auto require = [](bool condition, const char* message) {
+        if (!condition) throw std::runtime_error(message);
+    };
+    const QString path = QStringLiteral(S7STUDIO_SOURCE_DIR "/../examples/3int_helix_phase_trajectory.s7diagram");
+    for (const int frequency : {1000, 10000}) {
+        s7studio::MainWindow window(nullptr, false);
+        window.openPath(path);
+        auto* editor = window.findChild<s7studio::diagram::DiagramEditor*>();
+        const s7studio::diagram::NetModel net(*editor->scene());
+        require(net.problems().empty(), "3D Phase Trajectory example wiring is invalid");
+        const auto document = s7studio::diagram::DiagramDocument::fromJson(readJson(path.toLocal8Bit().constData()));
+        auto schemaJson = document.runtimeSchema;
+        const double dt = 1.0 / frequency;
+        for (auto& element : schemaJson.as_object().at("elements").as_array()) {
+            if (element.as_object().at("type").as_string() == "EulerIntegrator")
+                element.as_object().at("params").as_object()["dt"] = dt;
+        }
+        std::vector<s7studio::RunProbe> probes;
+        int axes = 0;
+        for (const auto& connection : net.observationConnections()) {
+            std::string name;
+            if (connection.to.element == "phase_trajectory_1") {
+                require(connection.to.port >= 0 && connection.to.port <= 2, "Unexpected phase input port");
+                const auto expected = connection.to.port == 0 ? "eulerintegrator_1" : connection.to.port == 1 ? "eulerintegrator_2" : "eulerintegrator_3";
+                require(connection.from.element == expected && connection.from.port == 0, "Integrator axis mapping is reversed");
+                name = "phase_trajectory_1/" + std::string(connection.to.port == 0 ? "x" : connection.to.port == 1 ? "y" : "z");
+                ++axes;
+            } else {
+                require(connection.to.element == "scope_1", "Unexpected observer in oscillator example");
+                name = "scope_1/v";
+            }
+            probes.push_back({name, connection.from.element, connection.from.port});
+        }
+        require(axes == 3 && probes.size() == 4, "Missing diagram observer connections");
+        auto referenceSchema = s7studio::runtime::buildSchema(schemaJson);
+        referenceSchema.set_rate(s7::Rate::from_seconds(dt));
+        s7studio::runtime::validateSchema(referenceSchema);
+        s7::NodeRuntime reference(s7::Compiler::compile(referenceSchema));
+        s7::ObservationService observation(reference);
+        const long steps = 10 * frequency;
+        std::vector<std::array<double, 3>> expected;
+        expected.reserve(steps);
+        for (long step = 0; step < steps; ++step) {
+            reference.step();
+            expected.push_back({observation.sample_output("eulerintegrator_1", 0).to_display_double(),
+                                observation.sample_output("eulerintegrator_2", 0).to_display_double(),
+                                observation.sample_output("eulerintegrator_3", 0).to_display_double()});
+        }
+        auto* runner = window.findChild<s7studio::LocalSchemaRunner*>();
+        require(runner, "Missing bundled runner");
+        bool completed = false, success = false;
+        QObject::connect(runner, &s7studio::LocalSchemaRunner::runCompleted, &window,
+            [&](bool ok, const QString&) { completed = true; success = ok; });
+        const auto open = [&] {
+            require(QMetaObject::invokeMethod(&window, "onElementNodeDoubleClicked", Qt::DirectConnection,
+                Q_ARG(QString, QStringLiteral("phase_trajectory_1")), Q_ARG(QString, QStringLiteral("PhaseTrajectory3D")),
+                Q_ARG(int, 3)), "Cannot open 3D Phase Trajectory observer");
+        };
+        // Exercise an already-open viewer at 1 kHz, and first opening after
+        // completion at higher rates. Both must show the complete trajectory.
+        if (frequency == 1000) open();
+        runner->run(schemaJson, dt, steps, probes);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (!completed && std::chrono::steady_clock::now() < deadline) {
+            app.processEvents();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        require(completed && success, "3D Phase Trajectory oscillator run failed or timed out");
+        app.processEvents();
+        QMetaObject::invokeMethod(&window, "onScopeSamplesAvailable", Qt::DirectConnection);
+        open();
+        s7studio::ui::PhaseTrajectory3DViewWindow* phase = nullptr;
+        for (auto* widget : QApplication::topLevelWidgets()) {
+            if (auto* candidate = qobject_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(widget))
+                if (candidate->xProbeName() == QStringLiteral("phase_trajectory_1/x")) phase = candidate;
+        }
+        require(phase, "3D Phase Trajectory window was not created");
+        for (auto* label : phase->findChildren<QLabel*>())
+            require(!label->text().contains(QStringLiteral("display dropped")), "3D Phase Trajectory run lost mailbox samples");
+        const auto check = [&] {
+            QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
+            const auto plots = phase->findChildren<QCustomPlot*>();
+            require(plots.size() == 3, "Missing 3D orthogonal projections");
+            const std::array<std::pair<int, int>, 3> projections{{{0, 1}, {0, 2}, {1, 2}}};
+            const std::array<QString, 3> names{QStringLiteral("phase_trajectory_1/x"),
+                QStringLiteral("phase_trajectory_1/y"), QStringLiteral("phase_trajectory_1/z")};
+            int projection = 0;
+            for (auto* plot : plots) {
+                const auto [x, y] = projections[projection++];
+                auto* curve = plot->plottableCount() == 1 ? qobject_cast<QCPCurve*>(plot->plottable(0)) : nullptr;
+                require(curve && curve->data()->size() == steps, "3D trajectory lost or duplicated triples");
+                require(plot->xAxis->label() == names[x] && plot->yAxis->label() == names[y],
+                    "3D projection axes are mislabeled");
+                long index = 0;
+                for (const auto& point : *curve->data()) {
+                    require(point.key == expected[index][x] && point.value == expected[index][y],
+                        "3D projection differs from same-step headless states");
+                    require(plot->xAxis->range().contains(point.key) && plot->yAxis->range().contains(point.value),
+                        "3D projection clips a trajectory point");
+                    const double amplitude = std::exp(.5 * index * std::log1p(dt * dt));
+                    const double angle = index * std::atan(dt);
+                    const std::array<double, 3> analytical{amplitude * std::cos(angle),
+                        amplitude * std::sin(angle), .2 * index * dt};
+                    require(std::abs(point.key - analytical[x]) < 1e-10 &&
+                        std::abs(point.value - analytical[y]) < 1e-10, "3D helix disagrees with discrete reference");
+                    ++index;
+                }
+            }
+        };
+        check();
+        phase->close(); app.sendPostedEvents(nullptr, QEvent::DeferredDelete); open(); check();
+        if (frequency == 1000) {
+            if (const auto png = qEnvironmentVariable("S7_PHASE_TRAJECTORY_3D_PNG"); !png.isEmpty()) {
+                for (auto* plot : phase->findChildren<QCustomPlot*>()) plot->replot();
+                require(phase->grab().save(png), "Cannot save 3D viewer screenshot");
+            }
+        }
+        phase->clearSamples();
+        phase->appendZSample(2, 9); phase->appendXSample(1, 5); phase->appendYSample(2, 8);
+        QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
+        for (auto* plot : phase->findChildren<QCustomPlot*>())
+            require(qobject_cast<QCPCurve*>(plot->plottable(0))->data()->isEmpty(), "3D mixed different runtime steps");
+        phase->appendXSample(2, 7);
+        QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
+        const std::array<std::pair<double, double>, 3> paired{{{7, 8}, {7, 9}, {8, 9}}};
+        int projection = 0;
+        for (auto* plot : phase->findChildren<QCustomPlot*>()) {
+            auto* curve = qobject_cast<QCPCurve*>(plot->plottable(0));
+            const auto [x, y] = paired[projection++];
+            require(curve->data()->size() == 1 && curve->data()->constBegin()->key == x &&
+                curve->data()->constBegin()->value == y, "3D reverse-order triple pairing failed");
+        }
+        std::cout << "3D Phase Trajectory " << frequency << " Hz: " << steps
+                  << " exact headless/discrete-reference triples; late open/reopen and pairing passed\n";
+    }
+    return 0;
+}
+
 // Exercise delivery, late opening and reopening with the actual oscillator.
 int runScopeRunCheck(int argc, char** argv)
 {
@@ -931,6 +1081,10 @@ int main(int argc, char** argv) try
 
     if (hasArg(argc, argv, "--enable-core-dumps")) {
         enableCrashDumps();
+    }
+
+    if (hasArg(argc, argv, "--phase-trajectory-3d-check")) {
+        return runPhaseTrajectory3DCheck(argc, argv);
     }
 
     if (hasArg(argc, argv, "--phase-portrait-check")) {
