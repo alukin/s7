@@ -7,9 +7,11 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 ## Start here
 
 1. `../README.md` — what this implementation contains, how to build and run it.
-2. `OPEN_PROBLEMS.md` — unsolved problems, open design decisions, and documented MVP limits, prioritized.
-3. `DEVELOPMENT_PLAN.md` — the phased sequence for addressing them.
+2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the next release: dependable Studio simulation with the bundled runtime, acceptance criteria, and deferred backlog.
+3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
 4. `VISUAL_NUMERICAL_TESTS_PLAN.md` — the diagram-based, visualized numerical-validation test track (companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md`).
+
+The next-release target is local simulation quality. The development plan defines intended outcomes; the editor guide describes implemented behavior; open problems and the visual numerical plan track remaining work. Existing tests establish only their stated cases, not completion of the release criteria.
 
 ## Implementation architecture
 
@@ -24,7 +26,7 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 | `ELEMENT_DEV_GUIDE.md` | Writing elements: element contract, metadata, registration, parameters |
 | `PLUGIN_INTERFACE.md` | C ABI for element plugins, discovery paths, loading process |
 | `SCHEMA_LIBRARY_WORKFLOW.md` | Schema-backed element libraries in Studio and the runtime |
-| `STUDIO_DIAGRAM_EDITOR.md` | Studio diagram editor internals, diagram file format, QSchematic notes |
+| `STUDIO_DIAGRAM_EDITOR.md` | Current local simulation/Scope behavior, diagram editor internals, diagram file format, QSchematic notes |
 | `STUDIO_DIAGRAM_WIRING_DESIGN.md` | Design record of the diagram wiring: QSchematic subclasses, format v2, connection rules, router (implemented) |
 | `LOCAL_HEADLESS_NODES_DEMO.md` | Run two local headless runtimes and discover them in Studio |
 | `WINDOWS_BUILD.md` | Cross-building Windows binaries on Linux (Clang, MSYS2 sysroot), testing under Wine, packaging |

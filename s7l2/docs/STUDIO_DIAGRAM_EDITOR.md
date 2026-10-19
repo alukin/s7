@@ -45,6 +45,19 @@ The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills 
 - The window layout (geometry, open tool windows, toolbars) is restored at start (`QSettings`, organization `s7`, application `s7studio`).
 - `s7studio <file>` opens a diagram, schema or element library at start; `S7_STUDIO_SCREENSHOT=<png>` saves a picture of the main window and quits.
 
+## Local simulation with the bundled runtime
+
+This is the [next release's focus](DEVELOPMENT_PLAN.md). The behavior below is implemented; the development plan's remaining quality gates are not yet all met.
+
+Open a diagram (for example `s7studio examples/2int_osc.s7diagram`), use **Run > Run Configuration** to set duration and discretization frequency, then run locally and double-click the Scope observer. Studio embeds `s7core` through `LocalSchemaRunner`; no separate `s7runtime` process, network deployment or certificate configuration is needed for this workflow.
+
+- **Model time:** frequency `f` selects `dt = 1/f` seconds. Studio updates rate-related element parameters and seeds the run's schema rate; validation still rejects incompatible rates/types. The worker steps as fast as it can, with pause/stop controls. Changing `f` changes numerical discretization and the number of steps for a fixed model duration, not a promised wall-clock execution rate. Samples carry the runtime step and model timestamp; causal-memory outputs are published on the next step, so reference comparisons must account for that publication convention.
+- **Observation:** values are read on the runtime worker through `ObservationService`, then delivered to the UI through a bounded mailbox. Scope observers and their links do not participate in functional compilation or execution. Opening, hiding or reopening a Scope does not restart or change the model.
+- **Scope history:** recording starts with the first sample delivered for a Scope, even before its window is shown. Closing hides the view and retains its recording; opening it again does not clear or replace the data. Clearing samples or clearing before a new run discards that history; closing the diagram/application releases it. These temporary recordings are not persistent saved sessions.
+- **Preview versus recording:** each channel has a bounded preview (20,000 retained points plus the latest endpoint when needed), uniformly thinned over the run as it grows. At the buffer threshold, a temporary disk file retains delivered samples for detailed history/CSV export. Fit full run shows the recorded time extent; zoom/pan can read the disk-backed region; Auto Y rescales values without changing the time axis. Preview thinning cannot guarantee detail for arbitrary high-frequency signals; characterize the supported signal/rate/window combinations before relying on an overview plot alone.
+- **Completeness and failures:** the mailbox is bounded at 200,000 samples across probes. It drops the oldest when the UI falls behind and reports the loss; temporary disk buffering cannot restore those samples. Scope reports temporary-file/write failures too. **Export Full CSV** exports the recorded samples; its name does not establish completeness if capture loss or a storage warning occurred. Disk use grows with delivered sample count even though preview memory is bounded.
+- **Numerical method limits:** a smooth plot alone is not evidence of accurate dynamics. The two-`EulerIntegrator` oscillator has known forward-Euler amplitude growth; a finer `dt` reduces finite-duration error but does not make that method exactly energy-conserving. `SymplecticIntegrator` is available for the documented position/velocity formulation; it is not a general accuracy guarantee for arbitrary nonlinear systems. See [known integrator limits](OPEN_PROBLEMS.md) and the [numerical validation plan](VISUAL_NUMERICAL_TESTS_PLAN.md).
+
 ## Model
 
 - **Nets are trees.** A net has one driver, an output port. Its first wire (the trunk) runs from that output to an input; every further wire starts at a junction on a wire of the same net and ends at an input. A `WireEnd` is either a port (`node`, `direction`, `index`) or a junction (`wire`, `at`). Junctions are drawn as dots; wires that only cross are not connected. Wires refer to ports by element and index, so ports rebuilt after a parameter change keep their wires.
@@ -123,6 +136,8 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 | `s7studio --layout-check <schema>` | Auto-layout: every connection drawn and attached, orthogonal, no wire through an element, nets never touch (`S7_LAYOUT_PNG` renders it) |
 | `s7studio --edit-check <diagram>` | Adding an element through the main window keeps connections and routes; undo; save/reload |
 | `s7studio --wire-types <file>` | Type labels (`s7studio_wire_types`) |
+| `s7studio_scope_view` | Scope preview resolution and bounded size at 1/10/100 kHz; latest endpoint and Auto Y preserving a zoomed time range |
+| `s7studio --scope-run-check` (`s7studio_scope_run`) | Actual `examples/2int_osc.s7diagram` through the embedded runner at 1/10/100 kHz, ten-second extent/curve checks, late opening and close/reopen |
 | `s7studio --deployment-diagram <in> <out>` | Placement and stream assignment as Deploy does it (`s7studio_deployment_diagram`) |
 
 ## Known gaps

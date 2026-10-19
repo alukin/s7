@@ -1,39 +1,63 @@
 # S7 Development Plan
 
-Date: 2026-10-14
+Date: 2026-10-19
 Status: living document — update in place as phases complete or the sequence changes; do not create a new dated copy.
 
-This is the sequencing companion to `docs/OPEN_PROBLEMS.md`: that document lists what is unsolved, this one orders the work. Phases build on each other — later phases assume the earlier ones are done — but a phase does not need to fully close before useful work on the next starts, except where noted.
+This is the sequencing companion to `docs/OPEN_PROBLEMS.md`: that document lists what is unsolved, this one orders the work. The next-release section defines the current commitment; the later phases preserve the longer-term backlog.
 
-## Phase 0: Establish the next deliverable
+## Next release: dependable local simulation in Studio
 
-Create one short, dated project roadmap that names the target audience and release outcome (for example, a dependable two-node development MVP), lists explicit non-goals, and links to detailed design records. Update `docs/INDEX.md` so it points to the current roadmap and clearly separates normative contracts, implementation status, and open-problem tracking.
+**Decision: 2026-10-19. One release goal: good simulation quality in `s7studio` with its bundled runtime.** The target user builds or opens a causal model, runs it locally, and can trust the computed values, model time, plots, and recorded results. No release number or delivery date is assigned here.
 
-**Addresses:** Open Problems P0.
-**Completion criteria:** every advertised capability is classified as implemented, experimental, or deferred; every deferred item has an owner/trigger or an explicit no-plan decision; no document presents completed work as upcoming or vice versa.
+“Bundled runtime” means Studio's existing in-process `LocalSchemaRunner`, using `s7core` validation, compilation and `NodeRuntime` on a worker thread. Local simulation must work without starting a separate `s7runtime` service, discovering nodes, provisioning certificates, or deploying a diagram. Core/runtime logic stays headless and independently testable; Studio configures execution and observes it. This release does not introduce a second numerical engine in the UI.
 
-## Phase 1: Numerical-modeling validation and visualization
+### Release boundary
 
-**Top priority.** Until this phase has passing, independently-referenced results, nothing about the system's computation can be asserted to be correct — every other phase below is hardening or extending a runtime whose numerical behavior is unverified. This phase does not depend on Phases 2–5 completing first and should start immediately; it will still benefit once Phase 2's CI hardening lands (a stable, reproducible way to run `ctest`), but does not need to wait for it.
+In scope: single-node, single-rate simulation; correct rate/`dt` handling; causal state publication; the accuracy and documented limitations of existing integrators; deterministic run controls; reliable Scope and phase views; observation delivery, recording/export, bounded resource use and useful errors. Fix editor, loader, plugin or packaging problems when they prevent that local workflow.
 
-Full design in `docs/VISUAL_NUMERICAL_TESTS_PLAN.md`, implementing `../../doc/S7_Numerical_Modeling_Test_Plan.md`'s staged methodology:
+Deferred: distributed scheduling/deployment expansion, remote observation, hardware acquisition, multi-rate execution/resampling, snapshots/restore, production credential/operations work, broad architectural refactoring, and new integrators or a systematic nonlinear integrator comparison. Existing network features remain available, but expanding them is not a next-release objective. Revisit deferred work after this release's acceptance criteria pass; a demonstrated local simulation blocker can bring a specific item forward.
 
-- **Stage 0 harness and a first Stage 1.1 scalar linear case — revisited against RateResolver (2026-10-15), still correct.** `s7tests/numerical_harness.hpp`/`linear_scalar_smoke.cpp` were built against the old hand-propagated `dt` convention; now that RateResolver is mandatory, a new `test_rate_resolver_confirms_one_rate()` check confirms, rather than assumes, that each schema's `EulerIntegrator` pins its connected component to exactly 1/`dt` Hz. No logic changed — the schemas already had exactly one rate-pinning element per component, so they needed no `Schema::set_rate()` seed — only the harness's stale "no formal model" comment did, and is now updated.
-- **Hard prerequisite for every stage, not only Stage 2 onward — done.** Implemented `../../doc/S7_Sample_Rate_Model.md`'s inference/validation half: `s7::Rate`, `Element::declared_rate()`, `Schema::rate()`, `RateResolver::resolve()`, and (2026-10-14) wired into `Validator::validate()`/`Compiler::compile()` as a mandatory gate (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model" — that entry has the full list of what fixing the resulting fallout touched: a `"dt"` JSON field on both schema-loading paths, deployment seeding from the diagram's own `dt`, and every affected test schema). A rate conflict, or no element/seed pinning one, is now a validation error naming the element(s), exactly like a type conflict. The headless diagram runner (below) now exercises this for real. **Studio fixed too (2026-10-15):** the mandatory gate had actually broken `s7studio_smoke` on `main` since the previous commit (any diagram with no rate-pinning element, e.g. a pure Gain/Adder/Multiply graph, failed to run in Studio) — not caught earlier because Studio needs Qt6 and wasn't built in the sandbox used to verify that change. Fixed in `local_runtime_v2.hpp::buildSchema()` (reads the same `"dt"` JSON convention as `s7runtime`/the schema-library format) and `LocalSchemaRunner::prepareRuntime()` (seeds the schema from the run's own authoritative `dt`, overriding whatever the JSON said, the same way it already overrides a stale discretization-frequency value). The design's deliberately out-of-scope multi-rate-execution half, and its `RatioOf`/per-port rate rule (needed only once a rate-changing element exists), stay with Phase 5 item 7.
-- **Hard prerequisite for Stage 2 onward — done (2026-10-15).** Added a generic `Trig` element to `s7core` (`OPEN_PROBLEMS.md`, "No generic trigonometric/math element blocks nonlinear modeling"): `sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`sinh`/`cosh`/`tanh` via a `function` parameter, real floating types, verified on both the native Linux build and the Windows cross-build. The pendulum's own dynamics need it, not just its energy diagnostic; Van der Pol and Lorenz need nothing beyond the existing `Multiply`. Complex-type support stays deferred (no complex-analytic trig in `s7::math` yet) until something actually needs it.
-- **Headless `.s7diagram` + probe-sidecar runner — done (2026-10-15).** `s7tests/diagram_harness.hpp`, validated by re-expressing Stage 1.1 as a diagram and reproducing its result bit-for-bit; verified on both the native Linux build and the Windows cross-build. Next: work through Stages 1.2–5 (linear oscillator and coupled systems, pendulum, Van der Pol, Lorenz, integrator-dynamics investigation), each paired with a gnuplot-based visualization (phase portraits, attractor projections, energy drift, convergence plots) — the visualization pipeline itself (`VISUAL_NUMERICAL_TESTS_PLAN.md` section 3) is also not built yet.
-- **Done (2026-10-15):** the architecture follow-up surfaced by this work — migrating Studio's `Scope` off being a Functional Graph element (ADR-011/012 conformance, `docs/OPEN_PROBLEMS.md`) — plus, as a direct consequence of doing that properly, a new Probes panel and the first Studio-side visualization beyond time-series: a phase-portrait (X-Y) viewer.
-- A genuine multi-rate/resample Functional Graph element (as opposed to observation-side decimation, which this phase handles without one) stays deferred to Phase 5 if it turns out to be needed.
+### Current evidence and remaining work
 
-**Addresses:** the numerical-validation and visual-test-tooling work requested directly, not an Open Problems entry.
-**Completion criteria:** every stage in `doc/S7_Numerical_Modeling_Test_Plan.md` section 12 has a passing `ctest` case with an independent reference and, where the plan calls for one, a reviewable diagram/probe/plot artifact triple.
+| Area | Implemented evidence | Still required for release |
+|---|---|---|
+| Numerical execution | Mandatory rate validation; scalar analytical/convergence harness; plain-Euler amplification and symplectic-oscillator checks | Reference-backed acceptance for the supported example/configuration matrix; model-time/state alignment and timestep refinement checks |
+| Studio delivery and views | Worker-thread execution and bounded sample mailbox; `s7studio_scope_view` and `s7studio_scope_run` regressions | Exercise overload, multiple channels, interactive view changes, long runs, recording failures and all run controls |
+| Scope lifecycle | Uniform preview stride; recording starts before opening a view and survives hiding/reopening; Auto Y preserves the time range | Verify full CSV against the delivered trace, recording completeness, and zoom/pan across disk-backed history |
+| Reproducibility | Headless diagram/probe-sidecar harness and Studio end-to-end oscillator test | Compare the same saved model/configuration across both paths; document supported platforms and resource envelope |
+
+These checks establish specific behavior, not general numerical correctness. In particular, the Scope run regression's ten-second sine comparison at 1/10/100 kHz is a rendering/delivery regression with a tolerance; it does not prove long-term energy conservation or validate all integrators.
+
+### Work sequence
+
+1. **Establish the local simulation baseline.** Reproduce failures from saved diagrams through the complete open → configure → validate → run → observe → export workflow. Start with `examples/2int_osc.s7diagram` at 1, 10 and 100 kHz over the same model duration. Record effective parameters, method, initial conditions, rate, step count, first/last timestamps, probe mapping and any dropped samples. Distinguish numerical-method limits from scheduling, timestamp and display defects before changing semantics.
+2. **Validate values and model time together.** Extend the existing headless harness and Studio tests with independent references and per-case tolerances. Cover scalar dynamics, the two-integrator oscillator, an energy-bounded oscillator realization, and representative coupled/nonlinear models selected from the bundled examples. Verify the first published state, its step/time label, the final sample and convergence as `dt` decreases. Characterize forward Euler's known oscillator drift rather than requiring impossible exact conservation. Preserve causal-memory publication order; any runtime change needs a core smoke regression.
+3. **Make observation trustworthy throughout a run.** Test full-run and zoomed views, multiple channels, open-before/open-after-run, close/reopen, pause/resume/stop/reset/rerun, clear and overlay behavior, CSV export and disk failures. Preview decimation must retain the model-time extent and useful curve detail. Observation overload must be visible and bounded; a disk recording of delivered samples cannot recover samples dropped before delivery. Select and test a delivery/recording policy for the supported rate/duration/channel envelope before claiming full-resolution capture.
+4. **Make the result reproducible and releasable.** Exercise Studio-enabled builds and the local workflow in CI, with explicit dependencies and a supported compiler; keep headless numerical gates too. Check worker/UI lifetime and shutdown under load. Record reference metrics and reviewable traces/plots for the release matrix, then smoke-test the packaged Studio with its required local runtime dependencies/plugins. State which platforms were actually tested; Wine does not establish native Windows support.
+
+### Acceptance criteria
+
+The next release is ready when all of the following have evidence:
+
+- A fresh Studio installation can open, configure and run the supported examples locally without an external service. Every bundled example is classified as **validated within a stated envelope** or **experimental with stated limits**; no illustrative nonlinear/chaotic diagram is advertised as reference-validated merely because it draws a plausible curve.
+- Each validated numerical case records equations, parameters, initial conditions, method, effective `dt`, duration, independent reference, tolerances and results. State error, convergence and applicable amplitude/phase/energy behavior pass within that envelope. The suite distinguishes known method instability from implementation defects.
+- The oscillator's 1/10/100 kHz runs preserve the same requested model duration, correct step/time alignment and full plotted time extent. Display sampling does not change model values or timestamps. Observation enabled/disabled and different window states produce the same runtime trace at matching steps.
+- Run controls and view lifecycle tests pass without stale or mixed run data. Scope fit/zoom/pan and Auto Y preserve the selected time semantics. Exported values/timestamps match the recorded trace, and all capture loss or storage failures are reported rather than presented as complete data.
+- A documented rate/duration/channel/graph-size envelope has measured throughput, bounded preview/queue memory and disk-use behavior. UI responsiveness, pause/stop latency and clean shutdown have measured bounds on the stated test machine. No universal throughput or real-time guarantee is inferred from discretization frequency.
+- CI runs the named numerical and Studio integration gates; the release build passes them and a manual packaged-workflow check. Remaining local-simulation defects have explicit dispositions against these criteria.
+
+Detailed test design: [`VISUAL_NUMERICAL_TESTS_PLAN.md`](VISUAL_NUMERICAL_TESTS_PLAN.md). Current gaps: [`OPEN_PROBLEMS.md`](OPEN_PROBLEMS.md). Current UI/runtime behavior: [`STUDIO_DIAGRAM_EDITOR.md`](STUDIO_DIAGRAM_EDITOR.md).
+
+## Later work — retained backlog, not next-release gates
+
+The phases below retain the broader project direction. Their numbering is a backlog reference, not a requirement to finish them for the Studio simulation release. Only the local validation, CI and lifecycle work selected above is part of this release; the complete cross-language, distributed, security and operations programmes remain deferred.
 
 ## Phase 2: Make validation repeatable
 
 - Extend the existing `.github/workflows/ci.yml` job rather than treating CI as absent: add an explicit dependency-install step (Boost, OpenSSL, zlib, and Qt6 or `-DS7_BUILD_STUDIO=OFF`) and pin a toolchain that satisfies AGENTS.md's GCC 15+/Clang 22+ requirement, then confirm the job actually passes against that pinned configuration.
 - Add a compiler/dependency matrix (supported Linux combinations, headless and Studio builds).
 - Add a Windows cross-build plus Wine job, with a clear note that Wine is not native Windows validation.
-- Either move `tools/test_two_node_deployment.sh` (registered as ctest's `s7_two_node_deployment`) under `s7tests/`, or update AGENTS.md's module map to say whole-system tests currently live beside the CLI they exercise. Extend that scenario with a standalone clean-shutdown case and a multi-cycle restart/recovery case.
+- Decide whether to move `tools/test_two_node_deployment.sh` (registered as ctest's `s7_two_node_deployment`) under `s7tests/`, and keep module maps consistent with that decision. Extend that scenario with a standalone clean-shutdown case and a multi-cycle restart/recovery case.
 - Promote fixture currency, plugin SDK smoke, and Python decoder checks to required (non-skippable) CI checks, and make cross-language fixture conformance a release gate.
 - Add sanitizer jobs selectively: ThreadSanitizer for transport/runtime concurrency, AddressSanitizer/UBSan for core, parsing, and lifecycle paths. These have been run ad hoc (see resolved findings in git history) but are not a standing gate.
 - Perform the concurrency/lifecycle audit called for in Open Problems P1 (runtime graph replacement, stream ownership, endpoint shutdown, Studio worker/UI handoff) before adding scheduler or recovery features in Phase 5.
@@ -78,7 +102,7 @@ After the MVP boundary is stable, choose one major model capability at a time:
 4. Add snapshots/restore only after element state serialization has a versioning and validation contract.
 5. Add remote observation through explicit network/data contracts that preserve local observation's non-invasive behavior.
 6. Give `s7spectral` frame/block signal types so `MagnitudeSpectrum`/`PowerSpectrumDB` can come back.
-7. The harder, deliberately out-of-scope half of `../../doc/S7_Sample_Rate_Model.md` (see Phase 1, which needs that design's inference/validation half much sooner, not this item): how a genuinely multi-rate graph actually *executes* — single global tick vs. per-rate-domain scheduling vs. a hardware element buffering internally like `NetSource`/`NetSink` — once the rate-changing element it defines actually exists and something needs more than one rate domain in one running graph.
+7. The harder, deliberately out-of-scope half of `../../doc/S7_Sample_Rate_Model.md` (the inference/validation half is already implemented and required by the local simulation baseline): how a genuinely multi-rate graph actually *executes* — single global tick vs. per-rate-domain scheduling vs. a hardware element buffering internally like `NetSource`/`NetSink` — once the rate-changing element it defines actually exists and something needs more than one rate domain in one running graph.
 
 These items should not be bundled together. Each changes either semantics, persistent state, or protocol behavior and needs a design decision, conformance fixtures, and a vertical end-to-end demonstration.
 

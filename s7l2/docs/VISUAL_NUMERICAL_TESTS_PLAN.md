@@ -1,11 +1,35 @@
 # S7 Visual Numerical Test Plan
 
-Date: 2026-10-14
+Date: 2026-10-19
 Status: living document — update in place as stages complete or the design changes.
 
 Companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md` (the language-neutral validation methodology: stages, reference-solution discipline, metrics, acceptance criteria) and to `DEVELOPMENT_PLAN.md`/`OPEN_PROBLEMS.md`. This document is the S7L2-specific (C++) implementation plan for that methodology, extended with a visual/diagram-based test track: each numerical test case is represented as an actual diagram with explicit observation points, runnable both headlessly (for pass/fail) and visually in Studio (for human inspection), with generated plots (time series, phase portraits, attractor projections, convergence) as reviewable artifacts.
 
-Code written so far: the Stage 0 harness and first Stage 1.1 test (`s7tests/numerical_harness.hpp`, `linear_scalar_smoke.cpp`), and the headless `.s7diagram` + probe-sidecar runner itself (section 2, `s7tests/diagram_harness.hpp`), validated by re-expressing that same Stage 1.1 case as a diagram (`s7tests/diagrams/euler_scalar_decay.s7diagram`, `diagram_harness_smoke.cpp`) and confirming it reproduces the identical numbers. The visualization pipeline (section 3) and every stage from 1.2 onward are not built yet.
+## Next-release role and current evidence
+
+The next release has one goal: dependable local simulation in Studio with its bundled runtime. [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) defines its acceptance criteria. This document remains the longer-term numerical methodology; completing every research stage below is not a condition of that release. Select a supported example/configuration matrix, validate it independently, and label examples outside the validated envelope experimental. Broad nonlinear integrator comparison, new methods, large-scale studies and the full Lorenz/statistical programme remain later research.
+
+Implemented evidence as of 2026-10-19:
+
+- Stage 0 numerical harness and Stage 1.1 scalar analytical/convergence checks (`s7tests/numerical_harness.hpp`, `linear_scalar_smoke.cpp`).
+- Mandatory rate inference/validation in compilation, including schema-rate seeding on the Studio path.
+- Headless diagram/probe-sidecar runner (`s7tests/diagram_harness.hpp`), checked against the scalar case (`diagram_harness_smoke.cpp`).
+- Focused plain-Euler amplification and symplectic-oscillator tests (`symplectic_oscillator_smoke.cpp`). These do not complete the damped/forced oscillator or coupled-system stages.
+- Studio Scope preview regression (`s7studio_scope_view`) and actual-example delivery/window-lifecycle regression (`s7studio_scope_run`, `s7studio --scope-run-check`): ten model seconds of `examples/2int_osc.s7diagram` at 1/10/100 kHz, including opening after execution and closing/reopening. The unit view test also checks that Auto Y preserves a zoomed time range. This is focused integration evidence, not a complete convergence/long-run numerical study.
+
+Not completed: the gnuplot artifact pipeline (section 3), the full staged model/reference suite, headless/Studio trace equivalence for the supported release matrix, capture/export completeness and overload qualification, and broader run-control/phase-view lifecycle coverage. Existing pendulum example diagrams are available for investigation; their presence is not proof of numerical validation.
+
+### Local release validation matrix to build
+
+| Track | Required comparison | Coverage to add |
+|---|---|---|
+| Effective configuration and time | Saved diagram, effective element rates, requested duration, steps and model timestamps | First/final published samples; frequency changes including 1/10/100 kHz; save/reload and nested-schema consistency |
+| Numerical values | Independent analytical/reference result with per-case tolerances | Scalar dynamics, plain-Euler oscillator, bounded oscillator realization, selected coupled/nonlinear cases; refinement, phase/amplitude and energy metrics where applicable |
+| Runtime/client equivalence | Same effective model and probes through headless and bundled Studio paths | Match values/timestamps at matching steps; repeat runs and observation/window-state changes; account explicitly for causal-memory publication |
+| View lifecycle | Captured trace versus displayed time extent and curve | Open before/after run, hide/reopen, multi-channel views, zoom/pan, fit/Auto Y, phase views; pause/resume/stop/reset/rerun and clear/overlay |
+| Recording and resource use | Delivered samples versus CSV; produced versus delivered sample counts | Overload/loss reporting, temporary-file/disk failures, long runs, queue/preview bounds, disk growth and measured UI/stop responsiveness |
+
+Every release case must name its reference, parameters, method, `dt`, duration, expected sample/time alignment and tolerances before it can count as validated. Keep numerical/reference checks headless, and add Studio integration checks for the complete user path. A Scope screenshot or a synthetic sine-buffer test cannot substitute for actual model execution and recording checks.
 
 ## 1. Design decided so far
 
@@ -56,13 +80,13 @@ The sidecar (and Studio's embedded array) each have the probe entries themselves
 - `"probes"`: `{"name": ..., "element": ..., "port": ..., "unit": ...}` objects. `name` is for labeling and need not match the element id; `unit` (optional, e.g. `"rad"`, `"m/s"`) is for plot axis labels only, nothing else reads it.
 - `"views"` (sidecar only; Studio has no equivalent concept yet, since it opens live windows interactively instead of generating plots from a file): which plots section 3's driver should generate for this case, referencing probes by `name` — e.g. `{"type": "phase_portrait", "x": "position", "y": "velocity"}`, `{"type": "attractor3d", "x": "x", "y": "y", "z": "z"}`. Explicit per case, not auto-generated from every probe combination — matching the project's general preference for explicit over inferred behavior (explicit network boundaries, explicit type conversion; "prefer explicit errors over silent coercion" in `AGENTS.md`'s guardrails).
 
-### 1.3 dt/rate is governed by `S7_Sample_Rate_Model.md`, not hand propagation — a blocking prerequisite
+### 1.3 dt/rate inference and validation — implemented; configuration parity still needs tests
 
-Superseded from this plan's earlier draft, which only had the headless runner replicate Studio's ad hoc `dt`-propagation convention (`MainWindow::updateSchemaDiscretizationParams`, Qt-only). That was judged not good enough: nothing proved two integrators in one schema actually shared a rate, only hand inspection did. The real design is `../../doc/S7_Sample_Rate_Model.md` (not yet implemented) — a `RateResolver` mirroring `s7core`'s existing `TypeResolver`, giving every port a validated rate (a rational `{numerator, denominator}`, reusing the wire protocol's existing representation) and making a rate conflict a validation error naming the element, the same way a `SignalType` conflict already is.
+**Implemented:** `s7::Rate`, element-declared rates, schema-rate seeds and mandatory `RateResolver` checks in `Validator::validate()`/`Compiler::compile()`. Stage 1.1 now explicitly checks the resolved rate. Studio's loader reads schema `dt`, and `LocalSchemaRunner` seeds the run from its authoritative `dt`. The headless diagram runner seeds the schema from the diagram's top-level `dt`.
 
-This is now treated as a **hard prerequisite for every stage in this plan, not just Stage 2 onward the way the `Trig` element is** (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model"; `DEVELOPMENT_PLAN.md` Phase 1, now this plan's own phase and the project's top development priority). The headless diagram runner (section 2) should run the schema through the resolver (which also absorbs the "propagate `.s7diagram`'s top-level `dt` into every element" job, as the resolver's hardware/schema-level seed, section 3 of that design) rather than reimplementing propagation by hand. Stage 1.1 (`linear_scalar_smoke.cpp`), already passing, was built before this design existed and should be revisited once the resolver does, not assumed correct by inspection.
+Rate resolution validates agreement; it does not rewrite every element's parameters. Studio's run configuration separately updates rate-related parameters before building the run. The headless diagram runner uses the stored parameters. Release comparisons must use the same effective configuration, report it, and test stale/conflicting parameters and nested schemas explicitly rather than assuming these paths are equivalent.
 
-**"One dt for the whole diagram" stays this plan's scope, not the general rule.** `dt`/rate is fundamentally a per-element property in the full design: a hardware I/O element has a rate fixed by the device, not a free choice, and in general a diagram may need an explicit rate-changing element wherever two connected elements' rates genuinely differ. "One rate everywhere" is what the resolver will *confirm* (not just assume) for every stage in this plan, since none of them has a hardware element or a rate-changing element — the harder multi-rate case is explicitly out of this plan's scope and belongs to `DEVELOPMENT_PLAN.md` Phase 5 item 7 instead.
+**One rate per connected model is this release's scope.** Hardware-native rates, explicit rate-changing elements and scheduling genuinely multi-rate graphs remain deferred. The implemented inference/validation is the prerequisite already met; multi-rate execution is a separate capability. See `../../doc/S7_Sample_Rate_Model.md` for the design and `OPEN_PROBLEMS.md` for implementation history.
 
 ### 1.4 Observation-side decimation, not a new functional element, for plotting at a lower rate
 
@@ -133,7 +157,7 @@ Error vs. h on log-log axes (`set logscale xy`), with the expected order's slope
 
 ### 3.5 Client-type precedent
 
-Time-series and phase-portrait/attractor views are deliberately separate templates, not modes of one: `S7_Terminology.md` already lists `Scope` and `Spectrum Analyzer` as distinct Observation Client types (alongside `Studio` and `Logger`), and, for exactly this kind of split, Simulink's Sinks library has `Scope` (time-domain) and `XY Graph` (phase-plane) as two separate blocks rather than two modes of one block. This plan's gnuplot templates follow that precedent; if Studio's `Scope` is ever migrated to a real Observation Client (section 5), it should stay a time-series-only client, with phase-portrait/attractor viewing as its own, separately named client type, not a mode added to Scope.
+Time-series and phase-portrait/attractor views are deliberately separate templates, not modes of one: `S7_Terminology.md` already lists `Scope` and `Spectrum Analyzer` as distinct Observation Client types (alongside `Studio` and `Logger`), and, for exactly this kind of split, Simulink's Sinks library has `Scope` (time-domain) and `XY Graph` (phase-plane) as two separate blocks rather than two modes of one block. This plan's gnuplot templates follow that precedent; Studio's `Scope` is now an Observation Client (section 5) and remains a time-series client, with phase-portrait/attractor viewing as its own, separately named client type, not a mode added to Scope.
 
 ## 4. Layout
 
@@ -145,18 +169,18 @@ Time-series and phase-portrait/attractor views are deliberately separate templat
 ## 5. Explicitly deferred, not part of this plan
 
 - **Done, no longer deferred:** migrating Studio's `Scope` off `ScopeElement` onto a real Observation Client / fixing the ADR-011/012 violation, and drawing probes as a distinct visual symbol in the diagram editor (2026-10-15, `OPEN_PROBLEMS.md`). Unifying Studio's native embedded `"probes"` array with this plan's own sidecar-file convention (section 1.2) is a small follow-up, not done.
-- How a genuinely multi-rate graph would *execute* (as opposed to the rate resolver's inference/validation, which is a blocking prerequisite below, not deferred) — a Functional Graph resample element, and the scheduling question behind it, for models that actually need more than one rate domain (`../../doc/S7_Sample_Rate_Model.md` section 6). Tracked as a `DEVELOPMENT_PLAN.md` Phase 5 item.
+- How a genuinely multi-rate graph would *execute* (as opposed to the rate resolver's inference/validation, which is already implemented, not deferred) — a Functional Graph resample element, and the scheduling question behind it, for models that actually need more than one rate domain (`../../doc/S7_Sample_Rate_Model.md` section 6). Tracked as a `DEVELOPMENT_PLAN.md` Phase 5 item.
 - Remote observation (section 1.1's last point). Already tracked in `OPEN_PROBLEMS.md` P3.
 
 ## 6. Execution order
 
 Follows `doc/S7_Numerical_Modeling_Test_Plan.md` section 12, with the diagram+probes+visualization track layered on from Stage 1.2 onward (Stage 1.1 needs no diagram or phase portrait — one scalar trajectory against a closed form needs no visual story):
 
-1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1 — done.** `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` is implemented and mandatory in `Validator::validate()`/`Compiler::compile()` (`OPEN_PROBLEMS.md`, "Rate/`dt` has no formal model").
+1. **Blocking prerequisite for every stage below, including re-confirming Stage 1.1 — done.** `../../doc/S7_Sample_Rate_Model.md`'s `RateResolver` is implemented and mandatory in `Validator::validate()`/`Compiler::compile()` (`OPEN_PROBLEMS.md`, "Rate/`dt` inference and validation").
 2. Stage 0 harness — done (`numerical_harness.hpp`).
 3. **Stage 1.1 scalar linear — re-confirmed against the resolver (2026-10-15), not just re-passing by inspection.** `linear_scalar_smoke.cpp` (`EulerIntegrator` vs. analytical decay, convergence order, forced-response steady state) now has a `test_rate_resolver_confirms_one_rate()` check that calls `RateResolver::resolve()` directly and asserts it resolves exactly 1/`dt` Hz for every element in the integrator loop — the schema needed no `Schema::set_rate()` seed, since its one `EulerIntegrator` already pins its one connected component.
 4. **Headless diagram runner (section 2) — done (2026-10-15).** Runs every schema through the resolver from step 1 (not hand-propagating `dt`); validated against a re-expression of 1.1 as a diagram (`diagrams/euler_scalar_decay.s7diagram`, `diagram_harness_smoke.cpp`) reproducing its result bit-for-bit.
-5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes — first phase-portrait case. Build next.
+5. Stage 1.2 linear second-order oscillator, as a diagram with position/velocity probes. Focused Euler/symplectic tests and the Studio example regression exist; damped/forced cases, a full convergence/reference report and generated phase-portrait artifacts remain. Complete the release subset before expanding the research suite.
 6. Stage 1.3 coupled linear systems of increasing size, against the matrix exponential.
 7. Stage 1.6 larger-graph/performance checks (kept numeric-only, no visualization story).
 8. **Blocking math prerequisites for Stage 2 onward — implemented.** `Trig` supplies real floating-point trigonometric functions and `Divider` supplies real floating-point division. Van der Pol and Lorenz also use the existing `Multiply`; the full pendulum additionally uses `Divider` for its nonlinear denominators.

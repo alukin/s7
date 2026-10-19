@@ -4,6 +4,8 @@ S7 is a platform for constructing, executing, and observing distributed causal s
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
 
+The next release focuses on **dependable local simulation in `s7studio` with its bundled runtime**: correct numerical results and model time, reliable plots and recording, and predictable run controls. Local runs use Studio's in-process runtime and require no separately running service. Acceptance criteria and deferred work are in the [development plan](docs/DEVELOPMENT_PLAN.md); the existing distributed capabilities remain part of S7's longer-term direction.
+
 Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, architecture, protocols) is in `../doc/README.md`. Unsolved problems and open design decisions: `docs/OPEN_PROBLEMS.md`.
 
 ## Repository layout
@@ -20,7 +22,7 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 | `s7spectral/` | Reference third-party plugin (FFT), built out of tree against the installed SDK by `ctest -R s7spectral_sdk_smoke` |
 | `s7studio/` | Qt6 Studio: diagram editor, element library, local embedded runtime with Scope windows, headless node discovery |
 | `s7ctl/` | CLI: check a diagram offline, deploy it to its nodes, read a node's deployed configuration and stream status, recover a stream |
-| `s7tests/` | Reserved for whole-system tests; module smoke tests live in `<module>/tests/` |
+| `s7tests/` | Numerical/reference and diagram-runner tests; module smoke tests live in `<module>/tests/`; the two-node integration driver currently lives in `tools/` |
 | `external/` | Vendor code (QSchematic, QCustomPlot) — do not modify |
 
 ## Implemented
