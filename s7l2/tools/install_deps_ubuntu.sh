@@ -41,6 +41,8 @@ PACKAGES=(
   git              # QSchematic fetches its GPDS dependency via FetchContent
   pkg-config
   ca-certificates
+  python3          # wire/control fixture tests (skipped without it)
+  diffutils        # cmp, used by the fixture tests
 )
 
 # Core/runtime libraries: Boost.JSON, Boost.System/Asio/Beast/UUID, OpenSSL, zlib.

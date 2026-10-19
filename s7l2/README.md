@@ -47,7 +47,7 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 
 ## Build
 
-Install dependencies (Ubuntu): `tools/install_deps_ubuntu.sh` (`--no-studio` for headless only).
+Install dependencies: `tools/install_deps_ubuntu.sh` (Ubuntu 26.04) or `tools/install_deps_fedora.sh` (Fedora 44); `--no-studio` for headless only. Windows binaries are cross-built on Ubuntu ([docs/WINDOWS_BUILD.md](docs/WINDOWS_BUILD.md)).
 
 ```bash
 cmake -S . -B build                       # add -DS7_BUILD_STUDIO=OFF to skip Qt
