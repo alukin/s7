@@ -119,3 +119,7 @@ s7_add_test_executable(s7core_pwm_smoke tests/pwm_smoke.cpp)
 target_link_libraries(s7core_pwm_smoke PRIVATE s7core)
 target_compile_definitions(s7core_pwm_smoke PRIVATE S7_PWM_EXAMPLE="${PROJECT_SOURCE_DIR}/examples/pwm_pid_rlc.s7diagram")
 add_test(NAME s7core_pwm_smoke COMMAND s7core_pwm_smoke)
+
+s7_add_test_executable(s7core_sources_smoke tests/sources_smoke.cpp)
+target_link_libraries(s7core_sources_smoke PRIVATE s7core)
+add_test(NAME s7core_sources_smoke COMMAND s7core_sources_smoke)

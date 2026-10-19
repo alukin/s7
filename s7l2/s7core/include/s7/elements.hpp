@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_ELEMENTS_HPP
 
 #include "s7/element.hpp"
+#include "s7/sources.hpp"
 #include "s7/trapezoid.hpp"
 #include "s7/convert.hpp"
 #include "s7/signal_values.hpp"

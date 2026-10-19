@@ -558,6 +558,81 @@ void register_builtin_elements(ElementRegistry& registry)
             return m;
         }()));
 
+    for (const std::string name : {"TriangleGenerator", "PulseGenerator", "ImpulseGenerator",
+                                   "StepGenerator", "ControlledOscillator"}) {
+        registry.register_element(ElementDescriptor(
+            name,
+            [name](const ElementCreationContext& ctx) {
+                return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                    if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                        using V = signal_storage_t<T>;
+                        const double rate = ctx.get_real("sample_rate_hz");
+                        if (name == "TriangleGenerator")
+                            return std::make_unique<TriangleGeneratorT<T>>(
+                                param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
+                                param_value<T>(ctx, "frequency_hz", V(1)), rate,
+                                ctx.get_real("phase"), ctx.get_real("rise_fraction"));
+                        if (name == "PulseGenerator")
+                            return std::make_unique<PulseGeneratorT<T>>(
+                                param_value<T>(ctx, "low", V(0)), param_value<T>(ctx, "high", V(1)),
+                                param_value<T>(ctx, "frequency_hz", V(1)), rate,
+                                ctx.get_real("duty"), ctx.get_real("phase"));
+                        if (name == "ImpulseGenerator")
+                            return std::make_unique<ImpulseGeneratorT<T>>(
+                                param_value<T>(ctx, "area", V(1)), rate,
+                                static_cast<std::uint64_t>(ctx.get_int("start_sample")));
+                        if (name == "StepGenerator")
+                            return std::make_unique<StepGeneratorT<T>>(
+                                param_value<T>(ctx, "initial_value", V(0)), param_value<T>(ctx, "final_value", V(1)),
+                                rate, static_cast<std::uint64_t>(ctx.get_int("start_sample")));
+                        return std::make_unique<ControlledOscillatorT<T>>(
+                            param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
+                            rate, param_value<T>(ctx, "phase", V(0)));
+                    } else {
+                        return unsupported_type(ctx);
+                    }
+                });
+            },
+            [name] {
+                const bool controlled = name == "ControlledOscillator";
+                auto m = make_generic_metadata(name, name,
+                    name == "ImpulseGenerator" ? "One-sample delta pulse with specified integral (area)" :
+                    name == "StepGenerator" ? "Sigma step at a specified model sample" :
+                    name == "TriangleGenerator" ? "Triangle or sawtooth with configurable rise fraction" :
+                    name == "PulseGenerator" ? "Periodic rectangular pulse source" :
+                    "Phase-continuous sine oscillator controlled by frequency in Hz",
+                    "sources", controlled ? 1 : 0, 1, real_floating_types());
+                m.parameters.push_back({"sample_rate_hz", "real", "Model samples per second", 1000, 0, std::nullopt, {}, false});
+                if (name == "StepGenerator" || name == "ImpulseGenerator") {
+                    m.parameters.push_back({"start_sample", "int", "Zero-based model sample of the transition or impulse", 0, 0, std::nullopt, {}, false});
+                    if (name == "ImpulseGenerator") {
+                        m.parameters.push_back({"area", "value", "Impulse integral; pulse height is area * sample_rate_hz", 1, std::nullopt, std::nullopt, {}, false});
+                    } else {
+                        m.parameters.push_back({"initial_value", "value", "Level before start_sample", 0, std::nullopt, std::nullopt, {}, false});
+                        m.parameters.push_back({"final_value", "value", "Level at and after start_sample", 1, std::nullopt, std::nullopt, {}, false});
+                    }
+                } else {
+                    if (name == "PulseGenerator") {
+                        m.parameters.push_back({"low", "value", "Low level", 0, std::nullopt, std::nullopt, {}, false});
+                        m.parameters.push_back({"high", "value", "High level", 1, std::nullopt, std::nullopt, {}, false});
+                        m.parameters.push_back({"duty", "real", "High fraction of each period", 0.5, 0, 1, {}, false});
+                    } else {
+                        m.parameters.push_back({"amplitude", "value", "Half peak-to-peak amplitude", 1, std::nullopt, std::nullopt, {}, false});
+                        m.parameters.push_back({"offset", "value", "Output offset", 0, std::nullopt, std::nullopt, {}, false});
+                    }
+                    if (!controlled)
+                        m.parameters.push_back({"frequency_hz", "value", "Frequency in Hz; negative reverses phase", 1, std::nullopt, std::nullopt, {}, false});
+                    m.parameters.push_back({"phase", controlled ? "value" : "real", controlled ? "Initial phase in radians" : "Initial phase in cycles (wrapped to [0,1))", 0, std::nullopt, std::nullopt, {}, false});
+                    if (name == "TriangleGenerator")
+                        m.parameters.push_back({"rise_fraction", "real", "Rising fraction: 0 falling saw, 0.5 triangle, 1 rising saw", 0.5, 0, 1, {}, false});
+                }
+                if (controlled) m.input_ports[0].name = "frequency_hz";
+                m.visual.shape = "circle";
+                m.visual.color = "#42A5F5";
+                return m;
+            }()));
+    }
+
     registry.register_element(ElementDescriptor(
         "PWM",
         [](const ElementCreationContext& ctx) {
