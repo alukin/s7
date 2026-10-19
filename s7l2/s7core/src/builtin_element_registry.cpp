@@ -558,6 +558,61 @@ void register_builtin_elements(ElementRegistry& registry)
             return m;
         }()));
 
+    registry.register_element(ElementDescriptor(
+        "ChirpGenerator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    using V = signal_storage_t<T>;
+                    return std::make_unique<ChirpGeneratorT<T>>(
+                        param_value<T>(ctx, "start_hz", V(1)), param_value<T>(ctx, "end_hz", V(100)),
+                        static_cast<std::uint64_t>(ctx.get_int("sweep_samples")), ctx.get_real("sample_rate_hz"),
+                        param_value<T>(ctx, "amplitude", V(1)), param_value<T>(ctx, "offset", V(0)),
+                        param_value<T>(ctx, "phase", V(0)), ctx.get_string("sweep") == "linear" ? ChirpSweep::Linear : ChirpSweep::Logarithmic,
+                        ctx.get_string("end_behavior") == "repeat");
+                } else return unsupported_type(ctx);
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("ChirpGenerator", "Chirp Generator", "Phase-continuous linear or logarithmic sine frequency sweep",
+                                           "sources", 0, 1, real_floating_types());
+            m.parameters.push_back({"start_hz", "value", "Initial frequency in Hz", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"end_hz", "value", "Final frequency in Hz", 100, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"sweep_samples", "int", "Sweep duration in model sample intervals", 1000, 1, std::nullopt, {}, false});
+            m.parameters.push_back({"sample_rate_hz", "real", "Model samples per second", 1000, 0, std::nullopt, {}, false});
+            m.parameters.push_back({"amplitude", "value", "Half peak-to-peak amplitude", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"offset", "value", "Output offset", 0, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"phase", "value", "Initial phase in radians", 0, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"sweep", "enum", "Frequency interpolation", "linear", std::nullopt, std::nullopt, {"linear", "logarithmic"}, false});
+            m.parameters.push_back({"end_behavior", "enum", "Hold final frequency or repeat sweep with continuous phase", "hold", std::nullopt, std::nullopt, {"hold", "repeat"}, false});
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "PRBSGenerator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    using V = signal_storage_t<T>;
+                    return std::make_unique<PrbsGeneratorT<T>>(
+                        static_cast<unsigned>(ctx.get_int("order")), static_cast<std::uint32_t>(ctx.get_int("seed")),
+                        static_cast<std::uint64_t>(ctx.get_int("bit_samples")), ctx.get_real("sample_rate_hz"),
+                        param_value<T>(ctx, "low", V(-1)), param_value<T>(ctx, "high", V(1)));
+                } else return unsupported_type(ctx);
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("PRBSGenerator", "PRBS Generator", "Deterministic maximal-length PRBS7 or PRBS15 excitation",
+                                           "sources", 0, 1, real_floating_types());
+            m.parameters.push_back({"order", "int", "LFSR order: 7 or 15", 7, 7, 15, {}, false});
+            m.parameters.push_back({"seed", "int", "Nonzero initial LFSR state fitting the order", 1, 1, 32767, {}, false});
+            m.parameters.push_back({"bit_samples", "int", "Model samples per bit", 1, 1, std::nullopt, {}, false});
+            m.parameters.push_back({"sample_rate_hz", "real", "Model samples per second", 1000, 0, std::nullopt, {}, false});
+            m.parameters.push_back({"low", "value", "Zero-bit level", -1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"high", "value", "One-bit level", 1, std::nullopt, std::nullopt, {}, false});
+            return m;
+        }()));
+
     for (const std::string name : {"TriangleGenerator", "PulseGenerator", "ImpulseGenerator",
                                    "StepGenerator", "ControlledOscillator"}) {
         registry.register_element(ElementDescriptor(

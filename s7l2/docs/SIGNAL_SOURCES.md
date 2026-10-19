@@ -3,7 +3,7 @@
 The built-in registry exposes these sources in the `sources` category, including
 Studio's element picker. Their C++ templates and F64 aliases are declared in
 `s7/sources.hpp`, also included by `s7/elements.hpp` and `s7/core.hpp`.
-All five support F16, F32, F64 and F128; parameter `type` can pin the output type.
+All seven core generators support F16, F32, F64 and F128; parameter `type` can pin the output type.
 The VCO frequency input shares its output type.
 
 Each instance declares its `sample_rate_hz` (default 1000). Connected integrators
@@ -17,6 +17,8 @@ restarts its sequence. Step zero is the first call to `step()`.
 | `PulseGenerator` | `low=0`, `high=1`, `frequency_hz=1`, `phase=0` cycles, `duty=0.5` |
 | `ImpulseGenerator` | `area=1`, `start_sample=0` |
 | `StepGenerator` | `initial_value=0`, `final_value=1`, `start_sample=0` |
+| `ChirpGenerator` | `start_hz=1`, `end_hz=100`, `sweep_samples=1000`, `amplitude=1`, `offset=0`, `phase=0` radians, `sweep=linear`, `end_behavior=hold` |
+| `PRBSGenerator` | `order=7`, `seed=1`, `bit_samples=1`, `low=-1`, `high=1` |
 | `ControlledOscillator` | `amplitude=1`, `offset=0`, `phase=0` radians; input port 0: `frequency_hz` |
 
 The corresponding template names append `T<SignalType>`, for example
@@ -95,6 +97,56 @@ declares direct feedthrough; use a causal-memory element to close feedback loops
 Use ordinary `Gain` and `Adder` blocks to implement the voltage-to-frequency
 law `frequency_hz = base_frequency + sensitivity_hz_per_volt * voltage`.
 
+## Chirp frequency sweeps
+
+`ChirpGenerator` emits a sine with a linear or logarithmic frequency sweep.
+Its duration is `sweep_samples/sample_rate_hz` model seconds. With
+`N=sweep_samples`, frequency sample n is:
+
+- Linear: `(1-n/N)*start_hz + (n/N)*end_hz`.
+- Logarithmic: `exp(log(start_hz) + (n/N)*(log(end_hz)-log(start_hz)))`.
+
+Logarithmic sweeps require positive endpoints. Linear sweeps support descending,
+zero and negative frequencies. The phase parameter is in radians. Like the VCO,
+output sample n uses the current phase, then advances it by `2*pi*f[n]/fs`.
+This is a discrete frequency sweep, rather than exact integration of a continuous
+chirp formula between sample times.
+
+With `end_behavior=hold`, frequency reaches `end_hz` at sample N and stays
+there. With `repeat`, samples 0 through N-1 repeat the frequency sweep; phase
+continues across the boundary rather than resetting. The final endpoint is not
+a separate sample in repeat mode. Output amplitude and offset behave as for the VCO.
+
+## PRBS excitation
+
+`PRBSGenerator` supplies deterministic two-level excitation, useful for system
+identification. Supported orders are 7 and 15, with bit periods 127 and 32767.
+Each bit is held for `bit_samples` model steps, so the bit rate is
+`sample_rate_hz/bit_samples` and the sequence period is
+`(2^order-1)*bit_samples` steps.
+
+The generator uses a left-shifting Fibonacci LFSR with feedback from bits
+`order-1` and `order-2` (zero-based). It emits the most-significant bit before
+each shift, maps zero to `low` and one to `high`, and masks to the selected
+width. These correspond to polynomials `x^7+x^6+1` and `x^15+x^14+1`.
+The seed must be nonzero and fit the selected order. A new instance with the
+same seed reproduces the sequence exactly. No wall-clock seed is used.
+
+## Recording and replay (`s7io`)
+
+`RecordingSink` saves F64/C64 signals, and `RecordedSource` replays them.
+Both are available in Studio, `s7runtime` and `s7ctl`. The default format is
+compact binary: 8 bytes per real sample or 16 bytes per complex sample.
+Readable Gnuplot text is also supported through `format=gnuplot-text`.
+
+Every recording has a versioned header containing the signal type, exact sample
+rate and a configurable short UTF-8 description. Replay takes its rate from the
+header by default and supports error/hold/repeat at EOF. Sink construction during
+validation and compilation never creates or truncates a file.
+
+See [RECORDING_FORMAT.md](RECORDING_FORMAT.md) for the byte-level binary layout,
+text header, parameters, examples, buffering and file lifecycle.
+
 ## Numerical limits and errors
 
 Timing parameters use double precision independently of the output type.
@@ -117,8 +169,8 @@ model rate that resolves the dynamics and switching transitions of interest.
 ## Verification
 
 ```bash
-cmake --build build --target s7core_sources_smoke
-ctest --test-dir build -R '^s7core_sources_smoke$' --output-on-failure
+cmake --build build --target s7core_sources_smoke s7io_replay_smoke
+ctest --test-dir build -R '^(s7core_sources_smoke|s7io_replay_smoke)$' --output-on-failure
 ```
 
 The smoke test covers waveform samples and boundaries, asymmetric triangles,
@@ -126,3 +178,8 @@ reverse phase, duty endpoints, step/impulse timing, impulse integration, VCO
 frequency changes and phase hold, high-rate phase accumulation, registry
 factories/defaults/type inference, invalid parameters and conflicting rates.
 Waveform, VCO and integration checks run for all four real floating types.
+
+The second batch adds full-period PRBS window/balance checks, chirp phase checks
+for both sweep laws and end behaviors, and replay tests for real/complex signals
+in both file formats, EOF modes, registry factories and malformed recordings.
+The runtime control smoke test also checks recorded replay through `RuntimeService`.

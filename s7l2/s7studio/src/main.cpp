@@ -21,6 +21,7 @@
 #include "wire_type_labels.hpp"
 
 #include <s7/builtin_element_registry.hpp>
+#include <s7/io.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/net.hpp>
 #include <s7/observe.hpp>
@@ -146,6 +147,7 @@ int runSmoke()
     try {
         auto& registry = s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry);
+        s7::register_io_elements(registry);
         s7::register_net_elements(registry);
         assert(registry.find("NetSink") != nullptr);
         assert(registry.find("NetSource") != nullptr);
@@ -300,6 +302,7 @@ void registerElements()
 {
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
+    s7::register_io_elements(registry);
     s7::register_net_elements(registry);
 }
 

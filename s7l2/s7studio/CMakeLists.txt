@@ -36,6 +36,7 @@ target_include_directories(s7studio_diagram PUBLIC
     ${PROJECT_SOURCE_DIR}/s7transport/include
 )
 target_link_libraries(s7studio_diagram PUBLIC
+    s7io
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets

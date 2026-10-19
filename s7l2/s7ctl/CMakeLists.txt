@@ -4,7 +4,7 @@ add_executable(s7ctl
 )
 
 target_include_directories(s7ctl PRIVATE ${PROJECT_SOURCE_DIR}/s7runtime/include)
-target_link_libraries(s7ctl PRIVATE s7net ${CMAKE_DL_LIBS})
+target_link_libraries(s7ctl PRIVATE s7net s7io ${CMAKE_DL_LIBS})
 
 add_test(NAME s7ctl_smoke COMMAND s7ctl help)
 

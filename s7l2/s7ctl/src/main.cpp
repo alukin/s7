@@ -25,6 +25,7 @@
 #include "s7/canonical_json.hpp"
 #include "s7/deployment_client.hpp"
 #include "s7/net.hpp"
+#include "s7/io.hpp"
 #include "s7/plugin_loader.hpp"
 #include "s7/schema_library.hpp"
 
@@ -212,6 +213,7 @@ try {
     }
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
+    s7::register_io_elements(registry);
     s7::register_net_elements(registry);
 
     const std::string command = argv[1];

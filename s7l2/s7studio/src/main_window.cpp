@@ -19,6 +19,7 @@
 #include "viewers/viewer_registry.hpp"
 
 #include <s7/builtin_element_registry.hpp>
+#include <s7/io.hpp>
 #include <s7/element_catalog.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/net.hpp>
@@ -621,6 +622,7 @@ void MainWindow::buildUi()
     }
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
+    s7::register_io_elements(registry);
     s7::register_net_elements(registry);
     pluginLoader_ = std::make_unique<s7::PluginLoader>();
     pluginLoader_->load_plugins(registry);

@@ -175,6 +175,90 @@ private:
     P phase_{};
 };
 
+/// Sampled sine sweep: frequency[n] runs from start_hz to end_hz over
+/// sweep_samples intervals. Phase follows the same recurrence as the VCO.
+enum class ChirpSweep { Linear, Logarithmic };
+template <SignalType Type>
+class ChirpGeneratorT final : public Element {
+public:
+    using V = signal_storage_t<Type>;
+    using P = detail::source_phase_t<Type>;
+    ChirpGeneratorT(V start_hz = V(1), V end_hz = V(100), std::uint64_t sweep_samples = 1000,
+                    double sample_rate_hz = 1000, V amplitude = V(1), V offset = V(0),
+                    V phase = V(0), ChirpSweep sweep = ChirpSweep::Linear, bool repeat = false)
+        : Element("ChirpGenerator", true), start_(start_hz), end_(end_hz), count_(sweep_samples),
+          rate_(sample_rate_hz), amplitude_(amplitude), offset_(offset), sweep_(sweep), repeat_(repeat)
+    {
+        detail::require_source_rate(rate_);
+        detail::require_source_finite(start_hz); detail::require_source_finite(end_hz);
+        detail::require_source_finite(amplitude); detail::require_source_finite(offset);
+        phase_ = detail::source_phase(P(phase)/(P(2)*math::pi_v<P>));
+        if (!count_) throw std::invalid_argument("ChirpGenerator sweep_samples must be positive.");
+        if (sweep_ == ChirpSweep::Logarithmic) {
+            if (start_ <= P(0) || end_ <= P(0))
+                throw std::invalid_argument("Logarithmic chirp frequencies must be positive.");
+            log_ratio_ = math::log(end_) - math::log(start_);
+        }
+        register_output(0, port_names::out, Type, &output_);
+    }
+    void step() override {
+        const P fraction = P(sample_)/P(count_);
+        const P frequency = sample_ == count_ ? end_ : sweep_ == ChirpSweep::Linear ?
+            (P(1)-fraction)*start_ + fraction*end_ : math::exp(math::log(start_) + fraction*log_ratio_);
+        output_ = offset_ + amplitude_*V(math::sin(P(2)*math::pi_v<P>*phase_));
+        phase_ = detail::source_phase(phase_ + detail::source_phase(frequency/P(rate_)));
+        if (sample_ < count_) ++sample_;
+        if (repeat_ && sample_ == count_) sample_ = 0;
+    }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(rate_); }
+private:
+    P start_, end_, phase_{}, log_ratio_{};
+    std::uint64_t count_, sample_{};
+    double rate_;
+    V amplitude_, offset_, output_{};
+    ChirpSweep sweep_;
+    bool repeat_;
+};
+
+/// Maximal-length PRBS7 / PRBS15, left-shifting Fibonacci LFSR. The
+/// most-significant bit selects high/low before shifting; no random seed.
+template <SignalType Type>
+class PrbsGeneratorT final : public Element {
+public:
+    using V = signal_storage_t<Type>;
+    PrbsGeneratorT(unsigned order = 7, std::uint32_t seed = 1, std::uint64_t bit_samples = 1,
+                   double sample_rate_hz = 1000, V low = V(-1), V high = V(1))
+        : Element("PRBSGenerator", true), order_(order), state_(seed), bit_samples_(bit_samples),
+          rate_(sample_rate_hz), low_(low), high_(high)
+    {
+        detail::require_source_rate(rate_);
+        detail::require_source_finite(low); detail::require_source_finite(high);
+        if (order_ != 7 && order_ != 15) throw std::invalid_argument("PRBSGenerator order must be 7 or 15.");
+        mask_ = (std::uint32_t(1)<<order_)-1;
+        if (!seed || seed > mask_) throw std::invalid_argument("PRBSGenerator seed must be nonzero and fit its order.");
+        if (!bit_samples_) throw std::invalid_argument("PRBSGenerator bit_samples must be positive.");
+        register_output(0, port_names::out, Type, &output_);
+    }
+    void step() override {
+        output_ = state_ & (std::uint32_t(1)<<(order_-1)) ? high_ : low_;
+        if (++sample_ == bit_samples_) {
+            const auto feedback = ((state_>>(order_-1)) ^ (state_>>(order_-2))) & 1u;
+            state_ = ((state_<<1) | feedback) & mask_;
+            sample_ = 0;
+        }
+    }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(rate_); }
+private:
+    unsigned order_;
+    std::uint32_t state_, mask_{};
+    std::uint64_t bit_samples_, sample_{};
+    double rate_;
+    V low_, high_, output_{};
+};
+
+using ChirpGenerator = ChirpGeneratorT<SignalType::F64>;
+using PRBSGenerator = PrbsGeneratorT<SignalType::F64>;
+
 using TriangleGenerator = TriangleGeneratorT<SignalType::F64>;
 using PulseGenerator = PulseGeneratorT<SignalType::F64>;
 using ImpulseGenerator = ImpulseGeneratorT<SignalType::F64>;

@@ -39,6 +39,65 @@ std::filesystem::path make_temp_state_dir(const std::string& label)
 
 int main()
 {
+    {
+        // A recorded source is available through the runtime schema loader,
+        // including to services constructed without the CLI registration path.
+        const auto state_dir = make_temp_state_dir("recorded-source");
+        const auto path = state_dir / "recording.dat";
+        {
+            std::ofstream file(path);
+            file << "# s7 gnuplot sample file\n# format=gnuplot-text\n# version=1\n# signal=F64\n# rate=8/1\n# description=\"Runtime replay test\"\n# columns=sample_index value\n0 1.25\n1 -3.5\n";
+        }
+        s7::RuntimeSchemaDefinition definition;
+        definition.name = "recorded-source";
+        definition.elements.push_back({"recording", "RecordedSource",
+            {{"file_path", path.string()}, {"format", "gnuplot-text"}, {"sample_rate_hz", 8}, {"end_behavior", "repeat"}}, {}});
+        {
+            s7::RuntimeService service{definition, state_dir};
+            service.initialize_graph();
+            for (int n = 0; n < 6; ++n) {
+                service.step();
+                if (service.active_real_output("recording") != (n % 2 ? -3.5 : 1.25))
+                    throw std::runtime_error("Runtime recording replay did not preserve the sample sequence.");
+            }
+        }
+        std::filesystem::remove_all(state_dir);
+    }
+
+    {
+        // The default binary recording sink is discoverable by the runtime,
+        // reports its output path and produces a self-describing replay file.
+        s7::register_builtin_elements(s7::ElementRegistry::instance());
+        const auto dir = make_temp_state_dir("recording-sink");
+        const auto path = dir / "voltage.s7bin";
+        s7::RuntimeSchemaDefinition definition;
+        definition.name = "record-and-replay";
+        definition.elements.push_back({"value", "Constant", {{"value", 2}}, {}});
+        definition.elements.push_back({"save", "RecordingSink",
+            {{"file_path", path.string()}, {"sample_rate_hz", 8}, {"description", "Voltage [V]"}}, {}});
+        definition.connections.push_back({"value", 0, "save", 0});
+        {
+            s7::RuntimeService service{definition, dir / "writer"};
+            if (service.output_files() != std::vector<std::filesystem::path>{path})
+                throw std::runtime_error("Runtime did not report the recording output file.");
+            service.initialize_graph();
+            if (std::filesystem::exists(path)) throw std::runtime_error("Compiling a sink must not create its file.");
+            service.step(); service.step();
+        }
+        definition.connections.clear();
+        definition.elements.clear();
+        definition.elements.push_back({"replay", "RecordedSource", {{"file_path", path.string()}}, {}});
+        {
+            s7::RuntimeService service{definition, dir / "reader"};
+            service.initialize_graph();
+            for (int n = 0; n < 2; ++n) {
+                service.step();
+                if (service.active_real_output("replay") != 2)
+                    throw std::runtime_error("Runtime binary recording round trip failed.");
+            }
+        }
+        std::filesystem::remove_all(dir);
+    }
 
     s7::ControlNodeDescriptor descriptor;
     descriptor.node_uuid = "11111111-2222-3333-4444-555555555555";

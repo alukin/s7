@@ -315,6 +315,7 @@ auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> 
 {
     auto schema = std::make_unique<s7::Schema>(definition.name);
     auto& registry = s7::ElementRegistry::instance();
+    s7::register_io_elements(registry);
 
     // Seeds every element with no rate of its own (doc/S7_Sample_Rate_Model.md):
     // the schema's own declared "dt", or else the rate a continuously served
@@ -1184,7 +1185,7 @@ std::vector<std::filesystem::path> RuntimeService::output_files() const {
     std::vector<std::filesystem::path> files;
 
     for (const auto& element : definition_.elements) {
-        if (element.type == "RealGnuplotFileSink" || element.type == "RealCompactBinaryFileSink") {
+        if (element.type == "RecordingSink" || element.type == "RealGnuplotFileSink" || element.type == "RealCompactBinaryFileSink") {
             const auto params_it = element.params.find("file_path");
             if (params_it != element.params.end() && params_it->value().is_string()) {
                 files.emplace_back(params_it->value().as_string().c_str());

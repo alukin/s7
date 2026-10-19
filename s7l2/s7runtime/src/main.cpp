@@ -17,6 +17,7 @@
 #include "../include/s7/plugin_loader.hpp"
 
 #include <s7/builtin_element_registry.hpp>
+#include <s7/io.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/net.hpp>
 #include <s7/platform.hpp>
@@ -133,6 +134,7 @@ int main(int argc, char** argv) {
 
         auto& registry = s7::ElementRegistry::instance();
         s7::register_builtin_elements(registry);
+        s7::register_io_elements(registry);
         s7::register_net_elements(registry);
 
         s7::PluginLoader plugin_loader(std::move(plugin_dirs));

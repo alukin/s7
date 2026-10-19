@@ -4,6 +4,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 void require(bool ok, const char* message) {
@@ -99,10 +100,53 @@ template <s7::SignalType T> void integrate_delta() {
     }
 }
 
+template <s7::SignalType T> void sweeps_and_prbs() {
+    using V = s7::signal_storage_t<T>;
+    for (bool logarithmic : {false,true}) for (bool repeat : {false,true}) {
+        s7::ChirpGeneratorT<T> source(V(1),V(4),8,64,V(2),V(3),V(0),
+            logarithmic ? s7::ChirpSweep::Logarithmic : s7::ChirpSweep::Linear,repeat);
+        const double ratio=std::pow(4.0,1.0/8);
+        const auto sum = [&](int n) {
+            return logarithmic ? (std::pow(ratio,n)-1)/(ratio-1) : n+3.0*n*(n-1)/16;
+        };
+        for (int n=0;n<100;++n) {
+            const double phase_sum = repeat ? (n/8)*sum(8)+sum(n%8) :
+                n<=8 ? sum(n) : sum(8)+(n-8)*4;
+            const double expected=3+2*std::sin(2*s7::math::pi_v<double>*phase_sum/64);
+            require(std::abs(double(sample(source))-expected)<0.005, "Chirp phase follows frequency sum through sweep boundaries");
+        }
+    }
+    for(unsigned order : {7u,15u}) {
+        const std::size_t period=(1u<<order)-1;
+        s7::PrbsGeneratorT<T> source(order,1,1,1000,V(-2),V(3));
+        std::vector<unsigned> bits;
+        std::size_t ones=0;
+        for(std::size_t n=0;n<period;++n) {
+            const V value=sample(source);
+            require(value==V(-2)||value==V(3), "PRBS configured levels");
+            bits.push_back(value==V(3)); ones+=bits.back();
+        }
+        require(ones==(1u<<(order-1)), "Maximal PRBS bit balance");
+        std::vector<bool> seen(1u<<order);
+        for(std::size_t n=0;n<period;++n) {
+            unsigned word=0;
+            for(unsigned k=0;k<order;++k) word=(word<<1)|bits[(n+k)%period];
+            require(word!=0&&!seen[word], "Each nonzero PRBS window occurs exactly once per period");
+            seen[word]=true;
+            require(sample(source)==V(bits[n] ? 3 : -2), "PRBS repeats after its full period");
+        }
+    }
+    s7::PrbsGeneratorT<T> slow(7,65,3), fast(7,65,1);
+    for(int n=0;n<50;++n) {
+        const V expected=sample(fast);
+        for(int k=0;k<3;++k) require(sample(slow)==expected, "PRBS bit hold and alternate seed");
+    }
+}
+
 void registry() {
     auto& registry=s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
-    for (const char* type : {"TriangleGenerator","PulseGenerator","ImpulseGenerator","StepGenerator","ControlledOscillator"}) {
+    for (const char* type : {"TriangleGenerator","PulseGenerator","ImpulseGenerator","StepGenerator","ControlledOscillator","ChirpGenerator","PRBSGenerator"}) {
         for (const char* signal : {"F16","F32","F64","F128"}) {
             s7::Schema schema("registered_source");
             add(schema,"source",type,{{"type",signal}});
@@ -145,7 +189,15 @@ int main() {
         rejects([] { s7::PulseGenerator invalid(0,1,1,1000,2); });
         rejects([] { s7::StepGenerator invalid(0,1,std::numeric_limits<double>::infinity()); });
         rejects([] { s7::ImpulseGeneratorT<s7::SignalType::F16> invalid(s7::float16_t(1),100000); });
+        sweeps_and_prbs<s7::SignalType::F16>(); sweeps_and_prbs<s7::SignalType::F32>();
+        sweeps_and_prbs<s7::SignalType::F64>(); sweeps_and_prbs<s7::SignalType::F128>();
+        rejects([] {s7::ChirpGenerator bad(0,1,8,1000,1,0,0,s7::ChirpSweep::Logarithmic);});
+        rejects([] {s7::ChirpGenerator bad(1,2,0);});
+        rejects([] {s7::PRBSGenerator bad(8);});
+        rejects([] {s7::PRBSGenerator bad(7,0);});
+        rejects([] {s7::PRBSGenerator bad(7,128);});
+        rejects([] {s7::PRBSGenerator bad(7,1,0);});
         registry();
-        std::cout << "Sources: waveforms, VCO phase, delta integration, registry and validation passed\n";
+        std::cout << "Sources: waveforms, VCO/chirp phase, maximal PRBS periods, delta integration, registry and validation passed\n";
     } catch(const std::exception& e) {std::cerr << e.what() << '\n';return 1;}
 }
