@@ -52,6 +52,55 @@ The next release is ready when all of the following have evidence:
 
 Detailed test design: [`VISUAL_NUMERICAL_TESTS_PLAN.md`](VISUAL_NUMERICAL_TESTS_PLAN.md). Current gaps: [`OPEN_PROBLEMS.md`](OPEN_PROBLEMS.md). Current UI/runtime behavior: [`STUDIO_DIAGRAM_EDITOR.md`](STUDIO_DIAGRAM_EDITOR.md).
 
+## Next coding session TODO: educational examples
+
+Build the educational examples below as explicit analog-computer graphs under
+`examples/`, using the existing primitives and reusable schema elements described
+in [CONTROL_ELEMENTS.md](CONTROL_ELEMENTS.md). Schema is element: reusable
+controllers and model components belong in the separate schema-element resource,
+not new hard-coded compound elements. Do not introduce a global numerical solver;
+independent RK4 or other solvers may provide test references only.
+
+- [ ] **First- and second-order response:** RC charging/discharging, RLC resonance,
+  and a mass–spring–damper. Demonstrate step/impulse response, damping regimes,
+  resonance, and electrical/mechanical analogies; reuse the existing oscillator
+  and pendulum examples where appropriate.
+- [ ] **PI/PID control laboratory:** a first-order plant and a DC motor with load
+  torque changes. Compare open loop, P, PI and PID; demonstrate saturation,
+  anti-windup, derivative filtering, and reference/disturbance responses using
+  the reusable controllers.
+- [ ] **PWM power conversion:** extend the existing `pwm_pid_rlc.s7diagram`
+  example into a documented buck-converter exercise with changing load,
+  startup, output ripple, and load-step recovery. Check the switching topology
+  and energy balance before treating it as a physical converter model.
+- [ ] **Relay control:** thermostat/heater with thermal inertia and hysteresis;
+  show switching thresholds, overshoot, and the resulting limit cycle.
+- [ ] **Nonlinear oscillation:** Van der Pol oscillator, with time traces and
+  phase portraits showing convergence to a limit cycle.
+- [ ] **Chaos:** Lorenz attractor, with a three-dimensional phase trajectory and
+  nearby initial conditions. Document timestep sensitivity and avoid claiming
+  long-term trajectory agreement as an accuracy criterion.
+- [ ] **Population dynamics:** Lotka–Volterra predator–prey model, with time
+  traces, phase portrait, equilibrium, and parameter/initial-state variations.
+- [ ] **Synchronization and measurement:** a phase-locked loop built from VCO,
+  phase detector and loop filter; demonstrate acquisition, tracking, phase
+  error, and frequency measurement. Use phase wrapping and the frequency meter
+  where their documented contracts fit the model.
+- [ ] **Signal measurement:** AM/FM generation and detection, plus RMS
+  measurement. Compare known source amplitude/frequency with measured outputs
+  and explain smoothing/transient error.
+
+For each example, include a Studio-editable `.s7diagram` and a short README with
+equations, units, parameters, initial conditions, suggested experiments, probes,
+execution rate, duration, expected behavior, and numerical limitations. Add
+headless reference checks appropriate to the model, check timestep refinement,
+and manually verify open → run → observe → edit nested component → rerun in
+Studio. Reuse existing examples instead of duplicating them; mark each model
+experimental until its stated validation envelope is checked. Start with the
+linear-response and PI/PID exercises before the nonlinear and synchronization
+models. This checklist records the next session's example work; it does not make
+the entire catalog a next-release acceptance gate.
+
 ## Later work — retained backlog, not next-release gates
 
 The phases below retain the broader project direction. Their numbering is a backlog reference, not a requirement to finish them for the Studio simulation release. Only the local validation, CI and lifecycle work selected above is part of this release; the complete cross-language, distributed, security and operations programmes remain deferred.
