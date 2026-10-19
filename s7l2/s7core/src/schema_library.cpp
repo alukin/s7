@@ -257,6 +257,32 @@ auto library_element_metadata(const SchemaLibraryDefinition& library,
 
 } // namespace
 
+bool configure_schema_discretization(boost::json::value& schema, const double dt, const ElementRegistry& registry)
+{
+    (void)Rate::from_seconds(dt);
+    if (!schema.is_object()) throw std::invalid_argument("Expected a schema object for discretization.");
+    auto& root=schema.as_object();
+    root["dt"]=dt;
+    auto* elements=root.if_contains("elements");
+    if (!elements || !elements->is_array()) throw std::invalid_argument("Expected schema elements array for discretization.");
+    for (auto& value : elements->as_array()) {
+        auto& element=value.as_object();
+        const auto* type=element.if_contains("type");
+        const auto* descriptor=type && type->is_string() ? registry.find(std::string(type->as_string())) : nullptr;
+        if (!element.if_contains("schema") && descriptor && descriptor->metadata().schema_definition)
+            element["schema"]=*descriptor->metadata().schema_definition;
+        if (auto* nested=element.if_contains("schema"); nested && nested->is_object())
+            configure_schema_discretization(*nested,dt,registry);
+        if (!descriptor) continue;
+        for (const auto& parameter : descriptor->metadata().parameters) {
+            if (parameter.name!="dt" && parameter.name!="sample_rate_hz") continue;
+            if (!element.if_contains("params")) element["params"]=boost::json::object{};
+            element["params"].as_object()[parameter.name]=parameter.name=="dt" ? dt : 1/dt;
+        }
+    }
+    return true;
+}
+
 auto SchemaLibraryDefinition::to_json() const -> boost::json::value
 {
     boost::json::object root;

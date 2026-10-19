@@ -224,6 +224,12 @@ void Schema::ensure_compiled_runtime()
     }
 
     auto graph = Compiler::compile(executable, random_uuid_string(), random_uuid_string());
+    if (rate_) {
+        for (const auto& [id, element] : graph.elements) {
+            if (const auto declared=element->declared_rate(); declared && *declared!=*rate_)
+                throw std::invalid_argument("Schema '"+name_+"' rate conflicts with internal element '"+id+"'.");
+        }
+    }
     auto runtime = std::make_unique<NodeRuntime>(std::move(graph));
 
     for (const auto& output : exposed_outputs_) {

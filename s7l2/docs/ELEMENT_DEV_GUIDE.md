@@ -1,5 +1,9 @@
 # Element Development Guide
 
+Simulation follows the [analog-computer model](SIMULATION_MODEL.md): dynamics
+are explicit element networks. RK4 and other independent solvers belong in
+test references, not a new runtime simulation engine.
+
 How to write an S7 element, describe it with metadata, and register it. For packaging elements as a loadable shared library see `PLUGIN_INTERFACE.md`; for schema-backed elements see `SCHEMA_LIBRARY_WORKFLOW.md`.
 
 ## Element contract

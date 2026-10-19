@@ -52,6 +52,8 @@ class HeadlessNodesPanel;
 class ProbesPanel;
 }
 
+class SchemaTabs;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -109,6 +111,7 @@ private slots:
 
 private:
     void buildUi();
+    [[nodiscard]] diagram::DiagramEditor* activeDiagramEditor() const;
     void buildActions();
     void refreshRecentDiagrams();
     void rememberRecentDiagram(const QString& path);
@@ -218,6 +221,7 @@ private:
     QAction* redoAction_ = nullptr;
 
     diagram::DiagramEditor* diagramEditor_ = nullptr;
+    SchemaTabs* schemaTabs_ = nullptr;
     ui::ToolWindows* toolWindows_ = nullptr;
     ui::ProblemsPanel* problemsPanel_ = nullptr;
     ui::LogPanel* logPanel_ = nullptr;

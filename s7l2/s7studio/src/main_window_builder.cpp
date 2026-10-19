@@ -9,6 +9,7 @@
 #include <QToolBar>
 #include <Qt>
 #include <QWidget>
+#include <QTabWidget>
 
 namespace s7studio::ui {
 
@@ -102,7 +103,10 @@ auto MainWindowBuilder::buildCentralWidgets(QMainWindow* window) -> MainWindowWi
     // The diagram is the whole central area; everything else is a tool window.
     widgets.diagramEditor = new diagram::DiagramEditor(window);
     widgets.diagramEditor->setMinimumWidth(320);
-    window->setCentralWidget(widgets.diagramEditor);
+    widgets.diagramTabs = new QTabWidget(window);
+    widgets.diagramTabs->setObjectName(QStringLiteral("diagram.tabs"));
+    widgets.diagramTabs->addTab(widgets.diagramEditor,QStringLiteral("Diagram"));
+    window->setCentralWidget(widgets.diagramTabs);
     window->resize(1440, 900);
     window->setWindowTitle("s7studio");
     return widgets;

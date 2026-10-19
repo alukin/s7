@@ -1,5 +1,9 @@
 # S7 Development Plan
 
+Simulation follows the [analog-computer model](SIMULATION_MODEL.md): dynamics
+are explicit element networks. RK4 and other independent solvers belong in
+test references, not a new runtime simulation engine.
+
 Date: 2026-10-19
 Status: living document — update in place as phases complete or the sequence changes; do not create a new dated copy.
 

@@ -2,6 +2,7 @@
 
 class QAction;
 class QMainWindow;
+class QTabWidget;
 
 namespace s7studio {
 
@@ -32,6 +33,7 @@ struct MainWindowActions {
 };
 
 struct MainWindowWidgets {
+    QTabWidget* diagramTabs = nullptr;
     diagram::DiagramEditor* diagramEditor = nullptr;
 };
 

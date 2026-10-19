@@ -1,0 +1,5 @@
+// Generated from the separate, editable schema-elements resource. Do not edit.
+#pragma once
+namespace s7::detail {
+inline constexpr char builtin_schema_resource[] = R"s7schema(@S7_SCHEMA_ELEMENTS_JSON@)s7schema";
+}

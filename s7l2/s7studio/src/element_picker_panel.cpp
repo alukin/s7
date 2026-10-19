@@ -20,6 +20,7 @@
 #include <QMouseEvent>
 #include <QFont>
 #include <algorithm>
+#include <map>
 
 namespace s7studio::ui {
 
@@ -90,12 +91,15 @@ void ElementPickerPanel::buildCategoryTree() {
     elementTree_->clear();
     categoryNodes_.clear();
 
-    // Get all categories
-    auto categories = catalog.categories();
-    std::sort(categories.begin(), categories.end());
-
-    for (const auto& category : categories) {
-        auto elements = catalog.elements_in_category(category);
+    // Schema is an element: keep all reusable graph elements together,
+    // including user-loaded libraries with their own metadata categories.
+    std::map<std::string,std::vector<s7::ElementCatalogEntry>> groups;
+    for (const auto& entry : catalog.all_elements()) {
+        const auto* descriptor=registry_.find(entry.type_name);
+        const bool schema=descriptor && descriptor->metadata().schema_definition.has_value();
+        groups[schema ? "Schema elements" : entry.category].push_back(entry);
+    }
+    for (const auto& [category,elements] : groups) {
         if (elements.empty()) {
             continue;
         }
@@ -151,6 +155,7 @@ void ElementPickerPanel::buildCategoryTree() {
     elementTree_->addTopLevelItem(observerCategory);
 
     elementTree_->expandAll();
+    applyFilter(searchEdit_->text());
     elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count() + viewerTypes.size()));
 }
 

@@ -62,6 +62,17 @@ Reference example in repository:
 
 ---
 
+## Bundled resource and simulation model
+
+Reusable controllers and other standard components live in the separate
+`s7core/resources/schema_elements.s7library` resource. They use the existing
+schema-is-element mechanism and are automatically registered with core.
+Simulation follows the [analog-computer model](SIMULATION_MODEL.md); independent
+RK4 and other solvers are permitted as test references.
+
+See [CONTROL_ELEMENTS.md](CONTROL_ELEMENTS.md) for the bundled components,
+configuration and numerical contracts.
+
 ## Studio Workflow
 
 ### 1) Export a Schema as a Library Element
@@ -94,6 +105,10 @@ You can also open library files via `File -> Open...`.
 - Add the element from the picker as usual.
 - The node stores its embedded `schema` payload in the diagram/runtime JSON.
 - Saving/reloading diagram documents preserves this payload.
+- Bundled and user-loaded schema elements appear in the separate **Schema elements** category.
+- Double-click an instance to view/edit its embedded graph in a new tab; double-click nested schema elements to navigate deeper.
+- Edits affect that instance and propagate into the parent diagram, preserving the exposed interface and internal layout. The registry/library template is unchanged.
+- Save and Run use the root diagram; Save Schema Library from a schema tab exports that schema.
 
 ---
 

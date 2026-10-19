@@ -1,3 +1,8 @@
+# Embed the same headless schema-library resource shipped for inspection/editing.
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/schema_elements.s7library")
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/resources/schema_elements.s7library" S7_SCHEMA_ELEMENTS_JSON)
+configure_file(resources/schema_elements.hpp.in generated/s7_schema_elements.hpp @ONLY)
+
 
 # Shared, so that the host and every plugin use one copy of the registry and
 # element code.
@@ -24,6 +29,8 @@ set_target_properties(s7core PROPERTIES
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
 target_compile_features(s7core PUBLIC cxx_std_${CMAKE_CXX_STANDARD})
+
+target_include_directories(s7core PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 target_include_directories(s7core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -53,6 +60,7 @@ endif()
 
 # --- SDK: headers, library and CMake package for out-of-tree plugins --------
 include(GNUInstallDirs)
+install(FILES resources/schema_elements.s7library DESTINATION ${CMAKE_INSTALL_DATADIR}/s7 COMPONENT s7sdk)
 include(CMakePackageConfigHelpers)
 
 install(TARGETS ${S7CORE_SDK_TARGETS} EXPORT s7coreTargets
@@ -123,3 +131,11 @@ add_test(NAME s7core_pwm_smoke COMMAND s7core_pwm_smoke)
 s7_add_test_executable(s7core_sources_smoke tests/sources_smoke.cpp)
 target_link_libraries(s7core_sources_smoke PRIVATE s7core)
 add_test(NAME s7core_sources_smoke COMMAND s7core_sources_smoke)
+
+s7_add_test_executable(s7core_control_elements_smoke tests/control_elements_smoke.cpp)
+target_link_libraries(s7core_control_elements_smoke PRIVATE s7core)
+add_test(NAME s7core_control_elements_smoke COMMAND s7core_control_elements_smoke)
+
+s7_add_test_executable(s7core_schema_elements_smoke tests/schema_elements_smoke.cpp)
+target_link_libraries(s7core_schema_elements_smoke PRIVATE s7core)
+add_test(NAME s7core_schema_elements_smoke COMMAND s7core_schema_elements_smoke)

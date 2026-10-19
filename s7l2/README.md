@@ -45,6 +45,10 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 - `SOURCE_TIME` on streams (needs source elements that know their acquisition time), relaying streams through other nodes.
 - Recovering stream data across a process crash (a crash faults the stream; recovery continues without the lost data).
 
+Simulation follows an **analog-computer approach**: explicit networks of local
+integrators and function/state blocks. Independent RK4 and other solvers are
+allowed as test references. See [simulation semantics](docs/SIMULATION_MODEL.md).
+
 ## Build
 
 Install dependencies: `tools/install_deps_ubuntu.sh` (Ubuntu 26.04) or `tools/install_deps_fedora.sh` (Fedora 44); `--no-studio` for headless only. Windows binaries are cross-built on Ubuntu ([docs/WINDOWS_BUILD.md](docs/WINDOWS_BUILD.md)).

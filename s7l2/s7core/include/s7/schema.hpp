@@ -68,6 +68,8 @@ public:
     // own (no element in it pins one). Unset by default.
     void set_rate(Rate rate);
     [[nodiscard]] std::optional<Rate> rate() const;
+    // A nested schema with an explicit rate participates in parent rate validation.
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_; }
 
 private:
     struct ExposedInput {

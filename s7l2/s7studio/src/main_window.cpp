@@ -1,4 +1,6 @@
 #include "main_window.hpp"
+#include "schema_tabs.hpp"
+#include <QUndoGroup>
 
 #include "deployment_support.hpp"
 #include "diagram_document.hpp"
@@ -351,6 +353,13 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
 MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
+    // Tear down tab callbacks while all editors and tool widgets still exist.
+    // QTabWidget otherwise emits currentChanged while its pages are destroyed.
+    if (schemaTabs_) {
+        schemaTabs_->reset();
+        delete schemaTabs_;
+        schemaTabs_=nullptr;
+    }
     if (networkTask_.joinable()) {
         networkTask_.join(); // bounded by the control request timeouts
     }
@@ -485,8 +494,8 @@ void MainWindow::buildActions()
     connect(saveLibraryAction_, &QAction::triggered, this, &MainWindow::saveSchemaLibrary);
     connect(loadDemoAction_, &QAction::triggered, this, &MainWindow::loadDemoDiagram);
     connect(fitDiagramAction_, &QAction::triggered, this, [this] {
-        if (diagramEditor_) {
-            diagramEditor_->fitDiagramInView();
+        if (activeDiagramEditor()) {
+            activeDiagramEditor()->fitDiagramInView();
         }
     });
     connect(exitAction_, &QAction::triggered, this, &QWidget::close);
@@ -603,8 +612,32 @@ void MainWindow::buildUi()
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
+    schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
+    connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
+    connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
+        connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
+        connect(editor->scene(),&QGraphicsScene::selectionChanged,this,&MainWindow::syncTextFrameStyleControls);
+        connect(editor->scene(),&QSchematic::Scene::modeChanged,this,[this,editor](int mode) {
+            if (activeDiagramEditor()==editor && modeWireAction_) {
+                const QSignalBlocker blocker(modeWireAction_);
+                modeWireAction_->setChecked(mode==diagram::DiagramScene::DrawMode);
+            }
+        });
+        connect(editor->scene(),&diagram::DiagramScene::statusMessage,this,[this](const QString& message) {statusBar()->showMessage(message,6000);});
+        connect(editor->scene(),&diagram::DiagramScene::diagramChanged,this,[editor] {
+            QString error;
+            static_cast<void>(diagram::updateWireTypeLabels(*editor->scene(),&error));
+        });
+    });
+    connect(schemaTabs_,&SchemaTabs::activeEditorChanged,this,[this](diagram::DiagramEditor* editor) {
+        syncPageActions();syncTextFrameStyleControls();
+        if (modeWireAction_) {
+            const QSignalBlocker blocker(modeWireAction_);
+            modeWireAction_->setChecked(editor->scene()->mode()==diagram::DiagramScene::DrawMode);
+        }
+    });
     if (diagramEditor_ && diagramEditor_->scene()) {
-        auto* stack = diagramEditor_->scene()->undoStack();
+        auto* stack = schemaTabs_->undoGroup();
         undoAction_ = stack->createUndoAction(this, QStringLiteral("&Undo"));
         undoAction_->setShortcut(QKeySequence::Undo);
         undoAction_->setIcon(ui::icon(QStringLiteral("arrow-back-up")));
@@ -670,9 +703,14 @@ void MainWindow::buildUi()
     syncTextFrameStyleControls();
 }
 
+diagram::DiagramEditor* MainWindow::activeDiagramEditor() const
+{
+    return schemaTabs_ ? schemaTabs_->activeEditor() : diagramEditor_;
+}
+
 void MainWindow::onElementRequested(const QString& elementType, const QString& /*displayName*/)
 {
-    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    auto* scene = activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr;
     if (elementType.isEmpty() || !scene) {
         return;
     }
@@ -696,7 +734,7 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     const int portRows = static_cast<int>(std::max(ports.inputs.size(), ports.outputs.size()));
     const QSizeF size(diagram::kElementWidthSteps * diagram::kGridStep,
                       std::max(5, 2 * portRows + 1) * diagram::kGridStep);
-    scene->addElement(element, diagramEditor_->suggestedNewItemPosition(size));
+    scene->addElement(element, activeDiagramEditor()->suggestedNewItemPosition(size));
     setDiagramMode(QSchematic::Scene::NormalMode);
     refreshPlacementLabels();
     appendLog(QStringLiteral("[studio] added %1 %2").arg(observer ? QStringLiteral("observer") : QStringLiteral("element"),
@@ -899,7 +937,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
                                             const QString& elementType,
                                             const int /*channelCount*/)
 {
-    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    auto* scene = activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr;
     if (!scene) {
         return;
     }
@@ -933,11 +971,20 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     }
 
     if (viewers::ViewerRegistry::instance().find(elementType)) {
+        if (activeDiagramEditor()!=diagramEditor_) {
+            appendLog(QStringLiteral("[studio] Nested tabs edit schema structure; open runtime observers from the root diagram."));
+            return;
+        }
         viewers_->openObserver(elementType, QString::fromStdString(elementNode->id()));
         return;
     }
 
     const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
+    if (elementNode->element().schema.is_object() || (descriptor && descriptor->metadata().schema_definition)) {
+        try {schemaTabs_->open(activeDiagramEditor(),elementNode->id());}
+        catch(const std::exception& e) {QMessageBox::warning(this,QStringLiteral("Open schema"),QString::fromUtf8(e.what()));}
+        return;
+    }
 
     QDialog dialog(this);
     dialog.setWindowTitle(QStringLiteral("Element Properties - %1").arg(elementId));
@@ -1110,29 +1157,29 @@ void MainWindow::refreshActions()
 
 void MainWindow::zoomDiagramIn()
 {
-    if (diagramEditor_) {
-        diagramEditor_->zoomIn();
+    if (activeDiagramEditor()) {
+        activeDiagramEditor()->zoomIn();
     }
 }
 
 void MainWindow::zoomDiagramOut()
 {
-    if (diagramEditor_) {
-        diagramEditor_->zoomOut();
+    if (activeDiagramEditor()) {
+        activeDiagramEditor()->zoomOut();
     }
 }
 
 void MainWindow::resetDiagramZoom()
 {
-    if (diagramEditor_) {
-     diagramEditor_->resetZoom();
+    if (activeDiagramEditor()) {
+     activeDiagramEditor()->resetZoom();
      }
  }
 
  void MainWindow::setDiagramMode(const int mode)
 {
-    if (diagramEditor_ && diagramEditor_->scene()) {
-        diagramEditor_->scene()->setMode(mode);
+    if (activeDiagramEditor() && activeDiagramEditor()->scene()) {
+        activeDiagramEditor()->scene()->setMode(mode);
     }
 }
 
@@ -1284,14 +1331,14 @@ void MainWindow::onProbeDeleteRequested(const QString& probeName)
 
 void MainWindow::addTextFrame()
 {
-    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    auto* scene = activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr;
     if (!scene) {
         return;
     }
     const auto frameId = nextTextFrameId(*scene);
     const auto params = diagram::TextFrameNode::defaultParams();
     const QSizeF size(params.at("width").to_number<double>(), params.at("height").to_number<double>());
-    const auto frame = scene->addTextFrame(frameId, params, diagramEditor_->suggestedNewItemPosition(size));
+    const auto frame = scene->addTextFrame(frameId, params, activeDiagramEditor()->suggestedNewItemPosition(size));
     scene->clearSelection();
     frame->setSelected(true);
     setDiagramMode(QSchematic::Scene::NormalMode);
@@ -1301,7 +1348,7 @@ void MainWindow::addTextFrame()
 
 void MainWindow::setSelectedTextFrameTextColor()
 {
-    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     if (!frame) {
         return;
     }
@@ -1320,7 +1367,7 @@ void MainWindow::setSelectedTextFrameTextColor()
 
 void MainWindow::setSelectedTextFrameLineColor()
 {
-    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     if (!frame) {
         return;
     }
@@ -1339,7 +1386,7 @@ void MainWindow::setSelectedTextFrameLineColor()
 
 void MainWindow::setSelectedTextFrameFillColor()
 {
-    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     if (!frame) {
         return;
     }
@@ -1358,7 +1405,7 @@ void MainWindow::setSelectedTextFrameFillColor()
 
 void MainWindow::setSelectedTextFrameFont(const QFont& font)
 {
-    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     if (!frame) {
         return;
     }
@@ -1369,7 +1416,7 @@ void MainWindow::setSelectedTextFrameFont(const QFont& font)
 
 void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
 {
-    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     if (!frame) {
         return;
     }
@@ -1380,7 +1427,7 @@ void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
 
 void MainWindow::syncTextFrameStyleControls()
 {
-    const auto frame = selectedTextFrame(diagramEditor_ ? diagramEditor_->scene() : nullptr);
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     const bool enabled = static_cast<bool>(frame);
 
     if (textColorAction_) textColorAction_->setEnabled(enabled);
@@ -1406,15 +1453,15 @@ void MainWindow::syncTextFrameStyleControls()
 
 void MainWindow::applyPaperSize(const double widthMm, const double heightMm)
 {
-    if (!diagramEditor_) {
+    if (!activeDiagramEditor()) {
         return;
     }
 
-    auto pageLayout = diagramEditor_->pageLayout();
+    auto pageLayout = activeDiagramEditor()->pageLayout();
     pageLayout.widthMm = widthMm;
     pageLayout.heightMm = heightMm;
-    diagramEditor_->setPageLayout(pageLayout);
-    diagramEditor_->fitPageInView();
+    activeDiagramEditor()->setPageLayout(pageLayout);
+    activeDiagramEditor()->fitPageInView();
     syncPageActions();
 }
 
@@ -1440,37 +1487,37 @@ void MainWindow::setPaperLetter()
 
 void MainWindow::setPagePortrait()
 {
-    if (!diagramEditor_) {
+    if (!activeDiagramEditor()) {
         return;
     }
 
-    auto pageLayout = diagramEditor_->pageLayout();
+    auto pageLayout = activeDiagramEditor()->pageLayout();
     pageLayout.orientation = diagram::PageOrientation::Portrait;
-    diagramEditor_->setPageLayout(pageLayout);
-    diagramEditor_->fitPageInView();
+    activeDiagramEditor()->setPageLayout(pageLayout);
+    activeDiagramEditor()->fitPageInView();
     syncPageActions();
 }
 
 void MainWindow::setPageLandscape()
 {
-    if (!diagramEditor_) {
+    if (!activeDiagramEditor()) {
         return;
     }
 
-    auto pageLayout = diagramEditor_->pageLayout();
+    auto pageLayout = activeDiagramEditor()->pageLayout();
     pageLayout.orientation = diagram::PageOrientation::Landscape;
-    diagramEditor_->setPageLayout(pageLayout);
-    diagramEditor_->fitPageInView();
+    activeDiagramEditor()->setPageLayout(pageLayout);
+    activeDiagramEditor()->fitPageInView();
     syncPageActions();
 }
 
 void MainWindow::syncPageActions()
 {
-    if (!diagramEditor_) {
+    if (!activeDiagramEditor()) {
         return;
     }
 
-    const auto pageLayout = diagramEditor_->pageLayout();
+    const auto pageLayout = activeDiagramEditor()->pageLayout();
     const double maxSide = std::max(pageLayout.widthMm, pageLayout.heightMm);
     const double minSide = std::min(pageLayout.widthMm, pageLayout.heightMm);
 
@@ -1597,6 +1644,11 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
 
 void MainWindow::launchRunWithCurrentConfiguration()
 {
+    if (schemaTabs_ && !schemaTabs_->commitAll()) {
+        appendLog(QStringLiteral("[studio] Apply or undo the pending schema-tab edits before continuing."));
+        return;
+    }
+
     refreshWireTypeLabels();
     if (const auto problem = diagramProblem(); !problem.isEmpty()) {
         statusBar()->showMessage(QStringLiteral("The diagram cannot run: %1").arg(problem), 8000);
@@ -1641,72 +1693,14 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
                                                   const double frequencyHz,
                                                   const double dtSeconds) -> bool
 {
-    if (!schema.is_object()) {
-        return false;
-    }
-
-    auto& root = schema.as_object();
-    const auto elementsIt = root.find("elements");
-    if (elementsIt == root.end() || !elementsIt->value().is_array()) {
-        return false;
-    }
-
-    bool changed = false;
-    for (auto& elementValue : elementsIt->value().as_array()) {
-        if (!elementValue.is_object()) {
-            continue;
-        }
-
-        auto& elementObject = elementValue.as_object();
-        const auto type = json_utils::stringValue(elementObject, "type");
-        bool needsSampleRate = false;
-        bool needsDt = false;
-        if (const auto* descriptor = s7::ElementRegistry::instance().find(type)) {
-            for (const auto& parameter : descriptor->metadata().parameters) {
-                if (parameter.name == "sample_rate_hz") {
-                    needsSampleRate = true;
-                }
-                if (parameter.name == "dt") {
-                    needsDt = true;
-                }
-            }
-        }
-
-        boost::json::object* params = nullptr;
-        if (const auto paramsIt = elementObject.find("params");
-            paramsIt != elementObject.end() && paramsIt->value().is_object()) {
-            params = &paramsIt->value().as_object();
-        }
-
-        if (!needsSampleRate && !needsDt && params) {
-            needsSampleRate = params->contains("sample_rate_hz");
-            needsDt = params->contains("dt");
-        }
-
-        if (!needsSampleRate && !needsDt) {
-            continue;
-        }
-
-        if (!params) {
-            elementObject["params"] = boost::json::object{};
-            params = &elementObject["params"].as_object();
-        }
-
-        if (needsSampleRate) {
-            (*params)["sample_rate_hz"] = frequencyHz;
-            changed = true;
-        }
-        if (needsDt) {
-            (*params)["dt"] = dtSeconds;
-            changed = true;
-        }
-    }
-
-    return changed;
+    (void)frequencyHz;
+    return s7::configure_schema_discretization(schema,dtSeconds);
 }
 
 void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
+    if (schemaTabs_) schemaTabs_->reset();
+
     closeViewers();
     clearViewerSamples();
 
@@ -1731,6 +1725,8 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
 
 void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
+    if (schemaTabs_) schemaTabs_->reset();
+
     closeViewers();
     clearViewerSamples();
 
@@ -1862,6 +1858,8 @@ void MainWindow::openDocumentFile()
 
 void MainWindow::closeCurrentDiagram()
 {
+    if (schemaTabs_) schemaTabs_->reset();
+
     if (runner_ && runner_->isRunning()) {
         runner_->reset();
     }
@@ -2027,6 +2025,11 @@ void MainWindow::loadDemoDiagram()
 
 void MainWindow::saveSchemaLibrary()
 {
+    if (schemaTabs_ && !schemaTabs_->commitAll()) {
+        appendLog(QStringLiteral("[studio] Apply or undo the pending schema-tab edits before continuing."));
+        return;
+    }
+
     if (!diagramEditor_ || !diagramEditor_->scene()) {
         QMessageBox::critical(this,
                               QStringLiteral("Save library failed"),
@@ -2035,6 +2038,7 @@ void MainWindow::saveSchemaLibrary()
     }
 
     auto document = syncSchemaFromScene();
+    if (schemaTabs_ && activeDiagramEditor()!=diagramEditor_) document.runtimeSchema=schemaTabs_->activeSchema();
     const auto schemaJson = document.runtimeSchema;
     if (!schemaJson.is_object()) {
         QMessageBox::critical(this,
@@ -2171,6 +2175,10 @@ void MainWindow::saveSchemaLibrary()
 
 auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
 {
+    if (schemaTabs_ && !schemaTabs_->commitAll()) {
+        QMessageBox::warning(this,QStringLiteral("Save failed"),QStringLiteral("A schema tab could not apply its edits. See the log."));
+        return false;
+    }
     if (!diagramEditor_ || !diagramEditor_->scene()) {
         QMessageBox::critical(this, QStringLiteral("Save failed"), QStringLiteral("Diagram scene is not available."));
         return false;
@@ -2204,8 +2212,8 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
 
 void MainWindow::fitDiagramToView()
 {
-    if (diagramEditor_) {
-        diagramEditor_->fitPageInView();
+    if (activeDiagramEditor()) {
+        activeDiagramEditor()->fitPageInView();
     }
 }
 
@@ -2231,6 +2239,7 @@ auto MainWindow::serializeScene() const -> diagram::DiagramDocument
 
 auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
 {
+    if (schemaTabs_) schemaTabs_->commitAll();
     auto document = serializeScene();
     auto schema = runtimeSchema_.is_object() ? runtimeSchema_.as_object() : boost::json::object{{"name", "untitled"}};
     const auto& fromScene = document.runtimeSchema.as_object();
@@ -2262,12 +2271,20 @@ void MainWindow::applySchemaParamsToScene()
         const auto& object = value.as_object();
         const auto node = diagramEditor_->scene()->elementNode(json_utils::stringValue(object, "id"));
         const auto* params = object.if_contains("params");
-        if (node && params && params->is_object() && node->element().params != params->as_object()) {
-            auto element = node->element();
-            element.params = params->as_object();
-            node->setElement(element);
+        if (!node) continue;
+        auto element = node->element();
+        bool changed=false;
+        if (params && params->is_object() && element.params!=params->as_object()) {
+            element.params=params->as_object();
+            changed=true;
         }
+        if (const auto* nested=object.if_contains("schema"); nested && nested->is_object() && element.schema!=*nested) {
+            element.schema=*nested;
+            changed=true;
+        }
+        if (changed) node->setElement(element);
     }
+    if (schemaTabs_) schemaTabs_->refresh();
 }
 
 auto MainWindow::prepareElementTypes(const boost::json::value& schema) -> ElementCheck
@@ -2384,6 +2401,11 @@ auto MainWindow::startNetworkTask(std::function<std::function<void()>()> work) -
 
 void MainWindow::deployToNodes()
 {
+    if (schemaTabs_ && !schemaTabs_->commitAll()) {
+        appendLog(QStringLiteral("[studio] Apply or undo the pending schema-tab edits before continuing."));
+        return;
+    }
+
     if (!diagramEditor_ || !diagramEditor_->scene() || !headlessNodesPanel_) {
         return;
     }

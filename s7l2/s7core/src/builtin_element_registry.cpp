@@ -2,6 +2,8 @@
 
 #include "s7/convert.hpp"
 #include "s7/elements.hpp"
+#include "s7/schema_library.hpp"
+#include "s7_schema_elements.hpp"
 #include "s7/signal_values.hpp"
 #include "s7/type_inference.hpp"
 
@@ -688,6 +690,69 @@ void register_builtin_elements(ElementRegistry& registry)
             }()));
     }
 
+    for (const std::string name : {"Switch", "HysteresisRelay", "ControlledIntegrator", "PhaseWrap", "FrequencyMeter"}) {
+        registry.register_element(ElementDescriptor(name,
+            [name](const ElementCreationContext& ctx) {
+                return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                    using V = signal_storage_t<T>;
+                    if constexpr (!signal_type_info(T).is_complex()) {
+                        if (name == "Switch") return std::make_unique<SwitchT<T>>();
+                        if (name == "HysteresisRelay") return std::make_unique<HysteresisRelayT<T>>(
+                            param_value<T>(ctx,"lower_threshold",V(-1)), param_value<T>(ctx,"upper_threshold",V(1)),
+                            param_value<T>(ctx,"low_value",V(0)), param_value<T>(ctx,"high_value",V(1)),
+                            ctx.params.at("initial_on").as_bool());
+                        if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                            if (name == "ControlledIntegrator") return std::make_unique<ControlledIntegratorT<T>>(
+                                param_value<T>(ctx,"dt",V(0.001)), param_value<T>(ctx,"initial_value",V(0)),
+                                param_value<T>(ctx,"lower_limit",std::numeric_limits<V>::lowest()),
+                                param_value<T>(ctx,"upper_limit",std::numeric_limits<V>::max()),
+                                ctx.get_string("reset_mode")=="rising" ? IntegratorReset::Rising : IntegratorReset::Level);
+                            if (name == "PhaseWrap") return std::make_unique<PhaseWrapT<T>>(
+                                param_value<T>(ctx,"period",V(2)*math::pi_v<V>), param_value<T>(ctx,"lower",-math::pi_v<V>));
+                            return std::make_unique<FrequencyMeterT<T>>(ctx.get_real("sample_rate_hz"));
+                        }
+                    }
+                    return unsupported_type(ctx);
+                });
+            },
+            [name] {
+                const bool real = name=="Switch";
+                auto m=make_generic_metadata(name,name,
+                    name=="Switch" ? "Select off/on input with numeric control (zero/nonzero)" :
+                    name=="HysteresisRelay" ? "Relay with distinct on/off thresholds and retained state" :
+                    name=="ControlledIntegrator" ? "Local causal integrator with enable, reset and state limits" :
+                    name=="PhaseWrap" ? "Wrap phase into a half-open interval" :
+                    "Measure frequency from successive rising zero crossings",
+                    name=="FrequencyMeter" ? "measurement" : "control",
+                    name=="Switch" ? 3 : name=="ControlledIntegrator" ? 4 : 1,
+                    name=="FrequencyMeter" ? 2 : 1,real ? signal_type_sets::real : real_floating_types());
+                if (name=="Switch") {
+                    m.input_ports[0].name="off";m.input_ports[1].name="on";m.input_ports[2].name="control";
+                } else if (name=="HysteresisRelay") {
+                    m.parameters.push_back({"lower_threshold","value","Turn off at/below this threshold",-1,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"upper_threshold","value","Turn on at/above this threshold",1,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"low_value","value","Off output",0,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"high_value","value","On output",1,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"initial_on","bool","Initial state for an input in the hysteresis band",false,std::nullopt,std::nullopt,{},false});
+                } else if (name=="ControlledIntegrator") {
+                    m.parameters.push_back({"dt","value","Model step in seconds",0.001,0,std::nullopt,{},false});
+                    m.parameters.push_back({"initial_value","value","Initial published state",0,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"lower_limit","value","Lower state bound; omitted means lowest finite value",nullptr,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"upper_limit","value","Upper state bound; omitted means highest finite value",nullptr,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"reset_mode","enum","Reset on rising edge or every asserted sample","rising",std::nullopt,std::nullopt,{"rising","level"},false});
+                    m.input_ports[0].name="derivative";m.input_ports[1].name="enable";
+                    m.input_ports[2].name="reset";m.input_ports[3].name="reset_value";
+                } else if (name=="PhaseWrap") {
+                    m.parameters.push_back({"period","value","Interval width; omitted means 2*pi in the selected type",nullptr,std::nullopt,std::nullopt,{},false});
+                    m.parameters.push_back({"lower","value","Lower interval endpoint; omitted means -pi",nullptr,std::nullopt,std::nullopt,{},false});
+                } else {
+                    m.parameters.push_back({"sample_rate_hz","real","Model samples per second",1000,0,std::nullopt,{},false});
+                    m.output_ports[0].name="frequency_hz";m.output_ports[1].name="valid";
+                }
+                return m;
+            }()));
+    }
+
     registry.register_element(ElementDescriptor(
         "PWM",
         [](const ElementCreationContext& ctx) {
@@ -884,6 +949,9 @@ void register_builtin_elements(ElementRegistry& registry)
             m.parameters.push_back({"overflow", "enum", "Out-of-range values", "saturate", std::nullopt, std::nullopt, {"saturate", "fault"}, false});
             return m;
         }()));
+    SchemaLibraryLoader::register_library(SchemaLibraryLoader::load_from_json(
+        boost::json::parse(detail::builtin_schema_resource)), registry);
+
 }
 
 } // namespace s7

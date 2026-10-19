@@ -3,6 +3,8 @@
 ## Mission-critical orientation
 - S7 is a **causal graph runtime**: schema -> validate -> compile -> execute -> observe (`README.md`, `../doc/S7_Runtime_Architecture.md`).
 - Prioritize **causality over clock time** and keep network boundaries explicit (`../doc/S7_Architecture_Overview.md`, `../doc/S7_Architectural_Decisions.md`).
+- Simulation uses the **analog-computer approach**: explicit integrator/function/state networks and local causal transitions. Do not introduce global ODE/event solvers for examples. RK4 and other independent solvers are allowed for test references (`docs/SIMULATION_MODEL.md`).
+- Reusable controllers/plants are schema elements, with definitions in `s7core/resources/schema_elements.s7library`; do not duplicate them as special C++ plant/controller elements.
 - Keep runtime logic headless-first; GUI (`s7studio`) is optional and should not leak into core/runtime paths.
 
 ## Component map (where to change what)

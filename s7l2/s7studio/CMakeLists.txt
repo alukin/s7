@@ -97,8 +97,8 @@ target_link_libraries(s7studio_viewers PUBLIC
 set_target_properties(s7studio_viewers PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_viewers)
 
-add_executable(s7studio
-    src/main.cpp
+add_library(s7studio_app OBJECT
+    src/schema_tabs.cpp src/schema_tabs.hpp
     src/main_window.cpp
     src/main_window.hpp
     src/main_window_builder.cpp
@@ -130,7 +130,7 @@ add_executable(s7studio
     src/ui_icons.cpp
 )
 
-target_include_directories(s7studio PRIVATE
+target_include_directories(s7studio_app PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/s7core/include
     ${PROJECT_SOURCE_DIR}/s7net/include
@@ -139,7 +139,7 @@ target_include_directories(s7studio PRIVATE
     ${PROJECT_SOURCE_DIR}/s7transport/include
 )
 
-target_link_libraries(s7studio PRIVATE
+target_link_libraries(s7studio_app PUBLIC
     s7studio_diagram
     s7studio_viewers
     Qt6::Core
@@ -154,11 +154,11 @@ target_link_libraries(s7studio PRIVATE
     Threads::Threads
 )
 
-target_compile_definitions(s7studio PRIVATE
+target_compile_definitions(s7studio_app PUBLIC
     S7STUDIO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-set_target_properties(s7studio PROPERTIES
+set_target_properties(s7studio_app PROPERTIES
     AUTOMOC ON
     AUTORCC ON
     CXX_STANDARD 20
@@ -166,8 +166,13 @@ set_target_properties(s7studio PROPERTIES
 )
 
 if (TARGET s7noise)
-    add_dependencies(s7studio s7noise)
+    add_dependencies(s7studio_app s7noise)
 endif()
+
+s7_enable_project_warnings(s7studio_app)
+
+add_executable(s7studio src/main.cpp)
+target_link_libraries(s7studio PRIVATE s7studio_app)
 
 add_test(NAME s7studio_smoke COMMAND s7studio --smoke)
 add_test(NAME s7studio_wire_types
@@ -276,3 +281,8 @@ set_target_properties(s7studio_viewers_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_viewers_test)
 add_test(NAME s7studio_viewers COMMAND s7studio_viewers_test)
 set_tests_properties(s7studio_viewers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
+
+s7_add_test_executable(s7studio_schema_elements_test tests/schema_elements_test.cpp)
+target_link_libraries(s7studio_schema_elements_test PRIVATE s7studio_app)
+add_test(NAME s7studio_schema_elements COMMAND s7studio_schema_elements_test)
+set_tests_properties(s7studio_schema_elements PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
