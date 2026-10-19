@@ -14,7 +14,7 @@ target_include_directories(s7net PUBLIC
 
 target_link_libraries(s7net PUBLIC s7core s7io s7transport PRIVATE OpenSSL::Crypto)
 
-add_executable(s7net_smoke
+s7_add_test_executable(s7net_smoke
     tests/net_smoke.cpp
 )
 
@@ -23,7 +23,7 @@ target_link_libraries(s7net_smoke PRIVATE s7net)
 add_test(NAME s7net_smoke COMMAND s7net_smoke)
 
 
-add_executable(s7net_diagram_deployment_smoke tests/diagram_deployment_smoke.cpp)
+s7_add_test_executable(s7net_diagram_deployment_smoke tests/diagram_deployment_smoke.cpp)
 target_link_libraries(s7net_diagram_deployment_smoke PRIVATE s7net)
 target_compile_definitions(s7net_diagram_deployment_smoke PRIVATE
     S7_WIRE_FIXTURES="${PROJECT_SOURCE_DIR}/s7transport/tests/fixtures/wire_v1.json")

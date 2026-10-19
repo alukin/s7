@@ -80,7 +80,7 @@ install(FILES
     COMPONENT s7sdk
 )
 
-add_executable(s7core_smoke
+s7_add_test_executable(s7core_smoke
     tests/core_smoke.cpp
 )
 
@@ -88,20 +88,20 @@ target_link_libraries(s7core_smoke PRIVATE s7core)
 
 add_test(NAME s7core_smoke COMMAND s7core_smoke)
 
-add_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
+s7_add_test_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
 target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)
 add_test(NAME s7core_signal_types_smoke COMMAND s7core_signal_types_smoke)
 
-add_executable(s7core_type_inference_smoke tests/type_inference_smoke.cpp)
+s7_add_test_executable(s7core_type_inference_smoke tests/type_inference_smoke.cpp)
 target_link_libraries(s7core_type_inference_smoke PRIVATE s7core)
 add_test(NAME s7core_type_inference_smoke COMMAND s7core_type_inference_smoke)
 
-add_executable(s7core_rate_inference_smoke tests/rate_inference_smoke.cpp)
+s7_add_test_executable(s7core_rate_inference_smoke tests/rate_inference_smoke.cpp)
 target_link_libraries(s7core_rate_inference_smoke PRIVATE s7core)
 add_test(NAME s7core_rate_inference_smoke COMMAND s7core_rate_inference_smoke)
 
 # Plugins may build in strict ISO mode: the type headers must work there too.
-add_executable(s7core_signal_types_strict_smoke tests/signal_types_smoke.cpp)
+s7_add_test_executable(s7core_signal_types_strict_smoke tests/signal_types_smoke.cpp)
 target_include_directories(s7core_signal_types_strict_smoke PRIVATE include)
 set_target_properties(s7core_signal_types_strict_smoke PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_options(s7core_signal_types_strict_smoke PRIVATE -Wall -Wextra -Wpedantic)
@@ -111,11 +111,11 @@ endif()
 add_test(NAME s7core_signal_types_strict_smoke COMMAND s7core_signal_types_strict_smoke)
 
 
-add_executable(s7core_trapezoid_smoke tests/trapezoid_smoke.cpp)
+s7_add_test_executable(s7core_trapezoid_smoke tests/trapezoid_smoke.cpp)
 target_link_libraries(s7core_trapezoid_smoke PRIVATE s7core)
 add_test(NAME s7core_trapezoid_smoke COMMAND s7core_trapezoid_smoke)
 
-add_executable(s7core_pwm_smoke tests/pwm_smoke.cpp)
+s7_add_test_executable(s7core_pwm_smoke tests/pwm_smoke.cpp)
 target_link_libraries(s7core_pwm_smoke PRIVATE s7core)
 target_compile_definitions(s7core_pwm_smoke PRIVATE S7_PWM_EXAMPLE="${PROJECT_SOURCE_DIR}/examples/pwm_pid_rlc.s7diagram")
 add_test(NAME s7core_pwm_smoke COMMAND s7core_pwm_smoke)

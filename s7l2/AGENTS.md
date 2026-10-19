@@ -29,8 +29,9 @@ cmake --build build
 ```bash
 cmake -S . -B build -DS7_BUILD_STUDIO=OFF
 ```
-- Run tests:
+- Normal builds exclude test binaries. Build and run the full test suite:
 ```bash
+cmake --build build --target build-tests --parallel
 ctest --test-dir build --output-on-failure
 ```
 - Run specific smoke tests:

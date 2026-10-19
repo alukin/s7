@@ -10,7 +10,7 @@ target_include_directories(s7io PUBLIC
 
 target_link_libraries(s7io PUBLIC s7core)
 
-add_executable(s7io_smoke
+s7_add_test_executable(s7io_smoke
     tests/io_smoke.cpp
 )
 

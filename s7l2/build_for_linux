@@ -36,6 +36,7 @@ fi
 cmake -S . -B "$BUILD" "${ARGS[@]}"
 cmake --build "$BUILD" --parallel "$JOBS"
 if (( TEST )); then
+    cmake --build "$BUILD" --target build-tests --parallel "$JOBS"
     ctest --test-dir "$BUILD" --output-on-failure --parallel "$JOBS"
 fi
 echo "Built in $BUILD/. Run programs with ./run_on_linux$( [ "$BUILD" = build ] || echo ' --release') <program>."

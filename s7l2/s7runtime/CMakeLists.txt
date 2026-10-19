@@ -28,7 +28,7 @@ target_link_libraries(s7runtime PRIVATE
     Threads::Threads
 )
 
-add_executable(s7runtime_control_smoke
+s7_add_test_executable(s7runtime_control_smoke
     tests/control_plane_smoke.cpp
     src/control_plane_mvp.cpp
     src/runtime_service.cpp
@@ -58,7 +58,7 @@ target_compile_definitions(s7runtime_control_smoke PRIVATE
 
 add_test(NAME s7runtime_control_smoke COMMAND s7runtime_control_smoke)
 
-add_executable(s7runtime_deployment_smoke
+s7_add_test_executable(s7runtime_deployment_smoke
     tests/deployment_smoke.cpp
     src/control_plane_mvp.cpp
     src/runtime_service.cpp
@@ -89,7 +89,7 @@ target_compile_definitions(s7runtime_deployment_smoke PRIVATE
 add_test(NAME s7runtime_deployment_smoke COMMAND s7runtime_deployment_smoke)
 
 # The control protocol conformance script, run against the control plane.
-add_executable(s7runtime_control_fixtures_smoke tests/control_fixtures_smoke.cpp src/control_plane_mvp.cpp)
+s7_add_test_executable(s7runtime_control_fixtures_smoke tests/control_fixtures_smoke.cpp src/control_plane_mvp.cpp)
 target_include_directories(s7runtime_control_fixtures_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(s7runtime_control_fixtures_smoke PRIVATE s7core s7transport s7net Boost::json Threads::Threads)
 target_compile_definitions(s7runtime_control_fixtures_smoke PRIVATE
@@ -105,7 +105,7 @@ endif()
 
 
 # Third-party plugin path: build s7spectral against the installed SDK and load it.
-add_executable(s7runtime_plugin_sdk_smoke
+s7_add_test_executable(s7runtime_plugin_sdk_smoke
     tests/plugin_sdk_smoke.cpp
     src/plugin_loader.cpp
 )
@@ -122,12 +122,12 @@ set_tests_properties(s7spectral_sdk_smoke PROPERTIES
 )
 
 # Transactional plugin registration.
-add_library(s7_test_plugin MODULE tests/test_plugin.cpp)
+add_library(s7_test_plugin MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
 target_link_libraries(s7_test_plugin PRIVATE s7core)
-add_library(s7_test_plugin_failing MODULE tests/test_plugin.cpp)
+add_library(s7_test_plugin_failing MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
 target_link_libraries(s7_test_plugin_failing PRIVATE s7core)
 target_compile_definitions(s7_test_plugin_failing PRIVATE S7_TEST_PLUGIN_FAIL)
-add_executable(s7runtime_plugin_loader_smoke
+s7_add_test_executable(s7runtime_plugin_loader_smoke
     tests/plugin_loader_smoke.cpp
     src/plugin_loader.cpp
 )

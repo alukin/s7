@@ -73,6 +73,7 @@ fi
 cmake "${FRESH[@]}" -S . -B "$BUILD" "${ARGS[@]}"
 cmake --build "$BUILD" --parallel
 if (( TEST )); then
+    cmake --build "$BUILD" --target build-tests --parallel "$(nproc)"
     ctest --test-dir "$BUILD" --output-on-failure --parallel "$(nproc)"
 fi
 if (( PACKAGE )); then

@@ -100,4 +100,5 @@ else
   echo "  cmake -S . -B build -DS7_BUILD_STUDIO=OFF"
 fi
 echo "  cmake --build build --parallel"
+echo "  cmake --build build --target build-tests --parallel"
 echo "  ctest --test-dir build --output-on-failure"

@@ -127,6 +127,7 @@ else
   echo "  cmake -S . -B build -DS7_BUILD_STUDIO=OFF"
 fi
 echo "  cmake --build build --parallel"
+echo "  cmake --build build --target build-tests --parallel"
 echo "  ctest --test-dir build --output-on-failure"
 if (( WITH_WINDOWS )); then
   echo
@@ -134,5 +135,6 @@ if (( WITH_WINDOWS )); then
   echo "  tools/windows/fetch_msys2_sysroot.py$( (( WITH_STUDIO )) || echo ' --no-studio')"
   echo "  cmake -S . -B build-win -G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake$( (( WITH_STUDIO )) || echo ' -DS7_BUILD_STUDIO=OFF')"
   echo "  cmake --build build-win"
+  echo "  cmake --build build-win --target build-tests --parallel"
   echo "  ctest --test-dir build-win --output-on-failure"
 fi

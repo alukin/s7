@@ -182,7 +182,7 @@ set_tests_properties(s7studio_edit_check PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 
 # Trust shown by the Headless Nodes panel, against fake nodes (honest,
 # impostor, plain) in the test process.
-add_executable(s7studio_nodes_panel_test
+s7_add_test_executable(s7studio_nodes_panel_test
     tests/nodes_panel_test.cpp
     src/headless_nodes_panel.cpp
     src/headless_nodes_panel.hpp
@@ -200,7 +200,7 @@ foreach(layout_case wire_types_ok layout_loops)
 endforeach()
 
 # Diagram editing: connection rules, wire trees, routing, undo, file round trips.
-add_executable(s7studio_diagram_test tests/diagram_test.cpp)
+s7_add_test_executable(s7studio_diagram_test tests/diagram_test.cpp)
 target_link_libraries(s7studio_diagram_test PRIVATE s7studio_diagram ${CMAKE_DL_LIBS} Threads::Threads)
 set_target_properties(s7studio_diagram_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_diagram COMMAND s7studio_diagram_test)
@@ -211,7 +211,7 @@ if (TARGET s7noise)
     target_compile_definitions(s7studio_diagram_test PRIVATE S7_TEST_NOISE_PLUGIN_DIR="$<TARGET_FILE_DIR:s7noise>")
 endif()
 
-add_executable(s7studio_scope_view_test tests/scope_view_test.cpp)
+s7_add_test_executable(s7studio_scope_view_test tests/scope_view_test.cpp)
 target_link_libraries(s7studio_scope_view_test PRIVATE s7studio_viewers)
 set_target_properties(s7studio_scope_view_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_scope_view COMMAND s7studio_scope_view_test)
@@ -220,7 +220,7 @@ set_tests_properties(s7studio_scope_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 add_test(NAME s7studio_scope_run COMMAND s7studio --scope-run-check)
 set_tests_properties(s7studio_scope_run PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
-add_executable(s7studio_coupled_pendulum_test
+s7_add_test_executable(s7studio_coupled_pendulum_test
     tests/coupled_pendulum_test.cpp
     src/local_schema_runner.cpp
     src/local_schema_runner.hpp
@@ -233,7 +233,7 @@ set_target_properties(s7studio_coupled_pendulum_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_coupled_pendulum COMMAND s7studio_coupled_pendulum_test)
 set_tests_properties(s7studio_coupled_pendulum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600)
 
-add_executable(s7studio_nonlinear_pendulum_test
+s7_add_test_executable(s7studio_nonlinear_pendulum_test
     tests/nonlinear_pendulum_test.cpp
     src/local_schema_runner.cpp src/local_schema_runner.hpp
 )
@@ -246,7 +246,7 @@ set_target_properties(s7studio_nonlinear_pendulum_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_nonlinear_pendulum COMMAND s7studio_nonlinear_pendulum_test)
 set_tests_properties(s7studio_nonlinear_pendulum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600)
 
-add_executable(s7studio_scope_lifecycle_test
+s7_add_test_executable(s7studio_scope_lifecycle_test
     tests/scope_lifecycle_test.cpp
     src/local_schema_runner.cpp src/local_schema_runner.hpp
 )
@@ -269,7 +269,7 @@ set_tests_properties(s7studio_phase_trajectory_3d PROPERTIES ENVIRONMENT "QT_QPA
 
 # Viewer registry, manager routing and lifecycle, step alignment, Qt Graphs
 # plot state and the Qt Quick 3D trajectory geometry.
-add_executable(s7studio_viewers_test tests/viewers_test.cpp)
+s7_add_test_executable(s7studio_viewers_test tests/viewers_test.cpp)
 target_link_libraries(s7studio_viewers_test PRIVATE s7studio_viewers)
 set_target_properties(s7studio_viewers_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_viewers_test)

@@ -16,7 +16,7 @@ jobs:
         run: cmake -S . -B build
 
       - name: Build
-        run: cmake --build build --parallel
+        run: cmake --build build --target build-tests --parallel
 
       - name: Test
         run: ctest --test-dir build --output-on-failure

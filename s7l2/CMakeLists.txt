@@ -81,6 +81,14 @@ endif()
 
 enable_testing()
 
+# Test binaries remain individually buildable, but never join the default build.
+# CTest only runs binaries; build this aggregate target before running the suite.
+add_custom_target(build-tests)
+function(s7_add_test_executable target_name)
+	add_executable(${target_name} EXCLUDE_FROM_ALL ${ARGN})
+	add_dependencies(build-tests ${target_name})
+endfunction()
+
 if (WIN32)
 	# Windows 10 APIs for Asio.
 	add_compile_definitions(_WIN32_WINNT=0x0A00 WIN32_LEAN_AND_MEAN NOMINMAX)
@@ -101,7 +109,9 @@ if (CMAKE_CROSSCOMPILING)
 endif()
 
 if (S7_BUILD_STUDIO)
-	add_subdirectory(external/QSchematic)
+	# Pull in only libraries needed by Studio during a normal build.
+	add_subdirectory(external/QSchematic EXCLUDE_FROM_ALL)
+	add_dependencies(build-tests qschematic-tests qschematic-wiresystem-tests)
 endif()
 add_subdirectory(s7core)
 add_subdirectory(s7io)
@@ -147,14 +157,9 @@ set(S7_ALL_TARGETS
 	s7transport
 	s7net
 	s7observe
-	s7core_smoke
-	s7observe_smoke
-	s7net_smoke
 	s7noise
 	s7runtime
 	s7ctl
-	s7io_smoke
-	s7runtime_control_smoke
 )
 
 if (TARGET s7spectral)
@@ -166,6 +171,8 @@ if (S7_BUILD_STUDIO)
 endif()
 
 add_custom_target(all_targets ALL DEPENDS ${S7_ALL_TARGETS})
+# Some tests run the production programs directly rather than dedicated binaries.
+add_dependencies(build-tests ${S7_ALL_TARGETS})
 
 if (WIN32 AND CMAKE_CROSSCOMPILING)
 	# WINEPATH: the directories of this build's DLLs, then the sysroot's.

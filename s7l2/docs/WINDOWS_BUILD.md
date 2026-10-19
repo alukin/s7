@@ -18,6 +18,9 @@ The fetch script downloads the MSYS2 UCRT64 packages S7 needs (mingw-w64 CRT and
 ```bash
 cmake -S . -B build-win -G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake
 cmake --build build-win
+
+# Optional: build and run tests under Wine
+cmake --build build-win --target build-tests --parallel
 ctest --test-dir build-win --output-on-failure
 ```
 

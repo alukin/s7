@@ -10,7 +10,7 @@ target_include_directories(s7observe PUBLIC
 
 target_link_libraries(s7observe PUBLIC s7core)
 
-add_executable(s7observe_smoke
+s7_add_test_executable(s7observe_smoke
     tests/observe_smoke.cpp
 )
 

@@ -52,8 +52,14 @@ Install dependencies: `tools/install_deps_ubuntu.sh` (Ubuntu 26.04) or `tools/in
 ```bash
 cmake -S . -B build                       # add -DS7_BUILD_STUDIO=OFF to skip Qt
 cmake --build build --parallel
+
+# Optional: build and run tests
+cmake --build build --target build-tests --parallel
 ctest --test-dir build --output-on-failure
 ```
+
+The normal build excludes test binaries. Build `build-tests` before running CTest,
+or build an individual test with `cmake --build build --target <test-target>`.
 
 Or use the scripts in the project root (`--help` on each): `./build_for_linux [--release] [--no-studio] [--test]` and `./run_on_linux [<program> [args...]]` (program `s7studio`, `s7runtime` or `s7ctl`).
 

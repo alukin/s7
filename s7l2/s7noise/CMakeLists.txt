@@ -39,6 +39,6 @@ install(FILES include/s7noise/noise_elements.hpp
 )
 
 
-add_executable(s7noise_smoke tests/noise_smoke.cpp)
+s7_add_test_executable(s7noise_smoke tests/noise_smoke.cpp)
 target_link_libraries(s7noise_smoke PRIVATE s7noise s7core)
 add_test(NAME s7noise_smoke COMMAND s7noise_smoke)
