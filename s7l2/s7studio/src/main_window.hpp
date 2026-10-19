@@ -117,6 +117,7 @@ private:
     void refreshActions();
     auto ensureScopeWindow(const QString& probeName) -> ui::ScopeViewWindow*;
     void openScopeWindow(const QString& probeName);
+    auto ensurePhasePortraitWindow(const QString& xProbeName, const QString& yProbeName) -> ui::PhasePortraitViewWindow*;
     void openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName);
     void openPhaseTrajectory3DWindow(const QString& xProbeName, const QString& yProbeName, const QString& zProbeName);
     void closeScopeWindows();

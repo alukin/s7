@@ -3,6 +3,7 @@
 #include "scope_sample_mailbox.hpp"
 #include "main_window.hpp"
 #include "scope_view_window.hpp"
+#include "phase_portrait_view_window.hpp"
 #include "qcp.h"
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
@@ -19,12 +20,15 @@
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/net.hpp>
+#include <s7/observe.hpp>
+#include <s7/compiler.hpp>
 #include <s7/transport.hpp>
 
 #include <QApplication>
 #include <QAction>
 #include <QFile>
 #include <QMenu>
+#include <QLabel>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QImage>
@@ -703,6 +707,147 @@ int runRecentDiagramsCheck(int argc, char** argv)
     return 0;
 }
 
+int runPhasePortraitCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    QTemporaryDir directory;
+    if (!directory.isValid()) throw std::runtime_error("Cannot create Phase Portrait fixture");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, directory.path());
+    QApplication::setOrganizationName(QStringLiteral("s7-test"));
+    QApplication::setApplicationName(QStringLiteral("phase-portrait"));
+    QSettings{}.setValue(QStringLiteral("scope/temporaryDirectory"), directory.path());
+    registerElements();
+    const auto require = [](bool condition, const char* message) {
+        if (!condition) throw std::runtime_error(message);
+    };
+    const QString path = QStringLiteral(S7STUDIO_SOURCE_DIR "/../examples/2int_osc_phase_portrait.s7diagram");
+    for (const int frequency : {1000, 10000, 100000}) {
+        s7studio::MainWindow window(nullptr, false);
+        window.openPath(path);
+        auto* editor = window.findChild<s7studio::diagram::DiagramEditor*>();
+        const s7studio::diagram::NetModel net(*editor->scene());
+        require(net.problems().empty(), "Phase Portrait example wiring is invalid");
+        const auto document = s7studio::diagram::DiagramDocument::fromJson(readJson(path.toLocal8Bit().constData()));
+        auto schemaJson = document.runtimeSchema;
+        const double dt = 1.0 / frequency;
+        for (auto& element : schemaJson.as_object().at("elements").as_array()) {
+            if (element.as_object().at("type").as_string() == "EulerIntegrator")
+                element.as_object().at("params").as_object()["dt"] = dt;
+        }
+        std::vector<s7studio::RunProbe> probes;
+        int axes = 0;
+        for (const auto& connection : net.observationConnections()) {
+            std::string name;
+            if (connection.to.element == "phase_portrait_1") {
+                require(connection.to.port == 0 || connection.to.port == 1, "Unexpected phase input port");
+                const auto expected = connection.to.port == 0 ? "eulerintegrator_1" : "eulerintegrator_2";
+                require(connection.from.element == expected && connection.from.port == 0, "Integrator axis mapping is reversed");
+                name = "phase_portrait_1/" + std::string(connection.to.port == 0 ? "x" : "y");
+                ++axes;
+            } else {
+                require(connection.to.element == "scope_1", "Unexpected observer in oscillator example");
+                name = "scope_1/v";
+            }
+            probes.push_back({name, connection.from.element, connection.from.port});
+        }
+        require(axes == 2 && probes.size() == 3, "Missing diagram observer connections");
+        auto referenceSchema = s7studio::runtime::buildSchema(schemaJson);
+        referenceSchema.set_rate(s7::Rate::from_seconds(dt));
+        s7studio::runtime::validateSchema(referenceSchema);
+        s7::NodeRuntime reference(s7::Compiler::compile(referenceSchema));
+        s7::ObservationService observation(reference);
+        const long steps = 10 * frequency;
+        std::vector<std::pair<double, double>> expected;
+        expected.reserve(steps);
+        for (long step = 0; step < steps; ++step) {
+            reference.step();
+            expected.emplace_back(observation.sample_output("eulerintegrator_1", 0).to_display_double(),
+                                  observation.sample_output("eulerintegrator_2", 0).to_display_double());
+        }
+        auto* runner = window.findChild<s7studio::LocalSchemaRunner*>();
+        require(runner, "Missing bundled runner");
+        bool completed = false, success = false;
+        QObject::connect(runner, &s7studio::LocalSchemaRunner::runCompleted, &window,
+            [&](bool ok, const QString&) { completed = true; success = ok; });
+        const auto open = [&] {
+            require(QMetaObject::invokeMethod(&window, "onElementNodeDoubleClicked", Qt::DirectConnection,
+                Q_ARG(QString, QStringLiteral("phase_portrait_1")), Q_ARG(QString, QStringLiteral("PhasePortrait")),
+                Q_ARG(int, 2)), "Cannot open Phase Portrait observer");
+        };
+        // Exercise an already-open viewer at 1 kHz, and first opening after
+        // completion at higher rates. Both must show the complete trajectory.
+        if (frequency == 1000) open();
+        runner->run(schemaJson, dt, steps, probes);
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (!completed && std::chrono::steady_clock::now() < deadline) {
+            app.processEvents();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        require(completed && success, "Phase Portrait oscillator run failed or timed out");
+        app.processEvents();
+        QMetaObject::invokeMethod(&window, "onScopeSamplesAvailable", Qt::DirectConnection);
+        open();
+        s7studio::ui::PhasePortraitViewWindow* phase = nullptr;
+        for (auto* widget : QApplication::topLevelWidgets()) {
+            if (auto* candidate = qobject_cast<s7studio::ui::PhasePortraitViewWindow*>(widget))
+                if (candidate->xProbeName() == QStringLiteral("phase_portrait_1/x")) phase = candidate;
+        }
+        require(phase, "Phase Portrait window was not created");
+        for (auto* label : phase->findChildren<QLabel*>())
+            require(!label->text().contains(QStringLiteral("display dropped")), "Phase Portrait run lost mailbox samples");
+        const auto check = [&] {
+            QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
+            auto* plot = phase->findChild<QCustomPlot*>();
+            auto* curve = plot && plot->plottableCount() == 1 ? qobject_cast<QCPCurve*>(plot->plottable(0)) : nullptr;
+            if (!curve || curve->data()->size() != steps) {
+                throw std::runtime_error("Phase Portrait state pairs: received "
+                    + std::to_string(curve ? curve->data()->size() : 0) + ", expected " + std::to_string(steps));
+            }
+            require(plot->xAxis->label() == QStringLiteral("phase_portrait_1/x")
+                && plot->yAxis->label() == QStringLiteral("phase_portrait_1/y"), "Phase axes are mislabeled");
+            long index = 0;
+            for (auto it = curve->data()->constBegin(); it != curve->data()->constEnd(); ++it, ++index) {
+                require(it->key == expected[index].first && it->value == expected[index].second,
+                    "Plotted X/Y values differ from same-step headless integrator states");
+                require(plot->xAxis->range().contains(it->key) && plot->yAxis->range().contains(it->value),
+                    "Plotted phase point lies outside the visible axis ranges");
+                const double amplitude = std::exp(.5 * index * std::log1p(dt * dt));
+                const double angle = index * std::atan(dt);
+                require(std::abs(it->key - amplitude * std::cos(angle)) < 1e-10
+                    && std::abs(it->value - amplitude * std::sin(angle)) < 1e-10,
+                    "Phase trajectory disagrees with forward-Euler discrete reference");
+            }
+            require(plot->xAxis->range().lower <= -1 && plot->xAxis->range().upper >= 1
+                && plot->yAxis->range().lower <= -1 && plot->yAxis->range().upper >= 1,
+                "Phase trajectory is clipped by plot axes");
+        };
+        check();
+        phase->close(); app.sendPostedEvents(nullptr, QEvent::DeferredDelete); open(); check();
+        if (frequency == 1000) {
+            if (const auto png = qEnvironmentVariable("S7_PHASE_PORTRAIT_PNG"); !png.isEmpty()) {
+                phase->findChild<QCustomPlot*>()->replot();
+                phase->grab().save(png);
+            }
+        }
+        phase->clearSamples();
+        QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
+        require(qobject_cast<QCPCurve*>(phase->findChild<QCustomPlot*>()->plottable(0))->data()->size() == 0, "Phase clear retained old points");
+        // Mismatched steps must not manufacture a point, including after clear.
+        phase->appendXSample(1, 5); phase->appendYSample(2, 6);
+        QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
+        require(qobject_cast<QCPCurve*>(phase->findChild<QCustomPlot*>()->plottable(0))->data()->size() == 0, "Phase paired different runtime steps");
+        phase->appendXSample(2, 7);
+        QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
+        auto* paired = qobject_cast<QCPCurve*>(phase->findChild<QCustomPlot*>()->plottable(0));
+        require(paired->data()->size() == 1 && paired->data()->constBegin()->key == 7
+            && paired->data()->constBegin()->value == 6, "Reverse-order phase pairing failed");
+        std::cout << "Phase Portrait " << frequency << " Hz: " << steps
+                  << " exact headless/discrete-reference pairs; late open/reopen and pairing passed\n";
+    }
+    return 0;
+}
+
 // Exercise delivery, late opening and reopening with the actual oscillator.
 int runScopeRunCheck(int argc, char** argv)
 {
@@ -786,6 +931,10 @@ int main(int argc, char** argv) try
 
     if (hasArg(argc, argv, "--enable-core-dumps")) {
         enableCrashDumps();
+    }
+
+    if (hasArg(argc, argv, "--phase-portrait-check")) {
+        return runPhasePortraitCheck(argc, argv);
     }
 
     if (hasArg(argc, argv, "--recent-diagrams-check")) {

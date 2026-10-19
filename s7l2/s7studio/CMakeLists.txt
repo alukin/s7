@@ -240,3 +240,6 @@ set_tests_properties(s7studio_scope_lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLA
 
 add_test(NAME s7studio_recent_diagrams COMMAND s7studio --recent-diagrams-check)
 set_tests_properties(s7studio_recent_diagrams PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+add_test(NAME s7studio_phase_portrait COMMAND s7studio --phase-portrait-check)
+set_tests_properties(s7studio_phase_portrait PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180)

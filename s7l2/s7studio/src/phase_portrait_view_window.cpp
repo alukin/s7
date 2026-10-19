@@ -187,7 +187,9 @@ void PhasePortraitViewWindow::exportRecordedCsv()
 
 void PhasePortraitViewWindow::refreshPlot()
 {
-    if (!dirty_) {
+    // Hidden diagram observers keep collecting pairs without rebuilding a
+    // potentially large curve until the viewer is opened.
+    if (!dirty_ || !isVisible()) {
         return;
     }
 

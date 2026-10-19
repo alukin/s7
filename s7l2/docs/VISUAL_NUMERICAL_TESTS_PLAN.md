@@ -21,6 +21,8 @@ Implemented evidence as of 2026-10-19:
 
 - `s7studio_scope_lifecycle`: reference-matched two-channel pendulum pause/resume/stop/reset/rerun and recording snapshots, disk-backed saved-result comparisons, import rollback, mailbox overflow accounting and injected temporary-directory failure. [Scope results](SCOPE_RESULTS.md) documents persistence and comparison semantics. This does not qualify native dialogs, disk exhaustion or a general throughput envelope.
 
+- `s7studio_phase_portrait`: [two-integrator oscillator with a PhasePortrait observer](../examples/2int_osc_phase_portrait.md), ten seconds at 1/10/100 kHz. Every plotted X/Y pair must match same-step headless states exactly and the closed-form Euler recurrence within `1e-10`; tests cover axis mapping/ranges, late opening, reopening, clear and step pairing. Broader live phase rendering and overload qualification remain open.
+
 Not completed: a general gnuplot artifact pipeline (section 3), the full staged model/reference suite, headless/Studio trace equivalence for the supported release matrix, capture/export completeness and overload qualification, and broader run-control/phase-view lifecycle coverage. The single-pendulum benchmark validates its stated envelope; other illustrative nonlinear/chaotic diagrams remain unvalidated.
 
 ### Local release validation matrix to build

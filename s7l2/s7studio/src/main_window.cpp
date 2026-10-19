@@ -1078,12 +1078,26 @@ void MainWindow::onScopeSamplesAvailable()
         return;
     }
     const auto batch = runner_->takeScopeSamples();
+    QHash<QString, ui::ScopeViewWindow*> scopeTargets;
 
     for (const auto& sample : batch.samples) {
         const auto probeName = QString::fromStdString(sample.probeName);
         const auto separator = probeName.indexOf(QLatin1Char('/'));
         const auto scopeId = separator < 0 ? probeName : probeName.left(separator);
-        if (const auto window = ensureScopeWindow(scopeId)) {
+        // Resolve each observer once per batch. A PhasePortrait records its
+        // state pairs directly; duplicating both axes into hidden Scope disk
+        // buffers wastes UI time and can cause mailbox loss at higher rates.
+        if (!scopeTargets.contains(scopeId)) {
+            const auto node = diagramEditor_ && diagramEditor_->scene()
+                ? diagramEditor_->scene()->elementNode(scopeId.toStdString()) : nullptr;
+            if (node && node->element().type == "PhasePortrait") {
+                static_cast<void>(ensurePhasePortraitWindow(scopeId + QStringLiteral("/x"), scopeId + QStringLiteral("/y")));
+                scopeTargets.insert(scopeId, nullptr);
+            } else {
+                scopeTargets.insert(scopeId, ensureScopeWindow(scopeId));
+            }
+        }
+        if (auto* window = scopeTargets.value(scopeId)) {
             const auto channel = separator < 0 ? probeName : probeName.mid(separator + 1);
             window->appendSample(channel, sample.timeSeconds, sample.value);
         }
@@ -1566,30 +1580,26 @@ void MainWindow::openScopeWindow(const QString& probeName)
     window->activateWindow();
 }
 
+auto MainWindow::ensurePhasePortraitWindow(const QString& xProbeName, const QString& yProbeName) -> ui::PhasePortraitViewWindow*
+{
+    if (xProbeName.isEmpty() || yProbeName.isEmpty() || xProbeName == yProbeName) return nullptr;
+    const auto key = QStringLiteral("%1|%2").arg(xProbeName, yProbeName);
+    if (const auto existing = phasePortraitWindows_.value(key)) return existing;
+    auto* window = new ui::PhasePortraitViewWindow(
+        xProbeName, yProbeName, nullptr,
+        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    phasePortraitWindows_.insert(key, window);
+    window->setDroppedSampleCount(scopeSamplesDropped_);
+    return window;
+}
+
 void MainWindow::openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName)
 {
-    if (xProbeName.isEmpty() || yProbeName.isEmpty() || xProbeName == yProbeName) {
-        return;
+    if (auto* window = ensurePhasePortraitWindow(xProbeName, yProbeName)) {
+        window->show();
+        window->raise();
+        window->activateWindow();
     }
-    const auto key = QStringLiteral("%1|%2").arg(xProbeName, yProbeName);
-
-    if (const auto existing = phasePortraitWindows_.value(key)) {
-        existing->show();
-        existing->raise();
-        existing->activateWindow();
-        return;
-    }
-
-    auto* window = new ui::PhasePortraitViewWindow(
-        xProbeName,
-        yProbeName,
-        nullptr,
-        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    window->setAttribute(Qt::WA_DeleteOnClose, true);
-    phasePortraitWindows_.insert(key, window);
-    window->show();
-    window->raise();
-    window->activateWindow();
 }
 
 void MainWindow::openPhaseTrajectory3DWindow(const QString& xProbeName,
@@ -1630,9 +1640,7 @@ void MainWindow::closeScopeWindows()
     const auto existingPhasePortraits = phasePortraitWindows_.values();
     phasePortraitWindows_.clear();
     for (const auto& window : existingPhasePortraits) {
-        if (window) {
-            window->close();
-        }
+        if (window) delete window.data();
     }
     const auto existingPhaseTrajectories3D = phaseTrajectory3DWindows_.values();
     phaseTrajectory3DWindows_.clear();
