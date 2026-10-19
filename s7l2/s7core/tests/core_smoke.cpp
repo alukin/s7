@@ -915,6 +915,176 @@ int main() try
         }
     }
 
+    {
+        // Comparator: each relational operation, and IEEE 754 NaN behavior
+        // (false for every ordered operation and eq, true for ne).
+        using Op = s7::ComparatorOperation;
+        const auto compare = [](const double lhs, const double rhs, const Op op) {
+            s7::ComparatorT<s7::SignalType::F64> comparator{op};
+            const std::array<s7::InputBinding, 2> bindings{
+                s7::bind_input<s7::SignalType::F64>(lhs),
+                s7::bind_input<s7::SignalType::F64>(rhs),
+            };
+            comparator.bind_inputs({bindings.data(), bindings.size()});
+            comparator.step();
+            return s7::bound_value<s7::SignalType::F64>(comparator.outputs()[0]);
+        };
+
+        if (compare(1.0, 2.0, Op::Less) != 1.0 || compare(2.0, 1.0, Op::Less) != 0.0) {
+            throw std::runtime_error("Expected Comparator 'lt' to compare lhs < rhs.");
+        }
+        if (compare(2.0, 2.0, Op::LessEqual) != 1.0 || compare(3.0, 2.0, Op::LessEqual) != 0.0) {
+            throw std::runtime_error("Expected Comparator 'le' to compare lhs <= rhs.");
+        }
+        if (compare(2.0, 1.0, Op::Greater) != 1.0 || compare(1.0, 2.0, Op::Greater) != 0.0) {
+            throw std::runtime_error("Expected Comparator 'gt' to compare lhs > rhs.");
+        }
+        if (compare(2.0, 2.0, Op::GreaterEqual) != 1.0 || compare(1.0, 2.0, Op::GreaterEqual) != 0.0) {
+            throw std::runtime_error("Expected Comparator 'ge' to compare lhs >= rhs.");
+        }
+        if (compare(2.0, 2.0, Op::Equal) != 1.0 || compare(2.0, 3.0, Op::Equal) != 0.0) {
+            throw std::runtime_error("Expected Comparator 'eq' to compare lhs == rhs.");
+        }
+        if (compare(2.0, 3.0, Op::NotEqual) != 1.0 || compare(2.0, 2.0, Op::NotEqual) != 0.0) {
+            throw std::runtime_error("Expected Comparator 'ne' to compare lhs != rhs.");
+        }
+
+        const double nanValue = std::nan("");
+        for (const auto op : {Op::Less, Op::LessEqual, Op::Greater, Op::GreaterEqual, Op::Equal}) {
+            if (compare(nanValue, 1.0, op) != 0.0) {
+                throw std::runtime_error("Expected Comparator to be false against NaN, except 'ne'.");
+            }
+        }
+        if (compare(nanValue, 1.0, Op::NotEqual) != 1.0) {
+            throw std::runtime_error("Expected Comparator 'ne' to be true against NaN.");
+        }
+    }
+
+    {
+        // Comparator through the registry: drives the "operation" string ->
+        // ComparatorOperation mapping end to end (direct construction above
+        // only exercises the enum itself), for every declared operation plus
+        // the omitted-parameter default ("lt"), and for a non-default type.
+        auto& registry = s7::ElementRegistry::instance();
+        s7::register_builtin_elements(registry);
+        const auto* comparator = registry.find("Comparator");
+        assert(comparator != nullptr);
+
+        // Each operation string against three input pairs (1,2), (2,2), (3,2):
+        // the six expected patterns are all distinct, so a swapped string ->
+        // enum mapping shows up as a wrong pattern rather than passing by luck.
+        const auto expectF64 = [&](const std::string& operation, const bool lt, const bool eq, const bool gt) {
+            const double pairs[3][2] = {{1.0, 2.0}, {2.0, 2.0}, {3.0, 2.0}};
+            const bool expected[3] = {lt, eq, gt};
+            for (int index = 0; index < 3; ++index) {
+                s7::Schema schema{"comparator_f64"};
+                schema.set_rate(s7::Rate::from_hz(1));
+                schema.add_element("a", [&] { return std::make_unique<s7::Constant>(pairs[index][0]); });
+                schema.add_element("b", [&] { return std::make_unique<s7::Constant>(pairs[index][1]); });
+                schema.add_element(s7::make_element_spec("cmp", *comparator, {{"type", "F64"}, {"operation", operation}}));
+                schema.connect("a", 0, "cmp", 0);
+                schema.connect("b", 0, "cmp", 1);
+
+                s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+                runtime.step();
+                const double output = runtime.real_output_of("cmp");
+                const double expectedOutput = expected[index] ? 1.0 : 0.0;
+                if (output != expectedOutput) {
+                    throw std::runtime_error("Comparator '" + operation + "' on (" + std::to_string(pairs[index][0]) + ", " +
+                                             std::to_string(pairs[index][1]) + ") produced " + std::to_string(output) +
+                                             ", expected " + std::to_string(expectedOutput) + ".");
+                }
+            }
+        };
+        expectF64("lt", true, false, false);
+        expectF64("le", true, true, false);
+        expectF64("gt", false, false, true);
+        expectF64("ge", false, true, true);
+        expectF64("eq", false, true, false);
+        expectF64("ne", true, false, true);
+
+        {
+            // The "operation" parameter is not required: the default is "lt".
+            s7::Schema schema{"comparator_default"};
+            schema.set_rate(s7::Rate::from_hz(1));
+            schema.add_element("a", [] { return std::make_unique<s7::Constant>(1.0); });
+            schema.add_element("b", [] { return std::make_unique<s7::Constant>(2.0); });
+            schema.add_element(s7::make_element_spec("cmp", *comparator, {{"type", "F64"}}));
+            schema.connect("a", 0, "cmp", 0);
+            schema.connect("b", 0, "cmp", 1);
+
+            s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+            runtime.step();
+            if (runtime.real_output_of("cmp") != 1.0) {
+                throw std::runtime_error("Expected Comparator with no 'operation' parameter to default to 'lt'.");
+            }
+        }
+
+        {
+            // A non-F64 real type: the "T" type variable, not just the F64 alias.
+            s7::Schema schema{"comparator_i16"};
+            schema.set_rate(s7::Rate::from_hz(1));
+            schema.add_element(s7::make_element_spec("a", *registry.find("Constant"), {{"type", "I16"}, {"value", 3}}));
+            schema.add_element(s7::make_element_spec("b", *registry.find("Constant"), {{"type", "I16"}, {"value", 2}}));
+            schema.add_element(s7::make_element_spec("cmp", *comparator, {{"type", "I16"}, {"operation", "gt"}}));
+            schema.connect("a", 0, "cmp", 0);
+            schema.connect("b", 0, "cmp", 1);
+
+            s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+            runtime.step();
+            if (runtime.output_of<s7::SignalType::I16>("cmp") != 1) {
+                throw std::runtime_error("Expected Comparator 'gt' on I16 inputs (3, 2) to output 1.");
+            }
+        }
+
+        {
+            // An unsupported (complex) type is rejected, naming the element,
+            // like every other element outside its allowed type set.
+            s7::Schema schema{"bad_comparator_type"};
+            schema.set_rate(s7::Rate::from_hz(1));
+            schema.add_element("a", [] { return std::make_unique<s7::ComplexConstant>(); });
+            schema.add_element("b", [] { return std::make_unique<s7::ComplexConstant>(); });
+            schema.add_element(s7::make_element_spec("cmp1", *comparator, {{"type", "C64"}, {"operation", "lt"}}));
+            schema.connect("a", 0, "cmp1", 0);
+            schema.connect("b", 0, "cmp1", 1);
+
+            const auto validation = s7::Validator::validate(schema);
+            if (validation.ok()) {
+                throw std::runtime_error("Expected Comparator with type C64 to be rejected.");
+            }
+            const auto hasIdPrefixedError = std::ranges::any_of(validation.errors, [](const std::string& error) {
+                return error.find("Element 'cmp1'") != std::string::npos;
+            });
+            if (!hasIdPrefixedError) {
+                throw std::runtime_error("Expected the Comparator type error to name element 'cmp1'.");
+            }
+        }
+
+        {
+            // An operation string outside enum_values is rejected by parameter
+            // checking before the element is ever created, naming the element,
+            // like every other declared-enum parameter.
+            s7::Schema schema{"bad_comparator_operation"};
+            schema.set_rate(s7::Rate::from_hz(1));
+            schema.add_element("a", [] { return std::make_unique<s7::Constant>(1.0); });
+            schema.add_element("b", [] { return std::make_unique<s7::Constant>(2.0); });
+            schema.add_element(s7::make_element_spec("cmp2", *comparator, {{"type", "F64"}, {"operation", "between"}}));
+            schema.connect("a", 0, "cmp2", 0);
+            schema.connect("b", 0, "cmp2", 1);
+
+            const auto validation = s7::Validator::validate(schema);
+            if (validation.ok()) {
+                throw std::runtime_error("Expected Comparator with an unknown operation to be rejected.");
+            }
+            const auto hasIdPrefixedError = std::ranges::any_of(validation.errors, [](const std::string& error) {
+                return error.find("Element 'cmp2'") != std::string::npos;
+            });
+            if (!hasIdPrefixedError) {
+                throw std::runtime_error("Expected the Comparator operation error to name element 'cmp2'.");
+            }
+        }
+    }
+
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core smoke: fatal error: " << ex.what() << '\n';

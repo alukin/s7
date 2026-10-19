@@ -156,6 +156,18 @@ bool minmax_is_maximum(const ElementCreationContext& ctx)
     throw std::invalid_argument("MinMax operation must be min or max.");
 }
 
+ComparatorOperation comparator_operation_param(const ElementCreationContext& ctx)
+{
+    const auto operation = ctx.get_string("operation");
+    if (operation == "lt") return ComparatorOperation::Less;
+    if (operation == "le") return ComparatorOperation::LessEqual;
+    if (operation == "gt") return ComparatorOperation::Greater;
+    if (operation == "ge") return ComparatorOperation::GreaterEqual;
+    if (operation == "eq") return ComparatorOperation::Equal;
+    if (operation == "ne") return ComparatorOperation::NotEqual;
+    throw std::invalid_argument("Comparator operation must be one of lt, le, gt, ge, eq, ne.");
+}
+
 // Accumulating elements: input type T and accumulator type A (A defaults to T).
 void add_accumulator_variable(ElementMetadata& metadata)
 {
@@ -349,6 +361,28 @@ void register_builtin_elements(ElementRegistry& registry)
         [] {
             return make_generic_metadata("Sign", "Sign", "Return -1, 0 or 1 according to the input sign", "basic", 1, 1,
                                          signal_type_sets::real);
+        }()));
+
+    registry.register_element(ElementDescriptor(
+        "Comparator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (!signal_type_info(T).is_complex()) {
+                    return std::make_unique<ComparatorT<T>>(comparator_operation_param(ctx));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("Comparator", "Comparator",
+                                           "Output 1 if lhs 'operation' rhs holds, else 0", "basic", 2, 1,
+                                           signal_type_sets::real);
+            m.parameters.push_back({"operation", "enum", "Relational operation applied to lhs and rhs", "lt", std::nullopt,
+                                    std::nullopt, {"lt", "le", "gt", "ge", "eq", "ne"}, false});
+            m.input_ports[0].name = "lhs";
+            m.input_ports[1].name = "rhs";
+            return m;
         }()));
 
     registry.register_element(ElementDescriptor(

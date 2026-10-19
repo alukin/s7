@@ -271,6 +271,45 @@ private:
     value_type output_value_{};
 };
 
+enum class ComparatorOperation : std::uint8_t { Less, LessEqual, Greater, GreaterEqual, Equal, NotEqual };
+
+/// Comparator: out = 1 if lhs `operation` rhs holds, else 0, in the input
+/// type. Real numeric types. Floating-point comparison follows IEEE 754: a
+/// comparison against NaN is false for lt/le/gt/ge and for eq, true for ne.
+template <SignalType Type>
+class ComparatorT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    explicit ComparatorT(ComparatorOperation operation = ComparatorOperation::Less)
+        : Element("Comparator"), operation_(operation)
+    {
+        register_input(0, port_names::lhs, Type, nullptr);
+        register_input(1, port_names::rhs, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+
+    void step() override
+    {
+        const auto lhs = read_input<value_type>(0);
+        const auto rhs = read_input<value_type>(1);
+        bool result = false;
+        switch (operation_) {
+            case ComparatorOperation::Less: result = lhs < rhs; break;
+            case ComparatorOperation::LessEqual: result = lhs <= rhs; break;
+            case ComparatorOperation::Greater: result = lhs > rhs; break;
+            case ComparatorOperation::GreaterEqual: result = lhs >= rhs; break;
+            case ComparatorOperation::Equal: result = lhs == rhs; break;
+            case ComparatorOperation::NotEqual: result = lhs != rhs; break;
+        }
+        output_value_ = result ? value_type{1} : value_type{};
+    }
+
+private:
+    ComparatorOperation operation_;
+    value_type output_value_{};
+};
+
 // Exact widening of a value into an accumulator type (see widens_exactly()).
 template <SignalType From, SignalType To>
 [[nodiscard]] constexpr signal_storage_t<To> widen(const signal_storage_t<From>& value)
@@ -764,6 +803,7 @@ using Power = PowerT<SignalType::F64>;
 using Saturation = SaturationT<SignalType::F64>;
 using MinMax = MinMaxT<SignalType::F64>;
 using Sign = SignT<SignalType::F64>;
+using Comparator = ComparatorT<SignalType::F64>;
 using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
 using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
 using FirFilter = FirFilterT<SignalType::F64>;
