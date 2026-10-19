@@ -1,0 +1,19 @@
+{
+  "model": "theta'' = -9.81*sin(theta)",
+  "initial_angle_rad": 1.5,
+  "initial_velocity_rad_s": 0.0,
+  "duration_s": 100,
+  "reference": "Jacobi elliptic analytical solution; independent RK4 refinement and AGM period checks",
+  "frequency_budgets": [
+    {"hz": 1000, "max_angle_rad": 0.01, "max_velocity_rad_s": 0.03, "max_relative_energy_error": 0.005, "max_period_error_s": 0.00005},
+    {"hz": 10000, "max_angle_rad": 0.001, "max_velocity_rad_s": 0.003, "max_relative_energy_error": 0.0005, "max_period_error_s": 0.0000005}
+  ],
+  "short_time_convergence_window_s": 5,
+  "short_time_error_ratio_for_10x_rate": {"euler": [7, 15], "symplectic": [7, 15], "trapezoid": [70, 130]},
+  "trapezoid_max_endpoint_residual": 0.000000000001,
+  "trapezoid_max_relative_energy_error_over_dt_squared": 20,
+  "bundled_headless_max_difference": 0.000000000001,
+  "csv_round_trip": "exact equality for every finite double timestamp/value",
+  "expected_quality_pass": {"euler": false, "symplectic": true, "trapezoid": true},
+  "euler_baseline": "Expected accuracy failure is reported separately from regression success; final energy growth must exceed 2 percent at both rates."
+}

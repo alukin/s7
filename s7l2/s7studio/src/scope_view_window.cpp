@@ -10,6 +10,7 @@
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPen>
 #include <QPushButton>
@@ -245,32 +246,61 @@ void ScopeViewWindow::exportRecordedCsv()
         return;
     }
 
-    QTextStream out(&file);
+    QString error;
+    if (!writeRecordedCsv(file, &error)) {
+        QMessageBox::critical(this, QStringLiteral("Export failed"), error);
+    }
+}
+
+bool ScopeViewWindow::writeRecordedCsv(QIODevice& device, QString* error) const
+{
+    const auto fail = [error](const QString& message) {
+        if (error) *error = message;
+        return false;
+    };
+    if (!device.isWritable()) return fail(QStringLiteral("CSV destination is not writable"));
+    if (error) error->clear();
+    QTextStream out(&device);
+    out.setLocale(QLocale::c());
+    out.setRealNumberPrecision(std::numeric_limits<double>::max_digits10);
+    out.setRealNumberNotation(QTextStream::SmartNotation);
+    const auto field = [](QString value) {
+        if (value.contains(QLatin1Char(',')) || value.contains(QLatin1Char('"')) ||
+            value.contains(QLatin1Char('\n')) || value.contains(QLatin1Char('\r'))) {
+            value.replace(QStringLiteral("\""), QStringLiteral("\"\""));
+            return QLatin1Char('"') + value + QLatin1Char('"');
+        }
+        return value;
+    };
     out << "scope,channel,time_s,value\n";
     for (auto it = series_.cbegin(); it != series_.cend(); ++it) {
         const auto& series = it.value();
+        const auto prefix = field(probeName_) + QLatin1Char(',') + field(it.key()) + QLatin1Char(',');
         if (series.spillFile) {
-            series.spillFile->flush();
-            series.spillFile->seek(0);
+            const auto position = series.spillFile->pos();
+            if (!series.spillFile->flush() || !series.spillFile->seek(0)) {
+                return fail(QStringLiteral("Cannot read temporary recording"));
+            }
             QDataStream in(series.spillFile.data());
             in.setByteOrder(QDataStream::LittleEndian);
-            double time = 0.0;
-            double value = 0.0;
             while (!in.atEnd()) {
+                double time = 0.0, value = 0.0;
                 in >> time >> value;
                 if (in.status() != QDataStream::Ok) {
-                    break;
+                    series.spillFile->seek(position);
+                    return fail(QStringLiteral("Temporary recording read failed"));
                 }
-                out << probeName_ << ',' << it.key() << ',' << time << ',' << value << '\n';
+                out << prefix << time << ',' << value << '\n';
             }
-            series.spillFile->seek(series.spillFile->size());
+            if (!series.spillFile->seek(position)) return fail(QStringLiteral("Cannot restore recording position"));
         } else {
-            const int sampleCount = std::min(series.time.size(), series.value.size());
-            for (int i = 0; i < sampleCount; ++i) {
-                out << probeName_ << ',' << it.key() << ',' << series.time[i] << ',' << series.value[i] << '\n';
-            }
+            const int count = std::min(series.time.size(), series.value.size());
+            for (int i = 0; i < count; ++i) out << prefix << series.time[i] << ',' << series.value[i] << '\n';
         }
     }
+    out.flush();
+    if (out.status() != QTextStream::Ok) return fail(QStringLiteral("CSV write failed"));
+    return true;
 }
 
 auto ScopeViewWindow::spillSeries(Series& series) -> bool

@@ -1,0 +1,267 @@
+{
+  "id": "nonlinear_pendulum_trapezoid",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 420.0,
+    "height_mm": 210.0
+  },
+  "schema": {
+    "name": "nonlinear_pendulum_trapezoid",
+    "elements": [
+      {
+        "id": "omega",
+        "type": "TrapezoidIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.0
+        }
+      },
+      {
+        "id": "theta",
+        "type": "TrapezoidIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 1.5
+        }
+      },
+      {
+        "id": "sin_theta",
+        "type": "Trig",
+        "params": {
+          "function": "sin"
+        }
+      },
+      {
+        "id": "gravity",
+        "type": "Gain",
+        "params": {
+          "factor": -9.81
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "omega",
+        "from_port": 0,
+        "to_element": "theta",
+        "to_port": 0
+      },
+      {
+        "from_element": "theta",
+        "from_port": 0,
+        "to_element": "sin_theta",
+        "to_port": 0
+      },
+      {
+        "from_element": "sin_theta",
+        "from_port": 0,
+        "to_element": "gravity",
+        "to_port": 0
+      },
+      {
+        "from_element": "gravity",
+        "from_port": 0,
+        "to_element": "omega",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "theta",
+      "element": "theta",
+      "port": 0,
+      "unit": "rad"
+    },
+    {
+      "name": "omega",
+      "element": "omega",
+      "port": 0,
+      "unit": "rad/s"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "omega",
+        "position": [
+          33,
+          18
+        ],
+        "title": "Angular velocity (rad/s)"
+      },
+      {
+        "id": "theta",
+        "position": [
+          47,
+          18
+        ],
+        "title": "Angle (rad)"
+      },
+      {
+        "id": "sin_theta",
+        "position": [
+          5,
+          18
+        ],
+        "title": "sin(angle)"
+      },
+      {
+        "id": "gravity",
+        "position": [
+          19,
+          18
+        ],
+        "title": "-g/l = -9.81 per s^2"
+      },
+      {
+        "id": "scope_states",
+        "position": [
+          65,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "theta",
+            "omega"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "omega",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "theta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "theta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "sin_theta",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "sin_theta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "gravity",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "gravity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "omega",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "theta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "omega",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "model_notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "NONLINEAR SINGLE PENDULUM / TRAPEZOID\ntheta'' = -9.81*sin(theta), theta(0)=1.5 rad, omega(0)=0 rad/s.\nRun Configuration: 100 model seconds at 1 and 10 kHz; default dt=0.001 s.\nE = omega^2/2 + 9.81*(1-cos(theta)); exact period from complete elliptic integral.\nReference and predeclared quality budgets: examples/pendulum/README.md. Euler is a drift baseline, expected to FAIL the long-run accuracy budgets.\nTrapezoid solves the nonlinear endpoint jointly; reduce dt on nonconvergence.\nState after runtime step k is z[k-1], observation timestamp is k*dt.",
+          "width": 1450.0,
+          "height": 200.0,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

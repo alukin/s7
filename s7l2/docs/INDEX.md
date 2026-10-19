@@ -13,7 +13,7 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 
 The next-release target is local simulation quality. The development plan defines intended outcomes; the editor guide describes implemented behavior; open problems and the visual numerical plan track remaining work. Existing tests establish only their stated cases, not completion of the release criteria.
 
-Numerical examples and measured integrator comparisons: [small-angle double pendulum](../examples/double_pendulum/README.md) (nine diagrams, continuous/discrete references and reproducible reports).
+Numerical examples and measured integrator comparisons: [small-angle double pendulum](../examples/double_pendulum/README.md) (nine diagrams, continuous/discrete references and reproducible reports), and [nonlinear single pendulum](../examples/pendulum/README.md) (100-second comparisons at 1/10 kHz, energy/phase/convergence and full Scope/CSV fidelity).
 
 ## Implementation architecture
 

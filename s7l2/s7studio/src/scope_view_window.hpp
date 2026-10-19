@@ -8,6 +8,7 @@
 #include <Qt>
 #include <QWidget>
 
+class QIODevice;
 class QCheckBox;
 class QLabel;
 class QPushButton;
@@ -35,6 +36,9 @@ public:
     void appendSample(double timeSeconds, double value);
     void appendSample(const QString& channel, double timeSeconds, double value);
     void clearSamples();
+    // Same full-resolution CSV writer used by the export action. The caller
+    // supplies a writable device; finite doubles retain round-trip precision.
+    [[nodiscard]] bool writeRecordedCsv(QIODevice& device, QString* error = nullptr) const;
     // Samples the runtime produced but the UI dropped because it fell behind.
     void setDroppedSampleCount(std::uint64_t dropped);
 

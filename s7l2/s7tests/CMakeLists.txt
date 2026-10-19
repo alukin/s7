@@ -33,3 +33,11 @@ target_compile_definitions(s7tests_coupled_pendulum_smoke PRIVATE
     S7_PENDULUM_REPORT_DIR="${CMAKE_CURRENT_BINARY_DIR}/coupled_pendulum")
 add_test(NAME s7tests_coupled_pendulum_smoke COMMAND s7tests_coupled_pendulum_smoke)
 set_tests_properties(s7tests_coupled_pendulum_smoke PROPERTIES TIMEOUT 180)
+
+add_executable(s7tests_nonlinear_pendulum_smoke nonlinear_pendulum_smoke.cpp)
+target_link_libraries(s7tests_nonlinear_pendulum_smoke PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_nonlinear_pendulum_smoke PRIVATE
+    S7_SINGLE_PENDULUM_DIR="${PROJECT_SOURCE_DIR}/examples/pendulum"
+    S7_SINGLE_PENDULUM_REPORT_DIR="${CMAKE_CURRENT_BINARY_DIR}/nonlinear_pendulum")
+add_test(NAME s7tests_nonlinear_pendulum_smoke COMMAND s7tests_nonlinear_pendulum_smoke)
+set_tests_properties(s7tests_nonlinear_pendulum_smoke PROPERTIES TIMEOUT 180)

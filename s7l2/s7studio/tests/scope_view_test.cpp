@@ -2,6 +2,8 @@
 #include "qcp.h"
 
 #include <QApplication>
+#include <QBuffer>
+#include <QLocale>
 #include <QCheckBox>
 #include <QMetaObject>
 
@@ -11,6 +13,28 @@
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
+    // Export must preserve doubles regardless of UI locale and escape labels.
+    {
+        QLocale::setDefault(QLocale(QLocale::German));
+        s7studio::ui::ScopeViewWindow scope(QStringLiteral("a,\"b"));
+        const double time = 0.12345678901234566;
+        const double value = -1.2345678901234567;
+        scope.appendSample(QStringLiteral("channel,1"), time, value);
+        QBuffer buffer;
+        QString error;
+        if (scope.writeRecordedCsv(buffer, &error) || error.isEmpty())
+            throw std::runtime_error("Unwritable CSV destination accepted");
+        buffer.open(QIODevice::ReadWrite);
+        if (!scope.writeRecordedCsv(buffer, &error) || !error.isEmpty())
+            throw std::runtime_error("CSV export failed");
+        const auto row = QString::fromUtf8(buffer.data()).split('\n').at(1);
+        if (!row.startsWith(QStringLiteral("\"a,\"\"b\",\"channel,1\",")))
+            throw std::runtime_error("CSV labels were not escaped");
+        const auto fields = row.split(',');
+        if (fields[fields.size()-2].toDouble() != time || fields.back().toDouble() != value)
+            throw std::runtime_error("CSV lost double precision or used UI locale");
+        QLocale::setDefault(QLocale::c());
+    }
     // The example's oscillator is approximately sin(t). Increasing the
     // discretization frequency must retain its shape over the whole run.
     for (const int frequency : {1000, 10000, 100000}) {
