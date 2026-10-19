@@ -14,9 +14,9 @@
 #include "tool_windows.hpp"
 #include "ui_icons.hpp"
 #include "scene_serializer.hpp"
-#include "scope_view_window.hpp"
-#include "phase_portrait_view_window.hpp"
-#include "phase_trajectory_3d_view_window.hpp"
+#include "scope_sample_mailbox.hpp"
+#include "viewers/viewer_manager.hpp"
+#include "viewers/viewer_registry.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/element_catalog.hpp>
@@ -326,6 +326,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
     : QMainWindow(parent)
     , runtimeSchema_(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}})
 {
+    viewers_ = new viewers::ViewerManager(viewers::ViewerRegistry::instance(), this);
     runner_ = new LocalSchemaRunner(this);
     controller_ = std::make_unique<ui::ModelRunController>(runner_);
 
@@ -358,12 +359,7 @@ MainWindow::~MainWindow()
     if (runner_) {
         disconnect(runner_, nullptr, this, nullptr);
     }
-    for (const auto& window : scopeWindows_) {
-        if (window) {
-            disconnect(window, nullptr, this, nullptr);
-        }
-    }
-    closeScopeWindows();
+    closeViewers();
 }
 
 void MainWindow::connectRunnerSignals()
@@ -505,7 +501,7 @@ void MainWindow::buildActions()
     connect(stopAction_, &QAction::triggered, this, [this] { controller_->stop(); });
     connect(resetAction_, &QAction::triggered, this, [this] {
         controller_->reset();
-        clearScopeSamples();
+        clearViewerSamples();
         refreshActions();
     });
 
@@ -678,13 +674,12 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     if (elementType.isEmpty() || !scene) {
         return;
     }
-    const bool scopeObserver = elementType == QStringLiteral("StudioObserver:Scope");
-    const bool phasePortraitObserver = elementType == QStringLiteral("StudioObserver:PhasePortrait");
-    const bool phaseTrajectory3DObserver = elementType == QStringLiteral("StudioObserver:PhaseTrajectory3D");
-    const bool observer = scopeObserver || phasePortraitObserver || phaseTrajectory3DObserver;
-    const QString actualType = scopeObserver ? QStringLiteral("Scope")
-                              : phasePortraitObserver ? QStringLiteral("PhasePortrait")
-                              : phaseTrajectory3DObserver ? QStringLiteral("PhaseTrajectory3D") : elementType;
+    // Observers come from the viewer registry ("StudioObserver:<viewer type>").
+    const QString observerPrefix = QStringLiteral("StudioObserver:");
+    const bool observer = elementType.startsWith(observerPrefix)
+        && viewers::ViewerRegistry::instance().find(elementType.mid(observerPrefix.size()));
+    const QString actualType = observer ? elementType.mid(observerPrefix.size()) : elementType;
+    const bool scopeObserver = actualType == QStringLiteral("Scope");
     const auto* descriptor = observer ? nullptr : s7::ElementRegistry::instance().find(actualType.toStdString());
     diagram::ElementNode::Element element;
     element.id = nextElementId(*scene, actualType).toStdString();
@@ -935,19 +930,8 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         return;
     }
 
-    if (elementType == QStringLiteral("Scope")) {
-        openScopeWindow(QString::fromStdString(elementNode->id()));
-        return;
-    }
-    if (elementType == QStringLiteral("PhasePortrait")) {
-        const auto id = QString::fromStdString(elementNode->id());
-        openPhasePortraitWindow(id + QStringLiteral("/x"), id + QStringLiteral("/y"));
-        return;
-    }
-    if (elementType == QStringLiteral("PhaseTrajectory3D")) {
-        const auto id = QString::fromStdString(elementNode->id());
-        openPhaseTrajectory3DWindow(id + QStringLiteral("/x"), id + QStringLiteral("/y"),
-                                    id + QStringLiteral("/z"));
+    if (viewers::ViewerRegistry::instance().find(elementType)) {
+        viewers_->openObserver(elementType, QString::fromStdString(elementNode->id()));
         return;
     }
 
@@ -1078,86 +1062,28 @@ void MainWindow::onScopeSamplesAvailable()
         return;
     }
     const auto batch = runner_->takeScopeSamples();
-    QHash<QString, ui::ScopeViewWindow*> scopeTargets;
-
-    for (const auto& sample : batch.samples) {
-        const auto probeName = QString::fromStdString(sample.probeName);
-        const auto separator = probeName.indexOf(QLatin1Char('/'));
-        const auto scopeId = separator < 0 ? probeName : probeName.left(separator);
-        // Resolve each observer once per batch. A PhasePortrait records its
-        // state pairs directly; duplicating both axes into hidden Scope disk
-        // buffers wastes UI time and can cause mailbox loss at higher rates.
-        if (!scopeTargets.contains(scopeId)) {
-            const auto node = diagramEditor_ && diagramEditor_->scene()
-                ? diagramEditor_->scene()->elementNode(scopeId.toStdString()) : nullptr;
-            if (node && node->element().type == "PhasePortrait") {
-                static_cast<void>(ensurePhasePortraitWindow(scopeId + QStringLiteral("/x"), scopeId + QStringLiteral("/y")));
-                scopeTargets.insert(scopeId, nullptr);
-            } else if (node && node->element().type == "PhaseTrajectory3D") {
-                static_cast<void>(ensurePhaseTrajectory3DWindow(scopeId + QStringLiteral("/x"),
-                    scopeId + QStringLiteral("/y"), scopeId + QStringLiteral("/z")));
-                scopeTargets.insert(scopeId, nullptr);
-            } else {
-                scopeTargets.insert(scopeId, ensureScopeWindow(scopeId));
-            }
-        }
-        if (auto* window = scopeTargets.value(scopeId)) {
-            const auto channel = separator < 0 ? probeName : probeName.mid(separator + 1);
-            window->appendSample(channel, sample.timeSeconds, sample.value);
-        }
-        for (auto it = phasePortraitWindows_.cbegin(); it != phasePortraitWindows_.cend(); ++it) {
-            const auto& window = it.value();
-            if (!window) {
-                continue;
-            }
-            if (window->xProbeName() == probeName) {
-                window->appendXSample(sample.step, sample.value);
-            }
-            if (window->yProbeName() == probeName) {
-                window->appendYSample(sample.step, sample.value);
-            }
-        }
-        for (auto it = phaseTrajectory3DWindows_.cbegin(); it != phaseTrajectory3DWindows_.cend(); ++it) {
-            const auto& window = it.value();
-            if (!window) {
-                continue;
-            }
-            if (window->xProbeName() == probeName) {
-                window->appendXSample(sample.step, sample.value);
-            }
-            if (window->yProbeName() == probeName) {
-                window->appendYSample(sample.step, sample.value);
-            }
-            if (window->zProbeName() == probeName) {
-                window->appendZSample(sample.step, sample.value);
-            }
-        }
-    }
+    // Each observer records from its first sample, even before it is opened.
+    viewers_->deliver(batch, [this](const QString& observerId) { return observerViewerType(observerId); });
     if (batch.dropped > 0) {
         // The runtime produced samples faster than the UI took them; the oldest were dropped.
-        scopeSamplesDropped_ += batch.dropped;
-        for (const auto& window : std::as_const(scopeWindows_)) {
-            if (window) {
-                window->setDroppedSampleCount(scopeSamplesDropped_);
-            }
-        }
-        for (const auto& window : std::as_const(phasePortraitWindows_)) {
-            if (window) {
-                window->setDroppedSampleCount(scopeSamplesDropped_);
-            }
-        }
-        for (const auto& window : std::as_const(phaseTrajectory3DWindows_)) {
-            if (window) {
-                window->setDroppedSampleCount(scopeSamplesDropped_);
-            }
-        }
         const auto nowMs = QDateTime::currentMSecsSinceEpoch();
         if (nowMs - lastScopeDropLogMs_ >= 1000) {
             lastScopeDropLogMs_ = nowMs;
             appendLog(QStringLiteral("[studio] scope display could not keep up; %1 samples dropped so far (oldest first)")
-                          .arg(scopeSamplesDropped_));
+                          .arg(viewers_->droppedSampleCount()));
         }
     }
+}
+
+auto MainWindow::observerViewerType(const QString& observerId) const -> QString
+{
+    const auto node = diagramEditor_ && diagramEditor_->scene()
+        ? diagramEditor_->scene()->elementNode(observerId.toStdString()) : nullptr;
+    if (node) {
+        const auto type = QString::fromStdString(node->element().type);
+        if (viewers::ViewerRegistry::instance().find(type)) return type;
+    }
+    return QStringLiteral("Scope");
 }
 
 void MainWindow::refreshActions()
@@ -1316,12 +1242,14 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
 
 void MainWindow::onProbeOpenScopeRequested(const QString& probeName)
 {
-    openScopeWindow(probeName);
+    viewers_->open(QStringLiteral("Scope"), {probeName, {}});
 }
 
 void MainWindow::onProbeOpenPhasePortraitRequested(const QString& xProbeName, const QString& yProbeName)
 {
-    openPhasePortraitWindow(xProbeName, yProbeName);
+    // Ad-hoc portraits of two probes are keyed by the pair.
+    viewers_->open(QStringLiteral("PhasePortrait"),
+                   {QStringLiteral("%1|%2").arg(xProbeName, yProbeName), {xProbeName, yProbeName}});
 }
 
 void MainWindow::onProbeRenameRequested(const QString& probeName, const QString& newName)
@@ -1557,122 +1485,14 @@ void MainWindow::syncPageActions()
     landscapePageAction_->setChecked(pageLayout.orientation == diagram::PageOrientation::Landscape);
 }
 
-auto MainWindow::ensureScopeWindow(const QString& probeName) -> ui::ScopeViewWindow*
+void MainWindow::closeViewers()
 {
-    if (const auto existing = scopeWindows_.value(probeName)) {
-        return existing;
-    }
-    // Record from the first delivered sample, even before the user opens the
-    // view. Closing hides the window and retains its disk-backed recording.
-    auto* window = new ui::ScopeViewWindow(
-        probeName,
-        nullptr,
-        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    scopeWindows_.insert(probeName, window);
-    window->setDroppedSampleCount(scopeSamplesDropped_);
-    return window;
+    viewers_->closeAll();
 }
 
-void MainWindow::openScopeWindow(const QString& probeName)
+void MainWindow::clearViewerSamples()
 {
-    if (probeName.isEmpty()) {
-        return;
-    }
-    auto* window = ensureScopeWindow(probeName);
-    window->show();
-    window->raise();
-    window->activateWindow();
-}
-
-auto MainWindow::ensurePhasePortraitWindow(const QString& xProbeName, const QString& yProbeName) -> ui::PhasePortraitViewWindow*
-{
-    if (xProbeName.isEmpty() || yProbeName.isEmpty() || xProbeName == yProbeName) return nullptr;
-    const auto key = QStringLiteral("%1|%2").arg(xProbeName, yProbeName);
-    if (const auto existing = phasePortraitWindows_.value(key)) return existing;
-    auto* window = new ui::PhasePortraitViewWindow(
-        xProbeName, yProbeName, nullptr,
-        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    phasePortraitWindows_.insert(key, window);
-    window->setDroppedSampleCount(scopeSamplesDropped_);
-    return window;
-}
-
-void MainWindow::openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName)
-{
-    if (auto* window = ensurePhasePortraitWindow(xProbeName, yProbeName)) {
-        window->show();
-        window->raise();
-        window->activateWindow();
-    }
-}
-
-auto MainWindow::ensurePhaseTrajectory3DWindow(const QString& xProbeName,
-                                               const QString& yProbeName,
-                                               const QString& zProbeName) -> ui::PhaseTrajectory3DViewWindow*
-{
-    if (xProbeName.isEmpty() || yProbeName.isEmpty() || zProbeName.isEmpty() ||
-        xProbeName == yProbeName || xProbeName == zProbeName || yProbeName == zProbeName) return nullptr;
-    const auto key = QStringLiteral("%1|%2|%3").arg(xProbeName, yProbeName, zProbeName);
-    if (const auto existing = phaseTrajectory3DWindows_.value(key)) return existing;
-    auto* window = new ui::PhaseTrajectory3DViewWindow(
-        xProbeName, yProbeName, zProbeName, nullptr,
-        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |
-            Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    phaseTrajectory3DWindows_.insert(key, window);
-    window->setDroppedSampleCount(scopeSamplesDropped_);
-    return window;
-}
-
-void MainWindow::openPhaseTrajectory3DWindow(const QString& xProbeName,
-                                             const QString& yProbeName,
-                                             const QString& zProbeName)
-{
-    if (auto* window = ensurePhaseTrajectory3DWindow(xProbeName, yProbeName, zProbeName)) {
-        window->show();
-        window->raise();
-        window->activateWindow();
-    }
-}
-
-void MainWindow::closeScopeWindows()
-{
-    const auto existingWindows = scopeWindows_.values();
-    scopeWindows_.clear();
-    for (const auto& window : existingWindows) {
-        if (window) {
-            delete window.data();
-        }
-    }
-    const auto existingPhasePortraits = phasePortraitWindows_.values();
-    phasePortraitWindows_.clear();
-    for (const auto& window : existingPhasePortraits) {
-        if (window) delete window.data();
-    }
-    const auto existingPhaseTrajectories3D = phaseTrajectory3DWindows_.values();
-    phaseTrajectory3DWindows_.clear();
-    for (const auto& window : existingPhaseTrajectories3D) {
-        if (window) delete window.data();
-    }
-}
-
-void MainWindow::clearScopeSamples()
-{
-    scopeSamplesDropped_ = 0;
-    for (const auto& window : scopeWindows_) {
-        if (window) {
-            window->clearSamples();
-        }
-    }
-    for (const auto& window : phasePortraitWindows_) {
-        if (window) {
-            window->clearSamples();
-        }
-    }
-    for (const auto& window : phaseTrajectory3DWindows_) {
-        if (window) {
-            window->clearSamples();
-        }
-    }
+    viewers_->clearSamples();
 }
 
 void MainWindow::closeEvent(QCloseEvent* event)
@@ -1690,13 +1510,8 @@ void MainWindow::closeEvent(QCloseEvent* event)
     if (runner_) {
         disconnect(runner_, nullptr, this, nullptr);
     }
-    for (const auto& window : scopeWindows_) {
-        if (window) {
-            disconnect(window, nullptr, this, nullptr);
-        }
-    }
 
-    closeScopeWindows();
+    closeViewers();
     if (runner_) {
         runner_->reset();
     }
@@ -1791,7 +1606,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
                           .arg(discretizationFrequencyHz_)
                           .arg(runtimeSeconds_ < 0 ? QStringLiteral("continuously") : QStringLiteral("%1 s").arg(runtimeSeconds_)));
     if (clearScopesBeforeRun_) {
-        clearScopeSamples();
+        clearViewerSamples();
     }
 
     const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
@@ -1890,8 +1705,8 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
 
 void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
-    closeScopeWindows();
-    clearScopeSamples();
+    closeViewers();
+    clearViewerSamples();
 
     runtimeSchema_ = schemaJson;
     deploymentRuntimeNodes_.clear();
@@ -1914,8 +1729,8 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
 
 void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
-    closeScopeWindows();
-    clearScopeSamples();
+    closeViewers();
+    clearViewerSamples();
 
     QProgressDialog loading(QStringLiteral("Preparing diagram…"), QString(), 0, 100, this);
     loading.setWindowTitle(QStringLiteral("Loading diagram"));
@@ -2049,8 +1864,8 @@ void MainWindow::closeCurrentDiagram()
         runner_->reset();
     }
 
-    closeScopeWindows();
-    clearScopeSamples();
+    closeViewers();
+    clearViewerSamples();
 
     runtimeSchema_ = boost::json::object{
         {"name", "untitled"},

@@ -122,7 +122,6 @@ s7_suppress_target_warnings(qschematic-static)
 s7_suppress_target_warnings(qschematic-shared)
 s7_suppress_target_warnings(gpds-static)
 s7_suppress_target_warnings(gpds-shared)
-s7_suppress_target_warnings(s7_qcustomplot)
 
 # Keep warnings enabled for first-party targets.
 s7_enable_project_warnings(s7core)

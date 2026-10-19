@@ -38,6 +38,20 @@ This register complements existing architectural decision records in the reposit
 - **Rationale:** Prevents speculative chat ideas from becoming accidental requirements and avoids overloading `AGENTS.md`.
 - **Consequences:** Each AI contribution should clearly identify whether it is a proposal, finding, implementation, or verified result.
 
+## Accepted Studio decisions
+
+### AI-004 — Studio observation viewers use Qt Graphs and Qt Quick 3D
+
+- **Status:** Accepted
+- **Date:** 2026-10-19
+- **Owner/approver:** Maintainer (approved technology decision in the viewer-migration task)
+- **Context:** Studio's Scope, Phase Portrait and 3D trajectory viewers were drawn with the vendored QCustomPlot; the 3D viewer could only show three 2D projections, and there was no common mechanism for adding viewer types.
+- **Decision:** Draw 2D viewers with Qt Graphs and the 3D trajectory with Qt Quick 3D, embedded with `QQuickWidget` in the Qt Widgets Studio. Viewer types register in a viewer registry; a per-window viewer manager owns instances and routes observed samples. QCustomPlot is removed. Observation stays outside the computational graph (ADR-011 to ADR-013); headless components stay Qt-free.
+- **Alternatives considered:** keeping QCustomPlot; other third-party plotting libraries (not evaluated, per the approved decision); Qt Graphs 3D scatter for trajectories (rejected: no continuous line).
+- **Rationale:** Qt-maintained modules, GPU rendering through Qt's RHI, a real 3D view, and a lighter vendored footprint.
+- **Consequences:** Studio requires Qt ≥ 6.9 with Qml, Quick, QuickWidgets, Graphs and Quick3D, which are GPLv3/commercial (S7 is GPL). Packages must deploy the QML modules. Qt Graphs 2D has no dashed lines, so comparison overlays use translucency. Offscreen test runs cannot render Qt Quick 3D; 3D pixels are checked manually.
+- **References:** `s7l2/docs/STUDIO_OBSERVATION_VIEWERS.md`.
+
 ## Architectural topics requiring confirmation
 
 The following are **questions**, not accepted decisions. Refer to existing S7 formal and architectural documents for already established rules.

@@ -1,41 +1,91 @@
 #include "phase_trajectory_3d_view_window.hpp"
 
-#include "qcp.h"
+#include "viewers/quick_support.hpp"
 
 #include <QCheckBox>
-#include <QColor>
 #include <QFile>
 #include <QFileDialog>
-#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
-#include <QPen>
 #include <QPushButton>
+#include <QQuickWidget>
 #include <QStringList>
 #include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QVariantMap>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace s7studio::ui {
 
 namespace {
 
-auto configureProjection(QCustomPlot* plot, const QString& xLabel, const QString& yLabel) -> QCPCurve*
+constexpr float kExtent = viewers::kTrajectoryHalfExtent;
+
+auto label(const QVector3D& position, const QString& text, const bool title) -> QVariant
 {
-    plot->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
-    plot->xAxis->setLabel(xLabel);
-    plot->yAxis->setLabel(yLabel);
-    auto* curve = new QCPCurve(plot->xAxis, plot->yAxis);
-    curve->setLineStyle(QCPCurve::lsLine);
-    curve->setPen(QPen(QColor("#2ca02c"), 1.4));
-    return curve;
+    return QVariantMap{{QStringLiteral("position"), position},
+                       {QStringLiteral("text"), text},
+                       {QStringLiteral("title"), title}};
+}
+
+// A tick value with about three significant digits of the axis span, so
+// midpoints read "0.00" rather than "-0.0007885".
+auto number(const double value, const double span) -> QString
+{
+    if (!(span > 0.0) || !std::isfinite(span)) return QString::number(value, 'g', 4);
+    const int decimals = std::clamp(2 - static_cast<int>(std::floor(std::log10(span))), 0, 12);
+    if (decimals == 0 && std::abs(value) >= 1e6) return QString::number(value, 'g', 4);
+    auto text = QString::number(value, 'f', decimals);
+    if (text.startsWith(QLatin1Char('-')) && text.toDouble() == 0.0) text.remove(0, 1);
+    return text;
 }
 
 } // namespace
+
+Trajectory3DBridge::Trajectory3DBridge(QObject* parent)
+    : QObject(parent)
+{
+}
+
+void Trajectory3DBridge::setLabels(QVariantList labels)
+{
+    labels_ = std::move(labels);
+    emit labelsChanged();
+}
+
+void Trajectory3DBridge::setHead(const bool hasHead, const QVector3D head)
+{
+    if (hasHead_ == hasHead && head_ == head) return;
+    hasHead_ = hasHead;
+    head_ = head;
+    emit headChanged();
+}
+
+void Trajectory3DBridge::setViewRotation(const QVector3D rotation)
+{
+    viewRotation_ = rotation;
+    emit viewRotationChanged();
+}
+
+auto PhaseTrajectory3DViewWindow::viewerType() -> viewers::ViewerType
+{
+    return {QStringLiteral("PhaseTrajectory3D"), QStringLiteral("3D Phase Trajectory"), QStringLiteral("3→plot"),
+            QStringLiteral("Plots three observed signals as a continuous trajectory in 3D."),
+            {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")},
+            [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* {
+                const auto& probes = spec.probeNames;
+                if (probes.size() != 3 || probes[0].isEmpty() || probes[1].isEmpty() || probes[2].isEmpty()
+                    || probes[0] == probes[1] || probes[0] == probes[2] || probes[1] == probes[2]) return nullptr;
+                return new PhaseTrajectory3DViewWindow(probes[0], probes[1], probes[2], nullptr,
+                    Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |
+                        Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+            }};
+}
 
 PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
                                                          QString yProbeName,
@@ -52,10 +102,12 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     setWindowFlag(Qt::WindowMaximizeButtonHint, true);
     setWindowFlag(Qt::WindowCloseButtonHint, true);
     setAttribute(Qt::WA_QuitOnClose, false);
-    setMinimumSize(900, 650);
+    setMinimumSize(640, 560);
     setWindowTitle(QStringLiteral("3D Phase Trajectory - %1, %2, %3")
                        .arg(xProbeName_, yProbeName_, zProbeName_));
-    resize(1100, 760);
+    resize(900, 760);
+
+    bridge_ = new Trajectory3DBridge(this);
 
     auto* root = new QVBoxLayout(this);
     auto* controls = new QHBoxLayout();
@@ -66,22 +118,25 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     exportButton_ = new QPushButton(QStringLiteral("Export CSV"), this);
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
+    controls->addSpacing(12);
+    const std::pair<const char*, ViewPreset> presets[]{{"3D", ViewPreset::Perspective}, {"XY", ViewPreset::XY},
+                                                       {"XZ", ViewPreset::XZ}, {"YZ", ViewPreset::YZ}};
+    for (const auto& [text, preset] : presets) {
+        auto* button = new QPushButton(QString::fromLatin1(text), this);
+        button->setToolTip(preset == ViewPreset::Perspective
+            ? QStringLiteral("Reset to the default 3D view")
+            : QStringLiteral("View the %1 projection").arg(QString::fromLatin1(text)));
+        connect(button, &QPushButton::clicked, this, [this, preset = preset] { setViewPreset(preset); });
+        controls->addWidget(button);
+    }
     controls->addStretch(1);
     statusLabel_ = new QLabel(this);
     controls->addWidget(statusLabel_);
     root->addLayout(controls);
+    // The Qt Quick 3D scene is created on first show (showEvent).
 
-    auto* plots = new QGridLayout();
-    xyPlot_ = new QCustomPlot(this);
-    xzPlot_ = new QCustomPlot(this);
-    yzPlot_ = new QCustomPlot(this);
-    xyCurve_ = configureProjection(xyPlot_, xProbeName_, yProbeName_);
-    xzCurve_ = configureProjection(xzPlot_, xProbeName_, zProbeName_);
-    yzCurve_ = configureProjection(yzPlot_, yProbeName_, zProbeName_);
-    plots->addWidget(xyPlot_, 0, 0);
-    plots->addWidget(xzPlot_, 0, 1);
-    plots->addWidget(yzPlot_, 1, 0, 1, 2);
-    root->addLayout(plots, 1);
+    setViewPreset(ViewPreset::Perspective);
+    updateLabels();
 
     repaintTimer_ = new QTimer(this);
     repaintTimer_->setInterval(33);
@@ -89,6 +144,38 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     repaintTimer_->start();
     connect(clearButton_, &QPushButton::clicked, this, &PhaseTrajectory3DViewWindow::clearBuffers);
     connect(exportButton_, &QPushButton::clicked, this, &PhaseTrajectory3DViewWindow::exportCsv);
+    connect(autoScaleCheck_, &QCheckBox::toggled, this, [this] { dirty_ = true; });
+}
+
+PhaseTrajectory3DViewWindow::~PhaseTrajectory3DViewWindow()
+{
+    // The scene refers to the bridge's geometries; it goes first.
+    viewers::unloadQuickScene(quick_);
+    quick_ = nullptr;
+}
+
+void PhaseTrajectory3DViewWindow::showEvent(QShowEvent* event)
+{
+    if (!quick_) {
+        quick_ = viewers::createQuickWidget();
+        quick_->setToolTip(QStringLiteral("Drag to rotate, scroll to zoom."));
+        static_cast<QVBoxLayout*>(layout())->addWidget(quick_, 1);
+        viewers::loadQuickScene(*quick_, QStringLiteral("Trajectory3D.qml"),
+                                {{QStringLiteral("trajectoryView"), QVariant::fromValue<QObject*>(bridge_)}});
+    }
+    QWidget::showEvent(event);
+}
+
+auto PhaseTrajectory3DViewWindow::subscribes(const QString& probeName) const -> bool
+{
+    return probeName == xProbeName_ || probeName == yProbeName_ || probeName == zProbeName_;
+}
+
+void PhaseTrajectory3DViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
+{
+    if (sample.probeName == xProbeName_) appendXSample(sample.step, sample.value);
+    if (sample.probeName == yProbeName_) appendYSample(sample.step, sample.value);
+    if (sample.probeName == zProbeName_) appendZSample(sample.step, sample.value);
 }
 
 void PhaseTrajectory3DViewWindow::appendXSample(const long step, const double value)
@@ -106,30 +193,14 @@ void PhaseTrajectory3DViewWindow::appendZSample(const long step, const double va
     addCoordinate(step, value, 2);
 }
 
-void PhaseTrajectory3DViewWindow::addCoordinate(const long step, const double value, const int axis)
+void PhaseTrajectory3DViewWindow::addCoordinate(const long step, const double value, const std::size_t axis)
 {
-    auto& pending = pending_[step];
-    if (axis == 0) {
-        pending.point.x = value;
-        pending.hasX = true;
-    } else if (axis == 1) {
-        pending.point.y = value;
-        pending.hasY = true;
-    } else {
-        pending.point.z = value;
-        pending.hasZ = true;
-    }
-    if (pending.hasX && pending.hasY && pending.hasZ) {
+    if (const auto point = aligner_.add(step, axis, value)) {
         if (points_.size() >= kMaxPoints) {
             points_.pop_front();
         }
-        points_.push_back(pending.point);
-        pending_.erase(step);
+        points_.push_back(*point);
         dirty_ = true;
-    }
-    while (pending_.size() > 8) {
-        pending_.erase(pending_.begin());
-        ++incompletePointsDropped_;
     }
 }
 
@@ -150,24 +221,58 @@ void PhaseTrajectory3DViewWindow::updateStatus()
     if (points_.size() >= kMaxPoints) {
         parts << QStringLiteral("trajectory trimmed to %1 points").arg(kMaxPoints);
     }
-    if (const auto totalDropped = droppedSamples_ + incompletePointsDropped_; totalDropped > 0) {
+    if (points_.size() > kMaxDrawnPoints) {
+        parts << QStringLiteral("drawing every %1th point").arg((points_.size() + kMaxDrawnPoints - 1) / kMaxDrawnPoints);
+    }
+    if (const auto totalDropped = droppedSamples_ + aligner_.discardedSteps(); totalDropped > 0) {
         parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
     }
     statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
 
+void PhaseTrajectory3DViewWindow::updateLabels()
+{
+    const float e = kExtent;
+    const float offset = e * 0.12f;
+    QVariantList labels;
+    // Tick values along the three labelled edges (the same edges and
+    // fractions TrajectoryFrameGeometry puts ticks on).
+    for (const double fraction : viewers::kTrajectoryTickFractions) {
+        const auto t = static_cast<float>(-e + 2.0 * fraction * e);
+        const auto at = [&](std::size_t axis) {
+            const double span = bounds_.max[axis] - bounds_.min[axis];
+            return number(bounds_.min[axis] + fraction * span, span);
+        };
+        labels << label({t, -e - offset, e + offset}, at(0), false);
+        labels << label({e + offset, -e - offset, -t}, at(1), false);
+        labels << label({-e - offset, t, e + offset}, at(2), false);
+    }
+    labels << label({0.0f, -e - 2.6f * offset, e + 2.6f * offset}, QStringLiteral("X: ") + xProbeName_, true);
+    labels << label({e + 2.6f * offset, -e - 2.6f * offset, 0.0f}, QStringLiteral("Y: ") + yProbeName_, true);
+    labels << label({-e - 2.6f * offset, e + offset, e + offset}, QStringLiteral("Z: ") + zProbeName_, true);
+    bridge_->setLabels(labels);
+}
+
+void PhaseTrajectory3DViewWindow::setViewPreset(const ViewPreset preset)
+{
+    // Euler angles of the camera orbit. Scene Y is data Z (up) and scene -Z
+    // is data Y, so the front view is XZ.
+    switch (preset) {
+    case ViewPreset::Perspective: bridge_->setViewRotation({-25.0f, 35.0f, 0.0f}); break;
+    case ViewPreset::XY: bridge_->setViewRotation({-90.0f, 0.0f, 0.0f}); break;
+    case ViewPreset::XZ: bridge_->setViewRotation({0.0f, 0.0f, 0.0f}); break;
+    case ViewPreset::YZ: bridge_->setViewRotation({0.0f, 90.0f, 0.0f}); break;
+    }
+}
+
 void PhaseTrajectory3DViewWindow::clearBuffers()
 {
     points_.clear();
-    pending_.clear();
+    aligner_.clear();
     droppedSamples_ = 0;
-    incompletePointsDropped_ = 0;
     updateStatus();
-    for (auto* plot : {xyPlot_, xzPlot_, yzPlot_}) {
-        auto* curve = plot == xyPlot_ ? xyCurve_ : (plot == xzPlot_ ? xzCurve_ : yzCurve_);
-        curve->data()->clear();
-        plot->replot(QCustomPlot::rpQueuedReplot);
-    }
+    bridge_->trajectoryGeometry().setTrajectory({}, bounds_, kMaxDrawnPoints);
+    bridge_->setHead(false, {});
     dirty_ = true;
 }
 
@@ -186,8 +291,8 @@ void PhaseTrajectory3DViewWindow::exportCsv()
     }
     QTextStream out(&file);
     out << xProbeName_ << ',' << yProbeName_ << ',' << zProbeName_ << '\n';
-    for (const auto& point : points_) {
-        out << point.x << ',' << point.y << ',' << point.z << '\n';
+    for (const auto& point : std::as_const(points_)) {
+        out << point[0] << ',' << point[1] << ',' << point[2] << '\n';
     }
 }
 
@@ -197,28 +302,13 @@ void PhaseTrajectory3DViewWindow::refreshPlots()
         return;
     }
     dirty_ = false;
-    QVector<double> x;
-    QVector<double> y;
-    QVector<double> z;
-    x.reserve(points_.size());
-    y.reserve(points_.size());
-    z.reserve(points_.size());
-    for (const auto& point : points_) {
-        x.push_back(point.x);
-        y.push_back(point.y);
-        z.push_back(point.z);
+    if (autoScaleCheck_->isChecked() && !points_.isEmpty()) {
+        bounds_ = viewers::TrajectoryBounds::of(points_);
+        updateLabels();
     }
-    xyCurve_->setData(x, y);
-    xzCurve_->setData(x, z);
-    yzCurve_->setData(y, z);
-    if (autoScaleCheck_->isChecked()) {
-        xyPlot_->rescaleAxes(true);
-        xzPlot_->rescaleAxes(true);
-        yzPlot_->rescaleAxes(true);
-    }
-    xyPlot_->replot(QCustomPlot::rpQueuedReplot);
-    xzPlot_->replot(QCustomPlot::rpQueuedReplot);
-    yzPlot_->replot(QCustomPlot::rpQueuedReplot);
+    bridge_->trajectoryGeometry().setTrajectory(points_, bounds_, kMaxDrawnPoints);
+    if (points_.isEmpty()) bridge_->setHead(false, {});
+    else bridge_->setHead(true, viewers::toScene(points_.back(), bounds_));
     updateStatus();
 }
 

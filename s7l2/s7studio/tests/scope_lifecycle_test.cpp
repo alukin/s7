@@ -1,7 +1,12 @@
 #include "nonlinear_pendulum_cases.hpp"
 #include "local_schema_runner.hpp"
+#include "phase_portrait_view_window.hpp"
 #include "scope_view_window.hpp"
-#include "qcp.h"
+#include "viewers/viewer_manager.hpp"
+#include "viewers/viewer_registry.hpp"
+#include "viewers/line_plot_view.hpp"
+
+#include <QtGraphs/QLineSeries>
 
 #include <QApplication>
 #include <QBuffer>
@@ -87,7 +92,7 @@ int main(int argc, char** argv) try {
         for (auto* check : source.findChildren<QCheckBox*>())
             if (check->text() == QStringLiteral("Fit full run")) check->setChecked(false);
         QMetaObject::invokeMethod(&source, "refreshPlot", Qt::DirectConnection);
-        source.findChild<QCustomPlot*>()->xAxis->setRange(10.0, 10.1);
+        source.plotView()->setXRange(10.0, 10.1);
         source.appendSample(QStringLiteral("theta"), 25.0, std::sin(25.0));
         const auto after = csv(source);
         require(after.count('\n') == before.count('\n') + 1 && after.startsWith(before), "Saving disturbed append cursor");
@@ -95,13 +100,13 @@ int main(int argc, char** argv) try {
         load(restored, snapshot, QStringLiteral("previous"));
         verifySameValues(before, csv(restored));
         require(warningContains(restored, QStringLiteral("dropped 7")), "Saved capture loss was hidden");
-        auto* plot = restored.findChild<QCustomPlot*>();
-        require(plot && plot->graphCount() == 1 && plot->graph(0)->pen().style() == Qt::DashLine,
-            "Comparison was not drawn as an overlay");
+        auto* plot = restored.plotView();
+        require(plot && plot->series().size() == 1 && plot->isOverlay(plot->series().front())
+            && plot->series().front()->opacity() < 1.0, "Comparison was not drawn as an overlay");
         for (auto* check : restored.findChildren<QCheckBox*>())
             if (check->text() == QStringLiteral("Fit full run")) check->setChecked(false);
-        plot->xAxis->setRange(10.0, 10.1);
-        require(plot->graph(0)->data()->size() > 90, "Imported disk-backed zoom lost full-resolution history");
+        plot->setXRange(10.0, 10.1);
+        require(plot->series().front()->points().size() > 90, "Imported disk-backed zoom lost full-resolution history");
         const auto unchanged = csv(restored);
         auto wrongVersion = snapshot;
         wrongVersion[8] = 2;
@@ -119,7 +124,7 @@ int main(int argc, char** argv) try {
             require(csv(restored) == unchanged, "Failed import changed existing data");
         }
         restored.appendSample(QStringLiteral("theta"), .001, 1.5);
-        require(plot->graphCount() == 2, "Current run collided with comparison channel");
+        require(plot->series().size() == 2, "Current run collided with comparison channel");
         const auto liveOnly = save(restored);
         s7studio::ui::ScopeViewWindow live(QStringLiteral("live"));
         load(live, liveOnly, QStringLiteral("live"));
@@ -127,9 +132,9 @@ int main(int argc, char** argv) try {
         restored.clearSamples();
         require(csv(restored) == unchanged, "Rerun cleared comparison data");
         load(restored, snapshot, QStringLiteral("previous"));
-        require(plot->graphCount() == 2, "Repeated import overwrote a comparison");
+        require(plot->series().size() == 2, "Repeated import overwrote a comparison");
         restored.clearComparisons();
-        require(plot->graphCount() == 0 && csv(restored).count('\n') == 1, "Removing comparisons left stale data");
+        require(plot->series().isEmpty() && csv(restored).count('\n') == 1, "Removing comparisons left stale data");
     }
     // A temporary-storage failure stays visible after saving and reopening.
     {
@@ -159,13 +164,26 @@ int main(int argc, char** argv) try {
     bool completed = false, success = false;
     QObject::connect(&runner, &s7studio::LocalSchemaRunner::runCompleted, &runner,
         [&](bool ok, const QString&) { completed = true; success = ok; });
+    // The same batches also go through the viewer manager into a Phase
+    // Portrait of theta/omega. The probes resolve to no viewer type, so the
+    // manager creates no Scopes of its own (the test drives `scope` directly).
+    s7studio::viewers::ViewerManager manager(s7studio::viewers::ViewerRegistry::instance());
+    const auto scopes = [](const QString&) { return QString(); };
+    auto* portrait = dynamic_cast<s7studio::ui::PhasePortraitViewWindow*>(
+        manager.ensure(QStringLiteral("PhasePortrait"), {QStringLiteral("theta|omega"), {QStringLiteral("theta"), QStringLiteral("omega")}}));
+    require(portrait, "Phase Portrait viewer was not created");
+    QList<QPointF> expectedPairs;
+    double pendingTheta = 0.0;
     std::size_t received = 0;
     auto consume = [&] {
         auto batch = runner.takeScopeSamples();
         require(batch.dropped == 0, "Lifecycle run unexpectedly dropped samples");
+        manager.deliver(batch, scopes);
         for (const auto& sample : batch.samples) {
             const auto channel = received % 2;
             if (channel == 0) reference->step();
+            if (channel == 0) pendingTheta = sample.value;
+            else expectedPairs.push_back({pendingTheta, sample.value});
             const auto expected = observation->sample_output("state", channel).to_display_double();
             require(sample.step == static_cast<long>(received / 2 + 1) && sample.probeName == probes[channel].name,
                 "Lifecycle skipped, duplicated or mixed steps/channels");
@@ -195,6 +213,9 @@ int main(int argc, char** argv) try {
     for (int i = 0; i < 30; ++i) { app.processEvents(); consume(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
     require(received == pausedCount, "Paused runtime kept publishing samples");
     load(scope, pausedSnapshot, QStringLiteral("paused baseline"));
+    // Keep recording hidden: an unthrottled worker against offscreen software
+    // rendering (CI, Wine) measures the renderer, not the recording lifecycle.
+    scope.close();
     runner.resume();
     waitUntil([&] { return received >= pausedCount + 6000; });
     static_cast<void>(save(scope)); // Snapshot while the worker is producing.
@@ -202,7 +223,11 @@ int main(int argc, char** argv) try {
     runner.pause(); runner.stop();
     waitUntil([&] { return completed; }); consume();
     require(success && received > pausedCount && received % 2 == 0, "Stop while paused lost final channel or failed");
+    require(portrait->points() == expectedPairs, "Phase Portrait lost, duplicated or misaligned pairs across pause/resume/stop");
+    require(manager.viewers().size() == 1, "Manager created viewers for unresolved probes");
     runner.reset();
+    manager.clearSamples();
+    require(portrait->points().isEmpty(), "Reset kept Phase Portrait pairs");
     require(runner.takeScopeSamples().samples.empty(), "Reset retained stale mailbox data");
     app.processEvents();
     scope.clearSamples();
@@ -224,10 +249,12 @@ int main(int argc, char** argv) try {
             scope.appendSample(QString::fromStdString(sample.probeName), sample.timeSeconds, sample.value);
             ++rerunCount;
         }
+        manager.deliver(batch, scopes);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     require(completed && success && rerunCount == 2000, "Rerun incomplete");
-    require(scope.findChild<QCustomPlot*>()->graphCount() == 4, "Rerun lost saved comparison");
+    require(scope.plotView()->series().size() == 4, "Rerun lost saved comparison");
+    require(portrait->points().size() == 1000, "Rerun did not refill the Phase Portrait");
     runner.reset(); app.processEvents();
 
     // Intentionally withhold delivery to test the real worker/mailbox limit.

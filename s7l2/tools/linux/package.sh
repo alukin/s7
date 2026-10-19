@@ -77,6 +77,8 @@ EOF
 iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAAOklEQVR42u3OQQ0AAAgEoMtlKFvZ0xbOBxsBSPW8EiEhISEhISEhISEhISEhISEhISEhISEhISGhOwsjprWm4kIWxAAAAABJRU5ErkJggg==
 EOF
     QT_ARGS=(--desktop-file "$WORKDIR/s7studio.desktop" --icon-file "$WORKDIR/s7studio.png" --plugin qt)
+    # linuxdeploy-plugin-qt deploys the QML modules these scenes import.
+    export QML_SOURCES_PATHS="$SOURCE/s7studio/src/viewers/qml"
 fi
 
 QMAKE="${QMAKE:-qmake6}" APPIMAGE_EXTRACT_AND_RUN=1 "$LINUXDEPLOY" \

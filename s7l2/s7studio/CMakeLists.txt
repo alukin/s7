@@ -1,21 +1,8 @@
-
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
-find_package(Qt6 REQUIRED COMPONENTS PrintSupport)
-
-file(GLOB_RECURSE S7_QCUSTOMPLOT_SOURCES
-    "${PROJECT_SOURCE_DIR}/external/QCustomPlot/src/*.cpp")
-file(GLOB_RECURSE S7_QCUSTOMPLOT_HEADERS
-    "${PROJECT_SOURCE_DIR}/external/QCustomPlot/src/*.h")
-
-add_library(s7_qcustomplot STATIC ${S7_QCUSTOMPLOT_SOURCES} ${S7_QCUSTOMPLOT_HEADERS})
-target_include_directories(s7_qcustomplot PUBLIC
-    ${PROJECT_SOURCE_DIR}/external/QCustomPlot/src)
-target_link_libraries(s7_qcustomplot PUBLIC
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Widgets)
-target_link_libraries(s7_qcustomplot PUBLIC Qt6::PrintSupport)
-set_target_properties(s7_qcustomplot PROPERTIES AUTOMOC ON)
+# Observation viewers: Qt Graphs (2D) and Qt Quick 3D in QQuickWidget. 6.9 is
+# the first release with GraphsView.plotArea, which cursor-anchored zooming
+# needs (src/viewers/qml/LinePlot.qml).
+find_package(Qt6 6.9 REQUIRED COMPONENTS Qml Quick QuickWidgets Graphs Quick3D)
 
 # Diagram model, scene, router and file format: shared by Studio and its tests.
 add_library(s7studio_diagram STATIC
@@ -62,24 +49,64 @@ target_link_libraries(s7studio_diagram PUBLIC
 set_target_properties(s7studio_diagram PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_diagram)
 
-add_executable(s7studio
-    src/main.cpp
-    src/main_window.cpp
-    src/main_window.hpp
-    src/main_window_builder.cpp
-    src/main_window_builder.hpp
+# Observation viewers (docs/STUDIO_OBSERVATION_VIEWERS.md): the viewer
+# registry, manager and shared plot/3D components, and the Scope, Phase
+# Portrait and 3D Phase Trajectory windows. Shared by Studio and its tests.
+add_library(s7studio_viewers STATIC
+    src/viewers/observation_viewer.hpp
+    src/viewers/viewer_registry.cpp
+    src/viewers/viewer_registry.hpp
+    src/viewers/viewer_manager.cpp
+    src/viewers/viewer_manager.hpp
+    src/viewers/step_aligner.hpp
+    src/viewers/line_plot_view.cpp
+    src/viewers/line_plot_view.hpp
+    src/viewers/quick_support.cpp
+    src/viewers/quick_support.hpp
+    src/viewers/trajectory_geometry.cpp
+    src/viewers/trajectory_geometry.hpp
+    src/scope_recording.cpp
+    src/scope_recording.hpp
+    src/scope_sample_mailbox.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
     src/phase_portrait_view_window.cpp
     src/phase_portrait_view_window.hpp
     src/phase_trajectory_3d_view_window.cpp
     src/phase_trajectory_3d_view_window.hpp
+)
+qt_add_resources(s7studio_viewers s7studio_viewers_qml
+    PREFIX /s7studio/viewers
+    BASE src/viewers/qml
+    FILES
+        src/viewers/qml/LinePlot.qml
+        src/viewers/qml/Trajectory3D.qml
+)
+target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(s7studio_viewers PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Widgets
+    Qt6::Qml
+    Qt6::Quick
+    Qt6::QuickWidgets
+    Qt6::Graphs
+    Qt6::Quick3D
+)
+set_target_properties(s7studio_viewers PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_viewers)
+
+add_executable(s7studio
+    src/main.cpp
+    src/main_window.cpp
+    src/main_window.hpp
+    src/main_window_builder.cpp
+    src/main_window_builder.hpp
     src/model_run_controller.cpp
     src/is_schema_runner.hpp
     src/model_run_controller.hpp
     src/json_utils.hpp
     src/local_runtime_v2.hpp
-    src/scope_sample_mailbox.hpp
     src/local_schema_runner.cpp
     src/local_schema_runner.hpp
     src/element_picker_panel.cpp
@@ -113,11 +140,11 @@ target_include_directories(s7studio PRIVATE
 
 target_link_libraries(s7studio PRIVATE
     s7studio_diagram
+    s7studio_viewers
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
     qschematic-static
-    s7_qcustomplot
     s7core
     s7net
     s7observe
@@ -184,13 +211,8 @@ if (TARGET s7noise)
     target_compile_definitions(s7studio_diagram_test PRIVATE S7_TEST_NOISE_PLUGIN_DIR="$<TARGET_FILE_DIR:s7noise>")
 endif()
 
-add_executable(s7studio_scope_view_test
-    tests/scope_view_test.cpp
-    src/scope_view_window.cpp
-    src/scope_view_window.hpp
-)
-target_include_directories(s7studio_scope_view_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(s7studio_scope_view_test PRIVATE s7_qcustomplot Qt6::Widgets)
+add_executable(s7studio_scope_view_test tests/scope_view_test.cpp)
+target_link_libraries(s7studio_scope_view_test PRIVATE s7studio_viewers)
 set_target_properties(s7studio_scope_view_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_scope_view COMMAND s7studio_scope_view_test)
 set_tests_properties(s7studio_scope_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
@@ -214,10 +236,9 @@ set_tests_properties(s7studio_coupled_pendulum PROPERTIES ENVIRONMENT "QT_QPA_PL
 add_executable(s7studio_nonlinear_pendulum_test
     tests/nonlinear_pendulum_test.cpp
     src/local_schema_runner.cpp src/local_schema_runner.hpp
-    src/scope_view_window.cpp src/scope_view_window.hpp
 )
 target_include_directories(s7studio_nonlinear_pendulum_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
-target_link_libraries(s7studio_nonlinear_pendulum_test PRIVATE s7studio_diagram s7_qcustomplot Threads::Threads)
+target_link_libraries(s7studio_nonlinear_pendulum_test PRIVATE s7studio_diagram s7studio_viewers Threads::Threads)
 target_compile_definitions(s7studio_nonlinear_pendulum_test PRIVATE
     S7_SINGLE_PENDULUM_DIR="${PROJECT_SOURCE_DIR}/examples/pendulum"
     S7_SINGLE_PENDULUM_STUDIO_REPORT_DIR="${CMAKE_CURRENT_BINARY_DIR}/nonlinear_pendulum")
@@ -228,10 +249,9 @@ set_tests_properties(s7studio_nonlinear_pendulum PROPERTIES ENVIRONMENT "QT_QPA_
 add_executable(s7studio_scope_lifecycle_test
     tests/scope_lifecycle_test.cpp
     src/local_schema_runner.cpp src/local_schema_runner.hpp
-    src/scope_view_window.cpp src/scope_view_window.hpp
 )
 target_include_directories(s7studio_scope_lifecycle_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
-target_link_libraries(s7studio_scope_lifecycle_test PRIVATE s7studio_diagram s7_qcustomplot Threads::Threads)
+target_link_libraries(s7studio_scope_lifecycle_test PRIVATE s7studio_diagram s7studio_viewers Threads::Threads)
 target_compile_definitions(s7studio_scope_lifecycle_test PRIVATE
     S7_SINGLE_PENDULUM_DIR="${PROJECT_SOURCE_DIR}/examples/pendulum")
 set_target_properties(s7studio_scope_lifecycle_test PROPERTIES AUTOMOC ON)
@@ -246,3 +266,12 @@ set_tests_properties(s7studio_phase_portrait PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 
 add_test(NAME s7studio_phase_trajectory_3d COMMAND s7studio --phase-trajectory-3d-check)
 set_tests_properties(s7studio_phase_trajectory_3d PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 180)
+
+# Viewer registry, manager routing and lifecycle, step alignment, Qt Graphs
+# plot state and the Qt Quick 3D trajectory geometry.
+add_executable(s7studio_viewers_test tests/viewers_test.cpp)
+target_link_libraries(s7studio_viewers_test PRIVATE s7studio_viewers)
+set_target_properties(s7studio_viewers_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_viewers_test)
+add_test(NAME s7studio_viewers COMMAND s7studio_viewers_test)
+set_tests_properties(s7studio_viewers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)

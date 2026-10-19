@@ -210,10 +210,14 @@ inline float16_t arg(const std::complex<float16_t>& z) { return atan2(z.imag(), 
 
 inline bool isnan(const float128_t x) { return __builtin_isnan(x); }
 inline bool isinf(const float128_t x) { return __builtin_isinf(x); }
+// libstdc++ 16 declares std::abs(__float128) (a sign-bit fabs, brought in by
+// `using std::abs` above) wherever it defines _GLIBCXX_USE_FLOAT128.
+#if !defined(_GLIBCXX_USE_FLOAT128)
 inline float128_t abs(const float128_t x)
 {
     return x == float128_t{} ? float128_t{} : (x < float128_t{} ? -x : x);
 }
+#endif
 inline float128_t copysign(const float128_t x, const float128_t y) { return S7_F128_MATH(copysign, x, y); }
 inline float128_t ldexp(const float128_t x, const int e) { return S7_F128_MATH(ldexp, x, e); }
 inline float128_t nearbyint(const float128_t x) { return S7_F128_MATH(nearbyint, x); }

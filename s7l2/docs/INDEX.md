@@ -28,6 +28,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | Document | Content |
 |---|---|
 | [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
+| [STUDIO_OBSERVATION_VIEWERS.md](STUDIO_OBSERVATION_VIEWERS.md) | Studio's Scope, Phase Portrait and 3D trajectory viewers (Qt Graphs, Qt Quick 3D): viewer registry and lifecycle, data flow, adding a viewer type, tests and manual visual test plan |
 | [SCOPE_RESULTS.md](SCOPE_RESULTS.md) | Save/open Scope results, persistent comparison overlays, capture-loss metadata and file format |
 | `ELEMENT_DEV_GUIDE.md` | Writing elements: element contract, metadata, registration, parameters |
 | `PLUGIN_INTERFACE.md` | C ABI for element plugins, discovery paths, loading process |

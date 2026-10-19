@@ -1,7 +1,7 @@
 # Saving and comparing Scope results
 
 In a Scope window, **Save Run…** saves the current recording to a `.s7scope`
-file. **Open Run…** opens one or more saved files as dashed comparison traces,
+file. **Open Run…** opens one or more saved files as comparison traces (thinner and translucent, with a dashed legend swatch),
 with the filename, source Scope and a unique comparison number in the legend.
 The current run remains a solid trace. All traces use their original model
 timestamps; loading does not interpolate, shift time or run the model again.

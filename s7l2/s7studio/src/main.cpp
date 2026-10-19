@@ -5,7 +5,9 @@
 #include "scope_view_window.hpp"
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
-#include "qcp.h"
+#include "viewers/line_plot_view.hpp"
+#include "viewers/trajectory_geometry.hpp"
+#include <QtGraphs/QLineSeries>
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
 #include "deployment_support.hpp"
@@ -799,50 +801,64 @@ int runPhasePortraitCheck(int argc, char** argv)
             require(!label->text().contains(QStringLiteral("display dropped")), "Phase Portrait run lost mailbox samples");
         const auto check = [&] {
             QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
-            auto* plot = phase->findChild<QCustomPlot*>();
-            auto* curve = plot && plot->plottableCount() == 1 ? qobject_cast<QCPCurve*>(plot->plottable(0)) : nullptr;
-            if (!curve || curve->data()->size() != steps) {
+            auto* plot = phase->plotView();
+            require(plot->series().size() == 1 && plot->series().front() == phase->trajectorySeries(),
+                "Phase Portrait must draw exactly one trajectory series");
+            // Every pair is recorded; up to kMaxDrawnPoints are drawn, beyond
+            // that a uniform subsample that keeps both ends.
+            const auto& points = phase->points();
+            if (points.size() != steps) {
                 throw std::runtime_error("Phase Portrait state pairs: received "
-                    + std::to_string(curve ? curve->data()->size() : 0) + ", expected " + std::to_string(steps));
+                    + std::to_string(points.size()) + ", expected " + std::to_string(steps));
             }
-            require(plot->xAxis->label() == QStringLiteral("phase_portrait_1/x")
-                && plot->yAxis->label() == QStringLiteral("phase_portrait_1/y"), "Phase axes are mislabeled");
+            const auto drawnPoints = phase->trajectorySeries()->points();
+            const qsizetype stride = (steps + s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints - 1)
+                / s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints;
+            require(drawnPoints.size() <= s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints + 1
+                && drawnPoints.front() == points.front() && drawnPoints.back() == points.back(),
+                "Drawn phase trajectory is unbounded or lost its ends");
+            for (qsizetype i = 0; i + 1 < drawnPoints.size(); ++i)
+                require(drawnPoints[i] == points[i * stride], "Drawn phase trajectory is not a uniform subsample");
+            if (stride == 1) require(drawnPoints == points, "Phase Portrait thinned a trajectory below its display limit");
+            require(plot->xTitle() == QStringLiteral("phase_portrait_1/x")
+                && plot->yTitle() == QStringLiteral("phase_portrait_1/y"), "Phase axes are mislabeled");
             long index = 0;
-            for (auto it = curve->data()->constBegin(); it != curve->data()->constEnd(); ++it, ++index) {
-                require(it->key == expected[index].first && it->value == expected[index].second,
+            for (const auto& point : points) {
+                require(point.x() == expected[index].first && point.y() == expected[index].second,
                     "Plotted X/Y values differ from same-step headless integrator states");
-                require(plot->xAxis->range().contains(it->key) && plot->yAxis->range().contains(it->value),
+                require(point.x() >= plot->xMin() && point.x() <= plot->xMax()
+                    && point.y() >= plot->yMin() && point.y() <= plot->yMax(),
                     "Plotted phase point lies outside the visible axis ranges");
                 const double amplitude = std::exp(.5 * index * std::log1p(dt * dt));
                 const double angle = index * std::atan(dt);
-                require(std::abs(it->key - amplitude * std::cos(angle)) < 1e-10
-                    && std::abs(it->value - amplitude * std::sin(angle)) < 1e-10,
+                require(std::abs(point.x() - amplitude * std::cos(angle)) < 1e-10
+                    && std::abs(point.y() - amplitude * std::sin(angle)) < 1e-10,
                     "Phase trajectory disagrees with forward-Euler discrete reference");
+                ++index;
             }
-            require(plot->xAxis->range().lower <= -1 && plot->xAxis->range().upper >= 1
-                && plot->yAxis->range().lower <= -1 && plot->yAxis->range().upper >= 1,
+            require(plot->xMin() <= -1 && plot->xMax() >= 1 && plot->yMin() <= -1 && plot->yMax() >= 1,
                 "Phase trajectory is clipped by plot axes");
         };
         check();
         phase->close(); app.sendPostedEvents(nullptr, QEvent::DeferredDelete); open(); check();
         if (frequency == 1000) {
             if (const auto png = qEnvironmentVariable("S7_PHASE_PORTRAIT_PNG"); !png.isEmpty()) {
-                phase->findChild<QCustomPlot*>()->replot();
-                phase->grab().save(png);
+                for (int i = 0; i < 20; ++i) { app.processEvents(); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+                require(phase->grab().save(png), "Cannot save Phase Portrait screenshot");
             }
         }
+        const auto drawn = [&] {
+            QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
+            return phase->trajectorySeries()->points();
+        };
         phase->clearSamples();
-        QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
-        require(qobject_cast<QCPCurve*>(phase->findChild<QCustomPlot*>()->plottable(0))->data()->size() == 0, "Phase clear retained old points");
+        require(drawn().isEmpty() && phase->points().isEmpty(), "Phase clear retained old points");
         // Mismatched steps must not manufacture a point, including after clear.
         phase->appendXSample(1, 5); phase->appendYSample(2, 6);
-        QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
-        require(qobject_cast<QCPCurve*>(phase->findChild<QCustomPlot*>()->plottable(0))->data()->size() == 0, "Phase paired different runtime steps");
+        require(drawn().isEmpty(), "Phase paired different runtime steps");
         phase->appendXSample(2, 7);
-        QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
-        auto* paired = qobject_cast<QCPCurve*>(phase->findChild<QCustomPlot*>()->plottable(0));
-        require(paired->data()->size() == 1 && paired->data()->constBegin()->key == 7
-            && paired->data()->constBegin()->value == 6, "Reverse-order phase pairing failed");
+        const auto paired = drawn();
+        require(paired.size() == 1 && paired.front() == QPointF(7, 6), "Reverse-order phase pairing failed");
         std::cout << "Phase Portrait " << frequency << " Hz: " << steps
                   << " exact headless/discrete-reference pairs; late open/reopen and pairing passed\n";
     }
@@ -941,57 +957,56 @@ int runPhaseTrajectory3DCheck(int argc, char** argv)
             require(!label->text().contains(QStringLiteral("display dropped")), "3D Phase Trajectory run lost mailbox samples");
         const auto check = [&] {
             QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
-            const auto plots = phase->findChildren<QCustomPlot*>();
-            require(plots.size() == 3, "Missing 3D orthogonal projections");
-            const std::array<std::pair<int, int>, 3> projections{{{0, 1}, {0, 2}, {1, 2}}};
-            const std::array<QString, 3> names{QStringLiteral("phase_trajectory_1/x"),
-                QStringLiteral("phase_trajectory_1/y"), QStringLiteral("phase_trajectory_1/z")};
-            int projection = 0;
-            for (auto* plot : plots) {
-                const auto [x, y] = projections[projection++];
-                auto* curve = plot->plottableCount() == 1 ? qobject_cast<QCPCurve*>(plot->plottable(0)) : nullptr;
-                require(curve && curve->data()->size() == steps, "3D trajectory lost or duplicated triples");
-                require(plot->xAxis->label() == names[x] && plot->yAxis->label() == names[y],
-                    "3D projection axes are mislabeled");
-                long index = 0;
-                for (const auto& point : *curve->data()) {
-                    require(point.key == expected[index][x] && point.value == expected[index][y],
-                        "3D projection differs from same-step headless states");
-                    require(plot->xAxis->range().contains(point.key) && plot->yAxis->range().contains(point.value),
-                        "3D projection clips a trajectory point");
-                    const double amplitude = std::exp(.5 * index * std::log1p(dt * dt));
-                    const double angle = index * std::atan(dt);
-                    const std::array<double, 3> analytical{amplitude * std::cos(angle),
-                        amplitude * std::sin(angle), .2 * index * dt};
-                    require(std::abs(point.key - analytical[x]) < 1e-10 &&
-                        std::abs(point.value - analytical[y]) < 1e-10, "3D helix disagrees with discrete reference");
-                    ++index;
-                }
+            const auto& points = phase->points();
+            const auto& geometry = phase->bridge()->trajectoryGeometry();
+            require(points.size() == steps, "3D trajectory lost or duplicated triples");
+            // One continuous line strip through every triple, in step order.
+            require(geometry.primitiveType() == QQuick3DGeometry::PrimitiveType::LineStrip
+                && geometry.vertexCount() == steps, "3D trajectory is not one continuous line through every triple");
+            QStringList labels;
+            for (const auto& label : phase->bridge()->labels()) labels << label.toMap().value(QStringLiteral("text")).toString();
+            for (const auto* axis : {"X: phase_trajectory_1/x", "Y: phase_trajectory_1/y", "Z: phase_trajectory_1/z"})
+                require(labels.contains(QString::fromLatin1(axis)), "3D axes are mislabeled");
+            constexpr float extent = s7studio::viewers::kTrajectoryHalfExtent;
+            long index = 0;
+            for (const auto& point : points) {
+                require(point[0] == expected[index][0] && point[1] == expected[index][1] && point[2] == expected[index][2],
+                    "3D trajectory differs from same-step headless states");
+                const double amplitude = std::exp(.5 * index * std::log1p(dt * dt));
+                const double angle = index * std::atan(dt);
+                const std::array<double, 3> analytical{amplitude * std::cos(angle),
+                    amplitude * std::sin(angle), .2 * index * dt};
+                for (int axis = 0; axis < 3; ++axis)
+                    require(std::abs(point[axis] - analytical[axis]) < 1e-10, "3D helix disagrees with discrete reference");
+                const auto vertex = geometry.vertexAt(index);
+                require((vertex - s7studio::viewers::toScene(point, phase->bounds())).length() < 1e-3f,
+                    "3D vertex does not show its triple");
+                require(std::abs(vertex.x()) <= extent * 1.0001f && std::abs(vertex.y()) <= extent * 1.0001f
+                    && std::abs(vertex.z()) <= extent * 1.0001f, "3D frame clips a trajectory point");
+                ++index;
             }
         };
         check();
         phase->close(); app.sendPostedEvents(nullptr, QEvent::DeferredDelete); open(); check();
         if (frequency == 1000) {
             if (const auto png = qEnvironmentVariable("S7_PHASE_TRAJECTORY_3D_PNG"); !png.isEmpty()) {
-                for (auto* plot : phase->findChildren<QCustomPlot*>()) plot->replot();
+                for (int i = 0; i < 20; ++i) { app.processEvents(); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
                 require(phase->grab().save(png), "Cannot save 3D viewer screenshot");
             }
         }
+        const auto drawn = [&] {
+            QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
+            return phase->points();
+        };
         phase->clearSamples();
+        require(drawn().isEmpty() && phase->bridge()->trajectoryGeometry().vertexCount() == 0,
+            "3D clear retained old points");
         phase->appendZSample(2, 9); phase->appendXSample(1, 5); phase->appendYSample(2, 8);
-        QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
-        for (auto* plot : phase->findChildren<QCustomPlot*>())
-            require(qobject_cast<QCPCurve*>(plot->plottable(0))->data()->isEmpty(), "3D mixed different runtime steps");
+        require(drawn().isEmpty(), "3D mixed different runtime steps");
         phase->appendXSample(2, 7);
-        QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
-        const std::array<std::pair<double, double>, 3> paired{{{7, 8}, {7, 9}, {8, 9}}};
-        int projection = 0;
-        for (auto* plot : phase->findChildren<QCustomPlot*>()) {
-            auto* curve = qobject_cast<QCPCurve*>(plot->plottable(0));
-            const auto [x, y] = paired[projection++];
-            require(curve->data()->size() == 1 && curve->data()->constBegin()->key == x &&
-                curve->data()->constBegin()->value == y, "3D reverse-order triple pairing failed");
-        }
+        const auto paired = drawn();
+        require(paired.size() == 1 && paired.front() == s7studio::viewers::TrajectoryPoint{7, 8, 9},
+            "3D reverse-order triple pairing failed");
         std::cout << "3D Phase Trajectory " << frequency << " Hz: " << steps
                   << " exact headless/discrete-reference triples; late open/reopen and pairing passed\n";
     }
@@ -1044,20 +1059,22 @@ int runScopeRunCheck(int argc, char** argv)
         if (!scope) throw std::runtime_error("Missing Scope window");
         const auto check = [&] {
             QMetaObject::invokeMethod(scope, "refreshPlot", Qt::DirectConnection);
-            auto* plot = scope->findChild<QCustomPlot*>();
-            const auto data = plot->graph(0)->data();
-            if (data->isEmpty() || data->constBegin()->key > 2 * dt
-                || std::abs((data->constEnd() - 1)->key - 10.0) > 1e-8
-                || plot->xAxis->range().lower > 2 * dt
-                || std::abs(plot->xAxis->range().upper - 10.0) > 1e-8) {
+            auto* plot = scope->plotView();
+            auto* series = scope->plottedSeries(QStringLiteral("live:v"));
+            if (!series || plot->series().size() != 1) throw std::runtime_error("Scope channel was not plotted");
+            const auto data = series->points();
+            if (data.isEmpty() || data.front().x() > 2 * dt
+                || std::abs(data.back().x() - 10.0) > 1e-8
+                || plot->xMin() > 2 * dt
+                || std::abs(plot->xMax() - 10.0) > 1e-8) {
                 throw std::runtime_error("Scope lost full run time range");
             }
             double previous = 0.0;
-            for (auto it = data->constBegin(); it != data->constEnd(); ++it) {
-                if (it->key - previous > 0.01 || std::abs(it->value - std::sin(it->key)) > 0.02) {
+            for (const auto& point : data) {
+                if (point.x() - previous > 0.01 || std::abs(point.y() - std::sin(point.x())) > 0.02) {
                     throw std::runtime_error("Scope lost oscillator curve");
                 }
-                previous = it->key;
+                previous = point.x();
             }
         };
         check();
@@ -1065,6 +1082,12 @@ int runScopeRunCheck(int argc, char** argv)
         app.sendPostedEvents(nullptr, QEvent::DeferredDelete);
         open();
         check();
+        if (frequency == 1000) {
+            if (const auto png = qEnvironmentVariable("S7_SCOPE_PNG"); !png.isEmpty()) {
+                for (int i = 0; i < 20; ++i) { app.processEvents(); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+                if (!scope->grab().save(png)) throw std::runtime_error("Cannot save Scope screenshot");
+            }
+        }
     }
     return 0;
 }

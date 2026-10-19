@@ -34,8 +34,10 @@ ctest --test-dir build -R '^s7studio_phase_portrait$' --output-on-failure
 
 The offscreen integration regression loads the saved diagram and resolves its
 observer connections, runs the real bundled worker and MainWindow sample
-routing, and examines every plotted `QCPCurve` point. Ten model seconds at
-1/10/100 kHz produce 10,000/100,000/1,000,000 paired points respectively. Each
+routing, and examines every recorded point and the plotted Qt Graphs line
+series. Ten model seconds at 1/10/100 kHz produce 10,000/100,000/1,000,000
+paired points respectively; up to 200,000 are drawn as recorded, beyond that
+the drawn series must be a uniform subsample that keeps both ends. Each
 pair must equal the same-step headless integrator outputs exactly and agree
 with the independent closed-form Euler recurrence within `1e-10`. It checks
 axis mapping, plot ranges, opening before/after execution, closing/reopening,

@@ -1,5 +1,7 @@
 #include "element_picker_panel.hpp"
 
+#include "viewers/viewer_registry.hpp"
+
 #include "s7/element_registry.hpp"
 #include "s7/element_catalog.hpp"
 
@@ -138,27 +140,18 @@ void ElementPickerPanel::buildCategoryTree() {
     QFont observerFont = observerCategory->font(0);
     observerFont.setBold(true);
     observerCategory->setFont(0, observerFont);
-    auto* scopeItem = new QTreeWidgetItem(observerCategory);
-    scopeItem->setText(0, QStringLiteral("Scope"));
-    scopeItem->setText(1, QStringLiteral("N→plot"));
-    scopeItem->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:Scope"));
-    scopeItem->setData(0, Qt::UserRole + 1, QStringLiteral("Plots one or more observed signals over time."));
-    auto* phasePortraitItem = new QTreeWidgetItem(observerCategory);
-    phasePortraitItem->setText(0, QStringLiteral("Phase Portrait"));
-    phasePortraitItem->setText(1, QStringLiteral("2→plot"));
-    phasePortraitItem->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:PhasePortrait"));
-    phasePortraitItem->setData(0, Qt::UserRole + 1,
-                               QStringLiteral("Plots one observed signal against another."));
-    auto* phase3DItem = new QTreeWidgetItem(observerCategory);
-    phase3DItem->setText(0, QStringLiteral("3D Phase Trajectory"));
-    phase3DItem->setText(1, QStringLiteral("3→plot"));
-    phase3DItem->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:PhaseTrajectory3D"));
-    phase3DItem->setData(0, Qt::UserRole + 1,
-                         QStringLiteral("Plots one observed signal in three orthogonal projections."));
+    const auto& viewerTypes = viewers::ViewerRegistry::instance().types();
+    for (const auto& type : viewerTypes) {
+        auto* item = new QTreeWidgetItem(observerCategory);
+        item->setText(0, type.displayName);
+        item->setText(1, type.portSummary);
+        item->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:") + type.typeId);
+        item->setData(0, Qt::UserRole + 1, type.description);
+    }
     elementTree_->addTopLevelItem(observerCategory);
 
     elementTree_->expandAll();
-    elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count() + 3));
+    elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count() + viewerTypes.size()));
 }
 
 void ElementPickerPanel::onSearchTextChanged(const QString& text) {

@@ -1,29 +1,33 @@
 #pragma once
 
-#include <QVector>
-#include <QMap>
-#include <QSharedPointer>
+#include "scope_recording.hpp"
+#include "viewers/observation_viewer.hpp"
+
+#include <QHash>
+#include <QString>
+#include <QWidget>
 
 #include <cstdint>
-#include <functional>
 #include <Qt>
-#include <QWidget>
 
 class QIODevice;
 class QCheckBox;
 class QLabel;
+class QLineSeries;
 class QPushButton;
 class QTimer;
-class QVBoxLayout;
-class QCustomPlot;
-class QTemporaryFile;
 class QScrollBar;
+
+namespace s7studio::viewers {
+class LinePlotView;
+}
 
 namespace s7studio::ui {
 
 // A time-series view for one Studio Scope observer. Each connected observer
 // input is a separate plotted channel; observation is outside the runtime graph.
-class ScopeViewWindow : public QWidget
+// The recording (ScopeRecording) is drawn with Qt Graphs over model time.
+class ScopeViewWindow : public QWidget, public viewers::ObservationViewer
 {
     Q_OBJECT
 
@@ -31,12 +35,16 @@ public:
     explicit ScopeViewWindow(QString probeName,
                              QWidget* parent = nullptr,
                              Qt::WindowFlags flags = Qt::WindowFlags());
+    ~ScopeViewWindow() override;
+
+    // Registry entry: "Scope", one channel per "<id>/<channel>" probe.
+    static auto viewerType() -> viewers::ViewerType;
 
     [[nodiscard]] auto probeName() const -> QString;
 
     void appendSample(double timeSeconds, double value);
     void appendSample(const QString& channel, double timeSeconds, double value);
-    void clearSamples();
+    void clearSamples() override;
     // Same full-resolution CSV writer used by the export action. The caller
     // supplies a writable device; finite doubles retain round-trip precision.
     [[nodiscard]] bool writeRecordedCsv(QIODevice& device, QString* error = nullptr) const;
@@ -46,9 +54,22 @@ public:
     [[nodiscard]] bool openRunResults(QIODevice& device, const QString& label, QString* error = nullptr);
     void clearComparisons();
     // Samples the runtime produced but the UI dropped because it fell behind.
-    void setDroppedSampleCount(std::uint64_t dropped);
+    void setDroppedSampleCount(std::uint64_t dropped) override;
 
-    static constexpr int kMaxInMemorySamplesPerSeries = 20'000;
+    // ObservationViewer
+    [[nodiscard]] auto widget() -> QWidget* override { return this; }
+    [[nodiscard]] auto subscribes(const QString& probeName) const -> bool override;
+    void appendObservedSample(const viewers::ObservedSample& sample) override;
+
+    [[nodiscard]] auto recording() const -> const ScopeRecording& { return recording_; }
+    [[nodiscard]] auto plotView() const -> viewers::LinePlotView* { return plot_; }
+    // The plotted series of a recording key (see ScopeRecording::series()).
+    [[nodiscard]] auto plottedSeries(const QString& key) const -> QLineSeries*;
+
+    static constexpr int kMaxInMemorySamplesPerSeries = ScopeRecording::kMaxInMemorySamplesPerSeries;
+
+protected:
+    void showEvent(QShowEvent* event) override;
 
 private slots:
     void clearBuffers();
@@ -58,58 +79,24 @@ private slots:
     void refreshPlot();
 
 private:
-    struct Series {
-        struct SpillIndexEntry {
-            double timeSeconds = 0.0;
-            qint64 byteOffset = 0;
-        };
-        int graphIndex = -1;
-        QString channelName;
-        QString comparisonLabel;
-        QString recordingWarning;
-        QVector<double> time;
-        QVector<double> value;
-        QVector<SpillIndexEntry> spillIndex;
-        QSharedPointer<QTemporaryFile> spillFile;
-        qint64 spilledSamples = 0;
-        std::uint64_t receivedSamples = 0;
-        std::uint64_t plotStride = 1;
-        double lastValue = 0.0;
-        double firstTime = 0.0;
-        double lastTime = 0.0;
-        bool hasSamples = false;
-        // Set once spilling to disk fails; stops retrying it on every sample
-        // and marks that decimation below is now discarding full-resolution
-        // data rather than trimming a disk-backed copy.
-        bool spillFailed = false;
-    };
-
-    void configurePlot();
-    void addSeriesGraph(Series& series);
-    void rebuildGraphs();
-    [[nodiscard]] bool visitSamples(const Series& series,
-        const std::function<void(double, double)>& visitor, QString* error) const;
-    auto spillSeries(Series& series) -> bool;
-    auto appendToSpill(Series& series, double timeSeconds, double value) -> bool;
-    void decimatePlotBuffer(Series& series);
-    void setVisibleGraphData(Series& series, double lowerTime, double upperTime, bool fitFullRun);
+    // Creates/removes plotted series so they match the recording's series.
+    void syncSeries(bool restyle);
+    void setVisibleData();
     void updateStatus();
     void updateTimeScrollBar();
     void scrollToTimePosition(int position);
+    void onXRangeChanged();
+
     QString probeName_;
-    std::uint64_t droppedSamples_ = 0;
-    QString temporaryDirectory_;
-    QString temporaryWriteError_;
+    ScopeRecording recording_;
+    QHash<QString, QLineSeries*> lines_;
     bool dirty_ = false;
     bool updatingTimeScrollBar_ = false;
     bool hasTimeRange_ = false;
     double dataMinTime_ = 0.0;
     double dataMaxTime_ = 0.0;
 
-    QMap<QString, Series> series_;
-    std::uint64_t comparisonSequence_ = 0;
-
-    QCustomPlot* plot_ = nullptr;
+    viewers::LinePlotView* plot_ = nullptr;
     QCheckBox* autoScaleYCheck_ = nullptr;
     QCheckBox* fitAllTimeCheck_ = nullptr;
     QScrollBar* timeScrollBar_ = nullptr;

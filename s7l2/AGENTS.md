@@ -69,7 +69,7 @@ ctest --test-dir build -R s7io_smoke
 - JSON schemas under `s7runtime/examples/` are canonical runtime inputs.
 - Runtime default schema path is compiled via `S7RUNTIME_DEFAULT_SCHEMA_PATH` in `s7runtime/CMakeLists.txt`.
 - Runtime/plugin integration point: plugin `.so` discovery uses `--plugin-dir` directories, `~/.s7/plugins`, `/opt/s7/plugins`, `./plugins`, and `$S7_PLUGIN_PATH`; plugin targets install under `lib/s7/plugins`.
-- External UI libs live in `external/` (e.g., `QCustomPlot`, `QSchematic`); avoid coupling core logic to them.
+- External UI libs live in `external/` (e.g., `QSchematic`); avoid coupling core logic to them. Studio's observation viewers use Qt Graphs and Qt Quick 3D (`s7studio/src/viewers/`, `docs/STUDIO_OBSERVATION_VIEWERS.md`).
 - Treat code under `external/` as vendor code: default to **no edits**.
 - If behavior/style changes are needed, implement wrappers/subclasses/adapters in project modules (typically `s7studio/`) instead of patching `external/`.
 - Modify `external/` only when the user explicitly requests a vendor patch; document rationale and keep such patches minimal and isolated.

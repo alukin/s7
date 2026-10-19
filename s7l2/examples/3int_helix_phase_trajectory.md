@@ -10,11 +10,12 @@ This extends the two-integrator oscillator with a third integrator:
 - Y: second integrator, `dy/dt = x`, initially 0.
 - Z: third integrator, `dz/dt = 0.2`, initially 0.
 
-The trajectory is a rising helix. The viewer displays three orthogonal
-projections: **XY** is an almost circular orbit; **XZ** and **YZ** show the
-oscillating states against increasing height. The existing Scope shows Y
-against model time. Auto Scale fits the projections; drag/zoom explores them.
-The viewer currently shows these projections rather than a rotatable 3D scene.
+The trajectory is a rising helix, drawn as one continuous curve in a rotatable
+Qt Quick 3D scene (drag to rotate, scroll to zoom; a red marker shows the newest
+point). The **XY** button looks down the Z axis at an almost circular orbit;
+**XZ** and **YZ** show the oscillating states against increasing height; **3D**
+returns to the default view. The existing Scope shows Y against model time.
+Auto Scale fits each axis to the data.
 
 The continuous solution is `(cos(t), sin(t), 0.2*t)`. Forward Euler causes
 slow outward radial drift. At runtime step `k`, causal-memory outputs publish
@@ -33,15 +34,19 @@ ctest --test-dir build -R '^s7studio_phase_trajectory_3d$' --output-on-failure
 ```
 
 The test loads the diagram, checks the observer wiring, runs the bundled worker
-through MainWindow routing, and compares every point in all three projections
-with same-step headless states exactly and the discrete analytical solution
-within `1e-10`. It covers ten seconds at 1/10 kHz, axis labels/ranges, opening
-before/after the run, closing/reopening, clearing and out-of-order coordinates.
-This does not establish an arbitrary live-rendering throughput limit.
+through MainWindow routing, and compares every recorded triple with same-step
+headless states exactly and the discrete analytical solution within `1e-10`.
+It checks that the trajectory geometry is one line strip with a vertex for each
+triple at its scaled position inside the frame, the axis labels, opening
+before/after the run, closing/reopening, clearing and out-of-order coordinates,
+for ten seconds at 1/10 kHz. Offscreen, Qt Quick 3D draws nothing, so the
+rendered picture is checked by hand (see the manual test plan in
+[STUDIO_OBSERVATION_VIEWERS.md](../docs/STUDIO_OBSERVATION_VIEWERS.md)). This
+does not establish an arbitrary live-rendering throughput limit.
 
-Optional screenshot:
+Optional screenshot (on a desktop session; offscreen leaves the 3D view empty):
 
 ```bash
-QT_QPA_PLATFORM=offscreen S7_PHASE_TRAJECTORY_3D_PNG=/tmp/helix-3d.png \
+S7_PHASE_TRAJECTORY_3D_PNG=/tmp/helix-3d.png \
   ./build/s7studio/s7studio --phase-trajectory-3d-check
 ```

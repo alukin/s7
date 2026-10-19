@@ -31,7 +31,8 @@ PREFIX = "mingw-w64-ucrt-x86_64-"
 # Compiler support: libstdc++ headers and libraries live in the gcc package.
 TOOLCHAIN = ["gcc", "gcc-libs", "crt", "headers", "winpthreads", "libwinpthread"]
 CORE = ["boost", "openssl", "zlib"]
-STUDIO = ["qt6-base"]
+# Studio's observation viewers: Qt Quick (declarative), Qt Graphs, Qt Quick 3D.
+STUDIO = ["qt6-base", "qt6-declarative", "qt6-graphs", "qt6-quick3d"]
 SPECTRAL = ["fftw", "pkgconf"]
 
 # Dependencies needed only to run the Windows-hosted compiler or build tools,

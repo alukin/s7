@@ -52,11 +52,22 @@ PACKAGES+=(
   zlib1g-dev
 )
 
-# s7studio: Qt6 Core, Gui, Widgets, PrintSupport (+ OpenGL headers required by Qt6Gui).
+# s7studio: Qt6 Core, Gui, Widgets (+ OpenGL headers required by Qt6Gui); the
+# observation viewers' Qt Quick, Qt Graphs and Qt Quick 3D (Qt >= 6.9) and the
+# QML modules their scenes import at run time.
 if (( WITH_STUDIO )); then
   PACKAGES+=(
     qt6-base-dev
     libgl-dev
+    qt6-declarative-dev
+    qt6-graphs-dev
+    qt6-quick3d-dev
+    qml6-module-qtquick
+    qml6-module-qtquick-window
+    qml6-module-qtqml-workerscript
+    qml6-module-qtgraphs
+    qml6-module-qtquick3d
+    qml6-module-qtquick3d-helpers
   )
 fi
 

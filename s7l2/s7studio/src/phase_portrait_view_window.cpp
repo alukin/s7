@@ -1,6 +1,6 @@
 #include "phase_portrait_view_window.hpp"
 
-#include "qcp.h"
+#include "viewers/line_plot_view.hpp"
 
 #include <QCheckBox>
 #include <QColor>
@@ -9,14 +9,13 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
-#include <QPen>
 #include <QPushButton>
 #include <QStringList>
 #include <QTextStream>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QtGraphs/QLineSeries>
 
-#include <algorithm>
 #include <utility>
 
 namespace s7studio::ui {
@@ -24,6 +23,19 @@ namespace s7studio::ui {
 namespace {
 const QColor kTrajectoryColor("#2ca02c");
 } // namespace
+
+auto PhasePortraitViewWindow::viewerType() -> viewers::ViewerType
+{
+    return {QStringLiteral("PhasePortrait"), QStringLiteral("Phase Portrait"), QStringLiteral("2→plot"),
+            QStringLiteral("Plots one observed signal against another."), {QStringLiteral("x"), QStringLiteral("y")},
+            [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* {
+                if (spec.probeNames.size() != 2 || spec.probeNames[0].isEmpty() || spec.probeNames[1].isEmpty()
+                    || spec.probeNames[0] == spec.probeNames[1]) return nullptr;
+                return new PhasePortraitViewWindow(spec.probeNames[0], spec.probeNames[1], nullptr,
+                    Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |
+                        Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+            }};
+}
 
 PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
                                                  QString yProbeName,
@@ -59,10 +71,11 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
 
     rootLayout->addLayout(controls);
 
-    plot_ = new QCustomPlot(this);
+    plot_ = new viewers::LinePlotView(this);
+    plot_->setAxisTitles(xProbeName_, yProbeName_);
+    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging in the plot."));
+    curve_ = plot_->addSeries(QStringLiteral("%1 vs %2").arg(yProbeName_, xProbeName_), {kTrajectoryColor, 1.4, false});
     rootLayout->addWidget(plot_, 1);
-
-    configurePlot();
 
     repaintTimer_ = new QTimer(this);
     repaintTimer_->setInterval(33);
@@ -73,53 +86,38 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     connect(exportButton_, &QPushButton::clicked, this, &PhasePortraitViewWindow::exportRecordedCsv);
 }
 
-void PhasePortraitViewWindow::configurePlot()
+auto PhasePortraitViewWindow::subscribes(const QString& probeName) const -> bool
 {
-    plot_->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom);
-    plot_->xAxis->setLabel(xProbeName_);
-    plot_->yAxis->setLabel(yProbeName_);
+    return probeName == xProbeName_ || probeName == yProbeName_;
+}
 
-    curve_ = new QCPCurve(plot_->xAxis, plot_->yAxis);
-    curve_->setLineStyle(QCPCurve::lsLine);
-    curve_->setScatterStyle(QCPScatterStyle(QCPScatterStyle::ssNone));
-    QPen pen(kTrajectoryColor);
-    pen.setWidthF(1.4);
-    curve_->setPen(pen);
+void PhasePortraitViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
+{
+    if (sample.probeName == xProbeName_) appendXSample(sample.step, sample.value);
+    if (sample.probeName == yProbeName_) appendYSample(sample.step, sample.value);
 }
 
 void PhasePortraitViewWindow::appendXSample(const long step, const double value)
 {
-    if (pendingYStep_ && *pendingYStep_ == step) {
-        emitPoint(value, pendingYValue_);
-        pendingYStep_.reset();
-        pendingXStep_.reset();
-    } else {
-        pendingXStep_ = step;
-        pendingXValue_ = value;
-    }
+    addCoordinate(step, 0, value);
 }
 
 void PhasePortraitViewWindow::appendYSample(const long step, const double value)
 {
-    if (pendingXStep_ && *pendingXStep_ == step) {
-        emitPoint(pendingXValue_, value);
-        pendingXStep_.reset();
-        pendingYStep_.reset();
-    } else {
-        pendingYStep_ = step;
-        pendingYValue_ = value;
-    }
+    addCoordinate(step, 1, value);
 }
 
-void PhasePortraitViewWindow::emitPoint(const double x, const double y)
+void PhasePortraitViewWindow::addCoordinate(const long step, const std::size_t axis, const double value)
 {
-    if (xValues_.size() >= kMaxPoints) {
-        xValues_.pop_front();
-        yValues_.pop_front();
+    const auto discarded = aligner_.discardedSteps();
+    if (const auto point = aligner_.add(step, axis, value)) {
+        if (points_.size() >= kMaxPoints) {
+            points_.pop_front();
+        }
+        points_.push_back({(*point)[0], (*point)[1]});
+        dirty_ = true;
     }
-    xValues_.push_back(x);
-    yValues_.push_back(y);
-    dirty_ = true;
+    if (aligner_.discardedSteps() != discarded) updateStatus();
 }
 
 void PhasePortraitViewWindow::clearSamples()
@@ -136,28 +134,26 @@ void PhasePortraitViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 void PhasePortraitViewWindow::updateStatus()
 {
     QStringList parts;
-    if (xValues_.size() >= kMaxPoints) {
+    if (points_.size() >= kMaxPoints) {
         parts << QStringLiteral("trajectory trimmed to %1 points").arg(kMaxPoints);
     }
-    if (droppedSamples_ > 0) {
-        parts << QStringLiteral("display dropped %1 samples").arg(droppedSamples_);
+    if (points_.size() > kMaxDrawnPoints) {
+        parts << QStringLiteral("drawing every %1th point").arg((points_.size() + kMaxDrawnPoints - 1) / kMaxDrawnPoints);
+    }
+    if (const auto totalDropped = droppedSamples_ + aligner_.discardedSteps(); totalDropped > 0) {
+        parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
     }
     statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
 
 void PhasePortraitViewWindow::clearBuffers()
 {
-    xValues_.clear();
-    yValues_.clear();
-    pendingXStep_.reset();
-    pendingYStep_.reset();
+    points_.clear();
+    aligner_.clear();
     droppedSamples_ = 0;
     updateStatus();
-
-    curve_->data()->clear();
-
+    viewers::LinePlotView::setPoints(curve_, {});
     dirty_ = true;
-    plot_->replot(QCustomPlot::rpQueuedReplot);
 }
 
 void PhasePortraitViewWindow::exportRecordedCsv()
@@ -179,9 +175,8 @@ void PhasePortraitViewWindow::exportRecordedCsv()
 
     QTextStream out(&file);
     out << xProbeName_ << ',' << yProbeName_ << '\n';
-    const int count = std::min(xValues_.size(), yValues_.size());
-    for (int i = 0; i < count; ++i) {
-        out << xValues_[i] << ',' << yValues_[i] << '\n';
+    for (const auto& point : std::as_const(points_)) {
+        out << point.x() << ',' << point.y() << '\n';
     }
 }
 
@@ -194,13 +189,21 @@ void PhasePortraitViewWindow::refreshPlot()
     }
 
     dirty_ = false;
-    curve_->setData(xValues_, yValues_);
-
-    if (autoScaleCheck_->isChecked()) {
-        plot_->rescaleAxes(true);
+    if (points_.size() <= kMaxDrawnPoints) {
+        viewers::LinePlotView::setPoints(curve_, points_);
+    } else {
+        const qsizetype stride = (points_.size() + kMaxDrawnPoints - 1) / kMaxDrawnPoints;
+        QList<QPointF> drawn;
+        drawn.reserve(points_.size() / stride + 2);
+        for (qsizetype index = 0; index < points_.size(); index += stride) drawn.push_back(points_[index]);
+        if ((points_.size() - 1) % stride != 0) drawn.push_back(points_.back());
+        viewers::LinePlotView::setPoints(curve_, drawn);
     }
 
-    plot_->replot(QCustomPlot::rpQueuedReplot);
+    if (autoScaleCheck_->isChecked()) {
+        static_cast<void>(plot_->fitAll());
+    }
+    updateStatus();
 }
 
 } // namespace s7studio::ui

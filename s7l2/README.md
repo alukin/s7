@@ -20,10 +20,10 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 | `s7runtime/` | Headless runtime executable: JSON schema loader, plugin loader, node identity, control-plane MVP |
 | `s7noise/` | Example plugin: white and pink noise sources |
 | `s7spectral/` | Reference third-party plugin (FFT), built out of tree against the installed SDK by `ctest -R s7spectral_sdk_smoke` |
-| `s7studio/` | Qt6 Studio: diagram editor, element library, local embedded runtime with Scope windows, headless node discovery |
+| `s7studio/` | Qt6 Studio: diagram editor, element library, local embedded runtime, observation viewers (Scope, Phase Portrait, 3D trajectory) on Qt Graphs and Qt Quick 3D, headless node discovery |
 | `s7ctl/` | CLI: check a diagram offline, deploy it to its nodes, read a node's deployed configuration and stream status, recover a stream |
 | `s7tests/` | Numerical/reference and diagram-runner tests; module smoke tests live in `<module>/tests/`; the two-node integration driver currently lives in `tools/` |
-| `external/` | Vendor code (QSchematic, QCustomPlot) — do not modify |
+| `external/` | Vendor code (QSchematic) — do not modify |
 
 ## Implemented
 

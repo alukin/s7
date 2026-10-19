@@ -11,7 +11,7 @@ tools/install_deps_ubuntu.sh --windows      # clang-22, lld-22, llvm-22, wine, z
 tools/windows/fetch_msys2_sysroot.py        # ~150 MB into ~/.cache/s7/msys2-ucrt64
 ```
 
-The fetch script downloads the MSYS2 UCRT64 packages S7 needs (mingw-w64 CRT and headers, GCC's libstdc++ and runtime DLLs, Boost, OpenSSL, zlib, Qt6, FFTW) and everything they depend on, checks their SHA-256 sums against the repository database and unpacks them into one sysroot. `--no-studio` skips Qt, `--no-spectral` skips FFTW; another directory can be given as an argument (then pass `-DS7_MINGW_SYSROOT=<dir>` to CMake). MSYS2 is a rolling distribution: rerunning the script updates the sysroot to the packages it ships now.
+The fetch script downloads the MSYS2 UCRT64 packages S7 needs (mingw-w64 CRT and headers, GCC's libstdc++ and runtime DLLs, Boost, OpenSSL, zlib, Qt6 with Qt Quick, Qt Graphs and Qt Quick 3D, FFTW) and everything they depend on, checks their SHA-256 sums against the repository database and unpacks them into one sysroot. `--no-studio` skips Qt, `--no-spectral` skips FFTW; another directory can be given as an argument (then pass `-DS7_MINGW_SYSROOT=<dir>` to CMake). MSYS2 is a rolling distribution: rerunning the script updates the sysroot to the packages it ships now.
 
 ## Build and test
 
@@ -33,7 +33,7 @@ ctest runs every test program under Wine through `build-win/wine-run.sh`, which 
 tools/windows/package.sh build-win-release dist/s7-windows
 ```
 
-The directory holds `s7runtime.exe`, `s7ctl.exe`, `s7studio.exe`, `libs7core.dll`, `plugins/libs7noise.dll`, Qt's `platforms/` and `styles/` plugins, `examples/`, and every DLL these import from the sysroot (found with `llvm-objdump`); the build's own modules are stripped. Copy or zip it to a Windows machine. Start the programs in that directory (Explorer does for `s7studio.exe`), so that they find `./plugins`.
+The directory holds `s7runtime.exe`, `s7ctl.exe`, `s7studio.exe`, `libs7core.dll`, `plugins/libs7noise.dll`, Qt's `platforms/` and `styles/` plugins, the QML modules Studio's viewers import (`qml/`: QtQml, QtQuick, QtGraphs, QtQuick3D, without the submodules they do not use) with a `qt.conf` pointing Qt at them, `examples/`, and every DLL these import from the sysroot (found with `llvm-objdump`); the build's own modules are stripped. Copy or zip it to a Windows machine. Start the programs in that directory (Explorer does for `s7studio.exe`), so that they find `./plugins`.
 
 On Windows:
 
@@ -53,6 +53,6 @@ Why each piece of the toolchain is as it is:
   - libgcc's soft-float routines that return `__float128` (`__addtf3`, `__extenddftf2`, `__floatditf`, ...), which Clang calls for every F128 operation: `s7core/src/windows_f128_abi.cpp` replaces them in every module that links s7core (the `s7_f128_abi` library), forwarding to libgcc with GCC's convention. Routines that return anything else (comparisons, conversions from F128) are compatible.
   `s7core_signal_types_smoke` exercises each of these at run time; it is the test that fails if a new GCC or Clang changes either convention.
 - **DLLs.** MinGW exports every symbol of a DLL that marks none for export, so `libs7core.dll` and plugins need no export macros; the `s7_f128_abi` symbols are excluded (`--exclude-symbols`), each module keeps its own. Boost is linked as DLLs so that the executables, `libs7core.dll` and plugins share one Boost.JSON.
-- **Qt.** MSYS2's Qt is a native Windows build: its moc, uic and rcc are Windows programs. `CMakeLists.txt` points the `Qt6::moc`/`uic`/`rcc` targets at the host Qt's tools (Ubuntu's Qt 6.10 generates code for MSYS2's Qt 6.11; `QT_NO_PACKAGE_VERSION_CHECK`).
+- **Qt.** MSYS2's Qt is a native Windows build: its moc, uic and rcc are Windows programs. `CMakeLists.txt` points the `Qt6::moc`/`uic`/`rcc` targets at the host Qt's tools (Ubuntu's Qt 6.10 generates code for MSYS2's Qt 6.11; `QT_NO_PACKAGE_VERSION_CHECK`). Studio's QML scenes are plain Qt resources (rcc), so no other host Qt tool is needed. Under Wine the tests use the offscreen platform, where Qt Quick 3D draws nothing; check the 3D viewer on Windows itself.
 - **Wine.** `wine-run.sh` disables `winedbg`, so a crashing test fails instead of waiting in the debugger. Windows programs write `\r\n` to stdout; the shell-script tests strip the `\r` before matching lines.
 - **Third-party plugins.** `s7spectral_sdk_smoke` builds s7spectral against the installed SDK with the same toolchain file; a plugin built out of tree for Windows does the same (`--toolchain ... -Ds7core_DIR=<sdk>/lib/cmake/s7core`, since a cross build finds packages only inside the sysroot).

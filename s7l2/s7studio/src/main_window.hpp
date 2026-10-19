@@ -41,11 +41,12 @@ namespace diagram {
 class DiagramEditor;
 }
 
+namespace viewers {
+class ViewerManager;
+}
+
 namespace ui {
 class ToolWindows;
-class ScopeViewWindow;
-class PhasePortraitViewWindow;
-class PhaseTrajectory3DViewWindow;
 class ElementPickerPanel;
 class HeadlessNodesPanel;
 class ProbesPanel;
@@ -115,15 +116,11 @@ private:
     void restoreStartupDiagram();
     void connectRunnerSignals();
     void refreshActions();
-    auto ensureScopeWindow(const QString& probeName) -> ui::ScopeViewWindow*;
-    void openScopeWindow(const QString& probeName);
-    auto ensurePhasePortraitWindow(const QString& xProbeName, const QString& yProbeName) -> ui::PhasePortraitViewWindow*;
-    void openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName);
-    auto ensurePhaseTrajectory3DWindow(const QString& xProbeName, const QString& yProbeName,
-                                       const QString& zProbeName) -> ui::PhaseTrajectory3DViewWindow*;
-    void openPhaseTrajectory3DWindow(const QString& xProbeName, const QString& yProbeName, const QString& zProbeName);
-    void closeScopeWindows();
-    void clearScopeSamples();
+    // The viewer type recording a diagram observer (its element type), or
+    // Scope for probes that belong to no diagram observer.
+    [[nodiscard]] auto observerViewerType(const QString& observerId) const -> QString;
+    void closeViewers();
+    void clearViewerSamples();
     void refreshProbesPanel();
     // The RunProbe list the runner should sample for the current scene.
     [[nodiscard]] auto currentRunProbes() const -> std::vector<RunProbe>;
@@ -241,11 +238,8 @@ private:
     ui::HeadlessNodesPanel* headlessNodesPanel_ = nullptr;
     std::unique_ptr<s7::PluginLoader> pluginLoader_;
     QString currentDiagramPath_;
-    QHash<QString, QPointer<ui::ScopeViewWindow>> scopeWindows_;
-    // Keyed by "xProbe|yProbe".
-    QHash<QString, QPointer<ui::PhasePortraitViewWindow>> phasePortraitWindows_;
-    QHash<QString, QPointer<ui::PhaseTrajectory3DViewWindow>> phaseTrajectory3DWindows_;
-    std::uint64_t scopeSamplesDropped_ = 0;
+    // Open observation viewers (Scope, Phase Portrait, ...) of this window.
+    viewers::ViewerManager* viewers_ = nullptr;
     class QTimer* wireTypeTimer_ = nullptr;
     QString lastWireTypeError_;
     qint64 lastScopeDropLogMs_ = 0;
