@@ -52,6 +52,7 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
 void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions)
 {
     auto* fileMenu = window->menuBar()->addMenu("&File");
+    fileMenu->setObjectName(QStringLiteral("menu.file"));
     fileMenu->addAction(actions.openAction);
     fileMenu->addAction(actions.closeDiagramAction);
     fileMenu->addSeparator();

@@ -49,11 +49,27 @@ The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills 
 
 This is the [next release's focus](DEVELOPMENT_PLAN.md). The behavior below is implemented; the development plan's remaining quality gates are not yet all met.
 
+**File > Recent Diagrams** lists the ten most recently opened or saved diagrams,
+newest first, with their directories shown to distinguish matching filenames.
+Opening an entry moves it to the top; **Clear recent diagrams** clears the
+stored list. Missing files remain visible but disabled. Runtime schemas,
+element libraries and the bundled demo are not added automatically.
+
+At startup Studio reopens the most recent saved diagram. If that file is
+missing, unreadable or invalid, it logs the failure and tries earlier entries;
+if none can be opened, it loads the demo. Passing a file on the command line
+opens that file directly and bypasses history restoration. History stores file
+paths in Studio settings; it does not recover unsaved edits. On opening a
+diagram, Studio fits the full sheet after the editor becomes visible and its
+viewport is laid out. **View > Fit Diagram to Window** (Ctrl+8) fits the diagram
+contents; **View > Fit Page** (Ctrl+9) fits the sheet. Subsequent window resizing
+preserves the selected zoom.
+
 Open a diagram (for example `s7studio examples/2int_osc.s7diagram`), use **Run > Run Configuration** to set duration and discretization frequency, then run locally and double-click the Scope observer. Studio embeds `s7core` through `LocalSchemaRunner`; no separate `s7runtime` process, network deployment or certificate configuration is needed for this workflow.
 
 - **Model time:** frequency `f` selects `dt = 1/f` seconds. Studio updates rate-related element parameters and seeds the run's schema rate; validation still rejects incompatible rates/types. The worker steps as fast as it can, with pause/stop controls. Changing `f` changes numerical discretization and the number of steps for a fixed model duration, not a promised wall-clock execution rate. Samples carry the runtime step and model timestamp; causal-memory outputs are published on the next step, so reference comparisons must account for that publication convention.
 - **Observation:** values are read on the runtime worker through `ObservationService`, then delivered to the UI through a bounded mailbox. Scope observers and their links do not participate in functional compilation or execution. Opening, hiding or reopening a Scope does not restart or change the model.
-- **Scope history:** recording starts with the first sample delivered for a Scope, even before its window is shown. Closing hides the view and retains its recording; opening it again does not clear or replace the data. Clearing samples or clearing before a new run discards that history; closing the diagram/application releases it. These temporary recordings are not persistent saved sessions.
+- **Scope history:** recording starts with the first sample delivered for a Scope, even before its window is shown. Closing hides the view and retains its recording; opening it again does not clear or replace the data. **Clear current** or starting a new run discards the current history; closing the diagram/application releases temporary buffers. **Save Run…** persists the current samples to `.s7scope`; **Open Run…** overlays saved results for comparison. Imported comparisons survive new runs and can be removed separately. See [saving and comparing results](SCOPE_RESULTS.md) for snapshot semantics, completeness metadata and the format.
 - **Preview versus recording:** each channel has a bounded preview (20,000 retained points plus the latest endpoint when needed), uniformly thinned over the run as it grows. At the buffer threshold, a temporary disk file retains delivered samples for detailed history/CSV export. Fit full run shows the recorded time extent; zoom/pan can read the disk-backed region; Auto Y rescales values without changing the time axis. Preview thinning cannot guarantee detail for arbitrary high-frequency signals; characterize the supported signal/rate/window combinations before relying on an overview plot alone.
 - **CSV fidelity:** timestamps and values use 17 significant digits and a locale-independent decimal point, preserving finite double values on round trip. Scope/channel fields are CSV-escaped. The [nonlinear-pendulum benchmark](../examples/pendulum/README.md) verifies every captured/exported sample against headless execution over 100 seconds at 1/10 kHz, with two channels and no dropped samples on the tested Linux build.
 - **Completeness and failures:** the mailbox is bounded at 200,000 samples across probes. It drops the oldest when the UI falls behind and reports the loss; temporary disk buffering cannot restore those samples. Scope reports temporary-file/write failures too. **Export Full CSV** exports the recorded samples; its name does not establish completeness if capture loss or a storage warning occurred. Disk use grows with delivered sample count even though preview memory is bounded.

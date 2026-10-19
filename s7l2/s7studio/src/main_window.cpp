@@ -322,7 +322,7 @@ auto parameterListSummary(const std::vector<s7::ParameterSpec>& parameters) -> Q
 
 } // namespace
 
-MainWindow::MainWindow(QWidget* parent)
+MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
     : QMainWindow(parent)
     , runtimeSchema_(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}})
 {
@@ -341,7 +341,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     appendLog("[studio] Local embedded runtime ready");
     restoreWindowLayout();
-    loadDemoDiagram();
+    if (restoreStartupDiagram) this->restoreStartupDiagram();
     refreshActions();
     onStatusChanged("idle");
 }
@@ -551,6 +551,10 @@ void MainWindow::buildUi()
     actions.openDeployedAction = openDeployedAction_;
 
     ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
+    recentDiagramsMenu_ = new QMenu(QStringLiteral("Recent Diagrams"), this);
+    recentDiagramsMenu_->setObjectName(QStringLiteral("menu.recentDiagrams"));
+    findChild<QMenu*>(QStringLiteral("menu.file"))->insertMenu(closeDiagramAction_, recentDiagramsMenu_);
+    refreshRecentDiagrams();
 
     diagramDrawToolBar_ = addToolBar(QStringLiteral("Diagram Drawing"));
     diagramDrawToolBar_->setObjectName(QStringLiteral("toolbar.drawing"));
@@ -1948,6 +1952,76 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     loading.close();
 }
 
+void MainWindow::refreshRecentDiagrams()
+{
+    recentDiagramsMenu_->clear();
+    const auto paths = QSettings{}.value(QStringLiteral("files/recentDiagrams")).toStringList().mid(0, 10);
+    for (qsizetype i = 0; i < paths.size(); ++i) {
+        const QFileInfo info(paths[i]);
+        const auto label = QStringLiteral("%1 %2 — %3")
+            .arg(i < 9 ? QStringLiteral("&%1").arg(i + 1) : QString::number(i + 1),
+                 info.fileName().replace('&', QStringLiteral("&&")),
+                 info.absolutePath().replace('&', QStringLiteral("&&")));
+        auto* action = recentDiagramsMenu_->addAction(label);
+        action->setData(paths[i]);
+        action->setToolTip(paths[i]);
+        action->setStatusTip(paths[i]);
+        action->setEnabled(info.isFile());
+        connect(action, &QAction::triggered, this, [this, path = paths[i]] {
+            static_cast<void>(openRecentDiagram(path, true));
+        });
+    }
+    if (paths.isEmpty()) {
+        auto* empty = recentDiagramsMenu_->addAction(QStringLiteral("No recent diagrams"));
+        empty->setEnabled(false);
+    }
+    recentDiagramsMenu_->addSeparator();
+    auto* clear = recentDiagramsMenu_->addAction(QStringLiteral("Clear recent diagrams"));
+    clear->setObjectName(QStringLiteral("action.clearRecentDiagrams"));
+    clear->setEnabled(!paths.isEmpty());
+    connect(clear, &QAction::triggered, this, [this] {
+        QSettings{}.remove(QStringLiteral("files/recentDiagrams"));
+        refreshRecentDiagrams();
+    });
+}
+
+void MainWindow::rememberRecentDiagram(const QString& path)
+{
+    const QFileInfo info(path);
+    const auto normalized = info.canonicalFilePath().isEmpty() ? info.absoluteFilePath() : info.canonicalFilePath();
+    QSettings settings;
+    auto paths = settings.value(QStringLiteral("files/recentDiagrams")).toStringList();
+    paths.removeAll(normalized);
+    paths.prepend(normalized);
+    settings.setValue(QStringLiteral("files/recentDiagrams"), paths.mid(0, 10));
+    refreshRecentDiagrams();
+}
+
+bool MainWindow::openRecentDiagram(const QString& path, bool interactive)
+{
+    try {
+        const auto parsed = json_utils::parseFile(path);
+        if (!isDiagramDocument(parsed)) throw std::runtime_error("The recent file is no longer a diagram");
+        loadDiagramJson(parsed, QFileInfo(path).fileName());
+        currentDiagramPath_ = QFileInfo(path).absoluteFilePath();
+        rememberRecentDiagram(path);
+        return true;
+    } catch (const std::exception& ex) {
+        appendLog(QStringLiteral("[studio] cannot reopen %1: %2").arg(path, QString::fromUtf8(ex.what())));
+        if (interactive) QMessageBox::critical(this, QStringLiteral("Open failed"), QString::fromUtf8(ex.what()));
+        return false;
+    }
+}
+
+void MainWindow::restoreStartupDiagram()
+{
+    const auto paths = QSettings{}.value(QStringLiteral("files/recentDiagrams")).toStringList().mid(0, 10);
+    for (const auto& path : paths) {
+        if (openRecentDiagram(path, false)) return;
+    }
+    loadDemoDiagram();
+}
+
 void MainWindow::openDocumentFile()
 {
     openJsonDocument(
@@ -2049,7 +2123,8 @@ void MainWindow::openPath(const QString& filePath, const bool preferDiagram, con
         const bool diagramDocument = isDiagramDocument(parsed);
         if (diagramDocument) {
             loadDiagramJson(parsed, sourceLabel);
-            currentDiagramPath_ = filePath;
+            currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
+            rememberRecentDiagram(filePath);
         } else {
             loadSchemaJson(parsed, sourceLabel);
             currentDiagramPath_.clear();
@@ -2291,7 +2366,8 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
     file.close();
 
     runtimeSchema_ = document.runtimeSchema;
-    currentDiagramPath_ = filePath;
+    currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
+    rememberRecentDiagram(filePath);
     appendLog(QString("[studio] saved diagram: %1").arg(QFileInfo(filePath).fileName()));
     statusBar()->showMessage(QString("Saved diagram: %1").arg(QFileInfo(filePath).fileName()), 5000);
     return true;

@@ -5,6 +5,7 @@
 #include <QSharedPointer>
 
 #include <cstdint>
+#include <functional>
 #include <Qt>
 #include <QWidget>
 
@@ -39,6 +40,11 @@ public:
     // Same full-resolution CSV writer used by the export action. The caller
     // supplies a writable device; finite doubles retain round-trip precision.
     [[nodiscard]] bool writeRecordedCsv(QIODevice& device, QString* error = nullptr) const;
+    // A saved result contains the current recording, not comparison overlays.
+    [[nodiscard]] bool writeRunResults(QIODevice& device, QString* error = nullptr) const;
+    // Transactional: invalid input leaves existing recordings/comparisons intact.
+    [[nodiscard]] bool openRunResults(QIODevice& device, const QString& label, QString* error = nullptr);
+    void clearComparisons();
     // Samples the runtime produced but the UI dropped because it fell behind.
     void setDroppedSampleCount(std::uint64_t dropped);
 
@@ -47,6 +53,8 @@ public:
 private slots:
     void clearBuffers();
     void exportRecordedCsv();
+    void saveRunResults();
+    void openRunResultsFile();
     void refreshPlot();
 
 private:
@@ -56,6 +64,9 @@ private:
             qint64 byteOffset = 0;
         };
         int graphIndex = -1;
+        QString channelName;
+        QString comparisonLabel;
+        QString recordingWarning;
         QVector<double> time;
         QVector<double> value;
         QVector<SpillIndexEntry> spillIndex;
@@ -74,6 +85,10 @@ private:
     };
 
     void configurePlot();
+    void addSeriesGraph(Series& series);
+    void rebuildGraphs();
+    [[nodiscard]] bool visitSamples(const Series& series,
+        const std::function<void(double, double)>& visitor, QString* error) const;
     auto spillSeries(Series& series) -> bool;
     auto appendToSpill(Series& series, double timeSeconds, double value) -> bool;
     void decimatePlotBuffer(Series& series);
@@ -92,6 +107,7 @@ private:
     double dataMaxTime_ = 0.0;
 
     QMap<QString, Series> series_;
+    std::uint64_t comparisonSequence_ = 0;
 
     QCustomPlot* plot_ = nullptr;
     QCheckBox* autoScaleYCheck_ = nullptr;

@@ -19,6 +19,7 @@
 #include <thread>
 #include <vector>
 
+class QMenu;
 class QAction;
 class QActionGroup;
 class QSpinBox;
@@ -55,7 +56,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget* parent = nullptr);
+    explicit MainWindow(QWidget* parent = nullptr, bool restoreStartupDiagram = true);
     ~MainWindow() override;
 
     // Opens a diagram, runtime schema or element library file.
@@ -108,6 +109,10 @@ private slots:
 private:
     void buildUi();
     void buildActions();
+    void refreshRecentDiagrams();
+    void rememberRecentDiagram(const QString& path);
+    bool openRecentDiagram(const QString& path, bool interactive);
+    void restoreStartupDiagram();
     void connectRunnerSignals();
     void refreshActions();
     auto ensureScopeWindow(const QString& probeName) -> ui::ScopeViewWindow*;
@@ -174,6 +179,7 @@ private:
     LocalSchemaRunner* runner_ = nullptr;
     std::unique_ptr<ui::ModelRunController> controller_;
 
+    QMenu* recentDiagramsMenu_ = nullptr;
     QAction* openAction_ = nullptr;
     QAction* closeDiagramAction_ = nullptr;
     QAction* saveAction_ = nullptr;

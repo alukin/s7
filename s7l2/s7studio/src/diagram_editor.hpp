@@ -57,7 +57,7 @@ signals:
     void elementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
 
 private:
-    void scheduleFitToContents();
+    void scheduleInitialPageFit();
     void rebuildPageFrame();
     void updateSceneRectFromPage();
     void updateRulerLayout();
@@ -73,7 +73,7 @@ protected:
 private:
     std::unique_ptr<DiagramScene> _scene;
     QSchematic::View* _view = nullptr;
-    bool _pendingFitToContents = false;
+    bool _pendingPageFit = false;
     DiagramPageLayout pageLayout_;
     QGraphicsRectItem* pageFrame_ = nullptr;
     DiagramRuler* horizontalRuler_ = nullptr;

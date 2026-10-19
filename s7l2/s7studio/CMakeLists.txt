@@ -224,3 +224,19 @@ target_compile_definitions(s7studio_nonlinear_pendulum_test PRIVATE
 set_target_properties(s7studio_nonlinear_pendulum_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_nonlinear_pendulum COMMAND s7studio_nonlinear_pendulum_test)
 set_tests_properties(s7studio_nonlinear_pendulum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600)
+
+add_executable(s7studio_scope_lifecycle_test
+    tests/scope_lifecycle_test.cpp
+    src/local_schema_runner.cpp src/local_schema_runner.hpp
+    src/scope_view_window.cpp src/scope_view_window.hpp
+)
+target_include_directories(s7studio_scope_lifecycle_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
+target_link_libraries(s7studio_scope_lifecycle_test PRIVATE s7studio_diagram s7_qcustomplot Threads::Threads)
+target_compile_definitions(s7studio_scope_lifecycle_test PRIVATE
+    S7_SINGLE_PENDULUM_DIR="${PROJECT_SOURCE_DIR}/examples/pendulum")
+set_target_properties(s7studio_scope_lifecycle_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_scope_lifecycle COMMAND s7studio_scope_lifecycle_test)
+set_tests_properties(s7studio_scope_lifecycle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+add_test(NAME s7studio_recent_diagrams COMMAND s7studio --recent-diagrams-check)
+set_tests_properties(s7studio_recent_diagrams PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)

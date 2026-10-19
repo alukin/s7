@@ -115,6 +115,8 @@ DiagramEditor::DiagramEditor(QWidget* parent)
     // Create editor view
     auto* diagramView = new DiagramView(this);
     _view = diagramView;
+    // A complete sheet must fit even in a narrow editor or a short viewport.
+    _view->zoom_factor_min = 0.01;
     diagramView->setDiagramScene(_scene.get());
     _view->setRenderHint(QPainter::Antialiasing);
     _view->setDragMode(QGraphicsView::RubberBandDrag);
@@ -168,7 +170,7 @@ void DiagramEditor::loadDocument(const DiagramDocument& document, const std::fun
         throw;
     }
     setPageLayout(document.pageLayout);
-    scheduleFitToContents();
+    scheduleInitialPageFit();
 }
 
 void DiagramEditor::loadRuntimeSchema(const boost::json::value& schemaJson)
@@ -207,15 +209,15 @@ void DiagramEditor::fitPageInView()
         return;
     }
 
-    if (_view->viewport()->width() < 32 || _view->viewport()->height() < 32) {
-        _pendingFitToContents = true;
+    if (!isVisible() || _view->viewport()->width() < 32 || _view->viewport()->height() < 32) {
+        _pendingPageFit = true;
         return;
     }
 
     const auto pageRect = orientedPageRect(pageLayout_);
     updateSceneRectFromPage();
     fitRectInView(_view, pageRect.adjusted(-4.0, -4.0, 4.0, 4.0));
-    _pendingFitToContents = false;
+    _pendingPageFit = false;
     updateRulers();
 }
 
@@ -240,7 +242,7 @@ void DiagramEditor::fitDiagramInView()
     }
     const double margin = 2.0 * kGridStep;
     if (fitRectInView(_view, content.adjusted(-margin, -margin, margin, margin))) {
-        _pendingFitToContents = false;
+        _pendingPageFit = false;
     }
     updateRulers();
 }
@@ -258,6 +260,7 @@ void DiagramEditor::zoomOut()
 void DiagramEditor::resetZoom()
 {
     if (_view) {
+        _pendingPageFit = false;
         _view->setZoomValue(1.0);
     }
 }
@@ -274,12 +277,14 @@ auto DiagramEditor::pageLayout() const -> DiagramPageLayout
     return pageLayout_;
 }
 
-void DiagramEditor::scheduleFitToContents()
+void DiagramEditor::scheduleInitialPageFit()
 {
-    _pendingFitToContents = true;
+    _pendingPageFit = true;
     QTimer::singleShot(0, this, [this] {
-        if (_pendingFitToContents) {
-            fitToContents();
+        // Loading progress can process events before the main window is
+        // shown. Keep the request pending until the real viewport is laid out.
+        if (_pendingPageFit && isVisible()) {
+            fitPageInView();
         }
     });
 }
@@ -289,6 +294,7 @@ bool DiagramEditor::eventFilter(QObject* watched, QEvent* event)
     if (_view && watched == _view->viewport() && event && event->type() == QEvent::Resize) {
         updateRulerLayout();
         updateRulers();
+        if (_pendingPageFit) scheduleInitialPageFit();
     }
 
     if (_view && watched == _view->viewport() && event && event->type() == QEvent::Wheel) {
@@ -337,8 +343,8 @@ void DiagramEditor::showEvent(QShowEvent* event)
     updateRulerLayout();
     updateRulers();
 
-    if (_pendingFitToContents) {
-        scheduleFitToContents();
+    if (_pendingPageFit) {
+        scheduleInitialPageFit();
     }
 }
 
@@ -349,8 +355,8 @@ void DiagramEditor::resizeEvent(QResizeEvent* event)
     updateRulerLayout();
     updateRulers();
 
-    if (_pendingFitToContents && event->size().width() > 32 && event->size().height() > 32) {
-        scheduleFitToContents();
+    if (_pendingPageFit && event->size().width() > 32 && event->size().height() > 32) {
+        scheduleInitialPageFit();
     }
 }
 
@@ -467,6 +473,7 @@ void DiagramEditor::zoomBy(const double factor)
         return;
     }
 
+    _pendingPageFit = false;
     const double currentZoom = _view->transform().m11();
     const double nextZoom = std::clamp(currentZoom * factor,
                                        static_cast<double>(_view->zoom_factor_min),

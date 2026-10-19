@@ -26,6 +26,7 @@ Numerical examples and measured integrator comparisons: [small-angle double pend
 | Document | Content |
 |---|---|
 | [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
+| [SCOPE_RESULTS.md](SCOPE_RESULTS.md) | Save/open Scope results, persistent comparison overlays, capture-loss metadata and file format |
 | `ELEMENT_DEV_GUIDE.md` | Writing elements: element contract, metadata, registration, parameters |
 | `PLUGIN_INTERFACE.md` | C ABI for element plugins, discovery paths, loading process |
 | `SCHEMA_LIBRARY_WORKFLOW.md` | Schema-backed element libraries in Studio and the runtime |

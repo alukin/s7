@@ -22,9 +22,13 @@
 #include <s7/transport.hpp>
 
 #include <QApplication>
+#include <QAction>
+#include <QFile>
+#include <QMenu>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QImage>
+#include <QGraphicsView>
 #include <QTimer>
 #include <QPainter>
 
@@ -586,6 +590,119 @@ int runLayoutCheck(int argc, char** argv)
     std::cout << (ok ? "layout check: OK (" : "layout check: FAILED (") << expected << " connections)\n";
     return ok ? 0 : 1;
 }
+int runRecentDiagramsCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    QTemporaryDir directory;
+    if (!directory.isValid()) throw std::runtime_error("Cannot create recent-diagrams fixture");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, directory.path());
+    QApplication::setOrganizationName(QStringLiteral("s7-test"));
+    QApplication::setApplicationName(QStringLiteral("recent-diagrams"));
+    registerElements();
+    const auto require = [](bool condition, const char* message) {
+        if (!condition) throw std::runtime_error(message);
+    };
+    const auto recent = [] { return QSettings{}.value(QStringLiteral("files/recentDiagrams")).toStringList(); };
+    auto document = readJson(S7STUDIO_SOURCE_DIR "/../examples/2int_osc.s7diagram");
+    QStringList paths;
+    for (int i = 0; i < 11; ++i) {
+        document.as_object()["id"] = "recent_" + std::to_string(i);
+        document.as_object().at("schema").as_object()["name"] = "recent_" + std::to_string(i);
+        const auto path = directory.path() + QStringLiteral("/recent_%1.s7diagram").arg(i);
+        QFile file(path);
+        require(file.open(QIODevice::WriteOnly), "Cannot write recent diagram");
+        const auto bytes = QByteArray::fromStdString(boost::json::serialize(document));
+        require(file.write(bytes) == bytes.size(), "Cannot write recent diagram fixture");
+        paths.append(path);
+    }
+    {
+        s7studio::MainWindow window;
+        require(recent().isEmpty(), "Demo was added to recent diagrams");
+        auto* menu = window.findChild<QMenu*>(QStringLiteral("menu.recentDiagrams"));
+        require(menu && !menu->actions().front()->isEnabled(), "Empty recent menu is missing");
+        for (const auto& path : paths) window.openPath(path);
+        require(recent().size() == 10 && recent().front() == paths[10] && !recent().contains(paths[0]),
+            "Recent list ordering or size bound failed");
+        window.openPath(directory.path() + QStringLiteral("/./recent_2.s7diagram"));
+        require(recent().front() == paths[2] && recent().count(paths[2]) == 1, "Recent paths were not deduplicated");
+        QAction* older = nullptr;
+        for (auto* action : menu->actions()) if (action->data().toString() == paths[5]) older = action;
+        require(older, "Recent diagram menu entry missing");
+        older->trigger();
+        require(recent().front() == paths[5] && window.windowTitle().endsWith(QStringLiteral("recent_5")),
+            "Recent menu did not open and promote the chosen file");
+        QMetaObject::invokeMethod(&window, "saveDocument", Qt::DirectConnection);
+        require(recent().front() == paths[5], "Saving did not retain current diagram history");
+        window.openPath(QStringLiteral(S7STUDIO_SOURCE_DIR "/../s7runtime/examples/schema_minimal.json"));
+        require(recent().front() == paths[5] && recent().size() == 10, "Runtime schema polluted recent diagrams");
+    }
+    {
+        s7studio::MainWindow restored;
+        require(restored.windowTitle().endsWith(QStringLiteral("recent_5")), "Startup did not restore latest diagram");
+        // Loading can run the event loop while hidden; the fit must wait for
+        // the shown window's real viewport, and fit the sheet, not its nodes.
+        app.processEvents();
+        restored.resize(900, 600);
+        restored.show();
+        for (int i = 0; i < 5; ++i) app.processEvents();
+        auto* editor = restored.findChild<s7studio::diagram::DiagramEditor*>();
+        auto* view = editor->findChild<QGraphicsView*>();
+        const auto page = editor->pageLayout();
+        const auto width = page.orientation == s7studio::diagram::PageOrientation::Portrait
+            ? std::min(page.widthMm, page.heightMm) : std::max(page.widthMm, page.heightMm);
+        const auto height = page.orientation == s7studio::diagram::PageOrientation::Portrait
+            ? std::max(page.widthMm, page.heightMm) : std::min(page.widthMm, page.heightMm);
+        const QRectF sheet(0, 0, width * 96.0 / 25.4, height * 96.0 / 25.4);
+        const auto sheetFits = [&] {
+            return view->viewport()->rect().adjusted(-2, -2, 2, 2).contains(view->mapFromScene(sheet).boundingRect());
+        };
+        require(sheetFits(), "Startup sheet extends beyond the editor viewport");
+        editor->zoomIn();
+        const auto userZoom = view->transform().m11();
+        restored.resize(950, 650);
+        for (int i = 0; i < 5; ++i) app.processEvents();
+        require(view->transform().m11() == userZoom, "Later layout changes reset user zoom");
+        // Explicit page fit also supports viewports below the vendor's default
+        // 25 percent zoom floor, without modifying vendored code.
+        restored.resize(900, 360);
+        for (int i = 0; i < 5; ++i) app.processEvents();
+        editor->fitPageInView();
+        for (int i = 0; i < 5; ++i) app.processEvents();
+        require(sheetFits(), "Sheet does not fit a short viewport");
+    }
+    // Missing/corrupt latest files must not block startup with a modal dialog.
+    QFile broken(paths[5]);
+    require(broken.open(QIODevice::WriteOnly | QIODevice::Truncate), "Cannot corrupt fixture");
+    broken.write("invalid JSON"); broken.close();
+    {
+        s7studio::MainWindow restored;
+        require(restored.windowTitle().endsWith(QStringLiteral("recent_2")), "Corrupt recent file did not fall back");
+    }
+    require(QFile::remove(paths[2]), "Cannot remove missing-file fixture");
+    {
+        s7studio::MainWindow restored;
+        require(restored.windowTitle().endsWith(QStringLiteral("recent_10")), "Missing recent file did not fall back");
+        auto* menu = restored.findChild<QMenu*>(QStringLiteral("menu.recentDiagrams"));
+        for (auto* action : menu->actions()) if (action->data().toString() == paths[2])
+            require(!action->isEnabled(), "Missing recent file was not disabled");
+    }
+    {
+        s7studio::MainWindow explicitFile(nullptr, false);
+        require(!explicitFile.windowTitle().endsWith(QStringLiteral("recent_10")), "Explicit-file startup restored history");
+        explicitFile.openPath(paths[1]);
+        require(explicitFile.windowTitle().endsWith(QStringLiteral("recent_1")), "Explicit startup file did not win");
+        explicitFile.findChild<QAction*>(QStringLiteral("action.clearRecentDiagrams"))->trigger();
+        require(recent().isEmpty(), "Clearing recent diagrams did not persist");
+    }
+    {
+        s7studio::MainWindow fallback;
+        require(!fallback.windowTitle().contains(QStringLiteral("recent_")), "Cleared history was restored");
+    }
+    std::cout << "Recent diagrams: ordering, deduplication, menu actions, startup and fallback passed\n";
+    return 0;
+}
+
 // Exercise delivery, late opening and reopening with the actual oscillator.
 int runScopeRunCheck(int argc, char** argv)
 {
@@ -671,6 +788,10 @@ int main(int argc, char** argv) try
         enableCrashDumps();
     }
 
+    if (hasArg(argc, argv, "--recent-diagrams-check")) {
+        return runRecentDiagramsCheck(argc, argv);
+    }
+
     if (hasArg(argc, argv, "--scope-run-check")) {
         return runScopeRunCheck(argc, argv);
     }
@@ -698,10 +819,11 @@ int main(int argc, char** argv) try
     QApplication app(argc, argv);
     QApplication::setOrganizationName(QStringLiteral("s7"));
     QApplication::setApplicationName(QStringLiteral("s7studio"));
-    s7studio::MainWindow window;
+    const bool explicitFile = argc == 2 && argv[1][0] != '-';
+    s7studio::MainWindow window(nullptr, !explicitFile);
     window.show();
     // s7studio <file>: opens a diagram, schema or element library.
-    if (argc == 2 && argv[1][0] != '-') {
+    if (explicitFile) {
         window.openPath(QString::fromLocal8Bit(argv[1]));
     }
     // S7_STUDIO_SCREENSHOT=<png>: saves a picture of the main window and quits (for checking the layout).
