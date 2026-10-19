@@ -559,6 +559,28 @@ void register_builtin_elements(ElementRegistry& registry)
         }()));
 
     registry.register_element(ElementDescriptor(
+        "PWM",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).kind == SignalKind::Float) {
+                    return std::make_unique<PwmT<T>>(static_cast<std::size_t>(ctx.get_int("period_samples")),
+                                                     ctx.get_real("sample_rate_hz"));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata("PWM", "PWM", "Trailing-edge PWM; duty latched at each carrier boundary",
+                                           "sources", 1, 1, real_floating_types());
+            m.parameters.push_back({"period_samples", "int", "Samples per carrier period (frequency = sample rate / period)", 100, 2, 65504, {}, false});
+            m.parameters.push_back({"sample_rate_hz", "real", "Model sample rate in Hz", 100000, 0, std::nullopt, {}, false});
+            m.input_ports[0].name = "duty";
+            m.output_ports[0].name = "gate";
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
         "AnalogOscillator",
         [](const ElementCreationContext& ctx) {
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {

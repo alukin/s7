@@ -718,6 +718,42 @@ private:
     value_type output_value_{};
 };
 
+/// Trailing-edge PWM. Duty is sampled at each carrier boundary and held for
+/// the whole period. Output is numeric 0/1, suitable for a switched plant.
+template <SignalType Type>
+class PwmT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+
+    PwmT(std::size_t period_samples, double sample_rate_hz)
+        : Element("PWM", true), period_samples_(period_samples), sample_rate_hz_(sample_rate_hz)
+    {
+        if (period_samples < 2 || period_samples > 65504 || !std::isfinite(sample_rate_hz) || sample_rate_hz <= 0) {
+            throw std::invalid_argument("PWM requires 2 <= period_samples <= 65504 and a finite positive sample_rate_hz.");
+        }
+        register_input(0, "duty", Type, nullptr);
+        register_output(0, "gate", Type, &output_value_);
+    }
+
+    void step() override
+    {
+        if (sample_ == 0) {
+            duty_ = read_input<value_type>(0);
+            if (duty_ - duty_ != value_type(0)) throw std::domain_error("PWM duty must be finite.");
+            duty_ = duty_ < value_type(0) ? value_type(0) : (duty_ > value_type(1) ? value_type(1) : duty_);
+        }
+        output_value_ = value_type(sample_) / value_type(period_samples_) < duty_ ? value_type(1) : value_type(0);
+        if (++sample_ == period_samples_) sample_ = 0;
+    }
+
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(sample_rate_hz_); }
+
+private:
+    std::size_t period_samples_, sample_{};
+    double sample_rate_hz_;
+    value_type duty_{}, output_value_{};
+};
+
 /// Sine source: amplitude * sin(phase), phase advancing by
 /// 2 pi frequency / sample_rate per step, computed in the element's type.
 /// Floating-point types.
@@ -895,6 +931,7 @@ using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
 using SymplecticIntegrator = SymplecticIntegratorT<SignalType::F64>;
 using FirFilter = FirFilterT<SignalType::F64>;
 using IirFilter = IirFilterT<SignalType::F64>;
+using PWM = PwmT<SignalType::F64>;
 using AnalogOscillator = AnalogOscillatorT<SignalType::F64>;
 using ReImToComplex = ReImToComplexT<SignalType::C64>;
 using ComplexToReIm = ComplexToReImT<SignalType::C64>;

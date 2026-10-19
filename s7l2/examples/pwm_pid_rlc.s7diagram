@@ -1,0 +1,1329 @@
+{
+  "id": "pwm_pid_rlc",
+  "dt": 1e-05,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1100,
+    "height_mm": 430
+  },
+  "schema": {
+    "name": "pwm_pid_rlc",
+    "elements": [
+      {
+        "id": "reference_12V",
+        "type": "Constant",
+        "params": {
+          "value": 12
+        }
+      },
+      {
+        "id": "voltage_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "proportional",
+        "type": "Gain",
+        "params": {
+          "factor": 0.04
+        }
+      },
+      {
+        "id": "integral_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            8,
+            100
+          ]
+        }
+      },
+      {
+        "id": "integral_state",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 1e-05
+        }
+      },
+      {
+        "id": "derivative_filtered",
+        "type": "IirFilter",
+        "params": {
+          "b0": 0.19900497512437812,
+          "b1": -0.19900497512437812,
+          "a1": -0.9950248756218906
+        }
+      },
+      {
+        "id": "pid_sum",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "duty_limit",
+        "type": "Saturation",
+        "params": {
+          "lower_limit": 0,
+          "upper_limit": 1
+        }
+      },
+      {
+        "id": "anti_windup",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "pwm_1kHz",
+        "type": "PWM",
+        "params": {
+          "period_samples": 100,
+          "sample_rate_hz": 100000
+        }
+      },
+      {
+        "id": "switch_24V",
+        "type": "Gain",
+        "params": {
+          "factor": 24
+        }
+      },
+      {
+        "id": "inductor_voltage",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "inverse_L",
+        "type": "Gain",
+        "params": {
+          "factor": 100
+        }
+      },
+      {
+        "id": "inductor_current",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 1e-05
+        }
+      },
+      {
+        "id": "winding_drop",
+        "type": "Gain",
+        "params": {
+          "factor": 0.2
+        }
+      },
+      {
+        "id": "capacitor_current",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "inverse_C",
+        "type": "Gain",
+        "params": {
+          "factor": 1000
+        }
+      },
+      {
+        "id": "output_voltage",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 1e-05
+        }
+      },
+      {
+        "id": "load_current",
+        "type": "Divider",
+        "params": {}
+      },
+      {
+        "id": "load_variation",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 4,
+          "frequency_hz": 2,
+          "sample_rate_hz": 100000
+        }
+      },
+      {
+        "id": "load_base_8ohm",
+        "type": "Constant",
+        "params": {
+          "value": 8
+        }
+      },
+      {
+        "id": "load_resistance",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference_12V",
+        "from_port": 0,
+        "to_element": "voltage_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_voltage",
+        "from_port": 0,
+        "to_element": "voltage_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "voltage_error",
+        "from_port": 0,
+        "to_element": "proportional",
+        "to_port": 0
+      },
+      {
+        "from_element": "voltage_error",
+        "from_port": 0,
+        "to_element": "integral_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "anti_windup",
+        "from_port": 0,
+        "to_element": "integral_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "integral_rate",
+        "from_port": 0,
+        "to_element": "integral_state",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_voltage",
+        "from_port": 0,
+        "to_element": "derivative_filtered",
+        "to_port": 0
+      },
+      {
+        "from_element": "proportional",
+        "from_port": 0,
+        "to_element": "pid_sum",
+        "to_port": 0
+      },
+      {
+        "from_element": "integral_state",
+        "from_port": 0,
+        "to_element": "pid_sum",
+        "to_port": 1
+      },
+      {
+        "from_element": "derivative_filtered",
+        "from_port": 0,
+        "to_element": "pid_sum",
+        "to_port": 2
+      },
+      {
+        "from_element": "pid_sum",
+        "from_port": 0,
+        "to_element": "duty_limit",
+        "to_port": 0
+      },
+      {
+        "from_element": "duty_limit",
+        "from_port": 0,
+        "to_element": "anti_windup",
+        "to_port": 0
+      },
+      {
+        "from_element": "pid_sum",
+        "from_port": 0,
+        "to_element": "anti_windup",
+        "to_port": 1
+      },
+      {
+        "from_element": "duty_limit",
+        "from_port": 0,
+        "to_element": "pwm_1kHz",
+        "to_port": 0
+      },
+      {
+        "from_element": "pwm_1kHz",
+        "from_port": 0,
+        "to_element": "switch_24V",
+        "to_port": 0
+      },
+      {
+        "from_element": "switch_24V",
+        "from_port": 0,
+        "to_element": "inductor_voltage",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_voltage",
+        "from_port": 0,
+        "to_element": "inductor_voltage",
+        "to_port": 1
+      },
+      {
+        "from_element": "winding_drop",
+        "from_port": 0,
+        "to_element": "inductor_voltage",
+        "to_port": 2
+      },
+      {
+        "from_element": "inductor_voltage",
+        "from_port": 0,
+        "to_element": "inverse_L",
+        "to_port": 0
+      },
+      {
+        "from_element": "inverse_L",
+        "from_port": 0,
+        "to_element": "inductor_current",
+        "to_port": 0
+      },
+      {
+        "from_element": "inductor_current",
+        "from_port": 0,
+        "to_element": "winding_drop",
+        "to_port": 0
+      },
+      {
+        "from_element": "inductor_current",
+        "from_port": 0,
+        "to_element": "capacitor_current",
+        "to_port": 0
+      },
+      {
+        "from_element": "load_current",
+        "from_port": 0,
+        "to_element": "capacitor_current",
+        "to_port": 1
+      },
+      {
+        "from_element": "capacitor_current",
+        "from_port": 0,
+        "to_element": "inverse_C",
+        "to_port": 0
+      },
+      {
+        "from_element": "inverse_C",
+        "from_port": 0,
+        "to_element": "output_voltage",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_voltage",
+        "from_port": 0,
+        "to_element": "load_current",
+        "to_port": 0
+      },
+      {
+        "from_element": "load_resistance",
+        "from_port": 0,
+        "to_element": "load_current",
+        "to_port": 1
+      },
+      {
+        "from_element": "load_variation",
+        "from_port": 0,
+        "to_element": "load_resistance",
+        "to_port": 0
+      },
+      {
+        "from_element": "load_base_8ohm",
+        "from_port": 0,
+        "to_element": "load_resistance",
+        "to_port": 1
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "reference_12V",
+        "position": [
+          3,
+          18
+        ]
+      },
+      {
+        "id": "voltage_error",
+        "position": [
+          15,
+          18
+        ]
+      },
+      {
+        "id": "proportional",
+        "position": [
+          27,
+          13
+        ]
+      },
+      {
+        "id": "integral_rate",
+        "position": [
+          27,
+          22
+        ]
+      },
+      {
+        "id": "integral_state",
+        "position": [
+          39,
+          22
+        ]
+      },
+      {
+        "id": "derivative_filtered",
+        "position": [
+          27,
+          31
+        ]
+      },
+      {
+        "id": "pid_sum",
+        "position": [
+          52,
+          18
+        ]
+      },
+      {
+        "id": "duty_limit",
+        "position": [
+          64,
+          18
+        ]
+      },
+      {
+        "id": "anti_windup",
+        "position": [
+          64,
+          31
+        ]
+      },
+      {
+        "id": "pwm_1kHz",
+        "position": [
+          76,
+          18
+        ]
+      },
+      {
+        "id": "switch_24V",
+        "position": [
+          88,
+          18
+        ]
+      },
+      {
+        "id": "inductor_voltage",
+        "position": [
+          100,
+          18
+        ]
+      },
+      {
+        "id": "inverse_L",
+        "position": [
+          112,
+          18
+        ]
+      },
+      {
+        "id": "inductor_current",
+        "position": [
+          124,
+          18
+        ]
+      },
+      {
+        "id": "winding_drop",
+        "position": [
+          112,
+          31
+        ]
+      },
+      {
+        "id": "capacitor_current",
+        "position": [
+          136,
+          18
+        ]
+      },
+      {
+        "id": "inverse_C",
+        "position": [
+          148,
+          18
+        ]
+      },
+      {
+        "id": "output_voltage",
+        "position": [
+          160,
+          18
+        ]
+      },
+      {
+        "id": "load_current",
+        "position": [
+          148,
+          37
+        ]
+      },
+      {
+        "id": "load_variation",
+        "position": [
+          112,
+          50
+        ]
+      },
+      {
+        "id": "load_base_8ohm",
+        "position": [
+          112,
+          59
+        ]
+      },
+      {
+        "id": "load_resistance",
+        "position": [
+          130,
+          50
+        ]
+      },
+      {
+        "id": "voltage_scope",
+        "position": [
+          179,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "Reference [V]",
+            "Output [V]"
+          ]
+        }
+      },
+      {
+        "id": "switching_scope",
+        "position": [
+          76,
+          52
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "Duty [0..1]",
+            "Gate [0/1]"
+          ]
+        }
+      },
+      {
+        "id": "current_scope",
+        "position": [
+          179,
+          37
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "Inductor [A]",
+            "Load [A]"
+          ]
+        }
+      },
+      {
+        "id": "resistance_scope",
+        "position": [
+          151,
+          54
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Load [ohm]"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "reference_12V",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage_error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            166,
+            67
+          ],
+          [
+            12,
+            67
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "voltage_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "proportional",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "voltage_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "integral_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "anti_windup",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "integral_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "integral_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "integral_state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative_filtered",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            168,
+            70
+          ],
+          [
+            24,
+            70
+          ]
+        ]
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "proportional",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pid_sum",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "integral_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pid_sum",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "derivative_filtered",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pid_sum",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "pid_sum",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "duty_limit",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "duty_limit",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "anti_windup",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "pid_sum",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "anti_windup",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "duty_limit",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pwm_1kHz",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "pwm_1kHz",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "switch_24V",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "switch_24V",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_voltage",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            164,
+            43
+          ],
+          [
+            97,
+            43
+          ]
+        ]
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "winding_drop",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_voltage",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "inductor_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inverse_L",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "inverse_L",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "inductor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "winding_drop",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "inductor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "capacitor_current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "load_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "capacitor_current",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "capacitor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inverse_C",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "inverse_C",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "load_resistance",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_current",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "load_variation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_resistance",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "load_base_8ohm",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_resistance",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs29",
+        "from": {
+          "port": [
+            "reference_12V",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs30",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs31",
+        "from": {
+          "port": [
+            "duty_limit",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "switching_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs32",
+        "from": {
+          "port": [
+            "pwm_1kHz",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "switching_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs33",
+        "from": {
+          "port": [
+            "inductor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs34",
+        "from": {
+          "port": [
+            "load_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs35",
+        "from": {
+          "port": [
+            "load_resistance",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "resistance_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "title",
+        "position": [
+          3,
+          3
+        ],
+        "params": {
+          "text": "PWM VOLTAGE PID REGULATOR \u2014 switched synchronous buck, 24 V -> 12 V\nRun 1 s at 100 kHz (dt = 10 us). PWM = 1 kHz, 100 samples / period. Double-click scopes.",
+          "width": 1450,
+          "height": 105,
+          "font_size": 10
+        }
+      },
+      {
+        "id": "controller",
+        "position": [
+          3,
+          43
+        ],
+        "params": {
+          "text": "PID: Kp=0.04, Ki=8, Kd=0.0004, derivative filter tau=2 ms.\nDerivative on measured voltage; back-calculation anti-windup gain=100 /s.\nDuty is clamped to [0,1] and latched at each PWM period boundary.",
+          "width": 1450,
+          "height": 105,
+          "font_size": 10
+        }
+      },
+      {
+        "id": "plant",
+        "position": [
+          94,
+          3
+        ],
+        "params": {
+          "text": "RLC plant: L=10 mH with winding resistance 0.2 ohm; C=1000 uF.\nR(t)=8+4 sin(4 pi t) ohm (4..12 ohm). Initial iL=vC=0.",
+          "width": 1450,
+          "height": 105,
+          "font_size": 10
+        }
+      },
+      {
+        "id": "notes",
+        "position": [
+          3,
+          75
+        ],
+        "params": {
+          "text": "MODEL: diL/dt=(24*gate - vC - 0.2*iL)/L; dvC/dt=(iL - vC/R(t))/C.\nIdeal synchronous switching permits reverse current. No diode losses, dead time or current limit.\nEuler integration; keep 100 kHz for these parameters. Voltage ripple is expected; zoom scopes to see switching.",
+          "width": 1500,
+          "height": 105,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}
