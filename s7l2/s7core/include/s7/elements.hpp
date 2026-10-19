@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_ELEMENTS_HPP
 
 #include "s7/element.hpp"
+#include "s7/trapezoid.hpp"
 #include "s7/convert.hpp"
 #include "s7/signal_values.hpp"
 
@@ -518,20 +519,24 @@ private:
     value_type output_value_;
 };
 
-/// TrapezoidIntegrator: trapezoidal rule: y[n] = y[n-1] + dt/2 * (x[n] + x[n-1]),
-/// y[0] = initial_value (the first step only records x[0]). Direct
-/// feedthrough: a feedback loop through it still needs causal memory.
+/// Implicit trapezoidal integration: y[n+1] = y[n] + dt/2 *
+/// (f(y[n]) + f(y[n+1])). NodeRuntime solves coupled states together;
+/// outputs remain causal memory and need no artificial feedback Delay.
+/// In sampled mode this instead integrates supplied samples with direct
+/// feedthrough; its first call only records the initial input sample.
 /// Floating-point and complex floating-point types.
 template <SignalType Type>
-class TrapezoidIntegratorT final : public Element {
+class TrapezoidIntegratorT final : public Element, public TrapezoidIntegration {
 public:
     using value_type = signal_storage_t<Type>;
     using step_type = component_storage_t<Type>;
 
-    explicit TrapezoidIntegratorT(step_type dt = step_type(1), value_type initial_value = {})
-        : Element("TrapezoidIntegrator", true)
+    explicit TrapezoidIntegratorT(step_type dt = step_type(1), value_type initial_value = {},
+                                 TrapezoidMode mode = TrapezoidMode::Implicit)
+        : Element("TrapezoidIntegrator", true, mode == TrapezoidMode::Sampled ? Feedthrough::Direct : Feedthrough::None)
         , half_dt_(dt / step_type(2))
         , output_value_(initial_value)
+        , sampled_(mode == TrapezoidMode::Sampled)
     {
         register_input(0, port_names::in, Type, nullptr);
         register_output(0, port_names::out, Type, &output_value_);
@@ -539,6 +544,9 @@ public:
 
     void step() override
     {
+        if (!sampled_) {
+            throw std::logic_error("Implicit TrapezoidIntegrator requires NodeRuntime's coupled numerical stage.");
+        }
         const auto x = read_input<value_type>(0);
         if (has_previous_) {
             output_value_ = output_value_ + (x + previous_input_) * half_dt_;
@@ -546,6 +554,33 @@ public:
         previous_input_ = x;
         has_previous_ = true;
     }
+
+    [[nodiscard]] bool implicit_trapezoid_enabled() const override { return !sampled_; }
+
+    void prepare_trapezoid_step() override
+    {
+        base_value_ = output_value_;
+        base_input_ = read_input<value_type>(0);
+        candidate_ = base_value_ + base_input_ * (half_dt_ * step_type(2));
+    }
+
+    [[nodiscard]] bool prepare_trapezoid_correction() override
+    {
+        candidate_ = base_value_ + (base_input_ + read_input<value_type>(0)) * half_dt_;
+        const auto magnitude = math::abs(candidate_);
+        const auto difference = math::abs(candidate_ - output_value_);
+        if (math::isnan(magnitude) || math::isinf(magnitude) || math::isnan(difference) || math::isinf(difference)) {
+            throw std::runtime_error("TrapezoidIntegrator produced a non-finite candidate.");
+        }
+        // Do not reduce F128 or complex components to double for convergence.
+        constexpr auto component = component_signal_type(Type);
+        constexpr int digits = component == SignalType::F16 ? 11 : component == SignalType::F32 ? 24 :
+                               component == SignalType::F64 ? 53 : 113;
+        const step_type tolerance = math::ldexp(step_type(1), 4 - digits); // 8 * machine epsilon
+        return difference <= tolerance * (step_type(1) + magnitude);
+    }
+
+    void publish_trapezoid_candidate() override { output_value_ = candidate_; }
 
     [[nodiscard]] std::optional<Rate> declared_rate() const override
     {
@@ -555,6 +590,10 @@ public:
 private:
     step_type half_dt_;
     value_type output_value_;
+    bool sampled_;
+    value_type base_value_{};
+    value_type base_input_{};
+    value_type candidate_{};
     value_type previous_input_{};
     bool has_previous_{false};
 };

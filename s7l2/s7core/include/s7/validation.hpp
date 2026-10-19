@@ -29,6 +29,7 @@ namespace detail {
 struct CheckedSchema {
     std::vector<std::string> errors;
     std::vector<std::unique_ptr<Element>> elements;
+    std::vector<std::string> trapezoid_rhs;
 };
 [[nodiscard]] CheckedSchema check_schema(const Schema& schema);
 

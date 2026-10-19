@@ -186,7 +186,7 @@ void test_integrators()
     schema.set_rate(s7::Rate::from_hz(1));
     add(schema, "one", "Constant", {{"value", 1}});
     add(schema, "ramp", "EulerIntegrator", {{"dt", 0.5}});
-    add(schema, "area", "TrapezoidIntegrator", {{"dt", 0.5}});
+    add(schema, "area", "TrapezoidIntegrator", {{"dt", 0.5}, {"mode", "sampled"}});
     schema.connect("one", 0, "ramp", 0);
     schema.connect("ramp", 0, "area", 0);
     s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
@@ -223,10 +223,11 @@ void test_integrators()
     expect(error < s7::float128_t(1e-28) && error > -s7::float128_t(1e-28), "F128 Euler energy growth matches (1 + dt^2)^n");
     expect(oscillator.output_type_of("minus") == SignalType::F128, "F128 inferred through the loop");
 
-    // A loop closed only through TrapezoidIntegrator has no causal memory.
+    // Supplied-sample quadrature still has direct feedthrough; implicit mode
+    // is tested separately and has genuine causal-memory publication.
     s7::Schema algebraic{"algebraic"};
     algebraic.set_rate(s7::Rate::from_hz(1));
-    add(algebraic, "y", "TrapezoidIntegrator", {{"dt", 0.1}});
+    add(algebraic, "y", "TrapezoidIntegrator", {{"dt", 0.1}, {"mode", "sampled"}});
     add(algebraic, "minus", "Gain", {{"factor", -1}});
     algebraic.connect("y", 0, "minus", 0);
     algebraic.connect("minus", 0, "y", 0);

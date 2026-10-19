@@ -85,6 +85,8 @@ public:
     virtual ~Element() = default;
 
     [[nodiscard]] std::string_view type_name() const { return type_name_; }
+    // Stateless operations may be reevaluated at numerical trial states.
+    // Elements with mutable history or side effects must declare has_state.
     [[nodiscard]] bool has_state() const { return has_state_; }
     [[nodiscard]] Feedthrough feedthrough() const { return feedthrough_; }
     [[nodiscard]] bool has_causal_memory() const { return feedthrough_ == Feedthrough::None; }
@@ -133,6 +135,8 @@ public:
     // them together. An element's private state may advance during step(), but
     // must not be shared with another element as an implicit communication
     // channel.
+    // Implicit integrators can additionally implement TrapezoidIntegration;
+    // NodeRuntime uses that coupled stage instead of their ordinary step().
     virtual void step() = 0;
 
 protected:

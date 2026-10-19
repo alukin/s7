@@ -1,6 +1,7 @@
 #include "s7/core.hpp"
 #include "s7/rate_inference.hpp"
 #include "s7/type_inference.hpp"
+#include "s7/trapezoid.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -291,6 +292,50 @@ CheckedSchema check_schema(const Schema& schema) {
         auto rates = RateResolver::resolve(schema, instances);
         if (!rates.ok()) {
             checked.errors.insert(checked.errors.end(), rates.errors.begin(), rates.errors.end());
+        }
+    }
+    if (checked.errors.empty()) {
+        // Find only derivative ancestors whose value varies with a trial
+        // integrator state. Independent sources/other memory outputs are held
+        // fixed for this interval; stateful direct-feedthrough dependencies
+        // must never be stepped repeatedly by the numerical solver.
+        std::unordered_set<std::string> implicit;
+        std::unordered_map<std::string, std::vector<std::string>> parents;
+        for (const auto& [id, instance] : instances) {
+            const auto* integration = dynamic_cast<const TrapezoidIntegration*>(instance);
+            if (integration && integration->implicit_trapezoid_enabled()) implicit.insert(id);
+        }
+        if (!implicit.empty()) {
+            for (const auto& connection : schema.connections()) {
+                parents[connection.to_element].push_back(connection.from_element);
+            }
+            std::unordered_map<std::string, bool> varying;
+            std::unordered_set<std::string> visiting;
+            std::function<bool(const std::string&)> visit = [&](const std::string& id) {
+                if (implicit.contains(id)) return true;
+                if (instances.at(id)->has_causal_memory()) return false;
+                if (const auto it = varying.find(id); it != varying.end()) return it->second;
+                if (!visiting.insert(id).second) {
+                    checked.errors.emplace_back("Cycle detected without causal memory in TrapezoidIntegrator derivative graph.");
+                    return false;
+                }
+                bool depends = false;
+                for (const auto& parent : parents[id]) depends = visit(parent) || depends;
+                visiting.erase(id);
+                varying[id] = depends;
+                if (depends) {
+                    if (instances.at(id)->has_state()) {
+                        checked.errors.emplace_back("Implicit TrapezoidIntegrator derivative depends on stateful "
+                            "direct-feedthrough element '" + id + "'; only stateless feedback operations may be reevaluated.");
+                    } else {
+                        checked.trapezoid_rhs.push_back(id);
+                    }
+                }
+                return depends;
+            };
+            for (const auto& id : implicit) {
+                for (const auto& parent : parents[id]) static_cast<void>(visit(parent));
+            }
         }
     }
     return checked;

@@ -488,7 +488,8 @@ void register_builtin_elements(ElementRegistry& registry)
                 if constexpr (signal_type_info(T).is_floating()) {
                     return std::make_unique<TrapezoidIntegratorT<T>>(
                         param_value<component_signal_type(T)>(ctx, "dt", component_storage_t<T>(1)),
-                        param_value<T>(ctx, "initial_value", {}));
+                        param_value<T>(ctx, "initial_value", {}),
+                        ctx.get_string("mode") == "sampled" ? TrapezoidMode::Sampled : TrapezoidMode::Implicit);
                 } else {
                     return unsupported_type(ctx);
                 }
@@ -496,10 +497,12 @@ void register_builtin_elements(ElementRegistry& registry)
         },
         [] {
             auto m = make_generic_metadata("TrapezoidIntegrator", "Trapezoid Integrator",
-                                           "Trapezoidal rule: y[n] = y[n-1] + dt/2*(x[n] + x[n-1]); direct feedthrough",
+                                           "Implicit trapezoidal ODE step, solved jointly across feedback states; sampled mode integrates supplied samples",
                                            "filters", 1, 1, floating_types());
             m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
             m.parameters.push_back({"initial_value", "value", "y[0]", 0, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"mode", "enum", "Implicit feedback solve or supplied-sample quadrature",
+                                    "implicit", std::nullopt, std::nullopt, {"implicit", "sampled"}, false});
             return m;
         }()));
 

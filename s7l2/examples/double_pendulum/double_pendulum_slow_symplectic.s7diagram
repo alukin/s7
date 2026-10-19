@@ -1,0 +1,529 @@
+{
+  "id": "double_pendulum_slow_symplectic",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 650.0,
+    "height_mm": 330.0
+  },
+  "schema": {
+    "name": "double_pendulum_slow_symplectic",
+    "elements": [
+      {
+        "id": "state1",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 0.1,
+          "initial_velocity": 0.0
+        }
+      },
+      {
+        "id": "state2",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 0.14142135623730953,
+          "initial_velocity": 0.0
+        }
+      },
+      {
+        "id": "coefficient_1_1",
+        "type": "Gain",
+        "params": {
+          "factor": -19.62
+        }
+      },
+      {
+        "id": "coefficient_1_2",
+        "type": "Gain",
+        "params": {
+          "factor": 9.81
+        }
+      },
+      {
+        "id": "acceleration1",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "id": "coefficient_2_1",
+        "type": "Gain",
+        "params": {
+          "factor": 19.62
+        }
+      },
+      {
+        "id": "coefficient_2_2",
+        "type": "Gain",
+        "params": {
+          "factor": -19.62
+        }
+      },
+      {
+        "id": "acceleration2",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.0,
+            1.0
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "state1",
+        "from_port": 0,
+        "to_element": "coefficient_1_1",
+        "to_port": 0
+      },
+      {
+        "from_element": "state2",
+        "from_port": 0,
+        "to_element": "coefficient_1_2",
+        "to_port": 0
+      },
+      {
+        "from_element": "coefficient_1_1",
+        "from_port": 0,
+        "to_element": "acceleration1",
+        "to_port": 0
+      },
+      {
+        "from_element": "coefficient_1_2",
+        "from_port": 0,
+        "to_element": "acceleration1",
+        "to_port": 1
+      },
+      {
+        "from_element": "acceleration1",
+        "from_port": 0,
+        "to_element": "state1",
+        "to_port": 0
+      },
+      {
+        "from_element": "state1",
+        "from_port": 0,
+        "to_element": "coefficient_2_1",
+        "to_port": 0
+      },
+      {
+        "from_element": "state2",
+        "from_port": 0,
+        "to_element": "coefficient_2_2",
+        "to_port": 0
+      },
+      {
+        "from_element": "coefficient_2_1",
+        "from_port": 0,
+        "to_element": "acceleration2",
+        "to_port": 0
+      },
+      {
+        "from_element": "coefficient_2_2",
+        "from_port": 0,
+        "to_element": "acceleration2",
+        "to_port": 1
+      },
+      {
+        "from_element": "acceleration2",
+        "from_port": 0,
+        "to_element": "state2",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "theta1",
+      "element": "state1",
+      "port": 0,
+      "unit": "rad"
+    },
+    {
+      "name": "omega1",
+      "element": "state1",
+      "port": 1,
+      "unit": "rad/s"
+    },
+    {
+      "name": "theta2",
+      "element": "state2",
+      "port": 0,
+      "unit": "rad"
+    },
+    {
+      "name": "omega2",
+      "element": "state2",
+      "port": 1,
+      "unit": "rad/s"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "state1",
+        "position": [
+          62,
+          20
+        ],
+        "title": "Pendulum 1: position / velocity"
+      },
+      {
+        "id": "state2",
+        "position": [
+          62,
+          44
+        ],
+        "title": "Pendulum 2: position / velocity"
+      },
+      {
+        "id": "coefficient_1_1",
+        "position": [
+          6,
+          20
+        ],
+        "title": "-19.62 times angle 1"
+      },
+      {
+        "id": "coefficient_1_2",
+        "position": [
+          20,
+          20
+        ],
+        "title": "9.81 times angle 2"
+      },
+      {
+        "id": "acceleration1",
+        "position": [
+          34,
+          20
+        ],
+        "title": "Acceleration 1"
+      },
+      {
+        "id": "coefficient_2_1",
+        "position": [
+          6,
+          44
+        ],
+        "title": "19.62 times angle 1"
+      },
+      {
+        "id": "coefficient_2_2",
+        "position": [
+          20,
+          44
+        ],
+        "title": "-19.62 times angle 2"
+      },
+      {
+        "id": "acceleration2",
+        "position": [
+          34,
+          44
+        ],
+        "title": "Acceleration 2"
+      },
+      {
+        "id": "scope_states",
+        "position": [
+          108,
+          29
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "theta1 (rad)",
+            "omega1 (rad/s)",
+            "theta2 (rad)",
+            "omega2 (rad/s)"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "state1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "coefficient_1_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "state2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "coefficient_1_2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "coefficient_1_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "coefficient_1_2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration1",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "acceleration1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "state1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "state1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "coefficient_2_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "state2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "coefficient_2_2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "coefficient_2_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "coefficient_2_2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration2",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "acceleration2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "state2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "state1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "state1",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "state2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "state2",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "scope_states",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "model_notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "SMALL-ANGLE DOUBLE PENDULUM / SLOW MODE / SYMPLECTIC\nm1=m2=l1=l2=1, g=9.81; theta1''=-2g*theta1+g*theta2; theta2''=2g*theta1-2g*theta2.\nInitial angles: 0.1, 0.1414213562373095 rad; velocities zero. Default h=0.001 s. Run for 20 s at 1, 10 and 100 kHz.\nVelocity-first semi-implicit Euler; each acceleration uses both old angles.\nNormal frequencies: sqrt(g*(2-sqrt(2))), sqrt(g*(2+sqrt(2))). After step k, plotted state is z[k-1]; runtime timestamp is k*h. See README.md.",
+          "width": 2100.0,
+          "height": 180.0,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_RUNTIME_HPP
 
 #include "s7/graph.hpp"
+#include "s7/trapezoid.hpp"
 
 #include <array>
 #include <atomic>
@@ -77,12 +78,28 @@ private:
         std::array<std::byte, 32> snapshot{};
     };
 
+    struct TrapezoidStage {
+        TrapezoidIntegration* integration{};
+        MemoryOutputRange outputs;
+    };
+    // Temporary trial storage, restored before any ordinary memory step or
+    // observation. Solver failure restores it before propagating the error.
+    struct TrialOutput {
+        void* value_ptr{};
+        std::size_t bytes{};
+        std::array<std::byte, 32> base{};
+    };
+    void stage_trapezoids();
+
     void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
     ExecutableGraph graph_;
     std::vector<MemoryOutput> memory_outputs_;
     std::vector<MemoryOutputRange> memory_output_ranges_;
     std::vector<CausalOutput> causal_outputs_;
+    std::vector<TrapezoidStage> trapezoids_;
+    std::vector<TrialOutput> trial_outputs_;
+    std::vector<bool> implicit_memory_;
     bool memory_outputs_staged_{};
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<std::int64_t> model_time_step_ns_;

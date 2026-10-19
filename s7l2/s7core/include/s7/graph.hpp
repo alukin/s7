@@ -20,6 +20,8 @@ struct ExecutableGraph {
     std::unordered_map<std::string, std::string> id_to_instance_uuid;
     std::vector<std::string> causal_order;
     std::vector<std::string> memory_order;
+    // Stateless derivative dependencies replayed only during an implicit solve.
+    std::vector<std::string> trapezoid_rhs;
 };
 
 } // namespace s7

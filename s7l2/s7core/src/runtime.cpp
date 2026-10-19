@@ -20,6 +20,15 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
             });
         }
         memory_output_ranges_.push_back(MemoryOutputRange{begin, memory_outputs_.size()});
+        auto* integration = dynamic_cast<TrapezoidIntegration*>(element.get());
+        const bool implicit = integration && integration->implicit_trapezoid_enabled();
+        implicit_memory_.push_back(implicit);
+        if (implicit) {
+            trapezoids_.push_back({integration, memory_output_ranges_.back()});
+            for (const auto& port : ports) {
+                trial_outputs_.push_back({port.value_ptr, signal_type_info(port.type).storage_bytes, {}});
+            }
+        }
     }
 
     for (const auto& id : graph_.causal_order) {
@@ -30,6 +39,47 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
                 .bytes = signal_type_info(port.type).storage_bytes,
             });
         }
+    }
+    for (const auto& id : graph_.trapezoid_rhs) {
+        for (const auto& port : graph_.elements.at(id)->output_ports()) {
+            trial_outputs_.push_back({port.value_ptr, signal_type_info(port.type).storage_bytes, {}});
+        }
+    }
+}
+
+void NodeRuntime::stage_trapezoids() {
+    if (trapezoids_.empty()) return;
+    for (auto& output : trial_outputs_) std::memcpy(output.base.data(), output.value_ptr, output.bytes);
+    const auto restore = [this] {
+        for (auto& output : trial_outputs_) std::memcpy(output.value_ptr, output.base.data(), output.bytes);
+    };
+    try {
+        for (auto& stage : trapezoids_) stage.integration->prepare_trapezoid_step();
+        for (auto& stage : trapezoids_) stage.integration->publish_trapezoid_candidate();
+        constexpr int max_iterations = 64;
+        for (int iteration = 0; iteration < max_iterations; ++iteration) {
+            for (const auto& id : graph_.trapezoid_rhs) graph_.elements.at(id)->step();
+            bool converged = true;
+            for (auto& stage : trapezoids_) {
+                converged = stage.integration->prepare_trapezoid_correction() && converged;
+            }
+            for (auto& stage : trapezoids_) stage.integration->publish_trapezoid_candidate();
+            if (converged) {
+                for (const auto& stage : trapezoids_) {
+                    for (auto i = stage.outputs.begin; i < stage.outputs.end; ++i) {
+                        auto& output = memory_outputs_[i];
+                        std::memcpy(output.staged.data(), output.value_ptr, output.bytes);
+                    }
+                }
+                restore();
+                return;
+            }
+        }
+        throw std::runtime_error("Implicit TrapezoidIntegrator did not converge after 64 iterations; "
+                                 "reduce dt (fixed-point solver requires a contractive step).");
+    } catch (...) {
+        restore();
+        throw;
     }
 }
 
@@ -73,8 +123,9 @@ void NodeRuntime::step() {
         for (const auto& id : graph_.causal_order) {
             graph_.elements.at(id)->step();
         }
+        stage_trapezoids();
     } catch (...) {
-        // A causal-order element faulted partway through: restore every
+        // A causal-order evaluation or numerical trial faulted: restore every
         // causal output, and the memory outputs just published above, to
         // their pre-step values, so the step is all-or-nothing instead of a
         // mix of this step's and the previous step's outputs. The staged
@@ -99,6 +150,7 @@ void NodeRuntime::step() {
     // inputs; its published output is restored right away so that other
     // causal-memory elements still read this step's values.
     for (std::size_t element_index = 0; element_index < graph_.memory_order.size(); ++element_index) {
+        if (implicit_memory_[element_index]) continue;
         const auto range = memory_output_ranges_[element_index];
         for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
             auto& output = memory_outputs_[output_index];

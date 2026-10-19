@@ -110,3 +110,7 @@ if (WIN32)
 endif()
 add_test(NAME s7core_signal_types_strict_smoke COMMAND s7core_signal_types_strict_smoke)
 
+
+add_executable(s7core_trapezoid_smoke tests/trapezoid_smoke.cpp)
+target_link_libraries(s7core_trapezoid_smoke PRIVATE s7core)
+add_test(NAME s7core_trapezoid_smoke COMMAND s7core_trapezoid_smoke)

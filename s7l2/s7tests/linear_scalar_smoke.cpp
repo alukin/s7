@@ -11,15 +11,10 @@
 // loop is a valid cycle on its own and needs no separate Delay element: it
 // is exactly forward Euler applied to x_dot = a*x, x[n+1] = x[n] + dt*a*x[n].
 //
-// TrapezoidIntegrator is deliberately not exercised the same way here: it
-// has Feedthrough::Direct, so a bare integrator-gain loop around it is an
-// algebraic cycle with no causal-memory element and the validator rejects
-// it (core_smoke.cpp's make_invalid_schema covers the general case). Closing
-// such a loop needs an explicit Delay, which changes the equation being
-// solved (see AGENTS.md's execution-ordering note and the test plan's
-// Stage 5 hypothesis about integrators gaining dynamics from how they are
-// wired as causal graph elements, not from their nominal accuracy order).
-// That case is follow-up work, not this test.
+// Implicit TrapezoidIntegrator now has a coupled runtime stage and causal
+// memory; scalar/nonlinear second-order convergence and its exact discrete
+// solution are covered separately in s7core/tests/trapezoid_smoke.cpp.
+// This file remains the forward-Euler reference/convergence test.
 //
 // test_rate_resolver_confirms_one_rate() revisits this schema's rate claim
 // now that RateResolver (s7/rate_inference.hpp) is a mandatory part of

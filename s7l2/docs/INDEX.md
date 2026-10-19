@@ -13,6 +13,8 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 
 The next-release target is local simulation quality. The development plan defines intended outcomes; the editor guide describes implemented behavior; open problems and the visual numerical plan track remaining work. Existing tests establish only their stated cases, not completion of the release criteria.
 
+Numerical examples and measured integrator comparisons: [small-angle double pendulum](../examples/double_pendulum/README.md) (nine diagrams, continuous/discrete references and reproducible reports).
+
 ## Implementation architecture
 
 | Document | Content |
@@ -23,6 +25,7 @@ The next-release target is local simulation quality. The development plan define
 
 | Document | Content |
 |---|---|
+| [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
 | `ELEMENT_DEV_GUIDE.md` | Writing elements: element contract, metadata, registration, parameters |
 | `PLUGIN_INTERFACE.md` | C ABI for element plugins, discovery paths, loading process |
 | `SCHEMA_LIBRARY_WORKFLOW.md` | Schema-backed element libraries in Studio and the runtime |

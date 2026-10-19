@@ -197,3 +197,16 @@ set_tests_properties(s7studio_scope_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 
 add_test(NAME s7studio_scope_run COMMAND s7studio --scope-run-check)
 set_tests_properties(s7studio_scope_run PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_executable(s7studio_coupled_pendulum_test
+    tests/coupled_pendulum_test.cpp
+    src/local_schema_runner.cpp
+    src/local_schema_runner.hpp
+)
+target_include_directories(s7studio_coupled_pendulum_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
+target_link_libraries(s7studio_coupled_pendulum_test PRIVATE s7studio_diagram Threads::Threads)
+target_compile_definitions(s7studio_coupled_pendulum_test PRIVATE
+    S7_PENDULUM_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples/double_pendulum")
+set_target_properties(s7studio_coupled_pendulum_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_coupled_pendulum COMMAND s7studio_coupled_pendulum_test)
+set_tests_properties(s7studio_coupled_pendulum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 600)

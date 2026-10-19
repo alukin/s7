@@ -194,6 +194,10 @@ ExecutableGraph Compiler::compile(const Schema& schema,
 
     executable_graph.causal_order =
         CausalScheduler::schedule(schema, prototypes, executable_graph.causal_order);
+    const std::unordered_set<std::string> trapezoid_rhs(checked.trapezoid_rhs.begin(), checked.trapezoid_rhs.end());
+    for (const auto& id : executable_graph.causal_order) {
+        if (trapezoid_rhs.contains(id)) executable_graph.trapezoid_rhs.push_back(id);
+    }
     return executable_graph;
 }
 

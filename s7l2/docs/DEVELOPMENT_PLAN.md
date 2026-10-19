@@ -21,10 +21,10 @@ Deferred: distributed scheduling/deployment expansion, remote observation, hardw
 
 | Area | Implemented evidence | Still required for release |
 |---|---|---|
-| Numerical execution | Mandatory rate validation; scalar analytical/convergence harness; plain-Euler amplification and symplectic-oscillator checks | Reference-backed acceptance for the supported example/configuration matrix; model-time/state alignment and timestep refinement checks |
+| Numerical execution | Mandatory rate validation; scalar analytical/convergence harness; Euler/symplectic oscillator checks; nine coupled-pendulum diagrams with continuous/discrete references at three rates; implicit trapezoidal stage and typed/nonlinear convergence smoke checks | Reference-backed acceptance for the supported example/configuration matrix; model-time/state alignment and timestep refinement checks |
 | Studio delivery and views | Worker-thread execution and bounded sample mailbox; `s7studio_scope_view` and `s7studio_scope_run` regressions | Exercise overload, multiple channels, interactive view changes, long runs, recording failures and all run controls |
 | Scope lifecycle | Uniform preview stride; recording starts before opening a view and survives hiding/reopening; Auto Y preserves the time range | Verify full CSV against the delivered trace, recording completeness, and zoom/pan across disk-backed history |
-| Reproducibility | Headless diagram/probe-sidecar harness and Studio end-to-end oscillator test | Compare the same saved model/configuration across both paths; document supported platforms and resource envelope |
+| Reproducibility | Headless diagram harness, Studio oscillator test, and coupled-pendulum bundled/headless sample comparisons | Compare the same saved model/configuration across both paths; document supported platforms and resource envelope |
 
 These checks establish specific behavior, not general numerical correctness. In particular, the Scope run regression's ten-second sine comparison at 1/10/100 kHz is a rendering/delivery regression with a tolerance; it does not prove long-term energy conservation or validate all integrators.
 
