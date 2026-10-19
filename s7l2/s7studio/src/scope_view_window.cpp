@@ -22,8 +22,6 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
-
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <utility>
@@ -138,8 +136,14 @@ void ScopeViewWindow::appendSample(const QString& channel, const double timeSeco
         series.hasSamples = true;
     }
     series.lastTime = timeSeconds;
-    series.time.push_back(timeSeconds);
-    series.value.push_back(value);
+    series.lastValue = value;
+    // Keep the same sampling stride for old and newly arriving preview points.
+    // Repeatedly thinning only the old prefix erases the start of long runs.
+    const auto sampleIndex = series.receivedSamples++;
+    if (sampleIndex % series.plotStride == 0) {
+        series.time.push_back(timeSeconds);
+        series.value.push_back(value);
+    }
     if (series.spillFile) {
         if (!appendToSpill(series, timeSeconds, value)) {
             series.spillFailed = true;
@@ -335,6 +339,9 @@ void ScopeViewWindow::setVisibleGraphData(Series& series,
     }
     if (!series.spillFile || fitFullRun || upperTime - lowerTime >= dataMaxTime_ - dataMinTime_) {
         graph->setData(series.time, series.value, true);
+        if (!series.time.isEmpty() && series.lastTime > series.time.back()) {
+            graph->addData(series.lastTime, series.lastValue);
+        }
         return;
     }
 
@@ -345,6 +352,9 @@ void ScopeViewWindow::setVisibleGraphData(Series& series,
     }
     if (series.spillIndex.isEmpty() || !series.spillFile->seek(series.spillIndex.isEmpty() ? 0 : index->byteOffset)) {
         graph->setData(series.time, series.value, true);
+        if (!series.time.isEmpty() && series.lastTime > series.time.back()) {
+            graph->addData(series.lastTime, series.lastValue);
+        }
         return;
     }
 
@@ -394,6 +404,7 @@ void ScopeViewWindow::setVisibleGraphData(Series& series,
 
 void ScopeViewWindow::decimatePlotBuffer(Series& series)
 {
+    series.plotStride *= 2;
     QVector<double> time;
     QVector<double> value;
     time.reserve((series.time.size() + 1) / 2);
@@ -440,7 +451,12 @@ void ScopeViewWindow::refreshPlot()
     }
 
     if (autoScaleYCheck_->isChecked()) {
-        plot_->rescaleAxes(true);
+        // Auto Y must preserve the requested time range, including zoom/pan.
+        bool onlyEnlarge = false;
+        for (int i = 0; i < plot_->graphCount(); ++i) {
+            plot_->graph(i)->rescaleValueAxis(onlyEnlarge, true);
+            onlyEnlarge = true;
+        }
     }
 
     plot_->replot(QCustomPlot::rpQueuedReplot);

@@ -2,6 +2,8 @@
 #include "local_schema_runner.hpp"
 #include "scope_sample_mailbox.hpp"
 #include "main_window.hpp"
+#include "scope_view_window.hpp"
+#include "qcp.h"
 #include "diagram_document.hpp"
 #include "diagram_editor.hpp"
 #include "deployment_support.hpp"
@@ -20,6 +22,8 @@
 #include <s7/transport.hpp>
 
 #include <QApplication>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QImage>
 #include <QTimer>
 #include <QPainter>
@@ -582,6 +586,76 @@ int runLayoutCheck(int argc, char** argv)
     std::cout << (ok ? "layout check: OK (" : "layout check: FAILED (") << expected << " connections)\n";
     return ok ? 0 : 1;
 }
+// Exercise delivery, late opening and reopening with the actual oscillator.
+int runScopeRunCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    QTemporaryDir settingsDir;
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDir.path());
+    QApplication::setOrganizationName(QStringLiteral("s7-test"));
+    QApplication::setApplicationName(QStringLiteral("scope-run"));
+    registerElements();
+    for (const int frequency : {1000, 10000, 100000}) {
+        s7studio::MainWindow window;
+        const QString path = QStringLiteral(S7STUDIO_SOURCE_DIR "/../examples/2int_osc.s7diagram");
+        window.openPath(path);
+        auto schema = readJson(path.toLocal8Bit().constData()).as_object().at("schema");
+        const double dt = 1.0 / frequency;
+        for (auto& element : schema.as_object().at("elements").as_array()) {
+            if (element.as_object().at("type").as_string() == "EulerIntegrator") {
+                element.as_object().at("params").as_object()["dt"] = dt;
+            }
+        }
+        auto* runner = window.findChild<s7studio::LocalSchemaRunner*>();
+        if (!runner) throw std::runtime_error("Missing runner");
+        runner->run(schema, dt, 10 * frequency, {{"scope_1/v", "eulerintegrator_2", 0}});
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (runner->isRunning() && std::chrono::steady_clock::now() < deadline) {
+            app.processEvents();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (runner->isRunning()) throw std::runtime_error("Oscillator run timed out");
+        app.processEvents();
+        QMetaObject::invokeMethod(&window, "onScopeSamplesAvailable", Qt::DirectConnection);
+        const auto open = [&] {
+            QMetaObject::invokeMethod(&window, "onProbeOpenScopeRequested", Qt::DirectConnection,
+                                      Q_ARG(QString, QStringLiteral("scope_1")));
+        };
+        open();
+        s7studio::ui::ScopeViewWindow* scope = nullptr;
+        for (auto* widget : QApplication::topLevelWidgets()) {
+            if (auto* candidate = qobject_cast<s7studio::ui::ScopeViewWindow*>(widget)) {
+                if (candidate->probeName() == QStringLiteral("scope_1")) scope = candidate;
+            }
+        }
+        if (!scope) throw std::runtime_error("Missing Scope window");
+        const auto check = [&] {
+            QMetaObject::invokeMethod(scope, "refreshPlot", Qt::DirectConnection);
+            auto* plot = scope->findChild<QCustomPlot*>();
+            const auto data = plot->graph(0)->data();
+            if (data->isEmpty() || data->constBegin()->key > 2 * dt
+                || std::abs((data->constEnd() - 1)->key - 10.0) > 1e-8
+                || plot->xAxis->range().lower > 2 * dt
+                || std::abs(plot->xAxis->range().upper - 10.0) > 1e-8) {
+                throw std::runtime_error("Scope lost full run time range");
+            }
+            double previous = 0.0;
+            for (auto it = data->constBegin(); it != data->constEnd(); ++it) {
+                if (it->key - previous > 0.01 || std::abs(it->value - std::sin(it->key)) > 0.02) {
+                    throw std::runtime_error("Scope lost oscillator curve");
+                }
+                previous = it->key;
+            }
+        };
+        check();
+        scope->close();
+        app.sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        open();
+        check();
+    }
+    return 0;
+}
 } // namespace
 
 int main(int argc, char** argv) try
@@ -595,6 +669,10 @@ int main(int argc, char** argv) try
 
     if (hasArg(argc, argv, "--enable-core-dumps")) {
         enableCrashDumps();
+    }
+
+    if (hasArg(argc, argv, "--scope-run-check")) {
+        return runScopeRunCheck(argc, argv);
     }
 
     if (hasArg(argc, argv, "--smoke")) {

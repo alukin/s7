@@ -57,6 +57,9 @@ private:
         QVector<SpillIndexEntry> spillIndex;
         QSharedPointer<QTemporaryFile> spillFile;
         qint64 spilledSamples = 0;
+        std::uint64_t receivedSamples = 0;
+        std::uint64_t plotStride = 1;
+        double lastValue = 0.0;
         double firstTime = 0.0;
         double lastTime = 0.0;
         bool hasSamples = false;

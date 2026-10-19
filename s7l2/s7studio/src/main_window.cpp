@@ -101,7 +101,6 @@ constexpr double kPaperA3WidthMm = 420.0;
 constexpr double kPaperA3HeightMm = 297.0;
 constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
-constexpr int kMaxScopeHistoryPointsPerScope = 20000;
 constexpr const char* kBundledDemoDiagramPath = S7STUDIO_SOURCE_DIR "/resources/demo_startup.s7diagram";
 
 
@@ -1078,10 +1077,9 @@ void MainWindow::onScopeSamplesAvailable()
 
     for (const auto& sample : batch.samples) {
         const auto probeName = QString::fromStdString(sample.probeName);
-        scopeSampleHistory_[probeName].push_back(ScopeSamplePoint{sample.timeSeconds, sample.value});
         const auto separator = probeName.indexOf(QLatin1Char('/'));
         const auto scopeId = separator < 0 ? probeName : probeName.left(separator);
-        if (const auto window = scopeWindows_.value(scopeId)) {
+        if (const auto window = ensureScopeWindow(scopeId)) {
             const auto channel = separator < 0 ? probeName : probeName.mid(separator + 1);
             window->appendSample(channel, sample.timeSeconds, sample.value);
         }
@@ -1111,12 +1109,6 @@ void MainWindow::onScopeSamplesAvailable()
             if (window->zProbeName() == probeName) {
                 window->appendZSample(sample.step, sample.value);
             }
-        }
-    }
-    for (auto it = scopeSampleHistory_.begin(); it != scopeSampleHistory_.end(); ++it) {
-        auto& history = it.value();
-        if (history.size() > kMaxScopeHistoryPointsPerScope) {
-            history.erase(history.begin(), history.begin() + (history.size() - kMaxScopeHistoryPointsPerScope));
         }
     }
     if (batch.dropped > 0) {
@@ -1543,27 +1535,28 @@ void MainWindow::syncPageActions()
     landscapePageAction_->setChecked(pageLayout.orientation == diagram::PageOrientation::Landscape);
 }
 
+auto MainWindow::ensureScopeWindow(const QString& probeName) -> ui::ScopeViewWindow*
+{
+    if (const auto existing = scopeWindows_.value(probeName)) {
+        return existing;
+    }
+    // Record from the first delivered sample, even before the user opens the
+    // view. Closing hides the window and retains its disk-backed recording.
+    auto* window = new ui::ScopeViewWindow(
+        probeName,
+        nullptr,
+        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
+    scopeWindows_.insert(probeName, window);
+    window->setDroppedSampleCount(scopeSamplesDropped_);
+    return window;
+}
+
 void MainWindow::openScopeWindow(const QString& probeName)
 {
     if (probeName.isEmpty()) {
         return;
     }
-
-    if (const auto existing = scopeWindows_.value(probeName)) {
-        replayScopeSamples(probeName, *existing);
-        existing->show();
-        existing->raise();
-        existing->activateWindow();
-        return;
-    }
-
-    auto* window = new ui::ScopeViewWindow(
-        probeName,
-        nullptr,
-        Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
-    window->setAttribute(Qt::WA_DeleteOnClose, true);
-    scopeWindows_.insert(probeName, window);
-    replayScopeSamples(probeName, *window);
+    auto* window = ensureScopeWindow(probeName);
     window->show();
     window->raise();
     window->activateWindow();
@@ -1627,7 +1620,7 @@ void MainWindow::closeScopeWindows()
     scopeWindows_.clear();
     for (const auto& window : existingWindows) {
         if (window) {
-            window->close();
+            delete window.data();
         }
     }
     const auto existingPhasePortraits = phasePortraitWindows_.values();
@@ -1648,7 +1641,6 @@ void MainWindow::closeScopeWindows()
 
 void MainWindow::clearScopeSamples()
 {
-    scopeSampleHistory_.clear();
     scopeSamplesDropped_ = 0;
     for (const auto& window : scopeWindows_) {
         if (window) {
@@ -1663,22 +1655,6 @@ void MainWindow::clearScopeSamples()
     for (const auto& window : phaseTrajectory3DWindows_) {
         if (window) {
             window->clearSamples();
-        }
-    }
-}
-
-void MainWindow::replayScopeSamples(const QString& probeName, ui::ScopeViewWindow& window)
-{
-    window.clearSamples();
-    for (auto it = scopeSampleHistory_.cbegin(); it != scopeSampleHistory_.cend(); ++it) {
-        const auto separator = it.key().indexOf(QLatin1Char('/'));
-        const auto owner = separator < 0 ? it.key() : it.key().left(separator);
-        if (owner != probeName) {
-            continue;
-        }
-        for (const auto& point : it.value()) {
-            const auto channel = separator < 0 ? it.key() : it.key().mid(separator + 1);
-            window.appendSample(channel, point.timeSeconds, point.value);
         }
     }
 }

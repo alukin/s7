@@ -50,11 +50,6 @@ class HeadlessNodesPanel;
 class ProbesPanel;
 }
 
-struct ScopeSamplePoint {
-    double timeSeconds = 0.0;
-    double value = 0.0;
-};
-
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -115,12 +110,12 @@ private:
     void buildActions();
     void connectRunnerSignals();
     void refreshActions();
+    auto ensureScopeWindow(const QString& probeName) -> ui::ScopeViewWindow*;
     void openScopeWindow(const QString& probeName);
     void openPhasePortraitWindow(const QString& xProbeName, const QString& yProbeName);
     void openPhaseTrajectory3DWindow(const QString& xProbeName, const QString& yProbeName, const QString& zProbeName);
     void closeScopeWindows();
     void clearScopeSamples();
-    void replayScopeSamples(const QString& probeName, ui::ScopeViewWindow& window);
     void refreshProbesPanel();
     // The RunProbe list the runner should sample for the current scene.
     [[nodiscard]] auto currentRunProbes() const -> std::vector<RunProbe>;
@@ -241,7 +236,6 @@ private:
     // Keyed by "xProbe|yProbe".
     QHash<QString, QPointer<ui::PhasePortraitViewWindow>> phasePortraitWindows_;
     QHash<QString, QPointer<ui::PhaseTrajectory3DViewWindow>> phaseTrajectory3DWindows_;
-    QHash<QString, QVector<ScopeSamplePoint>> scopeSampleHistory_;
     std::uint64_t scopeSamplesDropped_ = 0;
     class QTimer* wireTypeTimer_ = nullptr;
     QString lastWireTypeError_;

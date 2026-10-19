@@ -183,3 +183,17 @@ if (TARGET s7noise)
     add_dependencies(s7studio_diagram_test s7noise)
     target_compile_definitions(s7studio_diagram_test PRIVATE S7_TEST_NOISE_PLUGIN_DIR="$<TARGET_FILE_DIR:s7noise>")
 endif()
+
+add_executable(s7studio_scope_view_test
+    tests/scope_view_test.cpp
+    src/scope_view_window.cpp
+    src/scope_view_window.hpp
+)
+target_include_directories(s7studio_scope_view_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(s7studio_scope_view_test PRIVATE s7_qcustomplot Qt6::Widgets)
+set_target_properties(s7studio_scope_view_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_scope_view COMMAND s7studio_scope_view_test)
+set_tests_properties(s7studio_scope_view PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+add_test(NAME s7studio_scope_run COMMAND s7studio --scope-run-check)
+set_tests_properties(s7studio_scope_run PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
