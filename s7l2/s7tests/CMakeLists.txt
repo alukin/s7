@@ -11,6 +11,12 @@ add_executable(s7tests_linear_scalar_smoke linear_scalar_smoke.cpp)
 target_link_libraries(s7tests_linear_scalar_smoke PRIVATE s7core)
 add_test(NAME s7tests_linear_scalar_smoke COMMAND s7tests_linear_scalar_smoke)
 
+# SymplecticIntegrator vs. plain EulerIntegrator on the harmonic oscillator
+# (examples/2int_osc.s7diagram's amplitude-drift finding, docs/OPEN_PROBLEMS.md).
+add_executable(s7tests_symplectic_oscillator_smoke symplectic_oscillator_smoke.cpp)
+target_link_libraries(s7tests_symplectic_oscillator_smoke PRIVATE s7core)
+add_test(NAME s7tests_symplectic_oscillator_smoke COMMAND s7tests_symplectic_oscillator_smoke)
+
 # Headless .s7diagram + probe-sidecar runner (diagram_harness.hpp,
 # ../docs/VISUAL_NUMERICAL_TESTS_PLAN.md section 2); diagrams/*.s7diagram are
 # Studio-openable.

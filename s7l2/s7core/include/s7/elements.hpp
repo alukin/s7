@@ -559,6 +559,53 @@ private:
     bool has_previous_{false};
 };
 
+/// SymplecticIntegrator (semi-implicit Euler, a.k.a. Euler-Cromer): for a
+/// second-order system x'' = a(x), updates velocity from the current
+/// (not yet advanced) state, then position from the freshly updated
+/// velocity:
+///   v[n+1] = v[n] + dt*a[n]
+///   x[n+1] = x[n] + dt*v[n+1]
+/// Unlike EulerIntegrator applied independently to position and velocity,
+/// this bounds the energy of a conservative oscillator instead of letting
+/// it drift secularly (docs/OPEN_PROBLEMS.md). The bound holds when
+/// acceleration depends only on position (and time); an acceleration that
+/// also depends on velocity (damping) loses the symplectic property. Still
+/// only first-order accurate, not an exact conservation law.
+/// Causal memory (outputs hold [n] during the step; NodeRuntime publishes
+/// [n+1] after). Floating-point and complex floating-point types.
+template <SignalType Type>
+class SymplecticIntegratorT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using step_type = component_storage_t<Type>;
+
+    explicit SymplecticIntegratorT(step_type dt = step_type(1), value_type initial_position = {},
+                                   value_type initial_velocity = {})
+        : Element("SymplecticIntegrator", true, Feedthrough::None)
+        , dt_(dt)
+        , position_(initial_position)
+        , velocity_(initial_velocity)
+    {
+        register_input(0, "acceleration", Type, nullptr);
+        register_output(0, "position", Type, &position_);
+        register_output(1, "velocity", Type, &velocity_);
+    }
+
+    // Writes the next step's outputs; NodeRuntime publishes them after the step.
+    void step() override
+    {
+        velocity_ = velocity_ + read_input<value_type>(0) * dt_;
+        position_ = position_ + velocity_ * dt_;
+    }
+
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_seconds(static_cast<double>(dt_)); }
+
+private:
+    step_type dt_;
+    value_type position_;
+    value_type velocity_;
+};
+
 /// FIR filter: y[n] = sum_k taps[k] * x[n-k], computed in the accumulator type
 /// Acc (default: the input type), as a hardware MAC with a wide accumulator.
 /// Arithmetic types.
@@ -806,6 +853,7 @@ using Sign = SignT<SignalType::F64>;
 using Comparator = ComparatorT<SignalType::F64>;
 using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
 using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
+using SymplecticIntegrator = SymplecticIntegratorT<SignalType::F64>;
 using FirFilter = FirFilterT<SignalType::F64>;
 using IirFilter = IirFilterT<SignalType::F64>;
 using AnalogOscillator = AnalogOscillatorT<SignalType::F64>;

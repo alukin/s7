@@ -504,6 +504,38 @@ void register_builtin_elements(ElementRegistry& registry)
         }()));
 
     registry.register_element(ElementDescriptor(
+        "SymplecticIntegrator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_floating()) {
+                    return std::make_unique<SymplecticIntegratorT<T>>(
+                        param_value<component_signal_type(T)>(ctx, "dt", component_storage_t<T>(1)),
+                        param_value<T>(ctx, "initial_position", {}), param_value<T>(ctx, "initial_velocity", {}));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        [] {
+            auto m = make_generic_metadata(
+                "SymplecticIntegrator", "Symplectic Integrator (semi-implicit Euler)",
+                "Semi-implicit Euler for x'' = acceleration: v[n+1] = v[n] + dt*a[n], x[n+1] = x[n] + dt*v[n+1]; "
+                "bounds a conservative oscillator's energy instead of letting it drift like EulerIntegrator",
+                "filters", 1, 2, floating_types());
+            m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"initial_position", "value", "x[0]", 0, std::nullopt, std::nullopt, {}, false});
+            m.parameters.push_back({"initial_velocity", "value", "v[0]", 0, std::nullopt, std::nullopt, {}, false});
+            m.input_ports[0].name = "acceleration";
+            m.input_ports[0].description = "Acceleration/force input, a(x) computed by the surrounding graph; a "
+                                           "velocity dependency (damping) loses the symplectic energy bound.";
+            m.output_ports[0].name = "position";
+            m.output_ports[0].description = "Position output x[n].";
+            m.output_ports[1].name = "velocity";
+            m.output_ports[1].description = "Velocity output v[n].";
+            return m;
+        }()));
+
+    registry.register_element(ElementDescriptor(
         "Trig",
         [](const ElementCreationContext& ctx) {
             return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
