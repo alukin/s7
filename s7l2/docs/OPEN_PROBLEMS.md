@@ -1,11 +1,38 @@
 # S7 Open Problems
 
-Date: 2026-10-19
+Date: 2026-10-20
 Status: living document — update in place as items are resolved or found; do not create a new dated copy.
 
 This file replaces three earlier documents (`CODE_REVIEW_REQUIRED_FIXES.md`, `PROJECT_STATUS_AND_PLAN_2026-09-20.md`, `PROJECT_REVIEW_AND_DEVELOPMENT_PLAN_2026-10-14.md`), which tracked mostly-resolved findings and a stale plan and are now removed from the working tree. Their history (what was found, how it was fixed, and which fix superseded which) is still available with `git log --follow -- docs/CODE_REVIEW_REQUIRED_FIXES.md` and `git show <rev>:docs/CODE_REVIEW_REQUIRED_FIXES.md` etc.; resolved prerequisites are retained below only where they explain the current simulation baseline and remaining limits.
 
 This document lists *what* is unsolved. For *how and in what order* to address it, see `docs/DEVELOPMENT_PLAN.md`.
+
+## Release audit inventory — 2026-10-20
+
+Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit.
+
+- **D1 / P0 / confirmed defect:** MainWindow diagram and schema-library writes
+  use truncating QFile writes, ignore short writes and report success before
+  checking persistence. Existing destinations can be damaged on failed writes.
+- **D2 / P0 / confirmed defect:** MainWindow::closeEvent has no Save/Discard/Cancel
+  guard. Other destructive transitions and nested dirty tracking remain under audit.
+- **O1 / P0 / confirmed limitation; design decision needed:** recording is downstream
+  of a bounded, dropping mailbox. Completeness requires an independent capture path;
+  existing incomplete metadata does not make capture lossless.
+- **C1 / P1 / confirmed release infrastructure defect:** tracked workflow resides
+  under s7l2/.github, not repository-root .github. It also assumes the wrong CMake
+  source root and provides no compiler/dependency installation.
+- **L1 / P1 / rights decision needed:** GPLv3-or-later migration is authorized for
+  S7-owned material, but contributor rights are not yet verified. Git history includes
+  `teren-ukr <maksymgeliush@gmail.com>` changes in items.cpp/items.hpp,
+  diagram_editor.cpp/diagram_editor.hpp and main_window.cpp (24c4674, 2801427).
+  No permission/assignment has been established from this audit. s7spectral is
+  described as third-party in existing documentation and requires ownership review.
+  Do not silently relicense these files or vendored resources.
+- **R1/N1/U1/A1 / incomplete coverage and usability:** source/test audit and actual
+  execution are required; existing pendulum/viewer results are retained as historical
+  evidence, not fresh release acceptance. Real GPU/package/Windows validation remains
+  unverified. DISPLAY variables alone do not establish a usable display.
 
 ## Next-release scope — decided 2026-10-19
 
@@ -20,7 +47,7 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 ## P1 — Validation, CI, and whole-system testing
 
-- **CI exists but is minimal and its assumptions are unverified.** `.github/workflows/ci.yml` (present since commit `f8a970f`, 2026-07-08) runs one `ubuntu-latest` job: configure, build, `ctest --test-dir build --output-on-failure` (the suite has grown since the initial review). It installs no dependencies and pins no compiler, so it relies entirely on whatever the hosted image provides for Boost/OpenSSL/zlib/Qt6 and for a C++26-capable compiler — AGENTS.md requires GCC 15+ or Clang 22+ with libstdc++, which the job does not enforce or even check. `S7_BUILD_STUDIO` defaults `ON`, so the job also implicitly requires Qt6 to be present rather than exercising the documented headless path (`-DS7_BUILD_STUDIO=OFF`). Confirm whether this job currently passes before relying on it, then add: a compiler/dependency matrix, an explicit headless-build job, a Windows cross-build + Wine job, and sanitizer jobs (ThreadSanitizer for transport/runtime concurrency; AddressSanitizer/UBSan for core, parsing, and lifecycle paths — these have been run ad hoc per the resolved findings but are not a standing CI gate).
+- **CI is misplaced, minimal and its assumptions are unverified.** `.github/workflows/ci.yml` (present since commit `f8a970f`, 2026-07-08) runs one `ubuntu-latest` job: configure, build, `ctest --test-dir build --output-on-failure` (the suite has grown since the initial review). It installs no dependencies and pins no compiler, so it relies entirely on whatever the hosted image provides for Boost/OpenSSL/zlib/Qt6 and for a C++26-capable compiler — AGENTS.md requires GCC 15+ or Clang 22+ with libstdc++, which the job does not enforce or even check. `S7_BUILD_STUDIO` defaults `ON`, so the job also implicitly requires Qt6 to be present rather than exercising the documented headless path (`-DS7_BUILD_STUDIO=OFF`). Confirm whether this job currently passes before relying on it, then add: a compiler/dependency matrix, an explicit headless-build job, a Windows cross-build + Wine job, and sanitizer jobs (ThreadSanitizer for transport/runtime concurrency; AddressSanitizer/UBSan for core, parsing, and lifecycle paths — these have been run ad hoc per the resolved findings but are not a standing CI gate).
 - **Two-node integration placement and coverage need follow-up after the local release.** `s7tests/` now contains numerical/reference and diagram-harness tests. The two-node scenario remains `s7_two_node_deployment`, registered by `s7ctl/CMakeLists.txt` and driven by `tools/test_two_node_deployment.sh` (`LOCAL_HEADLESS_NODES_DEMO.md`); it covers deployment, a restart/sequence-gap fault and recovery. Decide later whether to move its driver; standalone clean shutdown and multi-cycle restart/recovery remain broader integration gaps.
 - **No dedicated concurrency audit or stress coverage.** Runtime graph replacement, stream ownership, endpoint shutdown, stepping, and Studio worker/UI handoff span modules; the existing tests are clean under ThreadSanitizer but are smoke-level, not a targeted lock/lifetime audit or deterministic stress suite, and nothing runs them under a sanitizer in CI.
 - **Cross-language conformance is not a required check (broader backlog).** The wire and control fixtures (`s7transport/tests/fixtures/`, `s7runtime/tests/fixtures/`) are checked against a reference Python decoder/generator, but nothing requires another-language conformance check to pass before a release that changes these protocols; drift between this implementation and the sibling Python implementation in `../doc/` is possible without being caught.

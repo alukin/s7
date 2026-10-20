@@ -4,10 +4,57 @@ Simulation follows the [analog-computer model](SIMULATION_MODEL.md): dynamics
 are explicit element networks. RK4 and other independent solvers belong in
 test references, not a new runtime simulation engine.
 
-Date: 2026-10-19
+Date: 2026-10-20
 Status: living document — update in place as phases complete or the sequence changes; do not create a new dated copy.
 
 This is the sequencing companion to `docs/OPEN_PROBLEMS.md`: that document lists what is unsolved, this one orders the work. The next-release section defines the current commitment; the later phases preserve the longer-term backlog.
+
+## Release execution audit — 2026-10-20
+
+This section supersedes the earlier work sequence where priorities differ.
+The authorized scope is `UI_AND_SYM_IMPROVMENT_PROMPT.md`; the complete workflow
+is Open → Edit → Configure → Run → Observe → Compare → Save → Reopen.
+Do not change implementation or licenses until this documentation increment is committed.
+
+### Reproducible starting point
+
+- Revision: `0e8f695` (Add PLL and AM/FM/RMS measurement examples).
+- Initial tracked tree clean; two untracked improvement prompts are user inputs.
+- Existing `build`: Debug, Studio ON, `/usr/bin/c++` GCC 16.2.1,
+  CMake 4.3.0, system Qt under `/usr/lib64/cmake/Qt6`.
+- `ctest --test-dir build -N`: 59 registered tests. Registration is not execution.
+- Baseline command: `cmake --build build --target build-tests --parallel 2`,
+  then `ctest --test-dir build --output-on-failure -j 2`.
+  Build/test results will be recorded below when complete.
+- DISPLAY=:0 and WAYLAND_DISPLAY=wayland-0 are set; this does not prove an
+  accessible GPU/session. Real rendering and native Windows remain unverified.
+- Workspace writes cover `s7l2` and `/tmp`; repository root, `doc`, and `s7py`
+  changes require filesystem approval. No vendored/submodule edits authorized.
+
+### Ordered tasks and acceptance
+
+All rows require a separate logical commit, relevant tests, and synchronized
+issue status. Status starts **pending audit** unless evidence is stated.
+
+| ID / priority / category | Modules and current behavior | Required behavior / implementation | Dependencies and risks | Regression tests / acceptance | Status |
+|---|---|---|---|---|---|
+| L1 P1 release infrastructure / rights decision | Root LICENSE says GPLv2; root README grants version 2; `s7spectral` is described as third-party; history contains multiple contributors | Audit tracked ownership and notices, inventory dependencies/assets; migrate verified S7 material to GPL-3.0-or-later, official license plus explicit or-later grant, module notices/SPDX, package notices and automated metadata check; user output is not automatically GPL | First documentation commit; root write access; obtain missing contributor permission rather than assuming ownership; preserve QSchematic/GPDS/Tabler and other vendor licenses | Scan all tracked first-party metadata and modules; CI rejects stale declarations; inspect packaged notices | Audit begun; rights unresolved |
+| D1 P0 confirmed defect | `s7studio/src/main_window.cpp` saveDocumentToPath and library export truncate destinations and ignore write results | Shared atomic QSaveFile writer, verify complete write and commit, disable direct fallback; update path/success state only after commit | Documentation commit; filesystem failure injection must work as root too | Existing-file preservation on open/write/commit failure, successful replacement/reopen and invalid path | Confirmed by source audit; pending implementation |
+| D2 P0 confirmed defect / coverage | MainWindow closeEvent has no unsaved prompt; other replacement paths and nested tabs need audit | Track persisted document state across scene, parameters, probes, nested schemas and run config; central Save/Discard/Cancel guard for every replacement including remote loads and recent files | D1; nested commits and undo cleanliness must agree; failed Save cancels transition | Each dialog choice, nested edits, open/new/recent/close/load, failed save retains dirty state, full config round trip | Close defect confirmed; other paths pending audit |
+| R1 P0 incomplete coverage | LocalSchemaRunner, ModelRunController, MainWindow, ViewerManager, mailbox already have lifecycle tests | Audit Idle/Prepared/Running/Paused/Stopping/Stopped/Error; stop/join on replacement; generation isolation for queued work, immutable active config, actionable failures | D2; Qt queued callbacks and shutdown ordering | Deterministic start/stop/reset/rerun, document replacement running/paused, close, stale callbacks, observers added/deleted, edit-next-run, worker recovery | Pending audit |
+| O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Confirmed limitation; implementation policy pending |
+| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | Pending audit; existing references retained |
+| U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | Pending audit |
+| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Confirmed misplaced workflow; pending implementation |
+| P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Pending audit |
+| A1 P1 incomplete coverage | Automated references and viewer regressions cover selected cases | Execute four acceptance guarantees: document safety, numerical correctness, run/sample isolation and operational readiness; classify bundled models validated or experimental | All above; real GPU/native Windows are external evidence requirements | Representative linear/nonlinear full workflow; measure hardware, model rate vs throughput, UI responsiveness, memory/disk growth, stop latency, high DPI and long-run behavior | Pending; no release-ready claim |
+
+Order: documentation baseline commit → L1 audit/migration where rights permit →
+D1 → D2 → R1 → O1 → N1 → U1 → C1 → P1 → A1.
+A licensing blocker does not block unrelated P0 fixes. C1 preparation may proceed
+after P0 correctness work while external rights are outstanding.
+No global solver, distributed scheduling expansion, additional integration methods,
+remote observation, hardware, multi-rate or checkpointing is added by this plan.
 
 ## Next release: dependable local simulation in Studio
 
