@@ -45,6 +45,7 @@ public:
     void appendSample(double timeSeconds, double value);
     void appendSample(const QString& channel, double timeSeconds, double value);
     void clearSamples() override;
+    void beginRun(const QString& previousRunLabel, bool preserve) override;
     // Same full-resolution CSV writer used by the export action. The caller
     // supplies a writable device; finite doubles retain round-trip precision.
     [[nodiscard]] bool writeRecordedCsv(QIODevice& device, QString* error = nullptr) const;

@@ -9,13 +9,15 @@ This document lists *what* is unsolved. For *how and in what order* to address i
 
 ## R1 completion audit — 2026-10-20
 
-Current confirmed gaps: pause reports success before a worker boundary; sample
-routing consults edited observer types; MainWindow destruction does not explicitly
-join its worker before member/plugin teardown; queued callbacks have no shutdown
-guard. State/error/recovery/edit-during-run stress coverage remains incomplete.
-The R1 completion section of DEVELOPMENT_PLAN.md sequences fixes and deterministic
-acceptance tests. Worker inputs already copy the schema; this audit does not claim
-that parameter edits currently mutate the executing numerical graph.
+Resolved in the R1 increment: pause now waits for a complete worker boundary;
+active schema/settings/probes and observer routing are frozen per run; queued
+callbacks and mailbox samples are generation-checked; close/destruction joins
+the worker before member/plugin teardown. Scope reruns archive previous live
+series as labelled comparisons, and phase views reset partial coordinates.
+Dedicated runner/window regressions cover transitions, cancellation, errors and
+recovery, edits during runs, observer changes and running/paused shutdown.
+Stop/reset remain cooperative: an element step that never returns can prevent
+joining. Recording completeness and measured throughput remain O1 work.
 
 ## Automated GUI suite priority
 
@@ -59,10 +61,10 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
   No permission/assignment has been established from this audit. s7spectral is
   described as third-party in existing documentation and requires ownership review.
   Do not silently relicense these files or vendored resources.
-- **R1 / P0 / isolation increment verified:** document replacement resets and joins
-  the embedded worker; start/reset/replacement invalidate queued notifications by
-  generation. A deterministic queued-worker regression and existing Scope run/
-  lifecycle checks pass. Full lifecycle state/error/observer stress remains open.
+- **R1 / P0 / implementation complete:** explicit acknowledged lifecycle states,
+  immutable active configuration, generation-isolated delivery, worker error
+  recovery, observer transitions and safe shutdown have deterministic Qt Test
+  coverage. Full-suite verification is recorded in DEVELOPMENT_PLAN.md.
 - **N1/U1/A1 / incomplete coverage and usability:** source/test audit and actual
   execution are required; existing pendulum/viewer results are retained as historical
   evidence, not fresh release acceptance. Real GPU/package/Windows validation remains
@@ -76,7 +78,7 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 - **Numerical coverage is partial.** Scalar analytical/convergence tests and the forward-Euler/symplectic oscillator regressions exist, but do not validate every bundled diagram, timestep or integration method. Define the supported configuration matrix and independent references; check values, first/final state publication and model-time alignment through both the headless and Studio paths. In particular, continuous oscillator energy conservation is not a valid exact requirement for forward Euler. More demanding nonlinear/chaotic examples need explicit experimental limits until validated.
 - **Observation completeness under load is not guaranteed.** `ScopeSampleMailbox` holds at most 200,000 samples across probes and drops the oldest on overflow, counting the loss. Scope's disk buffer preserves samples delivered to the UI, not ones already lost in that mailbox. Measure the supported rate/duration/channel envelope and choose/test delivery and recording behavior for overload. The lifecycle regression checks exact mailbox overflow accounting and an unusable temporary directory; saved Scope results preserve incomplete-recording metadata. Still verify actual disk exhaustion and write failures during capture; never describe a partial recording as full resolution without qualification.
-- **View and run lifecycle coverage needs expansion.** The 2026-10-19 Scope corrections address repeated thinning of early history, replacement of recordings by the last 20,000 points on open/reopen, and Auto Y changing the time axis. `s7studio_scope_view` checks preview resolution/bounds and zoom preservation; `s7studio_scope_run` runs the actual two-integrator example at 1/10/100 kHz for ten model seconds, opens Scope afterward and reopens it, checking the full time extent and curve. The new `s7studio_scope_lifecycle` regression covers two-channel pendulum pause/resume, stop while paused, reset/rerun, hide/reopen, live save/export, imported disk-backed zoom, comparison persistence and malformed-file rollback. [Saved results](SCOPE_RESULTS.md) can be overlaid across runs. Still broaden phase-view lifecycle, observation enabled/disabled equivalence, large-file responsiveness and clean shutdown under load.
+- **View and run lifecycle coverage needs expansion.** The 2026-10-19 Scope corrections address repeated thinning of early history, replacement of recordings by the last 20,000 points on open/reopen, and Auto Y changing the time axis. `s7studio_scope_view` checks preview resolution/bounds and zoom preservation; `s7studio_scope_run` runs the actual two-integrator example at 1/10/100 kHz for ten model seconds, opens Scope afterward and reopens it, checking the full time extent and curve. The new `s7studio_scope_lifecycle` regression covers two-channel pendulum pause/resume, stop while paused, reset/rerun, hide/reopen, live save/export, imported disk-backed zoom, comparison persistence and malformed-file rollback. [Saved results](SCOPE_RESULTS.md) can be overlaid across runs. R1 adds phase-coordinate reset and running/paused shutdown coverage. Observation enabled/disabled equivalence, large-file responsiveness and measured shutdown under load remain open.
 - **Supported performance and packaging are unspecified.** Discretization frequency defines model time, not guaranteed steps per wall-clock second. Record throughput, UI responsiveness, pause/stop latency, queue/preview memory and disk use on stated hardware; smoke-test packaged Studio and required local plugins without a separate service. Studio-enabled CI is a release requirement; native Windows support requires native evidence, not only Wine.
 
 ## P1 — Validation, CI, and whole-system testing

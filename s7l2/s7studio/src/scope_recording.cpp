@@ -87,6 +87,31 @@ void ScopeRecording::clearLive()
     notifyStatus();
 }
 
+void ScopeRecording::archiveLive(const QString& runLabel)
+{
+    const auto sequence = ++comparisonSequence_;
+    const bool incomplete = droppedSamples_ > 0 || !temporaryWriteError_.isEmpty()
+        || std::any_of(series_.cbegin(), series_.cend(), [](const Series& series) {
+            return !series.isComparison() && (series.spillFailed || !series.recordingWarning.isEmpty());
+        });
+    QMap<QString, Series> archived;
+    for (auto it = series_.begin(); it != series_.end();) {
+        if (it->isComparison()) { ++it; continue; }
+        auto series = std::move(it.value());
+        it = series_.erase(it);
+        series.comparisonLabel = QStringLiteral("%1 #%2%3").arg(runLabel).arg(sequence)
+            .arg(incomplete ? QStringLiteral(" INCOMPLETE") : QString());
+        if (incomplete) series.recordingWarning = QStringLiteral("incomplete recording; dropped %1 samples; %2")
+            .arg(droppedSamples_).arg(temporaryWriteError_);
+        const auto key = QStringLiteral("comparison:%1:%2").arg(sequence).arg(series.channelName);
+        archived.insert(key, std::move(series));
+    }
+    for (auto it = archived.begin(); it != archived.end(); ++it) series_.insert(it.key(), std::move(it.value()));
+    droppedSamples_ = 0;
+    temporaryWriteError_.clear();
+    notifyStatus();
+}
+
 void ScopeRecording::clearComparisons()
 {
     for (auto it = series_.begin(); it != series_.end();) {

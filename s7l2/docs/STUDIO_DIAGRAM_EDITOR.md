@@ -186,3 +186,58 @@ persisted document, so undoing back to the saved contents clears it; nested
 schema edits participate through their parent instance. Local run duration and
 clear-trace settings persist in `studio_run`, outside the Functional Graph.
 Replacing a document stops and joins its embedded worker and clears its mailbox.
+
+## Local run lifecycle and editing during a run
+
+The embedded runner owns a const `RunConfiguration` snapshot: a monotonically
+increasing run ID, schema JSON, dt, requested step count and probe bindings.
+The Run panel always identifies that snapshot's rate/count/ID and says that edits
+apply to the next run. Parameter, discretization, duration and nested-schema edits
+never mutate the executing graph. A subsequent Run compiles the edited document.
+
+| State | Meaning and controls |
+|---|---|
+| Idle | No prepared run; Run is enabled. |
+| Preparing / Prepared | Validate/compile the copied schema, then prepare execution. Preparation errors enter Error. |
+| Running | Step the frozen graph; Pause and Stop are enabled. |
+| Pausing | Pause requested; finish the current step and publish its samples. Resume is disabled in the UI until acknowledgment. |
+| Paused | Worker acknowledges a complete step boundary and waits on a condition variable. Resume or Stop wakes it. Previously queued samples may still be delivered. |
+| Stopping | Stop requested; no new run can begin until worker finalization. Stop itself does not join/block the UI. |
+| Stopped / Completed | Manual stop / requested finite steps finished. Run is enabled; retained configuration identifies the results. |
+| Error | Preparation or worker failure; the Run panel contains the error and Run permits recovery. |
+
+Reset joins the retiring worker, clears its runtime/mailbox/configuration, and
+returns to Idle. Each run/reset invalidates queued owner notifications; sample
+batches and samples carry their originating run ID. The window also guards its
+queued callbacks by generation and shutdown state. State getters are authoritative:
+a notification overtaken by a newer transition need not be presented as current.
+Runner commands and snapshot access belong to the QObject's owner thread.
+
+Observer bindings/types are frozen with the run. Existing windows continue to
+show the original snapshot if the diagram changes. Opening a newly added or
+rewired/retyped observer asks the user to rerun through a log/status message;
+it cannot silently subscribe to an old graph. Destroying and recreating a viewer
+uses its existing run binding, while a newly started run clears all phase alignment
+and live history. With **Clear scope traces before run** unchecked, the preceding
+Scope trace becomes a separately labelled `Run <ID>` comparison (including its
+capture-loss/storage warnings), rather than appending restarted timestamps to one
+series. Existing saved comparisons remain available; phase views restart.
+
+Document replacement stops/joins the old worker before loading the new graph.
+Application close and destruction invalidate callbacks and stop/join/release the
+runtime before destroying viewers, schema tabs or the plugin loader. A closed
+window cannot be repopulated by queued samples/completion events.
+
+Stop is cooperative: an executing element step or synchronous compilation cannot
+be safely interrupted midway. Reset/close/destruction wait for that work to return;
+no universal shutdown bound is claimed for a plugin that blocks indefinitely.
+Pause acknowledgment removes polling delays but does not promise a wall-clock
+execution rate. Recording completeness remains a separate limitation described
+in SCOPE_RESULTS.md.
+
+`s7studio_run_lifecycle` tests gated step boundaries, run snapshots/IDs,
+retired notifications, rapid transitions, cancellation, worker exceptions and
+recovery. `s7studio_window_lifecycle` tests the real window's running/paused
+replacement and shutdown, active edits, observer lifetime/type changes, run
+comparison isolation, phase alignment reset and error recovery. Their synchronization
+uses explicit step gates and state conditions, not arbitrary sleep intervals.

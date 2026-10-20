@@ -16,11 +16,13 @@ struct ScopeSample {
     long step = 0;
     double timeSeconds = 0.0;
     double value = 0.0;
+    std::uint64_t runId = 0;
 };
 
 struct ScopeSampleBatch {
     std::vector<ScopeSample> samples; // in production order
     std::uint64_t dropped = 0;        // discarded since the previous batch
+    std::uint64_t runId = 0;
 };
 
 // Hands Scope samples from the runtime worker to the UI thread with bounded
@@ -37,6 +39,7 @@ public:
     {
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            if (sample.runId != runId_) return false;
             if (samples_.size() >= capacity_) {
                 samples_.pop_front();
                 ++dropped_;
@@ -55,13 +58,15 @@ public:
         batch.samples.assign(std::make_move_iterator(samples_.begin()), std::make_move_iterator(samples_.end()));
         samples_.clear();
         batch.dropped = std::exchange(dropped_, 0);
+        batch.runId = runId_;
         return batch;
     }
 
-    void clear()
+    void clear(std::uint64_t runId = 0)
     {
         std::lock_guard<std::mutex> lock(mutex_);
         samples_.clear();
+        runId_ = runId;
         dropped_ = 0;
         notifyPending_.store(false);
     }
@@ -71,6 +76,7 @@ private:
     std::mutex mutex_;
     std::deque<ScopeSample> samples_;
     std::uint64_t dropped_ = 0;
+    std::uint64_t runId_ = 0;
     std::atomic<bool> notifyPending_{false};
 };
 

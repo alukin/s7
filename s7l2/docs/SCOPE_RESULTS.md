@@ -8,8 +8,10 @@ timestamps; loading does not interpolate, shift time or run the model again.
 Use names such as `pendulum_trapezoid_10kHz.s7scope` to identify configurations.
 
 **Clear current** discards the current recording and its capture warnings.
-Starting/resetting a run also clears current samples using the existing Studio
-lifecycle. Imported comparisons remain until **Remove comparisons** is clicked
+Starting a run clears current samples; with **Clear scope traces before run**
+unchecked, it first moves the preceding recording into a labelled `Run <ID>`
+comparison, preserving its storage and capture-loss warnings. Reset clears live
+samples. Phase views always restart their history and step alignment. Imported comparisons remain until **Remove comparisons** is clicked
 or the Scope is destroyed (for example, when closing its diagram/application).
 Closing and reopening the Scope window keeps both its current recording and
 comparisons. Reopen saved files after restarting Studio.

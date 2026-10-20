@@ -351,3 +351,18 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
     set_tests_properties(s7studio_gui_failure_artifacts PROPERTIES
         LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)
 endif()
+
+find_package(Qt6 REQUIRED COMPONENTS Test)
+s7_add_test_executable(s7studio_run_lifecycle_test
+    tests/run_lifecycle_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
+target_link_libraries(s7studio_run_lifecycle_test PRIVATE s7studio_diagram Qt6::Test Threads::Threads)
+set_target_properties(s7studio_run_lifecycle_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_run_lifecycle COMMAND s7studio_run_lifecycle_test)
+set_tests_properties(s7studio_run_lifecycle PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_window_lifecycle_test tests/window_lifecycle_test.cpp)
+target_link_libraries(s7studio_window_lifecycle_test PRIVATE s7studio_app Qt6::Test)
+set_target_properties(s7studio_window_lifecycle_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_window_lifecycle COMMAND s7studio_window_lifecycle_test)
+set_tests_properties(s7studio_window_lifecycle PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/lifecycle-cache;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/lifecycle-config" TIMEOUT 60)

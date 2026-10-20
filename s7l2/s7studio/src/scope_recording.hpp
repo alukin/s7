@@ -65,6 +65,7 @@ public:
     // Drops the current run (live series), its loss count and storage error;
     // comparisons stay.
     void clearLive();
+    void archiveLive(const QString& runLabel);
     void clearComparisons();
     void setDroppedSampleCount(std::uint64_t dropped);
     [[nodiscard]] auto droppedSampleCount() const -> std::uint64_t { return droppedSamples_; }

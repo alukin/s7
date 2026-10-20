@@ -356,6 +356,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
 MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
+    retireRunForShutdown();
     // Tear down tab callbacks while all editors and tool widgets still exist.
     // QTabWidget otherwise emits currentChanged while its pages are destroyed.
     if (schemaTabs_) {
@@ -375,6 +376,17 @@ MainWindow::~MainWindow()
     closeViewers();
 }
 
+void MainWindow::retireRunForShutdown()
+{
+    ++runGeneration_;
+    if (runner_) {
+        disconnect(runner_, nullptr, this, nullptr);
+        runner_->reset(); // join before schemas, viewers or plugin loader are destroyed
+    }
+    runObserverTypes_.clear();
+    observersFrozen_ = false;
+}
+
 void MainWindow::resetLocalRun()
 {
     // Disconnect before joining: the retiring worker may emit its final
@@ -382,6 +394,8 @@ void MainWindow::resetLocalRun()
     ++runGeneration_;
     disconnect(runner_, nullptr, this, nullptr);
     runner_->reset();
+    runObserverTypes_.clear();
+    observersFrozen_ = false;
     connectRunnerSignals();
     onStatusChanged(QStringLiteral("idle"));
 }
@@ -390,21 +404,21 @@ void MainWindow::connectRunnerSignals()
 {
     const auto generation = runGeneration_;
     connect(runner_, &LocalSchemaRunner::logMessage, this, [this, generation](const QString& message) {
-        if (generation != runGeneration_) return;
+        if (shuttingDown_ || generation != runGeneration_) return;
         appendLog(message);
         if (runPanel_) runPanel_->append(message);
     });
     connect(runner_, &LocalSchemaRunner::statusChanged, this, [this, generation](const QString& status) {
-        if (generation == runGeneration_) onStatusChanged(status);
+        if (!shuttingDown_ && generation == runGeneration_) onStatusChanged(status);
     });
     connect(runner_, &LocalSchemaRunner::runCompleted, this, [this, generation](bool success, const QString& error) {
-        if (generation == runGeneration_) onRunCompleted(success, error);
+        if (!shuttingDown_ && generation == runGeneration_) onRunCompleted(success, error);
     });
     connect(runner_, &LocalSchemaRunner::ticksProgress, this, [this, generation](long completed, long total) {
-        if (generation == runGeneration_) onTickProgress(completed, total);
+        if (!shuttingDown_ && generation == runGeneration_) onTickProgress(completed, total);
     });
     connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, [this, generation] {
-        if (generation == runGeneration_) onScopeSamplesAvailable();
+        if (!shuttingDown_ && generation == runGeneration_) onScopeSamplesAvailable();
     });
 }
 
@@ -930,14 +944,23 @@ void MainWindow::appendLog(const QString& message)
 
 void MainWindow::onStatusChanged(const QString& status)
 {
+    if (shuttingDown_) return;
     if (runPanel_) {
-        runPanel_->setStatus(status);
+        // A state notification may have been queued before another command.
+        runPanel_->setStatus(QString::fromLatin1(runStateName(runner_->state())));
+        if (const auto configuration = runner_->activeConfiguration()) {
+            runPanel_->setConfigurationSummary(QStringLiteral("Run %1 — %2 Hz, %3. Edits apply to the next run.")
+                .arg(configuration->id).arg(1.0 / configuration->dt, 0, 'g', 10)
+                .arg(configuration->ticks < 0 ? QStringLiteral("continuous") : QStringLiteral("%1 steps").arg(configuration->ticks)));
+        } else runPanel_->setConfigurationSummary(QString());
     }
+    (void)status;
     refreshActions();
 }
 
 void MainWindow::onRunCompleted(bool success, const QString& error)
 {
+    if (shuttingDown_) return;
     if (success) {
         appendLog("[studio] run completed");
         runPanel_->append(QStringLiteral("Run completed."));
@@ -997,6 +1020,10 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     if (viewers::ViewerRegistry::instance().find(elementType)) {
         if (activeDiagramEditor()!=diagramEditor_) {
             appendLog(QStringLiteral("[studio] Nested tabs edit schema structure; open runtime observers from the root diagram."));
+            return;
+        }
+        if (!observerMatchesActiveRun(elementId)) {
+            appendLog(QStringLiteral("[studio] This observer was added or changed after the run snapshot. Run again to observe its new configuration."));
             return;
         }
         viewers_->openObserver(elementType, QString::fromStdString(elementNode->id()));
@@ -1132,10 +1159,10 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
 
 void MainWindow::onScopeSamplesAvailable()
 {
-    if (!runner_) {
-        return;
-    }
+    if (shuttingDown_ || !runner_) return;
     const auto batch = runner_->takeScopeSamples();
+    const auto configuration = runner_->activeConfiguration();
+    if (!configuration || batch.runId != configuration->id) return;
     // Each observer records from its first sample, even before it is opened.
     viewers_->deliver(batch, [this](const QString& observerId) { return observerViewerType(observerId); });
     if (batch.dropped > 0) {
@@ -1151,6 +1178,7 @@ void MainWindow::onScopeSamplesAvailable()
 
 auto MainWindow::observerViewerType(const QString& observerId) const -> QString
 {
+    if (observersFrozen_) return runObserverTypes_.value(observerId);
     const auto node = diagramEditor_ && diagramEditor_->scene()
         ? diagramEditor_->scene()->elementNode(observerId.toStdString()) : nullptr;
     if (node) {
@@ -1158,6 +1186,23 @@ auto MainWindow::observerViewerType(const QString& observerId) const -> QString
         if (viewers::ViewerRegistry::instance().find(type)) return type;
     }
     return QStringLiteral("Scope");
+}
+
+bool MainWindow::observerMatchesActiveRun(const QString& observerId) const
+{
+    if (!observersFrozen_) return true;
+    const auto configuration = runner_->activeConfiguration();
+    if (!configuration || !runObserverTypes_.contains(observerId)) return false;
+    const auto node = diagramEditor_->scene()->elementNode(observerId.toStdString());
+    if (node && viewers::ViewerRegistry::instance().find(QString::fromStdString(node->element().type))
+        && runObserverTypes_.value(observerId) != QString::fromStdString(node->element().type)) return false;
+    auto select = [&](const std::vector<RunProbe>& probes) {
+        std::vector<RunProbe> selected;
+        for (const auto& probe : probes)
+            if (viewers::ViewerManager::observerIdOf(QString::fromStdString(probe.name)) == observerId) selected.push_back(probe);
+        return selected;
+    };
+    return select(configuration->probes) == select(currentRunProbes());
 }
 
 void MainWindow::refreshActions()
@@ -1244,6 +1289,12 @@ void MainWindow::connectSceneSignals()
     connect(scene, &diagram::DiagramScene::probesChanged, wireTypeTimer_, qOverload<>(&QTimer::start),
             Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::onProbesChanged, Qt::UniqueConnection);
+    const auto reportNextRunEdit = [this] {
+        if (!shuttingDown_ && runner_->isRunning())
+            statusBar()->showMessage(QStringLiteral("Edits apply to the next run; the active simulation keeps its starting configuration."), 6000);
+    };
+    connect(scene, &diagram::DiagramScene::diagramChanged, this, reportNextRunEdit);
+    connect(scene, &diagram::DiagramScene::probesChanged, this, reportNextRunEdit);
     wireTypeTimer_->start();
     onProbesChanged();
     auto* modifiedTimer = new QTimer(this);
@@ -1322,11 +1373,20 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
 
 void MainWindow::onProbeOpenScopeRequested(const QString& probeName)
 {
+    if (!observerMatchesActiveRun(viewers::ViewerManager::observerIdOf(probeName))) {
+        appendLog(QStringLiteral("[studio] This probe changed after the run snapshot; run again to observe it."));
+        return;
+    }
     viewers_->open(QStringLiteral("Scope"), {probeName, {}});
 }
 
 void MainWindow::onProbeOpenPhasePortraitRequested(const QString& xProbeName, const QString& yProbeName)
 {
+    if (!observerMatchesActiveRun(viewers::ViewerManager::observerIdOf(xProbeName))
+        || !observerMatchesActiveRun(viewers::ViewerManager::observerIdOf(yProbeName))) {
+        appendLog(QStringLiteral("[studio] These probes changed after the run snapshot; run again to observe them."));
+        return;
+    }
     // Ad-hoc portraits of two probes are keyed by the pair.
     viewers_->open(QStringLiteral("PhasePortrait"),
                    {QStringLiteral("%1|%2").arg(xProbeName, yProbeName), {xProbeName, yProbeName}});
@@ -1614,6 +1674,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
         return;
     }
     shuttingDown_ = true;
+    retireRunForShutdown();
     saveWindowLayout();
     if (diagramEditor_ && diagramEditor_->scene()) {
         disconnect(diagramEditor_->scene(), nullptr, this, nullptr);
@@ -1623,9 +1684,6 @@ void MainWindow::closeEvent(QCloseEvent* event)
     }
 
     closeViewers();
-    if (runner_) {
-        runner_->reset();
-    }
     QMainWindow::closeEvent(event);
 }
 
@@ -1646,6 +1704,12 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     dialog.resize(420, 260);
 
     auto* layout = new QVBoxLayout(&dialog);
+    if (runner_->isRunning()) {
+        auto* notice = new QLabel(QStringLiteral("Changes apply to the next run. The active run keeps its starting configuration."), &dialog);
+        notice->setObjectName(QStringLiteral("run.editNotice"));
+        notice->setWordWrap(true);
+        layout->addWidget(notice);
+    }
     auto* form = new QFormLayout();
 
     auto* runtimeSecondsSpin = new QSpinBox(&dialog);
@@ -1674,7 +1738,9 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
             [refreshDtLabel](const double valueHz) { refreshDtLabel(valueHz); });
 
     auto* clearSamplesCheck = new QCheckBox(QStringLiteral("Clear scope traces before run"), &dialog);
+    clearSamplesCheck->setObjectName(QStringLiteral("run.clearScopeTraces"));
     clearSamplesCheck->setChecked(clearScopesBeforeRun_);
+    clearSamplesCheck->setToolTip(QStringLiteral("Unchecked: keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
 
     form->addRow(QStringLiteral("Run time (s)"), runtimeSecondsSpin);
     form->addRow(QStringLiteral("Discretization frequency"), frequencySpin);
@@ -1722,14 +1788,15 @@ void MainWindow::launchRunWithCurrentConfiguration()
         return;
     }
     if (runner_->isRunning()) return;
+    const auto previousRun = runner_->activeConfiguration();
+    onScopeSamplesAvailable(); // consume final samples before retiring their generation
     resetLocalRun();
     runPanel_->clearOutput();
     runPanel_->append(QStringLiteral("Running at %1 Hz, %2.")
                           .arg(discretizationFrequencyHz_)
                           .arg(runtimeSeconds_ < 0 ? QStringLiteral("continuously") : QStringLiteral("%1 s").arg(runtimeSeconds_)));
-    if (clearScopesBeforeRun_) {
-        clearViewerSamples();
-    }
+    viewers_->beginRun(previousRun ? QStringLiteral("Run %1").arg(previousRun->id) : QStringLiteral("Previous run"),
+                       !clearScopesBeforeRun_);
 
     const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
     if (diagramEditor_ && diagramEditor_->scene()) {
@@ -1737,7 +1804,13 @@ void MainWindow::launchRunWithCurrentConfiguration()
         updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
     }
 
-    controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_}, currentRunProbes());
+    const auto probes = currentRunProbes();
+    for (const auto& probe : probes) {
+        const auto observerId = viewers::ViewerManager::observerIdOf(QString::fromStdString(probe.name));
+        runObserverTypes_.insert(observerId, observerViewerType(observerId));
+    }
+    observersFrozen_ = true;
+    controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_}, probes);
     refreshActions();
 }
 

@@ -147,6 +147,7 @@ void LogPanel::append(const QString& line)
 RunPanel::RunPanel(const std::vector<QAction*>& actions, QWidget* parent)
     : QWidget(parent)
     , status_(new QLabel(QStringLiteral("idle"), this))
+    , configuration_(new QLabel(this))
     , progress_(new QLabel(this))
     , output_(outputView(this))
 {
@@ -161,6 +162,10 @@ RunPanel::RunPanel(const std::vector<QAction*>& actions, QWidget* parent)
     line->addWidget(progress_);
     line->addStretch(1);
     layout->addLayout(line);
+    configuration_->setObjectName(QStringLiteral("run.activeConfiguration"));
+    status_->setObjectName(QStringLiteral("run.status"));
+    configuration_->setWordWrap(true);
+    layout->addWidget(configuration_);
     layout->addWidget(output_, 1);
     withActionBar(this, actions, content);
 }
@@ -168,6 +173,12 @@ RunPanel::RunPanel(const std::vector<QAction*>& actions, QWidget* parent)
 void RunPanel::setStatus(const QString& status)
 {
     status_->setText(status);
+}
+
+void RunPanel::setConfigurationSummary(const QString& summary)
+{
+    configuration_->setText(summary);
+    configuration_->setVisible(!summary.isEmpty());
 }
 
 void RunPanel::setProgress(const QString& progress)

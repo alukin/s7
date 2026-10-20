@@ -105,13 +105,16 @@ void ViewerManager::deliver(const ScopeSampleBatch& batch,
 {
     QSet<QString> resolvedObservers;
     QHash<QString, QList<ObservationViewer*>> routes;
+    QHash<QString, QString> observerTypes;
     std::uint64_t routedGeneration = generation_;
     for (const auto& raw : batch.samples) {
         ObservedSample sample{QString::fromStdString(raw.probeName), raw.step, raw.timeSeconds, raw.value};
         const auto observerId = observerIdOf(sample.probeName);
         if (!resolvedObservers.contains(observerId)) {
             resolvedObservers.insert(observerId);
-            static_cast<void>(ensureObserver(observerType(observerId), observerId));
+            const auto type = observerType(observerId);
+            observerTypes.insert(observerId, type);
+            static_cast<void>(ensureObserver(type, observerId));
         }
         if (routedGeneration != generation_) {
             routes.clear();
@@ -121,6 +124,10 @@ void ViewerManager::deliver(const ScopeSampleBatch& batch,
         if (route == routes.end()) {
             QList<ObservationViewer*> targets;
             for (const auto& instance : std::as_const(instances_)) {
+                // Editing/replacing a diagram observer with the same ID must
+                // not route its old run's samples into a different viewer type.
+                if (instance.instanceId == observerId && !observerTypes.value(observerId).isEmpty()
+                    && instance.typeId != observerTypes.value(observerId)) continue;
                 if (instance.window && instance.viewer->subscribes(sample.probeName)) targets.push_back(instance.viewer);
             }
             route = routes.insert(sample.probeName, targets);
@@ -128,6 +135,12 @@ void ViewerManager::deliver(const ScopeSampleBatch& batch,
         for (auto* viewer : std::as_const(*route)) viewer->appendObservedSample(sample);
     }
     if (batch.dropped > 0) setDroppedSampleCount(dropped_ + batch.dropped);
+}
+
+void ViewerManager::beginRun(const QString& previousRunLabel, bool preserveScopes)
+{
+    dropped_ = 0;
+    for (auto* viewer : viewers()) viewer->beginRun(previousRunLabel, preserveScopes);
 }
 
 void ViewerManager::clearSamples()

@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
         for (bool paused : {false, true}) {
             runner->run(reopened.currentDocument().as_object().at("schema"), .001, -1, {});
             require(runner->isRunning(), "continuous worker starts");
-            if (paused) { runner->pause(); require(runner->isPaused(), "worker paused"); }
+            if (paused) { runner->pause(); require(runner->state() == s7studio::RunState::Pausing || runner->isPaused(), "pause requested"); }
             reopened.openPath(input);
             require(!runner->isRunning() && !runner->isPaused(), "replacement stops and joins old run");
             require(runner->takeScopeSamples().samples.empty(), "replacement clears old mailbox");

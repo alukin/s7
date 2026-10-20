@@ -121,6 +121,8 @@ private:
     void restoreStartupDiagram();
     void connectRunnerSignals();
     void resetLocalRun();
+    void retireRunForShutdown();
+    bool observerMatchesActiveRun(const QString& observerId) const;
     void refreshActions();
     // The viewer type recording a diagram observer (its element type), or
     // Scope for probes that belong to no diagram observer.
@@ -181,6 +183,8 @@ private:
     boost::json::value savedDocument_;
     bool hasSavedDocument_ = false;
     std::uint64_t runGeneration_ = 0;
+    QHash<QString, QString> runObserverTypes_;
+    bool observersFrozen_ = false;
     // Deployment data of the open diagram (`runtime_nodes`, `streams`).
     boost::json::array deploymentRuntimeNodes_;
     boost::json::array deploymentStreams_;

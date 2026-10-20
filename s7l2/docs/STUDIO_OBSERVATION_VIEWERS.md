@@ -130,3 +130,11 @@ Qt Test/Qt Quick Test suite (`ctest -L gui`). It exercises actual viewer windows
 and the production QML scenes under Xvfb/OpenGL, including nonblank trajectory
 pixels and camera interaction. Unavailable OpenGL is explicitly skipped for the
 dedicated 3D gate; successful QML loading alone is not a rendering pass.
+
+New-run isolation uses `ObservationViewer::beginRun`: phase viewers clear their
+history and partial coordinates, while Scope may move its preceding recording
+into a labelled comparison without copying its full spill history. MainWindow
+freezes observer types/probe bindings, validates sample-batch run IDs and rejects
+opening changed observers against old results. See the local-run lifecycle
+contract in STUDIO_DIAGRAM_EDITOR.md. These changes do not remove mailbox losses
+or establish complete capture under overload.

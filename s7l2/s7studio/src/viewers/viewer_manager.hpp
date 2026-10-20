@@ -48,6 +48,7 @@ public:
     // it; each observer is resolved once per batch and created on demand.
     void deliver(const ScopeSampleBatch& batch, const std::function<QString(const QString&)>& observerType);
     void clearSamples();
+    void beginRun(const QString& previousRunLabel, bool preserveScopes);
     void setDroppedSampleCount(std::uint64_t dropped);
     [[nodiscard]] auto droppedSampleCount() const -> std::uint64_t { return dropped_; }
     void closeAll();

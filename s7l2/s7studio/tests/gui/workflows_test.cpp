@@ -239,6 +239,7 @@ private slots:
         QTRY_VERIFY(samples.count() > 0);
         QVERIFY(action("action.pause")->isEnabled()); action("action.pause")->trigger();
         QTRY_VERIFY(runner->isPaused());
+        QTRY_VERIFY(action("action.resume")->isEnabled());
         viewer->widget()->close(); QVERIFY(!viewer->widget()->isVisible());
         QVERIFY(QMetaObject::invokeMethod(editor(), "elementNodeDoubleClicked", Qt::DirectConnection,
             Q_ARG(QString, observerId), Q_ARG(QString, observerType), Q_ARG(int, 1)));

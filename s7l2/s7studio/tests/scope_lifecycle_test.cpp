@@ -204,13 +204,14 @@ int main(int argc, char** argv) try {
     runner.run(schemaJson, .001, -1, probes);
     waitUntil([&] { return received >= 6000; });
     runner.pause();
-    // Pause is a request; allow the current worker step to reach its boundary.
-    for (int i = 0; i < 30; ++i) { app.processEvents(); consume(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    // Paused acknowledges a completed step boundary, not merely the request.
+    waitUntil([&] { return runner.isPaused(); });
+    app.processEvents(); consume(); // drain samples produced before the pause acknowledgment
     require(runner.isPaused(), "Pause request was not retained");
     const auto pausedCount = received;
     scope.show(); scope.close(); scope.show();
     const auto pausedSnapshot = save(scope);
-    for (int i = 0; i < 30; ++i) { app.processEvents(); consume(); std::this_thread::sleep_for(std::chrono::milliseconds(1)); }
+    app.processEvents(); consume();
     require(received == pausedCount, "Paused runtime kept publishing samples");
     load(scope, pausedSnapshot, QStringLiteral("paused baseline"));
     // Keep recording hidden: an unthrottled worker against offscreen software

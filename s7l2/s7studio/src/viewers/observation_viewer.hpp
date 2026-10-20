@@ -35,6 +35,8 @@ public:
     virtual void appendObservedSample(const ObservedSample& sample) = 0;
     // Forgets the current run (a new run starts or the user cleared it).
     virtual void clearSamples() = 0;
+    // Every new run resets alignment; Scope may retain the preceding run as a comparison.
+    virtual void beginRun(const QString&, bool) { clearSamples(); setDroppedSampleCount(0); }
     // Samples the runtime produced but Studio dropped because the UI fell behind.
     virtual void setDroppedSampleCount(std::uint64_t dropped) = 0;
 };

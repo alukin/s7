@@ -205,6 +205,14 @@ void ScopeViewWindow::clearSamples()
     clearBuffers();
 }
 
+void ScopeViewWindow::beginRun(const QString& previousRunLabel, bool preserve)
+{
+    if (!preserve) { clearSamples(); return; }
+    recording_.archiveLive(previousRunLabel);
+    syncSeries(true);
+    dirty_ = true;
+}
+
 void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 {
     recording_.setDroppedSampleCount(dropped);

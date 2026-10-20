@@ -10,6 +10,9 @@
 #include <atomic>
 #include <memory>
 #include <set>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
 #include <cstddef>
 #include <string>
 #include <thread>
@@ -33,6 +36,10 @@ public:
     void stop() override;
     void reset() override;
 
+    // Commands and snapshot access belong to the QObject owner thread.
+    [[nodiscard]] RunState state() const override { return state_.load(); }
+    [[nodiscard]] auto activeConfiguration() const -> std::shared_ptr<const RunConfiguration> { return configuration_; }
+    [[nodiscard]] long completedTicks() const { return completedTicks_.load(); }
     [[nodiscard]] bool isRunning() const override;
     [[nodiscard]] bool isPaused() const override;
 
@@ -40,6 +47,7 @@ public:
     [[nodiscard]] auto takeScopeSamples() -> ScopeSampleBatch;
 
 signals:
+    void stateChanged(s7studio::RunState state);
     void logMessage(const QString& message);
     void statusChanged(const QString& status);
     void runCompleted(bool success, const QString& error);
@@ -51,10 +59,12 @@ signals:
 private:
     void emitScopeSamples();
     void requestStop();
-    auto prepareRuntime(const boost::json::value& schemaJson) -> bool;
-    void startRunLoop();
-    void executeRunLoop();
-    void finalizeRun(bool success, const std::string& error);
+    void prepareRuntime(const RunConfiguration& configuration);
+    void executeRunLoop(std::shared_ptr<const RunConfiguration> configuration);
+    void finalizeRun(std::uint64_t id, bool success, const std::string& error);
+    void publishState(RunState state, std::uint64_t id);
+    void postRunEvent(std::uint64_t id, std::function<void()> event);
+    void releaseRuntime();
     void waitForCompletion();
     void emitFinalSamples();
 
@@ -66,11 +76,17 @@ private:
     double dt_ = 0.001;
     long totalTicks_ = 0;
     std::atomic<long> completedTicks_{0};
-    std::atomic<bool> running_{false};
-    std::atomic<bool> paused_{false};
+    std::shared_ptr<const RunConfiguration> configuration_;
+    std::atomic<std::uint64_t> generation_{0};
+    std::atomic<RunState> state_{RunState::Idle};
+    std::atomic<bool> pauseRequested_{false};
+    std::mutex controlMutex_;
+    std::condition_variable controlChanged_;
     std::atomic<bool> stopRequested_{false};
     ScopeSampleMailbox scopeMailbox_;
     std::set<std::string> unreadableProbes_; // worker thread only
 };
 
 } // namespace s7studio
+
+Q_DECLARE_METATYPE(s7studio::RunState)
