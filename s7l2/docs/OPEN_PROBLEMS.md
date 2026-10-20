@@ -9,11 +9,15 @@ This document lists *what* is unsolved. For *how and in what order* to address i
 
 ## Automated GUI suite priority
 
-**G1 / P1 / incomplete coverage:** user requests Qt Test and Qt Quick Test real
-workflows on Linux Xvfb, screenshot/log artifacts on failure, CTest/root GitHub
-Actions integration, and actual Qt Quick 3D rendering where supported (explicit
-skip otherwise). Existing offscreen data checks do not establish rendering.
-Implementation and acceptance are tracked in DEVELOPMENT_PLAN.md.
+**G1 / P1 / local acceptance passed; hosted execution unverified:** Qt Test
+workflows and Qt Quick Test production scenes run under isolated Linux Xvfb,
+with screenshot/log/JUnit artifacts, an intentional failure-artifact self-check,
+and actual Qt Quick 3D pixel/camera tests. Unavailable Xvfb/OpenGL report skips.
+The final 4/4 CTest GUI run passed using Mesa llvmpipe, with 10 passing Qt Test
+cases and no rendering skips. The existing 61 tests also passed after the change;
+the diagnostic/watchdog refinement has its own passing self-check. Root GitHub Actions now
+provisions and runs the suite; hosted execution remains unverified. See
+STUDIO_GUI_TESTING.md and DEVELOPMENT_PLAN.md for coverage and final evidence.
 
 ## Release audit inventory — 2026-10-20
 
@@ -33,9 +37,11 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
 - **O1 / P0 / confirmed limitation; design decision needed:** recording is downstream
   of a bounded, dropping mailbox. Completeness requires an independent capture path;
   existing incomplete metadata does not make capture lossless.
-- **C1 / P1 / confirmed release infrastructure defect:** tracked workflow resides
-  under s7l2/.github, not repository-root .github. It also assumes the wrong CMake
-  source root and provides no compiler/dependency installation.
+- **C1 / P1 / CI placement/provisioning implemented; hosted validation open:** the
+  workflow now lives at repository-root .github, uses s7l2 as its source directory,
+  provisions compiler/Qt/Xvfb/Mesa dependencies and runs headless/Studio and GUI
+  checks with diagnostic artifacts. Local GUI and reporting checks pass. Actual
+  hosted execution, sanitizer and Windows job coverage remain release work.
 - **L1 / P1 / rights decision needed:** GPLv3-or-later migration is authorized for
   S7-owned material, but contributor rights are not yet verified. Git history includes
   `teren-ukr <maksymgeliush@gmail.com>` changes in items.cpp/items.hpp,
@@ -65,7 +71,15 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 ## P1 — Validation, CI, and whole-system testing
 
-- **CI is misplaced, minimal and its assumptions are unverified.** `.github/workflows/ci.yml` (present since commit `f8a970f`, 2026-07-08) runs one `ubuntu-latest` job: configure, build, `ctest --test-dir build --output-on-failure` (the suite has grown since the initial review). It installs no dependencies and pins no compiler, so it relies entirely on whatever the hosted image provides for Boost/OpenSSL/zlib/Qt6 and for a C++26-capable compiler — AGENTS.md requires GCC 15+ or Clang 22+ with libstdc++, which the job does not enforce or even check. `S7_BUILD_STUDIO` defaults `ON`, so the job also implicitly requires Qt6 to be present rather than exercising the documented headless path (`-DS7_BUILD_STUDIO=OFF`). Confirm whether this job currently passes before relying on it, then add: a compiler/dependency matrix, an explicit headless-build job, a Windows cross-build + Wine job, and sanitizer jobs (ThreadSanitizer for transport/runtime concurrency; AddressSanitizer/UBSan for core, parsing, and lifecycle paths — these have been run ad hoc per the resolved findings but are not a standing CI gate).
+- **Root CI and local GUI coverage implemented; hosted execution remains unverified.**
+  Repository-root `.github/workflows/ci.yml` now provisions Fedora 44 dependencies,
+  checks the supported compiler/Qt requirements through CMake, builds `build-tests`,
+  runs headless/Studio checks and the Xvfb Qt Test/Qt Quick Test suite, reports skips
+  explicitly, and retains diagnostics. Local GUI acceptance is 4/4; actual GitHub
+  Actions execution has not been observed. Sanitizer and Windows/Wine jobs remain
+  broader release infrastructure work. Test-target assertions stay active in
+  Release/RelWithDebInfo through `-UNDEBUG` (or `/UNDEBUG`).
+
 - **Two-node integration placement and coverage need follow-up after the local release.** `s7tests/` now contains numerical/reference and diagram-harness tests. The two-node scenario remains `s7_two_node_deployment`, registered by `s7ctl/CMakeLists.txt` and driven by `tools/test_two_node_deployment.sh` (`LOCAL_HEADLESS_NODES_DEMO.md`); it covers deployment, a restart/sequence-gap fault and recovery. Decide later whether to move its driver; standalone clean shutdown and multi-cycle restart/recovery remain broader integration gaps.
 - **No dedicated concurrency audit or stress coverage.** Runtime graph replacement, stream ownership, endpoint shutdown, stepping, and Studio worker/UI handoff span modules; the existing tests are clean under ThreadSanitizer but are smoke-level, not a targeted lock/lifetime audit or deterministic stress suite, and nothing runs them under a sanitizer in CI.
 - **Cross-language conformance is not a required check (broader backlog).** The wire and control fixtures (`s7transport/tests/fixtures/`, `s7runtime/tests/fixtures/`) are checked against a reference Python decoder/generator, but nothing requires another-language conformance check to pass before a release that changes these protocols; drift between this implementation and the sibling Python implementation in `../doc/` is possible without being caught.
@@ -135,3 +149,9 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 ## Review basis and limits
 
 Based on a documentation and source-structure review (file sizes, CI/test configuration, fixture and module layout, cross-checked against AGENTS.md and the module READMEs) plus the historical findings in the three superseded documents. It is not a fresh line-by-line correctness audit, a security audit, or a performance study, The 2026-10-19 release-scope update also checked current local runner/Scope code and test registration, and incorporates the Scope regressions verified during the preceding fix. No fresh numerical audit, performance study or full test run was performed for this documentation-only update. Treat items here as a planning backlog, not a defect list with reproduction steps — consult `git log` on the removed files for the reproduction detail behind any already-resolved finding this document does not repeat.
+
+The 2026-10-20 implementation audit additionally inspected save/lifecycle paths,
+committed document protection and run-generation fixes, and ran the new GUI
+suite on Xvfb/Mesa with real 2D/3D pixels. Current execution evidence and remaining
+release scope are recorded in DEVELOPMENT_PLAN.md; earlier review limitations
+above describe their original dates rather than superseding this new evidence.

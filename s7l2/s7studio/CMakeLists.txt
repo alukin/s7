@@ -296,3 +296,58 @@ s7_add_test_executable(s7studio_document_safety_test tests/document_safety_test.
 target_link_libraries(s7studio_document_safety_test PRIVATE s7studio_app)
 add_test(NAME s7studio_document_safety COMMAND s7studio_document_safety_test)
 set_tests_properties(s7studio_document_safety PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+# Real GUI interaction/rendering gates are native-Linux tests. Cross/Wine and
+# existing offscreen tests keep their own separately documented coverage.
+set(s7_gui_tests_default OFF)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPILING)
+    set(s7_gui_tests_default ON)
+endif()
+option(S7_BUILD_GUI_REGRESSION_TESTS "Build native Linux Qt Test/Quick Test GUI suite" ${s7_gui_tests_default})
+if(S7_BUILD_GUI_REGRESSION_TESTS)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_CROSSCOMPILING)
+        message(FATAL_ERROR "S7 GUI regression wrapper currently supports native Linux only")
+    endif()
+    find_package(Qt6 6.9 REQUIRED COMPONENTS Test QuickTest)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    s7_add_test_executable(s7studio_gui_capture tests/gui/capture.cpp)
+    target_link_libraries(s7studio_gui_capture PRIVATE Qt6::Gui)
+    s7_add_test_executable(s7studio_gui_workflows_test tests/gui/workflows_test.cpp)
+    target_link_libraries(s7studio_gui_workflows_test PRIVATE s7studio_app Qt6::Test)
+    target_compile_definitions(s7studio_gui_workflows_test PRIVATE S7_GUI_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples")
+    set_target_properties(s7studio_gui_workflows_test PROPERTIES AUTOMOC ON)
+    s7_add_test_executable(s7studio_gui_quick_test tests/gui/quick_test.cpp)
+    target_link_libraries(s7studio_gui_quick_test PRIVATE s7studio_viewers Qt6::Test Qt6::QuickTest)
+    target_compile_definitions(s7studio_gui_quick_test PRIVATE S7_GUI_QML_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/gui/qml")
+    set_target_properties(s7studio_gui_quick_test PROPERTIES AUTOMOC ON)
+    foreach(suite workflows lineplot trajectory)
+        set(gui_args)
+        if(suite STREQUAL "workflows")
+            set(gui_target s7studio_gui_workflows_test)
+        else()
+            set(gui_target s7studio_gui_quick_test)
+            list(APPEND gui_args -input "${CMAKE_CURRENT_SOURCE_DIR}/tests/gui/qml/tst_${suite}.qml")
+        endif()
+        set(graphics_args)
+        if(suite STREQUAL "trajectory")
+            list(APPEND graphics_args --graphics)
+        endif()
+        add_test(NAME s7studio_gui_${suite}
+            COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+                --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/${suite}"
+                --capture $<TARGET_FILE:s7studio_gui_capture> ${graphics_args}
+                -- $<TARGET_FILE:${gui_target}> ${gui_args})
+        set_tests_properties(s7studio_gui_${suite} PROPERTIES
+            LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)
+    endforeach()
+    set_property(TEST s7studio_gui_trajectory APPEND PROPERTY LABELS "rendering;quick3d")
+endif()
+if(S7_BUILD_GUI_REGRESSION_TESTS)
+    add_test(NAME s7studio_gui_failure_artifacts
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/check_gui_artifacts.py"
+            "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            $<TARGET_FILE:s7studio_gui_capture> $<TARGET_FILE:s7studio_gui_workflows_test>
+            "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/injected-failure")
+    set_tests_properties(s7studio_gui_failure_artifacts PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)
+endif()

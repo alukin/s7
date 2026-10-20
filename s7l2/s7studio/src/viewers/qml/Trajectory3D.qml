@@ -7,10 +7,12 @@ import QtQuick3D.Helpers
 
 Item {
     id: root
+    objectName: "viewer.trajectory"
     required property QtObject trajectoryView
 
     View3D {
         id: view
+        objectName: "viewer.view3d"
         anchors.fill: parent
         camera: camera
 
@@ -33,6 +35,7 @@ Item {
 
             PerspectiveCamera {
                 id: camera
+                objectName: "viewer.camera"
                 z: 520
                 clipNear: 1
                 clipFar: 10000

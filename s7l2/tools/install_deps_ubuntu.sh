@@ -65,6 +65,7 @@ if (( WITH_STUDIO )); then
     qt6-graphs-dev
     qt6-quick3d-dev
     qml6-module-qtquick
+    qml6-module-qttest
     qml6-module-qtquick-window
     qml6-module-qtqml-workerscript
     qml6-module-qtgraphs

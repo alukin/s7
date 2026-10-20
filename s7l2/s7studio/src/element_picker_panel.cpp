@@ -36,6 +36,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     auto* searchLayout = new QHBoxLayout();
     auto* searchLabel = new QLabel("Search:", this);
     searchEdit_ = new QLineEdit(this);
+    searchEdit_->setObjectName(QStringLiteral("elements.search"));
     searchEdit_->setPlaceholderText("Filter elements...");
     searchLayout->addWidget(searchLabel);
     searchLayout->addWidget(searchEdit_);
@@ -43,6 +44,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 
     // Element tree
     elementTree_ = new QTreeWidget(this);
+    elementTree_->setObjectName(QStringLiteral("elements.tree"));
     elementTree_->setColumnCount(2);
     elementTree_->setHeaderLabels({"Element", "I/O"});
     elementTree_->setColumnWidth(0, 180);

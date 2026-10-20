@@ -79,6 +79,9 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     auto* saveButton = new QPushButton(QStringLiteral("Save Run…"), this);
     auto* openButton = new QPushButton(QStringLiteral("Open Run…"), this);
     auto* removeButton = new QPushButton(QStringLiteral("Remove comparisons"), this);
+    saveButton->setObjectName(QStringLiteral("scope.saveRun"));
+    openButton->setObjectName(QStringLiteral("scope.openRun"));
+    removeButton->setObjectName(QStringLiteral("scope.removeComparisons"));
     saveButton->setToolTip(QStringLiteral("Save a snapshot of the current recording, including capture-loss warnings. Comparisons are saved separately."));
     openButton->setToolTip(QStringLiteral("Overlay saved results at their original model timestamps."));
     controls->addWidget(saveButton);

@@ -35,6 +35,18 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.deployAction = new QAction("Deploy to Nodes...", window);
     actions.openDeployedAction = new QAction("Open Deployed Diagram...", window);
 
+    actions.openAction->setObjectName(QStringLiteral("action.open"));
+    actions.closeDiagramAction->setObjectName(QStringLiteral("action.closeDiagram"));
+    actions.saveAction->setObjectName(QStringLiteral("action.save"));
+    actions.saveAsAction->setObjectName(QStringLiteral("action.saveAs"));
+    actions.runAction->setObjectName(QStringLiteral("action.run"));
+    actions.runParametersAction->setObjectName(QStringLiteral("action.runConfiguration"));
+    actions.pauseAction->setObjectName(QStringLiteral("action.pause"));
+    actions.resumeAction->setObjectName(QStringLiteral("action.resume"));
+    actions.stopAction->setObjectName(QStringLiteral("action.stop"));
+    actions.resetAction->setObjectName(QStringLiteral("action.reset"));
+    actions.exitAction->setObjectName(QStringLiteral("action.exit"));
+
     actions.openAction->setIcon(icon(QStringLiteral("folder-open")));
     actions.saveAction->setIcon(icon(QStringLiteral("device-floppy")));
     actions.runAction->setIcon(icon(QStringLiteral("player-play"), QColor(0x2e, 0x7d, 0x32)));

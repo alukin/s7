@@ -86,6 +86,13 @@ enable_testing()
 add_custom_target(build-tests)
 function(s7_add_test_executable target_name)
 	add_executable(${target_name} EXCLUDE_FROM_ALL ${ARGN})
+	# Numerical/document regressions use assert as well as Qt Test. Keep their
+	# checks effective in Release/RelWithDebInfo CI configurations.
+	if(MSVC)
+		target_compile_options(${target_name} PRIVATE /UNDEBUG)
+	else()
+		target_compile_options(${target_name} PRIVATE -UNDEBUG)
+	endif()
 	add_dependencies(build-tests ${target_name})
 endfunction()
 

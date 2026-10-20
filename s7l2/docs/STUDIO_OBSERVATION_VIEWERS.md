@@ -122,3 +122,11 @@ generation and are ignored. This applies to samples, progress, status, completio
 and logs; document replacement closes viewers only after worker retirement.
 The document-safety regression queues worker notifications without pumping GUI
 events, replaces the document and verifies those callbacks cannot reach the UI.
+
+## Automated rendered GUI checks
+
+[STUDIO_GUI_TESTING.md](STUDIO_GUI_TESTING.md) documents the native Linux
+Qt Test/Qt Quick Test suite (`ctest -L gui`). It exercises actual viewer windows
+and the production QML scenes under Xvfb/OpenGL, including nonblank trajectory
+pixels and camera interaction. Unavailable OpenGL is explicitly skipped for the
+dedicated 3D gate; successful QML loading alone is not a rendering pass.

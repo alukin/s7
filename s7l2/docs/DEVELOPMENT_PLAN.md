@@ -31,6 +31,25 @@ Do not change implementation or licenses until this documentation increment is c
 - Workspace writes cover `s7l2` and `/tmp`; repository root, `doc`, and `s7py`
   changes require filesystem approval. No vendored/submodule edits authorized.
 
+### Final G1 verification — 2026-10-20
+
+- `cmake --build build --target build-tests --parallel 2`: passed; focused
+  workflow-target rebuild after diagnostic refinement also passed.
+- GUI CI invocation: 4/4 passed in 2.81 s; no rendering skips. The refined
+  failure-artifact/watchdog self-check separately passed in 2.48 s.
+- `ctest --test-dir build -LE gui --output-on-failure -j 2`: **61/61 passed**
+  in 429.33 s, outside socket-restricting sandbox. Together with the GUI suite,
+  all 65 registered tests have passing evidence.
+- Python syntax, root workflow YAML/source directory, actual CTest/JUnit summary,
+  and positive/optional-skip/mandatory-skip/missing-test report policies checked.
+- Headless Release configure passed; test flags contain `-DNDEBUG ... -UNDEBUG`.
+  This verifies assertion configuration, not execution of a local Release suite.
+- No push or hosted Actions run performed. No physical-GPU, native Windows,
+  long-duration UI performance or complete-release readiness claim is made.
+- G1 is locally complete. The remaining L1/O1/N1/U1/P1/A1 work is still tracked;
+  contributor relicensing permission remains unresolved, and the broad release
+  acceptance criteria have not been marked complete.
+
 ### Execution evidence
 
 - Documentation-first commit: `b736b5e`.
@@ -74,7 +93,24 @@ increment, not a claim that the release audit is finished.
 
 | Task | Priority/category | Files / current behavior | Implementation / dependencies / risks | Tests and acceptance | Status |
 |---|---|---|---|---|---|
-| G1 | P1 missing coverage / release infrastructure | `s7studio/tests`, viewer QML, CMake, root CI; existing tests mostly custom checks/offscreen | Add Qt Test action/object workflows and Qt Quick Test of production viewer scenes; stable object names for dialogs/actions; Linux Xvfb wrapper with bounded timeouts, logs, failure screenshots, XML; probe OpenGL capability and explicitly skip genuine unavailable rendering; root CI provisions GCC15+/Qt6.9+/Xvfb/Mesa and uploads artifacts | Unattended edit/parameter/save/open/run/pause/stop/reset/viewer workflows; QML interaction; actual Quick3D pixel evidence under usable OpenGL; report unavailable display/3D as skipped, never passed; inject failure to verify artifacts; integrate CTest and hosted workflow | Planned; inspect installed Qt Test/QuickTest and Xvfb before implementation |
+| G1 | P1 missing coverage / release infrastructure | `s7studio/tests`, viewer QML, CMake, root CI; existing tests mostly custom checks/offscreen | Add Qt Test action/object workflows and Qt Quick Test of production viewer scenes; stable object names for dialogs/actions; Linux Xvfb wrapper with bounded timeouts, logs, failure screenshots, XML; probe OpenGL capability and explicitly skip genuine unavailable rendering; root CI provisions GCC15+/Qt6.9+/Xvfb/Mesa and uploads artifacts | Unattended edit/parameter/save/open/run/pause/stop/reset/viewer workflows; QML interaction; actual Quick3D pixel evidence under usable OpenGL; report unavailable display/3D as skipped, never passed; inject failure to verify artifacts; integrate CTest and hosted workflow | Implemented and verified locally (4/4); hosted execution unverified |
+
+G1 evidence: `cmake --build build --target build-tests --parallel 2` passes.
+The exact CI GUI invocation (`ctest --test-dir build -L gui --output-on-failure
+--output-junit gui-results.xml -j 2`) passes 4/4 in 2.81 s. Qt Test reports
+10 passed, 0 failed, 0 skipped; Qt Quick checks actual red curve/green trajectory
+pixels, zoom/pan and camera changes. Mesa llvmpipe renders through OpenGL 4.6.
+The intentional failure self-check verifies fresh screenshots, document JSON,
+diagnostic logs, object hierarchy and failed JUnit; missing Xvfb verifies exit
+77/skipped JUnit. A deliberately blocked child also verifies watchdog termination
+and pre-termination screenshot/diagnostics/process-failure reporting.
+`report_gui_tests.py` consumes the actual CTest report successfully; positive,
+optional-render-skip, mandatory-skip and missing-test cases have verified exit
+statuses. Root workflow
+YAML parses and uses the s7l2 source directory with headless/Studio matrix;
+actual hosted execution has not run. Test targets now undefine NDEBUG so assert
+checks remain active in optimized builds. A separate headless Release configuration confirms `-DNDEBUG` is followed by
+`-UNDEBUG` on smoke-test compile flags; no local Release suite execution is claimed.
 
 Order: commit this documentation → test infrastructure/object identities →
 Qt Test workflow → Qt Quick Test/viewer rendering → local Xvfb run and artifact
@@ -97,7 +133,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Confirmed limitation; implementation policy pending |
 | N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | Pending audit; existing references retained |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | Pending audit |
-| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Confirmed misplaced workflow; pending implementation |
+| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Root workflow/provisioning/headless/Studio GUI jobs implemented; hosted, sanitizer and Windows validation open |
 | P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Pending audit |
 | A1 P1 incomplete coverage | Automated references and viewer regressions cover selected cases | Execute four acceptance guarantees: document safety, numerical correctness, run/sample isolation and operational readiness; classify bundled models validated or experimental | All above; real GPU/native Windows are external evidence requirements | Representative linear/nonlinear full workflow; measure hardware, model rate vs throughput, UI responsiveness, memory/disk growth, stop latency, high DPI and long-run behavior | Pending; no release-ready claim |
 

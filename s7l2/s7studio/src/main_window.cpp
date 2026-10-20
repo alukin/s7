@@ -336,6 +336,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
 
     buildActions();
     buildUi();
+    setWindowTitle(QStringLiteral("s7studio - untitled[*]"));
 
     connectRunnerSignals();
     if (diagramEditor_) {
@@ -660,9 +661,11 @@ void MainWindow::buildUi()
     if (diagramEditor_ && diagramEditor_->scene()) {
         auto* stack = schemaTabs_->undoGroup();
         undoAction_ = stack->createUndoAction(this, QStringLiteral("&Undo"));
+        undoAction_->setObjectName(QStringLiteral("action.undo"));
         undoAction_->setShortcut(QKeySequence::Undo);
         undoAction_->setIcon(ui::icon(QStringLiteral("arrow-back-up")));
         redoAction_ = stack->createRedoAction(this, QStringLiteral("&Redo"));
+        redoAction_->setObjectName(QStringLiteral("action.redo"));
         redoAction_->setShortcut(QKeySequence::Redo);
         redoAction_->setIcon(ui::icon(QStringLiteral("arrow-forward-up")));
         diagramDrawToolBar_->insertAction(diagramDrawToolBar_->actions().value(0), redoAction_);
@@ -1090,6 +1093,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     const QString currentParamsText = QString::fromStdString(boost::json::serialize(paramsForDialog));
 
     auto* paramsEdit = new QPlainTextEdit(currentParamsText, &dialog);
+    paramsEdit->setObjectName(QStringLiteral("element.parameters"));
     paramsEdit->setPlaceholderText(QStringLiteral("{\n  \"value\": 1.0\n}"));
     paramsEdit->setMinimumHeight(180);
     layout->addWidget(paramsEdit, 1);
@@ -1637,6 +1641,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     }
 
     QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("dialog.runConfiguration"));
     dialog.setWindowTitle(QStringLiteral("Run Configuration"));
     dialog.resize(420, 260);
 
@@ -1644,11 +1649,13 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     auto* form = new QFormLayout();
 
     auto* runtimeSecondsSpin = new QSpinBox(&dialog);
+    runtimeSecondsSpin->setObjectName(QStringLiteral("run.duration"));
     runtimeSecondsSpin->setRange(-1, 604800);
     runtimeSecondsSpin->setSpecialValueText(QStringLiteral("-1 (continuous)"));
     runtimeSecondsSpin->setValue(static_cast<int>(std::clamp<long>(runtimeSeconds_, -1, 604800)));
 
     auto* frequencySpin = new QDoubleSpinBox(&dialog);
+    frequencySpin->setObjectName(QStringLiteral("run.frequency"));
     frequencySpin->setDecimals(6);
     frequencySpin->setRange(0.001, 1'000'000.0);
     frequencySpin->setSingleStep(10.0);

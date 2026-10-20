@@ -6,6 +6,7 @@ import QtGraphs
 
 Item {
     id: root
+    objectName: "viewer.linePlot"
     required property QtObject plot
 
     // Axis titles sit outside the GraphsView so they never cover tick labels.
@@ -32,6 +33,7 @@ Item {
 
     GraphsView {
         id: view
+        objectName: "viewer.graphs"
         anchors.fill: parent
         anchors.leftMargin: yTitle.visible ? yTitle.height + 4 : 0
         anchors.bottomMargin: xTitle.visible ? xTitle.height + 4 : 0
@@ -112,6 +114,7 @@ Item {
 
     Rectangle {
         id: legend
+        objectName: "viewer.legend"
         visible: plot.legendVisible && plot.legend.length > 0
         x: view.x + view.plotArea.x + view.plotArea.width - width - 8
         y: view.y + view.plotArea.y + 8
