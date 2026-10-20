@@ -1,0 +1,1339 @@
+{
+  "id": "pll_phase_step",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "pll_phase_step",
+    "dt": 0.001,
+    "elements": [
+      {
+        "id": "reference_frequency",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 20,
+          "final_value": 20,
+          "sample_rate_hz": 1000.0,
+          "start_sample": 2000
+        }
+      },
+      {
+        "id": "reference_rate",
+        "type": "Gain",
+        "params": {
+          "factor": 6.283185307179586
+        }
+      },
+      {
+        "id": "reference_phase",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0.8
+        }
+      },
+      {
+        "id": "phase_step",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1,
+          "sample_rate_hz": 1000.0,
+          "start_sample": 2000
+        }
+      },
+      {
+        "id": "reference_angle",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "phase_error",
+        "type": "PhaseDifference",
+        "params": {},
+        "schema": {
+          "name": "PhaseDifference",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "wrap",
+              "type": "PhaseWrap",
+              "params": {}
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "wrap",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "phase_a",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "phase_b",
+              "type": "F64",
+              "element": "difference",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "difference",
+              "type": "F64",
+              "element": "wrap",
+              "port": 0
+            }
+          ],
+          "dt": 0.001
+        }
+      },
+      {
+        "id": "controller",
+        "type": "PIController",
+        "params": {},
+        "schema": {
+          "name": "PIController",
+          "elements": [
+            {
+              "id": "error",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "p",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_gain",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_rate",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  10
+                ]
+              }
+            },
+            {
+              "id": "i_state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.001
+              }
+            },
+            {
+              "id": "sum",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  1
+                ]
+              }
+            },
+            {
+              "id": "limit",
+              "type": "Saturation",
+              "params": {
+                "lower_limit": -1,
+                "upper_limit": 1
+              }
+            },
+            {
+              "id": "tracking",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "p",
+              "to_port": 0
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "i_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_gain",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "tracking",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 1
+            },
+            {
+              "from_element": "i_rate",
+              "from_port": 0,
+              "to_element": "i_state",
+              "to_port": 0
+            },
+            {
+              "from_element": "p",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_state",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 1
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "limit",
+              "to_port": 0
+            },
+            {
+              "from_element": "limit",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 0
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 1
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "error",
+              "type": "F64",
+              "element": "error",
+              "port": 0
+            },
+            {
+              "name": "kp",
+              "type": "F64",
+              "element": "p",
+              "port": 1
+            },
+            {
+              "name": "ki",
+              "type": "F64",
+              "element": "i_gain",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "control",
+              "type": "F64",
+              "element": "limit",
+              "port": 0
+            },
+            {
+              "name": "unlimited",
+              "type": "F64",
+              "element": "sum",
+              "port": 0
+            }
+          ],
+          "dt": 0.001
+        }
+      },
+      {
+        "id": "kp",
+        "type": "Constant",
+        "params": {
+          "value": 0.1
+        }
+      },
+      {
+        "id": "ki",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "nominal_frequency",
+        "type": "Constant",
+        "params": {
+          "value": 18
+        }
+      },
+      {
+        "id": "vco_frequency",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            10
+          ]
+        }
+      },
+      {
+        "id": "vco_rate",
+        "type": "Gain",
+        "params": {
+          "factor": 6.283185307179586
+        }
+      },
+      {
+        "id": "vco_phase",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "reference_wrapped",
+        "type": "PhaseWrap",
+        "params": {}
+      },
+      {
+        "id": "reference_signal",
+        "type": "Trig",
+        "params": {
+          "function": "sin"
+        }
+      },
+      {
+        "id": "reference_meter",
+        "type": "FrequencyMeter",
+        "params": {
+          "sample_rate_hz": 1000.0
+        }
+      },
+      {
+        "id": "vco_wrapped",
+        "type": "PhaseWrap",
+        "params": {}
+      },
+      {
+        "id": "vco_signal",
+        "type": "Trig",
+        "params": {
+          "function": "sin"
+        }
+      },
+      {
+        "id": "vco_meter",
+        "type": "FrequencyMeter",
+        "params": {
+          "sample_rate_hz": 1000.0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference_frequency",
+        "from_port": 0,
+        "to_element": "reference_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "reference_rate",
+        "from_port": 0,
+        "to_element": "reference_phase",
+        "to_port": 0
+      },
+      {
+        "from_element": "reference_phase",
+        "from_port": 0,
+        "to_element": "reference_angle",
+        "to_port": 0
+      },
+      {
+        "from_element": "phase_step",
+        "from_port": 0,
+        "to_element": "reference_angle",
+        "to_port": 1
+      },
+      {
+        "from_element": "reference_angle",
+        "from_port": 0,
+        "to_element": "phase_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "vco_phase",
+        "from_port": 0,
+        "to_element": "phase_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "phase_error",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 0
+      },
+      {
+        "from_element": "kp",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 1
+      },
+      {
+        "from_element": "ki",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 2
+      },
+      {
+        "from_element": "nominal_frequency",
+        "from_port": 0,
+        "to_element": "vco_frequency",
+        "to_port": 0
+      },
+      {
+        "from_element": "controller",
+        "from_port": 0,
+        "to_element": "vco_frequency",
+        "to_port": 1
+      },
+      {
+        "from_element": "vco_frequency",
+        "from_port": 0,
+        "to_element": "vco_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "vco_rate",
+        "from_port": 0,
+        "to_element": "vco_phase",
+        "to_port": 0
+      },
+      {
+        "from_element": "reference_angle",
+        "from_port": 0,
+        "to_element": "reference_wrapped",
+        "to_port": 0
+      },
+      {
+        "from_element": "reference_wrapped",
+        "from_port": 0,
+        "to_element": "reference_signal",
+        "to_port": 0
+      },
+      {
+        "from_element": "reference_signal",
+        "from_port": 0,
+        "to_element": "reference_meter",
+        "to_port": 0
+      },
+      {
+        "from_element": "vco_phase",
+        "from_port": 0,
+        "to_element": "vco_wrapped",
+        "to_port": 0
+      },
+      {
+        "from_element": "vco_wrapped",
+        "from_port": 0,
+        "to_element": "vco_signal",
+        "to_port": 0
+      },
+      {
+        "from_element": "vco_signal",
+        "from_port": 0,
+        "to_element": "vco_meter",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "reference_Hz",
+      "element": "reference_frequency",
+      "port": 0,
+      "unit": "Hz"
+    },
+    {
+      "name": "vco_Hz",
+      "element": "vco_frequency",
+      "port": 0,
+      "unit": "Hz"
+    },
+    {
+      "name": "measured_vco_Hz",
+      "element": "vco_meter",
+      "port": 0,
+      "unit": "Hz"
+    },
+    {
+      "name": "phase_error_rad",
+      "element": "phase_error",
+      "port": 0,
+      "unit": "rad"
+    },
+    {
+      "name": "control",
+      "element": "controller",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "unlimited",
+      "element": "controller",
+      "port": 1,
+      "unit": "1"
+    },
+    {
+      "name": "reference",
+      "element": "reference_signal",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "vco",
+      "element": "vco_signal",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "measured_reference_Hz",
+      "element": "reference_meter",
+      "port": 0,
+      "unit": "Hz"
+    },
+    {
+      "name": "reference_valid",
+      "element": "reference_meter",
+      "port": 1,
+      "unit": "1"
+    },
+    {
+      "name": "vco_valid",
+      "element": "vco_meter",
+      "port": 1,
+      "unit": "1"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "reference_frequency",
+        "position": [
+          3,
+          18
+        ],
+        "title": "reference_frequency"
+      },
+      {
+        "id": "reference_rate",
+        "position": [
+          24,
+          18
+        ],
+        "title": "2*pi*f_ref (rad/s)"
+      },
+      {
+        "id": "reference_phase",
+        "position": [
+          46,
+          18
+        ],
+        "title": "Reference phase (rad)"
+      },
+      {
+        "id": "phase_step",
+        "position": [
+          24,
+          36
+        ],
+        "title": "phase_step"
+      },
+      {
+        "id": "reference_angle",
+        "position": [
+          66,
+          18
+        ],
+        "title": "reference_angle"
+      },
+      {
+        "id": "phase_error",
+        "position": [
+          88,
+          18
+        ],
+        "title": "wrap(reference - VCO) (rad)"
+      },
+      {
+        "id": "controller",
+        "position": [
+          110,
+          18
+        ],
+        "title": "PI loop filter: kp=0.1, ki=1, u in [-1,1]"
+      },
+      {
+        "id": "kp",
+        "position": [
+          88,
+          36
+        ],
+        "title": "kp"
+      },
+      {
+        "id": "ki",
+        "position": [
+          110,
+          36
+        ],
+        "title": "ki"
+      },
+      {
+        "id": "nominal_frequency",
+        "position": [
+          132,
+          36
+        ],
+        "title": "nominal_frequency"
+      },
+      {
+        "id": "vco_frequency",
+        "position": [
+          132,
+          18
+        ],
+        "title": "18 + 10*u (Hz)"
+      },
+      {
+        "id": "vco_rate",
+        "position": [
+          154,
+          18
+        ],
+        "title": "2*pi*f_vco (rad/s)"
+      },
+      {
+        "id": "vco_phase",
+        "position": [
+          154,
+          48
+        ],
+        "title": "VCO phase (rad)"
+      },
+      {
+        "id": "reference_wrapped",
+        "position": [
+          24,
+          50
+        ],
+        "title": "reference_wrapped"
+      },
+      {
+        "id": "reference_signal",
+        "position": [
+          24,
+          63
+        ],
+        "title": "reference waveform"
+      },
+      {
+        "id": "reference_meter",
+        "position": [
+          46,
+          63
+        ],
+        "title": "reference_meter"
+      },
+      {
+        "id": "vco_wrapped",
+        "position": [
+          88,
+          50
+        ],
+        "title": "vco_wrapped"
+      },
+      {
+        "id": "vco_signal",
+        "position": [
+          88,
+          63
+        ],
+        "title": "vco waveform"
+      },
+      {
+        "id": "vco_meter",
+        "position": [
+          110,
+          63
+        ],
+        "title": "vco_meter"
+      },
+      {
+        "id": "frequency_scope",
+        "position": [
+          175,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "reference_Hz",
+            "vco_Hz",
+            "measured_vco_Hz"
+          ]
+        }
+      },
+      {
+        "id": "phase_scope",
+        "position": [
+          175,
+          38
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "phase_error_rad",
+            "control",
+            "unlimited"
+          ]
+        }
+      },
+      {
+        "id": "waveform_scope",
+        "position": [
+          175,
+          56
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "reference",
+            "vco"
+          ]
+        }
+      },
+      {
+        "id": "measurement_scope",
+        "position": [
+          175,
+          72
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "measured_reference_Hz",
+            "reference_valid",
+            "vco_valid"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "reference_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "reference_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_phase",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "reference_phase",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_angle",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "phase_step",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_angle",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "reference_angle",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "phase_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "vco_phase",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "phase_error",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "phase_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "kp",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "ki",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "nominal_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_frequency",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_frequency",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "vco_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "vco_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_phase",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "reference_angle",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_wrapped",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "reference_wrapped",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_signal",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "reference_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference_meter",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "vco_phase",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_wrapped",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "vco_wrapped",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_signal",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "vco_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "vco_meter",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "reference_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "vco_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "vco_meter",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "phase_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "phase_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "phase_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "phase_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "reference_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "waveform_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "vco_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "waveform_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "reference_meter",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "measurement_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "reference_meter",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "measurement_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w30",
+        "from": {
+          "port": [
+            "vco_meter",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "measurement_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "PLL_PHASE_STEP\nIdeal phase-domain detector; reference 20 Hz, VCO 18+10*u Hz, initial phase error 0.8 rad.\nRun 6 s at 1000 Hz; open the scopes.\nEquations, experiments and limits: examples/pll/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

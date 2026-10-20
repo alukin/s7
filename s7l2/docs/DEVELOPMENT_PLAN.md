@@ -93,9 +93,11 @@ independent RK4 or other solvers may provide test references only.
   phase detector and loop filter; demonstrate acquisition, tracking, phase
   error, and frequency measurement. Use phase wrapping and the frequency meter
   where their documented contracts fit the model.
+  Initial diagrams and headless checks: [PLL laboratory](../examples/pll/README.md).
 - [ ] **Signal measurement:** AM/FM generation and detection, plus RMS
   measurement. Compare known source amplitude/frequency with measured outputs
   and explain smoothing/transient error.
+  Initial diagrams and headless checks: [AM/FM/RMS laboratory](../examples/signal_measurement/README.md).
 
 For each example, include a Studio-editable `.s7diagram` and a short README with
 equations, units, parameters, initial conditions, suggested experiments, probes,

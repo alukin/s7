@@ -27,6 +27,13 @@ target_compile_definitions(s7tests_nonlinear_examples_smoke PRIVATE
 add_test(NAME s7tests_nonlinear_examples_smoke COMMAND s7tests_nonlinear_examples_smoke)
 set_tests_properties(s7tests_nonlinear_examples_smoke PROPERTIES TIMEOUT 180)
 
+s7_add_test_executable(s7tests_measurement_examples_smoke measurement_examples_smoke.cpp)
+target_link_libraries(s7tests_measurement_examples_smoke PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_measurement_examples_smoke PRIVATE
+    S7_MEASUREMENT_DIR="${PROJECT_SOURCE_DIR}/examples")
+add_test(NAME s7tests_measurement_examples_smoke COMMAND s7tests_measurement_examples_smoke)
+set_tests_properties(s7tests_measurement_examples_smoke PROPERTIES TIMEOUT 120)
+
 s7_add_test_executable(s7tests_linear_scalar_smoke linear_scalar_smoke.cpp)
 target_link_libraries(s7tests_linear_scalar_smoke PRIVATE s7core)
 add_test(NAME s7tests_linear_scalar_smoke COMMAND s7tests_linear_scalar_smoke)

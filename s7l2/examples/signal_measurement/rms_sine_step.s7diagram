@@ -1,0 +1,531 @@
+{
+  "id": "rms_sine_step",
+  "dt": 0.0001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "rms_sine_step",
+    "dt": 0.0001,
+    "elements": [
+      {
+        "id": "amplitude",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 2,
+          "final_value": 1,
+          "sample_rate_hz": 10000.0,
+          "start_sample": 10000
+        }
+      },
+      {
+        "id": "carrier",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 50,
+          "sample_rate_hz": 10000
+        }
+      },
+      {
+        "id": "signal",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "rms",
+        "type": "RMSDetector",
+        "params": {},
+        "schema": {
+          "name": "RMSDetector",
+          "elements": [
+            {
+              "id": "input",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "square",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "ControlledIntegrator",
+              "params": {
+                "dt": 0.0001,
+                "lower_limit": 0
+              }
+            },
+            {
+              "id": "one",
+              "type": "Constant",
+              "params": {
+                "value": 1
+              }
+            },
+            {
+              "id": "zero",
+              "type": "Constant",
+              "params": {
+                "value": 0
+              }
+            },
+            {
+              "id": "root",
+              "type": "MathFunction",
+              "params": {
+                "function": "sqrt"
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "input",
+              "from_port": 0,
+              "to_element": "square",
+              "to_port": 0
+            },
+            {
+              "from_element": "input",
+              "from_port": 0,
+              "to_element": "square",
+              "to_port": 1
+            },
+            {
+              "from_element": "square",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 0
+            },
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            },
+            {
+              "from_element": "one",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 1
+            },
+            {
+              "from_element": "zero",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 2
+            },
+            {
+              "from_element": "zero",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 3
+            },
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "root",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "input",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "rms",
+              "type": "F64",
+              "element": "root",
+              "port": 0
+            }
+          ],
+          "dt": 0.0001
+        }
+      },
+      {
+        "id": "rms_tau",
+        "type": "Constant",
+        "params": {
+          "value": 0.05
+        }
+      },
+      {
+        "id": "expected",
+        "type": "Gain",
+        "params": {
+          "factor": 0.7071067811865475
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "amplitude",
+        "from_port": 0,
+        "to_element": "signal",
+        "to_port": 0
+      },
+      {
+        "from_element": "carrier",
+        "from_port": 0,
+        "to_element": "signal",
+        "to_port": 1
+      },
+      {
+        "from_element": "signal",
+        "from_port": 0,
+        "to_element": "rms",
+        "to_port": 0
+      },
+      {
+        "from_element": "rms_tau",
+        "from_port": 0,
+        "to_element": "rms",
+        "to_port": 1
+      },
+      {
+        "from_element": "amplitude",
+        "from_port": 0,
+        "to_element": "expected",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "rms_V",
+      "element": "rms",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "steady_target_V",
+      "element": "expected",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "signal_V",
+      "element": "signal",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "amplitude_V",
+      "element": "amplitude",
+      "port": 0,
+      "unit": "V"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "amplitude",
+        "position": [
+          3,
+          18
+        ],
+        "title": "amplitude"
+      },
+      {
+        "id": "carrier",
+        "position": [
+          3,
+          42
+        ],
+        "title": "carrier"
+      },
+      {
+        "id": "signal",
+        "position": [
+          47,
+          18
+        ],
+        "title": "Amplitude * sin(2*pi*50*t) (V)"
+      },
+      {
+        "id": "rms",
+        "position": [
+          91,
+          18
+        ],
+        "title": "sqrt(exponentially filtered mean square)"
+      },
+      {
+        "id": "rms_tau",
+        "position": [
+          69,
+          42
+        ],
+        "title": "rms_tau"
+      },
+      {
+        "id": "expected",
+        "position": [
+          91,
+          58
+        ],
+        "title": "Steady RMS target (V)"
+      },
+      {
+        "id": "rms_scope",
+        "position": [
+          140,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "rms_V",
+            "steady_target_V"
+          ]
+        }
+      },
+      {
+        "id": "source_scope",
+        "position": [
+          140,
+          48
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "signal_V",
+            "amplitude_V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "amplitude",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "signal",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "carrier",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "signal",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "rms",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "rms_tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "rms",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "amplitude",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "expected",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "rms",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "rms_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "expected",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "rms_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "source_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "amplitude",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "source_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "RMS_SINE_STEP\nExponential RMS tau=0.05 s; source step at 1 s; initial mean-square state is zero.\nRun 2 s at 10000 Hz; open the scopes.\nEquations, experiments and limits: examples/signal_measurement/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

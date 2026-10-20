@@ -1,0 +1,751 @@
+{
+  "id": "am_coherent_detection",
+  "dt": 0.0001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "am_coherent_detection",
+    "dt": 0.0001,
+    "elements": [
+      {
+        "id": "message",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 2,
+          "sample_rate_hz": 10000
+        }
+      },
+      {
+        "id": "bias",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "envelope",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            0.6
+          ]
+        }
+      },
+      {
+        "id": "carrier",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 100,
+          "sample_rate_hz": 10000
+        }
+      },
+      {
+        "id": "am_signal",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "mixer",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "twice_mixer",
+        "type": "Gain",
+        "params": {
+          "factor": 2
+        }
+      },
+      {
+        "id": "lowpass",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.0001
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.0001
+        }
+      },
+      {
+        "id": "lowpass_tau",
+        "type": "Constant",
+        "params": {
+          "value": 0.02
+        }
+      },
+      {
+        "id": "recovered",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.6666666666666667,
+            -1.6666666666666667
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "bias",
+        "from_port": 0,
+        "to_element": "envelope",
+        "to_port": 0
+      },
+      {
+        "from_element": "message",
+        "from_port": 0,
+        "to_element": "envelope",
+        "to_port": 1
+      },
+      {
+        "from_element": "envelope",
+        "from_port": 0,
+        "to_element": "am_signal",
+        "to_port": 0
+      },
+      {
+        "from_element": "carrier",
+        "from_port": 0,
+        "to_element": "am_signal",
+        "to_port": 1
+      },
+      {
+        "from_element": "am_signal",
+        "from_port": 0,
+        "to_element": "mixer",
+        "to_port": 0
+      },
+      {
+        "from_element": "carrier",
+        "from_port": 0,
+        "to_element": "mixer",
+        "to_port": 1
+      },
+      {
+        "from_element": "mixer",
+        "from_port": 0,
+        "to_element": "twice_mixer",
+        "to_port": 0
+      },
+      {
+        "from_element": "twice_mixer",
+        "from_port": 0,
+        "to_element": "lowpass",
+        "to_port": 0
+      },
+      {
+        "from_element": "lowpass_tau",
+        "from_port": 0,
+        "to_element": "lowpass",
+        "to_port": 1
+      },
+      {
+        "from_element": "lowpass",
+        "from_port": 0,
+        "to_element": "recovered",
+        "to_port": 0
+      },
+      {
+        "from_element": "bias",
+        "from_port": 0,
+        "to_element": "recovered",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "message",
+      "element": "message",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "recovered",
+      "element": "recovered",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "am_V",
+      "element": "am_signal",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "envelope_V",
+      "element": "envelope",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "carrier",
+      "element": "carrier",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "mixer_V",
+      "element": "twice_mixer",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "filtered_V",
+      "element": "lowpass",
+      "port": 0,
+      "unit": "V"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "message",
+        "position": [
+          3,
+          18
+        ],
+        "title": "message"
+      },
+      {
+        "id": "bias",
+        "position": [
+          3,
+          34
+        ],
+        "title": "bias"
+      },
+      {
+        "id": "envelope",
+        "position": [
+          24,
+          18
+        ],
+        "title": "1 + 0.6*message"
+      },
+      {
+        "id": "carrier",
+        "position": [
+          24,
+          50
+        ],
+        "title": "carrier"
+      },
+      {
+        "id": "am_signal",
+        "position": [
+          46,
+          18
+        ],
+        "title": "am_signal"
+      },
+      {
+        "id": "mixer",
+        "position": [
+          68,
+          18
+        ],
+        "title": "Received signal * coherent carrier"
+      },
+      {
+        "id": "twice_mixer",
+        "position": [
+          90,
+          18
+        ],
+        "title": "twice_mixer"
+      },
+      {
+        "id": "lowpass",
+        "position": [
+          112,
+          18
+        ],
+        "title": "lowpass"
+      },
+      {
+        "id": "lowpass_tau",
+        "position": [
+          112,
+          32
+        ],
+        "title": "lowpass_tau"
+      },
+      {
+        "id": "recovered",
+        "position": [
+          134,
+          18
+        ],
+        "title": "(Filtered envelope - 1)/0.6"
+      },
+      {
+        "id": "message_scope",
+        "position": [
+          170,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "message",
+            "recovered"
+          ]
+        }
+      },
+      {
+        "id": "carrier_scope",
+        "position": [
+          170,
+          42
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "am_V",
+            "envelope_V",
+            "carrier"
+          ]
+        }
+      },
+      {
+        "id": "detector_scope",
+        "position": [
+          112,
+          58
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "mixer_V",
+            "filtered_V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "bias",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "envelope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "envelope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "envelope",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "am_signal",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "carrier",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "am_signal",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "am_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixer",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "carrier",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixer",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "mixer",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "twice_mixer",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "twice_mixer",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lowpass",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "lowpass_tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lowpass",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "lowpass",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "recovered",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "bias",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "recovered",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "recovered",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "am_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "carrier_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "envelope",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "carrier_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "carrier",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "carrier_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "twice_mixer",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "detector_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "lowpass",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "detector_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "AM_COHERENT_DETECTION\n100 Hz carrier, 2 Hz message, modulation index 0.6; coherent detection, tau=0.02 s.\nRun 2 s at 10000 Hz; open the scopes.\nEquations, experiments and limits: examples/signal_measurement/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

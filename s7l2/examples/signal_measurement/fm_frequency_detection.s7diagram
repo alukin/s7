@@ -1,0 +1,767 @@
+{
+  "id": "fm_frequency_detection",
+  "dt": 0.0001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "fm_frequency_detection",
+    "dt": 0.0001,
+    "elements": [
+      {
+        "id": "message",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 2,
+          "sample_rate_hz": 10000
+        }
+      },
+      {
+        "id": "carrier_frequency",
+        "type": "Constant",
+        "params": {
+          "value": 100
+        }
+      },
+      {
+        "id": "frequency",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            20
+          ]
+        }
+      },
+      {
+        "id": "fm_signal",
+        "type": "ControlledOscillator",
+        "params": {
+          "amplitude": 1,
+          "sample_rate_hz": 10000,
+          "phase": 0
+        }
+      },
+      {
+        "id": "meter",
+        "type": "FrequencyMeter",
+        "params": {
+          "sample_rate_hz": 10000
+        }
+      },
+      {
+        "id": "raw_message",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            0.05,
+            -0.05
+          ]
+        }
+      },
+      {
+        "id": "zero",
+        "type": "Constant",
+        "params": {
+          "value": 0
+        }
+      },
+      {
+        "id": "valid_message",
+        "type": "Switch",
+        "params": {}
+      },
+      {
+        "id": "lowpass",
+        "type": "FirstOrderLag",
+        "params": {},
+        "schema": {
+          "name": "FirstOrderLag",
+          "elements": [
+            {
+              "id": "difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.0001
+              }
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "state",
+              "from_port": 0,
+              "to_element": "difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "difference",
+              "from_port": 0,
+              "to_element": "rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "rate",
+              "from_port": 0,
+              "to_element": "state",
+              "to_port": 0
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "input",
+              "type": "F64",
+              "element": "difference",
+              "port": 0
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "output",
+              "type": "F64",
+              "element": "state",
+              "port": 0
+            }
+          ],
+          "dt": 0.0001
+        }
+      },
+      {
+        "id": "lowpass_tau",
+        "type": "Constant",
+        "params": {
+          "value": 0.02
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "carrier_frequency",
+        "from_port": 0,
+        "to_element": "frequency",
+        "to_port": 0
+      },
+      {
+        "from_element": "message",
+        "from_port": 0,
+        "to_element": "frequency",
+        "to_port": 1
+      },
+      {
+        "from_element": "frequency",
+        "from_port": 0,
+        "to_element": "fm_signal",
+        "to_port": 0
+      },
+      {
+        "from_element": "fm_signal",
+        "from_port": 0,
+        "to_element": "meter",
+        "to_port": 0
+      },
+      {
+        "from_element": "meter",
+        "from_port": 0,
+        "to_element": "raw_message",
+        "to_port": 0
+      },
+      {
+        "from_element": "carrier_frequency",
+        "from_port": 0,
+        "to_element": "raw_message",
+        "to_port": 1
+      },
+      {
+        "from_element": "zero",
+        "from_port": 0,
+        "to_element": "valid_message",
+        "to_port": 0
+      },
+      {
+        "from_element": "raw_message",
+        "from_port": 0,
+        "to_element": "valid_message",
+        "to_port": 1
+      },
+      {
+        "from_element": "meter",
+        "from_port": 1,
+        "to_element": "valid_message",
+        "to_port": 2
+      },
+      {
+        "from_element": "valid_message",
+        "from_port": 0,
+        "to_element": "lowpass",
+        "to_port": 0
+      },
+      {
+        "from_element": "lowpass_tau",
+        "from_port": 0,
+        "to_element": "lowpass",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "message",
+      "element": "message",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "raw_detected",
+      "element": "valid_message",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "smoothed",
+      "element": "lowpass",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "command_Hz",
+      "element": "frequency",
+      "port": 0,
+      "unit": "Hz"
+    },
+    {
+      "name": "measured_Hz",
+      "element": "meter",
+      "port": 0,
+      "unit": "Hz"
+    },
+    {
+      "name": "fm_V",
+      "element": "fm_signal",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "valid",
+      "element": "meter",
+      "port": 1,
+      "unit": "1"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "message",
+        "position": [
+          3,
+          18
+        ],
+        "title": "message"
+      },
+      {
+        "id": "carrier_frequency",
+        "position": [
+          3,
+          36
+        ],
+        "title": "carrier_frequency"
+      },
+      {
+        "id": "frequency",
+        "position": [
+          25,
+          18
+        ],
+        "title": "100 + 20*message (Hz)"
+      },
+      {
+        "id": "fm_signal",
+        "position": [
+          47,
+          18
+        ],
+        "title": "fm_signal"
+      },
+      {
+        "id": "meter",
+        "position": [
+          69,
+          18
+        ],
+        "title": "meter"
+      },
+      {
+        "id": "raw_message",
+        "position": [
+          91,
+          18
+        ],
+        "title": "(Measured Hz - 100)/20"
+      },
+      {
+        "id": "zero",
+        "position": [
+          69,
+          50
+        ],
+        "title": "zero"
+      },
+      {
+        "id": "valid_message",
+        "position": [
+          113,
+          18
+        ],
+        "title": "Suppress estimate until meter valid"
+      },
+      {
+        "id": "lowpass",
+        "position": [
+          135,
+          18
+        ],
+        "title": "lowpass"
+      },
+      {
+        "id": "lowpass_tau",
+        "position": [
+          135,
+          32
+        ],
+        "title": "lowpass_tau"
+      },
+      {
+        "id": "message_scope",
+        "position": [
+          172,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "message",
+            "raw_detected",
+            "smoothed"
+          ]
+        }
+      },
+      {
+        "id": "frequency_scope",
+        "position": [
+          172,
+          42
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "command_Hz",
+            "measured_Hz"
+          ]
+        }
+      },
+      {
+        "id": "waveform_scope",
+        "position": [
+          69,
+          66
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "fm_V"
+          ]
+        }
+      },
+      {
+        "id": "validity_scope",
+        "position": [
+          135,
+          66
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "valid"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "carrier_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "fm_signal",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "fm_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "meter",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "meter",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "raw_message",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "carrier_frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "raw_message",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "zero",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "valid_message",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "raw_message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "valid_message",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "meter",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "valid_message",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "valid_message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lowpass",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "lowpass_tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "lowpass",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "valid_message",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "lowpass",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "message_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "frequency",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "meter",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "frequency_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "fm_signal",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "waveform_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "meter",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "validity_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "FM_FREQUENCY_DETECTION\n100 Hz carrier, +/-20 Hz deviation, 2 Hz message; crossing-period detection and 0.02 s smoothing.\nRun 2 s at 10000 Hz; open the scopes.\nEquations, experiments and limits: examples/signal_measurement/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}
