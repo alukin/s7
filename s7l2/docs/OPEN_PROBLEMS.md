@@ -7,6 +7,14 @@ This file replaces three earlier documents (`CODE_REVIEW_REQUIRED_FIXES.md`, `PR
 
 This document lists *what* is unsolved. For *how and in what order* to address it, see `docs/DEVELOPMENT_PLAN.md`.
 
+## Automated GUI suite priority
+
+**G1 / P1 / incomplete coverage:** user requests Qt Test and Qt Quick Test real
+workflows on Linux Xvfb, screenshot/log artifacts on failure, CTest/root GitHub
+Actions integration, and actual Qt Quick 3D rendering where supported (explicit
+skip otherwise). Existing offscreen data checks do not establish rendering.
+Implementation and acceptance are tracked in DEVELOPMENT_PLAN.md.
+
 ## Release audit inventory — 2026-10-20
 
 Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit.

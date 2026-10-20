@@ -67,6 +67,22 @@ Do not change implementation or licenses until this documentation increment is c
   needed its title expectation updated for Qt's modification marker; it now passes.
   This is an integration check across successive builds, not a pristine baseline.
 
+### Automated GUI suite — user-directed priority, 2026-10-20
+
+Implement G1 before the remaining broader release phases. This is a testing
+increment, not a claim that the release audit is finished.
+
+| Task | Priority/category | Files / current behavior | Implementation / dependencies / risks | Tests and acceptance | Status |
+|---|---|---|---|---|---|
+| G1 | P1 missing coverage / release infrastructure | `s7studio/tests`, viewer QML, CMake, root CI; existing tests mostly custom checks/offscreen | Add Qt Test action/object workflows and Qt Quick Test of production viewer scenes; stable object names for dialogs/actions; Linux Xvfb wrapper with bounded timeouts, logs, failure screenshots, XML; probe OpenGL capability and explicitly skip genuine unavailable rendering; root CI provisions GCC15+/Qt6.9+/Xvfb/Mesa and uploads artifacts | Unattended edit/parameter/save/open/run/pause/stop/reset/viewer workflows; QML interaction; actual Quick3D pixel evidence under usable OpenGL; report unavailable display/3D as skipped, never passed; inject failure to verify artifacts; integrate CTest and hosted workflow | Planned; inspect installed Qt Test/QuickTest and Xvfb before implementation |
+
+Order: commit this documentation → test infrastructure/object identities →
+Qt Test workflow → Qt Quick Test/viewer rendering → local Xvfb run and artifact
+failure verification → root GitHub Actions integration → update evidence.
+Do not automate by desktop coordinates when actions, widget objects, model
+indices or QML objects exist. GPU tests must inspect rendered content, not only
+QML load status. Hosted workflow execution is separate from local validation.
+
 ### Ordered tasks and acceptance
 
 All rows require a separate logical commit, relevant tests, and synchronized
