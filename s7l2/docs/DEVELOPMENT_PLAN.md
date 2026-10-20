@@ -347,7 +347,7 @@ Baseline: `0de5bc6`, 67/67 tests passed; user prompt files remain untracked.
 
 | Task | Current / required behavior | Files / approach | Risk and acceptance | Status |
 |---|---|---|---|---|
-| O1a P0 architectural prerequisite | ViewerManager creates hidden windows to retain samples; Scope owns save/export data. Data must survive without any window. | Add QtCore-only observation source with bounded memory and disk-backed paged reads, run/channel identities and explicit delivery-loss/storage status. Manager owns source; viewers attach read-only and consume bounded pages. Keep Qt Graphs/Quick3D. | No capture-completeness claim: input still follows mailbox. No unbounded replay or hidden window creation. Test zero-window capture, paging/spill/failure, view deletion/recreation, clear without deleting results, source-backed export and run isolation. | In progress |
+| O1a P0 architectural prerequisite | ViewerManager creates hidden windows to retain samples; Scope owns save/export data. Data must survive without any window. | Add QtCore-only observation source with bounded memory and disk-backed paged reads, run/channel identities and explicit delivery-loss/storage status. Manager owns source; viewers attach read-only and consume bounded pages. Keep Qt Graphs/Quick3D. | No capture-completeness claim: input still follows mailbox. No unbounded replay or hidden window creation. Test zero-window capture, paging/spill/failure, view deletion/recreation, clear without deleting results, source-backed export and run isolation. | Implemented; six focused tests and four Xvfb GUI tests passed, including Quick3D; full-suite check follows O1b |
 | O1b P0 completeness | Data discarded before UI delivery is still unavailable. | After O1a passes, move authoritative append to worker before preview; bounded storage/backpressure and explicit failure policy, typed probe validation. | Independent capture and preview status; deliberate preview overflow preserves full results; injected storage failure marks incomplete and stops/alerts under documented policy. | Pending O1a validation |
 
 O1a data contract: append is owned by the observation host, never a viewer;
@@ -359,3 +359,7 @@ Scope recording remains a disposable presentation/import/export projection
 while raw delivered samples belong to the independent source. Disk/history reads
 are bounded per UI turn; full save/export is explicit work, not a repaint path.
 No runtime/core semantic changes, vendor edits or licensing changes belong here.
+
+O1a validation: build-tests passed; source test uses QCoreApplication only.
+Focused source/viewer/window/Scope/document tests passed 6/6; Xvfb GUI tests
+passed 4/4, including actual Mesa Qt Quick 3D and diagnostic artifact self-check.

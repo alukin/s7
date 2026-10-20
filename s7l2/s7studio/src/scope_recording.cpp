@@ -112,6 +112,13 @@ void ScopeRecording::archiveLive(const QString& runLabel)
     notifyStatus();
 }
 
+void ScopeRecording::copyComparisonsFrom(const ScopeRecording& other)
+{
+    for (auto it = other.series_.cbegin(); it != other.series_.cend(); ++it)
+        if (it->isComparison()) series_.insert(it.key(), it.value());
+    comparisonSequence_ = std::max(comparisonSequence_, other.comparisonSequence_);
+}
+
 void ScopeRecording::clearComparisons()
 {
     for (auto it = series_.begin(); it != series_.end();) {

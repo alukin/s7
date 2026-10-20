@@ -85,3 +85,10 @@ It intentionally overflows the actual worker mailbox with 220,000 values,
 checking that 200,000 remain and 20,000 drops are reported, and injects an
 unusable temporary directory to verify storage-failure reporting/persistence.
 Native file-picker interaction and actual disk exhaustion are not automated.
+
+With an attached observation source, save/export reads the retained source rather
+than the displayed prefix or cleared display. ScopeRecording inside a window is
+a presentation/import projection. Source lifetime is independent of windows;
+closing and recreating a viewer can replay its retained history. The upstream
+mailbox may still discard samples in O1a, so independent ownership does not yet
+establish complete capture. See STUDIO_OBSERVATION_VIEWERS.md.

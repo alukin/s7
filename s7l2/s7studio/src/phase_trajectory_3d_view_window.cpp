@@ -3,6 +3,7 @@
 #include "viewers/quick_support.hpp"
 
 #include <QCheckBox>
+#include <QSaveFile>
 #include <QFile>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -114,7 +115,8 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     autoScaleCheck_ = new QCheckBox(QStringLiteral("Auto Scale"), this);
     autoScaleCheck_->setChecked(true);
     controls->addWidget(autoScaleCheck_);
-    clearButton_ = new QPushButton(QStringLiteral("Clear"), this);
+    clearButton_ = new QPushButton(QStringLiteral("Clear display"), this);
+    clearButton_->setToolTip(QStringLiteral("Clear this presentation. Recorded source data remains available for export and reopening."));
     exportButton_ = new QPushButton(QStringLiteral("Export CSV"), this);
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
@@ -166,16 +168,11 @@ void PhaseTrajectory3DViewWindow::showEvent(QShowEvent* event)
     QWidget::showEvent(event);
 }
 
-auto PhaseTrajectory3DViewWindow::subscribes(const QString& probeName) const -> bool
-{
-    return probeName == xProbeName_ || probeName == yProbeName_ || probeName == zProbeName_;
-}
-
 void PhaseTrajectory3DViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
-    if (sample.probeName == xProbeName_) appendXSample(sample.step, sample.value);
-    if (sample.probeName == yProbeName_) appendYSample(sample.step, sample.value);
-    if (sample.probeName == zProbeName_) appendZSample(sample.step, sample.value);
+    if (sample.role == QStringLiteral("x")) appendXSample(sample.step, sample.value);
+    if (sample.role == QStringLiteral("y")) appendYSample(sample.step, sample.value);
+    if (sample.role == QStringLiteral("z")) appendZSample(sample.step, sample.value);
 }
 
 void PhaseTrajectory3DViewWindow::appendXSample(const long step, const double value)
@@ -227,6 +224,7 @@ void PhaseTrajectory3DViewWindow::updateStatus()
     if (const auto totalDropped = droppedSamples_ + aligner_.discardedSteps(); totalDropped > 0) {
         parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
     }
+    if (!sourceStatusText().isEmpty()) parts << sourceStatusText();
     statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
 
@@ -267,6 +265,7 @@ void PhaseTrajectory3DViewWindow::setViewPreset(const ViewPreset preset)
 
 void PhaseTrajectory3DViewWindow::clearBuffers()
 {
+    discardPresentationHistory();
     points_.clear();
     aligner_.clear();
     droppedSamples_ = 0;
@@ -284,16 +283,29 @@ void PhaseTrajectory3DViewWindow::exportCsv()
     if (filePath.isEmpty()) {
         return;
     }
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::critical(this, QStringLiteral("Export failed"), file.errorString());
         return;
     }
+    if (source()) {
+        QString error;
+        if (!source()->writeAlignedCsv(file, selectedChannels({QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}), &error)) {
+            QMessageBox::critical(this, QStringLiteral("Export failed"), error); return;
+        }
+    } else {
     QTextStream out(&file);
+    out.setRealNumberPrecision(17);
     out << xProbeName_ << ',' << yProbeName_ << ',' << zProbeName_ << '\n';
     for (const auto& point : std::as_const(points_)) {
         out << point[0] << ',' << point[1] << ',' << point[2] << '\n';
+    }    out.flush();
+    if (out.status() != QTextStream::Ok) {
+        QMessageBox::critical(this, QStringLiteral("Export failed"), QStringLiteral("CSV write failed.")); return;
     }
+    }
+    if (!file.commit()) QMessageBox::critical(this, QStringLiteral("Export failed"), file.errorString());
+
 }
 
 void PhaseTrajectory3DViewWindow::refreshPlots()

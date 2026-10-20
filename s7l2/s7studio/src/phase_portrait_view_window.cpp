@@ -4,6 +4,7 @@
 
 #include <QCheckBox>
 #include <QColor>
+#include <QSaveFile>
 #include <QFile>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -61,7 +62,8 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     autoScaleCheck_->setChecked(true);
     controls->addWidget(autoScaleCheck_);
 
-    clearButton_ = new QPushButton(QStringLiteral("Clear"), this);
+    clearButton_ = new QPushButton(QStringLiteral("Clear display"), this);
+    clearButton_->setToolTip(QStringLiteral("Clear this presentation. Recorded source data remains available for export and reopening."));
     exportButton_ = new QPushButton(QStringLiteral("Export CSV"), this);
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
@@ -86,15 +88,10 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     connect(exportButton_, &QPushButton::clicked, this, &PhasePortraitViewWindow::exportRecordedCsv);
 }
 
-auto PhasePortraitViewWindow::subscribes(const QString& probeName) const -> bool
-{
-    return probeName == xProbeName_ || probeName == yProbeName_;
-}
-
 void PhasePortraitViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
-    if (sample.probeName == xProbeName_) appendXSample(sample.step, sample.value);
-    if (sample.probeName == yProbeName_) appendYSample(sample.step, sample.value);
+    if (sample.role == QStringLiteral("x")) appendXSample(sample.step, sample.value);
+    if (sample.role == QStringLiteral("y")) appendYSample(sample.step, sample.value);
 }
 
 void PhasePortraitViewWindow::appendXSample(const long step, const double value)
@@ -143,11 +140,13 @@ void PhasePortraitViewWindow::updateStatus()
     if (const auto totalDropped = droppedSamples_ + aligner_.discardedSteps(); totalDropped > 0) {
         parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
     }
+    if (!sourceStatusText().isEmpty()) parts << sourceStatusText();
     statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
 
 void PhasePortraitViewWindow::clearBuffers()
 {
+    discardPresentationHistory();
     points_.clear();
     aligner_.clear();
     droppedSamples_ = 0;
@@ -167,17 +166,30 @@ void PhasePortraitViewWindow::exportRecordedCsv()
         return;
     }
 
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         QMessageBox::critical(this, QStringLiteral("Export failed"), file.errorString());
         return;
     }
 
+    if (source()) {
+        QString error;
+        if (!source()->writeAlignedCsv(file, selectedChannels({QStringLiteral("x"), QStringLiteral("y")}), &error)) {
+            QMessageBox::critical(this, QStringLiteral("Export failed"), error); return;
+        }
+    } else {
     QTextStream out(&file);
+    out.setRealNumberPrecision(17);
     out << xProbeName_ << ',' << yProbeName_ << '\n';
     for (const auto& point : std::as_const(points_)) {
         out << point.x() << ',' << point.y() << '\n';
+    }    out.flush();
+    if (out.status() != QTextStream::Ok) {
+        QMessageBox::critical(this, QStringLiteral("Export failed"), QStringLiteral("CSV write failed.")); return;
     }
+    }
+    if (!file.commit()) QMessageBox::critical(this, QStringLiteral("Export failed"), file.errorString());
+
 }
 
 void PhasePortraitViewWindow::refreshPlot()

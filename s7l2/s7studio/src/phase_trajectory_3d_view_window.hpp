@@ -1,7 +1,7 @@
 #pragma once
 
 #include "viewers/observation_viewer.hpp"
-#include "viewers/step_aligner.hpp"
+#include "observation/step_aligner.hpp"
 #include "viewers/trajectory_geometry.hpp"
 
 #include <QList>
@@ -95,8 +95,9 @@ public:
 
     // ObservationViewer
     [[nodiscard]] auto widget() -> QWidget* override { return this; }
-    [[nodiscard]] auto subscribes(const QString& probeName) const -> bool override;
+protected:
     void appendObservedSample(const viewers::ObservedSample& sample) override;
+public:
 
     // Every recorded (x, y, z) triple in step order; export writes these.
     [[nodiscard]] auto points() const -> const QList<viewers::TrajectoryPoint>& { return points_; }
@@ -127,7 +128,7 @@ private:
     QString xProbeName_;
     QString yProbeName_;
     QString zProbeName_;
-    viewers::StepAligner<3> aligner_;
+    observation::StepAligner<3> aligner_;
     QList<viewers::TrajectoryPoint> points_;
     viewers::TrajectoryBounds bounds_;
     std::uint64_t droppedSamples_ = 0;

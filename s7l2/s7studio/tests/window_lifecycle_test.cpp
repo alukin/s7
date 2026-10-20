@@ -40,7 +40,7 @@ class WindowLifecycleTest : public QObject {
     auto runner() { return window_->findChild<s7studio::LocalSchemaRunner*>(); }
     auto manager() { return window_->findChild<s7studio::viewers::ViewerManager*>(); }
     auto action(const char* name) { return window_->findChild<QAction*>(name); }
-    auto scope() { return dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager()->find("Scope", "scope")); }
+    auto scope() { return dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager()->openObserver("Scope", "scope")); }
     bool start(int seconds = -1, bool preserve = false) {
         bool accepted = false;
         QTimer::singleShot(0, window_.get(), [&] {
@@ -291,7 +291,7 @@ private slots:
         QTRY_COMPARE(gate_->entered.load(), 2);
         runner()->pause(); gate_->allow();
         QTRY_VERIFY(runner()->isPaused());
-        QTRY_COMPARE(scope()->recording().series().value("live:value").receivedSamples, std::uint64_t(1));
+        QTRY_COMPARE(scope()->recording().series().value("live:value").receivedSamples, std::uint64_t(2));
         runner()->stop();
         QTRY_COMPARE(runner()->state(), s7studio::RunState::Stopped);
         action("action.reset")->trigger();

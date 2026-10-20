@@ -59,8 +59,9 @@ public:
 
     // ObservationViewer
     [[nodiscard]] auto widget() -> QWidget* override { return this; }
-    [[nodiscard]] auto subscribes(const QString& probeName) const -> bool override;
+protected:
     void appendObservedSample(const viewers::ObservedSample& sample) override;
+public:
 
     [[nodiscard]] auto recording() const -> const ScopeRecording& { return recording_; }
     [[nodiscard]] auto plotView() const -> viewers::LinePlotView* { return plot_; }

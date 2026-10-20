@@ -1,5 +1,7 @@
 #pragma once
 
+#include "observation/observation_source.hpp"
+
 #include <QString>
 #include <QStringList>
 
@@ -18,27 +20,50 @@ struct ObservedSample {
     long step = 0;
     double timeSeconds = 0.0;
     double value = 0.0;
+    std::uint64_t runId = 0;
+    observation::ChannelId channel = 0;
+    QString role;
 };
 
-// The minimal contract between Studio and one observation viewer instance:
-// identity, which probes it consumes, and the lifecycle operations the host
-// applies to every viewer. How a viewer stores, aligns or draws its data is
-// its own business.
+struct InputBinding {
+    QString role;
+    observation::ChannelId channel;
+};
+
+// Presentation only. The host supplies a const data source and explicit input
+// bindings. Windows do not own capture and never receive producer callbacks.
 class ObservationViewer {
 public:
     virtual ~ObservationViewer() = default;
-
-    // The top-level window showing this viewer. The ViewerManager owns it.
     [[nodiscard]] virtual auto widget() -> QWidget* = 0;
-    // Whether samples of this probe belong to this viewer.
-    [[nodiscard]] virtual auto subscribes(const QString& probeName) const -> bool = 0;
-    virtual void appendObservedSample(const ObservedSample& sample) = 0;
-    // Forgets the current run (a new run starts or the user cleared it).
+    void attachSource(std::shared_ptr<const observation::ObservationSource> source,
+                      QVector<InputBinding> bindings, bool clear = true);
+    void setBindings(QVector<InputBinding> bindings) { bindings_ = std::move(bindings); }
+    // One bounded page per UI turn. Returns whether more history remains.
+    bool refreshSource();
+    [[nodiscard]] auto source() const { return source_; }
+    // Presentation operations: never erase recorded data.
     virtual void clearSamples() = 0;
-    // Every new run resets alignment; Scope may retain the preceding run as a comparison.
     virtual void beginRun(const QString&, bool) { clearSamples(); setDroppedSampleCount(0); }
-    // Samples the runtime produced but Studio dropped because the UI fell behind.
     virtual void setDroppedSampleCount(std::uint64_t dropped) = 0;
+protected:
+    virtual void appendObservedSample(const ObservedSample& sample) = 0;
+    // Called by a user clear; future updates start at the current source end.
+    void discardPresentationHistory();
+    [[nodiscard]] QVector<observation::ChannelId> selectedChannels(const QStringList& roles = {}) const {
+        QVector<observation::ChannelId> result;
+        if (roles.isEmpty()) {
+            for (const auto& binding : bindings_) result.push_back(binding.channel);
+        } else for (const auto& role : roles)
+            for (const auto& binding : bindings_) if (binding.role == role) result.push_back(binding.channel);
+        return result;
+    }
+    [[nodiscard]] QString sourceStatusText() const;
+private:
+    std::shared_ptr<const observation::ObservationSource> source_;
+    QVector<InputBinding> bindings_;
+    std::uint64_t cursor_ = 0;
+    QString readError_;
 };
 
 // What the host asks a viewer type to create: a stable instance id (the

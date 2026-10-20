@@ -138,3 +138,43 @@ freezes observer types/probe bindings, validates sample-batch run IDs and reject
 opening changed observers against old results. See the local-run lifecycle
 contract in STUDIO_DIAGRAM_EDITOR.md. These changes do not remove mailbox losses
 or establish complete capture under overload.
+
+## Observation data and presentation separation (O1a)
+
+`observation/ObservationSource` is a QtCore-only delivered-sample journal, usable
+with QCoreApplication and no windows. It owns one run ID, stable channel IDs,
+step/model-time/value records, delivery-loss count and storage-error status.
+Memory is bounded (20,000 records by default); subsequent records spill to a
+private temporary file. Reads are bounded pages in production order (4,096 by
+default, hard maximum 16,384). Private spill files are not a portable interchange
+format. A storage error stops further retention and remains explicitly incomplete.
+
+`ObservationSession` owns the active source; retained const handles keep an old
+run alive without changing it when another run starts. The manager hosts a
+session and window instances, but delivering data no longer creates hidden
+windows. Window creation occurs only through ensure/open. Windows receive a
+const source and explicit role/channel bindings; prefix/suffix interpretation is
+confined to the diagram-to-binding adapter in ViewerManager. New viewers consume
+bounded pages through the common ObservationViewer implementation. Reopening a
+destroyed window replays retained source history. Existing instances refresh at
+bounded intervals; a large history may take multiple turns to display.
+
+ScopeRecording is now a disposable display/import/comparison projection, not the
+owner of delivered results. Scope save/export rebuilds its projection from the
+source, independently of display replay progress. Phase exports use the shared
+step aligner and source data, not trimmed plotted trajectories. The raw source
+also offers window-independent CSV export with run/channel/step/time identity.
+Explicit save/export and Scope comparison archival currently perform synchronous
+paged scans; making these user operations asynchronous is follow-up responsiveness
+work, separate from bounded periodic display updates.
+
+Clear display advances only that view's presentation cursor; it does not delete
+recorded data. Creating another view or exporting can still access it. Diagram
+replacement releases the session, while externally retained source handles remain
+valid. Closing/hiding a window does not control capture. Source and presentation
+limits are separate: a trimmed phase plot is not the complete source history.
+
+This increment does **not** fix upstream mailbox loss. The source records only
+samples already delivered through that mailbox, and reports its loss. O1b must
+move authoritative capture before the preview path and separate preview loss
+from recording completeness before claiming complete results.

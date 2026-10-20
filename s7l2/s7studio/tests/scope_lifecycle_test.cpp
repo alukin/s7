@@ -224,10 +224,11 @@ int main(int argc, char** argv) try {
     runner.pause(); runner.stop();
     waitUntil([&] { return completed; }); consume();
     require(success && received > pausedCount && received % 2 == 0, "Stop while paused lost final channel or failed");
+    while (portrait->refreshSource()) {} // bounded pages; drain presentation backlog explicitly
     require(portrait->points() == expectedPairs, "Phase Portrait lost, duplicated or misaligned pairs across pause/resume/stop");
     require(manager.viewers().size() == 1, "Manager created viewers for unresolved probes");
     runner.reset();
-    manager.clearSamples();
+    manager.beginRun(QStringLiteral("previous"), false);
     require(portrait->points().isEmpty(), "Reset kept Phase Portrait pairs");
     require(runner.takeScopeSamples().samples.empty(), "Reset retained stale mailbox data");
     app.processEvents();

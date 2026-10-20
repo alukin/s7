@@ -3,7 +3,7 @@
 #include "scope_sample_mailbox.hpp"
 #include "viewers/viewer_registry.hpp"
 
-#include <QSet>
+#include <QTimer>
 
 namespace s7studio::viewers {
 
@@ -11,6 +11,10 @@ ViewerManager::ViewerManager(const ViewerRegistry& registry, QObject* parent)
     : QObject(parent)
     , registry_(registry)
 {
+    auto* timer = new QTimer(this);
+    timer->setInterval(16);
+    connect(timer, &QTimer::timeout, this, &ViewerManager::refreshViews);
+    timer->start();
 }
 
 ViewerManager::~ViewerManager()
@@ -65,7 +69,9 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     // An instance destroyed elsewhere must never receive another sample.
     connect(window, &QObject::destroyed, this, [this, key] { forget(key); });
     viewer->setDroppedSampleCount(dropped_);
-    instances_.insert(key, Instance{typeId, spec.instanceId, window, viewer});
+    instances_.insert(key, Instance{typeId, spec.instanceId, window, viewer, spec});
+    viewer->attachSource(source(), bindingsFor(instances_[key]));
+    viewer->refreshSource();
     ++generation_;
     return viewer;
 }
@@ -103,49 +109,62 @@ auto ViewerManager::openObserver(const QString& typeId, const QString& observerI
 void ViewerManager::deliver(const ScopeSampleBatch& batch,
                             const std::function<QString(const QString&)>& observerType)
 {
-    QSet<QString> resolvedObservers;
-    QHash<QString, QList<ObservationViewer*>> routes;
-    QHash<QString, QString> observerTypes;
-    std::uint64_t routedGeneration = generation_;
-    for (const auto& raw : batch.samples) {
-        ObservedSample sample{QString::fromStdString(raw.probeName), raw.step, raw.timeSeconds, raw.value};
-        const auto observerId = observerIdOf(sample.probeName);
-        if (!resolvedObservers.contains(observerId)) {
-            resolvedObservers.insert(observerId);
-            const auto type = observerType(observerId);
-            observerTypes.insert(observerId, type);
-            static_cast<void>(ensureObserver(type, observerId));
-        }
-        if (routedGeneration != generation_) {
-            routes.clear();
-            routedGeneration = generation_;
-        }
-        auto route = routes.find(sample.probeName);
-        if (route == routes.end()) {
-            QList<ObservationViewer*> targets;
-            for (const auto& instance : std::as_const(instances_)) {
-                // Editing/replacing a diagram observer with the same ID must
-                // not route its old run's samples into a different viewer type.
-                if (instance.instanceId == observerId && !observerTypes.value(observerId).isEmpty()
-                    && instance.typeId != observerTypes.value(observerId)) continue;
-                if (instance.window && instance.viewer->subscribes(sample.probeName)) targets.push_back(instance.viewer);
-            }
-            route = routes.insert(sample.probeName, targets);
-        }
-        for (auto* viewer : std::as_const(*route)) viewer->appendObservedSample(sample);
+    if (!session_.append(batch)) return;
+    for (const auto& sample : batch.samples) {
+        const auto id = observerIdOf(QString::fromStdString(sample.probeName));
+        if (!recordedTypes_.contains(id)) recordedTypes_.insert(id, observerType(id));
     }
-    if (batch.dropped > 0) setDroppedSampleCount(dropped_ + batch.dropped);
+    bindViews(false);
+    refreshViews();
+    dropped_ = source()->status().deliveryDropped;
+}
+
+QVector<InputBinding> ViewerManager::bindingsFor(const Instance& instance) const
+{
+    QVector<InputBinding> bindings;
+    if (recordedTypes_.contains(instance.instanceId) && recordedTypes_.value(instance.instanceId) != instance.typeId)
+        return bindings;
+    const auto* type = registry_.find(instance.typeId);
+    if (!type) return bindings;
+    const auto channels = source()->channels();
+    for (const auto& channel : channels) {
+        if (instance.spec.probeNames.isEmpty()) {
+            if (observerIdOf(channel.name) != instance.instanceId) continue;
+            const auto separator = channel.name.indexOf(QLatin1Char('/'));
+            bindings.push_back({separator < 0 ? channel.name : channel.name.mid(separator + 1), channel.id});
+        } else {
+            const auto index = instance.spec.probeNames.indexOf(channel.name);
+            if (index < 0) continue;
+            bindings.push_back({type->inputSuffixes.value(index, channel.name), channel.id});
+        }
+    }
+    return bindings;
+}
+void ViewerManager::bindViews(bool clear)
+{
+    for (const auto& instance : std::as_const(instances_)) {
+        if (!instance.window) continue;
+        if (instance.viewer->source() != source())
+            instance.viewer->attachSource(source(), bindingsFor(instance), clear);
+        else instance.viewer->setBindings(bindingsFor(instance));
+    }
+}
+void ViewerManager::refreshViews()
+{
+    for (auto* viewer : viewers()) viewer->refreshSource();
 }
 
 void ViewerManager::beginRun(const QString& previousRunLabel, bool preserveScopes)
 {
     dropped_ = 0;
     for (auto* viewer : viewers()) viewer->beginRun(previousRunLabel, preserveScopes);
+    session_.beginRun();
+    recordedTypes_.clear();
+    bindViews(false);
 }
 
 void ViewerManager::clearSamples()
 {
-    dropped_ = 0;
     for (auto* viewer : viewers()) viewer->clearSamples();
 }
 
@@ -158,6 +177,9 @@ void ViewerManager::setDroppedSampleCount(const std::uint64_t dropped)
 void ViewerManager::closeAll()
 {
     const auto instances = std::exchange(instances_, {});
+    session_.beginRun();
+    recordedTypes_.clear();
+    dropped_ = 0;
     ++generation_;
     for (const auto& instance : instances) {
         if (instance.window) {

@@ -5,12 +5,14 @@
 #include "scope_sample_mailbox.hpp"
 #include "scope_view_window.hpp"
 #include "viewers/line_plot_view.hpp"
-#include "viewers/step_aligner.hpp"
+#include "observation/step_aligner.hpp"
 #include "viewers/trajectory_geometry.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
 
 #include <QApplication>
+#include <QBuffer>
+#include "observation/scope_results.hpp"
 #include <QLabel>
 #include <QPointer>
 #include <QQuickItem>
@@ -42,7 +44,6 @@ class CountingViewer : public QWidget, public viewers::ObservationViewer {
 public:
     explicit CountingViewer(QString probe) : probe_(std::move(probe)) {}
     auto widget() -> QWidget* override { return this; }
-    auto subscribes(const QString& probeName) const -> bool override { return probeName == probe_; }
     void appendObservedSample(const viewers::ObservedSample& sample) override { sum += sample.value; ++count; }
     void clearSamples() override { sum = 0; count = 0; }
     void setDroppedSampleCount(const std::uint64_t value) override { dropped = value; }
@@ -119,10 +120,10 @@ void testManagerRoutingAndAlignment()
     require(p2->points() == QList<QPointF>{{-1, -10}, {-3, -30}}, "Portrait 2 misaligned X/Y samples");
     require(t1->points().size() == 1 && t1->points().front() == viewers::TrajectoryPoint{100, 200, 300},
         "3D viewer misaligned X/Y/Z samples");
-    auto* scope = dynamic_cast<ui::ScopeViewWindow*>(manager.find("Scope", "scope_a"));
+    auto* scope = dynamic_cast<ui::ScopeViewWindow*>(manager.openObserver("Scope", "scope_a"));
     require(scope && scope->recording().series().size() == 2
         && scope->recording().series().contains("live:v") && scope->recording().series().contains("live:w"),
-        "Scope observer was not created on demand with one channel per probe");
+        "Scope did not read retained channels on open");
     require(manager.viewers().size() == 4, "Unexpected viewer instances");
 
     // Loss accounting reaches existing and new viewers; clearing resets it.
@@ -137,8 +138,8 @@ void testManagerRoutingAndAlignment()
         require(shown, "Capture loss hidden in a viewer");
     }
     manager.clearSamples();
-    require(manager.droppedSampleCount() == 0 && p1->points().isEmpty() && t1->points().isEmpty()
-        && scope->recording().series().isEmpty(), "Clear left samples or loss counts behind");
+    require(manager.droppedSampleCount() == 5 && manager.source()->status().samples == 14 && p1->points().isEmpty() && t1->points().isEmpty()
+        && scope->recording().series().isEmpty(), "Clear erased source data or left presentation points behind");
     // A step half-delivered before the clear must not complete afterwards.
     ScopeSampleBatch afterClear;
     afterClear.samples = {sample("pp1/y", 3, 30)};
@@ -172,8 +173,8 @@ void testLifecycle()
     delete window.data();
     require(!manager->find("PhasePortrait", "pp") && manager->viewers().isEmpty(), "Destroyed viewer still registered");
     manager->deliver(batch, portraits);
-    auto* recreated = dynamic_cast<ui::PhasePortraitViewWindow*>(manager->find("PhasePortrait", "pp"));
-    require(recreated && recreated->points() == QList<QPointF>{{1, 2}}, "Observer was not recorded afresh");
+    auto* recreated = dynamic_cast<ui::PhasePortraitViewWindow*>(manager->openObserver("PhasePortrait", "pp"));
+    require(recreated && recreated->points() == QList<QPointF>{{1, 2}, {1, 2}, {1, 2}}, "Recreated viewer lost source history");
 
     // Diagram switch: closeAll destroys every viewer.
     auto* scope = manager->openObserver("Scope", "s");
@@ -187,6 +188,52 @@ void testLifecycle()
     QApplication::processEvents();
     manager.reset();
     require(!open3d && !openScope, "Viewer windows outlived their manager");
+}
+
+void testWindowIndependentResults()
+{
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    ScopeSampleBatch batch;
+    for (long i = 1; i <= 25000; ++i) {
+        batch.samples.push_back(sample("scope/v", i, i * .25));
+        batch.samples.push_back(sample("pp/x", i, i));
+        batch.samples.push_back(sample("pp/y", i, 2 * i));
+        batch.samples.push_back(sample("t/x", i, i));
+        batch.samples.push_back(sample("t/y", i, 2 * i));
+        batch.samples.push_back(sample("t/z", i, 3 * i));
+    }
+    const auto types = [](const QString& id) {
+        return id == "pp" ? QStringLiteral("PhasePortrait") : id == "t" ? QStringLiteral("PhaseTrajectory3D") : QStringLiteral("Scope");
+    };
+    manager.deliver(batch, types);
+    require(manager.viewers().isEmpty(), "Data delivery created hidden windows");
+    const auto source = manager.source();
+    require(source->status().samples == 150000, "No-window delivery lost samples");
+    auto* scope = dynamic_cast<ui::ScopeViewWindow*>(manager.openObserver("Scope", "scope"));
+    require(scope, "Cannot open retained Scope");
+    // Export before bounded replay catches up: full source, not plotted prefix.
+    QBuffer output; output.open(QIODevice::WriteOnly); QString error;
+    require(scope->writeRunResults(output, &error), "Source-backed save failed");
+    QBuffer input(&output.buffer()); input.open(QIODevice::ReadOnly);
+    ui::ScopeRecording restored("saved");
+    require(restored.openRunResults(input, "saved", &error), "Saved source cannot reopen");
+    require(restored.series().first().receivedSamples == 25000, "Save used incomplete viewer replay");
+    auto* phase = dynamic_cast<ui::PhasePortraitViewWindow*>(manager.openObserver("PhasePortrait", "pp"));
+    auto* trajectory = dynamic_cast<ui::PhaseTrajectory3DViewWindow*>(manager.openObserver("PhaseTrajectory3D", "t"));
+    require(phase && trajectory, "Cannot open retained phase data");
+    for (int turn = 0; turn < 40; ++turn) manager.refreshViews();
+    require(phase->points().size() == 25000 && trajectory->points().size() == 25000, "Phase history was window-owned");
+    require(phase->points().last() == QPointF(25000, 50000), "Replayed coordinates misaligned");
+    scope->clearSamples(); phase->clearSamples(); trajectory->clearSamples();
+    require(source->status().samples == 150000, "Presentation clear deleted captured data");
+    manager.refreshViews(); require(phase->points().isEmpty(), "Clear replayed old history again");
+    delete phase;
+    phase = dynamic_cast<ui::PhasePortraitViewWindow*>(manager.openObserver("PhasePortrait", "pp"));
+    for (int turn = 0; turn < 40; ++turn) manager.refreshViews();
+    require(phase->points().size() == 25000, "Viewer deletion destroyed recorded history");
+    manager.beginRun("old", false);
+    require(manager.source() != source && source->status().samples == 150000, "New run mutated previous source");
+    require(phase->points().isEmpty(), "New source retained old phase alignment/history");
 }
 
 void testLinePlot()
@@ -276,6 +323,7 @@ int main(int argc, char** argv) try
     testRegistry();
     testManagerRoutingAndAlignment();
     testLifecycle();
+    testWindowIndependentResults();
     testLinePlot();
     testTrajectory();
     std::cout << "Viewer registry, routing, alignment, lifecycle, plot and 3D trajectory checks passed\n";

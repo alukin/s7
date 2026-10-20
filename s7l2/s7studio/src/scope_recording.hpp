@@ -67,6 +67,8 @@ public:
     void clearLive();
     void archiveLive(const QString& runLabel);
     void clearComparisons();
+    void copyComparisonsFrom(const ScopeRecording& other);
+    void setCaptureError(const QString& error) { temporaryWriteError_ = error; notifyStatus(); }
     void setDroppedSampleCount(std::uint64_t dropped);
     [[nodiscard]] auto droppedSampleCount() const -> std::uint64_t { return droppedSamples_; }
 

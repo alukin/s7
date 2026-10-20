@@ -168,9 +168,9 @@ suite on Xvfb/Mesa with real 2D/3D pixels. Current execution evidence and remain
 release scope are recorded in DEVELOPMENT_PLAN.md; earlier review limitations
 above describe their original dates rather than superseding this new evidence.
 
-### O1a observation separation in progress
+### O1a observation separation verified
 
-Before changing completeness, extract delivered-sample ownership from viewer
+Delivered-sample ownership is extracted from viewer
 windows into a window-independent, disk-backed observation source. Viewers read
 bounded pages through explicit bindings; their lifetime and clear action must
 not delete source data. This is a prerequisite, not a lossless-capture fix:

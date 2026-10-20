@@ -53,13 +53,22 @@ s7_enable_project_warnings(s7studio_diagram)
 # Observation viewers (docs/STUDIO_OBSERVATION_VIEWERS.md): the viewer
 # registry, manager and shared plot/3D components, and the Scope, Phase
 # Portrait and 3D Phase Trajectory windows. Shared by Studio and its tests.
+add_library(s7studio_observation STATIC
+    src/observation/observation_source.cpp
+    src/observation/observation_source.hpp
+)
+target_include_directories(s7studio_observation PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(s7studio_observation PUBLIC Qt6::Core)
+s7_enable_project_warnings(s7studio_observation)
+
 add_library(s7studio_viewers STATIC
     src/viewers/observation_viewer.hpp
+    src/viewers/observation_viewer.cpp
     src/viewers/viewer_registry.cpp
     src/viewers/viewer_registry.hpp
     src/viewers/viewer_manager.cpp
     src/viewers/viewer_manager.hpp
-    src/viewers/step_aligner.hpp
+    src/observation/step_aligner.hpp
     src/viewers/line_plot_view.cpp
     src/viewers/line_plot_view.hpp
     src/viewers/quick_support.cpp
@@ -68,6 +77,8 @@ add_library(s7studio_viewers STATIC
     src/viewers/trajectory_geometry.hpp
     src/scope_recording.cpp
     src/scope_recording.hpp
+    src/observation/scope_results.cpp
+    src/observation/scope_results.hpp
     src/scope_sample_mailbox.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
@@ -85,6 +96,7 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
 )
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
+    s7studio_observation
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -366,3 +378,10 @@ set_target_properties(s7studio_window_lifecycle_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_window_lifecycle COMMAND s7studio_window_lifecycle_test)
 set_tests_properties(s7studio_window_lifecycle PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software;XDG_CACHE_HOME=${CMAKE_CURRENT_BINARY_DIR}/lifecycle-cache;XDG_CONFIG_HOME=${CMAKE_CURRENT_BINARY_DIR}/lifecycle-config" TIMEOUT 60)
+
+s7_add_test_executable(s7studio_observation_source_test tests/observation_source_test.cpp)
+target_link_libraries(s7studio_observation_source_test PRIVATE s7studio_observation Qt6::Test)
+set_target_properties(s7studio_observation_source_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_observation_source_test)
+add_test(NAME s7studio_observation_source COMMAND s7studio_observation_source_test)
+set_tests_properties(s7studio_observation_source PROPERTIES TIMEOUT 60)

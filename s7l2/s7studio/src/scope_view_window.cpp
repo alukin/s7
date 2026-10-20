@@ -1,4 +1,5 @@
 #include "scope_view_window.hpp"
+#include "observation/scope_results.hpp"
 
 #include "viewers/line_plot_view.hpp"
 
@@ -148,18 +149,9 @@ auto ScopeViewWindow::probeName() const -> QString
     return probeName_;
 }
 
-auto ScopeViewWindow::subscribes(const QString& probeName) const -> bool
-{
-    return probeName == probeName_
-        || (probeName.size() > probeName_.size() && probeName.startsWith(probeName_)
-            && probeName[probeName_.size()] == QLatin1Char('/'));
-}
-
 void ScopeViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
-    const auto separator = sample.probeName.indexOf(QLatin1Char('/'));
-    const auto channel = separator < 0 ? sample.probeName : sample.probeName.mid(separator + 1);
-    appendSample(channel, sample.timeSeconds, sample.value);
+    appendSample(sample.role, sample.timeSeconds, sample.value);
 }
 
 void ScopeViewWindow::appendSample(const double timeSeconds, const double value)
@@ -208,6 +200,15 @@ void ScopeViewWindow::clearSamples()
 void ScopeViewWindow::beginRun(const QString& previousRunLabel, bool preserve)
 {
     if (!preserve) { clearSamples(); return; }
+    if (source()) {
+        QString error;
+        auto projection = observation::scopeProjection(*source(), probeName_, selectedChannels(), &error);
+        if (projection) {
+            projection->copyComparisonsFrom(recording_);
+            recording_ = std::move(*projection);
+            recording_.setStatusChangedHandler([this] { updateStatus(); });
+        } else recording_.setCaptureError(error);
+    }
     recording_.archiveLive(previousRunLabel);
     syncSeries(true);
     dirty_ = true;
@@ -220,11 +221,12 @@ void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 
 void ScopeViewWindow::updateStatus()
 {
-    statusLabel_->setText(recording_.statusText());
+    statusLabel_->setText(recording_.statusText() + QStringLiteral(" | ") + sourceStatusText());
 }
 
 void ScopeViewWindow::clearBuffers()
 {
+    discardPresentationHistory();
     recording_.clearLive();
     syncSeries(true);
     timeScrollBar_->setEnabled(false);
@@ -270,12 +272,18 @@ void ScopeViewWindow::exportRecordedCsv()
 
 bool ScopeViewWindow::writeRecordedCsv(QIODevice& device, QString* error) const
 {
-    return recording_.writeRecordedCsv(device, error);
+    if (!source()) return recording_.writeRecordedCsv(device, error);
+    auto projection = observation::scopeProjection(*source(), probeName_, selectedChannels(), error);
+    if (!projection) return false;
+    projection->copyComparisonsFrom(recording_);
+    return projection->writeRecordedCsv(device, error);
 }
 
 bool ScopeViewWindow::writeRunResults(QIODevice& device, QString* error) const
 {
-    return recording_.writeRunResults(device, error);
+    if (!source()) return recording_.writeRunResults(device, error);
+    auto projection = observation::scopeProjection(*source(), probeName_, selectedChannels(), error);
+    return projection && projection->writeRunResults(device, error);
 }
 
 bool ScopeViewWindow::openRunResults(QIODevice& device, const QString& label, QString* error)

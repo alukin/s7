@@ -1,6 +1,7 @@
 #pragma once
 
 #include "viewers/observation_viewer.hpp"
+#include "observation/observation_session.hpp"
 
 #include <QHash>
 #include <QList>
@@ -19,11 +20,9 @@ namespace s7studio::viewers {
 
 class ViewerRegistry;
 
-// Owns the open viewer instances of one Studio window and routes observed
-// samples to them. Instances are keyed by (type, instance id), so a diagram
-// can hold any number of viewers, including several of one type. A viewer
-// records from its first delivered sample, even while hidden; closing its
-// window only hides it, and closeAll() (diagram switch, shutdown) destroys it.
+// Hosts read-only viewer instances and an independent observation session.
+// Data delivery never creates windows. View lifetime and display clearing do
+// not control retention; a newly opened viewer replays bounded source pages.
 class ViewerManager : public QObject
 {
     Q_OBJECT
@@ -43,15 +42,16 @@ public:
     [[nodiscard]] auto find(const QString& typeId, const QString& instanceId) const -> ObservationViewer*;
     [[nodiscard]] auto viewers() const -> QList<ObservationViewer*>;
 
-    // Routes a batch in production order. observerType maps an observer id
-    // (the probe name up to its first '/') to the viewer type that records
-    // it; each observer is resolved once per batch and created on demand.
+    // Retains delivered samples independently of windows, resolves diagram
+    // bindings, then refreshes existing presentations with bounded pages.
     void deliver(const ScopeSampleBatch& batch, const std::function<QString(const QString&)>& observerType);
     void clearSamples();
     void beginRun(const QString& previousRunLabel, bool preserveScopes);
     void setDroppedSampleCount(std::uint64_t dropped);
     [[nodiscard]] auto droppedSampleCount() const -> std::uint64_t { return dropped_; }
     void closeAll();
+    [[nodiscard]] auto source() const { return session_.source(); }
+    void refreshViews();
 
     [[nodiscard]] static auto observerIdOf(const QString& probeName) -> QString;
 
@@ -61,11 +61,16 @@ private:
         QString instanceId;
         QPointer<QWidget> window;
         ObservationViewer* viewer = nullptr;
+        ViewerInstanceSpec spec;
     };
 
     [[nodiscard]] static auto keyOf(const QString& typeId, const QString& instanceId) -> QString;
     void forget(const QString& key);
 
+    QVector<InputBinding> bindingsFor(const Instance& instance) const;
+    void bindViews(bool clear);
+    observation::ObservationSession session_;
+    QHash<QString, QString> recordedTypes_;
     const ViewerRegistry& registry_;
     QHash<QString, Instance> instances_;
     std::uint64_t dropped_ = 0;

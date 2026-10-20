@@ -7,7 +7,7 @@
 #include <map>
 #include <optional>
 
-namespace s7studio::viewers {
+namespace s7studio::observation {
 
 // Joins N independently delivered coordinate streams into points of one
 // runtime step: a point exists only once every coordinate of that step has
@@ -55,4 +55,4 @@ private:
     std::uint64_t discardedSteps_ = 0;
 };
 
-} // namespace s7studio::viewers
+} // namespace s7studio::observation
