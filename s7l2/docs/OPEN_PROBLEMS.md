@@ -7,6 +7,16 @@ This file replaces three earlier documents (`CODE_REVIEW_REQUIRED_FIXES.md`, `PR
 
 This document lists *what* is unsolved. For *how and in what order* to address it, see `docs/DEVELOPMENT_PLAN.md`.
 
+## R1 completion audit — 2026-10-20
+
+Current confirmed gaps: pause reports success before a worker boundary; sample
+routing consults edited observer types; MainWindow destruction does not explicitly
+join its worker before member/plugin teardown; queued callbacks have no shutdown
+guard. State/error/recovery/edit-during-run stress coverage remains incomplete.
+The R1 completion section of DEVELOPMENT_PLAN.md sequences fixes and deterministic
+acceptance tests. Worker inputs already copy the schema; this audit does not claim
+that parameter edits currently mutate the executing numerical graph.
+
 ## Automated GUI suite priority
 
 **G1 / P1 / local acceptance passed; hosted execution unverified:** Qt Test

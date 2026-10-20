@@ -9,6 +9,28 @@ Status: living document — update in place as phases complete or the sequence c
 
 This is the sequencing companion to `docs/OPEN_PROBLEMS.md`: that document lists what is unsolved, this one orders the work. The next-release section defines the current commitment; the later phases preserve the longer-term backlog.
 
+## R1 lifecycle completion — 2026-10-20
+
+User priority: finish next-step 1, then commit and push. Starting revision
+`b9b5285`; tracked tree clean, the two untracked user prompt files are preserved.
+The preceding baseline passed 61 existing + 4 GUI tests; this increment will
+rebuild and verify lifecycle changes before pushing, without rewriting history.
+
+| Task | Priority / finding | Implementation and affected files | Risks/dependencies | Regression / acceptance | Status |
+|---|---|---|---|---|---|
+| R1a | P0 confirmed: pause is a request but immediately reports paused; polling waits; independently stored flags can obscure transitions | `is_schema_runner.hpp`, `local_schema_runner.*`, `model_run_controller.cpp`: explicit Idle/Preparing/Prepared/Running/Pausing/Paused/Stopping/Stopped/Completed/Error; condition-variable pause acknowledgment at a complete step boundary; state-aware actions and event generation guards | Preserve existing causal stepping; stop/reset remain cooperative and cannot interrupt arbitrary plugin code mid-step | Deterministic gated-element tests for pause boundary, stop while paused/in-flight, repeated pause/resume/stop/reset/rerun and terminal states; no arbitrary sleeps | Planned |
+| R1b | P0 confirmed: worker inputs are copied but no exposed immutable configuration; observer routing still reads edited scene | Frozen run ID/schema/dt/ticks/probe snapshot in runner, run IDs on mailbox batches, frozen MainWindow observer mapping; persistent Run-panel summary and next-run edit notice; isolate changed/new observer IDs and types | Maintain ad-hoc viewers and saved comparisons; observation stays read-only; recording completeness is O1, not this task | Edit params/config/observer wiring during run: current values/routes stay fixed; next run uses edits; viewers created/deleted during transitions receive correct-generation samples | Planned |
+| R1c | P0 confirmed: destructor disconnects worker but joins it only during later QObject-child destruction; callbacks do not check shuttingDown | MainWindow explicit stop/join/reset before member/plugin teardown; invalidate generation and guard all UI callbacks during close/destruction; runner invalidates pending owner events on reset/rerun | Shutdown latency bounded by current element step/build; no unsafe thread cancellation or GUI event-loop pumping while joining | Close/destruct running and paused windows; queue callbacks before close/reset/rerun and verify no view resurrection/status/log contamination; test element destruction after worker exit | Planned |
+| R1d | P0 coverage: preparation errors covered incompletely, worker failure/recovery and rapid transitions lack deterministic gates | Dedicated Qt Test runner and MainWindow lifecycle regressions using test-owned semaphore/condition gates and throwing elements; extend existing lifecycle/GUI tests; update lifecycle docs | Qt owner-thread commands; test gate always released before teardown; no changes to core numerical contracts | Invalid config/build, runtime exception and recovery; immutable snapshot; controller actions; fresh step/run IDs; all targeted, GUI and broader regressions pass | Planned |
+
+Order: commit this plan → runner state/snapshot implementation + deterministic
+runner regressions → MainWindow routing/shutdown and integration tests → update
+living documentation → build/tests → commit → ordinary push to origin/main.
+No recording redesign, numerical-engine change, licensing change or vendor edit
+belongs to this increment. Acceptance requires every R1 row above verified; any
+inherently blocking user/plugin step is documented as a cooperative-stop limit,
+not presented as a universal stop-latency guarantee.
+
 ## Release execution audit — 2026-10-20
 
 This section supersedes the earlier work sequence where priorities differ.
