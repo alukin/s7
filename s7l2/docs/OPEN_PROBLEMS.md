@@ -11,9 +11,11 @@ This document lists *what* is unsolved. For *how and in what order* to address i
 
 Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit.
 
-- **D1 / P0 / confirmed defect:** MainWindow diagram and schema-library writes
-  use truncating QFile writes, ignore short writes and report success before
-  checking persistence. Existing destinations can be damaged on failed writes.
+- **D1 / P0 / resolved:** diagram and schema-library saves now share checked
+  QSaveFile replacement with direct-write fallback disabled. The atomic-file
+  regression verifies actual injected write failure preserves the destination,
+  invalid paths, successful replacement/reopen and recovery. Actual disk exhaustion
+  remains untested; the focused regression and Studio build pass.
 - **D2 / P0 / confirmed defect:** MainWindow::closeEvent has no Save/Discard/Cancel
   guard. Other destructive transitions and nested dirty tracking remain under audit.
 - **O1 / P0 / confirmed limitation; design decision needed:** recording is downstream

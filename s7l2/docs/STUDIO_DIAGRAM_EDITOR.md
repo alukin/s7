@@ -169,3 +169,12 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 ## QSchematic notes
 
 QSchematic lives in `external/QSchematic` and is vendor code: do not edit it; Studio subclasses it. What Studio uses: `Scene` (items, selection, element moves through `ItemMove`, undo stack, the wire manager for connector attachments and junction dots), `View` (zoom, pan, grid), `Node`/`Connector`/`Wire` as base classes. What Studio replaces: QSchematic's `WireMode` (its internals are private and it attaches a wire to any wire it touches) by `DiagramScene::DrawMode`; wire point dragging by the scene's bend editing; the netlist by `NetModel`. Item types are `QSchematicItemUserType + n` (`diagram/items.hpp`). Studio keeps JSON as its file format instead of GPDS.
+
+## Save reliability
+
+Diagram saves and schema-library exports use atomic QSaveFile replacement.
+Studio reports success only after a complete write and successful commit;
+when a replacement fails, the original destination remains intact and the
+new path is not adopted. Direct truncating fallback is disabled.
+The `s7studio_atomic_file` regression injects an actual Linux write failure
+using a child-only file-size limit and verifies destination preservation.

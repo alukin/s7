@@ -31,6 +31,20 @@ Do not change implementation or licenses until this documentation increment is c
 - Workspace writes cover `s7l2` and `/tmp`; repository root, `doc`, and `s7py`
   changes require filesystem approval. No vendored/submodule edits authorized.
 
+### Execution evidence
+
+- Documentation-first commit: `b736b5e`.
+- Baseline build-tests completed successfully (59 registered tests). Full CTest
+  was started before implementation; Studio was subsequently rebuilt during
+  its long numerical cases, so the eventual suite is an integration check,
+  not an immutable-revision baseline run.
+- D1: shared atomic writer used by diagram saves and schema-library exports;
+  complete writes and commit checked, direct truncating fallback disabled.
+  `s7studio_atomic_file` passes: replacement/reopen, invalid destinations,
+  Linux child-process file-size-limit write failure preserving existing bytes,
+  and successful recovery. Studio rebuild passed. Actual disk exhaustion and
+  platform-specific filesystem semantics remain acceptance work.
+
 ### Ordered tasks and acceptance
 
 All rows require a separate logical commit, relevant tests, and synchronized
@@ -39,7 +53,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | ID / priority / category | Modules and current behavior | Required behavior / implementation | Dependencies and risks | Regression tests / acceptance | Status |
 |---|---|---|---|---|---|
 | L1 P1 release infrastructure / rights decision | Root LICENSE says GPLv2; root README grants version 2; `s7spectral` is described as third-party; history contains multiple contributors | Audit tracked ownership and notices, inventory dependencies/assets; migrate verified S7 material to GPL-3.0-or-later, official license plus explicit or-later grant, module notices/SPDX, package notices and automated metadata check; user output is not automatically GPL | First documentation commit; root write access; obtain missing contributor permission rather than assuming ownership; preserve QSchematic/GPDS/Tabler and other vendor licenses | Scan all tracked first-party metadata and modules; CI rejects stale declarations; inspect packaged notices | Audit begun; rights unresolved |
-| D1 P0 confirmed defect | `s7studio/src/main_window.cpp` saveDocumentToPath and library export truncate destinations and ignore write results | Shared atomic QSaveFile writer, verify complete write and commit, disable direct fallback; update path/success state only after commit | Documentation commit; filesystem failure injection must work as root too | Existing-file preservation on open/write/commit failure, successful replacement/reopen and invalid path | Confirmed by source audit; pending implementation |
+| D1 P0 confirmed defect | `s7studio/src/main_window.cpp` saveDocumentToPath and library export truncate destinations and ignore write results | Shared atomic QSaveFile writer, verify complete write and commit, disable direct fallback; update path/success state only after commit | Documentation commit; filesystem failure injection must work as root too | Existing-file preservation on open/write/commit failure, successful replacement/reopen and invalid path | Implemented and focused regression passed |
 | D2 P0 confirmed defect / coverage | MainWindow closeEvent has no unsaved prompt; other replacement paths and nested tabs need audit | Track persisted document state across scene, parameters, probes, nested schemas and run config; central Save/Discard/Cancel guard for every replacement including remote loads and recent files | D1; nested commits and undo cleanliness must agree; failed Save cancels transition | Each dialog choice, nested edits, open/new/recent/close/load, failed save retains dirty state, full config round trip | Close defect confirmed; other paths pending audit |
 | R1 P0 incomplete coverage | LocalSchemaRunner, ModelRunController, MainWindow, ViewerManager, mailbox already have lifecycle tests | Audit Idle/Prepared/Running/Paused/Stopping/Stopped/Error; stop/join on replacement; generation isolation for queued work, immutable active config, actionable failures | D2; Qt queued callbacks and shutdown ordering | Deterministic start/stop/reset/rerun, document replacement running/paused, close, stale callbacks, observers added/deleted, edit-next-run, worker recovery | Pending audit |
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Confirmed limitation; implementation policy pending |

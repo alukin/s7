@@ -1,4 +1,5 @@
 #include "main_window.hpp"
+#include "atomic_file.hpp"
 #include "schema_tabs.hpp"
 #include <QUndoGroup>
 
@@ -2143,18 +2144,14 @@ void MainWindow::saveSchemaLibrary()
     library.elements.push_back(element);
 
     const auto payload = library.to_json();
-    QFile file(outputFile);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+    const auto json = boost::json::serialize(payload);
+    QString error;
+    if (!writeFileAtomically(outputFile, QByteArray::fromStdString(json) + '\n', error)) {
         QMessageBox::critical(this,
                               QStringLiteral("Save library failed"),
-                              QStringLiteral("Failed to write '%1': %2").arg(outputFile, file.errorString()));
+                              QStringLiteral("Failed to write '%1': %2").arg(outputFile, error));
         return;
     }
-
-    const auto json = boost::json::serialize(payload);
-    file.write(QByteArray::fromStdString(json));
-    file.write("\n");
-    file.close();
 
     try {
         s7::SchemaLibraryDefinition registrationOnly;
@@ -2190,17 +2187,13 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
 
     const auto payload = document.toJson();
     const auto json = boost::json::serialize(payload);
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+    QString error;
+    if (!writeFileAtomically(filePath, QByteArray::fromStdString(json) + '\n', error)) {
         QMessageBox::critical(this,
                               QStringLiteral("Save failed"),
-                              QStringLiteral("Failed to write '%1': %2").arg(filePath, file.errorString()));
+                              QStringLiteral("Failed to write '%1': %2").arg(filePath, error));
         return false;
     }
-
-    file.write(QByteArray::fromStdString(json));
-    file.write("\n");
-    file.close();
 
     runtimeSchema_ = document.runtimeSchema;
     currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
