@@ -1,0 +1,320 @@
+{
+  "id": "mass_spring_damper_euler",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 490,
+    "height_mm": 210
+  },
+  "schema": {
+    "name": "mass_spring_damper_euler",
+    "elements": [
+      {
+        "id": "source",
+        "type": "Constant",
+        "params": {
+          "value": 0.0
+        }
+      },
+      {
+        "id": "velocity",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "position",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 1.0
+        }
+      },
+      {
+        "id": "derivative",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1,
+            -4
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "velocity",
+        "from_port": 0,
+        "to_element": "position",
+        "to_port": 0
+      },
+      {
+        "from_element": "source",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 0
+      },
+      {
+        "from_element": "velocity",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 1
+      },
+      {
+        "from_element": "position",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 2
+      },
+      {
+        "from_element": "derivative",
+        "from_port": 0,
+        "to_element": "velocity",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "position",
+      "element": "position",
+      "port": 0,
+      "unit": "m"
+    },
+    {
+      "name": "velocity",
+      "element": "velocity",
+      "port": 0,
+      "unit": "m/s"
+    },
+    {
+      "name": "input",
+      "element": "source",
+      "port": 0,
+      "unit": "N"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "source",
+        "position": [
+          3,
+          18
+        ],
+        "title": "Applied force (N)"
+      },
+      {
+        "id": "velocity",
+        "position": [
+          37,
+          18
+        ],
+        "title": "Velocity (m/s)"
+      },
+      {
+        "id": "position",
+        "position": [
+          51,
+          18
+        ],
+        "title": "Position (m)"
+      },
+      {
+        "id": "derivative",
+        "position": [
+          21,
+          18
+        ],
+        "title": "x'' = F - x' - 4x"
+      },
+      {
+        "id": "scope",
+        "position": [
+          78,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "position",
+            "velocity",
+            "input"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "position",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "position",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "derivative",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "velocity",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "position",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "MASS_SPRING_DAMPER / EULER\nDefault dt=0.001 s (1 kHz); run 10 s, resonance 30 s. Open Scope.\nEquations, units, experiments and limits: examples/linear/README.md.\nState at runtime step k represents (k-1)*dt; Scope labels k*dt.\nExperimental teaching model; manual Studio workflow not yet qualified.",
+          "width": 1650,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

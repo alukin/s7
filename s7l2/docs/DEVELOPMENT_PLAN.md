@@ -65,16 +65,20 @@ independent RK4 or other solvers may provide test references only.
   and a mass–spring–damper. Demonstrate step/impulse response, damping regimes,
   resonance, and electrical/mechanical analogies; reuse the existing oscillator
   and pendulum examples where appropriate.
+  Initial diagrams and headless checks: [linear laboratory](../examples/linear/README.md).
 - [ ] **PI/PID control laboratory:** a first-order plant and a DC motor with load
   torque changes. Compare open loop, P, PI and PID; demonstrate saturation,
   anti-windup, derivative filtering, and reference/disturbance responses using
   the reusable controllers.
+  Initial diagrams and headless checks: [control laboratory](../examples/control/README.md).
 - [ ] **PWM power conversion:** extend the existing `pwm_pid_rlc.s7diagram`
   example into a documented buck-converter exercise with changing load,
   startup, output ripple, and load-step recovery. Check the switching topology
   and energy balance before treating it as a physical converter model.
+  Initial diagrams and headless checks: [synchronous buck](../examples/buck/README.md).
 - [ ] **Relay control:** thermostat/heater with thermal inertia and hysteresis;
   show switching thresholds, overshoot, and the resulting limit cycle.
+  Initial diagrams and headless checks: [thermostat laboratory](../examples/relay/README.md).
 - [ ] **Nonlinear oscillation:** Van der Pol oscillator, with time traces and
   phase portraits showing convergence to a limit cycle.
 - [ ] **Chaos:** Lorenz attractor, with a three-dimensional phase trajectory and
@@ -100,6 +104,9 @@ experimental until its stated validation envelope is checked. Start with the
 linear-response and PI/PID exercises before the nonlinear and synchronization
 models. This checklist records the next session's example work; it does not make
 the entire catalog a next-release acceptance gate.
+The linked laboratories have automated checks within their documented envelopes;
+their manual Studio workflow and edited-instance checks remain outstanding, so
+their checklist items stay open.
 
 ## Later work — retained backlog, not next-release gates
 

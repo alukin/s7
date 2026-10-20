@@ -1,0 +1,617 @@
+{
+  "id": "thermostat_narrow_band",
+  "dt": 0.1,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "thermostat_narrow_band",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "setpoint",
+        "type": "Constant",
+        "params": {
+          "value": 20
+        }
+      },
+      {
+        "id": "ambient",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 15,
+          "final_value": 10,
+          "sample_rate_hz": 10.0,
+          "start_sample": 6000
+        }
+      },
+      {
+        "id": "error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "relay",
+        "type": "HysteresisRelay",
+        "params": {
+          "lower_threshold": -0.1,
+          "upper_threshold": 0.1,
+          "low_value": 0,
+          "high_value": 1,
+          "initial_on": false
+        }
+      },
+      {
+        "id": "heater_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            200,
+            -0.1
+          ]
+        }
+      },
+      {
+        "id": "heater_power",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.1,
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "thermal_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            0.0001,
+            -0.01,
+            0.01
+          ]
+        }
+      },
+      {
+        "id": "temperature",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.1,
+          "initial_value": 18
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "setpoint",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 0
+      },
+      {
+        "from_element": "temperature",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 1
+      },
+      {
+        "from_element": "error",
+        "from_port": 0,
+        "to_element": "relay",
+        "to_port": 0
+      },
+      {
+        "from_element": "relay",
+        "from_port": 0,
+        "to_element": "heater_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "heater_power",
+        "from_port": 0,
+        "to_element": "heater_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "heater_rate",
+        "from_port": 0,
+        "to_element": "heater_power",
+        "to_port": 0
+      },
+      {
+        "from_element": "heater_power",
+        "from_port": 0,
+        "to_element": "thermal_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "temperature",
+        "from_port": 0,
+        "to_element": "thermal_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "ambient",
+        "from_port": 0,
+        "to_element": "thermal_rate",
+        "to_port": 2
+      },
+      {
+        "from_element": "thermal_rate",
+        "from_port": 0,
+        "to_element": "temperature",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "temperature_C",
+      "element": "temperature",
+      "port": 0,
+      "unit": "degC"
+    },
+    {
+      "name": "setpoint_C",
+      "element": "setpoint",
+      "port": 0,
+      "unit": "degC"
+    },
+    {
+      "name": "ambient_C",
+      "element": "ambient",
+      "port": 0,
+      "unit": "degC"
+    },
+    {
+      "name": "heater_W",
+      "element": "heater_power",
+      "port": 0,
+      "unit": "W"
+    },
+    {
+      "name": "on",
+      "element": "relay",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "error_K",
+      "element": "error",
+      "port": 0,
+      "unit": "K"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "setpoint",
+        "position": [
+          3,
+          18
+        ],
+        "title": "setpoint"
+      },
+      {
+        "id": "ambient",
+        "position": [
+          94,
+          58
+        ],
+        "title": "ambient"
+      },
+      {
+        "id": "error",
+        "position": [
+          23,
+          18
+        ],
+        "title": "Setpoint - temperature (K)"
+      },
+      {
+        "id": "relay",
+        "position": [
+          44,
+          18
+        ],
+        "title": "relay"
+      },
+      {
+        "id": "heater_rate",
+        "position": [
+          66,
+          18
+        ],
+        "title": "P' = (2000*relay - P)/10 W/s"
+      },
+      {
+        "id": "heater_power",
+        "position": [
+          88,
+          18
+        ],
+        "title": "Heater power (W)"
+      },
+      {
+        "id": "thermal_rate",
+        "position": [
+          110,
+          18
+        ],
+        "title": "T' = (P - 100*(T-Ta))/10000 K/s"
+      },
+      {
+        "id": "temperature",
+        "position": [
+          132,
+          18
+        ],
+        "title": "Temperature (degC)"
+      },
+      {
+        "id": "temperature_scope",
+        "position": [
+          157,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "temperature_C",
+            "setpoint_C",
+            "ambient_C"
+          ]
+        }
+      },
+      {
+        "id": "heater_scope",
+        "position": [
+          111,
+          58
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "heater_W"
+          ]
+        }
+      },
+      {
+        "id": "relay_scope",
+        "position": [
+          52,
+          58
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "on",
+            "error_K"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "setpoint",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "temperature",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "relay",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "relay",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "heater_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "heater_power",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "heater_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "heater_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "heater_power",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "heater_power",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "thermal_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "temperature",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "thermal_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "ambient",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "thermal_rate",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "thermal_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "temperature",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "temperature",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "temperature_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "setpoint",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "temperature_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "ambient",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "temperature_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "heater_power",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "heater_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "relay",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "relay_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "relay_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "THERMOSTAT_NARROW_BAND\nHeater lag 10 s; setpoint 20 degC; hysteresis +/-0.1 K; ambient 15 -> 10 at 600 s.\nRun 1200 s at 10 Hz; open the scopes.\nEquations, experiments and limits: examples/relay/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

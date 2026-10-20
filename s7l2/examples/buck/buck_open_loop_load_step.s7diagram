@@ -1,0 +1,817 @@
+{
+  "id": "buck_open_loop_load_step",
+  "dt": 1e-05,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "buck_open_loop_load_step",
+    "dt": 1e-05,
+    "elements": [
+      {
+        "id": "switch_24V",
+        "type": "Gain",
+        "params": {
+          "factor": 24
+        }
+      },
+      {
+        "id": "inductor_voltage",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "inverse_L",
+        "type": "Gain",
+        "params": {
+          "factor": 100
+        }
+      },
+      {
+        "id": "inductor_current",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 1e-05
+        }
+      },
+      {
+        "id": "winding_drop",
+        "type": "Gain",
+        "params": {
+          "factor": 0.2
+        }
+      },
+      {
+        "id": "capacitor_current",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "inverse_C",
+        "type": "Gain",
+        "params": {
+          "factor": 1000
+        }
+      },
+      {
+        "id": "output_voltage",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 1e-05
+        }
+      },
+      {
+        "id": "load_current",
+        "type": "Divider",
+        "params": {}
+      },
+      {
+        "id": "reference",
+        "type": "Constant",
+        "params": {
+          "value": 12
+        }
+      },
+      {
+        "id": "load_resistance",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 8,
+          "final_value": 4,
+          "sample_rate_hz": 99999.99999999999,
+          "start_sample": 50000
+        }
+      },
+      {
+        "id": "controller",
+        "type": "Constant",
+        "params": {
+          "value": 0.5
+        }
+      },
+      {
+        "id": "pwm",
+        "type": "PWM",
+        "params": {
+          "period_samples": 100,
+          "sample_rate_hz": 100000
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "switch_24V",
+        "from_port": 0,
+        "to_element": "inductor_voltage",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_voltage",
+        "from_port": 0,
+        "to_element": "inductor_voltage",
+        "to_port": 1
+      },
+      {
+        "from_element": "winding_drop",
+        "from_port": 0,
+        "to_element": "inductor_voltage",
+        "to_port": 2
+      },
+      {
+        "from_element": "inductor_voltage",
+        "from_port": 0,
+        "to_element": "inverse_L",
+        "to_port": 0
+      },
+      {
+        "from_element": "inverse_L",
+        "from_port": 0,
+        "to_element": "inductor_current",
+        "to_port": 0
+      },
+      {
+        "from_element": "inductor_current",
+        "from_port": 0,
+        "to_element": "winding_drop",
+        "to_port": 0
+      },
+      {
+        "from_element": "inductor_current",
+        "from_port": 0,
+        "to_element": "capacitor_current",
+        "to_port": 0
+      },
+      {
+        "from_element": "load_current",
+        "from_port": 0,
+        "to_element": "capacitor_current",
+        "to_port": 1
+      },
+      {
+        "from_element": "capacitor_current",
+        "from_port": 0,
+        "to_element": "inverse_C",
+        "to_port": 0
+      },
+      {
+        "from_element": "inverse_C",
+        "from_port": 0,
+        "to_element": "output_voltage",
+        "to_port": 0
+      },
+      {
+        "from_element": "output_voltage",
+        "from_port": 0,
+        "to_element": "load_current",
+        "to_port": 0
+      },
+      {
+        "from_element": "load_resistance",
+        "from_port": 0,
+        "to_element": "load_current",
+        "to_port": 1
+      },
+      {
+        "from_element": "controller",
+        "from_port": 0,
+        "to_element": "pwm",
+        "to_port": 0
+      },
+      {
+        "from_element": "pwm",
+        "from_port": 0,
+        "to_element": "switch_24V",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "reference_V",
+      "element": "reference",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "voltage_V",
+      "element": "output_voltage",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "inductor_A",
+      "element": "inductor_current",
+      "port": 0,
+      "unit": "A"
+    },
+    {
+      "name": "load_A",
+      "element": "load_current",
+      "port": 0,
+      "unit": "A"
+    },
+    {
+      "name": "duty",
+      "element": "controller",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "gate",
+      "element": "pwm",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "resistance_ohm",
+      "element": "load_resistance",
+      "port": 0,
+      "unit": "ohm"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "switch_24V",
+        "position": [
+          88,
+          18
+        ],
+        "title": "switch_24V"
+      },
+      {
+        "id": "inductor_voltage",
+        "position": [
+          100,
+          18
+        ],
+        "title": "inductor_voltage"
+      },
+      {
+        "id": "inverse_L",
+        "position": [
+          112,
+          18
+        ],
+        "title": "inverse_L"
+      },
+      {
+        "id": "inductor_current",
+        "position": [
+          124,
+          18
+        ],
+        "title": "inductor_current"
+      },
+      {
+        "id": "winding_drop",
+        "position": [
+          112,
+          31
+        ],
+        "title": "winding_drop"
+      },
+      {
+        "id": "capacitor_current",
+        "position": [
+          136,
+          18
+        ],
+        "title": "capacitor_current"
+      },
+      {
+        "id": "inverse_C",
+        "position": [
+          148,
+          18
+        ],
+        "title": "inverse_C"
+      },
+      {
+        "id": "output_voltage",
+        "position": [
+          160,
+          18
+        ],
+        "title": "output_voltage"
+      },
+      {
+        "id": "load_current",
+        "position": [
+          148,
+          37
+        ],
+        "title": "load_current"
+      },
+      {
+        "id": "reference",
+        "position": [
+          3,
+          18
+        ],
+        "title": "reference"
+      },
+      {
+        "id": "load_resistance",
+        "position": [
+          130,
+          58
+        ],
+        "title": "load_resistance"
+      },
+      {
+        "id": "controller",
+        "position": [
+          54,
+          18
+        ],
+        "title": "controller"
+      },
+      {
+        "id": "pwm",
+        "position": [
+          76,
+          18
+        ],
+        "title": "pwm"
+      },
+      {
+        "id": "voltage_scope",
+        "position": [
+          179,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "reference_V",
+            "voltage_V"
+          ]
+        }
+      },
+      {
+        "id": "current_scope",
+        "position": [
+          179,
+          38
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "inductor_A",
+            "load_A"
+          ]
+        }
+      },
+      {
+        "id": "switching_scope",
+        "position": [
+          76,
+          60
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "duty",
+            "gate"
+          ]
+        }
+      },
+      {
+        "id": "load_scope",
+        "position": [
+          155,
+          60
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "resistance_ohm"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "switch_24V",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_voltage",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "winding_drop",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_voltage",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "inductor_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inverse_L",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "inverse_L",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inductor_current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "inductor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "winding_drop",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "inductor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "capacitor_current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "load_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "capacitor_current",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "capacitor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "inverse_C",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "inverse_C",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "load_resistance",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_current",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pwm",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "pwm",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "switch_24V",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "output_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "inductor_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "load_current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "switching_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "pwm",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "switching_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "load_resistance",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "load_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "BUCK_OPEN_LOOP_LOAD_STEP\n24 V synchronous buck; R: 8 -> 4 ohm at 0.5 s; PWM 1 kHz.\nRun 1 s at 100000 Hz; open the scopes.\nEquations, experiments and limits: examples/buck/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

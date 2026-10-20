@@ -1,0 +1,1336 @@
+{
+  "id": "dc_motor_pid",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 450
+  },
+  "schema": {
+    "name": "dc_motor_pid",
+    "dt": 0.001,
+    "elements": [
+      {
+        "id": "reference_step",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 0.6,
+          "sample_rate_hz": 1000.0,
+          "start_sample": 500
+        }
+      },
+      {
+        "id": "overload",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 1.4,
+          "sample_rate_hz": 1000.0,
+          "start_sample": 2000
+        }
+      },
+      {
+        "id": "release",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": -1.4,
+          "sample_rate_hz": 1000.0,
+          "start_sample": 4000
+        }
+      },
+      {
+        "id": "reference",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "load",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 0.1,
+          "sample_rate_hz": 1000.0,
+          "start_sample": 6000
+        }
+      },
+      {
+        "id": "error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "controller",
+        "type": "PIDController",
+        "params": {},
+        "schema": {
+          "name": "PIDController",
+          "elements": [
+            {
+              "id": "error",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "measurement",
+              "type": "Gain",
+              "params": {
+                "factor": 1
+              }
+            },
+            {
+              "id": "p",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_gain",
+              "type": "Multiply",
+              "params": {}
+            },
+            {
+              "id": "i_rate",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  10
+                ]
+              }
+            },
+            {
+              "id": "i_state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.001
+              }
+            },
+            {
+              "id": "sum",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "limit",
+              "type": "Saturation",
+              "params": {
+                "lower_limit": -1,
+                "upper_limit": 1
+              }
+            },
+            {
+              "id": "tracking",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "filter_difference",
+              "type": "Adder",
+              "params": {
+                "weights": [
+                  1,
+                  -1
+                ]
+              }
+            },
+            {
+              "id": "filter_rate",
+              "type": "Divider",
+              "params": {}
+            },
+            {
+              "id": "filter_state",
+              "type": "EulerIntegrator",
+              "params": {
+                "dt": 0.001
+              }
+            },
+            {
+              "id": "derivative",
+              "type": "Multiply",
+              "params": {}
+            }
+          ],
+          "connections": [
+            {
+              "from_element": "measurement",
+              "from_port": 0,
+              "to_element": "error",
+              "to_port": 1
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "p",
+              "to_port": 0
+            },
+            {
+              "from_element": "error",
+              "from_port": 0,
+              "to_element": "i_gain",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_gain",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "tracking",
+              "from_port": 0,
+              "to_element": "i_rate",
+              "to_port": 1
+            },
+            {
+              "from_element": "i_rate",
+              "from_port": 0,
+              "to_element": "i_state",
+              "to_port": 0
+            },
+            {
+              "from_element": "p",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 0
+            },
+            {
+              "from_element": "i_state",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 1
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "limit",
+              "to_port": 0
+            },
+            {
+              "from_element": "limit",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 0
+            },
+            {
+              "from_element": "sum",
+              "from_port": 0,
+              "to_element": "tracking",
+              "to_port": 1
+            },
+            {
+              "from_element": "measurement",
+              "from_port": 0,
+              "to_element": "filter_difference",
+              "to_port": 0
+            },
+            {
+              "from_element": "filter_state",
+              "from_port": 0,
+              "to_element": "filter_difference",
+              "to_port": 1
+            },
+            {
+              "from_element": "filter_difference",
+              "from_port": 0,
+              "to_element": "filter_rate",
+              "to_port": 0
+            },
+            {
+              "from_element": "filter_rate",
+              "from_port": 0,
+              "to_element": "filter_state",
+              "to_port": 0
+            },
+            {
+              "from_element": "filter_rate",
+              "from_port": 0,
+              "to_element": "derivative",
+              "to_port": 0
+            },
+            {
+              "from_element": "derivative",
+              "from_port": 0,
+              "to_element": "sum",
+              "to_port": 2
+            }
+          ],
+          "exposed_inputs": [
+            {
+              "name": "reference",
+              "type": "F64",
+              "element": "error",
+              "port": 0
+            },
+            {
+              "name": "measurement",
+              "type": "F64",
+              "element": "measurement",
+              "port": 0
+            },
+            {
+              "name": "kp",
+              "type": "F64",
+              "element": "p",
+              "port": 1
+            },
+            {
+              "name": "ki",
+              "type": "F64",
+              "element": "i_gain",
+              "port": 1
+            },
+            {
+              "name": "kd",
+              "type": "F64",
+              "element": "derivative",
+              "port": 1
+            },
+            {
+              "name": "tau",
+              "type": "F64",
+              "element": "filter_rate",
+              "port": 1
+            }
+          ],
+          "exposed_outputs": [
+            {
+              "name": "control",
+              "type": "F64",
+              "element": "limit",
+              "port": 0
+            },
+            {
+              "name": "unlimited",
+              "type": "F64",
+              "element": "sum",
+              "port": 0
+            }
+          ],
+          "dt": 0.001
+        }
+      },
+      {
+        "id": "kp",
+        "type": "Constant",
+        "params": {
+          "value": 1.2
+        }
+      },
+      {
+        "id": "ki",
+        "type": "Constant",
+        "params": {
+          "value": 2
+        }
+      },
+      {
+        "id": "kd",
+        "type": "Constant",
+        "params": {
+          "value": 0.02
+        }
+      },
+      {
+        "id": "filter_tau",
+        "type": "Constant",
+        "params": {
+          "value": 0.03
+        }
+      },
+      {
+        "id": "armature_voltage",
+        "type": "Gain",
+        "params": {
+          "factor": 4
+        }
+      },
+      {
+        "id": "current_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            10,
+            -10,
+            -5
+          ]
+        }
+      },
+      {
+        "id": "current",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "speed_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            5,
+            -1,
+            -10
+          ]
+        }
+      },
+      {
+        "id": "speed",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "output",
+        "type": "Gain",
+        "params": {
+          "factor": 0.2
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference_step",
+        "from_port": 0,
+        "to_element": "reference",
+        "to_port": 0
+      },
+      {
+        "from_element": "overload",
+        "from_port": 0,
+        "to_element": "reference",
+        "to_port": 1
+      },
+      {
+        "from_element": "release",
+        "from_port": 0,
+        "to_element": "reference",
+        "to_port": 2
+      },
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 0
+      },
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 0
+      },
+      {
+        "from_element": "kp",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 2
+      },
+      {
+        "from_element": "ki",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 3
+      },
+      {
+        "from_element": "kd",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 4
+      },
+      {
+        "from_element": "filter_tau",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 5
+      },
+      {
+        "from_element": "controller",
+        "from_port": 0,
+        "to_element": "armature_voltage",
+        "to_port": 0
+      },
+      {
+        "from_element": "armature_voltage",
+        "from_port": 0,
+        "to_element": "current_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "current",
+        "from_port": 0,
+        "to_element": "current_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "speed",
+        "from_port": 0,
+        "to_element": "current_rate",
+        "to_port": 2
+      },
+      {
+        "from_element": "current_rate",
+        "from_port": 0,
+        "to_element": "current",
+        "to_port": 0
+      },
+      {
+        "from_element": "current",
+        "from_port": 0,
+        "to_element": "speed_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "speed",
+        "from_port": 0,
+        "to_element": "speed_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "load",
+        "from_port": 0,
+        "to_element": "speed_rate",
+        "to_port": 2
+      },
+      {
+        "from_element": "speed_rate",
+        "from_port": 0,
+        "to_element": "speed",
+        "to_port": 0
+      },
+      {
+        "from_element": "speed",
+        "from_port": 0,
+        "to_element": "output",
+        "to_port": 0
+      },
+      {
+        "from_element": "output",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 1
+      },
+      {
+        "from_element": "output",
+        "from_port": 0,
+        "to_element": "controller",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "current_A",
+      "element": "current",
+      "port": 0,
+      "unit": "A"
+    },
+    {
+      "name": "speed_rad_s",
+      "element": "speed",
+      "port": 0,
+      "unit": "rad/s"
+    },
+    {
+      "name": "reference",
+      "element": "reference",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "output",
+      "element": "output",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "error",
+      "element": "error",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "control",
+      "element": "controller",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "unlimited",
+      "element": "controller",
+      "port": 1,
+      "unit": "1"
+    },
+    {
+      "name": "load",
+      "element": "load",
+      "port": 0,
+      "unit": "N m"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "reference_step",
+        "position": [
+          3,
+          18
+        ],
+        "title": "reference_step"
+      },
+      {
+        "id": "overload",
+        "position": [
+          3,
+          30
+        ],
+        "title": "overload"
+      },
+      {
+        "id": "release",
+        "position": [
+          3,
+          42
+        ],
+        "title": "release"
+      },
+      {
+        "id": "reference",
+        "position": [
+          24,
+          18
+        ],
+        "title": "reference"
+      },
+      {
+        "id": "load",
+        "position": [
+          84,
+          56
+        ],
+        "title": "load"
+      },
+      {
+        "id": "error",
+        "position": [
+          43,
+          18
+        ],
+        "title": "error"
+      },
+      {
+        "id": "controller",
+        "position": [
+          64,
+          18
+        ],
+        "title": "controller"
+      },
+      {
+        "id": "kp",
+        "position": [
+          44,
+          34
+        ],
+        "title": "kp"
+      },
+      {
+        "id": "ki",
+        "position": [
+          44,
+          44
+        ],
+        "title": "ki"
+      },
+      {
+        "id": "kd",
+        "position": [
+          44,
+          54
+        ],
+        "title": "kd"
+      },
+      {
+        "id": "filter_tau",
+        "position": [
+          44,
+          64
+        ],
+        "title": "filter_tau"
+      },
+      {
+        "id": "armature_voltage",
+        "position": [
+          85,
+          18
+        ],
+        "title": "Va = 4*u V"
+      },
+      {
+        "id": "current_rate",
+        "position": [
+          104,
+          18
+        ],
+        "title": "i' = (Va - i - 0.5*omega)/0.1"
+      },
+      {
+        "id": "current",
+        "position": [
+          126,
+          18
+        ],
+        "title": "Current (A)"
+      },
+      {
+        "id": "speed_rate",
+        "position": [
+          126,
+          40
+        ],
+        "title": "omega' = (0.5*i - 0.1*omega - load)/0.1"
+      },
+      {
+        "id": "speed",
+        "position": [
+          148,
+          40
+        ],
+        "title": "Speed (rad/s)"
+      },
+      {
+        "id": "output",
+        "position": [
+          148,
+          18
+        ],
+        "title": "Normalized speed = omega / 5"
+      },
+      {
+        "id": "motor_scope",
+        "position": [
+          170,
+          40
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "current_A",
+            "speed_rad_s"
+          ]
+        }
+      },
+      {
+        "id": "response_scope",
+        "position": [
+          170,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "reference",
+            "output",
+            "error"
+          ]
+        }
+      },
+      {
+        "id": "actuator_scope",
+        "position": [
+          170,
+          62
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "control",
+            "unlimited",
+            "load"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "reference_step",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "overload",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "release",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "reference",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "kp",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "ki",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "kd",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            4
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "filter_tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            5
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "armature_voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "armature_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "speed",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current_rate",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "current_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "current",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "speed_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "speed",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "speed_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "load",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "speed_rate",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "speed_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "speed",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "speed",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "current",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "motor_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "speed",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "motor_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "controller",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "output",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "actuator_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "controller",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "actuator_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "load",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "actuator_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "DC_MOTOR_PID\nReference: 0 -> 0.6 at 0.5 s, 2 at 2 s, 0.6 at 4 s; load step at 6 s.\nRun 12 s at 1000 Hz; open the scopes.\nEquations, experiments and limits: examples/control/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "width": 2600,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

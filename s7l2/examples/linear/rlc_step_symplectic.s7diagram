@@ -1,0 +1,345 @@
+{
+  "id": "rlc_step_symplectic",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 490,
+    "height_mm": 210
+  },
+  "schema": {
+    "name": "rlc_step_symplectic",
+    "elements": [
+      {
+        "id": "source",
+        "type": "Constant",
+        "params": {
+          "value": 1.0
+        }
+      },
+      {
+        "id": "state",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 0.0,
+          "initial_velocity": 0
+        }
+      },
+      {
+        "id": "derivative",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1,
+            -4
+          ]
+        }
+      },
+      {
+        "id": "capacitor_voltage",
+        "type": "Gain",
+        "params": {
+          "factor": 4
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "source",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 0
+      },
+      {
+        "from_element": "state",
+        "from_port": 1,
+        "to_element": "derivative",
+        "to_port": 1
+      },
+      {
+        "from_element": "state",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 2
+      },
+      {
+        "from_element": "derivative",
+        "from_port": 0,
+        "to_element": "state",
+        "to_port": 0
+      },
+      {
+        "from_element": "state",
+        "from_port": 0,
+        "to_element": "capacitor_voltage",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "charge",
+      "element": "state",
+      "port": 0,
+      "unit": "C"
+    },
+    {
+      "name": "current",
+      "element": "state",
+      "port": 1,
+      "unit": "A"
+    },
+    {
+      "name": "capacitor_voltage",
+      "element": "capacitor_voltage",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "input",
+      "element": "source",
+      "port": 0,
+      "unit": "V"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "source",
+        "position": [
+          3,
+          18
+        ],
+        "title": "Applied voltage (V)"
+      },
+      {
+        "id": "state",
+        "position": [
+          47,
+          18
+        ],
+        "title": "Charge / current"
+      },
+      {
+        "id": "derivative",
+        "position": [
+          21,
+          18
+        ],
+        "title": "q'' = Vs - q' - 4q"
+      },
+      {
+        "id": "capacitor_voltage",
+        "position": [
+          65,
+          12
+        ],
+        "title": "Vc = q/C (V)"
+      },
+      {
+        "id": "scope",
+        "position": [
+          78,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "charge",
+            "current",
+            "capacitor_voltage",
+            "input"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "derivative",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "capacitor_voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "capacitor_voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "RLC_STEP / SYMPLECTIC\nDefault dt=0.001 s (1 kHz); run 10 s, resonance 30 s. Open Scope.\nEquations, units, experiments and limits: examples/linear/README.md.\nState at runtime step k represents (k-1)*dt; Scope labels k*dt.\nExperimental teaching model; manual Studio workflow not yet qualified.",
+          "width": 1650,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

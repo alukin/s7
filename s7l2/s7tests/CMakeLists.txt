@@ -7,6 +7,19 @@
 # they follow (s7::Schema has no schema-wide dt, so each test picks one and
 # passes it explicitly to every element that needs it).
 
+s7_add_test_executable(s7tests_linear_examples_smoke linear_examples_smoke.cpp)
+target_link_libraries(s7tests_linear_examples_smoke PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_linear_examples_smoke PRIVATE
+    S7_LINEAR_DIR="${PROJECT_SOURCE_DIR}/examples/linear")
+add_test(NAME s7tests_linear_examples_smoke COMMAND s7tests_linear_examples_smoke)
+
+s7_add_test_executable(s7tests_control_examples_smoke control_examples_smoke.cpp)
+target_link_libraries(s7tests_control_examples_smoke PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_control_examples_smoke PRIVATE
+    S7_EDUCATIONAL_DIR="${PROJECT_SOURCE_DIR}/examples")
+add_test(NAME s7tests_control_examples_smoke COMMAND s7tests_control_examples_smoke)
+set_tests_properties(s7tests_control_examples_smoke PROPERTIES TIMEOUT 120)
+
 s7_add_test_executable(s7tests_linear_scalar_smoke linear_scalar_smoke.cpp)
 target_link_libraries(s7tests_linear_scalar_smoke PRIVATE s7core)
 add_test(NAME s7tests_linear_scalar_smoke COMMAND s7tests_linear_scalar_smoke)
