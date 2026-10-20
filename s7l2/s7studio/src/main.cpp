@@ -640,7 +640,7 @@ int runRecentDiagramsCheck(int argc, char** argv)
         for (auto* action : menu->actions()) if (action->data().toString() == paths[5]) older = action;
         require(older, "Recent diagram menu entry missing");
         older->trigger();
-        require(recent().front() == paths[5] && window.windowTitle().endsWith(QStringLiteral("recent_5")),
+        require(recent().front() == paths[5] && window.windowTitle().remove(QStringLiteral("[*]")).endsWith(QStringLiteral("recent_5")),
             "Recent menu did not open and promote the chosen file");
         QMetaObject::invokeMethod(&window, "saveDocument", Qt::DirectConnection);
         require(recent().front() == paths[5], "Saving did not retain current diagram history");
@@ -649,7 +649,7 @@ int runRecentDiagramsCheck(int argc, char** argv)
     }
     {
         s7studio::MainWindow restored;
-        require(restored.windowTitle().endsWith(QStringLiteral("recent_5")), "Startup did not restore latest diagram");
+        require(restored.windowTitle().remove(QStringLiteral("[*]")).endsWith(QStringLiteral("recent_5")), "Startup did not restore latest diagram");
         // Loading can run the event loop while hidden; the fit must wait for
         // the shown window's real viewport, and fit the sheet, not its nodes.
         app.processEvents();
@@ -687,21 +687,21 @@ int runRecentDiagramsCheck(int argc, char** argv)
     broken.write("invalid JSON"); broken.close();
     {
         s7studio::MainWindow restored;
-        require(restored.windowTitle().endsWith(QStringLiteral("recent_2")), "Corrupt recent file did not fall back");
+        require(restored.windowTitle().remove(QStringLiteral("[*]")).endsWith(QStringLiteral("recent_2")), "Corrupt recent file did not fall back");
     }
     require(QFile::remove(paths[2]), "Cannot remove missing-file fixture");
     {
         s7studio::MainWindow restored;
-        require(restored.windowTitle().endsWith(QStringLiteral("recent_10")), "Missing recent file did not fall back");
+        require(restored.windowTitle().remove(QStringLiteral("[*]")).endsWith(QStringLiteral("recent_10")), "Missing recent file did not fall back");
         auto* menu = restored.findChild<QMenu*>(QStringLiteral("menu.recentDiagrams"));
         for (auto* action : menu->actions()) if (action->data().toString() == paths[2])
             require(!action->isEnabled(), "Missing recent file was not disabled");
     }
     {
         s7studio::MainWindow explicitFile(nullptr, false);
-        require(!explicitFile.windowTitle().endsWith(QStringLiteral("recent_10")), "Explicit-file startup restored history");
+        require(!explicitFile.windowTitle().remove(QStringLiteral("[*]")).endsWith(QStringLiteral("recent_10")), "Explicit-file startup restored history");
         explicitFile.openPath(paths[1]);
-        require(explicitFile.windowTitle().endsWith(QStringLiteral("recent_1")), "Explicit startup file did not win");
+        require(explicitFile.windowTitle().remove(QStringLiteral("[*]")).endsWith(QStringLiteral("recent_1")), "Explicit startup file did not win");
         explicitFile.findChild<QAction*>(QStringLiteral("action.clearRecentDiagrams"))->trigger();
         require(recent().isEmpty(), "Clearing recent diagrams did not persist");
     }

@@ -347,6 +347,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
     appendLog("[studio] Local embedded runtime ready");
     restoreWindowLayout();
     if (restoreStartupDiagram) this->restoreStartupDiagram();
+    markDocumentSaved();
     refreshActions();
     onStatusChanged("idle");
 }
@@ -1222,6 +1223,12 @@ void MainWindow::connectSceneSignals()
     connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::onProbesChanged, Qt::UniqueConnection);
     wireTypeTimer_->start();
     onProbesChanged();
+    auto* modifiedTimer = new QTimer(this);
+    modifiedTimer->setSingleShot(true);
+    modifiedTimer->setInterval(150);
+    connect(modifiedTimer, &QTimer::timeout, this, [this] { setWindowModified(documentModified()); });
+    connect(scene, &diagram::DiagramScene::diagramChanged, modifiedTimer, qOverload<>(&QTimer::start));
+    connect(scene, &diagram::DiagramScene::probesChanged, modifiedTimer, qOverload<>(&QTimer::start));
 }
 
 void MainWindow::refreshWireTypeLabels()
@@ -1545,6 +1552,33 @@ void MainWindow::clearViewerSamples()
     viewers_->clearSamples();
 }
 
+bool MainWindow::documentModified() const
+{
+    return hasSavedDocument_ && currentDocument() != savedDocument_;
+}
+
+void MainWindow::markDocumentSaved()
+{
+    savedDocument_ = currentDocument();
+    hasSavedDocument_ = true;
+    setWindowModified(false);
+}
+
+bool MainWindow::confirmDocumentReplacement()
+{
+    // Nested edits normally propagate immediately; a failed propagation must
+    // never be interpreted as a clean document.
+    const bool committed = !schemaTabs_ || schemaTabs_->commitAll();
+    if (committed && !documentModified()) return true;
+    const auto choice = QMessageBox::warning(this, QStringLiteral("Unsaved changes"),
+        QStringLiteral("Save changes to the current diagram before continuing?"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (choice == QMessageBox::Discard) return true;
+    if (choice != QMessageBox::Save || !committed) return false;
+    saveDocument();
+    return !documentModified();
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
     if (shuttingDown_) {
@@ -1552,6 +1586,10 @@ void MainWindow::closeEvent(QCloseEvent* event)
         return;
     }
 
+    if (!confirmDocumentReplacement()) {
+        event->ignore();
+        return;
+    }
     shuttingDown_ = true;
     saveWindowLayout();
     if (diagramEditor_ && diagramEditor_->scene()) {
@@ -1635,6 +1673,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     }
 
     applyDiscretizationFrequency(frequencySpin->value());
+    setWindowModified(documentModified());
 
     if (launchAfterAccept) {
         launchRunWithCurrentConfiguration();
@@ -1698,14 +1737,18 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
     return s7::configure_schema_discretization(schema,dtSeconds);
 }
 
-void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
+bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
+    if (runner_) runner_->reset();
     if (schemaTabs_) schemaTabs_->reset();
 
     closeViewers();
     clearViewerSamples();
 
     runtimeSchema_ = schemaJson;
+    runtimeSeconds_ = 60;
+    clearScopesBeforeRun_ = true;
+    if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(false);
     deploymentRuntimeNodes_.clear();
     deploymentStreams_.clear();
 
@@ -1721,11 +1764,15 @@ void MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
     const auto name = schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded schema: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded schema: %1").arg(name), 5000);
-    setWindowTitle(QString("s7studio - %1").arg(name));
+    setWindowTitle(QString("s7studio - %1[*]").arg(name));
+    markDocumentSaved();
+    return true;
 }
 
-void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
+bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
+    const auto document = diagram::DiagramDocument::fromJson(diagramJson);
+    if (runner_) runner_->reset();
     if (schemaTabs_) schemaTabs_->reset();
 
     closeViewers();
@@ -1749,10 +1796,15 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     };
     updateProgress(0);
 
-    const auto document = diagram::DiagramDocument::fromJson(diagramJson);
     runtimeSchema_ = document.runtimeSchema;
     deploymentRuntimeNodes_ = document.runtimeNodes;
     deploymentStreams_ = document.streams;
+
+    runtimeSeconds_ = document.runConfiguration.contains("runtime_seconds")
+        ? document.runConfiguration.at("runtime_seconds").to_number<long>() : 60;
+    clearScopesBeforeRun_ = !document.runConfiguration.contains("clear_scope_traces")
+        || document.runConfiguration.at("clear_scope_traces").as_bool();
+    if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(!clearScopesBeforeRun_);
 
     if (document.dt > 0.0) {
         discretizationFrequencyHz_ = 1.0 / document.dt;
@@ -1773,9 +1825,11 @@ void MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded diagram: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded diagram: %1").arg(name), 5000);
-    setWindowTitle(QString("s7studio - %1").arg(name));
+    setWindowTitle(QString("s7studio - %1[*]").arg(name));
     updateProgress(100);
     loading.close();
+    markDocumentSaved();
+    return true;
 }
 
 void MainWindow::refreshRecentDiagrams()
@@ -1826,9 +1880,12 @@ void MainWindow::rememberRecentDiagram(const QString& path)
 bool MainWindow::openRecentDiagram(const QString& path, bool interactive)
 {
     try {
-        const auto parsed = json_utils::parseFile(path);
+        auto parsed = json_utils::parseFile(path);
         if (!isDiagramDocument(parsed)) throw std::runtime_error("The recent file is no longer a diagram");
-        loadDiagramJson(parsed, QFileInfo(path).fileName());
+        static_cast<void>(diagram::DiagramDocument::fromJson(parsed));
+        if (!confirmDocumentReplacement()) return false;
+        parsed = json_utils::parseFile(path);
+        if (!loadDiagramJson(parsed, QFileInfo(path).fileName())) return false;
         currentDiagramPath_ = QFileInfo(path).absoluteFilePath();
         rememberRecentDiagram(path);
         return true;
@@ -1859,11 +1916,10 @@ void MainWindow::openDocumentFile()
 
 void MainWindow::closeCurrentDiagram()
 {
+    if (!confirmDocumentReplacement()) return;
     if (schemaTabs_) schemaTabs_->reset();
 
-    if (runner_ && runner_->isRunning()) {
-        runner_->reset();
-    }
+    if (runner_) runner_->reset();
 
     closeViewers();
     clearViewerSamples();
@@ -1874,6 +1930,9 @@ void MainWindow::closeCurrentDiagram()
         {"connections", boost::json::array{}}
     };
     currentDiagramPath_.clear();
+    runtimeSeconds_ = 60;
+    clearScopesBeforeRun_ = true;
+    if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(false);
     deploymentRuntimeNodes_.clear();
     deploymentStreams_.clear();
 
@@ -1884,7 +1943,8 @@ void MainWindow::closeCurrentDiagram()
         syncTextFrameStyleControls();
     }
 
-    setWindowTitle(QStringLiteral("s7studio - untitled"));
+    markDocumentSaved();
+    setWindowTitle(QStringLiteral("s7studio - untitled[*]"));
     appendLog(QStringLiteral("[studio] closed diagram"));
     statusBar()->showMessage(QStringLiteral("Diagram closed"), 4000);
     onStatusChanged(QStringLiteral("idle"));
@@ -1942,19 +2002,22 @@ void MainWindow::openJsonDocument(const QString& dialogTitle,
 void MainWindow::openPath(const QString& filePath, const bool preferDiagram, const QString& errorTitle)
 {
     try {
-        const auto parsed = json_utils::parseFile(filePath);
+        auto parsed = json_utils::parseFile(filePath);
         const auto sourceLabel = QFileInfo(filePath).fileName();
         if (isElementLibraryDocument(parsed)) {
             loadElementLibraryJson(parsed, sourceLabel);
             return;
         }
         const bool diagramDocument = isDiagramDocument(parsed);
+        if (diagramDocument) static_cast<void>(diagram::DiagramDocument::fromJson(parsed));
+        if (!confirmDocumentReplacement()) return;
+        parsed = json_utils::parseFile(filePath);
         if (diagramDocument) {
-            loadDiagramJson(parsed, sourceLabel);
+            if (!loadDiagramJson(parsed, sourceLabel)) return;
             currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
             rememberRecentDiagram(filePath);
         } else {
-            loadSchemaJson(parsed, sourceLabel);
+            if (!loadSchemaJson(parsed, sourceLabel)) return;
             currentDiagramPath_.clear();
             if (preferDiagram) {
                 appendLog(QString("[studio] file '%1' is a runtime schema; showing synthesized diagram view").arg(sourceLabel));
@@ -2007,14 +2070,15 @@ void MainWindow::loadElementLibrary()
 
 void MainWindow::loadDemoDiagram()
 {
+    if (!confirmDocumentReplacement()) return;
     try {
         const auto filePath = QString::fromUtf8(kBundledDemoDiagramPath);
         const auto parsed = json_utils::parseFile(filePath);
         const auto sourceLabel = QFileInfo(filePath).fileName();
         if (isDiagramDocument(parsed)) {
-            loadDiagramJson(parsed, sourceLabel);
+            if (!loadDiagramJson(parsed, sourceLabel)) return;
         } else {
-            loadSchemaJson(parsed, sourceLabel);
+            if (!loadSchemaJson(parsed, sourceLabel)) return;
         }
     } catch (const std::exception& ex) {
         appendLog(QStringLiteral("[studio] failed to load bundled demo: %1").arg(QString::fromUtf8(ex.what())));
@@ -2196,6 +2260,7 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
     }
 
     runtimeSchema_ = document.runtimeSchema;
+    markDocumentSaved();
     currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
     rememberRecentDiagram(filePath);
     appendLog(QString("[studio] saved diagram: %1").arg(QFileInfo(filePath).fileName()));
@@ -2220,6 +2285,7 @@ auto MainWindow::serializeScene() const -> diagram::DiagramDocument
     options.sheetWidthMm = pageLayout.widthMm;
     options.sheetHeightMm = pageLayout.heightMm;
     auto document = diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+    document.runConfiguration = {{"runtime_seconds", runtimeSeconds_}, {"clear_scope_traces", clearScopesBeforeRun_}};
     // The plugins the elements come from, so a runtime (or Studio) can find them.
     auto& schema = document.runtimeSchema.as_object();
     if (auto requirements = pluginLoader_ ? pluginRequirements(schema, *pluginLoader_) : boost::json::array{}; requirements.empty()) {
@@ -2544,9 +2610,10 @@ void MainWindow::openDeployedDiagram()
                 QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QStringLiteral("Request failed: %1").arg(error));
                 return;
             }
+            if (!confirmDocumentReplacement()) return;
             const auto revision = response.at("revision").to_number<std::uint64_t>();
             try {
-                loadDiagramJson(response.at("diagram"), QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision));
+                if (!loadDiagramJson(response.at("diagram"), QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision))) return;
             } catch (const std::exception& ex) {
                 QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QString::fromUtf8(ex.what()));
             }

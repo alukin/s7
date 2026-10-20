@@ -95,6 +95,17 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
         }
     }
 
+    if (const auto* config = root.if_contains("studio_run")) {
+        if (!config->is_object()) throw std::invalid_argument("studio_run must be an object");
+        doc.runConfiguration = config->as_object();
+        if (const auto* seconds = doc.runConfiguration.if_contains("runtime_seconds")) {
+            if (!seconds->is_int64() || seconds->as_int64() < -1 || seconds->as_int64() > 604800)
+                throw std::invalid_argument("studio_run.runtime_seconds must be an integer in [-1, 604800]");
+        }
+        if (const auto* clear = doc.runConfiguration.if_contains("clear_scope_traces"); clear && !clear->is_bool())
+            throw std::invalid_argument("studio_run.clear_scope_traces must be boolean");
+    }
+
     // Store the runtime schema (or reconstruct from diagram if needed)
     if (auto it = root.find("schema"); it != root.end()) {
         doc.runtimeSchema = it->value();
@@ -113,6 +124,7 @@ auto DiagramDocument::toJson() const -> boost::json::value {
     root["document_kind"] = "s7.diagram";
     root["diagram_version"] = kDiagramVersion;
     root["sheet"] = pageLayout.toJson();
+    if (!runConfiguration.empty()) root["studio_run"] = runConfiguration;
     
     if (runtimeSchema.is_object()) {
         root["schema"] = runtimeSchema;

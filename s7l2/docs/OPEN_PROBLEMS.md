@@ -16,8 +16,12 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
   regression verifies actual injected write failure preserves the destination,
   invalid paths, successful replacement/reopen and recovery. Actual disk exhaustion
   remains untested; the focused regression and Studio build pass.
-- **D2 / P0 / confirmed defect:** MainWindow::closeEvent has no Save/Discard/Cancel
-  guard. Other destructive transitions and nested dirty tracking remain under audit.
+- **D2 / P0 / implementation complete; coverage expanding:** destructive document
+  transitions share Save/Discard/Cancel handling and compare serialized document
+  contents, including nested schemas and local run settings. A failed save cancels
+  replacement. Focused tests cover close/open, undo, nested prompting, failed Save,
+  saved settings and worker shutdown during running/paused replacement. Native
+  dialog interaction and the wider editor gesture matrix remain acceptance work.
 - **O1 / P0 / confirmed limitation; design decision needed:** recording is downstream
   of a bounded, dropping mailbox. Completeness requires an independent capture path;
   existing incomplete metadata does not make capture lossless.

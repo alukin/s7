@@ -111,6 +111,8 @@ private slots:
 
 private:
     void buildUi();
+    bool confirmDocumentReplacement();
+    void markDocumentSaved();
     [[nodiscard]] diagram::DiagramEditor* activeDiagramEditor() const;
     void buildActions();
     void refreshRecentDiagrams();
@@ -135,8 +137,8 @@ private:
                           const QString& errorTitle);
     void loadElementLibraryJson(const boost::json::value& libraryJson, const QString& sourceLabel);
     auto saveDocumentToPath(const QString& filePath) -> bool;
-    void loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
-    void loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel);
+    bool loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel);
+    bool loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel);
     void connectSceneSignals();
     void openRunParametersDialog();
     void buildToolWindows();
@@ -154,6 +156,7 @@ private:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    [[nodiscard]] bool documentModified() const;
     [[nodiscard]] auto currentDocument() const -> boost::json::value;
     // The scene serialized as a document; elements and connections come from
     // the scene (the source of truth), the rest of the schema from runtimeSchema_,
@@ -174,6 +177,8 @@ protected:
 
 private:
     boost::json::value runtimeSchema_;
+    boost::json::value savedDocument_;
+    bool hasSavedDocument_ = false;
     // Deployment data of the open diagram (`runtime_nodes`, `streams`).
     boost::json::array deploymentRuntimeNodes_;
     boost::json::array deploymentStreams_;

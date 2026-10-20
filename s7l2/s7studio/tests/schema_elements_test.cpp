@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QTimer>
 #include <QMessageBox>
+#include <QAbstractButton>
 #include <QPlainTextEdit>
 #include <QDialog>
 #include <QUndoGroup>
@@ -26,6 +27,7 @@ class Window : public s7studio::MainWindow {
 public:
     Window() : MainWindow(nullptr,false) {}
     using MainWindow::currentDocument;
+    using MainWindow::documentModified;
     using MainWindow::applySchemaParamsToScene;
 };
 void click(s7studio::diagram::DiagramEditor* editor,const char* id,const char* type) {
@@ -139,6 +141,7 @@ int main(int argc,char** argv) {
         auto edited=wrap->element();edited.params={{"period",4},{"lower",-2}};grandchild->scene()->changeElement(wrap,edited);
         const auto& left=root->scene()->elementNode("left")->element().schema;
         require(element(element(left,"phase").at("schema"),"wrap").at("params").as_object().at("period")==4,"Nested edit propagates through all parents");
+        require(window.documentModified(),"Nested edits mark root document modified");
         const auto saved=window.currentDocument();
         auto computational=s7::SchemaLibraryLoader::build_schema(saved.as_object().at("schema"));
         s7::NodeRuntime runtime(s7::Compiler::compile(computational));
@@ -149,6 +152,11 @@ int main(int argc,char** argv) {
         require(tabs->count()==1,"Closing a schema tab also closes its descendant tabs");
         const auto output=temp.filePath("saved.s7diagram");
         {std::ofstream file(output.toStdString());file<<boost::json::serialize(saved);}
+        QTimer::singleShot(0,[] {
+            auto* box=qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            require(box && box->windowTitle()=="Unsaved changes","Nested edits prompt before replacement");
+            box->button(QMessageBox::Discard)->click();
+        });
         window.openPath(output);require(tabs->count()==1,"Loading another document clears child tabs");
         click(root,"left","PIController");auto* reopened=manager->activeEditor();
         require(reopened->scene()->elementNode("error")->element().params.at("factor")==2,"Edits survive root save/reload");

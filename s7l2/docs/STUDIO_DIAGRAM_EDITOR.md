@@ -178,3 +178,11 @@ when a replacement fails, the original destination remains intact and the
 new path is not adopted. Direct truncating fallback is disabled.
 The `s7studio_atomic_file` regression injects an actual Linux write failure
 using a child-only file-size limit and verifies destination preservation.
+
+Modified diagrams are protected by Save / Discard / Cancel on application or
+diagram close and document replacement (including recent and deployed diagrams).
+Cancel and failed Save preserve the current document. Dirty state compares the
+persisted document, so undoing back to the saved contents clears it; nested
+schema edits participate through their parent instance. Local run duration and
+clear-trace settings persist in `studio_run`, outside the Functional Graph.
+Replacing a document stops and joins its embedded worker and clears its mailbox.

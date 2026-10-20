@@ -39,6 +39,7 @@ struct DiagramDocument {
     // and the streams between them, kept so redeployments continue them.
     boost::json::array runtimeNodes;
     boost::json::array streams;
+    boost::json::object runConfiguration; // Studio local run settings, outside the functional graph
     // Observation points (DiagramProbe, ADR-011/012): not part of the
     // Functional Graph, so not inside `schema`.
     std::vector<DiagramProbe> probes;

@@ -291,3 +291,8 @@ s7_add_test_executable(s7studio_atomic_file_test tests/atomic_file_test.cpp)
 target_include_directories(s7studio_atomic_file_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_atomic_file_test PRIVATE Qt6::Core)
 add_test(NAME s7studio_atomic_file COMMAND s7studio_atomic_file_test)
+
+s7_add_test_executable(s7studio_document_safety_test tests/document_safety_test.cpp)
+target_link_libraries(s7studio_document_safety_test PRIVATE s7studio_app)
+add_test(NAME s7studio_document_safety COMMAND s7studio_document_safety_test)
+set_tests_properties(s7studio_document_safety PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
