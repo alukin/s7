@@ -363,3 +363,27 @@ No runtime/core semantic changes, vendor edits or licensing changes belong here.
 O1a validation: build-tests passed; source test uses QCoreApplication only.
 Focused source/viewer/window/Scope/document tests passed 6/6; Xvfb GUI tests
 passed 4/4, including actual Mesa Qt Quick 3D and diagnostic artifact self-check.
+
+### O1b capture policy (after validated O1a)
+
+Authoritative append belongs to LocalSchemaRunner's stepping thread, immediately
+after a completed runtime step and before optional preview-mailbox publication.
+The same window-independent source becomes the read-only source for all viewers
+and result services; UI delivery must not append a second copy. Pre-register and
+validate every selected probe before stepping; reject complex probes and invalid
+ports/names with actionable preparation errors. Scalar conversion to stored
+binary64 is explicit, preserving F64 exactly and identifying other source types.
+
+Policy: bounded in-memory records, then synchronous temporary-file writes on the
+worker. Storage backpressure reduces achieved wall-clock throughput, never the
+model rate or causal order. Storage create/write/final-flush errors fail the run
+and retain a visibly incomplete prefix; do not silently continue unrecorded.
+Run status distinguishes active/completed/stopped/failed, capture failure and
+preview loss. Temporary history is not crash-durable; explicit atomic save is
+the persistence boundary. No unbounded queues or extra recording thread.
+
+Tests: withhold preview draining until actual mailbox overflow and verify exact
+full-source count/step/value and source-backed saved results; inject mid-write
+and final-flush failures, verify incomplete metadata and recovery; reject complex
+probes before the first runtime step; preserve pause/reset/generation guarantees.
+Rebuild build-tests and run focused/GUI checks before the complete suite.
