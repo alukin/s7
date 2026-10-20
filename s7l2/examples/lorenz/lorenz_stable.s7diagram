@@ -1,0 +1,1569 @@
+{
+  "id": "lorenz_stable",
+  "dt": 0.00025,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 600
+  },
+  "schema": {
+    "name": "lorenz_stable",
+    "dt": 0.00025,
+    "elements": [
+      {
+        "id": "base_x",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "base_y",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "base_z",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "base_dx",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            10,
+            -10
+          ]
+        }
+      },
+      {
+        "id": "base_xz",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "base_dy",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            10,
+            -1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "base_xy",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "base_dz",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -2.6666666666666665
+          ]
+        }
+      },
+      {
+        "id": "nearby_x",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1.000001
+        }
+      },
+      {
+        "id": "nearby_y",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "nearby_z",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "nearby_dx",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            10,
+            -10
+          ]
+        }
+      },
+      {
+        "id": "nearby_xz",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "nearby_dy",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            10,
+            -1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "nearby_xy",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "nearby_dz",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -2.6666666666666665
+          ]
+        }
+      },
+      {
+        "id": "delta_x",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "delta_y",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "delta_z",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "base_y",
+        "from_port": 0,
+        "to_element": "base_dx",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_x",
+        "from_port": 0,
+        "to_element": "base_dx",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_dx",
+        "from_port": 0,
+        "to_element": "base_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_x",
+        "from_port": 0,
+        "to_element": "base_xz",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_z",
+        "from_port": 0,
+        "to_element": "base_xz",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_x",
+        "from_port": 0,
+        "to_element": "base_dy",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_y",
+        "from_port": 0,
+        "to_element": "base_dy",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_xz",
+        "from_port": 0,
+        "to_element": "base_dy",
+        "to_port": 2
+      },
+      {
+        "from_element": "base_dy",
+        "from_port": 0,
+        "to_element": "base_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_x",
+        "from_port": 0,
+        "to_element": "base_xy",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_y",
+        "from_port": 0,
+        "to_element": "base_xy",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_xy",
+        "from_port": 0,
+        "to_element": "base_dz",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_z",
+        "from_port": 0,
+        "to_element": "base_dz",
+        "to_port": 1
+      },
+      {
+        "from_element": "base_dz",
+        "from_port": 0,
+        "to_element": "base_z",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_y",
+        "from_port": 0,
+        "to_element": "nearby_dx",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_x",
+        "from_port": 0,
+        "to_element": "nearby_dx",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_dx",
+        "from_port": 0,
+        "to_element": "nearby_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_x",
+        "from_port": 0,
+        "to_element": "nearby_xz",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_z",
+        "from_port": 0,
+        "to_element": "nearby_xz",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_x",
+        "from_port": 0,
+        "to_element": "nearby_dy",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_y",
+        "from_port": 0,
+        "to_element": "nearby_dy",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_xz",
+        "from_port": 0,
+        "to_element": "nearby_dy",
+        "to_port": 2
+      },
+      {
+        "from_element": "nearby_dy",
+        "from_port": 0,
+        "to_element": "nearby_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_x",
+        "from_port": 0,
+        "to_element": "nearby_xy",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_y",
+        "from_port": 0,
+        "to_element": "nearby_xy",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_xy",
+        "from_port": 0,
+        "to_element": "nearby_dz",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_z",
+        "from_port": 0,
+        "to_element": "nearby_dz",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_dz",
+        "from_port": 0,
+        "to_element": "nearby_z",
+        "to_port": 0
+      },
+      {
+        "from_element": "nearby_x",
+        "from_port": 0,
+        "to_element": "delta_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_x",
+        "from_port": 0,
+        "to_element": "delta_x",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_y",
+        "from_port": 0,
+        "to_element": "delta_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_y",
+        "from_port": 0,
+        "to_element": "delta_y",
+        "to_port": 1
+      },
+      {
+        "from_element": "nearby_z",
+        "from_port": 0,
+        "to_element": "delta_z",
+        "to_port": 0
+      },
+      {
+        "from_element": "base_z",
+        "from_port": 0,
+        "to_element": "delta_z",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "base_x",
+      "element": "base_x",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "base_y",
+      "element": "base_y",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "base_z",
+      "element": "base_z",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "nearby_x",
+      "element": "nearby_x",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "nearby_y",
+      "element": "nearby_y",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "nearby_z",
+      "element": "nearby_z",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "delta_x",
+      "element": "delta_x",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "delta_y",
+      "element": "delta_y",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "delta_z",
+      "element": "delta_z",
+      "port": 0,
+      "unit": "1"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "base_x",
+        "position": [
+          96,
+          20
+        ],
+        "title": "x"
+      },
+      {
+        "id": "base_y",
+        "position": [
+          96,
+          32
+        ],
+        "title": "y"
+      },
+      {
+        "id": "base_z",
+        "position": [
+          96,
+          44
+        ],
+        "title": "z"
+      },
+      {
+        "id": "base_dx",
+        "position": [
+          22,
+          20
+        ],
+        "title": "x' = 10*(y-x)"
+      },
+      {
+        "id": "base_xz",
+        "position": [
+          22,
+          32
+        ],
+        "title": "x*z"
+      },
+      {
+        "id": "base_dy",
+        "position": [
+          60,
+          32
+        ],
+        "title": "y' = rho*x - y - x*z"
+      },
+      {
+        "id": "base_xy",
+        "position": [
+          22,
+          44
+        ],
+        "title": "x*y"
+      },
+      {
+        "id": "base_dz",
+        "position": [
+          60,
+          44
+        ],
+        "title": "z' = x*y - (8/3)*z"
+      },
+      {
+        "id": "base_scope",
+        "position": [
+          124,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "base_x",
+            "base_y",
+            "base_z"
+          ]
+        }
+      },
+      {
+        "id": "base_trajectory",
+        "position": [
+          146,
+          32
+        ],
+        "observer": true,
+        "type": "PhaseTrajectory3D",
+        "params": {}
+      },
+      {
+        "id": "nearby_x",
+        "position": [
+          96,
+          60
+        ],
+        "title": "x"
+      },
+      {
+        "id": "nearby_y",
+        "position": [
+          96,
+          72
+        ],
+        "title": "y"
+      },
+      {
+        "id": "nearby_z",
+        "position": [
+          96,
+          84
+        ],
+        "title": "z"
+      },
+      {
+        "id": "nearby_dx",
+        "position": [
+          22,
+          60
+        ],
+        "title": "x' = 10*(y-x)"
+      },
+      {
+        "id": "nearby_xz",
+        "position": [
+          22,
+          72
+        ],
+        "title": "x*z"
+      },
+      {
+        "id": "nearby_dy",
+        "position": [
+          60,
+          72
+        ],
+        "title": "y' = rho*x - y - x*z"
+      },
+      {
+        "id": "nearby_xy",
+        "position": [
+          22,
+          84
+        ],
+        "title": "x*y"
+      },
+      {
+        "id": "nearby_dz",
+        "position": [
+          60,
+          84
+        ],
+        "title": "z' = x*y - (8/3)*z"
+      },
+      {
+        "id": "nearby_scope",
+        "position": [
+          124,
+          60
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "nearby_x",
+            "nearby_y",
+            "nearby_z"
+          ]
+        }
+      },
+      {
+        "id": "nearby_trajectory",
+        "position": [
+          146,
+          72
+        ],
+        "observer": true,
+        "type": "PhaseTrajectory3D",
+        "params": {}
+      },
+      {
+        "id": "delta_x",
+        "position": [
+          166,
+          26
+        ],
+        "title": "nearby x - base x"
+      },
+      {
+        "id": "delta_y",
+        "position": [
+          166,
+          46
+        ],
+        "title": "nearby y - base y"
+      },
+      {
+        "id": "delta_z",
+        "position": [
+          166,
+          66
+        ],
+        "title": "nearby z - base z"
+      },
+      {
+        "id": "difference_scope",
+        "position": [
+          166,
+          90
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "delta_x",
+            "delta_y",
+            "delta_z"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dx",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dx",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "base_dx",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_xz",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "base_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_xz",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dy",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dy",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "base_xz",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dy",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "base_dy",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_xy",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_xy",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "base_xy",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dz",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "base_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_dz",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "base_dz",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_z",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "base_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_trajectory",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_trajectory",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "base_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "base_trajectory",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "nearby_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dx",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dx",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "nearby_dx",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_xz",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "nearby_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_xz",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dy",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "nearby_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dy",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "nearby_xz",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dy",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "nearby_dy",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w30",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_xy",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w31",
+        "from": {
+          "port": [
+            "nearby_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_xy",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w32",
+        "from": {
+          "port": [
+            "nearby_xy",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dz",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w33",
+        "from": {
+          "port": [
+            "nearby_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_dz",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w34",
+        "from": {
+          "port": [
+            "nearby_dz",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_z",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w35",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w36",
+        "from": {
+          "port": [
+            "nearby_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w37",
+        "from": {
+          "port": [
+            "nearby_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w38",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_trajectory",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w39",
+        "from": {
+          "port": [
+            "nearby_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_trajectory",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w40",
+        "from": {
+          "port": [
+            "nearby_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "nearby_trajectory",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w41",
+        "from": {
+          "port": [
+            "nearby_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delta_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w42",
+        "from": {
+          "port": [
+            "base_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delta_x",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w43",
+        "from": {
+          "port": [
+            "nearby_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delta_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w44",
+        "from": {
+          "port": [
+            "base_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delta_y",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w45",
+        "from": {
+          "port": [
+            "nearby_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delta_z",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w46",
+        "from": {
+          "port": [
+            "base_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delta_z",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w47",
+        "from": {
+          "port": [
+            "delta_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w48",
+        "from": {
+          "port": [
+            "delta_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w49",
+        "from": {
+          "port": [
+            "delta_z",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "LORENZ_STABLE\nsigma=10, rho=10, beta=8/3; initial (1,1,1) and (1.000001,1,1).\nRun 10 model seconds at 4000 Hz. Double-click Scope and phase viewers.\nEquations, experiments and numerical limits: examples/lorenz/README.md.\nState at step k represents (k-1)*dt; observation label is k*dt.\nExperimental teaching model; manual Studio workflow remains unqualified.",
+          "width": 3000,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

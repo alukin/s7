@@ -1,0 +1,429 @@
+{
+  "id": "predator_prey_faster_growth",
+  "dt": 0.00025,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 600
+  },
+  "schema": {
+    "name": "predator_prey_faster_growth",
+    "dt": 0.00025,
+    "elements": [
+      {
+        "id": "prey",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 4
+        }
+      },
+      {
+        "id": "predator",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.00025,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "interaction",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "prey_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1.5,
+            -0.5
+          ]
+        }
+      },
+      {
+        "id": "predator_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            0.5,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "prey",
+        "from_port": 0,
+        "to_element": "interaction",
+        "to_port": 0
+      },
+      {
+        "from_element": "predator",
+        "from_port": 0,
+        "to_element": "interaction",
+        "to_port": 1
+      },
+      {
+        "from_element": "prey",
+        "from_port": 0,
+        "to_element": "prey_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "interaction",
+        "from_port": 0,
+        "to_element": "prey_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "interaction",
+        "from_port": 0,
+        "to_element": "predator_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "predator",
+        "from_port": 0,
+        "to_element": "predator_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "prey_rate",
+        "from_port": 0,
+        "to_element": "prey",
+        "to_port": 0
+      },
+      {
+        "from_element": "predator_rate",
+        "from_port": 0,
+        "to_element": "predator",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "prey",
+      "element": "prey",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "predator",
+      "element": "predator",
+      "port": 0,
+      "unit": "1"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "prey",
+        "position": [
+          80,
+          20
+        ],
+        "title": "Prey population (scaled)"
+      },
+      {
+        "id": "predator",
+        "position": [
+          80,
+          50
+        ],
+        "title": "Predator population (scaled)"
+      },
+      {
+        "id": "interaction",
+        "position": [
+          15,
+          36
+        ],
+        "title": "Prey * predator"
+      },
+      {
+        "id": "prey_rate",
+        "position": [
+          48,
+          20
+        ],
+        "title": "Births - predation"
+      },
+      {
+        "id": "predator_rate",
+        "position": [
+          48,
+          50
+        ],
+        "title": "Predation growth - deaths"
+      },
+      {
+        "id": "population_scope",
+        "position": [
+          110,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "prey",
+            "predator"
+          ]
+        }
+      },
+      {
+        "id": "population_phase",
+        "position": [
+          110,
+          50
+        ],
+        "observer": true,
+        "type": "PhasePortrait",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "prey",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "interaction",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "predator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "interaction",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "prey",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "prey_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "interaction",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "prey_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "interaction",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "predator_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "predator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "predator_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "prey_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "prey",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "predator_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "predator",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "prey",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "population_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "predator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "population_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "prey",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "population_phase",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "predator",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "population_phase",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "PREDATOR_PREY_FASTER_GROWTH\nprey'=1.5*prey-0.5*prey*predator; predator'=0.5*prey*predator-predator; initial (4,1).\nRun 40 model seconds at 4000 Hz. Double-click Scope and phase viewers.\nEquations, experiments and numerical limits: examples/lotka_volterra/README.md.\nState at step k represents (k-1)*dt; observation label is k*dt.\nExperimental teaching model; manual Studio workflow remains unqualified.",
+          "width": 3000,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

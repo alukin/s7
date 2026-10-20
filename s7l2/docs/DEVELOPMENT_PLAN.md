@@ -81,11 +81,14 @@ independent RK4 or other solvers may provide test references only.
   Initial diagrams and headless checks: [thermostat laboratory](../examples/relay/README.md).
 - [ ] **Nonlinear oscillation:** Van der Pol oscillator, with time traces and
   phase portraits showing convergence to a limit cycle.
+  Initial diagrams and headless checks: [Van der Pol laboratory](../examples/van_der_pol/README.md).
 - [ ] **Chaos:** Lorenz attractor, with a three-dimensional phase trajectory and
   nearby initial conditions. Document timestep sensitivity and avoid claiming
   long-term trajectory agreement as an accuracy criterion.
+  Initial diagrams and headless checks: [Lorenz laboratory](../examples/lorenz/README.md).
 - [ ] **Population dynamics:** Lotka–Volterra predator–prey model, with time
   traces, phase portrait, equilibrium, and parameter/initial-state variations.
+  Initial diagrams and headless checks: [predator–prey laboratory](../examples/lotka_volterra/README.md).
 - [ ] **Synchronization and measurement:** a phase-locked loop built from VCO,
   phase detector and loop filter; demonstrate acquisition, tracking, phase
   error, and frequency measurement. Use phase wrapping and the frequency meter

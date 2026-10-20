@@ -1,0 +1,1306 @@
+{
+  "id": "van_der_pol_mu1_symplectic",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 1000,
+    "height_mm": 600
+  },
+  "schema": {
+    "name": "van_der_pol_mu1_symplectic",
+    "dt": 0.001,
+    "elements": [
+      {
+        "id": "small_state",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 0.1,
+          "initial_velocity": 0
+        }
+      },
+      {
+        "id": "small_one",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "small_square",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "small_damping",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "small_drive",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "small_acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "cycle_state",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 2,
+          "initial_velocity": 0
+        }
+      },
+      {
+        "id": "cycle_one",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "cycle_square",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "cycle_damping",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "cycle_drive",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "cycle_acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "large_state",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 4,
+          "initial_velocity": 0
+        }
+      },
+      {
+        "id": "large_one",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "large_square",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "large_damping",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "large_drive",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "large_acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "small_state",
+        "from_port": 0,
+        "to_element": "small_square",
+        "to_port": 0
+      },
+      {
+        "from_element": "small_state",
+        "from_port": 0,
+        "to_element": "small_square",
+        "to_port": 1
+      },
+      {
+        "from_element": "small_one",
+        "from_port": 0,
+        "to_element": "small_damping",
+        "to_port": 0
+      },
+      {
+        "from_element": "small_square",
+        "from_port": 0,
+        "to_element": "small_damping",
+        "to_port": 1
+      },
+      {
+        "from_element": "small_damping",
+        "from_port": 0,
+        "to_element": "small_drive",
+        "to_port": 0
+      },
+      {
+        "from_element": "small_state",
+        "from_port": 1,
+        "to_element": "small_drive",
+        "to_port": 1
+      },
+      {
+        "from_element": "small_drive",
+        "from_port": 0,
+        "to_element": "small_acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "small_state",
+        "from_port": 0,
+        "to_element": "small_acceleration",
+        "to_port": 1
+      },
+      {
+        "from_element": "small_acceleration",
+        "from_port": 0,
+        "to_element": "small_state",
+        "to_port": 0
+      },
+      {
+        "from_element": "cycle_state",
+        "from_port": 0,
+        "to_element": "cycle_square",
+        "to_port": 0
+      },
+      {
+        "from_element": "cycle_state",
+        "from_port": 0,
+        "to_element": "cycle_square",
+        "to_port": 1
+      },
+      {
+        "from_element": "cycle_one",
+        "from_port": 0,
+        "to_element": "cycle_damping",
+        "to_port": 0
+      },
+      {
+        "from_element": "cycle_square",
+        "from_port": 0,
+        "to_element": "cycle_damping",
+        "to_port": 1
+      },
+      {
+        "from_element": "cycle_damping",
+        "from_port": 0,
+        "to_element": "cycle_drive",
+        "to_port": 0
+      },
+      {
+        "from_element": "cycle_state",
+        "from_port": 1,
+        "to_element": "cycle_drive",
+        "to_port": 1
+      },
+      {
+        "from_element": "cycle_drive",
+        "from_port": 0,
+        "to_element": "cycle_acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "cycle_state",
+        "from_port": 0,
+        "to_element": "cycle_acceleration",
+        "to_port": 1
+      },
+      {
+        "from_element": "cycle_acceleration",
+        "from_port": 0,
+        "to_element": "cycle_state",
+        "to_port": 0
+      },
+      {
+        "from_element": "large_state",
+        "from_port": 0,
+        "to_element": "large_square",
+        "to_port": 0
+      },
+      {
+        "from_element": "large_state",
+        "from_port": 0,
+        "to_element": "large_square",
+        "to_port": 1
+      },
+      {
+        "from_element": "large_one",
+        "from_port": 0,
+        "to_element": "large_damping",
+        "to_port": 0
+      },
+      {
+        "from_element": "large_square",
+        "from_port": 0,
+        "to_element": "large_damping",
+        "to_port": 1
+      },
+      {
+        "from_element": "large_damping",
+        "from_port": 0,
+        "to_element": "large_drive",
+        "to_port": 0
+      },
+      {
+        "from_element": "large_state",
+        "from_port": 1,
+        "to_element": "large_drive",
+        "to_port": 1
+      },
+      {
+        "from_element": "large_drive",
+        "from_port": 0,
+        "to_element": "large_acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "large_state",
+        "from_port": 0,
+        "to_element": "large_acceleration",
+        "to_port": 1
+      },
+      {
+        "from_element": "large_acceleration",
+        "from_port": 0,
+        "to_element": "large_state",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "small_x",
+      "element": "small_state",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "small_v",
+      "element": "small_state",
+      "port": 1,
+      "unit": "1"
+    },
+    {
+      "name": "cycle_x",
+      "element": "cycle_state",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "cycle_v",
+      "element": "cycle_state",
+      "port": 1,
+      "unit": "1"
+    },
+    {
+      "name": "large_x",
+      "element": "large_state",
+      "port": 0,
+      "unit": "1"
+    },
+    {
+      "name": "large_v",
+      "element": "large_state",
+      "port": 1,
+      "unit": "1"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "small_state",
+        "position": [
+          102,
+          20
+        ],
+        "title": "Euler-Cromer x / v"
+      },
+      {
+        "id": "small_one",
+        "position": [
+          3,
+          20
+        ],
+        "title": "1"
+      },
+      {
+        "id": "small_square",
+        "position": [
+          24,
+          30
+        ],
+        "title": "x squared"
+      },
+      {
+        "id": "small_damping",
+        "position": [
+          44,
+          20
+        ],
+        "title": "mu*(1-x*x)"
+      },
+      {
+        "id": "small_drive",
+        "position": [
+          64,
+          20
+        ],
+        "title": "mu*(1-x*x)*v"
+      },
+      {
+        "id": "small_acceleration",
+        "position": [
+          84,
+          32
+        ],
+        "title": "Nonlinear drive - x"
+      },
+      {
+        "id": "small_scope",
+        "position": [
+          140,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "small_x",
+            "small_v"
+          ]
+        }
+      },
+      {
+        "id": "small_phase",
+        "position": [
+          140,
+          32
+        ],
+        "observer": true,
+        "type": "PhasePortrait",
+        "params": {}
+      },
+      {
+        "id": "cycle_state",
+        "position": [
+          102,
+          50
+        ],
+        "title": "Euler-Cromer x / v"
+      },
+      {
+        "id": "cycle_one",
+        "position": [
+          3,
+          50
+        ],
+        "title": "1"
+      },
+      {
+        "id": "cycle_square",
+        "position": [
+          24,
+          60
+        ],
+        "title": "x squared"
+      },
+      {
+        "id": "cycle_damping",
+        "position": [
+          44,
+          50
+        ],
+        "title": "mu*(1-x*x)"
+      },
+      {
+        "id": "cycle_drive",
+        "position": [
+          64,
+          50
+        ],
+        "title": "mu*(1-x*x)*v"
+      },
+      {
+        "id": "cycle_acceleration",
+        "position": [
+          84,
+          62
+        ],
+        "title": "Nonlinear drive - x"
+      },
+      {
+        "id": "cycle_scope",
+        "position": [
+          140,
+          50
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "cycle_x",
+            "cycle_v"
+          ]
+        }
+      },
+      {
+        "id": "cycle_phase",
+        "position": [
+          140,
+          62
+        ],
+        "observer": true,
+        "type": "PhasePortrait",
+        "params": {}
+      },
+      {
+        "id": "large_state",
+        "position": [
+          102,
+          80
+        ],
+        "title": "Euler-Cromer x / v"
+      },
+      {
+        "id": "large_one",
+        "position": [
+          3,
+          80
+        ],
+        "title": "1"
+      },
+      {
+        "id": "large_square",
+        "position": [
+          24,
+          90
+        ],
+        "title": "x squared"
+      },
+      {
+        "id": "large_damping",
+        "position": [
+          44,
+          80
+        ],
+        "title": "mu*(1-x*x)"
+      },
+      {
+        "id": "large_drive",
+        "position": [
+          64,
+          80
+        ],
+        "title": "mu*(1-x*x)*v"
+      },
+      {
+        "id": "large_acceleration",
+        "position": [
+          84,
+          92
+        ],
+        "title": "Nonlinear drive - x"
+      },
+      {
+        "id": "large_scope",
+        "position": [
+          140,
+          80
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "large_x",
+            "large_v"
+          ]
+        }
+      },
+      {
+        "id": "large_phase",
+        "position": [
+          140,
+          92
+        ],
+        "observer": true,
+        "type": "PhasePortrait",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_square",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_square",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "small_one",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_damping",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "small_square",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_damping",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "small_damping",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_drive",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "small_drive",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "small_drive",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "small_acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "small_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "small_phase",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "small_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "small_phase",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_square",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_square",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "cycle_one",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_damping",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "cycle_square",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_damping",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "cycle_damping",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_drive",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_drive",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "cycle_drive",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "cycle_acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w24",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w25",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_phase",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w26",
+        "from": {
+          "port": [
+            "cycle_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "cycle_phase",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w27",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_square",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w28",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_square",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w29",
+        "from": {
+          "port": [
+            "large_one",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_damping",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w30",
+        "from": {
+          "port": [
+            "large_square",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_damping",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w31",
+        "from": {
+          "port": [
+            "large_damping",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_drive",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w32",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "large_drive",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w33",
+        "from": {
+          "port": [
+            "large_drive",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w34",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w35",
+        "from": {
+          "port": [
+            "large_acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w36",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w37",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "large_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w38",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "large_phase",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w39",
+        "from": {
+          "port": [
+            "large_state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "large_phase",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "VAN_DER_POL_MU1_SYMPLECTIC\nx'' = 1*(1-x*x)*v - x; x(0) = 0.1, 2, 4; v(0) = 0.\nRun 40 model seconds at 1000 Hz. Double-click Scope and phase viewers.\nEquations, experiments and numerical limits: examples/van_der_pol/README.md.\nState at step k represents (k-1)*dt; observation label is k*dt.\nExperimental teaching model; manual Studio workflow remains unqualified.",
+          "width": 3000,
+          "height": 200,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}
