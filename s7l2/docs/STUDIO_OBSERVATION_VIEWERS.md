@@ -113,3 +113,12 @@ Automated tests cannot judge rendering, interaction feel or GPU backends. Check 
 - Drawn-point caps (Phase Portrait 200,000, 3D 500,000) bound rendering work; exports always contain every retained point.
 - Live rendering throughput is not characterized. With software rendering (offscreen CI, Wine) a visible Qt Graphs plot costs far more UI-thread time than QCustomPlot's raster drawing did: in `s7studio_scope_lifecycle` a Scope left visible during an unthrottled run made the UI fall behind and the mailbox drop samples under Wine, so that test records hidden. Check on GPU desktops that a visible viewer keeps up at the intended rates (manual test 5).
 - Under offscreen platforms Qt Quick 3D renders nothing, so 3D pixels are only checked manually.
+
+## Run notification isolation
+
+MainWindow invalidates a generation before disconnecting and joining a retiring
+worker on start/reset/document replacement. Queued callbacks retain the previous
+generation and are ignored. This applies to samples, progress, status, completion
+and logs; document replacement closes viewers only after worker retirement.
+The document-safety regression queues worker notifications without pumping GUI
+events, replaces the document and verifies those callbacks cannot reach the UI.

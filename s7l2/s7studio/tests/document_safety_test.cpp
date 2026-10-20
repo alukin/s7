@@ -9,6 +9,8 @@
 #include <QSettings>
 #include <QDir>
 #include <QFile>
+#include <QPlainTextEdit>
+#include <thread>
 #include <QTimer>
 #include <QUndoStack>
 #include <iostream>
@@ -96,6 +98,19 @@ int main(int argc, char** argv) {
             require(!runner->isRunning() && !runner->isPaused(), "replacement stops and joins old run");
             require(runner->takeScopeSamples().samples.empty(), "replacement clears old mailbox");
         }
+        // Queue worker notifications deterministically without processing GUI
+        // events. They must be rejected after a document changes generation.
+        std::thread retiring([runner] {
+            emit runner->logMessage(QStringLiteral("RETIRED_RUN_SENTINEL"));
+            emit runner->runCompleted(false, QStringLiteral("RETIRED_RUN_SENTINEL"));
+            emit runner->ticksProgress(987654321, 987654321);
+            emit runner->scopeSamplesAvailable();
+        });
+        retiring.join();
+        reopened.openPath(input);
+        QCoreApplication::sendPostedEvents();
+        for (auto* output : reopened.findChildren<QPlainTextEdit*>())
+            require(!output->toPlainText().contains("RETIRED_RUN_SENTINEL"), "retired callbacks isolated");
         const auto other = dir.filePath("other.s7diagram");
         require(s7studio::writeFileAtomically(other, bytes, error), "other fixture");
         s7studio::diagram::ElementNode::Element unsaved;

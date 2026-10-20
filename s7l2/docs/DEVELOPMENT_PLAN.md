@@ -47,13 +47,25 @@ Do not change implementation or licenses until this documentation increment is c
   cleanliness, injected failed Save, close-save, running/paused replacement and
   mailbox clearing. Nested-schema regression verifies dirty state and prompting.
   Serialization comparison is authoritative; modification indicators are debounced.
-  Full rapid-rerun queued notification isolation remains R1 work.
+  R1 now also invalidates callbacks with a generation counter before disconnect,
+  worker join/reset and reconnection. Start/reset/document replacement share the
+  invalidation path. A deterministic queued-worker sentinel test verifies retired
+  logs/completion/progress/sample callbacks cannot update the new document.
+  `s7studio_document_safety`, `s7studio_scope_lifecycle`, `s7studio_scope_run`
+  and `s7studio_recent_diagrams` all pass (4/4). Broader failure/observer stress
+  and measured stop latency remain release acceptance work.
 - D1: shared atomic writer used by diagram saves and schema-library exports;
   complete writes and commit checked, direct truncating fallback disabled.
   `s7studio_atomic_file` passes: replacement/reopen, invalid destinations,
   Linux child-process file-size-limit write failure preserving existing bytes,
   and successful recovery. Studio rebuild passed. Actual disk exhaustion and
   platform-specific filesystem semantics remain acceptance work.
+
+- Integration run: 53/59 passed in the sandbox, including the long coupled
+  pendulum Studio case (444.95 s). Five local-socket tests failed on sandbox
+  restrictions; all five passed when rerun outside it. The recent-menu regression
+  needed its title expectation updated for Qt's modification marker; it now passes.
+  This is an integration check across successive builds, not a pristine baseline.
 
 ### Ordered tasks and acceptance
 

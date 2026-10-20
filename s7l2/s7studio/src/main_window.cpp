@@ -374,18 +374,37 @@ MainWindow::~MainWindow()
     closeViewers();
 }
 
+void MainWindow::resetLocalRun()
+{
+    // Disconnect before joining: the retiring worker may emit its final
+    // notifications during reset. Already queued lambdas retain their old ID.
+    ++runGeneration_;
+    disconnect(runner_, nullptr, this, nullptr);
+    runner_->reset();
+    connectRunnerSignals();
+    onStatusChanged(QStringLiteral("idle"));
+}
+
 void MainWindow::connectRunnerSignals()
 {
-    connect(runner_, &LocalSchemaRunner::logMessage, this, [this](const QString& message) {
+    const auto generation = runGeneration_;
+    connect(runner_, &LocalSchemaRunner::logMessage, this, [this, generation](const QString& message) {
+        if (generation != runGeneration_) return;
         appendLog(message);
-        if (runPanel_) {
-            runPanel_->append(message);
-        }
+        if (runPanel_) runPanel_->append(message);
     });
-    connect(runner_, &LocalSchemaRunner::statusChanged, this, &MainWindow::onStatusChanged);
-    connect(runner_, &LocalSchemaRunner::runCompleted, this, &MainWindow::onRunCompleted);
-    connect(runner_, &LocalSchemaRunner::ticksProgress, this, &MainWindow::onTickProgress);
-    connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, &MainWindow::onScopeSamplesAvailable);
+    connect(runner_, &LocalSchemaRunner::statusChanged, this, [this, generation](const QString& status) {
+        if (generation == runGeneration_) onStatusChanged(status);
+    });
+    connect(runner_, &LocalSchemaRunner::runCompleted, this, [this, generation](bool success, const QString& error) {
+        if (generation == runGeneration_) onRunCompleted(success, error);
+    });
+    connect(runner_, &LocalSchemaRunner::ticksProgress, this, [this, generation](long completed, long total) {
+        if (generation == runGeneration_) onTickProgress(completed, total);
+    });
+    connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, [this, generation] {
+        if (generation == runGeneration_) onScopeSamplesAvailable();
+    });
 }
 
 void MainWindow::buildActions()
@@ -512,7 +531,7 @@ void MainWindow::buildActions()
     connect(resumeAction_, &QAction::triggered, this, [this] { controller_->resume(); });
     connect(stopAction_, &QAction::triggered, this, [this] { controller_->stop(); });
     connect(resetAction_, &QAction::triggered, this, [this] {
-        controller_->reset();
+        resetLocalRun();
         clearViewerSamples();
         refreshActions();
     });
@@ -1695,6 +1714,8 @@ void MainWindow::launchRunWithCurrentConfiguration()
         toolWindows_->show(problemsDock_);
         return;
     }
+    if (runner_->isRunning()) return;
+    resetLocalRun();
     runPanel_->clearOutput();
     runPanel_->append(QStringLiteral("Running at %1 Hz, %2.")
                           .arg(discretizationFrequencyHz_)
@@ -1739,7 +1760,7 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
 
 bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
-    if (runner_) runner_->reset();
+    if (runner_) resetLocalRun();
     if (schemaTabs_) schemaTabs_->reset();
 
     closeViewers();
@@ -1772,7 +1793,7 @@ bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
 bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
     const auto document = diagram::DiagramDocument::fromJson(diagramJson);
-    if (runner_) runner_->reset();
+    if (runner_) resetLocalRun();
     if (schemaTabs_) schemaTabs_->reset();
 
     closeViewers();
@@ -1919,7 +1940,7 @@ void MainWindow::closeCurrentDiagram()
     if (!confirmDocumentReplacement()) return;
     if (schemaTabs_) schemaTabs_->reset();
 
-    if (runner_) runner_->reset();
+    if (runner_) resetLocalRun();
 
     closeViewers();
     clearViewerSamples();

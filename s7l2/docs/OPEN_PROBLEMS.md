@@ -35,7 +35,11 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
   No permission/assignment has been established from this audit. s7spectral is
   described as third-party in existing documentation and requires ownership review.
   Do not silently relicense these files or vendored resources.
-- **R1/N1/U1/A1 / incomplete coverage and usability:** source/test audit and actual
+- **R1 / P0 / isolation increment verified:** document replacement resets and joins
+  the embedded worker; start/reset/replacement invalidate queued notifications by
+  generation. A deterministic queued-worker regression and existing Scope run/
+  lifecycle checks pass. Full lifecycle state/error/observer stress remains open.
+- **N1/U1/A1 / incomplete coverage and usability:** source/test audit and actual
   execution are required; existing pendulum/viewer results are retained as historical
   evidence, not fresh release acceptance. Real GPU/package/Windows validation remains
   unverified. DISPLAY variables alone do not establish a usable display.
