@@ -599,3 +599,11 @@ six GUI/schema/document checks in 10.53 s. Full repository suite and the two
 long Studio pendulum checks were not rerun. Actual production application
 screenshots, severity and remaining human-review decisions are retained in the
 audit directory. No release-ready/platform-accessibility claim is made.
+
+Resumed-session verification (2026-10-21, revision `9b870c8`):
+`cmake --build build --target build-tests --parallel 2` passed, followed by
+`ctest --test-dir build --output-on-failure -j 2`: **72/72 passed** in
+528.65 seconds. This includes both long Studio pendulum checks and all four
+GUI suites. No implementation changes were made during this verification.
+This closes the full-suite verification gap above; packaging, hosted CI,
+platform/accessibility and broader release acceptance remain open.
