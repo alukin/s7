@@ -412,3 +412,34 @@ source/capture/viewer tests also passed 3/3. The no-window retained-comparison
 regression passes. `git diff --check` is clean. This completes O1 capture
 correctness; measured throughput, asynchronous bulk operations, physical-GPU
 acceptance and crash durability remain outside this increment.
+
+## N1a — model time and local execution parity (2026-10-21)
+
+Scope: audit/fix fractional timestep timestamps, first/last samples and finite
+run boundaries; verify pause/resume/rerun step alignment and execute the same
+saved diagram through the headless harness and Studio's embedded runner.
+
+Confirmed defects: Rate::from_seconds and LocalSchemaRunner round each period
+to whole nanoseconds; NodeRuntime multiplies that rounded period with unchecked
+signed arithmetic. ModelRunController rounds duration/dt to the nearest tick,
+which can exceed a finite requested duration. The headless diagram harness
+also installs a rounded period.
+
+Implementation contract: retain a reduced rational rate derived from configured
+dt without whole-nanosecond period quantization. Compute each absolute timestamp
+from the successful-step index, rounding only the final nanosecond representation;
+provide seconds from the same rational base for recording. Reject timestamp
+range overflow explicitly. Preserve causal ordering/state publication: step 1
+is recorded at dt, and causal-memory outputs are the initial published state
+(the update staged during that step appears on step 2). No step-zero or extra
+terminal sample is added. Finite durations include only complete steps at or
+before the requested end, including zero steps when dt exceeds the duration.
+Pause consumes no model steps; rerun creates a new run and restarts at step 1.
+
+Validation: module smoke coverage for fractional rates and timestamp overflow;
+deterministic gated lifecycle coverage; finite-boundary edge cases; shared
+saved linear/nonlinear diagrams with every sample's step/time/value compared
+between the headless harness and Studio. Run relevant tests, then build-tests
+and the complete suite. Distributed pacing/wire-period changes, solver changes,
+full reproducibility metadata and extended numerical references are out of scope.
+Status: audited; implementation pending. This is a partial N1 increment.
