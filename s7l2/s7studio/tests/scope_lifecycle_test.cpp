@@ -178,23 +178,29 @@ int main(int argc, char** argv) try {
     QList<QPointF> expectedPairs;
     double pendingTheta = 0.0;
     std::size_t received = 0;
+    std::uint64_t cursor = 0;
+    std::uint64_t previewDropped = 0;
     auto consume = [&] {
-        auto batch = runner.takeScopeSamples();
-        require(batch.dropped == 0, "Lifecycle run unexpectedly dropped samples");
-        manager.deliver(batch, scopes);
-        for (const auto& sample : batch.samples) {
+        previewDropped += runner.takeScopeSamples().dropped;
+        const auto source = runner.recordedSource();
+        require(source && !source->status().incomplete(), "Lifecycle capture incomplete");
+        manager.present(source, previewDropped, scopes);
+        const auto page = source->read(cursor);
+        require(page.error.isEmpty(), "Lifecycle capture read failed");
+        for (const auto& sample : page.samples) {
             const auto channel = received % 2;
             if (channel == 0) reference->step();
             if (channel == 0) pendingTheta = sample.value;
             else expectedPairs.push_back({pendingTheta, sample.value});
             const auto expected = observation->sample_output("state", channel).to_display_double();
-            require(sample.step == static_cast<long>(received / 2 + 1) && sample.probeName == probes[channel].name,
+            require(sample.step == static_cast<long>(received / 2 + 1) && sample.channel == source->channels().at(channel).id,
                 "Lifecycle skipped, duplicated or mixed steps/channels");
             require(sample.value == expected && std::abs(sample.timeSeconds - sample.step * .001) < 1e-12,
                 "Lifecycle changed headless values or model timestamps");
-            scope.appendSample(QString::fromStdString(sample.probeName), sample.timeSeconds, sample.value);
+            scope.appendSample(QString::fromStdString(probes[channel].name), sample.timeSeconds, sample.value);
             ++received;
         }
+        cursor = page.next;
     };
     auto waitUntil = [&](const auto& predicate) {
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
@@ -209,7 +215,8 @@ int main(int argc, char** argv) try {
     runner.pause();
     // Paused acknowledges a completed step boundary, not merely the request.
     waitUntil([&] { return runner.isPaused(); });
-    app.processEvents(); consume(); // drain samples produced before the pause acknowledgment
+    app.processEvents();
+    while (cursor < runner.recordedSource()->status().samples) consume(); // drain authoritative capture at the acknowledged boundary
     require(runner.isPaused(), "Pause request was not retained");
     const auto pausedCount = received;
     scope.show(); scope.close(); scope.show();
@@ -225,7 +232,9 @@ int main(int argc, char** argv) try {
     static_cast<void>(save(scope)); // Snapshot while the worker is producing.
     static_cast<void>(csv(scope));
     runner.pause(); runner.stop();
-    waitUntil([&] { return completed; }); consume();
+    waitUntil([&] { return completed; });
+    while (cursor < runner.recordedSource()->status().samples) consume();
+    require(runner.recordedSource()->status().finished && !runner.recordedSource()->status().incomplete(), "Stopped recording incomplete");
     require(success && received > pausedCount && received % 2 == 0, "Stop while paused lost final channel or failed");
     while (portrait->refreshSource()) {} // bounded pages; drain presentation backlog explicitly
     require(portrait->points() == expectedPairs, "Phase Portrait lost, duplicated or misaligned pairs across pause/resume/stop");
@@ -254,7 +263,7 @@ int main(int argc, char** argv) try {
             scope.appendSample(QString::fromStdString(sample.probeName), sample.timeSeconds, sample.value);
             ++rerunCount;
         }
-        manager.deliver(batch, scopes);
+        manager.present(runner.recordedSource(), batch.dropped, scopes);
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     require(completed && success && rerunCount == 2000, "Rerun incomplete");
