@@ -403,3 +403,12 @@ Qt Quick 3D rendered under Mesa; no rendering skips. The independent source test
 links QtCore/QtTest without QtGui/QtWidgets. Actual disk exhaustion, native GPU/
 Windows, measured performance envelope, crash durability and asynchronous bulk
 I/O remain unverified or deferred; injected I/O failures are identified as such.
+
+
+O1b completion validation (2026-10-21): rebuilt `build-tests` successfully and
+ran the complete CTest suite: **69/69 passed**, 428.77 seconds wall time,
+including all four GUI tests and Qt Quick 3D rendering. Focused observation
+source/capture/viewer tests also passed 3/3. The no-window retained-comparison
+regression passes. `git diff --check` is clean. This completes O1 capture
+correctness; measured throughput, asynchronous bulk operations, physical-GPU
+acceptance and crash durability remain outside this increment.
