@@ -55,6 +55,8 @@ public:
     };
 
     static constexpr int kMaxInMemorySamplesPerSeries = 20'000;
+    static constexpr quint32 kResultVersion = 2;
+    static constexpr quint32 kMaxResultHeaderBytes = 16 * 1024 * 1024;
 
     explicit ScopeRecording(QString scopeName);
 

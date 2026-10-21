@@ -1,4 +1,10 @@
 #include "scope_view_window.hpp"
+#include "observation/run_metadata.hpp"
+#include <QDialog>
+#include <QComboBox>
+#include <QPlainTextEdit>
+#include <QTabWidget>
+#include <QSet>
 #include "observation/scope_results.hpp"
 
 #include "viewers/line_plot_view.hpp"
@@ -80,6 +86,8 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     auto* saveButton = new QPushButton(QStringLiteral("Save Run…"), this);
     auto* openButton = new QPushButton(QStringLiteral("Open Run…"), this);
     auto* removeButton = new QPushButton(QStringLiteral("Remove comparisons"), this);
+    auto* detailsButton = new QPushButton(QStringLiteral("Run details…"), this);
+    detailsButton->setObjectName(QStringLiteral("scope.runDetails"));
     saveButton->setObjectName(QStringLiteral("scope.saveRun"));
     openButton->setObjectName(QStringLiteral("scope.openRun"));
     removeButton->setObjectName(QStringLiteral("scope.removeComparisons"));
@@ -88,6 +96,8 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     controls->addWidget(saveButton);
     controls->addWidget(openButton);
     controls->addWidget(removeButton);
+    controls->addWidget(detailsButton);
+    connect(detailsButton, &QPushButton::clicked, this, &ScopeViewWindow::showRunDetails);
     connect(saveButton, &QPushButton::clicked, this, &ScopeViewWindow::saveRunResults);
     connect(openButton, &QPushButton::clicked, this, &ScopeViewWindow::openRunResultsFile);
     connect(removeButton, &QPushButton::clicked, this, &ScopeViewWindow::clearComparisons);
@@ -248,6 +258,63 @@ void ScopeViewWindow::clearComparisons()
     recording_.clearComparisons();
     syncSeries(true);
     refreshPlot();
+}
+
+void ScopeViewWindow::showRunDetails()
+{
+    auto* dialog = new QDialog(this);
+    dialog->setObjectName(QStringLiteral("scope.runDetailsDialog"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(QStringLiteral("Run details — %1").arg(probeName_));
+    dialog->resize(860, 600);
+    auto* layout = new QVBoxLayout(dialog);
+    layout->addWidget(new QLabel(QStringLiteral("Snapshot taken when opened. Reopen Run details to refresh recording status."), dialog));
+    auto* runs = new QComboBox(dialog);
+    runs->setObjectName(QStringLiteral("scope.detailsRuns"));
+    QVector<QJsonObject> metadata;
+    if (source()) {
+        const auto status = source()->status();
+        metadata.push_back({{"run_id", QString::number(source()->runId())}, {"finished", status.finished},
+            {"stopped", status.stopped}, {"incomplete", status.incomplete()},
+            {"storage_error", status.storageError}, {"run_error", status.runError}, {"provenance", source()->provenance()}});
+        runs->addItem(QStringLiteral("Current run"));
+    } else if (!recording_.runMetadata().isEmpty()) {
+        metadata.push_back(recording_.runMetadata());
+        runs->addItem(QStringLiteral("Current run"));
+    }
+    QSet<QString> labels;
+    for (const auto& series : recording_.series()) {
+        if (!series.isComparison() || labels.contains(series.comparisonLabel)) continue;
+        labels.insert(series.comparisonLabel);
+        auto data = series.sourceMetadata;
+        data["incomplete"] = data.value("incomplete").toBool() || !series.recordingWarning.isEmpty();
+        metadata.push_back(data);
+        runs->addItem(series.comparisonLabel);
+    }
+    if (metadata.isEmpty()) { metadata.push_back({}); runs->addItem(QStringLiteral("No recorded run")); }
+    layout->addWidget(runs);
+    auto* tabs = new QTabWidget(dialog);
+    auto* summary = new QPlainTextEdit(tabs);
+    auto* effective = new QPlainTextEdit(tabs);
+    auto* requested = new QPlainTextEdit(tabs);
+    summary->setObjectName(QStringLiteral("scope.detailsSummary"));
+    effective->setObjectName(QStringLiteral("scope.detailsEffectiveModel"));
+    requested->setObjectName(QStringLiteral("scope.detailsRequestedModel"));
+    for (auto* text : {summary, effective, requested}) text->setReadOnly(true);
+    tabs->addTab(summary, QStringLiteral("Summary"));
+    tabs->addTab(effective, QStringLiteral("Effective model"));
+    tabs->addTab(requested, QStringLiteral("Requested model"));
+    layout->addWidget(tabs);
+    const auto select = [metadata, summary, effective, requested](int index) {
+        const auto& data = metadata[index];
+        const auto p = data.value("provenance").toObject();
+        summary->setPlainText(observation::runMetadataSummary(data));
+        effective->setPlainText(p.value("effective_model_json").toString());
+        requested->setPlainText(p.value("requested_model_json").toString());
+    };
+    connect(runs, &QComboBox::currentIndexChanged, dialog, select);
+    select(0);
+    dialog->show();
 }
 
 void ScopeViewWindow::exportRecordedCsv()

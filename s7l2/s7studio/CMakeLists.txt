@@ -56,10 +56,26 @@ s7_enable_project_warnings(s7studio_diagram)
 add_library(s7studio_observation STATIC
     src/observation/observation_source.cpp
     src/observation/observation_source.hpp
+    src/observation/run_metadata.cpp src/observation/run_metadata.hpp
 )
 target_include_directories(s7studio_observation PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_observation PUBLIC Qt6::Core)
 s7_enable_project_warnings(s7studio_observation)
+
+add_custom_target(s7studio_build_identity
+    COMMAND ${CMAKE_COMMAND} "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/generated/s7studio_build_identity.hpp"
+        "-DVERSION=${CMAKE_PROJECT_VERSION}"
+        "-DCOMPILER=${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/build_identity.cmake"
+    VERBATIM)
+add_library(s7studio_run_provenance STATIC src/run_provenance.cpp src/run_provenance.hpp)
+add_dependencies(s7studio_run_provenance s7studio_build_identity)
+target_include_directories(s7studio_run_provenance PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src
+    PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+target_link_libraries(s7studio_run_provenance PUBLIC s7studio_observation s7core s7net Qt6::Core Boost::json)
+s7_enable_project_warnings(s7studio_run_provenance)
+target_link_libraries(s7studio_diagram PUBLIC s7studio_run_provenance)
 
 add_library(s7studio_results STATIC
     src/scope_recording.cpp src/scope_recording.hpp
@@ -407,3 +423,13 @@ set_target_properties(s7studio_model_time_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_model_time_test)
 add_test(NAME s7studio_model_time COMMAND s7studio_model_time_test)
 set_tests_properties(s7studio_model_time PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_run_provenance_test
+    tests/run_provenance_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp)
+target_include_directories(s7studio_run_provenance_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
+target_compile_definitions(s7studio_run_provenance_test PRIVATE S7_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_link_libraries(s7studio_run_provenance_test PRIVATE s7studio_diagram s7studio_results s7noise Qt6::Test Threads::Threads)
+set_target_properties(s7studio_run_provenance_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_run_provenance_test)
+add_test(NAME s7studio_run_provenance COMMAND s7studio_run_provenance_test)
+set_tests_properties(s7studio_run_provenance PROPERTIES TIMEOUT 60)

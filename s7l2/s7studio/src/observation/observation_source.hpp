@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QStringList>
 #include <QIODevice>
+#include <QJsonObject>
 #include <functional>
 #include <QVector>
 #include <cstdint>
@@ -49,6 +50,9 @@ class ObservationSource {
 public:
     explicit ObservationSource(std::uint64_t runId = 0, StorageOptions options = {});
     [[nodiscard]] std::uint64_t runId() const { return runId_; }
+    // Host publishes exactly once before capture; callers only receive copies.
+    void setProvenance(QJsonObject provenance);
+    [[nodiscard]] QJsonObject provenance() const;
     ChannelId channel(const QString& name, const QString& sourceType = QStringLiteral("f64"));
     [[nodiscard]] QVector<Channel> channels() const;
     bool append(const Sample& sample);
@@ -73,5 +77,7 @@ private:
     QVector<Sample> memory_;
     mutable std::unique_ptr<QIODevice> file_;
     mutable SourceStatus status_;
+    QJsonObject provenance_;
+    bool provenanceSet_ = false;
 };
 } // namespace s7studio::observation

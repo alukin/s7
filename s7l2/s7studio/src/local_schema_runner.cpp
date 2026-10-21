@@ -1,4 +1,5 @@
 #include "local_schema_runner.hpp"
+#include "run_provenance.hpp"
 
 #include <QThread>
 
@@ -131,12 +132,14 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
 {
     netEndpoint_ = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     s7::RuntimeNetContext::set_endpoint(netEndpoint_);
-    schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(configuration.schemaJson));
+    auto prepared = prepareRunProvenance(configuration);
+    schema_ = std::make_shared<s7::Schema>(runtime::buildSchema(prepared.effectiveSchema));
     schema_->set_rate(s7::Rate::from_seconds(configuration.dt));
     runtime::validateSchema(*schema_);
     auto graph = s7::Compiler::compile(*schema_);
     runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
     runtime_->set_model_time_rate(s7::Rate::from_seconds(configuration.dt));
+    recording_->setProvenance(std::move(prepared.provenance));
     s7::ObservationService observation(*runtime_);
     std::set<std::string> names;
     for (const auto& probe : configuration.probes) {

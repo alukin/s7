@@ -11,6 +11,13 @@
 #include "viewers/viewer_registry.hpp"
 
 #include <QApplication>
+#include <QDialog>
+#include <QComboBox>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QCryptographicHash>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QBuffer>
 #include "observation/scope_results.hpp"
 #include <QLabel>
@@ -273,6 +280,44 @@ void testWindowIndependentResults()
     require(!source->status().incomplete(), "Preview loss marked authoritative capture incomplete");
 }
 
+void testRunDetails()
+{
+    const QString model = R"({"name":"saved-model","elements":[],"connections":[]})";
+    const QJsonObject provenance{{"format_version", 1}, {"run_uuid", "12345678-1234-1234-1234-123456789abc"},
+        {"effective_model_json", model}, {"requested_model_json", model},
+        {"model_sha256", QString::fromLatin1(QCryptographicHash::hash(model.toUtf8(), QCryptographicHash::Sha256).toHex())},
+        {"model_name", "saved-model"}, {"software", QJsonObject{{"project_version", "test-version"}, {"revision", "test-revision"}}},
+        {"requested_steps", "1"}, {"dt_seconds", .001}, {"rate", QJsonObject{{"numerator", "1000"}, {"denominator", "1"}}},
+        {"probes", QJsonArray{}}, {"seeds", QJsonArray{}}, {"initial_conditions", QJsonArray{}}, {"element_versions", QJsonArray{}}};
+    auto source = std::make_shared<observation::ObservationSource>(42);
+    source->setProvenance(provenance); source->channel("scope/v");
+    require(source->append({0, 1, .001, 2}), "Cannot append details fixture");
+    require(source->finish(), "Cannot finish details fixture");
+    ui::ScopeViewWindow live("scope"); live.attachSource(source, {{"v", 0}}); live.refreshSource();
+    auto* button = live.findChild<QPushButton*>("scope.runDetails");
+    require(button, "Missing Run details action"); button->click();
+    auto* dialog = live.findChild<QDialog*>("scope.runDetailsDialog");
+    auto* summary = dialog ? dialog->findChild<QPlainTextEdit*>("scope.detailsSummary") : nullptr;
+    require(summary && summary->isReadOnly() && summary->toPlainText().contains("saved-model")
+        && summary->toPlainText().contains("test-revision"), "Live provenance summary missing");
+    require(dialog->findChild<QPlainTextEdit*>("scope.detailsEffectiveModel")->toPlainText() == model,
+        "Details did not display the frozen effective model");
+    QBuffer saved; saved.open(QIODevice::ReadWrite); QString error;
+    require(live.writeRunResults(saved, &error), "Cannot save details fixture"); saved.seek(0);
+    ui::ScopeViewWindow imported("import");
+    require(imported.openRunResults(saved, "saved comparison", &error), "Cannot import details fixture");
+    imported.findChild<QPushButton*>("scope.runDetails")->click();
+    auto* importedDialog = imported.findChild<QDialog*>("scope.runDetailsDialog");
+    auto* choices = importedDialog->findChild<QComboBox*>("scope.detailsRuns");
+    require(choices && choices->count() == 1 && choices->itemText(0).contains("saved comparison"),
+        "Imported run is missing from details selector");
+    require(importedDialog->findChild<QPlainTextEdit*>("scope.detailsSummary")->toPlainText().contains("saved-model"),
+        "Imported provenance did not survive saving and reopening");
+    ui::ScopeViewWindow empty("empty"); empty.findChild<QPushButton*>("scope.runDetails")->click();
+    require(empty.findChild<QPlainTextEdit*>("scope.detailsSummary")->toPlainText().contains("unavailable"),
+        "Missing provenance was not explicit");
+}
+
 void testLinePlot()
 {
     viewers::LinePlotView plot;
@@ -362,6 +407,7 @@ int main(int argc, char** argv) try
     testLifecycle();
     testRetainedComparisonWithoutWindows();
     testWindowIndependentResults();
+    testRunDetails();
     testLinePlot();
     testTrajectory();
     std::cout << "Viewer registry, routing, alignment, lifecycle, plot and 3D trajectory checks passed\n";

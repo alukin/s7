@@ -38,7 +38,7 @@ std::unique_ptr<ui::ScopeRecording> scopeProjection(const ObservationSource& sou
             {"consecutive_steps", count == static_cast<std::uint64_t>(last - first + 1)}});
     }
     result->setRunMetadata({{"run_id", QString::number(source.runId())}, {"finished", snapshot.finished},
-        {"stopped", snapshot.stopped}, {"run_error", snapshot.runError}, {"channels", mapping}});
+        {"stopped", snapshot.stopped}, {"run_error", snapshot.runError}, {"channels", mapping}, {"provenance", source.provenance()}});
     result->setDroppedSampleCount(snapshot.captureDropped);
     if (!snapshot.storageError.isEmpty() || !snapshot.runError.isEmpty())
         result->setCaptureError(snapshot.storageError + QStringLiteral(" ") + snapshot.runError);

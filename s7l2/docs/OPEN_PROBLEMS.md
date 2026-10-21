@@ -71,7 +71,10 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
   coverage. Full-suite verification is recorded in DEVELOPMENT_PLAN.md.
 - **N1/U1/A1 / incomplete coverage and usability:** N1a local model time, duration
   boundaries, lifecycle alignment and initial saved-model execution parity are
-  validated. Wider numerical references, provenance and UI acceptance remain; existing pendulum/viewer results are retained as historical
+  validated. N1b adds immutable requested/effective configuration, defaults/nested definitions,
+  seeds, rate and build/element identities to saved results with Run details and
+  tested saved-config replay. Wider numerical references, external input histories
+  and UI acceptance remain; existing pendulum/viewer results are retained as historical
   evidence, not fresh release acceptance. Real GPU/package/Windows validation remains
   unverified. DISPLAY variables alone do not establish a usable display.
 

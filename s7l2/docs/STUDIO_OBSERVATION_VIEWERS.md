@@ -183,7 +183,9 @@ run identity, source/stored channel types, capture state and errors. Scope resul
 include run/channel step-range provenance in their JSON header. Scope CSV retains
 its existing interchange layout; use .s7scope or observation CSV for completeness
 metadata. N1a derives local recording time directly from step/rational rate (see
-SIMULATION_MODEL.md); full reproducibility metadata remains N1 work.
+SIMULATION_MODEL.md); N1b now retains immutable requested/effective model provenance in sources and
+Scope v2 results, with read-only Run details for current/imported runs. External
+input histories and cross-platform reproduction remain separate work.
 
 `s7studio_observation_source` tests window-free paging/spill and run handles;
 `s7studio_observation_capture` withholds preview delivery to force 20,000 dropped

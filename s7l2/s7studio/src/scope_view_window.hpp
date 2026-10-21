@@ -79,6 +79,7 @@ private slots:
     void exportRecordedCsv();
     void saveRunResults();
     void openRunResultsFile();
+    void showRunDetails();
     void refreshPlot();
 
 private:

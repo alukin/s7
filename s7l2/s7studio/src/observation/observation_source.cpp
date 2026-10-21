@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <limits>
 #include <exception>
+#include <stdexcept>
 
 namespace s7studio::observation {
 ObservationSource::ObservationSource(std::uint64_t runId, StorageOptions options)
@@ -26,6 +27,15 @@ ChannelId ObservationSource::channel(const QString& name, const QString& sourceT
     const auto id = static_cast<ChannelId>(channels_.size());
     channels_.push_back({id, name, sourceType}); ids_.insert(name, id); return id;
 }
+void ObservationSource::setProvenance(QJsonObject provenance)
+{
+    std::lock_guard lock(mutex_);
+    if (provenanceSet_ || status_.samples || status_.finished)
+        throw std::logic_error("Run provenance must be published once before capture.");
+    provenance_ = std::move(provenance);
+    provenanceSet_ = true;
+}
+QJsonObject ObservationSource::provenance() const { std::lock_guard lock(mutex_); return provenance_; }
 QVector<Channel> ObservationSource::channels() const { std::lock_guard lock(mutex_); return channels_; }
 SourceStatus ObservationSource::status() const { std::lock_guard lock(mutex_); return status_; }
 void ObservationSource::addCaptureLoss(std::uint64_t n) { std::lock_guard lock(mutex_); status_.captureDropped += n; }
@@ -112,7 +122,7 @@ Page ObservationSource::read(std::uint64_t cursor, qsizetype limit) const
     page.next += static_cast<std::uint64_t>(count); return page;
 }
 namespace {
-void writeMetadata(QTextStream& stream, std::uint64_t runId, const SourceStatus& status, const QVector<Channel>& channels)
+void writeMetadata(QTextStream& stream, std::uint64_t runId, const SourceStatus& status, const QVector<Channel>& channels, const QJsonObject& provenance)
 {
     QJsonArray types;
     for (const auto& channel : channels)
@@ -120,7 +130,7 @@ void writeMetadata(QTextStream& stream, std::uint64_t runId, const SourceStatus&
     const auto metadata = QJsonDocument(QJsonObject{{"run_id", QString::number(runId)},
         {"samples", QString::number(status.samples)}, {"capture_dropped", QString::number(status.captureDropped)},
         {"incomplete", status.incomplete()}, {"finished", status.finished}, {"stopped", status.stopped},
-        {"storage_error", status.storageError}, {"run_error", status.runError}, {"channels", types}}).toJson(QJsonDocument::Compact);
+        {"storage_error", status.storageError}, {"run_error", status.runError}, {"channels", types}, {"provenance", provenance}}).toJson(QJsonDocument::Compact);
     stream << "# s7_observation " << QString::fromUtf8(metadata) << '\n';
 }
 }
@@ -129,7 +139,7 @@ bool ObservationSource::writeCsv(QIODevice& output, const QVector<ChannelId>& se
     const auto snapshot = status();
     const auto metadata = channels();
     QTextStream stream(&output); stream.setRealNumberPrecision(std::numeric_limits<double>::max_digits10);
-    writeMetadata(stream, runId_, snapshot, metadata);
+    writeMetadata(stream, runId_, snapshot, metadata, provenance());
     stream << "run,channel,step,time,value\n";
     std::uint64_t cursor = 0;
     while (cursor < snapshot.samples) {
@@ -157,7 +167,7 @@ bool alignedCsv(const ObservationSource& source, QIODevice& output, const QVecto
         return false;
     }
     QTextStream stream(&output); stream.setRealNumberPrecision(std::numeric_limits<double>::max_digits10);
-    writeMetadata(stream, source.runId(), snapshot, channels);
+    writeMetadata(stream, source.runId(), snapshot, channels, source.provenance());
     stream << "run,step,time";
     for (auto channel : inputs) {
         auto name = channels[channel].name; name.replace('"', "\"\""); stream << ",\"" << name << "\"";

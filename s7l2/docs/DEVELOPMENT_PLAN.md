@@ -161,7 +161,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | D2 P0 confirmed defect / coverage | MainWindow closeEvent has no unsaved prompt; other replacement paths and nested tabs need audit | Track persisted document state across scene, parameters, probes, nested schemas and run config; central Save/Discard/Cancel guard for every replacement including remote loads and recent files | D1; nested commits and undo cleanliness must agree; failed Save cancels transition | Each dialog choice, nested edits, open/new/recent/close/load, failed save retains dirty state, full config round trip | Implemented; document safety and nested regressions pass; wider interaction coverage pending |
 | R1 P0 lifecycle complete | LocalSchemaRunner, ModelRunController, MainWindow, ViewerManager, mailbox already have lifecycle tests | Audit Idle/Prepared/Running/Paused/Stopping/Stopped/Error; stop/join on replacement; generation isolation for queued work, immutable active config, actionable failures | D2; Qt queued callbacks and shutdown ordering | Deterministic start/stop/reset/rerun, document replacement running/paused, close, stale callbacks, observers added/deleted, edit-next-run, worker recovery | Implemented; deterministic runner/window and GUI checks passed |
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Implemented: separate sources and authoritative pre-preview capture; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
-| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a local time/duration/lifecycle/parity validated; reproducibility metadata and wider independent-reference matrix remain |
+| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a timing/parity and N1b immutable provenance/saved-config replay validated; wider independent-reference matrix and external input histories remain |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | Pending audit |
 | C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Root workflow/provisioning/headless/Studio GUI jobs implemented; hosted, sanitizer and Windows validation open |
 | P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Pending audit |
@@ -515,4 +515,35 @@ noise replay on the same software/environment. External I/O/plugin behavior and
 cross-platform RNG/bitwise reproducibility require their own evidence and must
 not be promised. Build relevant targets, run affected tests and broaden to the
 full suite for shared observation/result contracts. No auto-execution on import.
-Status: audited; implementation pending.
+Status: complete for the four requested N1b items; evidence below. Broader N1
+numerical-reference and external-input work remains open.
+
+
+N1b validation (2026-10-21): `build-tests` passed (GCC 16.2, Debug, Qt 6.11.2,
+Linux). Seven affected provenance/source/capture/time/viewer/runner/window tests
+passed 7/7. The full 72-test suite ran in 558.61 seconds: 71 passed, including
+coupled/nonlinear pendulum, transport/deployment/SDK and all four GUI checks with
+Quick 3D rendering. The one failure was a stale malformed-file fixture that
+hardcoded version 2 as unsupported; version 2 is now the supported format.
+Changed the fixture to use current-version+1, rebuilt its target and reran it:
+`s7studio_scope_lifecycle` passed (1.90 s), retaining all rollback checks. Every
+registered test has therefore passed against the final behavior; the entire
+suite was not repeated after that test-only correction. `git diff --check` passes.
+
+Coverage includes edit/reset/rerun isolation, const source handles and one-time
+publication, exact uint64 JSON through binary files, default parameters, nested
+library definitions after registry removal, generated and explicit White/Pink
+noise seeds, single/multichannel deterministic linear/nonlinear saved-config
+reproduction, exact step/time/value equality, read-only live/imported/missing
+Run details, new-presentation metadata cleanup, >64 KiB metadata, 16 MiB bounds,
+unsupported versions and corrupt-fingerprint transactional rejection.
+
+Provenance is the effective constructor configuration plus declared element and
+build identities, not a state checkpoint or captured external input stream.
+Requested/effective JSON remains exact numeric text; the model SHA-256 identifies
+configuration content and is not an authentication signature. S7 noise seed=0
+is resolved explicitly in Studio before element factories/validation run. Saved
+results require the new v2 reader; no v1 shim was added. Dirty-build source
+changes and matching plugin implementations must be retained separately for
+reproduction. Native GPU/Windows, cross-platform RNG/bitwise equivalence, broad
+numerical-model acceptance and the measured operational envelope remain open.

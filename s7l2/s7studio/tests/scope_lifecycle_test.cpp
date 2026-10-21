@@ -109,7 +109,10 @@ int main(int argc, char** argv) try {
         require(plot->series().front()->points().size() > 90, "Imported disk-backed zoom lost full-resolution history");
         const auto unchanged = csv(restored);
         auto wrongVersion = snapshot;
-        wrongVersion[8] = 2;
+        QBuffer versionEdit(&wrongVersion); versionEdit.open(QIODevice::ReadWrite); versionEdit.seek(8);
+        QDataStream versionStream(&versionEdit); versionStream.setByteOrder(QDataStream::LittleEndian);
+        versionStream << quint32(s7studio::ui::ScopeRecording::kResultVersion + 1);
+        versionEdit.close();
         auto unordered = snapshot;
         QBuffer edit(&unordered); edit.open(QIODevice::ReadWrite); edit.seek(unordered.size() - 16);
         QDataStream editStream(&edit); editStream.setByteOrder(QDataStream::LittleEndian); editStream << 0.0;

@@ -1,4 +1,5 @@
 #include "scope_recording.hpp"
+#include "observation/run_metadata.hpp"
 
 #include <QDataStream>
 #include <QDateTime>
@@ -84,6 +85,7 @@ void ScopeRecording::clearLive()
     }
     droppedSamples_ = 0;
     temporaryWriteError_.clear();
+    runMetadata_ = {};
     notifyStatus();
 }
 
@@ -110,6 +112,7 @@ void ScopeRecording::archiveLive(const QString& runLabel)
     for (auto it = archived.begin(); it != archived.end(); ++it) series_.insert(it.key(), std::move(it.value()));
     droppedSamples_ = 0;
     temporaryWriteError_.clear();
+    runMetadata_ = {};
     notifyStatus();
 }
 
@@ -273,6 +276,9 @@ bool ScopeRecording::writeRunResults(QIODevice& device, QString* error) const
     };
     if (error) error->clear();
     if (!device.isWritable()) return fail(QStringLiteral("Result destination is not writable"));
+    if (runMetadata_.contains("provenance") && !runMetadata_.value("provenance").isObject())
+        return fail(QStringLiteral("Invalid run provenance"));
+    if (!observation::validateRunProvenance(runMetadata_.value("provenance").toObject(), error)) return false;
     QJsonArray channels;
     bool incomplete = droppedSamples_ > 0 || !temporaryWriteError_.isEmpty();
     for (const auto& series : series_) {
@@ -287,12 +293,12 @@ bool ScopeRecording::writeRunResults(QIODevice& device, QString* error) const
         {"saved_utc", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
         {"dropped_samples", QString::number(droppedSamples_)}, {"incomplete", incomplete},
         {"storage_warning", temporaryWriteError_}, {"channels", channels}, {"observation", runMetadata_}}).toJson(QJsonDocument::Compact);
-    if (header.size() > 65536) return fail(QStringLiteral("Result metadata exceeds 64 KiB"));
+    if (header.size() > kMaxResultHeaderBytes) return fail(QStringLiteral("Result metadata exceeds 16 MiB"));
     QDataStream out(&device);
     out.setByteOrder(QDataStream::LittleEndian);
     out.setFloatingPointPrecision(QDataStream::DoublePrecision);
     out.writeRawData("S7SCOPE\n", 8);
-    out << quint32(1) << quint32(header.size());
+    out << kResultVersion << quint32(header.size());
     out.writeRawData(header.constData(), header.size());
     bool validSamples = true;
     for (const auto& series : series_) {
@@ -325,7 +331,7 @@ bool ScopeRecording::openRunResults(QIODevice& device, const QString& label, QSt
     if (in.readRawData(magic, 8) != 8 || QByteArray(magic, 8) != QByteArray("S7SCOPE\n", 8))
         return fail(QStringLiteral("Not an S7 Scope result"));
     in >> version >> headerSize;
-    if (in.status() != QDataStream::Ok || version != 1 || headerSize > 65536)
+    if (in.status() != QDataStream::Ok || version != kResultVersion || headerSize > kMaxResultHeaderBytes)
         return fail(QStringLiteral("Unsupported or invalid Scope result header"));
     QByteArray header(headerSize, '\0');
     if (in.readRawData(header.data(), header.size()) != header.size())
@@ -341,6 +347,12 @@ bool ScopeRecording::openRunResults(QIODevice& device, const QString& label, QSt
         || !metadata.value("incomplete").isBool() || !metadata.value("storage_warning").isString()
         || !droppedOk || channels.isEmpty() || channels.size() > 1024)
         return fail(QStringLiteral("Invalid Scope result metadata"));
+    if (metadata.contains("observation") && !metadata.value("observation").isObject())
+        return fail(QStringLiteral("Invalid observation metadata"));
+    const auto observation = metadata.value("observation").toObject();
+    if (observation.contains("provenance") && !observation.value("provenance").isObject())
+        return fail(QStringLiteral("Invalid run provenance"));
+    if (!s7studio::observation::validateRunProvenance(observation.value("provenance").toObject(), error)) return false;
     const bool incomplete = metadata.value("incomplete").toBool() || dropped > 0
         || !metadata.value("storage_warning").toString().isEmpty();
     // Stage into independent bounded buffers; malformed/failed imports cannot
@@ -374,7 +386,9 @@ bool ScopeRecording::openRunResults(QIODevice& device, const QString& label, QSt
     for (auto it = staged.series_.begin(); it != staged.series_.end(); ++it) {
         auto series = std::move(it.value());
         series.comparisonLabel = comparisonLabel;
-        series.sourceMetadata = metadata.value("observation").toObject();
+        series.sourceMetadata = observation;
+        series.sourceMetadata["incomplete"] = incomplete;
+        series.sourceMetadata["storage_error"] = metadata.value("storage_warning").toString();
         if (incomplete) series.recordingWarning = QStringLiteral("incomplete recording; dropped %1 samples; %2")
             .arg(dropped).arg(metadata.value("storage_warning").toString());
         series_.insert(QStringLiteral("comparison:%1:").arg(id) + series.channelName, std::move(series));
