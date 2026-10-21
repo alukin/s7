@@ -94,17 +94,17 @@ void PhasePortraitViewWindow::appendObservedSample(const viewers::ObservedSample
     if (sample.role == QStringLiteral("y")) appendYSample(sample.step, sample.value);
 }
 
-void PhasePortraitViewWindow::appendXSample(const long step, const double value)
+void PhasePortraitViewWindow::appendXSample(const std::int64_t step, const double value)
 {
     addCoordinate(step, 0, value);
 }
 
-void PhasePortraitViewWindow::appendYSample(const long step, const double value)
+void PhasePortraitViewWindow::appendYSample(const std::int64_t step, const double value)
 {
     addCoordinate(step, 1, value);
 }
 
-void PhasePortraitViewWindow::addCoordinate(const long step, const std::size_t axis, const double value)
+void PhasePortraitViewWindow::addCoordinate(const std::int64_t step, const std::size_t axis, const double value)
 {
     const auto discarded = aligner_.discardedSteps();
     if (const auto point = aligner_.add(step, axis, value)) {

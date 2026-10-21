@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QJsonObject>
 #include <QMap>
 #include <QPointF>
 #include <QSharedPointer>
@@ -32,6 +33,7 @@ public:
         QString channelName;
         QString comparisonLabel;
         QString recordingWarning;
+        QJsonObject sourceMetadata;
         QVector<double> time;
         QVector<double> value;
         QVector<SpillIndexEntry> spillIndex;
@@ -67,7 +69,10 @@ public:
     void clearLive();
     void archiveLive(const QString& runLabel);
     void clearComparisons();
+    void appendComparison(const ScopeRecording& other, const QString& label);
     void copyComparisonsFrom(const ScopeRecording& other);
+    void setRunMetadata(QJsonObject metadata) { runMetadata_ = std::move(metadata); }
+    [[nodiscard]] const QJsonObject& runMetadata() const { return runMetadata_; }
     void setCaptureError(const QString& error) { temporaryWriteError_ = error; notifyStatus(); }
     void setDroppedSampleCount(std::uint64_t dropped);
     [[nodiscard]] auto droppedSampleCount() const -> std::uint64_t { return droppedSamples_; }
@@ -103,6 +108,7 @@ private:
     void decimatePlotBuffer(Series& series);
     void notifyStatus() const;
 
+    QJsonObject runMetadata_;
     QString scopeName_;
     std::uint64_t droppedSamples_ = 0;
     QString temporaryDirectory_;

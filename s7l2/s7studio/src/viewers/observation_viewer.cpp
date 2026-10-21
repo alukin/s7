@@ -7,6 +7,7 @@ void ObservationViewer::attachSource(std::shared_ptr<const observation::Observat
     source_ = std::move(source);
     bindings_ = std::move(bindings);
     readError_.clear();
+    previewDropped_ = 0;
     if (clear) clearSamples();
     cursor_ = 0;
 }
@@ -19,7 +20,12 @@ QString ObservationViewer::sourceStatusText() const
     if (!readError_.isEmpty()) return readError_;
     if (!source_) return {};
     const auto status = source_->status();
-    return status.storageError.isEmpty() ? QString() : QStringLiteral("INCOMPLETE: ") + status.storageError;
+    QStringList parts;
+    if (cursor_ < status.samples) parts << QStringLiteral("loading history %1/%2 records").arg(cursor_).arg(status.samples);
+    if (previewDropped_) parts << QStringLiteral("preview skipped %1 updates; recording unaffected").arg(previewDropped_);
+    if (!status.storageError.isEmpty()) parts << QStringLiteral("INCOMPLETE: ") + status.storageError;
+    if (!status.runError.isEmpty()) parts << QStringLiteral("run failed: ") + status.runError;
+    return parts.join(QStringLiteral(" | "));
 }
 bool ObservationViewer::refreshSource()
 {
@@ -29,11 +35,11 @@ bool ObservationViewer::refreshSource()
     const auto channels = source_->channels();
     for (const auto& sample : page.samples) {
         for (const auto& binding : bindings_) if (binding.channel == sample.channel)
-            appendObservedSample({channels[sample.channel].name, static_cast<long>(sample.step),
+            appendObservedSample({channels[sample.channel].name, sample.step,
                 sample.timeSeconds, sample.value, source_->runId(), sample.channel, binding.role});
     }
     cursor_ = page.next;
-    setDroppedSampleCount(source_->status().deliveryDropped);
+    setDroppedSampleCount(source_->status().captureDropped);
     return page.error.isEmpty() && cursor_ < source_->status().samples;
 }
 } // namespace s7studio::viewers

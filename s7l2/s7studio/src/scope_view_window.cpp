@@ -200,18 +200,26 @@ void ScopeViewWindow::clearSamples()
 void ScopeViewWindow::beginRun(const QString& previousRunLabel, bool preserve)
 {
     if (!preserve) { clearSamples(); return; }
-    if (source()) {
-        QString error;
-        auto projection = observation::scopeProjection(*source(), probeName_, selectedChannels(), &error);
-        if (projection) {
-            projection->copyComparisonsFrom(recording_);
-            recording_ = std::move(*projection);
-            recording_.setStatusChangedHandler([this] { updateStatus(); });
-        } else recording_.setCaptureError(error);
-    }
+    if (source()) { clearSamples(); return; } // retained run sources are projected independently
     recording_.archiveLive(previousRunLabel);
     syncSeries(true);
     dirty_ = true;
+}
+
+void ScopeViewWindow::setComparisonSources(const QVector<viewers::ComparisonBinding>& comparisons)
+{
+    for (const auto& comparison : comparisons) {
+        if (projectedComparisons_.contains(comparison.source)) continue;
+        QVector<observation::ChannelId> channels;
+        for (const auto& input : comparison.inputs) channels.push_back(input.channel);
+        if (channels.isEmpty()) continue;
+        projectedComparisons_.push_back(comparison.source); // one attempt per window; reopening can retry a storage failure
+        QString error;
+        auto projection = observation::scopeProjection(*comparison.source, probeName_, channels, &error);
+        if (!projection) { recording_.setCaptureError(error); continue; }
+        recording_.appendComparison(*projection, comparison.label);
+        syncSeries(false);
+    }
 }
 
 void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
@@ -221,7 +229,9 @@ void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 
 void ScopeViewWindow::updateStatus()
 {
-    statusLabel_->setText(recording_.statusText() + QStringLiteral(" | ") + sourceStatusText());
+    const auto cacheStatus = recording_.statusText();
+    statusLabel_->setText((source() && !cacheStatus.isEmpty() ? QStringLiteral("display cache: ") : QString())
+        + cacheStatus + (sourceStatusText().isEmpty() ? QString() : QStringLiteral(" | ") + sourceStatusText()));
 }
 
 void ScopeViewWindow::clearBuffers()

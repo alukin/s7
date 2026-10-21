@@ -87,9 +87,9 @@ public:
     [[nodiscard]] auto yProbeName() const -> QString { return yProbeName_; }
     [[nodiscard]] auto zProbeName() const -> QString { return zProbeName_; }
 
-    void appendXSample(long step, double value);
-    void appendYSample(long step, double value);
-    void appendZSample(long step, double value);
+    void appendXSample(std::int64_t step, double value);
+    void appendYSample(std::int64_t step, double value);
+    void appendZSample(std::int64_t step, double value);
     void clearSamples() override;
     void setDroppedSampleCount(std::uint64_t dropped) override;
 
@@ -121,7 +121,7 @@ private slots:
     void refreshPlots();
 
 private:
-    void addCoordinate(long step, double value, std::size_t axis);
+    void addCoordinate(std::int64_t step, double value, std::size_t axis);
     void updateStatus();
     void updateLabels();
 

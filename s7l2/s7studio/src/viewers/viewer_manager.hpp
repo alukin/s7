@@ -45,12 +45,14 @@ public:
     // Retains delivered samples independently of windows, resolves diagram
     // bindings, then refreshes existing presentations with bounded pages.
     void deliver(const ScopeSampleBatch& batch, const std::function<QString(const QString&)>& observerType);
+    void present(std::shared_ptr<const observation::ObservationSource> source, std::uint64_t previewDropped,
+                 const std::function<QString(const QString&)>& observerType);
     void clearSamples();
     void beginRun(const QString& previousRunLabel, bool preserveScopes);
     void setDroppedSampleCount(std::uint64_t dropped);
     [[nodiscard]] auto droppedSampleCount() const -> std::uint64_t { return dropped_; }
     void closeAll();
-    [[nodiscard]] auto source() const { return session_.source(); }
+    [[nodiscard]] auto source() const { return externalSource_ ? externalSource_ : session_.source(); }
     void refreshViews();
 
     [[nodiscard]] static auto observerIdOf(const QString& probeName) -> QString;
@@ -67,9 +69,12 @@ private:
     [[nodiscard]] static auto keyOf(const QString& typeId, const QString& instanceId) -> QString;
     void forget(const QString& key);
 
-    QVector<InputBinding> bindingsFor(const Instance& instance) const;
+    QVector<InputBinding> bindingsFor(const Instance& instance,
+        const std::shared_ptr<const observation::ObservationSource>& data) const;
+    void bindComparisons(const Instance& instance);
     void bindViews(bool clear);
     observation::ObservationSession session_;
+    std::shared_ptr<const observation::ObservationSource> externalSource_;
     QHash<QString, QString> recordedTypes_;
     const ViewerRegistry& registry_;
     QHash<QString, Instance> instances_;

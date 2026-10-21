@@ -4,7 +4,7 @@ Simulation follows the [analog-computer model](SIMULATION_MODEL.md): dynamics
 are explicit element networks. RK4 and other independent solvers belong in
 test references, not a new runtime simulation engine.
 
-Date: 2026-10-20
+Date: 2026-10-21
 Status: living document — update in place as phases complete or the sequence changes; do not create a new dated copy.
 
 This is the sequencing companion to `docs/OPEN_PROBLEMS.md`: that document lists what is unsolved, this one orders the work. The next-release section defines the current commitment; the later phases preserve the longer-term backlog.
@@ -76,7 +76,7 @@ Do not change implementation or licenses until this documentation increment is c
   This verifies assertion configuration, not execution of a local Release suite.
 - No push or hosted Actions run performed. No physical-GPU, native Windows,
   long-duration UI performance or complete-release readiness claim is made.
-- G1 is locally complete. The remaining L1/O1/N1/U1/P1/A1 work is still tracked;
+- G1 is locally complete. The remaining L1/N1/U1/P1/A1 work and measured O1 operational envelope are still tracked;
   contributor relicensing permission remains unresolved, and the broad release
   acceptance criteria have not been marked complete.
 
@@ -160,7 +160,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | D1 P0 confirmed defect | `s7studio/src/main_window.cpp` saveDocumentToPath and library export truncate destinations and ignore write results | Shared atomic QSaveFile writer, verify complete write and commit, disable direct fallback; update path/success state only after commit | Documentation commit; filesystem failure injection must work as root too | Existing-file preservation on open/write/commit failure, successful replacement/reopen and invalid path | Implemented and focused regression passed |
 | D2 P0 confirmed defect / coverage | MainWindow closeEvent has no unsaved prompt; other replacement paths and nested tabs need audit | Track persisted document state across scene, parameters, probes, nested schemas and run config; central Save/Discard/Cancel guard for every replacement including remote loads and recent files | D1; nested commits and undo cleanliness must agree; failed Save cancels transition | Each dialog choice, nested edits, open/new/recent/close/load, failed save retains dirty state, full config round trip | Implemented; document safety and nested regressions pass; wider interaction coverage pending |
 | R1 P0 lifecycle complete | LocalSchemaRunner, ModelRunController, MainWindow, ViewerManager, mailbox already have lifecycle tests | Audit Idle/Prepared/Running/Paused/Stopping/Stopped/Error; stop/join on replacement; generation isolation for queued work, immutable active config, actionable failures | D2; Qt queued callbacks and shutdown ordering | Deterministic start/stop/reset/rerun, document replacement running/paused, close, stale callbacks, observers added/deleted, edit-next-run, worker recovery | Implemented; deterministic runner/window and GUI checks passed |
-| O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Confirmed limitation; implementation policy pending |
+| O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Implemented: separate sources and authoritative pre-preview capture; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
 | N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | Pending audit; existing references retained |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | Pending audit |
 | C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Root workflow/provisioning/headless/Studio GUI jobs implemented; hosted, sanitizer and Windows validation open |
@@ -347,8 +347,8 @@ Baseline: `0de5bc6`, 67/67 tests passed; user prompt files remain untracked.
 
 | Task | Current / required behavior | Files / approach | Risk and acceptance | Status |
 |---|---|---|---|---|
-| O1a P0 architectural prerequisite | ViewerManager creates hidden windows to retain samples; Scope owns save/export data. Data must survive without any window. | Add QtCore-only observation source with bounded memory and disk-backed paged reads, run/channel identities and explicit delivery-loss/storage status. Manager owns source; viewers attach read-only and consume bounded pages. Keep Qt Graphs/Quick3D. | No capture-completeness claim: input still follows mailbox. No unbounded replay or hidden window creation. Test zero-window capture, paging/spill/failure, view deletion/recreation, clear without deleting results, source-backed export and run isolation. | Implemented; six focused tests and four Xvfb GUI tests passed, including Quick3D; full-suite check follows O1b |
-| O1b P0 completeness | Data discarded before UI delivery is still unavailable. | After O1a passes, move authoritative append to worker before preview; bounded storage/backpressure and explicit failure policy, typed probe validation. | Independent capture and preview status; deliberate preview overflow preserves full results; injected storage failure marks incomplete and stops/alerts under documented policy. | Pending O1a validation |
+| O1a P0 architectural prerequisite | ViewerManager creates hidden windows to retain samples; Scope owns save/export data. Data must survive without any window. | Add QtCore-only observation source with bounded memory and disk-backed paged reads, run/channel identities and explicit delivery-loss/storage status. Manager owns source; viewers attach read-only and consume bounded pages. Keep Qt Graphs/Quick3D. | No capture-completeness claim: input still follows mailbox. No unbounded replay or hidden window creation. Test zero-window capture, paging/spill/failure, view deletion/recreation, clear without deleting results, source-backed export and run isolation. | Implemented; six focused tests and four Xvfb GUI tests passed, including Quick3D; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
+| O1b P0 completeness | Data discarded before UI delivery is still unavailable. | After O1a passes, move authoritative append to worker before preview; bounded storage/backpressure and explicit failure policy, typed probe validation. | Independent capture and preview status; deliberate preview overflow preserves full results; injected storage failure marks incomplete and stops/alerts under documented policy. | Implemented after O1a validation; overflow/I/O failure/probe-validation regressions passed; 69-test suite and final 15 affected/GUI checks passed |
 
 O1a data contract: append is owned by the observation host, never a viewer;
 viewers hold a const source, explicit input bindings, and a presentation cursor.
@@ -387,3 +387,19 @@ full-source count/step/value and source-backed saved results; inject mid-write
 and final-flush failures, verify incomplete metadata and recovery; reject complex
 probes before the first runtime step; preserve pause/reset/generation guarantees.
 Rebuild build-tests and run focused/GUI checks before the complete suite.
+
+O1 review refinement: preserving previous traces must also retain source handles
+when no viewer exists. Store retained run handles/labels in the observation
+session, pass explicit per-view comparison bindings, and project on opening.
+Add a no-window rerun/comparison regression. This preserves the existing checkbox
+contract after removing hidden recording windows; no capture-policy change.
+
+Final O1 verification — 2026-10-21: build-tests passed. The full CTest suite
+passed 69/69 in 442.70 s, including headless numerical references and Xvfb GUI
+rendering. Following the final session-owned comparison refinement, rebuilt
+build-tests and reran all 11 affected source/capture/runner/window/viewer/Scope/
+document/end-to-end tests (18.89 s), plus all four GUI tests (4.15 s), all passed.
+Qt Quick 3D rendered under Mesa; no rendering skips. The independent source test
+links QtCore/QtTest without QtGui/QtWidgets. Actual disk exhaustion, native GPU/
+Windows, measured performance envelope, crash durability and asynchronous bulk
+I/O remain unverified or deferred; injected I/O failures are identified as such.

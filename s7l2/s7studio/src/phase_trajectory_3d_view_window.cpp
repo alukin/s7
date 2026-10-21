@@ -175,22 +175,22 @@ void PhaseTrajectory3DViewWindow::appendObservedSample(const viewers::ObservedSa
     if (sample.role == QStringLiteral("z")) appendZSample(sample.step, sample.value);
 }
 
-void PhaseTrajectory3DViewWindow::appendXSample(const long step, const double value)
+void PhaseTrajectory3DViewWindow::appendXSample(const std::int64_t step, const double value)
 {
     addCoordinate(step, value, 0);
 }
 
-void PhaseTrajectory3DViewWindow::appendYSample(const long step, const double value)
+void PhaseTrajectory3DViewWindow::appendYSample(const std::int64_t step, const double value)
 {
     addCoordinate(step, value, 1);
 }
 
-void PhaseTrajectory3DViewWindow::appendZSample(const long step, const double value)
+void PhaseTrajectory3DViewWindow::appendZSample(const std::int64_t step, const double value)
 {
     addCoordinate(step, value, 2);
 }
 
-void PhaseTrajectory3DViewWindow::addCoordinate(const long step, const double value, const std::size_t axis)
+void PhaseTrajectory3DViewWindow::addCoordinate(const std::int64_t step, const double value, const std::size_t axis)
 {
     if (const auto point = aligner_.add(step, axis, value)) {
         if (points_.size() >= kMaxPoints) {

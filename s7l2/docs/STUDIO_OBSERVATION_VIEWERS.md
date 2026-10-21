@@ -6,52 +6,49 @@ Observation stays outside computation (ADR-011, ADR-012, ADR-013 in `../../doc/S
 
 ## Data flow
 
-```
-LocalSchemaRunner worker            UI thread
-  NodeRuntime::step()
-  ObservationService::snapshot()  ─► ScopeSampleMailbox ─► MainWindow::onScopeSamplesAvailable
-  (one sample per probe per step;      (bounded, drops       │
-   step number + model time)            oldest, counts)      ▼
-                                                    viewers::ViewerManager::deliver
-                                                      │  resolves each observer once per batch
-                                                      │  (diagram element type, else Scope),
-                                                      │  creates missing viewers hidden,
-                                                      ▼  routes by probe name
-                                         ObservationViewer::appendObservedSample
-                                           Scope:   ScopeRecording (preview + spill file)
-                                           Phase:   StepAligner<2> → (x, y) pairs
-                                           3D:      StepAligner<3> → (x, y, z) triples
-                                                      │  repaint timer (33 ms, visible only)
-                                                      ▼
-                                         LinePlotView (Qt Graphs) / TrajectoryGeometry (Qt Quick 3D)
+```text
+LocalSchemaRunner worker
+  NodeRuntime::step() → ObservationService reads selected outputs
+       ↓ synchronous append (bounded RAM, then temporary disk; backpressure)
+  ObservationSource ──────────────→ result services → atomic save / CSV export
+       ↓ const handle + bounded paged reads
+  ObservationViewer → disposable display projection → Qt Graphs / Qt Quick 3D
+
+  ScopeSampleMailbox → MainWindow → ViewerManager::present()
+       bounded preview notifications/loss accounting; never authoritative capture
 ```
 
-Simulation → observation → data adapter → viewer → renderer: the mailbox and `ViewerManager` are the transport, `ScopeRecording` and `StepAligner` adapt samples to what a viewer draws, and the renderers only see finished point lists. Samples cross threads only through the existing mailbox; viewers, their QML scenes and their data live on the UI thread.
+A source belongs to one run and outlives individual windows. Capture occurs on
+the stepping thread and cannot change runtime state. Viewer refresh reads bounded
+pages; no hidden window is created to record data. Source I/O is serialized, and
+views receive const handles plus explicit role/channel bindings. Closing or
+clearing a view does not erase recorded data. Preview loss is distinct from
+capture failure. A storage error fails the run and retains an incomplete prefix.
 
 ## Components (`s7studio/src/viewers/`)
 
 | Component | Role |
 |---|---|
-| `ObservationViewer` (`observation_viewer.hpp`) | The minimal interface every viewer implements: `widget()`, `subscribes(probe)`, `appendObservedSample()`, `clearSamples()`, `setDroppedSampleCount()`. Nothing about storage or drawing. |
+| `ObservationViewer` (`observation_viewer.hpp`) | Presentation contract: `widget()`, const-source attachment, explicit `InputBinding` roles/channels, bounded `refreshSource()`, presentation clear and protected sample consumption. It cannot append capture data. |
 | `ViewerType`, `ViewerInstanceSpec` | A registered kind of viewer: `typeId` (equal to the diagram observer element type), picker text, the probe suffixes of its fixed inputs (`x`, `y`, ...; empty for Scope's variable channels) and a factory. |
 | `ViewerRegistry` (`viewer_registry.*`) | Process-wide list of viewer types; built-ins register in `registerBuiltinViewers()`. The element picker's **Observers** category and `MainWindow` both read it. |
-| `ViewerManager` (`viewer_manager.*`) | Owns one Studio window's viewer instances keyed by (type, instance id), so a diagram can hold several viewers of one type. Creates on demand, opens, routes samples, propagates capture-loss counts, clears on a new run/reset, and destroys all viewers on diagram switch and shutdown. A viewer window destroyed elsewhere is forgotten immediately. |
-| `StepAligner<N>` (`step_aligner.hpp`) | Joins N coordinate streams into points of one runtime step. Coordinates may arrive in any order; a step left incomplete after eight newer steps started is discarded and counted as dropped. |
+| `ViewerManager` (`viewer_manager.*`) | Owns one Studio window's viewer instances keyed by (type, instance id), so a diagram can hold several viewers of one type. Creates windows only on ensure/open, binds read-only sources, refreshes bounded pages and reports preview loss; destroys windows on diagram switch/shutdown. A viewer window destroyed elsewhere is forgotten immediately. |
+| `StepAligner<N>` (`../observation/step_aligner.hpp`) | Joins N coordinate streams into points of one runtime step. Coordinates may arrive in any order; a step left incomplete after eight newer steps started is discarded and counted as dropped. |
 | `LinePlotView` (`line_plot_view.*`, `qml/LinePlot.qml`) | 2D plot: `GraphsView` with `LineSeries` in a `QQuickWidget`. Axis ranges, titles, legend and series are C++ state in `LinePlotView`/`LinePlotBridge`; wheel zoom (about the cursor, both axes) and drag pan are forwarded from QML to C++. |
 | `TrajectoryGeometry`, `TrajectoryFrameGeometry` (`trajectory_geometry.*`, `qml/Trajectory3D.qml`) | Custom `QQuick3DGeometry`: the trajectory as one line strip, the frame as a wireframe cube with ticks. `OrbitCameraController` rotates (drag) and zooms (wheel). |
 | `quick_support.*` | Creating a viewer's `QQuickWidget`, loading its scene with required properties, and tearing it down safely. |
 
-The viewer windows themselves stay in `s7studio/src`: `scope_view_window.*` (with `scope_recording.*`), `phase_portrait_view_window.*`, `phase_trajectory_3d_view_window.*`. All of this is the `s7studio_viewers` static library, shared by Studio and its tests.
+The viewer windows themselves stay in `s7studio/src`: `scope_view_window.*` (with `scope_recording.*`), `phase_portrait_view_window.*`, `phase_trajectory_3d_view_window.*`. The windows/renderers are in `s7studio_viewers`. QtCore-only `s7studio_observation` owns raw sources and shared step alignment; QtCore-only `s7studio_results` implements Scope result projections and serialization. These are independently testable without a GUI application.
 
 ### Scope
 
-`ScopeRecording` holds the data: per channel a bounded preview of 20,000 points thinned uniformly as the run grows, plus a temporary spill file with every sample once the preview is full. Zooming into a spilled region reads full resolution back from the file. Save Run (`.s7scope`), Open Run (comparison overlays), CSV export and the completeness warnings are unchanged; see [SCOPE_RESULTS.md](SCOPE_RESULTS.md). Imports stage into a separate `ScopeRecording`, so no window is created for a failed or successful import.
+`ScopeRecording` holds a disposable display/import projection: per channel a bounded preview of 20,000 points thinned uniformly as the run grows, plus a temporary spill file with every sample once the preview is full. Zooming into a spilled region reads full resolution back from the file. Save Run (`.s7scope`), Open Run (comparison overlays), CSV export and the completeness warnings are unchanged; see [SCOPE_RESULTS.md](SCOPE_RESULTS.md). Imports stage into a separate `ScopeRecording`, so no window is created for a failed or successful import.
 
-`ScopeViewWindow` maps each recording series to a `QLineSeries`, keeps **Fit full run**, **Auto Y** (fits values within the visible time window), the time scroll bar and the legend. A hidden Scope keeps recording; its plot is rebuilt when shown.
+`ScopeViewWindow` maps each recording series to a `QLineSeries`, keeps **Fit full run**, **Auto Y** (fits values within the visible time window), the time scroll bar and the legend. Capture continues independently of the Scope. Its projection replays bounded source pages, and its plot is rebuilt when shown. Save/export scans the source rather than relying on the projection having caught up.
 
 ### Phase Portrait
 
-X/Y pairs of the same step go through `StepAligner<2>`. Every pair is retained (up to two million) and exported; at most 200,000 are drawn, as a uniform subsample that keeps the first and newest points when the trajectory is longer (the status line says so). Qt Graphs `LineSeries` join points in insertion order, so a parametric trajectory is drawn as such.
+X/Y pairs of the same step go through `StepAligner<2>`. The display retains up to two million pairs; export reads all available same-step pairs from the source, independently of that cap; at most 200,000 are drawn, as a uniform subsample that keeps the first and newest points when the trajectory is longer (the status line says so). Qt Graphs `LineSeries` join points in insertion order, so a parametric trajectory is drawn as such.
 
 ### 3D Phase Trajectory
 
@@ -75,7 +72,7 @@ Triples of the same step go through `StepAligner<3>`. The trajectory is drawn as
 
 ## Adding a viewer type
 
-1. Write a window class deriving from `QWidget` and `viewers::ObservationViewer`. Keep its data structures private: align steps with `StepAligner<N>` if it combines several probes, draw with `LinePlotView` or a QML scene of its own (`createQuickWidget()` + `loadQuickScene()`, passing a bridge object as a required property, and `unloadQuickScene()` in the destructor).
+1. Write a window class deriving from `QWidget` and `viewers::ObservationViewer`. Keep its presentation caches private; consume the roles supplied in each sample, not probe-name conventions. Do not write recording data from the window. Align steps with `observation::StepAligner<N>` if it combines several probes, draw with `LinePlotView` or a QML scene of its own (`createQuickWidget()` + `loadQuickScene()`, passing a bridge object as a required property, and `unloadQuickScene()` in the destructor).
 2. Give it a `static auto viewerType() -> viewers::ViewerType` with a unique `typeId`, picker text, `inputSuffixes` and a factory that validates the `ViewerInstanceSpec` (return `nullptr` to reject it). The window is created hidden and unparented; `ViewerManager` owns it.
 3. Register it: add `registry.add(MyViewer::viewerType())` to `registerBuiltinViewers()` (or call `ViewerRegistry::instance().add()` from a plugin hook). The element picker, `MainWindow` routing and lifecycle need no change.
 4. Diagram side: an observer element type must exist with that `typeId` and its input ports (`diagram/element_ports.cpp`: `isObserverElementType`, `isAxisObserverElementType`, `elementPorts`). That is the diagram's representation of observation, outside the functional graph, and deliberately separate from the viewer.
@@ -110,9 +107,9 @@ Automated tests cannot judge rendering, interaction feel or GPU backends. Check 
 
 - Qt Graphs 2D line series have no dash patterns; Scope comparison overlays are told apart by translucency, width and the legend swatch instead of dashes.
 - Zoom changes both axes together; there is no box zoom or per-axis wheel zoom yet.
-- Drawn-point caps (Phase Portrait 200,000, 3D 500,000) bound rendering work; exports always contain every retained point.
+- Drawn-point caps (Phase Portrait 200,000, 3D 500,000) bound rendering work; source-backed exports are independent of display trimming.
 - Live rendering throughput is not characterized. With software rendering (offscreen CI, Wine) a visible Qt Graphs plot costs far more UI-thread time than QCustomPlot's raster drawing did: in `s7studio_scope_lifecycle` a Scope left visible during an unthrottled run made the UI fall behind and the mailbox drop samples under Wine, so that test records hidden. Check on GPU desktops that a visible viewer keeps up at the intended rates (manual test 5).
-- Under offscreen platforms Qt Quick 3D renders nothing, so 3D pixels are only checked manually.
+- Offscreen QML/geometry checks do not establish 3D rendering; the separate Xvfb GUI suite checks actual pixels/camera behavior when OpenGL works.
 
 ## Run notification isolation
 
@@ -136,23 +133,20 @@ history and partial coordinates, while Scope may move its preceding recording
 into a labelled comparison without copying its full spill history. MainWindow
 freezes observer types/probe bindings, validates sample-batch run IDs and rejects
 opening changed observers against old results. See the local-run lifecycle
-contract in STUDIO_DIAGRAM_EDITOR.md. These changes do not remove mailbox losses
-or establish complete capture under overload.
+contract in STUDIO_DIAGRAM_EDITOR.md. Authoritative capture now precedes the preview mailbox; preview losses do not make captured results incomplete. Storage failures remain explicit run failures.
 
-## Observation data and presentation separation (O1a)
+## Observation data and presentation separation (O1a/O1b)
 
-`observation/ObservationSource` is a QtCore-only delivered-sample journal, usable
+`observation/ObservationSource` is a QtCore-only run data journal, usable
 with QCoreApplication and no windows. It owns one run ID, stable channel IDs,
 step/model-time/value records, delivery-loss count and storage-error status.
 Memory is bounded (20,000 records by default); subsequent records spill to a
 private temporary file. Reads are bounded pages in production order (4,096 by
 default, hard maximum 16,384). Private spill files are not a portable interchange
-format. A storage error stops further retention and remains explicitly incomplete.
+format. A storage error stops further retention, fails the run and remains explicitly incomplete.
 
-`ObservationSession` owns the active source; retained const handles keep an old
-run alive without changing it when another run starts. The manager hosts a
-session and window instances, but delivering data no longer creates hidden
-windows. Window creation occurs only through ensure/open. Windows receive a
+`LocalSchemaRunner` owns authoritative capture; `ObservationSession` also supports standalone delivered-data ingestion. In both modes, retained const handles keep an old
+run alive without changing it when another run starts. The manager hosts window instances and accepts the runner's const source; standalone delivery also does not create hidden windows. Window creation occurs only through ensure/open. Windows receive a
 const source and explicit role/channel bindings; prefix/suffix interpretation is
 confined to the diagram-to-binding adapter in ViewerManager. New viewers consume
 bounded pages through the common ObservationViewer implementation. Reopening a
@@ -174,7 +168,33 @@ replacement releases the session, while externally retained source handles remai
 valid. Closing/hiding a window does not control capture. Source and presentation
 limits are separate: a trimmed phase plot is not the complete source history.
 
-This increment does **not** fix upstream mailbox loss. The source records only
-samples already delivered through that mailbox, and reports its loss. O1b must
-move authoritative capture before the preview path and separate preview loss
-from recording completeness before claiming complete results.
+O1b moves authoritative append to the stepping thread before preview publication.
+All selected probes are validated before stepping; complex-valued outputs are
+rejected with an actionable error. Other real scalars are explicitly converted
+to stored binary64 with source-type metadata and a warning for possible rounding;
+F64 values retain their bits. Source records preserve run/channel/64-bit step/time.
+Synchronous storage backpressure reduces wall-clock throughput, not model rate.
+Run completion flushes storage before publishing success; write/flush/runtime
+failures preserve an incomplete prefix. Temporary capture is not crash-durable.
+
+Preview drops are reported as skipped updates, independently of capture status.
+The raw/aligned observation CSV formats include a JSON metadata comment with
+run identity, source/stored channel types, capture state and errors. Scope results
+include run/channel step-range provenance in their JSON header. Scope CSV retains
+its existing interchange layout; use .s7scope or observation CSV for completeness
+metadata. N1 still owns fractional model-time correctness and full reproducibility.
+
+`s7studio_observation_source` tests window-free paging/spill and run handles;
+`s7studio_observation_capture` withholds preview delivery to force 20,000 dropped
+updates while verifying all 220,000 authoritative samples and complete saved
+results. It injects partial disk-full writes and final-flush failure, verifies
+incomplete saved metadata/recovery, and rejects complex/invalid probes before
+stepping. Actual disk exhaustion is not claimed; failures are deterministic I/O
+injections. Performance-envelope and asynchronous bulk-operation work remains.
+
+Retained comparison runs belong to the observation session, including runs for
+which no window was ever opened. Explicit comparison bindings are passed to a
+viewer when it opens. Removing comparison traces clears their presentation;
+session-owned raw history remains until diagram replacement/shutdown. Imported
+comparison files have their own projection lifetime. Creating a new window may
+replay session comparisons; clearing plots is not a delete-recording operation.

@@ -1,6 +1,6 @@
 # S7 Open Problems
 
-Date: 2026-10-20
+Date: 2026-10-21
 Status: living document — update in place as items are resolved or found; do not create a new dated copy.
 
 This file replaces three earlier documents (`CODE_REVIEW_REQUIRED_FIXES.md`, `PROJECT_STATUS_AND_PLAN_2026-09-20.md`, `PROJECT_REVIEW_AND_DEVELOPMENT_PLAN_2026-10-14.md`), which tracked mostly-resolved findings and a stale plan and are now removed from the working tree. Their history (what was found, how it was fixed, and which fix superseded which) is still available with `git log --follow -- docs/CODE_REVIEW_REQUIRED_FIXES.md` and `git show <rev>:docs/CODE_REVIEW_REQUIRED_FIXES.md` etc.; resolved prerequisites are retained below only where they explain the current simulation baseline and remaining limits.
@@ -17,7 +17,7 @@ series as labelled comparisons, and phase views reset partial coordinates.
 Dedicated runner/window regressions cover transitions, cancellation, errors and
 recovery, edits during runs, observer changes and running/paused shutdown.
 Stop/reset remain cooperative: an element step that never returns can prevent
-joining. Recording completeness and measured throughput remain O1 work.
+joining. Recording ownership/completeness is handled by O1a/O1b below; measured throughput remains release acceptance work.
 
 ## Automated GUI suite priority
 
@@ -46,9 +46,13 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
   replacement. Focused tests cover close/open, undo, nested prompting, failed Save,
   saved settings and worker shutdown during running/paused replacement. Native
   dialog interaction and the wider editor gesture matrix remain acceptance work.
-- **O1 / P0 / confirmed limitation; design decision needed:** recording is downstream
-  of a bounded, dropping mailbox. Completeness requires an independent capture path;
-  existing incomplete metadata does not make capture lossless.
+- **O1 / P0 / capture implementation validated:**
+  authoritative worker capture now precedes preview delivery. Viewers attach
+  read-only sources; storage backpressure preserves model-time semantics.
+  Forced overflow retains all 220,000 samples despite 20,000 skipped preview
+  updates. Injected partial-write/final-flush failures stop the run and preserve
+  incomplete metadata; invalid/complex probes fail before stepping. The 69-test suite passed, and the final comparison refinement passed all 15
+  affected/GUI checks; evidence is in DEVELOPMENT_PLAN.md.
 - **C1 / P1 / CI placement/provisioning implemented; hosted validation open:** the
   workflow now lives at repository-root .github, uses s7l2 as its source directory,
   provisions compiler/Qt/Xvfb/Mesa dependencies and runs headless/Studio and GUI
@@ -77,7 +81,8 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 ## P1 — Local simulation quality: remaining release gaps
 
 - **Numerical coverage is partial.** Scalar analytical/convergence tests and the forward-Euler/symplectic oscillator regressions exist, but do not validate every bundled diagram, timestep or integration method. Define the supported configuration matrix and independent references; check values, first/final state publication and model-time alignment through both the headless and Studio paths. In particular, continuous oscillator energy conservation is not a valid exact requirement for forward Euler. More demanding nonlinear/chaotic examples need explicit experimental limits until validated.
-- **Observation completeness under load is not guaranteed.** `ScopeSampleMailbox` holds at most 200,000 samples across probes and drops the oldest on overflow, counting the loss. Scope's disk buffer preserves samples delivered to the UI, not ones already lost in that mailbox. Measure the supported rate/duration/channel envelope and choose/test delivery and recording behavior for overload. The lifecycle regression checks exact mailbox overflow accounting and an unusable temporary directory; saved Scope results preserve incomplete-recording metadata. Still verify actual disk exhaustion and write failures during capture; never describe a partial recording as full resolution without qualification.
+- **Recording policy now separates capture from presentation; operational envelope remains unmeasured.** LocalSchemaRunner records selected probes on its worker before the bounded preview mailbox, using bounded RAM and synchronous temporary-file backpressure. Preview overflow does not truncate authoritative data; storage failure stops capture/run and marks the retained prefix incomplete. Deterministic tests inject disk-full partial writes and flush failures; actual filesystem exhaustion/crash recovery is not claimed. Bulk projection/export/import is still synchronous UI work, and UI/source reads may wait for serialized storage I/O. Measure supported throughput, rate/duration/channel counts, disk use and UI latency; add asynchronous bulk operations without changing causal execution. Temporary capture is not durable persistence.
+
 - **View and run lifecycle coverage needs expansion.** The 2026-10-19 Scope corrections address repeated thinning of early history, replacement of recordings by the last 20,000 points on open/reopen, and Auto Y changing the time axis. `s7studio_scope_view` checks preview resolution/bounds and zoom preservation; `s7studio_scope_run` runs the actual two-integrator example at 1/10/100 kHz for ten model seconds, opens Scope afterward and reopens it, checking the full time extent and curve. The new `s7studio_scope_lifecycle` regression covers two-channel pendulum pause/resume, stop while paused, reset/rerun, hide/reopen, live save/export, imported disk-backed zoom, comparison persistence and malformed-file rollback. [Saved results](SCOPE_RESULTS.md) can be overlaid across runs. R1 adds phase-coordinate reset and running/paused shutdown coverage. Observation enabled/disabled equivalence, large-file responsiveness and measured shutdown under load remain open.
 - **Supported performance and packaging are unspecified.** Discretization frequency defines model time, not guaranteed steps per wall-clock second. Record throughput, UI responsiveness, pause/stop latency, queue/preview memory and disk use on stated hardware; smoke-test packaged Studio and required local plugins without a separate service. Studio-enabled CI is a release requirement; native Windows support requires native evidence, not only Wine.
 
@@ -173,5 +178,4 @@ above describe their original dates rather than superseding this new evidence.
 Delivered-sample ownership is extracted from viewer
 windows into a window-independent, disk-backed observation source. Viewers read
 bounded pages through explicit bindings; their lifetime and clear action must
-not delete source data. This is a prerequisite, not a lossless-capture fix:
-mailbox loss still makes delivered recordings incomplete until O1b.
+not delete source data. O1b now captures before the preview mailbox. Standalone delivered-only ingestion still reports upstream capture loss explicitly.

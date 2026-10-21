@@ -190,6 +190,32 @@ void testLifecycle()
     require(!open3d && !openScope, "Viewer windows outlived their manager");
 }
 
+void testRetainedComparisonWithoutWindows()
+{
+    viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
+    ScopeSampleBatch first; first.runId = 11;
+    first.samples = {{"scope/v", 1, .001, 12, 11}, {"scope/v", 2, .002, 24, 11}};
+    manager.deliver(first, everythingIsScope);
+    require(manager.viewers().isEmpty(), "First run created a recording window");
+    manager.beginRun("Run 11", true);
+    ScopeSampleBatch second; second.runId = 12;
+    second.samples = {{"scope/v", 1, .001, 99, 12}};
+    manager.deliver(second, everythingIsScope);
+    require(manager.viewers().isEmpty(), "Second run created a recording window");
+    auto* scope = dynamic_cast<ui::ScopeViewWindow*>(manager.openObserver("Scope", "scope"));
+    require(scope && scope->recording().series().size() == 2, "Unopened previous run lost its comparison");
+    int comparisons = 0;
+    for (const auto& series : scope->recording().series()) if (series.isComparison()) {
+        ++comparisons;
+        require(series.receivedSamples == 2 && series.lastValue == 24 && series.comparisonLabel.startsWith("Run 11"),
+            "Late comparison has wrong source data or identity");
+    }
+    require(comparisons == 1, "Previous run was duplicated");
+    delete scope;
+    scope = dynamic_cast<ui::ScopeViewWindow*>(manager.openObserver("Scope", "scope"));
+    require(scope->recording().series().size() == 2, "Recreation lost session-owned comparison");
+}
+
 void testWindowIndependentResults()
 {
     viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
@@ -234,6 +260,17 @@ void testWindowIndependentResults()
     manager.beginRun("old", false);
     require(manager.source() != source && source->status().samples == 150000, "New run mutated previous source");
     require(phase->points().isEmpty(), "New source retained old phase alignment/history");
+    manager.present(source, 100, types);
+    for (int turn = 0; turn < 40; ++turn) manager.refreshViews();
+    require(source->status().samples == 150000 && source->status().captureDropped == 0,
+        "Presentation duplicated authoritative samples or changed completeness");
+    require(phase->points().size() == 25000, "Authoritative source did not drive phase replay");
+    bool previewWarning = false;
+    for (auto* label : scope->findChildren<QLabel*>()) previewWarning |= label->text().contains("preview skipped 100");
+    require(previewWarning, "Preview loss is not distinguished from capture loss");
+    QBuffer full; full.open(QIODevice::WriteOnly);
+    require(scope->writeRunResults(full, &error), "Preview loss prevented complete source-backed save");
+    require(!source->status().incomplete(), "Preview loss marked authoritative capture incomplete");
 }
 
 void testLinePlot()
@@ -323,6 +360,7 @@ int main(int argc, char** argv) try
     testRegistry();
     testManagerRoutingAndAlignment();
     testLifecycle();
+    testRetainedComparisonWithoutWindows();
     testWindowIndependentResults();
     testLinePlot();
     testTrajectory();

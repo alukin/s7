@@ -803,6 +803,7 @@ int runPhasePortraitCheck(int argc, char** argv)
         for (auto* label : phase->findChildren<QLabel*>())
             require(!label->text().contains(QStringLiteral("display dropped")), "Phase Portrait run lost mailbox samples");
         const auto check = [&] {
+            while (phase->refreshSource()) {} // test harness explicitly drains bounded history pages
             QMetaObject::invokeMethod(phase, "refreshPlot", Qt::DirectConnection);
             auto* plot = phase->plotView();
             require(plot->series().size() == 1 && plot->series().front() == phase->trajectorySeries(),
@@ -959,6 +960,7 @@ int runPhaseTrajectory3DCheck(int argc, char** argv)
         for (auto* label : phase->findChildren<QLabel*>())
             require(!label->text().contains(QStringLiteral("display dropped")), "3D Phase Trajectory run lost mailbox samples");
         const auto check = [&] {
+            while (phase->refreshSource()) {} // test harness explicitly drains bounded history pages
             QMetaObject::invokeMethod(phase, "refreshPlots", Qt::DirectConnection);
             const auto& points = phase->points();
             const auto& geometry = phase->bridge()->trajectoryGeometry();
@@ -1061,6 +1063,7 @@ int runScopeRunCheck(int argc, char** argv)
         }
         if (!scope) throw std::runtime_error("Missing Scope window");
         const auto check = [&] {
+            while (scope->refreshSource()) {} // late-open projection is intentionally incremental
             QMetaObject::invokeMethod(scope, "refreshPlot", Qt::DirectConnection);
             auto* plot = scope->plotView();
             auto* series = scope->plottedSeries(QStringLiteral("live:v"));

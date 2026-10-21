@@ -70,7 +70,9 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     connect(window, &QObject::destroyed, this, [this, key] { forget(key); });
     viewer->setDroppedSampleCount(dropped_);
     instances_.insert(key, Instance{typeId, spec.instanceId, window, viewer, spec});
-    viewer->attachSource(source(), bindingsFor(instances_[key]));
+    viewer->attachSource(source(), bindingsFor(instances_[key], source()));
+    viewer->setPreviewDroppedCount(externalSource_ ? dropped_ : 0);
+    bindComparisons(instances_[key]);
     viewer->refreshSource();
     ++generation_;
     return viewer;
@@ -109,24 +111,45 @@ auto ViewerManager::openObserver(const QString& typeId, const QString& observerI
 void ViewerManager::deliver(const ScopeSampleBatch& batch,
                             const std::function<QString(const QString&)>& observerType)
 {
-    if (!session_.append(batch)) return;
+    if (externalSource_ || !session_.append(batch)) return;
     for (const auto& sample : batch.samples) {
         const auto id = observerIdOf(QString::fromStdString(sample.probeName));
         if (!recordedTypes_.contains(id)) recordedTypes_.insert(id, observerType(id));
     }
     bindViews(false);
     refreshViews();
-    dropped_ = source()->status().deliveryDropped;
+    dropped_ = source()->status().captureDropped;
 }
 
-QVector<InputBinding> ViewerManager::bindingsFor(const Instance& instance) const
+void ViewerManager::present(std::shared_ptr<const observation::ObservationSource> data,
+                            std::uint64_t previewDropped,
+                            const std::function<QString(const QString&)>& observerType)
+{
+    if (!data) return;
+    if (externalSource_ != data) {
+        externalSource_ = std::move(data);
+        dropped_ = 0;
+        recordedTypes_.clear();
+    }
+    for (const auto& channel : source()->channels()) {
+        const auto id = observerIdOf(channel.name);
+        if (!recordedTypes_.contains(id)) recordedTypes_.insert(id, observerType(id));
+    }
+    dropped_ += previewDropped;
+    bindViews(false);
+    for (auto* viewer : viewers()) viewer->setPreviewDroppedCount(dropped_);
+    refreshViews();
+}
+
+QVector<InputBinding> ViewerManager::bindingsFor(const Instance& instance,
+    const std::shared_ptr<const observation::ObservationSource>& data) const
 {
     QVector<InputBinding> bindings;
-    if (recordedTypes_.contains(instance.instanceId) && recordedTypes_.value(instance.instanceId) != instance.typeId)
+    if (data == source() && recordedTypes_.contains(instance.instanceId) && recordedTypes_.value(instance.instanceId) != instance.typeId)
         return bindings;
     const auto* type = registry_.find(instance.typeId);
     if (!type) return bindings;
-    const auto channels = source()->channels();
+    const auto channels = data->channels();
     for (const auto& channel : channels) {
         if (instance.spec.probeNames.isEmpty()) {
             if (observerIdOf(channel.name) != instance.instanceId) continue;
@@ -140,13 +163,21 @@ QVector<InputBinding> ViewerManager::bindingsFor(const Instance& instance) const
     }
     return bindings;
 }
+void ViewerManager::bindComparisons(const Instance& instance)
+{
+    QVector<ComparisonBinding> comparisons;
+    for (const auto& run : session_.retainedRuns())
+        comparisons.push_back({run.label, run.source, bindingsFor(instance, run.source)});
+    instance.viewer->setComparisonSources(comparisons);
+}
 void ViewerManager::bindViews(bool clear)
 {
     for (const auto& instance : std::as_const(instances_)) {
         if (!instance.window) continue;
         if (instance.viewer->source() != source())
-            instance.viewer->attachSource(source(), bindingsFor(instance), clear);
-        else instance.viewer->setBindings(bindingsFor(instance));
+            instance.viewer->attachSource(source(), bindingsFor(instance, source()), clear);
+        else instance.viewer->setBindings(bindingsFor(instance, source()));
+        bindComparisons(instance);
     }
 }
 void ViewerManager::refreshViews()
@@ -157,8 +188,10 @@ void ViewerManager::refreshViews()
 void ViewerManager::beginRun(const QString& previousRunLabel, bool preserveScopes)
 {
     dropped_ = 0;
+    if (preserveScopes) session_.retain(source(), previousRunLabel);
     for (auto* viewer : viewers()) viewer->beginRun(previousRunLabel, preserveScopes);
     session_.beginRun();
+    externalSource_.reset();
     recordedTypes_.clear();
     bindViews(false);
 }
@@ -178,6 +211,8 @@ void ViewerManager::closeAll()
 {
     const auto instances = std::exchange(instances_, {});
     session_.beginRun();
+    session_.clearHistory();
+    externalSource_.reset();
     recordedTypes_.clear();
     dropped_ = 0;
     ++generation_;

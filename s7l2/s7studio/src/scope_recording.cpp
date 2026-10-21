@@ -99,6 +99,7 @@ void ScopeRecording::archiveLive(const QString& runLabel)
         if (it->isComparison()) { ++it; continue; }
         auto series = std::move(it.value());
         it = series_.erase(it);
+        series.sourceMetadata = runMetadata_;
         series.comparisonLabel = QStringLiteral("%1 #%2%3").arg(runLabel).arg(sequence)
             .arg(incomplete ? QStringLiteral(" INCOMPLETE") : QString());
         if (incomplete) series.recordingWarning = QStringLiteral("incomplete recording; dropped %1 samples; %2")
@@ -109,6 +110,21 @@ void ScopeRecording::archiveLive(const QString& runLabel)
     for (auto it = archived.begin(); it != archived.end(); ++it) series_.insert(it.key(), std::move(it.value()));
     droppedSamples_ = 0;
     temporaryWriteError_.clear();
+    notifyStatus();
+}
+
+void ScopeRecording::appendComparison(const ScopeRecording& other, const QString& label)
+{
+    const auto sequence = ++comparisonSequence_;
+    for (const auto& original : other.series_) {
+        if (original.isComparison()) continue;
+        auto series = original;
+        series.sourceMetadata = other.runMetadata_;
+        series.comparisonLabel = QStringLiteral("%1 #%2%3").arg(label).arg(sequence)
+            .arg(other.exportMayBeIncomplete() ? QStringLiteral(" INCOMPLETE") : QString());
+        if (other.exportMayBeIncomplete()) series.recordingWarning = other.statusText();
+        series_.insert(QStringLiteral("comparison:%1:%2").arg(sequence).arg(series.channelName), std::move(series));
+    }
     notifyStatus();
 }
 
@@ -164,7 +180,7 @@ auto ScopeRecording::statusText() const -> QString
 
 auto ScopeRecording::exportMayBeIncomplete() const -> bool
 {
-    return droppedSamples_ > 0 || std::any_of(series_.cbegin(), series_.cend(), [](const Series& series) {
+    return droppedSamples_ > 0 || !temporaryWriteError_.isEmpty() || std::any_of(series_.cbegin(), series_.cend(), [](const Series& series) {
         return series.spillFailed || !series.recordingWarning.isEmpty();
     });
 }
@@ -270,7 +286,7 @@ bool ScopeRecording::writeRunResults(QIODevice& device, QString* error) const
     const auto header = QJsonDocument(QJsonObject{{"scope", scopeName_},
         {"saved_utc", QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},
         {"dropped_samples", QString::number(droppedSamples_)}, {"incomplete", incomplete},
-        {"storage_warning", temporaryWriteError_}, {"channels", channels}}).toJson(QJsonDocument::Compact);
+        {"storage_warning", temporaryWriteError_}, {"channels", channels}, {"observation", runMetadata_}}).toJson(QJsonDocument::Compact);
     if (header.size() > 65536) return fail(QStringLiteral("Result metadata exceeds 64 KiB"));
     QDataStream out(&device);
     out.setByteOrder(QDataStream::LittleEndian);
@@ -358,6 +374,7 @@ bool ScopeRecording::openRunResults(QIODevice& device, const QString& label, QSt
     for (auto it = staged.series_.begin(); it != staged.series_.end(); ++it) {
         auto series = std::move(it.value());
         series.comparisonLabel = comparisonLabel;
+        series.sourceMetadata = metadata.value("observation").toObject();
         if (incomplete) series.recordingWarning = QStringLiteral("incomplete recording; dropped %1 samples; %2")
             .arg(dropped).arg(metadata.value("storage_warning").toString());
         series_.insert(QStringLiteral("comparison:%1:").arg(id) + series.channelName, std::move(series));

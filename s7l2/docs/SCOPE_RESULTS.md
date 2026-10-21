@@ -7,7 +7,7 @@ The current run remains a solid trace. All traces use their original model
 timestamps; loading does not interpolate, shift time or run the model again.
 Use names such as `pendulum_trapezoid_10kHz.s7scope` to identify configurations.
 
-**Clear current** discards the current recording and its capture warnings.
+**Clear display** clears only this presentation. Recorded source data remains available for export and for replay after viewer recreation.
 Starting a run clears current samples; with **Clear scope traces before run**
 unchecked, it first moves the preceding recording into a labelled `Run <ID>`
 comparison, preserving its storage and capture-loss warnings. Reset clears live
@@ -20,17 +20,21 @@ A saved file contains only the current recording, not imported comparisons.
 **Export Full CSV** includes current and comparison traces; the `scope` column
 distinguishes their labels. CSV is an interchange export; **Open Run…** reads
 `.s7scope` files. Run settings, the model diagram, integrator parameters and
-runtime checkpoints are not stored in a Scope result. Save the diagram
+runtime checkpoints are not stored in a Scope result. Run identity, source signal types and per-channel step ranges are included when saving an attached source. Save the diagram
 separately to reproduce the computation.
 
 ## Snapshots and completeness
 
-Saving/exporting during execution snapshots the samples already delivered to
-Scope on the UI thread. The worker continues; subsequent/queued samples are
-outside that snapshot. File I/O runs synchronously on the UI thread, so large
-snapshots/imports can delay delivery. Pause before large file operations when
-capture completeness matters; this feature does not remove the bounded mailbox
-or promise lossless capture under arbitrary load.
+Saving/exporting during execution snapshots the authoritative source prefix,
+independently of UI delivery or plot replay progress. Capture runs on the worker
+before the preview mailbox. Its memory is bounded and disk writes apply
+backpressure to wall-clock execution; they do not change model time. A storage
+write/final-flush failure stops the run and marks retained results incomplete.
+Preview drops are reported separately and do not make recording incomplete.
+Explicit save/export/import currently perform synchronous paged work and can
+delay the UI; making bulk operations asynchronous remains responsiveness work.
+Temporary capture is not crash-durable. Explicit saved files are the persistence
+boundary.
 
 The saved result includes the Scope name, UTC save time, channel names, recorded
 timestamps/values, dropped-sample count, incomplete flag and storage warning.
@@ -58,7 +62,7 @@ All numeric fields are little endian. No Qt object serialization is used.
 
 Header fields: `scope` (string), `saved_utc` (ISO UTC string),
 `dropped_samples` (unsigned decimal string), `incomplete` (boolean),
-`storage_warning` (string), and `channels` (array). Each channel has `name`
+`storage_warning` (string), and `channels` (array). An `observation` object carries source run identity, active/finished/stopped state, run error, channel types and step ranges when available. Each channel has `name`
 (string) and `samples` (positive unsigned decimal string). Counts use strings
 to avoid JSON floating-point rounding. Channel names must be unique; the loader
 allows at most 1,024 channels. Trailing bytes, unsupported versions, bad counts,
@@ -66,14 +70,14 @@ non-finite samples and unordered timestamps are errors.
 
 Both loaded and live series use the same bounded preview and temporary-disk
 history implementation. Comparison count and disk use grow with imported data;
-**Remove comparisons** releases their buffers. A preview is decimated for
+**Remove comparisons** releases displayed projection buffers. Session-owned raw histories remain until diagram replacement/shutdown; imported-only buffers are released when removed. A preview is decimated for
 plotting; saved files retain the available full-resolution recording.
 
 ## Verification
 
 ```bash
-cmake --build build --target s7studio_scope_lifecycle_test
-ctest --test-dir build -R '^s7studio_scope_lifecycle$' --output-on-failure
+cmake --build build --target build-tests --parallel 2
+ctest --test-dir build -R '^s7studio_(scope_lifecycle|observation_source|observation_capture|viewers)$' --output-on-failure
 ```
 
 The offscreen regression uses the nonlinear Symplectic pendulum and compares
@@ -89,6 +93,4 @@ Native file-picker interaction and actual disk exhaustion are not automated.
 With an attached observation source, save/export reads the retained source rather
 than the displayed prefix or cleared display. ScopeRecording inside a window is
 a presentation/import projection. Source lifetime is independent of windows;
-closing and recreating a viewer can replay its retained history. The upstream
-mailbox may still discard samples in O1a, so independent ownership does not yet
-establish complete capture. See STUDIO_OBSERVATION_VIEWERS.md.
+closing and recreating a viewer can replay its retained history. Authoritative capture precedes the preview mailbox, so preview loss does not truncate the source. `s7studio_observation_capture` verifies full saved results under forced mailbox overflow and incomplete metadata under injected write/flush failures. See STUDIO_OBSERVATION_VIEWERS.md.

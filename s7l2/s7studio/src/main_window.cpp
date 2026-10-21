@@ -961,6 +961,7 @@ void MainWindow::onStatusChanged(const QString& status)
 void MainWindow::onRunCompleted(bool success, const QString& error)
 {
     if (shuttingDown_) return;
+    onScopeSamplesAvailable(); // final flush/error status, even with no pending preview notification
     if (success) {
         appendLog("[studio] run completed");
         runPanel_->append(QStringLiteral("Run completed."));
@@ -1163,14 +1164,15 @@ void MainWindow::onScopeSamplesAvailable()
     const auto batch = runner_->takeScopeSamples();
     const auto configuration = runner_->activeConfiguration();
     if (!configuration || batch.runId != configuration->id) return;
-    // Each observer records from its first sample, even before it is opened.
-    viewers_->deliver(batch, [this](const QString& observerId) { return observerViewerType(observerId); });
+    // Capture already happened on the worker; this only attaches read-only data.
+    viewers_->present(runner_->recordedSource(), batch.dropped,
+        [this](const QString& observerId) { return observerViewerType(observerId); });
     if (batch.dropped > 0) {
         // The runtime produced samples faster than the UI took them; the oldest were dropped.
         const auto nowMs = QDateTime::currentMSecsSinceEpoch();
         if (nowMs - lastScopeDropLogMs_ >= 1000) {
             lastScopeDropLogMs_ = nowMs;
-            appendLog(QStringLiteral("[studio] scope display could not keep up; %1 samples dropped so far (oldest first)")
+            appendLog(QStringLiteral("[studio] preview skipped %1 updates; authoritative recording is unaffected")
                           .arg(viewers_->droppedSampleCount()));
         }
     }

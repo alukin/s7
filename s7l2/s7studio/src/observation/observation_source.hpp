@@ -2,7 +2,8 @@
 
 #include <QHash>
 #include <QStringList>
-#include <QTemporaryFile>
+#include <QIODevice>
+#include <functional>
 #include <QVector>
 #include <cstdint>
 #include <memory>
@@ -18,12 +19,22 @@ struct Sample {
     double timeSeconds = 0;
     double value = 0;
 };
-struct Channel { ChannelId id; QString name; };
+struct Channel { ChannelId id; QString name; QString sourceType; };
+struct StorageOptions {
+    qsizetype memoryLimit = 20'000;
+    QString temporaryDirectory;
+    // Optional random-access storage provider (e.g. fault-injecting devices).
+    std::function<std::unique_ptr<QIODevice>()> createStorage;
+    std::function<bool(QIODevice&)> flushStorage;
+};
 struct SourceStatus {
     std::uint64_t samples = 0;
-    std::uint64_t deliveryDropped = 0;
+    std::uint64_t captureDropped = 0;
     QString storageError;
-    [[nodiscard]] bool incomplete() const { return deliveryDropped != 0 || !storageError.isEmpty(); }
+    QString runError;
+    bool finished = false;
+    bool stopped = false;
+    [[nodiscard]] bool incomplete() const { return captureDropped != 0 || !storageError.isEmpty() || !runError.isEmpty(); }
 };
 struct Page {
     QVector<Sample> samples;
@@ -33,16 +44,17 @@ struct Page {
 
 // Window-independent delivered-sample journal. A source belongs to exactly one
 // run. Const handles permit bounded history queries, never capture mutations.
-// O1a: upstream mailbox loss is still loss; this is not authoritative capture.
+// The producer decides whether these are authoritative or delivered-only data.
 class ObservationSource {
 public:
-    explicit ObservationSource(std::uint64_t runId = 0, qsizetype memoryLimit = 20'000,
-                               QString temporaryDirectory = {});
+    explicit ObservationSource(std::uint64_t runId = 0, StorageOptions options = {});
     [[nodiscard]] std::uint64_t runId() const { return runId_; }
-    ChannelId channel(const QString& name);
+    ChannelId channel(const QString& name, const QString& sourceType = QStringLiteral("f64"));
     [[nodiscard]] QVector<Channel> channels() const;
     bool append(const Sample& sample);
-    void addDeliveryLoss(std::uint64_t count);
+    void addCaptureLoss(std::uint64_t count);
+    // Flush temporary storage and freeze capture; false means incomplete.
+    bool finish(bool stopped = false, const QString& runError = {});
     [[nodiscard]] SourceStatus status() const;
     [[nodiscard]] Page read(std::uint64_t cursor, qsizetype limit = 4096) const;
     // Explicit full export, not a repaint operation. Includes run/step/time.
@@ -53,11 +65,13 @@ private:
     const std::uint64_t runId_;
     const qsizetype memoryLimit_;
     const QString temporaryDirectory_;
+    const std::function<std::unique_ptr<QIODevice>()> createStorage_;
+    const std::function<bool(QIODevice&)> flushStorage_;
     mutable std::mutex mutex_;
     QVector<Channel> channels_;
     QHash<QString, ChannelId> ids_;
     QVector<Sample> memory_;
-    mutable std::unique_ptr<QTemporaryFile> file_;
-    SourceStatus status_;
+    mutable std::unique_ptr<QIODevice> file_;
+    mutable SourceStatus status_;
 };
 } // namespace s7studio::observation

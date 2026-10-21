@@ -21,7 +21,7 @@ public:
     using Point = std::array<double, N>;
     static constexpr std::size_t kMaxPendingSteps = 8;
 
-    auto add(const long step, const std::size_t axis, const double value) -> std::optional<Point>
+    auto add(const std::int64_t step, const std::size_t axis, const double value) -> std::optional<Point>
     {
         auto& pending = pending_[step];
         pending.values[axis] = value;
@@ -51,7 +51,7 @@ private:
         Point values{};
         std::bitset<N> present;
     };
-    std::map<long, Pending> pending_;
+    std::map<std::int64_t, Pending> pending_;
     std::uint64_t discardedSteps_ = 0;
 };
 

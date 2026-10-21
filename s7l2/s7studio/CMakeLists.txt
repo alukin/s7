@@ -61,6 +61,14 @@ target_include_directories(s7studio_observation PUBLIC ${CMAKE_CURRENT_SOURCE_DI
 target_link_libraries(s7studio_observation PUBLIC Qt6::Core)
 s7_enable_project_warnings(s7studio_observation)
 
+add_library(s7studio_results STATIC
+    src/scope_recording.cpp src/scope_recording.hpp
+    src/observation/scope_results.cpp src/observation/scope_results.hpp
+)
+target_include_directories(s7studio_results PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(s7studio_results PUBLIC s7studio_observation Qt6::Core)
+s7_enable_project_warnings(s7studio_results)
+
 add_library(s7studio_viewers STATIC
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
@@ -75,10 +83,6 @@ add_library(s7studio_viewers STATIC
     src/viewers/quick_support.hpp
     src/viewers/trajectory_geometry.cpp
     src/viewers/trajectory_geometry.hpp
-    src/scope_recording.cpp
-    src/scope_recording.hpp
-    src/observation/scope_results.cpp
-    src/observation/scope_results.hpp
     src/scope_sample_mailbox.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
@@ -96,7 +100,7 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
 )
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
-    s7studio_observation
+    s7studio_observation s7studio_results
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -244,7 +248,7 @@ s7_add_test_executable(s7studio_coupled_pendulum_test
     src/local_schema_runner.hpp
 )
 target_include_directories(s7studio_coupled_pendulum_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
-target_link_libraries(s7studio_coupled_pendulum_test PRIVATE s7studio_diagram Threads::Threads)
+target_link_libraries(s7studio_coupled_pendulum_test PRIVATE s7studio_diagram s7studio_observation Threads::Threads)
 target_compile_definitions(s7studio_coupled_pendulum_test PRIVATE
     S7_PENDULUM_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples/double_pendulum")
 set_target_properties(s7studio_coupled_pendulum_test PROPERTIES AUTOMOC ON)
@@ -367,7 +371,7 @@ endif()
 find_package(Qt6 REQUIRED COMPONENTS Test)
 s7_add_test_executable(s7studio_run_lifecycle_test
     tests/run_lifecycle_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
-target_link_libraries(s7studio_run_lifecycle_test PRIVATE s7studio_diagram Qt6::Test Threads::Threads)
+target_link_libraries(s7studio_run_lifecycle_test PRIVATE s7studio_diagram s7studio_observation Qt6::Test Threads::Threads)
 set_target_properties(s7studio_run_lifecycle_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_run_lifecycle COMMAND s7studio_run_lifecycle_test)
 set_tests_properties(s7studio_run_lifecycle PROPERTIES TIMEOUT 60)
@@ -385,3 +389,11 @@ set_target_properties(s7studio_observation_source_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_observation_source_test)
 add_test(NAME s7studio_observation_source COMMAND s7studio_observation_source_test)
 set_tests_properties(s7studio_observation_source PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_observation_capture_test
+    tests/observation_capture_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp)
+target_link_libraries(s7studio_observation_capture_test PRIVATE s7studio_diagram s7studio_results Qt6::Test Threads::Threads)
+set_target_properties(s7studio_observation_capture_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_observation_capture_test)
+add_test(NAME s7studio_observation_capture COMMAND s7studio_observation_capture_test)
+set_tests_properties(s7studio_observation_capture PROPERTIES TIMEOUT 60)

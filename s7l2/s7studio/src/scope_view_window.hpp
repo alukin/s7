@@ -45,6 +45,7 @@ public:
     void appendSample(double timeSeconds, double value);
     void appendSample(const QString& channel, double timeSeconds, double value);
     void clearSamples() override;
+    void setComparisonSources(const QVector<viewers::ComparisonBinding>& comparisons) override;
     void beginRun(const QString& previousRunLabel, bool preserve) override;
     // Same full-resolution CSV writer used by the export action. The caller
     // supplies a writable device; finite doubles retain round-trip precision.
@@ -91,6 +92,7 @@ private:
 
     QString probeName_;
     ScopeRecording recording_;
+    QVector<std::shared_ptr<const observation::ObservationSource>> projectedComparisons_;
     QHash<QString, QLineSeries*> lines_;
     bool dirty_ = false;
     bool updatingTimeScrollBar_ = false;

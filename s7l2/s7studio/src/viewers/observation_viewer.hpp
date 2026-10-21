@@ -17,7 +17,7 @@ namespace s7studio::viewers {
 // they never reach back into the runtime (ADR-011, ADR-013).
 struct ObservedSample {
     QString probeName;
-    long step = 0;
+    std::int64_t step = 0;
     double timeSeconds = 0.0;
     double value = 0.0;
     std::uint64_t runId = 0;
@@ -28,6 +28,12 @@ struct ObservedSample {
 struct InputBinding {
     QString role;
     observation::ChannelId channel;
+};
+
+struct ComparisonBinding {
+    QString label;
+    std::shared_ptr<const observation::ObservationSource> source;
+    QVector<InputBinding> inputs;
 };
 
 // Presentation only. The host supplies a const data source and explicit input
@@ -41,6 +47,8 @@ public:
     void setBindings(QVector<InputBinding> bindings) { bindings_ = std::move(bindings); }
     // One bounded page per UI turn. Returns whether more history remains.
     bool refreshSource();
+    virtual void setComparisonSources(const QVector<ComparisonBinding>&) {}
+    void setPreviewDroppedCount(std::uint64_t dropped) { previewDropped_ = dropped; }
     [[nodiscard]] auto source() const { return source_; }
     // Presentation operations: never erase recorded data.
     virtual void clearSamples() = 0;
@@ -64,6 +72,7 @@ private:
     QVector<InputBinding> bindings_;
     std::uint64_t cursor_ = 0;
     QString readError_;
+    std::uint64_t previewDropped_ = 0;
 };
 
 // What the host asks a viewer type to create: a stable instance id (the

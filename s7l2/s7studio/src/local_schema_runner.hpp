@@ -3,6 +3,7 @@
 #include "is_schema_runner.hpp"
 #include "local_runtime_v2.hpp"
 #include "scope_sample_mailbox.hpp"
+#include "observation/observation_source.hpp"
 
 #include <QObject>
 #include <QString>
@@ -27,7 +28,7 @@ class LocalSchemaRunner : public QObject, public ISchemaRunner
     Q_OBJECT
 
 public:
-    explicit LocalSchemaRunner(QObject* parent = nullptr);
+    explicit LocalSchemaRunner(QObject* parent = nullptr, observation::StorageOptions storage = {});
     ~LocalSchemaRunner() override;
 
     void run(const boost::json::value& schemaJson, double dt, long ticks, std::vector<RunProbe> probes) override;
@@ -39,6 +40,7 @@ public:
     // Commands and snapshot access belong to the QObject owner thread.
     [[nodiscard]] RunState state() const override { return state_.load(); }
     [[nodiscard]] auto activeConfiguration() const -> std::shared_ptr<const RunConfiguration> { return configuration_; }
+    [[nodiscard]] auto recordedSource() const -> std::shared_ptr<const observation::ObservationSource> { return recording_; }
     [[nodiscard]] long completedTicks() const { return completedTicks_.load(); }
     [[nodiscard]] bool isRunning() const override;
     [[nodiscard]] bool isPaused() const override;
@@ -84,7 +86,9 @@ private:
     std::condition_variable controlChanged_;
     std::atomic<bool> stopRequested_{false};
     ScopeSampleMailbox scopeMailbox_;
-    std::set<std::string> unreadableProbes_; // worker thread only
+    const observation::StorageOptions storage_;
+    std::shared_ptr<observation::ObservationSource> recording_;
+    std::vector<observation::ChannelId> probeChannels_;
 };
 
 } // namespace s7studio

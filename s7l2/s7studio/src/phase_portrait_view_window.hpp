@@ -44,8 +44,8 @@ public:
     [[nodiscard]] auto xProbeName() const -> QString { return xProbeName_; }
     [[nodiscard]] auto yProbeName() const -> QString { return yProbeName_; }
 
-    void appendXSample(long step, double value);
-    void appendYSample(long step, double value);
+    void appendXSample(std::int64_t step, double value);
+    void appendYSample(std::int64_t step, double value);
     void clearSamples() override;
     void setDroppedSampleCount(std::uint64_t dropped) override;
 
@@ -73,7 +73,7 @@ private slots:
 
 private:
     void updateStatus();
-    void addCoordinate(long step, std::size_t axis, double value);
+    void addCoordinate(std::int64_t step, std::size_t axis, double value);
 
     QString xProbeName_;
     QString yProbeName_;

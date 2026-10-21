@@ -16,7 +16,8 @@
 
 namespace s7studio {
 
-LocalSchemaRunner::LocalSchemaRunner(QObject* parent) : QObject(parent)
+LocalSchemaRunner::LocalSchemaRunner(QObject* parent, observation::StorageOptions storage)
+    : QObject(parent), storage_(std::move(storage))
 {
     qRegisterMetaType<RunState>();
 }
@@ -26,6 +27,7 @@ LocalSchemaRunner::~LocalSchemaRunner()
     ++generation_;
     requestStop();
     waitForCompletion();
+    if (recording_ && !recording_->status().finished) recording_->finish(true);
     releaseRuntime();
 }
 
@@ -75,6 +77,10 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     const auto id = ++generation_;
     releaseRuntime();
     scopeMailbox_.clear(id);
+    auto storage = storage_;
+    if (storage.temporaryDirectory.isEmpty()) storage.temporaryDirectory = qEnvironmentVariable("S7STUDIO_RECORDING_TEMP_DIR");
+    recording_ = std::make_shared<observation::ObservationSource>(id, std::move(storage));
+    probeChannels_.clear();
     completedTicks_.store(0);
     pauseRequested_.store(false);
     stopRequested_.store(false);
@@ -105,14 +111,18 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
         worker_ = std::thread([this, configuration = configuration_] { executeRunLoop(configuration); });
     } catch (const std::exception& ex) {
         releaseRuntime();
+        recording_->finish(false, QString::fromUtf8(ex.what()));
         state_.store(RunState::Error);
         publishState(RunState::Error, id);
+        if (id != generation_.load()) return;
         emit logMessage(QString("[runtime] run %1 could not start: %2").arg(id).arg(QString::fromUtf8(ex.what())));
         emit runCompleted(false, QString::fromUtf8(ex.what()));
     } catch (...) {
         releaseRuntime();
+        recording_->finish(false, QStringLiteral("Unknown preparation exception."));
         state_.store(RunState::Error);
         publishState(RunState::Error, id);
+        if (id != generation_.load()) return;
         emit logMessage(QString("[runtime] run %1 could not start: unknown exception").arg(id));
         emit runCompleted(false, QStringLiteral("Unknown exception while preparing the local run."));
     }
@@ -132,7 +142,23 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
         throw std::invalid_argument("Run dt exceeds the supported model-time interval.");
     const auto stepNs = static_cast<std::int64_t>(std::llround(ns));
     runtime_->set_model_time_step_ns(stepNs > 0 ? std::optional<std::int64_t>{stepNs} : std::nullopt);
-    unreadableProbes_.clear();
+    s7::ObservationService observation(*runtime_);
+    std::set<std::string> names;
+    for (const auto& probe : configuration.probes) {
+        if (probe.name.empty() || !names.insert(probe.name).second || probe.port < 0)
+            throw std::invalid_argument("Probe names must be nonempty and unique, and output ports nonnegative.");
+        const auto sample = observation.sample_output(probe.element, static_cast<std::size_t>(probe.port));
+        if (sample.is_complex())
+            throw std::invalid_argument("Probe '" + probe.name + "' has unsupported complex type " +
+                std::string(s7::signal_type_name(sample.type)) + "; scalar viewers require a real-valued output.");
+        probeChannels_.push_back(recording_->channel(QString::fromStdString(probe.name),
+            QString::fromUtf8(s7::signal_type_name(sample.type).data(), static_cast<int>(s7::signal_type_name(sample.type).size()))));
+        if (sample.type != s7::SignalType::F64) {
+            const auto message = QStringLiteral("[runtime] probe %1: %2 is explicitly converted to stored binary64; wider scalar values may round.")
+                .arg(QString::fromStdString(probe.name)).arg(QString::fromStdString(std::string(s7::signal_type_name(sample.type))));
+            postRunEvent(configuration.id, [this, message] { emit logMessage(message); });
+        }
+    }
 }
 
 void LocalSchemaRunner::executeRunLoop(std::shared_ptr<const RunConfiguration> configuration)
@@ -183,20 +209,15 @@ void LocalSchemaRunner::emitScopeSamples()
     s7::ObservationService observation(*runtime_);
     bool notify = false;
     const auto id = configuration_->id;
-    for (const auto& probe : probes_) {
-        try {
-            const auto sample = observation.sample_output(probe.element, static_cast<std::size_t>(probe.port));
-            const double timeSeconds = sample.model_time_ns
-                ? static_cast<double>(*sample.model_time_ns) * 1e-9 : static_cast<double>(sample.step) * dt_;
-            notify |= scopeMailbox_.push(ScopeSample{probe.name, static_cast<long>(sample.step), timeSeconds,
-                                                    sample.to_display_double(), id});
-        } catch (const std::exception& ex) {
-            if (unreadableProbes_.insert(probe.name).second) {
-                const auto message = QString("[runtime] probe %1 cannot be displayed: %2")
-                    .arg(QString::fromStdString(probe.name)).arg(QString::fromUtf8(ex.what()));
-                postRunEvent(id, [this, message] { emit logMessage(message); });
-            }
-        }
+    for (std::size_t i = 0; i < probes_.size(); ++i) {
+        const auto& probe = probes_[i];
+        const auto sample = observation.sample_output(probe.element, static_cast<std::size_t>(probe.port));
+        const double timeSeconds = sample.model_time_ns
+            ? static_cast<double>(*sample.model_time_ns) * 1e-9 : static_cast<double>(sample.step) * dt_;
+        const auto value = sample.to_display_double();
+        if (!recording_->append({probeChannels_[i], static_cast<std::int64_t>(sample.step), timeSeconds, value}))
+            throw std::runtime_error("Observation capture failed: " + recording_->status().storageError.toStdString());
+        notify |= scopeMailbox_.push(ScopeSample{probe.name, static_cast<long>(sample.step), timeSeconds, value, id});
     }
     if (notify) postRunEvent(id, [this] { emit scopeSamplesAvailable(); });
 }
@@ -205,20 +226,26 @@ auto LocalSchemaRunner::takeScopeSamples() -> ScopeSampleBatch { return scopeMai
 
 void LocalSchemaRunner::finalizeRun(std::uint64_t id, bool success, const std::string& error)
 {
+    QString detail = QString::fromStdString(error);
+    const bool stopped = stopRequested_.load(); // latch outcome before final storage flush
+    if (recording_ && !recording_->finish(stopped, detail)) {
+        success = false;
+        const auto status = recording_->status();
+        if (detail.isEmpty()) detail = status.storageError.isEmpty() ? status.runError : status.storageError;
+    }
     RunState terminal;
     {
         std::lock_guard lock(controlMutex_);
-        terminal = !success ? RunState::Error : stopRequested_.load() ? RunState::Stopped : RunState::Completed;
+        terminal = !success ? RunState::Error : stopped ? RunState::Stopped : RunState::Completed;
         pauseRequested_.store(false);
         state_.store(terminal);
     }
     publishState(terminal, id);
-    const auto detail = QString::fromStdString(error);
     postRunEvent(id, [this, id, terminal, success, detail] {
         emit logMessage(QString("[runtime] run %1 %2%3").arg(id)
             .arg(QString::fromLatin1(runStateName(terminal)))
             .arg(detail.isEmpty() ? QString() : QStringLiteral(": ") + detail));
-        emit runCompleted(success, detail);
+        if (id == generation_.load()) emit runCompleted(success, detail);
     });
 }
 
@@ -265,8 +292,11 @@ void LocalSchemaRunner::reset()
     ++generation_; // queued owner events from the retiring run are now invalid
     requestStop();
     waitForCompletion();
+    if (recording_ && !recording_->status().finished) recording_->finish(true);
     releaseRuntime();
     configuration_.reset();
+    recording_.reset();
+    probeChannels_.clear();
     probes_.clear();
     scopeMailbox_.clear();
     completedTicks_.store(0);
