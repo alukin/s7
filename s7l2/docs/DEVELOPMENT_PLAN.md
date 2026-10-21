@@ -163,7 +163,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Implemented: separate sources and authoritative pre-preview capture; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
 | N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a timing/parity, N1b immutable provenance/replay and N1c linear analytical/Studio matrix validated; wider nonlinear/control references and external input histories remain |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | U1a editing, typed properties, viewer interpretation and screenshot audit implemented; further interaction/accessibility/performance acceptance remains |
-| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Hosted headless job verified on 3026b84; Studio run pending at audit; sanitizer and Windows validation open |
+| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Hosted headless and Studio jobs passed on 3026b84 and 89628cc; focused local ASan/UBSan passed; full sanitizer and Windows validation open |
 | P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Linux relocation/notice audit and 12 isolated package checks passed; distribution notices and native Windows remain open |
 | A1 P1 incomplete coverage | Automated references and viewer regressions cover selected cases | Execute four acceptance guarantees: document safety, numerical correctness, run/sample isolation and operational readiness; classify bundled models validated or experimental | All above; real GPU/native Windows are external evidence requirements | Representative linear/nonlinear full workflow; measure hardware, model rate vs throughput, UI responsiveness, memory/disk growth, stop latency, high DPI and long-run behavior | Linux 73-test Release suite, isolated package and 90-second operational measurement passed; broader acceptance remains open |
 
@@ -621,9 +621,14 @@ Studio failed two tests that incorrectly required lossless preview delivery.
 Commit `3026b84` switches those tests to authoritative capture without weakening
 value/step/CSV fidelity checks; preview loss is deliberately forced and counted.
 Both affected Release tests passed locally. The rerun is
-[39650453808](https://github.com/alukin/s7/actions/runs/39650453808): hosted
-headless succeeded; Studio was still building at this audit point. This entry
-must not be read as a passing hosted Studio result.
+[39650453808](https://github.com/alukin/s7/actions/runs/39650453808): both
+headless and Studio jobs succeeded. Hosted Studio passed 68 existing
+regressions plus all four GUI suites. The subsequent package implementation
+commit `89628cc` has a separate
+[hosted run](https://github.com/alukin/s7/actions/runs/39652261660): both jobs
+succeeded; Studio passed 69 existing regressions in 52.47 seconds and all four
+GUI suites in 6.55 seconds. This verifies the implementation before the
+subsequent license-only and final documentation updates.
 
 P1: fixed executable-relative project-plugin discovery and packaged runtime
 schema lookup; embedded Studio's startup demo. Packaging uses host ELF tools
@@ -646,3 +651,11 @@ stated machine, not guarantees for arbitrary rates, plugins or graph sizes.
 Actual disk exhaustion, multi-hour behavior, large interactive export/import,
 physical GPU/high-DPI/accessibility, native Windows and the broader numerical
 matrix remain open; no overall release-ready claim is made.
+
+Follow-up validation: Clang 22 headless ASan/UBSan build passed core execution,
+plugin-loader and runtime-control smoke tests (3/3, 0.87 seconds), with no
+sanitizer diagnostics. This is focused local coverage, not a full sanitizer CI
+matrix. Fast-forwarded the other agent's license commit `c76cd75` before further
+pushes and verified the packaged licensing map, third-party notice file and every
+S7 license text byte-for-byte against the refreshed repository. The three missing
+installed dependency notices remain a separate distribution blocker.

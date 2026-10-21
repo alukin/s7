@@ -19,7 +19,13 @@ reads the authoritative worker source instead. The pendulum test withholds
 preview delivery, checks its exact skip count, compares every captured value
 and step against the headless trace and verifies every CSV timestamp/value
 round trip. Both affected Release tests passed in 20.98 s before pushing.
-Hosted outcomes are recorded in DEVELOPMENT_PLAN.md with the run link.
+Both hosted jobs passed for `3026b84`: Studio passed 68 existing regressions
+and four GUI suites. Both jobs also passed for the package implementation
+`89628cc`: Studio passed 69 regressions and four GUI suites. Run links are
+recorded in DEVELOPMENT_PLAN.md. A focused Clang 22 headless
+ASan/UBSan build additionally passed core, plugin-loader and runtime-control
+smoke checks (3/3, 0.87 s), without sanitizer diagnostics; no full sanitizer
+matrix is claimed.
 
 ## Installed workflow
 

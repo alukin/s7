@@ -17,8 +17,10 @@ local control/event-loop latencies. See
 workload, metrics and limits. This advances C1/P1/A1 without closing them:
 three missing installed dependency notices, native Windows, physical display/
 accessibility, actual disk exhaustion and longer/broader workloads remain open.
-Hosted headless CI passed on the fix commit; hosted Studio was still building
-when this increment was documented. Earlier dated statements below describe
+Hosted headless and Studio CI passed on both the fix commit `3026b84` and
+package implementation `89628cc`; run links are in DEVELOPMENT_PLAN.md. Focused
+local Clang ASan/UBSan core/plugin/control checks also passed (3/3). Earlier
+dated statements below describe
 prior evidence and do not supersede this record.
 
 ## R1 completion audit — 2026-10-20
