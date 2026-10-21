@@ -188,10 +188,6 @@ target_link_libraries(s7studio_app PUBLIC
     Threads::Threads
 )
 
-target_compile_definitions(s7studio_app PUBLIC
-    S7STUDIO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-)
-
 set_target_properties(s7studio_app PROPERTIES
     AUTOMOC ON
     AUTORCC ON
@@ -206,7 +202,10 @@ endif()
 s7_enable_project_warnings(s7studio_app)
 
 add_executable(s7studio src/main.cpp)
+target_compile_definitions(s7studio PRIVATE S7STUDIO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(s7studio PRIVATE s7studio_app)
+add_test(NAME s7studio_bundled_demo COMMAND s7studio --bundled-demo-check)
+set_tests_properties(s7studio_bundled_demo PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
 
 add_test(NAME s7studio_smoke COMMAND s7studio --smoke)
 add_test(NAME s7studio_wire_types
@@ -435,3 +434,8 @@ set_target_properties(s7studio_run_provenance_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_run_provenance_test)
 add_test(NAME s7studio_run_provenance COMMAND s7studio_run_provenance_test)
 set_tests_properties(s7studio_run_provenance PROPERTIES TIMEOUT 60)
+
+# Opt-in measurement tool: wall-clock budgets describe a measured machine,
+# not a portable performance assertion in the ordinary regression suite.
+add_executable(s7studio_operational_acceptance EXCLUDE_FROM_ALL tests/operational_acceptance.cpp)
+target_link_libraries(s7studio_operational_acceptance PRIVATE s7studio_app)

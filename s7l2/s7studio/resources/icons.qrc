@@ -1,4 +1,7 @@
 <RCC>
+    <qresource prefix="/s7">
+        <file alias="demo_startup.s7diagram">demo_startup.s7diagram</file>
+    </qresource>
     <qresource prefix="/icons/tabler">
         <file alias="adjustments-horizontal.svg">icons/tabler/adjustments-horizontal.svg</file>
         <file alias="alert-triangle.svg">icons/tabler/alert-triangle.svg</file>

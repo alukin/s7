@@ -3,6 +3,10 @@
 #include <cstdlib>
 #include <system_error>
 #include <utility>
+#include <vector>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -15,6 +19,35 @@
 #endif
 
 namespace s7::platform {
+
+auto executable_directory() -> std::optional<std::filesystem::path>
+{
+#if defined(_WIN32)
+    std::vector<wchar_t> buffer(256);
+    for (;;) {
+        const DWORD size = ::GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+        if (!size) return std::nullopt;
+        if (size < buffer.size()) return std::filesystem::path(std::wstring(buffer.data(), size)).parent_path();
+        buffer.resize(buffer.size() * 2);
+    }
+#elif defined(__linux__)
+    std::error_code ec;
+    const auto path = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec) return path.parent_path();
+    return std::nullopt;
+#elif defined(__APPLE__)
+    std::uint32_t size = 0;
+    ::_NSGetExecutablePath(nullptr, &size);
+    std::vector<char> buffer(size);
+    if (::_NSGetExecutablePath(buffer.data(), &size) != 0) return std::nullopt;
+    std::error_code ec;
+    const auto path = std::filesystem::canonical(buffer.data(), ec);
+    if (!ec) return path.parent_path();
+    return std::nullopt;
+#else
+    return std::nullopt;
+#endif
+}
 
 #if defined(_WIN32)
 

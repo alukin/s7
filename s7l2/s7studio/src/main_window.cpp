@@ -106,7 +106,7 @@ constexpr double kPaperA3WidthMm = 420.0;
 constexpr double kPaperA3HeightMm = 297.0;
 constexpr double kPaperLetterWidthMm = 279.4;
 constexpr double kPaperLetterHeightMm = 215.9;
-constexpr const char* kBundledDemoDiagramPath = S7STUDIO_SOURCE_DIR "/resources/demo_startup.s7diagram";
+constexpr const char* kBundledDemoDiagramPath = ":/s7/demo_startup.s7diagram";
 
 
 auto selectedTextFrame(diagram::DiagramScene* scene) -> std::shared_ptr<diagram::TextFrameNode>

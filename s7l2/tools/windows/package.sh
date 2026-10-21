@@ -7,8 +7,7 @@
 #
 # Usage: tools/windows/package.sh <build-dir> <output-dir>
 #
-# Start the programs in <output-dir> (s7studio.exe from Explorer does): they
-# find the plugins in ./plugins.
+# Start the programs in <output-dir> from any working directory.
 set -euo pipefail
 
 if [ $# -ne 2 ]; then
@@ -53,6 +52,10 @@ if [ -f "$OUT/s7studio.exe" ]; then
     printf '[Paths]\nPrefix = .\nPlugins = .\nQmlImports = qml\n' > "$OUT/qt.conf"
 fi
 cp -r "$SOURCE/s7runtime/examples" "$OUT/examples"
+mkdir -p "$OUT/share/s7"
+cp -r "$SOURCE/examples" "$OUT/share/s7/examples"
+cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/share/s7/"
+
 # Symbol tables are no use without the build tree (the sysroot's DLLs are stripped).
 "llvm-strip${SUFFIX}" --strip-all "$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll
 
@@ -73,5 +76,7 @@ while [ ${#pending[@]} -gt 0 ]; do
         fi
     done < <(imports "$module")
 done
+
+python3 "$SOURCE/tools/package_notices.py" "$SOURCE" "$BUILD" "$OUT" --sysroot "$SYSROOT"
 
 echo "Packaged $(find "$OUT" -name '*.exe' | wc -l) programs and $(find "$OUT" -name '*.dll' | wc -l) DLLs into $OUT ($(du -sh "$OUT" | cut -f1))"

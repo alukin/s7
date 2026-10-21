@@ -179,9 +179,8 @@ int main(int argc, char** argv) try {
     double pendingTheta = 0.0;
     std::size_t received = 0;
     std::uint64_t cursor = 0;
-    std::uint64_t previewDropped = 0;
     auto consume = [&] {
-        previewDropped += runner.takeScopeSamples().dropped;
+        const auto previewDropped = runner.takeScopeSamples().dropped;
         const auto source = runner.recordedSource();
         require(source && !source->status().incomplete(), "Lifecycle capture incomplete");
         manager.present(source, previewDropped, scopes);

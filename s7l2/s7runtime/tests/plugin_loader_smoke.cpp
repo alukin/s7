@@ -6,6 +6,7 @@
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/core.hpp>
+#include <s7/platform.hpp>
 #include <s7/element_registry.hpp>
 
 #include "s7/plugin_loader.hpp"
@@ -23,6 +24,12 @@ void expect(const bool condition, const std::string& what)
 
 int main()
 try {
+    const auto executable = s7::platform::executable_directory();
+    expect(executable && executable->is_absolute() && std::filesystem::is_directory(*executable), "executable directory is available");
+    const auto previous = std::filesystem::current_path();
+    std::filesystem::current_path(std::filesystem::temp_directory_path());
+    expect(s7::platform::executable_directory() == executable, "executable location is independent of cwd");
+    std::filesystem::current_path(previous);
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     const auto builtin_count = registry.element_count();

@@ -1,3 +1,4 @@
+#include <s7/platform.hpp>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -34,6 +35,15 @@ int main(int argc, char** argv) {
         std::signal(SIGTERM, [](int) { stop_requested.store(true); });
 
         std::string schema_path = S7RUNTIME_DEFAULT_SCHEMA_PATH;
+        if (const auto directory = s7::platform::executable_directory()) {
+            for (const auto& candidate : {*directory / "examples" / "schema_minimal.json",
+                     *directory / ".." / "share" / "s7" / "runtime" / "examples" / "schema_minimal.json"}) {
+                if (std::filesystem::is_regular_file(candidate)) {
+                    schema_path = candidate.string();
+                    break;
+                }
+            }
+        }
         bool start_network = false;
         bool serve_forever = false;
         std::uint64_t serve_seconds = 0;

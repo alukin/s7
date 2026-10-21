@@ -17,6 +17,8 @@ Numerical examples and measured integrator comparisons: [small-angle double pend
 
 Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/2int_osc_phase_portrait.md), with same-step state-pair and plot verification at 1/10/100 kHz. See also the [three-integrator helix with 3D Phase Trajectory](../examples/3int_helix_phase_trajectory.md), verified at 1/10 kHz.
 
+[Local simulation acceptance](LOCAL_SIMULATION_ACCEPTANCE.md) records Release regression, installed-package and measured operational evidence with remaining release gates.
+
 ## Implementation architecture
 
 | Document | Content |

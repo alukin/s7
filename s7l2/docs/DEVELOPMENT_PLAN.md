@@ -163,9 +163,9 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Implemented: separate sources and authoritative pre-preview capture; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
 | N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a timing/parity, N1b immutable provenance/replay and N1c linear analytical/Studio matrix validated; wider nonlinear/control references and external input histories remain |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | U1a editing, typed properties, viewer interpretation and screenshot audit implemented; further interaction/accessibility/performance acceptance remains |
-| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Root workflow/provisioning/headless/Studio GUI jobs implemented; hosted, sanitizer and Windows validation open |
-| P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Pending audit |
-| A1 P1 incomplete coverage | Automated references and viewer regressions cover selected cases | Execute four acceptance guarantees: document safety, numerical correctness, run/sample isolation and operational readiness; classify bundled models validated or experimental | All above; real GPU/native Windows are external evidence requirements | Representative linear/nonlinear full workflow; measure hardware, model rate vs throughput, UI responsiveness, memory/disk growth, stop latency, high DPI and long-run behavior | Pending; no release-ready claim |
+| C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Hosted headless job verified on 3026b84; Studio run pending at audit; sanitizer and Windows validation open |
+| P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Linux relocation/notice audit and 12 isolated package checks passed; distribution notices and native Windows remain open |
+| A1 P1 incomplete coverage | Automated references and viewer regressions cover selected cases | Execute four acceptance guarantees: document safety, numerical correctness, run/sample isolation and operational readiness; classify bundled models validated or experimental | All above; real GPU/native Windows are external evidence requirements | Representative linear/nonlinear full workflow; measure hardware, model rate vs throughput, UI responsiveness, memory/disk growth, stop latency, high DPI and long-run behavior | Linux 73-test Release suite, isolated package and 90-second operational measurement passed; broader acceptance remains open |
 
 Order: documentation baseline commit → L1 audit/migration where rights permit →
 D1 → D2 → R1 → O1 → N1 → U1 → C1 → P1 → A1.
@@ -574,7 +574,7 @@ for this test/document-only increment. Detailed results are in the matrix.
 
 ## U1a — editing integrity and visual engineering usability (2026-10-21)
 
-The [visual audit](usability/2026-10-21/AUDIT.md) records the production
+The local visual audit (retained outside Git) records the production
 application baseline, severity and proposed remedies before UI modifications.
 Incremental captures and GUI runs cover probe/delete undo, clipboard subgraphs,
 save/reopen, metadata-driven typed fields with advanced JSON and inline errors,
@@ -607,3 +607,42 @@ Resumed-session verification (2026-10-21, revision `9b870c8`):
 GUI suites. No implementation changes were made during this verification.
 This closes the full-suite verification gap above; packaging, hosted CI,
 platform/accessibility and broader release acceptance remain open.
+
+
+## C1/P1/A1 — hosted CI, installed package and measured acceptance (2026-10-21)
+
+The current bounded evidence and remaining release gates are in
+[LOCAL_SIMULATION_ACCEPTANCE.md](LOCAL_SIMULATION_ACCEPTANCE.md). Raw logs,
+packages, captures and JSON reports remain local; prompts and usability captures
+are ignored and must not be staged.
+
+C1: inspected actual GitHub Actions logs. The prior headless job passed, while
+Studio failed two tests that incorrectly required lossless preview delivery.
+Commit `3026b84` switches those tests to authoritative capture without weakening
+value/step/CSV fidelity checks; preview loss is deliberately forced and counted.
+Both affected Release tests passed locally. The rerun is
+[39650453808](https://github.com/alukin/s7/actions/runs/39650453808): hosted
+headless succeeded; Studio was still building at this audit point. This entry
+must not be read as a passing hosted Studio result.
+
+P1: fixed executable-relative project-plugin discovery and packaged runtime
+schema lookup; embedded Studio's startup demo. Packaging uses host ELF tools
+instead of the AppImage's incompatible strip/patcher, ships Studio examples and
+schema library, and inventories dependency notices. The relocated Release
+package passed 12 checks inside a fresh Fedora 44 container without system Qt
+or the source checkout. Three missing installed dependency notices block normal
+distribution packaging; only the explicit local-test override was used. Nothing
+was published. The Windows platform helper cross-compiled; the existing MSYS2
+sysroot lacks Qt Qml, so updated Windows Studio/package behavior remains unverified.
+
+A1: a clean Linux Studio Release build passed 73/73 tests in 74.72 seconds,
+including all four GUI suites and the new embedded-demo regression. A separate
+90-second visible-Scope measurement (30 seconds per model rate at 1/10/100 kHz)
+recorded about 425–429 thousand steps/wall-second, complete four-channel capture,
+maximum event-loop gaps below 251 ms and measured controls/close below 122 ms.
+Whole-process sampled RSS peaked below 752 MiB; capture storage grew about
+1.53 GiB per case. These are observations for one four-element graph on the
+stated machine, not guarantees for arbitrary rates, plugins or graph sizes.
+Actual disk exhaustion, multi-hour behavior, large interactive export/import,
+physical GPU/high-DPI/accessibility, native Windows and the broader numerical
+matrix remain open; no overall release-ready claim is made.

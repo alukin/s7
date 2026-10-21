@@ -31,6 +31,8 @@
 #include <QApplication>
 #include <QAction>
 #include <QFile>
+#include <QFileInfo>
+#include <QDir>
 #include <QMenu>
 #include <QLabel>
 #include <QSettings>
@@ -66,6 +68,23 @@
 #endif
 
 namespace {
+
+auto examplePath(const QString& relative) -> QString
+{
+    const auto directory = QCoreApplication::applicationDirPath();
+    for (const auto& base : {directory + "/../share/s7/", directory + "/share/s7/", directory + "/"}) {
+        const auto candidate = QDir::cleanPath(base + relative);
+        if (QFileInfo::exists(candidate)) return candidate;
+    }
+    if (relative.startsWith("runtime/")) {
+        const auto windows = QDir::cleanPath(directory + "/" + relative.mid(8));
+        if (QFileInfo::exists(windows)) return windows;
+    }
+    const auto sourceRelative = relative.startsWith("runtime/") ? "s7" + relative : relative;
+    const auto source = QDir::cleanPath(QStringLiteral(S7STUDIO_SOURCE_DIR "/../") + sourceRelative);
+    if (QFileInfo::exists(source)) return source;
+    throw std::runtime_error(("Missing bundled example: " + relative).toStdString());
+}
 
 bool hasArg(int argc, char** argv, std::string_view needle)
 {
@@ -614,7 +633,7 @@ int runRecentDiagramsCheck(int argc, char** argv)
         if (!condition) throw std::runtime_error(message);
     };
     const auto recent = [] { return QSettings{}.value(QStringLiteral("files/recentDiagrams")).toStringList(); };
-    auto document = readJson(S7STUDIO_SOURCE_DIR "/../examples/2int_osc.s7diagram");
+    auto document = readJson(examplePath("examples/2int_osc.s7diagram").toLocal8Bit().constData());
     QStringList paths;
     for (int i = 0; i < 11; ++i) {
         document.as_object()["id"] = "recent_" + std::to_string(i);
@@ -644,7 +663,7 @@ int runRecentDiagramsCheck(int argc, char** argv)
             "Recent menu did not open and promote the chosen file");
         QMetaObject::invokeMethod(&window, "saveDocument", Qt::DirectConnection);
         require(recent().front() == paths[5], "Saving did not retain current diagram history");
-        window.openPath(QStringLiteral(S7STUDIO_SOURCE_DIR "/../s7runtime/examples/schema_minimal.json"));
+        window.openPath(examplePath("runtime/examples/schema_minimal.json"));
         require(recent().front() == paths[5] && recent().size() == 10, "Runtime schema polluted recent diagrams");
     }
     {
@@ -727,7 +746,7 @@ int runPhasePortraitCheck(int argc, char** argv)
     const auto require = [](bool condition, const char* message) {
         if (!condition) throw std::runtime_error(message);
     };
-    const QString path = QStringLiteral(S7STUDIO_SOURCE_DIR "/../examples/2int_osc_phase_portrait.s7diagram");
+    const QString path = examplePath("examples/2int_osc_phase_portrait.s7diagram");
     for (const int frequency : {1000, 10000, 100000}) {
         s7studio::MainWindow window(nullptr, false);
         window.openPath(path);
@@ -883,7 +902,7 @@ int runPhaseTrajectory3DCheck(int argc, char** argv)
     const auto require = [](bool condition, const char* message) {
         if (!condition) throw std::runtime_error(message);
     };
-    const QString path = QStringLiteral(S7STUDIO_SOURCE_DIR "/../examples/3int_helix_phase_trajectory.s7diagram");
+    const QString path = examplePath("examples/3int_helix_phase_trajectory.s7diagram");
     for (const int frequency : {1000, 10000}) {
         s7studio::MainWindow window(nullptr, false);
         window.openPath(path);
@@ -1018,6 +1037,23 @@ int runPhaseTrajectory3DCheck(int argc, char** argv)
     return 0;
 }
 
+// Exercise the embedded startup document without any source-tree lookup.
+int runBundledDemoCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    QTemporaryDir settings;
+    if (!settings.isValid()) throw std::runtime_error("Cannot create isolated settings");
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settings.path());
+    app.setOrganizationName("s7-test"); app.setApplicationName("bundled-demo");
+    s7studio::MainWindow window;
+    auto* editor = window.findChild<s7studio::diagram::DiagramEditor*>();
+    if (!QFile::exists(":/s7/demo_startup.s7diagram") || !editor || editor->scene()->elementNodes().empty())
+        throw std::runtime_error("Bundled startup diagram unavailable");
+    std::cout << "Embedded startup diagram loaded\n";
+    return 0;
+}
+
 // Exercise delivery, late opening and reopening with the actual oscillator.
 int runScopeRunCheck(int argc, char** argv)
 {
@@ -1030,7 +1066,7 @@ int runScopeRunCheck(int argc, char** argv)
     registerElements();
     for (const int frequency : {1000, 10000, 100000}) {
         s7studio::MainWindow window;
-        const QString path = QStringLiteral(S7STUDIO_SOURCE_DIR "/../examples/2int_osc.s7diagram");
+        const QString path = examplePath("examples/2int_osc.s7diagram");
         window.openPath(path);
         auto schema = readJson(path.toLocal8Bit().constData()).as_object().at("schema");
         const double dt = 1.0 / frequency;
@@ -1123,6 +1159,8 @@ int main(int argc, char** argv) try
     if (hasArg(argc, argv, "--recent-diagrams-check")) {
         return runRecentDiagramsCheck(argc, argv);
     }
+
+    if (hasArg(argc, argv, "--bundled-demo-check")) return runBundledDemoCheck(argc, argv);
 
     if (hasArg(argc, argv, "--scope-run-check")) {
         return runScopeRunCheck(argc, argv);

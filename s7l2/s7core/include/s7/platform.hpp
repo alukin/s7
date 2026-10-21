@@ -39,6 +39,9 @@ private:
 // The user's home directory: $HOME, or %USERPROFILE% on Windows.
 [[nodiscard]] std::optional<std::filesystem::path> home_directory();
 
+// Directory of the running executable, independent of cwd and argv[0].
+[[nodiscard]] std::optional<std::filesystem::path> executable_directory();
+
 // Dynamic libraries (plugins). A null handle means failure; `error` says why.
 [[nodiscard]] void* open_library(const std::filesystem::path& path, std::string& error);
 [[nodiscard]] void* library_symbol(void* library, const char* name);

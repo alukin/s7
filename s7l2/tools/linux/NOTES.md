@@ -49,3 +49,48 @@ LTS repos often are not.
 Until that exists, use `S7_MAX_GLIBC` to make `package.sh` fail loudly
 instead of silently producing a package that only runs on machines at least
 as new as the build host.
+
+## Relocated Release package acceptance (2026-10-21)
+
+The packaging build host needs `patchelf`, `binutils`, Python 3 and (for
+Studio) `qmake6`. Use the host `patchelf` and `strip`: the pinned linuxdeploy
+AppImage's older ELF tools fail on current RELR objects, and its patcher
+produced startup crashes on this Fedora build. `NO_STRIP=1` disables the
+AppImage strip; package.sh strips deployed ELF objects with host binutils.
+
+Project plugins live in `usr/lib/s7/plugins`, independently of Qt plugins;
+the loader searches relative to the executable. Programs run from arbitrary
+working directories. Runtime defaults come from
+`usr/share/s7/runtime/examples`; Studio diagrams are under
+`usr/share/s7/examples`, with `schema_elements.s7library` in `usr/share/s7`.
+The startup demo is a compiled Qt resource.
+
+`tools/package_notices.py` retains first-party/vendor notices and inventories
+all deployed ELF objects against installed package ownership. Shared source-RPM
+subpackage licenses and legacy COPYING files are included. Unresolved notices
+fail packaging with an explicit list. `S7_ALLOW_INCOMPLETE_NOTICES=1` permits
+local test packages only; `licenses/missing-notices.json` preserves the list.
+This collection does not settle contributor rights, source/offer obligations,
+or authorize publication. RPM ownership was exercised on Fedora; a dpkg copyright-file backend is
+provided for Debian/Ubuntu and remains unverified in this increment.
+
+The Release package built on Fedora 44 requires GLIBC_2.43,
+GLIBCXX_3.4.36 and CXXABI_1.3.15. In a fresh Fedora 44 container with basic
+X11/Mesa runtime dependencies, no Qt packages and no source checkout mounted,
+all 12 checks in `smoke_package.py` passed under Xvfb/llvmpipe. The read-only
+package path contained spaces and the working directory was a fresh `/tmp`
+directory. Checks cover library resolution, CLI startup, packaged default
+schema, executable-relative noise plugin loading and execution, the embedded
+demo, diagram save/reopen, Scope, Phase Portrait and 3D trajectory run/pairing.
+
+Reproduce against a package on a desktop or under Xvfb:
+
+```bash
+xvfb-run -a python3 tools/linux/smoke_package.py '/path/S7 installed' /tmp/s7-installed-check
+```
+
+The tested local package has three missing installed dependency notices:
+`openxr-libs`, `xcb-util-keysyms`, `kwin-common`. Default packaging therefore
+remains blocked for distribution. The local-test override was used solely for
+acceptance; no package was published. Earlier Ubuntu evidence above describes
+its own build and does not establish support for older Linux systems.

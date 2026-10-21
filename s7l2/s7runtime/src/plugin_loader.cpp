@@ -145,6 +145,16 @@ std::vector<std::filesystem::path> PluginLoader::get_plugin_search_paths() const
         paths.push_back(path);
     }
 
+    // Relocated packages: Windows keeps plugins beside the executable;
+    // Linux AppDir/install trees use usr/lib/s7/plugins beside usr/bin.
+    if (const auto directory = platform::executable_directory()) {
+        paths.push_back(*directory / "plugins");
+#if !defined(_WIN32)
+        paths.push_back(*directory / ".." / "lib" / "s7" / "plugins");
+        paths.push_back(*directory / ".." / "lib64" / "s7" / "plugins");
+#endif
+    }
+
     // 1. ~/.s7/plugins/
     if (const auto home = platform::home_directory()) {
         paths.push_back(*home / ".s7" / "plugins");

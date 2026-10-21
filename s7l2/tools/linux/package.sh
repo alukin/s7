@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Collects a native Linux build into a self-contained AppDir: the programs,
-# libs7core.so, the plugins in plugins/, Qt and its plugins (xcb platform,
+# libs7core.so, project plugins, Qt and its plugins (xcb platform,
 # svg icon engine, ...), and every shared library they need that isn't part
 # of the base desktop stack every distro provides (glibc, X11/xcb, GL/EGL,
 # D-Bus, fontconfig, ...). Built with linuxdeploy + linuxdeploy-plugin-qt,
@@ -8,8 +8,7 @@
 #
 # Usage: tools/linux/package.sh <build-dir> <output-dir>
 #
-# Start the programs in <output-dir> (./s7studio etc.) from a shell with
-# <output-dir> as the working directory: they find the plugins in ./plugins.
+# Start <output-dir>/s7studio (or s7runtime/s7ctl) from any directory.
 #
 # Set S7_MAX_GLIBC (e.g. 2.35) to fail the build if any bundled binary
 # requires a newer glibc than your oldest supported target -- this script
@@ -24,8 +23,12 @@ if [ $# -ne 2 ]; then
     sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
-BUILD="$1" OUT="$2"
+BUILD="$(realpath "$1")" OUT="$(realpath -m "$2")"
+# Packaging replaces OUT: never accept a source/build tree or its ancestor.
+case "$BUILD/" in "$OUT/"*) echo "error: output contains the build directory" >&2; exit 2;; esac
 SOURCE="$(cd "$(dirname "$0")/../.." && pwd)"
+case "$SOURCE/" in "$OUT/"*) echo "error: output contains the source directory" >&2; exit 2;; esac
+[ "$OUT" != "$HOME" ] || { echo "error: output cannot be the home directory" >&2; exit 2; }
 CACHE="${S7_PACKAGE_CACHE:-$HOME/.cache/s7-package}"
 LINUXDEPLOY_TAG="1-alpha-20251107-1"
 LINUXDEPLOY_QT_TAG="1-alpha-20250213-1"
@@ -81,28 +84,37 @@ EOF
     export QML_SOURCES_PATHS="$SOURCE/s7studio/src/viewers/qml"
 fi
 
+# The AppImage's old strip does not understand current RELR sections.
+# Strip with the build host's binutils after deployment.
+export NO_STRIP=1
+export PATCHELF="${PATCHELF:-$(command -v patchelf || true)}"
+[ -n "$PATCHELF" ] || { echo "error: install host patchelf before packaging" >&2; exit 1; }
 QMAKE="${QMAKE:-qmake6}" APPIMAGE_EXTRACT_AND_RUN=1 "$LINUXDEPLOY" \
     --appdir "$OUT" \
     "${EXECUTABLES[@]}" \
     "${LIBRARIES[@]}" \
     "${QT_ARGS[@]}"
 
-# s7's own plugin loader (s7runtime/src/plugin_loader.cpp) looks in ./plugins
-# relative to the current directory, skipping symlinks, so each plugin must
-# be a real copy here -- separate from Qt's own plugins under usr/plugins/,
-# which Qt finds via the qt.conf linuxdeploy-plugin-qt generated next to the
-# executables. A loaded plugin's own need for libs7core.so.0 is satisfied by
-# the copy already loaded into the process by s7studio/s7runtime/s7ctl
-# themselves, not by this copy's own rpath, so relocating it here is safe.
+while IFS= read -r -d '' binary; do
+    if readelf -h "$binary" >/dev/null 2>&1; then
+        "${STRIP:-strip}" --strip-unneeded "$binary"
+    fi
+done < <(find "$OUT" -type f \( -name '*.so*' -o -perm -u+x \) -print0)
+
+# Project plugins are executable-relative, separate from Qt's own plugins.
 if [ -f "$OUT/usr/lib/libs7noise.so" ]; then
-    mkdir -p "$OUT/plugins"
-    cp "$OUT/usr/lib/libs7noise.so" "$OUT/plugins/libs7noise.so"
+    mkdir -p "$OUT/usr/lib/s7/plugins"
+    cp "$OUT/usr/lib/libs7noise.so" "$OUT/usr/lib/s7/plugins/libs7noise.so"
 fi
 
 for program in s7runtime s7ctl s7studio; do
     [ -f "$OUT/usr/bin/$program" ] && ln -sf "usr/bin/$program" "$OUT/$program"
 done
-cp -r "$SOURCE/s7runtime/examples" "$OUT/examples"
+mkdir -p "$OUT/usr/share/s7/runtime" "$OUT/usr/share/s7"
+cp -r "$SOURCE/s7runtime/examples" "$OUT/usr/share/s7/runtime/examples"
+cp -r "$SOURCE/examples" "$OUT/usr/share/s7/examples"
+cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/usr/share/s7/"
+python3 "$SOURCE/tools/package_notices.py" "$SOURCE" "$BUILD" "$OUT"
 
 # Base libraries every distro with a working desktop provides: these must
 # come from the host (kernel/driver/X-or-Wayland-server/D-Bus version all
@@ -138,4 +150,4 @@ if [ -n "${S7_MAX_GLIBC:-}" ] && [ -n "$GLIBC_MAX" ]; then
     }
 fi
 
-echo "Packaged $(find "$OUT" -maxdepth 1 -type l | wc -l) programs and $(find "$OUT/usr/lib" -name '*.so*' 2>/dev/null | wc -l) bundled libraries into $OUT ($(du -sh "$OUT" | cut -f1))"
+echo "Packaged $((${#EXECUTABLES[@]} / 2)) programs and $(find "$OUT/usr/lib" -name '*.so*' 2>/dev/null | wc -l) bundled libraries into $OUT ($(du -sh "$OUT" | cut -f1))"

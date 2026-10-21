@@ -7,6 +7,20 @@ This file replaces three earlier documents (`CODE_REVIEW_REQUIRED_FIXES.md`, `PR
 
 This document lists *what* is unsolved. For *how and in what order* to address it, see `docs/DEVELOPMENT_PLAN.md`.
 
+## Linux acceptance increment — 2026-10-21
+
+The Studio-enabled Release suite passed 73/73 tests. A relocated package passed
+12 checks in a fresh Fedora container without system Qt or source access, and
+a 90-second visible-GUI run measured complete four-channel capture and bounded
+local control/event-loop latencies. See
+[LOCAL_SIMULATION_ACCEPTANCE.md](LOCAL_SIMULATION_ACCEPTANCE.md) for the exact
+workload, metrics and limits. This advances C1/P1/A1 without closing them:
+three missing installed dependency notices, native Windows, physical display/
+accessibility, actual disk exhaustion and longer/broader workloads remain open.
+Hosted headless CI passed on the fix commit; hosted Studio was still building
+when this increment was documented. Earlier dated statements below describe
+prior evidence and do not supersede this record.
+
 ## R1 completion audit — 2026-10-20
 
 Resolved in the R1 increment: pause now waits for a complete worker boundary;
