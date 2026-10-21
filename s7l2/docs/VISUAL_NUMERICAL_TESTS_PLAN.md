@@ -92,11 +92,11 @@ The sidecar (and Studio's embedded array) each have the probe entries themselves
 - `"probes"`: `{"name": ..., "element": ..., "port": ..., "unit": ...}` objects. `name` is for labeling and need not match the element id; `unit` (optional, e.g. `"rad"`, `"m/s"`) is for plot axis labels only, nothing else reads it.
 - `"views"` (sidecar only; Studio has no equivalent concept yet, since it opens live windows interactively instead of generating plots from a file): which plots section 3's driver should generate for this case, referencing probes by `name` — e.g. `{"type": "phase_portrait", "x": "position", "y": "velocity"}`, `{"type": "attractor3d", "x": "x", "y": "y", "z": "z"}`. Explicit per case, not auto-generated from every probe combination — matching the project's general preference for explicit over inferred behavior (explicit network boundaries, explicit type conversion; "prefer explicit errors over silent coercion" in `AGENTS.md`'s guardrails).
 
-### 1.3 dt/rate inference and validation — implemented; configuration parity still needs tests
+### 1.3 dt/rate inference and validation — implemented; initial configuration parity covered
 
 **Implemented:** `s7::Rate`, element-declared rates, schema-rate seeds and mandatory `RateResolver` checks in `Validator::validate()`/`Compiler::compile()`. Stage 1.1 now explicitly checks the resolved rate. Studio's loader reads schema `dt`, and `LocalSchemaRunner` seeds the run from its authoritative `dt`. The headless diagram runner seeds the schema from the diagram's top-level `dt`.
 
-Rate resolution validates agreement; it does not rewrite every element's parameters. Studio's run configuration separately updates rate-related parameters before building the run. The headless diagram runner uses the stored parameters. Release comparisons must use the same effective configuration, report it, and test stale/conflicting parameters and nested schemas explicitly rather than assuming these paths are equivalent.
+Rate resolution validates agreement; it does not rewrite every element's parameters. Studio's run configuration separately updates rate-related parameters before building the run. The headless diagram runner uses the stored parameters. Installing a runtime model-time base now rejects conflicting declared element rates; the schema rate remains a fallback for unpinned components. N1a compares every sample of saved linear decay at 44.1/48 kHz and nonlinear pendulum at 44.1 kHz through the headless harness and Studio runner, and checks stale integrator dt rejection. Broader model/method and nested-schema parity coverage remains required.
 
 **One rate per connected model is this release's scope.** Hardware-native rates, explicit rate-changing elements and scheduling genuinely multi-rate graphs remain deferred. The implemented inference/validation is the prerequisite already met; multi-rate execution is a separate capability. See `../../doc/S7_Sample_Rate_Model.md` for the design and `OPEN_PROBLEMS.md` for implementation history.
 
@@ -128,7 +128,7 @@ A small, Qt-free addition to `s7tests/` (`diagram_harness.hpp`), extending the e
 
 1. Parse a `.s7diagram` file (`boost::json`, already a dependency); take its `schema` object and top-level `dt`.
 2. Build the `s7::Schema` from `schema.elements`/`connections` the same way `s7core/tests/type_inference_smoke.cpp` already does for JSON-parameterized elements (`ElementRegistry::find(type)` + `make_element_spec`), not by hand-constructing C++ objects — this is what lets the same diagram run unmodified whether it came from Studio or was hand-written.
-3. Seed `Schema::set_rate()` from the diagram's top-level `dt` and call `NodeRuntime::set_model_time_step_ns()` with it, per 1.3 — no per-element propagation: RateResolver (run inside step 4 below) is what actually proves every element's own rate (if it has one) agrees, rather than this step rewriting it by hand.
+3. Seed `Schema::set_rate()` from the diagram's top-level `dt` and call `NodeRuntime::set_model_time_rate(Rate::from_seconds(dt))` with it, per 1.3 — no per-element propagation: RateResolver checks connected element rates; installing the runtime timebase checks that every declared rate agrees with the diagram dt, rather than rewriting parameters by hand.
 4. `Validator::validate` / `Compiler::compile` / `NodeRuntime`, exactly as today.
 5. Parse the matching `.probes.json` sidecar into `ProbePoint`s; construct one `ObservationService`.
 6. Step loop: step the runtime, `snapshot()` the probes (optionally strided, per 1.4), append to an in-memory trace.

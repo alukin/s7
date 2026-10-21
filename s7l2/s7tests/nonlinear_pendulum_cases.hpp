@@ -119,8 +119,7 @@ inline Result run(std::string_view method, int frequency, std::ostream* raw=null
     const auto root=diagram(method,frequency);
     auto schema=build_schema(root);
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
-    const auto step_ns=std::llround(1e9/frequency);
-    runtime.set_model_time_step_ns(step_ns);
+    runtime.set_model_time_rate(s7::Rate::from_hz(frequency));
     s7::ObservationService observation(runtime);
     std::array<s7::ProbePoint,2> points;
     const auto& probes=root.at("probes").as_array();
@@ -141,12 +140,13 @@ inline Result run(std::string_view method, int frequency, std::ostream* raw=null
         runtime.step();
         const auto q=observation.sample_output(points[0].element_id,points[0].port);
         const auto v=observation.sample_output(points[1].element_id,points[1].port);
-        if (q.step!=static_cast<std::size_t>(step) || v.step!=q.step || q.model_time_ns!=step*step_ns || v.model_time_ns!=q.model_time_ns) {
+        if (q.step!=static_cast<std::size_t>(step) || v.step!=q.step || q.model_time_ns!=std::llround(static_cast<long double>(step)*1e9L/frequency) || v.model_time_ns!=q.model_time_ns
+            || q.model_time_seconds!=v.model_time_seconds) {
             throw std::runtime_error("Nonlinear pendulum observation time/step mismatch");
         }
         const State state{q.as_real(),v.as_real()};
         if (!std::isfinite(state[0]) || !std::isfinite(state[1])) throw std::runtime_error("Non-finite pendulum state");
-        const double time=static_cast<double>(*q.model_time_ns)*1e-9;
+        const double time=q.model_time_seconds.value();
         if (raw) {
             const std::array row{time,state[0],state[1]};
             raw->write(reinterpret_cast<const char*>(row.data()),sizeof(row));

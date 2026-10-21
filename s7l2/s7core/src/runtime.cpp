@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include <stdexcept>
+#include <limits>
+#include <boost/multiprecision/cpp_int.hpp>
 
 namespace s7 {
 
@@ -87,14 +89,40 @@ void NodeRuntime::set_model_time_step_ns(const std::optional<std::int64_t> step_
     if (step_ns && *step_ns <= 0) {
         throw std::invalid_argument("Model time step must be positive.");
     }
-    model_time_step_ns_ = step_ns;
+    set_model_time_rate(step_ns ? std::optional{Rate::reduced(1'000'000'000, static_cast<std::uint64_t>(*step_ns))}
+                                : std::nullopt);
 }
 
-std::optional<std::int64_t> NodeRuntime::model_time_ns() const {
-    if (!model_time_step_ns_) {
-        return std::nullopt;
+void NodeRuntime::set_model_time_rate(std::optional<Rate> rate) {
+    if (rate) {
+        *rate = Rate::reduced(rate->numerator, rate->denominator);
+        for (const auto& [id, element] : graph_.elements) {
+            if (const auto declared = element->declared_rate(); declared && *declared != *rate)
+                throw std::invalid_argument("Model-time rate " + rate->to_string() + " conflicts with element '"
+                    + id + "' at " + declared->to_string() + ". Match the run dt and element discretization.");
+        }
     }
-    return static_cast<std::int64_t>(step_count_) * *model_time_step_ns_;
+    model_time_rate_ = rate;
+}
+
+namespace {
+std::int64_t timestamp_ns(std::size_t step, Rate rate) {
+    using boost::multiprecision::uint256_t;
+    const uint256_t scaled = uint256_t(step) * rate.denominator * 1'000'000'000;
+    const auto rounded = (scaled + rate.numerator / 2) / rate.numerator;
+    if (rounded > std::numeric_limits<std::int64_t>::max())
+        throw std::overflow_error("Model time exceeds the signed 64-bit nanosecond range.");
+    return rounded.convert_to<std::int64_t>();
+}
+}
+std::optional<std::int64_t> NodeRuntime::model_time_ns() const {
+    if (!model_time_rate_) return std::nullopt;
+    return timestamp_ns(step_count_, *model_time_rate_);
+}
+std::optional<double> NodeRuntime::model_time_seconds() const {
+    if (!model_time_rate_) return std::nullopt;
+    return static_cast<double>(static_cast<long double>(step_count_) * model_time_rate_->denominator
+                               / model_time_rate_->numerator);
 }
 
 std::thread::id NodeRuntime::stepping_thread() const {
@@ -102,6 +130,9 @@ std::thread::id NodeRuntime::stepping_thread() const {
 }
 
 void NodeRuntime::step() {
+    if (step_count_ == std::numeric_limits<std::size_t>::max())
+        throw std::overflow_error("Runtime step count exhausted.");
+    if (model_time_rate_) static_cast<void>(timestamp_ns(step_count_ + 1, *model_time_rate_));
     stepping_thread_.store(std::this_thread::get_id());
     const bool publishing = memory_outputs_staged_;
     if (publishing) {

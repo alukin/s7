@@ -52,6 +52,41 @@ at the chosen discretization rate. They do not claim to locate the exact
 continuous-time impact between samples. Phase interpolation inside a frequency
 meter is a local measurement calculation; it does not change graph execution.
 
+## Local model time and finite runs
+
+The configured `dt` defines a reduced rational sample rate. Local model time is
+computed from the completed step index and that rate, without accumulating a
+rounded duration. `ObservationSample`/`ObservationSnapshot` expose seconds as
+binary64 and nanoseconds rounded from each absolute timestamp. Nanosecond
+rounding is bounded to half a nanosecond per timestamp; it does not accumulate
+with the number of steps. Seconds retain fractional-nanosecond intervals within
+binary64 precision. Conversion from configured binary64 `dt` to a rational
+period first normalizes the binary64 reciprocal round trip so `dt` and
+`1/dt` configurations agree, then uses continued fractions within twice binary64
+machine epsilon of that normalized period (within four epsilon of configured
+`dt`); it does not change the element's numerical integration rule or `dt`.
+The supported configured interval is 1 ns through 9e9 seconds. Signed 64-bit
+nanosecond timestamp overflow is an explicit error before the next graph step.
+
+Samples taken after `step()` identify successful steps 1 through N, at times
+`dt` through `N*dt`. There is no automatic step-zero or extra terminal sample.
+Causal-memory elements publish their initial output on step 1 and the update
+staged during step 1 on step 2. Thus an Euler decay sampled on step N contains
+N-1 published updates. A timestamp identifies the graph step; it does not
+silently shift this state-publication contract.
+
+Studio finite runs execute `floor(duration * rate)` whole steps. A duration
+that is not a multiple of `dt` stops before the next step would exceed it;
+zero duration or `dt` greater than the requested duration executes zero steps.
+Only -1 selects continuous execution. Pause consumes no steps or model time;
+resume continues the same sequence, and a new run restarts at step 1 with its
+own run identity and initial state. Wall-clock waits and capture backpressure
+do not advance model time.
+
+These local timing rules do not change deployment wire periods or UTC pacing.
+Deployment still uses its explicit integer-nanosecond period contract; extending
+that contract to arbitrary rational periods is separate distributed work.
+
 ## Accuracy and examples
 
 Document each block's equations, initial conditions, input/output units,

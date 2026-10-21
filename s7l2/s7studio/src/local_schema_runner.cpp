@@ -86,7 +86,6 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     stopRequested_.store(false);
     state_.store(RunState::Preparing);
     configuration_ = std::make_shared<const RunConfiguration>(RunConfiguration{id, schemaJson, dt, ticks, std::move(probes)});
-    dt_ = dt;
     totalTicks_ = ticks;
     probes_ = configuration_->probes;
     publishState(RunState::Preparing, id);
@@ -137,11 +136,7 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
     runtime::validateSchema(*schema_);
     auto graph = s7::Compiler::compile(*schema_);
     runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
-    const double ns = configuration.dt * 1e9;
-    if (!std::isfinite(ns) || ns >= static_cast<double>(std::numeric_limits<std::int64_t>::max()))
-        throw std::invalid_argument("Run dt exceeds the supported model-time interval.");
-    const auto stepNs = static_cast<std::int64_t>(std::llround(ns));
-    runtime_->set_model_time_step_ns(stepNs > 0 ? std::optional<std::int64_t>{stepNs} : std::nullopt);
+    runtime_->set_model_time_rate(s7::Rate::from_seconds(configuration.dt));
     s7::ObservationService observation(*runtime_);
     std::set<std::string> names;
     for (const auto& probe : configuration.probes) {
@@ -212,8 +207,7 @@ void LocalSchemaRunner::emitScopeSamples()
     for (std::size_t i = 0; i < probes_.size(); ++i) {
         const auto& probe = probes_[i];
         const auto sample = observation.sample_output(probe.element, static_cast<std::size_t>(probe.port));
-        const double timeSeconds = sample.model_time_ns
-            ? static_cast<double>(*sample.model_time_ns) * 1e-9 : static_cast<double>(sample.step) * dt_;
+        const double timeSeconds = sample.model_time_seconds.value();
         const auto value = sample.to_display_double();
         if (!recording_->append({probeChannels_[i], static_cast<std::int64_t>(sample.step), timeSeconds, value}))
             throw std::runtime_error("Observation capture failed: " + recording_->status().storageError.toStdString());

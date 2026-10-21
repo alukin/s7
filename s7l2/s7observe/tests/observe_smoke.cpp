@@ -41,6 +41,8 @@ int main() try
     const auto snapshot = observation.snapshot({s7::ProbePoint{"memory", 0}, s7::ProbePoint{"sum", 0}});
     assert(snapshot.step == 2);
     assert(snapshot.model_time_ns == 2'000'000);
+    assert(snapshot.model_time_seconds == .002);
+    assert(snapshot.samples[0].model_time_seconds == snapshot.model_time_seconds);
     assert(snapshot.samples[0].model_time_ns == 2'000'000);
     const auto& samples = snapshot.samples;
     assert(samples.size() == 2);

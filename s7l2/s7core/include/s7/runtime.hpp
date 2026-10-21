@@ -2,6 +2,7 @@
 #define S7CORE_INCLUDE_S7_RUNTIME_HPP
 
 #include "s7/graph.hpp"
+#include "s7/rate.hpp"
 #include "s7/trapezoid.hpp"
 
 #include <array>
@@ -28,8 +29,12 @@ public:
     // Model time advanced by one step, in nanoseconds. Unset means the graph
     // has no model-time base (steps are only ordered, not timed).
     void set_model_time_step_ns(std::optional<std::int64_t> step_ns);
-    // step_count() * step, or nullopt without a model-time base.
+    // Local rational model-time base; rejects conflicting declared element rates.
+    // Does not change scheduling or element dt.
+    void set_model_time_rate(std::optional<Rate> rate);
+    // Absolute step/rate, rounded only once to ns; throws on int64 overflow.
     [[nodiscard]] std::optional<std::int64_t> model_time_ns() const;
+    [[nodiscard]] std::optional<double> model_time_seconds() const;
     [[nodiscard]] const std::string& runtime_instance_uuid() const;
     [[nodiscard]] const std::string& schema_instance_uuid() const;
     [[nodiscard]] const std::string& element_instance_uuid_of(const std::string& element_id) const;
@@ -102,7 +107,7 @@ private:
     std::vector<bool> implicit_memory_;
     bool memory_outputs_staged_{};
     std::atomic<std::thread::id> stepping_thread_{};
-    std::optional<std::int64_t> model_time_step_ns_;
+    std::optional<Rate> model_time_rate_;
     std::size_t step_count_{};
 };
 

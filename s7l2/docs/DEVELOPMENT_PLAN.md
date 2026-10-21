@@ -161,7 +161,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | D2 P0 confirmed defect / coverage | MainWindow closeEvent has no unsaved prompt; other replacement paths and nested tabs need audit | Track persisted document state across scene, parameters, probes, nested schemas and run config; central Save/Discard/Cancel guard for every replacement including remote loads and recent files | D1; nested commits and undo cleanliness must agree; failed Save cancels transition | Each dialog choice, nested edits, open/new/recent/close/load, failed save retains dirty state, full config round trip | Implemented; document safety and nested regressions pass; wider interaction coverage pending |
 | R1 P0 lifecycle complete | LocalSchemaRunner, ModelRunController, MainWindow, ViewerManager, mailbox already have lifecycle tests | Audit Idle/Prepared/Running/Paused/Stopping/Stopped/Error; stop/join on replacement; generation isolation for queued work, immutable active config, actionable failures | D2; Qt queued callbacks and shutdown ordering | Deterministic start/stop/reset/rerun, document replacement running/paused, close, stale callbacks, observers added/deleted, edit-next-run, worker recovery | Implemented; deterministic runner/window and GUI checks passed |
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Implemented: separate sources and authoritative pre-preview capture; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
-| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | Pending audit; existing references retained |
+| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a local time/duration/lifecycle/parity validated; reproducibility metadata and wider independent-reference matrix remain |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | Pending audit |
 | C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Root workflow/provisioning/headless/Studio GUI jobs implemented; hosted, sanitizer and Windows validation open |
 | P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Pending audit |
@@ -442,4 +442,38 @@ saved linear/nonlinear diagrams with every sample's step/time/value compared
 between the headless harness and Studio. Run relevant tests, then build-tests
 and the complete suite. Distributed pacing/wire-period changes, solver changes,
 full reproducibility metadata and extended numerical references are out of scope.
-Status: audited; implementation pending. This is a partial N1 increment.
+Status: complete for the four requested N1a items; validation evidence below.
+This is a partial N1 increment.
+
+N1a audit refinement: Schema::rate is intentionally only a fallback for unpinned
+components; it does not prove that a requested run timebase matches pinned
+integrators. Preserve that inference contract. Installing a runtime model-time
+rate must check the compiled elements' declared rates and reject disagreement
+before stepping. Add connected-pin sub-ns conflict coverage and a Studio
+preparation regression for mismatched run dt vs integrator dt.
+
+
+N1a validation: `build-tests` rebuilt successfully (GCC 16.2, Debug, Qt 6.11.2,
+Linux). The final focused rate/model-time/Studio-window checks passed 4/4. The
+complete 71-test run finished in 514.00 s with 70 passing, including the long
+coupled pendulum, transport/deployment/SDK tests and all four GUI checks with
+Quick 3D rendering. Its one failure was the old nonlinear-pendulum reference
+converting integer ns to seconds and requiring exact equality against the new
+direct rational-time seconds. Updated that shared reference to the same absolute
+time API, retained exact timestamp/value and CSV round-trip checks, rebuilt all
+three affected targets, and reran them: **3/3 passed** (65.38 s). Thus every one
+of the 71 registered tests has passed against the final behavior; a second
+complete suite was not run after the reference-only fix. `git diff --check`
+is clean. Comment-only clarification of the harness's rate validation contract
+followed its build; no executable behavior changed in that clarification.
+
+Coverage: exact 44.1/48 kHz final timestamps, fractional-ns rounding, reciprocal
+conversion agreement over 1,000 fractional intervals, invalid/range/overflow
+errors, connected-pin conflicts, run dt/integrator mismatch rejection, initial
+and final publication, finite truncation/zero steps, zero-duration Studio UI,
+gated stateful pause/resume/rerun, and every saved-model sample through both
+loaders/runners. These checks establish local same-platform equivalence for the
+covered configurations, not cross-platform bitwise reproducibility. Broader
+model/method references, complete run provenance, event-time configuration,
+performance envelope, packaging and distributed rational-period timing remain
+open. No integrator/state-publication rules or deployment wire periods changed.

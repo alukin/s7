@@ -1790,6 +1790,16 @@ void MainWindow::launchRunWithCurrentConfiguration()
         return;
     }
     if (runner_->isRunning()) return;
+    const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
+    try {
+        static_cast<void>(ui::ModelRunController::computeTicks(runtimeSeconds_, dtSeconds));
+    } catch (const std::exception& ex) {
+        const auto message = QStringLiteral("Cannot start run: %1").arg(QString::fromUtf8(ex.what()));
+        appendLog(message);
+        runPanel_->append(message);
+        toolWindows_->show(runDock_);
+        return;
+    }
     const auto previousRun = runner_->activeConfiguration();
     onScopeSamplesAvailable(); // consume final samples before retiring their generation
     resetLocalRun();
@@ -1800,7 +1810,6 @@ void MainWindow::launchRunWithCurrentConfiguration()
     viewers_->beginRun(previousRun ? QStringLiteral("Run %1").arg(previousRun->id) : QStringLiteral("Previous run"),
                        !clearScopesBeforeRun_);
 
-    const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
     if (diagramEditor_ && diagramEditor_->scene()) {
         static_cast<void>(syncSchemaFromScene());
         updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);

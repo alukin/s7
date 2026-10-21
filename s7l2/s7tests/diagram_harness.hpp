@@ -119,9 +119,8 @@ inline s7::Schema build_schema(const boost::json::object& diagram)
 // Loads a <case>.s7diagram + <case>.probes.json pair and compiles a runtime
 // from it: Validator::validate() / Compiler::compile() run as usual (and,
 // through them, the mandatory RateResolver check), and the runtime's model
-// time is set from the diagram's own "dt", exactly (nanosecond-quantized,
-// the same precision s7net/src/diagram_deployment.cpp's model_time_step_ns
-// already assumes), so every ObservationSnapshot carries a real model time.
+// time uses the rational rate from the diagram's own "dt", so each
+// ObservationSnapshot carries absolute model time without cumulative ns rounding.
 struct DiagramCase {
     boost::json::object diagram;
     std::vector<DiagramProbe> probes;
@@ -148,8 +147,7 @@ inline DiagramCase load_and_compile(const std::filesystem::path& diagram_path, c
 
     auto runtime = std::make_unique<s7::NodeRuntime>(s7::Compiler::compile(schema));
     const auto dt_seconds = diagram.at("dt").to_number<double>();
-    const auto step_ns = static_cast<std::int64_t>(std::llround(dt_seconds * 1e9));
-    runtime->set_model_time_step_ns(step_ns);
+    runtime->set_model_time_rate(s7::Rate::from_seconds(dt_seconds));
 
     return DiagramCase{std::move(diagram), std::move(probes), std::move(runtime)};
 }
@@ -209,7 +207,7 @@ inline void write_trace(const std::filesystem::path& path, const std::vector<Dia
     }
     file << '\n';
     for (const auto& snapshot : trace) {
-        file << snapshot.step << ' ' << (snapshot.model_time_ns ? static_cast<double>(*snapshot.model_time_ns) / 1e9 : 0.0);
+        file << snapshot.step << ' ' << snapshot.model_time_seconds.value_or(0.0);
         for (const auto& sample : snapshot.samples) {
             if (sample.is_complex()) {
                 const auto value = sample.as_complex();

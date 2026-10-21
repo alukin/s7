@@ -887,8 +887,7 @@ void RuntimeService::initialize_graph() {
         Compiler::compile(*schema, runtime_instance_uuid_, create_schema_instance_uuid()));
     // A simulation block defines the model-time base; otherwise steps are untimed.
     if (definition_.simulation.enabled && definition_.simulation.sample_rate_hz > 0) {
-        runtime->set_model_time_step_ns(static_cast<std::int64_t>(
-            std::llround(1e9 / static_cast<double>(definition_.simulation.sample_rate_hz))));
+        runtime->set_model_time_rate(Rate::from_hz(static_cast<double>(definition_.simulation.sample_rate_hz)));
     }
     std::lock_guard<std::mutex> lock(graph_mutex_);
     graph_ = std::move(runtime);

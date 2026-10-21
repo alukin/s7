@@ -153,6 +153,16 @@ try {
     test_undetermined_without_a_pin_or_seed();
     test_components_are_resolved_independently();
     test_isolated_pinned_element();
+    {
+        s7::Schema schema{"fractional_rate_conflict"};
+        schema.set_rate(s7::Rate::from_seconds(.0010000001));
+        add(schema, "one", "Constant", {{"value", 1}});
+        add(schema, "ramp", "EulerIntegrator", {{"dt", .0010000002}});
+        add(schema, "other", "EulerIntegrator", {{"dt", .0010000001}});
+        schema.connect("one", 0, "ramp", 0);
+        schema.connect("ramp", 0, "other", 0);
+        expect_error(schema, "Rate conflict", "sub-nanosecond period mismatch is not silently accepted");
+    }
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7core rate inference smoke: " << ex.what() << '\n';

@@ -75,7 +75,6 @@ private:
     s7::transport::RuntimeNetEndpointPtr netEndpoint_;
     std::thread worker_;
     std::vector<RunProbe> probes_;
-    double dt_ = 0.001;
     long totalTicks_ = 0;
     std::atomic<long> completedTicks_{0};
     std::shared_ptr<const RunConfiguration> configuration_;

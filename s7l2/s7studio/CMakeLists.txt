@@ -397,3 +397,13 @@ set_target_properties(s7studio_observation_capture_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_observation_capture_test)
 add_test(NAME s7studio_observation_capture COMMAND s7studio_observation_capture_test)
 set_tests_properties(s7studio_observation_capture PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_model_time_test
+    tests/model_time_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
+target_include_directories(s7studio_model_time_test PRIVATE ${PROJECT_SOURCE_DIR}/s7tests)
+target_compile_definitions(s7studio_model_time_test PRIVATE S7_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
+target_link_libraries(s7studio_model_time_test PRIVATE s7studio_diagram s7studio_observation Qt6::Test Threads::Threads)
+set_target_properties(s7studio_model_time_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_model_time_test)
+add_test(NAME s7studio_model_time COMMAND s7studio_model_time_test)
+set_tests_properties(s7studio_model_time PROPERTIES TIMEOUT 60)

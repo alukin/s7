@@ -139,3 +139,7 @@ add_test(NAME s7core_control_elements_smoke COMMAND s7core_control_elements_smok
 s7_add_test_executable(s7core_schema_elements_smoke tests/schema_elements_smoke.cpp)
 target_link_libraries(s7core_schema_elements_smoke PRIVATE s7core)
 add_test(NAME s7core_schema_elements_smoke COMMAND s7core_schema_elements_smoke)
+
+s7_add_test_executable(s7core_model_time_smoke tests/model_time_smoke.cpp)
+target_link_libraries(s7core_model_time_smoke PRIVATE s7core)
+add_test(NAME s7core_model_time_smoke COMMAND s7core_model_time_smoke)

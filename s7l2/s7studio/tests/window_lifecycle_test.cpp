@@ -101,6 +101,14 @@ private slots:
         QVERIFY(!gate_->destroyedInStep.load());
         QCoreApplication::sendPostedEvents();
     }
+    void zeroDurationDoesNotStep() {
+        QSignalSpy completed(runner(), &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(start(0));
+        QTRY_COMPARE(completed.count(), 1);
+        QCOMPARE(runner()->state(), s7studio::RunState::Completed);
+        QCOMPARE(gate_->entered.load(), 0);
+        QCOMPARE(runner()->recordedSource()->status().samples, std::uint64_t(0));
+    }
     void editsObserversAndRerunUseFrozenConfiguration() {
         QVERIFY(start());
         const auto snapshot = runner()->activeConfiguration();

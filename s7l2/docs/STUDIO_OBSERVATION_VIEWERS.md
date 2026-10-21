@@ -182,7 +182,8 @@ The raw/aligned observation CSV formats include a JSON metadata comment with
 run identity, source/stored channel types, capture state and errors. Scope results
 include run/channel step-range provenance in their JSON header. Scope CSV retains
 its existing interchange layout; use .s7scope or observation CSV for completeness
-metadata. N1 still owns fractional model-time correctness and full reproducibility.
+metadata. N1a derives local recording time directly from step/rational rate (see
+SIMULATION_MODEL.md); full reproducibility metadata remains N1 work.
 
 `s7studio_observation_source` tests window-free paging/spill and run handles;
 `s7studio_observation_capture` withholds preview delivery to force 20,000 dropped

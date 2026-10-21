@@ -22,7 +22,8 @@ struct ProbePoint {
 // The value of one output after step `step`.
 //
 // Time: `step` orders samples; `model_time_ns` is the model time of that step
-// when the runtime has a model-time base (NodeRuntime::set_model_time_step_ns),
+// when the runtime has a model-time base. `model_time_seconds` avoids ns
+// quantization for numerical recording; both derive directly from step/rate,
 // otherwise unavailable. Local observation has no source or processing
 // timestamps: those belong to data-stream packets (wire protocol section 6)
 // and become observable only through network elements that expose them.
@@ -33,6 +34,7 @@ struct ProbePoint {
 struct ObservationSample {
     std::size_t step{};
     std::optional<std::int64_t> model_time_ns;
+    std::optional<double> model_time_seconds;
     std::string element_id;
     std::size_t port{};
     SignalType type{SignalType::F64};
@@ -63,6 +65,7 @@ struct ObservationSample {
 struct ObservationSnapshot {
     std::size_t step{};
     std::optional<std::int64_t> model_time_ns;
+    std::optional<double> model_time_seconds;
     std::vector<ObservationSample> samples;
 };
 
