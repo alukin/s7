@@ -100,6 +100,21 @@ bool ObservationSource::finish(bool stopped, const QString& runError)
     } catch (...) {
         status_.storageError = QStringLiteral("Unknown observation history flush failure.");
     }
+    if (file && !status_.storageError.isEmpty()) {
+        // A failed QFile flush leaves unwritten data in Qt's write buffer.
+        // Reads/seeks would retry that flush and hide the valid on-disk prefix.
+        // Closing discards the failed buffer; reopening read-only exposes only
+        // complete records that actually reached the backing file.
+        file_->close();
+        if (file_->open(QIODevice::ReadOnly)) {
+            const auto stored = static_cast<std::uint64_t>(std::max(qint64(0), file_->size())) / sizeof(Sample);
+            const auto retained = std::min(status_.samples, stored);
+            status_.captureDropped += status_.samples - retained;
+            status_.samples = retained;
+        } else {
+            status_.storageError += QStringLiteral("; cannot reopen retained observation history: ") + file_->errorString();
+        }
+    }
     status_.runError = runError;
     status_.stopped = stopped;
     status_.finished = true;
