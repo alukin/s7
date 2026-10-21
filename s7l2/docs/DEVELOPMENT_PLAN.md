@@ -477,3 +477,42 @@ covered configurations, not cross-platform bitwise reproducibility. Broader
 model/method references, complete run provenance, event-time configuration,
 performance envelope, packaging and distributed rational-period timing remain
 open. No integrator/state-publication rules or deployment wire periods changed.
+
+## N1b — immutable run provenance and saved-configuration reproduction
+
+Scope: attach the immutable requested/effective model, effective parameter defaults
+and nested schema definitions, rational rate, initialization parameters, explicit
+noise seeds, software/element versions and run identity to captured results.
+Preserve provenance in saved results and show live/imported runs in a read-only
+Run details dialog. Verify editor/configuration changes cannot mutate old results,
+and reproduce deterministic sample values from configuration recovered from a
+saved result, without using the edited diagram.
+
+Approach: Studio-local preparation helper freezes the effective JSON before
+compilation, using existing registry defaults/validation and embedding schema-backed
+library definitions. Resolve the S7 White/PinkNoiseGenerator seed=0 convention to
+an explicit nonzero seed before factories run, including nested schemas; retain
+the original request separately. ObservationSource publishes provenance once,
+before capture, and exposes copies through const handles. Store model JSON as
+strings so Qt JSON never rounds uint64 model parameters. Hash canonical effective
+JSON with SHA-256; capture project/build revision/compiler/Qt/platform and element
+versions. Runtime run IDs remain generation identifiers; add a UUID for identity
+across processes. State initialization remains defined by effective parameters
+and the recorded software, not a checkpoint or a new solver.
+
+Saved .s7scope v2 retains the provenance with a bounded 16 MiB JSON header (the
+previous 64 KiB limit cannot hold realistic model snapshots); reject unsupported
+versions and oversized/malformed metadata transactionally, without compatibility
+shims. Raw/aligned observation CSV retains provenance in its metadata comment;
+Scope interchange CSV stays numerical. Run details offers live and imported/
+retained comparisons, including missing-provenance and incomplete states.
+
+Acceptance: immutable metadata across edits/reset/rerun; exact integer/default/
+nested-schema/seed round trips; large-header bounds and corrupt-metadata rollback;
+UI details for live and imported results; deterministic linear and nonlinear
+saved-config reproduction with identical step/time/value sequences; seeded S7
+noise replay on the same software/environment. External I/O/plugin behavior and
+cross-platform RNG/bitwise reproducibility require their own evidence and must
+not be promised. Build relevant targets, run affected tests and broaden to the
+full suite for shared observation/result contracts. No auto-execution on import.
+Status: audited; implementation pending.
