@@ -112,7 +112,7 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - **Drag from a port** to a port or a wire: valid targets are marked with a green ring, refused ones are dimmed, and the routed wire is previewed. Alt+drag starts from a wire (a junction). Releasing anywhere else connects nothing.
 - **Click by click (Wire Draw, `Ctrl+W`, or a click on a port without dragging):** click a port or a wire to start, click empty canvas to place bends, click a port or a wire to finish. Escape cancels the wire, then leaves the mode; Backspace/Delete removes the last bend; right-click cancels.
 - **Editing a wire:** select it; drag a bend handle (filled: placed by hand, hollow: routed) or drag a straight segment. Context menu: Add Bend Here, Remove Bend, Re-route (remove hand-placed bends), Delete Wire.
-- **Elements and observers:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click: element properties dialog (ports, parameter specs, editable parameter JSON, Node placement); `Scope` opens a multi-channel plot window; `TextFrame` edits text.
+- **Elements and observers:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click or select and press F4/Enter: element properties with metadata-driven fields, inline validation and Advanced JSON; ports and deployment are expandable; `Scope` opens a multi-channel plot window; `TextFrame` edits text.
 - **Element Library tool window:** double-click adds an element; schema libraries can be loaded and saved from the File menu.
 - **Placement:** the element properties dialog has a Node field listing the nodes found in the Headless Nodes tool window; placed elements show `@ <node>` under them.
 - Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes tool window (the Studio certificate pinned by the nodes). It runs off the UI thread; the Deploy tool window shows each node's outcome; nothing is committed unless every node is ready.
@@ -241,3 +241,31 @@ recovery. `s7studio_window_lifecycle` tests the real window's running/paused
 replacement and shutdown, active edits, observer lifetime/type changes, run
 comparison isolation, phase alignment reset and error recovery. Their synchronization
 uses explicit step gates and state conditions, not arbitrary sleep intervals.
+
+
+## Editing and keyboard access
+
+The active diagram supports Ctrl+C/Ctrl+X/Ctrl+V and Ctrl+A, also available
+in Edit. Copy includes selected elements/annotation frames and connections
+whose driver and destination are both selected, including observer links.
+Wires alone cannot be copied. Pasted elements/frames have fresh IDs; named
+probes get distinct names. Parameters, nested schemas, titles, user bends and
+relative placement are retained. Paste is one undo step. It avoids the occupied
+content bounds; large groups may be placed outside the sheet, where Fit Diagram
+(Ctrl+8) and scrolling make them accessible for repositioning. Drawing/paste
+never changes runtime causality or creates links to unselected elements.
+
+Probe add/rename/remove share undo history. Deleting an element or a removed
+output removes its probes in the same command; undo restores them with wiring.
+Selection is not document data. Ctrl+0 resets zoom; Ctrl+9 fits the sheet;
+Ctrl+8 fits the diagram. Ctrl+W toggles wire drawing and Escape cancels it.
+
+Properties validate known parameters using registry metadata before applying.
+Numeric fields retain JSON text precision (including uint64 and complex arrays);
+booleans/enums use choices and optional parameters without defaults have a Set
+checkbox. Advanced JSON is retained for arrays, imported data and expert work.
+Whole-graph/type-dependent validation still occurs when compiling/running.
+Cancel leaves the document unchanged. Deployment placement is optional for local
+simulation. F5 opens the local run dialog; Shift+F5 stops; Ctrl+Shift+R opens
+Run Configuration. Duration and step rate describe model time, not wall-clock
+pacing. Simulation actions keep their engineering transport icons and text labels.

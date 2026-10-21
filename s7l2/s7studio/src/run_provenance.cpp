@@ -88,7 +88,7 @@ PreparedRun prepareRunProvenance(const RunConfiguration& config) {
     freeze(effective, versions, seeds, initial);
     const auto rate = s7::Rate::from_seconds(config.dt);
     for (const auto& probe : config.probes)
-        probes.append(QJsonObject{{"name", text(probe.name)}, {"element", text(probe.element)}, {"port", probe.port}});
+        probes.append(QJsonObject{{"name", text(probe.name)}, {"element", text(probe.element)}, {"port", probe.port}, {"unit", text(probe.unit)}});
     const auto model = serialized(effective);
     QJsonObject provenance{{"format_version", 1}, {"run_id", QString::number(config.id)},
         {"run_uuid", QUuid::createUuid().toString(QUuid::WithoutBraces)},
@@ -128,7 +128,7 @@ RunConfiguration configurationFromProvenance(const QJsonObject& p) {
         const auto port = probe.value("port").toInteger(-1);
         if (!probe.value("name").isString() || !probe.value("element").isString() || port < 0 || port > std::numeric_limits<int>::max())
             throw std::invalid_argument("Invalid recorded probe.");
-        probes.push_back({probe.value("name").toString().toStdString(), probe.value("element").toString().toStdString(), static_cast<int>(port)});
+        probes.push_back({probe.value("name").toString().toStdString(), probe.value("element").toString().toStdString(), static_cast<int>(port), probe.value("unit").toString().toStdString()});
     }
     auto schema = json::parse(model.toStdString());
     if (!schema.is_object()) throw std::invalid_argument("Recorded model is not an object.");

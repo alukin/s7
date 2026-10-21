@@ -824,8 +824,8 @@ int runPhasePortraitCheck(int argc, char** argv)
             for (qsizetype i = 0; i + 1 < drawnPoints.size(); ++i)
                 require(drawnPoints[i] == points[i * stride], "Drawn phase trajectory is not a uniform subsample");
             if (stride == 1) require(drawnPoints == points, "Phase Portrait thinned a trajectory below its display limit");
-            require(plot->xTitle() == QStringLiteral("phase_portrait_1/x")
-                && plot->yTitle() == QStringLiteral("phase_portrait_1/y"), "Phase axes are mislabeled");
+            require(plot->xTitle() == QStringLiteral("phase_portrait_1/x (unit unspecified)")
+                && plot->yTitle() == QStringLiteral("phase_portrait_1/y (unit unspecified)"), "Phase axes are mislabeled");
             long index = 0;
             for (const auto& point : points) {
                 require(point.x() == expected[index].first && point.y() == expected[index].second,

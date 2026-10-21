@@ -43,6 +43,11 @@ public:
     void zoomIn();
     void zoomOut();
     void resetZoom();
+    void copySelection();
+    void cutSelection();
+    void pasteSelection();
+    void selectAll();
+    void editSelectedElement();
     void setPageLayout(const DiagramPageLayout& pageLayout);
     [[nodiscard]] auto pageLayout() const -> DiagramPageLayout;
 

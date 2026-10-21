@@ -58,12 +58,22 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.deployAction->setIcon(icon(QStringLiteral("cloud-upload")));
     actions.openDeployedAction->setIcon(icon(QStringLiteral("cloud-download")));
     actions.runParametersAction->setText(QStringLiteral("Run Configuration..."));
+    actions.runAction->setShortcut(QKeySequence(Qt::Key_F5));
+    actions.stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
+    actions.runParametersAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
+    actions.runAction->setToolTip(QStringLiteral("Run local simulation (F5). Model time is independent of wall-clock speed."));
+    actions.stopAction->setToolTip(QStringLiteral("Stop simulation (Shift+F5), retaining captured results."));
+    actions.resetAction->setToolTip(QStringLiteral("Reset simulation and clear the current viewer presentation."));
 
     return actions;
 }
 
 void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions)
 {
+    // Some platform styles draw a dark menu/toolbar while exposing light
+    // Window/WindowText roles. Text/ButtonText follow the actual controls.
+    window->menuBar()->setStyleSheet(QStringLiteral("QMenuBar { color: palette(text); } QMenuBar::item:disabled { color: palette(mid); }"));
+    window->setStyleSheet(QStringLiteral("QToolBar QToolButton { color: palette(button-text); } QToolBar QToolButton:disabled { color: palette(mid); }"));
     auto* fileMenu = window->menuBar()->addMenu("&File");
     fileMenu->setObjectName(QStringLiteral("menu.file"));
     fileMenu->addAction(actions.openAction);
@@ -100,7 +110,7 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
 
     auto* runToolBar = window->addToolBar("Run");
     runToolBar->setObjectName(QStringLiteral("toolbar.run"));
-    runToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    runToolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     runToolBar->addAction(actions.runParametersAction);
     runToolBar->addAction(actions.runAction);
     runToolBar->addAction(actions.pauseAction);

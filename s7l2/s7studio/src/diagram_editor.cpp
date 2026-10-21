@@ -22,6 +22,7 @@
 #include <QShowEvent>
 #include <QSizePolicy>
 #include <QTimer>
+#include <QShortcut>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -48,6 +49,13 @@ protected:
     // becomes the scene's DrawMode.
     void keyPressEvent(QKeyEvent* event) override
     {
+        if (auto* editor = qobject_cast<DiagramEditor*>(parentWidget())) {
+            if (event->matches(QKeySequence::Copy)) { editor->copySelection(); return; }
+            if (event->matches(QKeySequence::Cut)) { editor->cutSelection(); return; }
+            if (event->matches(QKeySequence::Paste)) { editor->pasteSelection(); return; }
+            if (event->matches(QKeySequence::SelectAll)) { editor->selectAll(); return; }
+            if (event->key() == Qt::Key_F4 || event->key() == Qt::Key_Return) { editor->editSelectedElement(); return; }
+        }
         if (diagramScene_) {
             if (event->modifiers().testFlag(Qt::ControlModifier) && event->key() == Qt::Key_W) {
                 diagramScene_->setMode(diagramScene_->mode() == DiagramScene::DrawMode ? QSchematic::Scene::NormalMode
@@ -115,6 +123,8 @@ DiagramEditor::DiagramEditor(QWidget* parent)
     // Create editor view
     auto* diagramView = new DiagramView(this);
     _view = diagramView;
+    _view->setAccessibleName(QStringLiteral("Schematic diagram"));
+    _view->setAccessibleDescription(QStringLiteral("Select elements, Ctrl+C/Ctrl+V to copy/paste, Delete to remove, F4 or Enter for properties. Ctrl+8 fits diagram, Ctrl+0 resets zoom."));
     // A complete sheet must fit even in a narrow editor or a short viewport.
     _view->zoom_factor_min = 0.01;
     diagramView->setDiagramScene(_scene.get());
@@ -126,6 +136,7 @@ DiagramEditor::DiagramEditor(QWidget* parent)
     _view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     diagramView->setViewportMargins(kRulerThicknessPx, kRulerThicknessPx, 0, 0);
     _view->viewport()->installEventFilter(this);
+    connect(_scene.get(), &DiagramScene::diagramChanged, this, &DiagramEditor::updateSceneRectFromPage);
 
     horizontalRuler_ = new DiagramRuler(_view, DiagramRuler::Axis::Horizontal, _view);
     verticalRuler_ = new DiagramRuler(_view, DiagramRuler::Axis::Vertical, _view);
@@ -149,6 +160,24 @@ DiagramEditor::DiagramEditor(QWidget* parent)
 
     updateRulerLayout();
     rebuildPageFrame();
+}
+
+void DiagramEditor::copySelection() { _scene->copySelection(); }
+void DiagramEditor::cutSelection() {
+    if (_scene->copySelection()) _scene->deleteSelection();
+}
+void DiagramEditor::pasteSelection() {
+    if (_scene->pasteSelection(suggestedNewItemPosition(QSizeF(240, 180)))) {
+        updateSceneRectFromPage();
+        for (const auto& node : _scene->elementNodes()) if (node->isSelected()) { showItem(node.get()); break; }
+    }
+}
+void DiagramEditor::selectAll() { _scene->selectAll(); }
+void DiagramEditor::editSelectedElement() {
+    for (const auto& node : _scene->elementNodes()) if (node->isSelected()) {
+        Q_EMIT elementNodeDoubleClicked(QString::fromStdString(node->id()), QString::fromStdString(node->element().type), static_cast<int>(node->inputs().size()));
+        return;
+    }
 }
 
 DiagramEditor::~DiagramEditor() = default;
@@ -435,7 +464,7 @@ void DiagramEditor::updateSceneRectFromPage()
 
     const auto pageRect = orientedPageRect(pageLayout_);
     const double pageMargin = sceneUnitsFromMm(kPageMarginMm);
-    _scene->setSceneRect(pageRect.adjusted(-pageMargin, -pageMargin, pageMargin, pageMargin));
+    _scene->setSceneRect(pageRect.united(_scene->itemsBoundingRect()).adjusted(-pageMargin, -pageMargin, pageMargin, pageMargin));
 }
 
 void DiagramEditor::updateRulerLayout()

@@ -201,3 +201,24 @@ viewer when it opens. Removing comparison traces clears their presentation;
 session-owned raw history remains until diagram replacement/shutdown. Imported
 comparison files have their own projection lifetime. Creating a new window may
 replay session comparisons; clearing plots is not a delete-recording operation.
+
+
+### Units, run identity and keyboard navigation
+
+A probe's supplied display unit is frozen with the run and used in Scope
+legends, saved comparison legends and phase axes. Diagram observer links inherit
+the unit of a named output probe on the same source port. Missing units stay
+explicitly unspecified; names are never used to guess units. Scope uses one
+shared numeric y-axis and explicitly labels mixed-unit overlays; it does not
+convert units or imply that charge, current and voltage share a dimension.
+
+All source-backed viewers show current run ID and capturing/completed/stopped/
+INCOMPLETE state, with loading, preview-skip and capture-error details retained.
+A completed source may still be loading its presentation history. Comparison
+labels remain separate, with incomplete imported runs visibly marked.
+
+Focus a 2D plot to use +/− for zoom, arrow keys for pan and Home to fit all data.
+Mouse wheel/drag remain supported; these actions only change the view. Scope
+separates display controls from result save/open/comparison controls. Clear
+display does not delete authoritative captured results. Phase/3D status occupies
+a separate wrapping row so lengthy error messages do not crowd control buttons.

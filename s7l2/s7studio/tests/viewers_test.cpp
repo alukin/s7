@@ -288,12 +288,20 @@ void testRunDetails()
         {"model_sha256", QString::fromLatin1(QCryptographicHash::hash(model.toUtf8(), QCryptographicHash::Sha256).toHex())},
         {"model_name", "saved-model"}, {"software", QJsonObject{{"project_version", "test-version"}, {"revision", "test-revision"}}},
         {"requested_steps", "1"}, {"dt_seconds", .001}, {"rate", QJsonObject{{"numerator", "1000"}, {"denominator", "1"}}},
-        {"probes", QJsonArray{}}, {"seeds", QJsonArray{}}, {"initial_conditions", QJsonArray{}}, {"element_versions", QJsonArray{}}};
+        {"probes", QJsonArray{QJsonObject{{"name", "scope/v"}, {"element", "source"}, {"port", 0}, {"unit", "V"}}, QJsonObject{{"name", "scope/i"}, {"element", "source"}, {"port", 1}, {"unit", "A"}}}}, {"seeds", QJsonArray{}}, {"initial_conditions", QJsonArray{}}, {"element_versions", QJsonArray{}}};
     auto source = std::make_shared<observation::ObservationSource>(42);
-    source->setProvenance(provenance); source->channel("scope/v");
+    source->setProvenance(provenance); source->channel("scope/v"); source->channel("scope/i");
     require(source->append({0, 1, .001, 2}), "Cannot append details fixture");
+    require(source->append({1, 1, .001, 3}), "Cannot append current fixture");
     require(source->finish(), "Cannot finish details fixture");
-    ui::ScopeViewWindow live("scope"); live.attachSource(source, {{"v", 0}}); live.refreshSource();
+    ui::ScopeViewWindow live("scope"); live.attachSource(source, {{"v", 0}, {"i", 1}}); live.refreshSource();
+    require(live.recording().series().value("live:v").displayName() == "v (V)", "Live legend dropped voltage units");
+    require(live.recording().series().value("live:i").displayName() == "i (A)", "Live legend dropped current units");
+    require(live.findChild<viewers::LinePlotView*>()->yTitle().contains("mixed units"), "Mixed-unit axis is misleading");
+    require(live.findChild<QLabel*>("viewer.status")->text().contains("Run #42 — completed"), "Run identity/state missing");
+    ui::PhasePortraitViewWindow phase("v", "i"); phase.attachSource(source, {{"x", 0}, {"y", 1}}); phase.refreshSource();
+    require(phase.findChild<viewers::LinePlotView*>()->xTitle() == "v (V)"
+        && phase.findChild<viewers::LinePlotView*>()->yTitle() == "i (A)", "Phase axes lost units");
     auto* button = live.findChild<QPushButton*>("scope.runDetails");
     require(button, "Missing Run details action"); button->click();
     auto* dialog = live.findChild<QDialog*>("scope.runDetailsDialog");
@@ -306,6 +314,10 @@ void testRunDetails()
     require(live.writeRunResults(saved, &error), "Cannot save details fixture"); saved.seek(0);
     ui::ScopeViewWindow imported("import");
     require(imported.openRunResults(saved, "saved comparison", &error), "Cannot import details fixture");
+    bool importedUnits = false;
+    for (const auto& series : imported.recording().series())
+        importedUnits |= series.channelName == "v" && series.channelUnit == "V" && series.displayName().contains("(V)");
+    require(importedUnits, "Saved comparison lost channel units");
     imported.findChild<QPushButton*>("scope.runDetails")->click();
     auto* importedDialog = imported.findChild<QDialog*>("scope.runDetailsDialog");
     auto* choices = importedDialog->findChild<QComboBox*>("scope.detailsRuns");
@@ -313,6 +325,16 @@ void testRunDetails()
         "Imported run is missing from details selector");
     require(importedDialog->findChild<QPlainTextEdit*>("scope.detailsSummary")->toPlainText().contains("saved-model"),
         "Imported provenance did not survive saving and reopening");
+    auto incomplete = std::make_shared<observation::ObservationSource>(43);
+    incomplete->channel("v"); incomplete->append({0, 1, .001, 1}); incomplete->addCaptureLoss(3); incomplete->finish(false, "test failure");
+    live.attachSource(incomplete, {{"v", 0}}); live.refreshSource();
+    const auto status = live.findChild<QLabel*>("viewer.status")->text();
+    require(status.contains("INCOMPLETE") && status.contains("capture lost 3") && status.contains("test failure"), "Capture failure lacks actionable warning");
+    auto stopped = std::make_shared<observation::ObservationSource>(44);
+    stopped->channel("v"); stopped->append({0, 1, .001, 1}); stopped->finish(true);
+    live.attachSource(stopped, {{"v", 0}}); live.refreshSource();
+    require(live.findChild<QLabel*>("viewer.status")->text().contains("stopped"), "Stopped run mislabelled completed");
+    require(live.findChild<viewers::LinePlotView*>()->yTitle().contains("unit unspecified"), "Unknown units were invented");
     ui::ScopeViewWindow empty("empty"); empty.findChild<QPushButton*>("scope.runDetails")->click();
     require(empty.findChild<QPlainTextEdit*>("scope.detailsSummary")->toPlainText().contains("unavailable"),
         "Missing provenance was not explicit");

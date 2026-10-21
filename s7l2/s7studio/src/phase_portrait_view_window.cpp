@@ -69,13 +69,17 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     controls->addWidget(exportButton_);
     controls->addStretch(1);
     statusLabel_ = new QLabel(this);
-    controls->addWidget(statusLabel_);
+    statusLabel_->setObjectName(QStringLiteral("viewer.status"));
+    statusLabel_->setTextFormat(Qt::PlainText);
+    statusLabel_->setWordWrap(true);
+
 
     rootLayout->addLayout(controls);
+    rootLayout->addWidget(statusLabel_);
 
     plot_ = new viewers::LinePlotView(this);
-    plot_->setAxisTitles(xProbeName_, yProbeName_);
-    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging in the plot."));
+    plot_->setAxisTitles(xProbeName_ + " (unit unspecified)", yProbeName_ + " (unit unspecified)");
+    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     curve_ = plot_->addSeries(QStringLiteral("%1 vs %2").arg(yProbeName_, xProbeName_), {kTrajectoryColor, 1.4, false});
     rootLayout->addWidget(plot_, 1);
 
@@ -90,6 +94,10 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
 
 void PhasePortraitViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
+    if (sample.role == "x") xUnit_ = sample.unit;
+    if (sample.role == "y") yUnit_ = sample.unit;
+    plot_->setAxisTitles(xProbeName_ + (xUnit_.isEmpty() ? " (unit unspecified)" : " (" + xUnit_ + ")"),
+                         yProbeName_ + (yUnit_.isEmpty() ? " (unit unspecified)" : " (" + yUnit_ + ")"));
     if (sample.role == QStringLiteral("x")) appendXSample(sample.step, sample.value);
     if (sample.role == QStringLiteral("y")) appendYSample(sample.step, sample.value);
 }
@@ -146,6 +154,8 @@ void PhasePortraitViewWindow::updateStatus()
 
 void PhasePortraitViewWindow::clearBuffers()
 {
+    xUnit_.clear(); yUnit_.clear();
+    plot_->setAxisTitles(xProbeName_ + " (unit unspecified)", yProbeName_ + " (unit unspecified)");
     discardPresentationHistory();
     points_.clear();
     aligner_.clear();

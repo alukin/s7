@@ -26,7 +26,8 @@ constexpr qint64 kSpillIndexStride = 4096;
 
 auto ScopeRecording::Series::displayName() const -> QString
 {
-    return comparisonLabel.isEmpty() ? channelName : comparisonLabel + QStringLiteral(" / ") + channelName;
+    const auto label = channelName + (channelUnit.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(channelUnit));
+    return comparisonLabel.isEmpty() ? label : comparisonLabel + QStringLiteral(" / ") + label;
 }
 
 ScopeRecording::ScopeRecording(QString scopeName)
@@ -37,6 +38,13 @@ ScopeRecording::ScopeRecording(QString scopeName)
 void ScopeRecording::notifyStatus() const
 {
     if (statusChanged_) statusChanged_();
+}
+
+bool ScopeRecording::setChannelUnit(const QString& channel, const QString& unit)
+{
+    auto& series = series_[QStringLiteral("live:") + channel];
+    if (series.channelUnit == unit) return false;
+    series.channelUnit = unit; return true;
 }
 
 void ScopeRecording::appendSample(const QString& channel, const double timeSeconds, const double value)
@@ -284,7 +292,7 @@ bool ScopeRecording::writeRunResults(QIODevice& device, QString* error) const
     for (const auto& series : series_) {
         if (series.isComparison() || !series.hasSamples) continue;
         const auto count = series.spillFile ? series.spilledSamples : series.time.size();
-        channels.append(QJsonObject{{"name", series.channelName}, {"samples", QString::number(count)}});
+        channels.append(QJsonObject{{"name", series.channelName}, {"unit", series.channelUnit}, {"samples", QString::number(count)}});
         incomplete |= series.spillFailed;
     }
     if (channels.isEmpty()) return fail(QStringLiteral("There is no current recording to save"));
@@ -363,10 +371,11 @@ bool ScopeRecording::openRunResults(QIODevice& device, const QString& label, QSt
         bool countOk = false;
         const auto count = channel.value("samples").toString().toULongLong(&countOk);
         const auto name = channel.value("name").toString();
-        if (!channel.value("name").isString() || !countOk || count == 0
+        if ((channel.contains("unit") && !channel.value("unit").isString()) || !channel.value("name").isString() || !countOk || count == 0
             || staged.series_.contains(QStringLiteral("live:") + name)
             || (!device.isSequential() && count > quint64(std::max<qint64>(0, device.bytesAvailable())) / 16))
             return fail(QStringLiteral("Invalid Scope channel or sample count"));
+        staged.setChannelUnit(name, channel.value("unit").toString());
         double previous = -std::numeric_limits<double>::infinity();
         for (quint64 i = 0; i < count; ++i) {
             double time = 0, value = 0;

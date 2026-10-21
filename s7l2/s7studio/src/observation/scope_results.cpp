@@ -1,4 +1,5 @@
 #include "observation/scope_results.hpp"
+#include "observation/run_metadata.hpp"
 #include <QJsonArray>
 
 namespace s7studio::observation {
@@ -28,8 +29,11 @@ std::unique_ptr<ui::ScopeRecording> scopeProjection(const ObservationSource& sou
         if (error) *error = QStringLiteral("Cannot build result projection: ") + result->statusText();
         return {};
     }
+    const auto provenance = source.provenance();
     QJsonArray mapping;
     for (const auto& channel : channels) if (counts.contains(channel.id)) {
+        const auto separator = channel.name.indexOf(QLatin1Char('/'));
+        result->setChannelUnit(separator < 0 ? channel.name : channel.name.mid(separator + 1), probeUnit(provenance, channel.name));
         const auto count = counts.value(channel.id);
         const auto first = firstSteps.value(channel.id), last = lastSteps.value(channel.id);
         mapping.append(QJsonObject{{"name", channel.name}, {"id", QString::number(channel.id)},

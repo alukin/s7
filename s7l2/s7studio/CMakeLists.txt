@@ -14,6 +14,7 @@ add_library(s7studio_diagram STATIC
     src/diagram/net_model.hpp
     src/diagram/wire_router.cpp
     src/diagram/wire_router.hpp
+    src/diagram/clipboard.cpp
     src/diagram/diagram_scene.cpp
     src/diagram/diagram_scene.hpp
     src/diagram_document.cpp
@@ -130,6 +131,7 @@ set_target_properties(s7studio_viewers PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_viewers)
 
 add_library(s7studio_app OBJECT
+    src/parameter_editor.cpp src/parameter_editor.hpp
     src/schema_tabs.cpp src/schema_tabs.hpp
     src/main_window.cpp
     src/main_window.hpp

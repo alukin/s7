@@ -34,9 +34,11 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 
     // Search box
     auto* searchLayout = new QHBoxLayout();
-    auto* searchLabel = new QLabel("Search:", this);
+    auto* searchLabel = new QLabel("&Search:", this);
     searchEdit_ = new QLineEdit(this);
     searchEdit_->setObjectName(QStringLiteral("elements.search"));
+    searchLabel->setBuddy(searchEdit_);
+    searchEdit_->setAccessibleName(QStringLiteral("Filter element library"));
     searchEdit_->setPlaceholderText("Filter elements...");
     searchLayout->addWidget(searchLabel);
     searchLayout->addWidget(searchEdit_);
@@ -45,6 +47,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     // Element tree
     elementTree_ = new QTreeWidget(this);
     elementTree_->setObjectName(QStringLiteral("elements.tree"));
+    elementTree_->setAccessibleName(QStringLiteral("Element library"));
     elementTree_->setColumnCount(2);
     elementTree_->setHeaderLabels({"Element", "I/O"});
     elementTree_->setColumnWidth(0, 180);
@@ -58,12 +61,14 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     descriptionLabel_ = new QLabel(this);
     descriptionLabel_->setWordWrap(true);
     descriptionLabel_->setMaximumHeight(80);
-    descriptionLabel_->setStyleSheet("QLabel { border: 1px solid #ccc; padding: 4px; background-color: #f9f9f9; }");
+    descriptionLabel_->setFrameStyle(QFrame::StyledPanel);
+    descriptionLabel_->setMargin(4);
+    descriptionLabel_->setTextFormat(Qt::PlainText);
     layout->addWidget(descriptionLabel_);
 
     // Count label
     elementCountLabel_ = new QLabel(this);
-    elementCountLabel_->setStyleSheet("color: #666; font-size: 11px;");
+
     layout->addWidget(elementCountLabel_);
 
     // Set stretch

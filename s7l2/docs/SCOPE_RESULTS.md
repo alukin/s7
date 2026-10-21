@@ -93,7 +93,8 @@ All numeric fields are little endian. No Qt object serialization is used.
 Header fields: `scope` (string), `saved_utc` (ISO UTC string),
 `dropped_samples` (unsigned decimal string), `incomplete` (boolean),
 `storage_warning` (string), and `channels` (array). An `observation` object carries source run identity, active/finished/stopped state, run error, channel types and step ranges when available. Each channel has `name`
-(string) and `samples` (positive unsigned decimal string). Counts use strings
+(string), `samples` (positive unsigned decimal string), and an optional `unit`
+(string; absent means unspecified). Counts use strings
 to avoid JSON floating-point rounding. Channel names must be unique; the loader
 allows at most 1,024 channels. Trailing bytes, unsupported versions, bad counts,
 non-finite samples and unordered timestamps are errors. Version 1 files are
@@ -136,3 +137,10 @@ N1b adds `s7studio_run_provenance` for saved-config replay, exact uint64/default
 nested-library/seed preservation, edit/reset/rerun isolation, large/oversized
 headers and corrupt-provenance rollback. `s7studio_viewers` checks read-only Run
 details on live, imported and missing-provenance recordings.
+
+
+Supplied probe units are frozen in run provenance and saved in Scope channel
+metadata as `unit`. Imported comparison legends retain those annotations.
+Units affect labels only; samples are not converted. A shared axis containing
+different or missing units is explicitly identified. See the
+[visual usability audit](usability/2026-10-21/AUDIT.md) for measured GUI evidence.

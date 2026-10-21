@@ -45,6 +45,7 @@ struct DiagramChange {
     std::vector<Rehang> rehung;
     std::vector<Bends> bends;
     std::vector<ElementEdit> elements;
+    std::optional<std::pair<std::vector<DiagramProbe>, std::vector<DiagramProbe>>> probes;
 
     [[nodiscard]] bool empty() const;
 };
@@ -72,9 +73,8 @@ public:
     [[nodiscard]] auto signalWires() const -> std::vector<std::shared_ptr<SignalWire>>;
     [[nodiscard]] auto sharedWire(const SignalWire* wire) const -> std::shared_ptr<SignalWire>;
 
-    // Probes (non-invasive output taps, not Functional Graph elements; see
-    // DiagramProbe). Not part of the undo stack: adding/removing/renaming a
-    // probe never changes what the diagram computes.
+    // Probes are non-invasive output taps. Annotation edits share the document
+    // undo history; they never change what the diagram computes.
     [[nodiscard]] const std::vector<DiagramProbe>& probes() const { return probes_; }
     // False if `point` already has a probe.
     bool addProbe(PortRef point, QString name, QString unit = {});
@@ -99,6 +99,9 @@ public:
     // Replaces an element's identity and params; wires on ports it no longer has are removed.
     void changeElement(const std::shared_ptr<ElementNode>& node, ElementNode::Element element);
     void deleteSelection();
+    bool copySelection() const;
+    bool pasteSelection(QPointF position);
+    void selectAll();
     void deleteWire(const std::shared_ptr<SignalWire>& wire);
     void setUserBends(const std::shared_ptr<SignalWire>& wire, QVector<QPointF> bends);
 

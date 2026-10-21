@@ -9,14 +9,14 @@
 
 namespace s7studio {
 
-// A probe to sample while running (DiagramProbe, without the display-only
-// unit): a read-only tap on an existing element's output port, named for
+// A probe to sample while running, retaining its display-only unit: a read-only tap on an existing element's output port, named for
 // routing samples back to whatever is showing them (ADR-011/012: never a
 // Functional Graph element).
 struct RunProbe {
     std::string name;
     std::string element;
     int port = 0;
+    std::string unit{};
     bool operator==(const RunProbe&) const = default;
 };
 

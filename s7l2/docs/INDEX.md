@@ -60,3 +60,5 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 - [Automated Studio GUI tests](STUDIO_GUI_TESTING.md): Qt Test/Quick Test workflows, Xvfb, real 3D rendering, skips and failure artifacts.
 
 - [Numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md): supported linear configurations, independent references, tolerances and bundled-example classification.
+
+- [Studio visual usability audit (2026-10-21)](usability/2026-10-21/AUDIT.md): production screenshots, severity-ranked findings, incremental improvements and human-review limits.

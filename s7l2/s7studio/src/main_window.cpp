@@ -1,4 +1,5 @@
 #include "main_window.hpp"
+#include "parameter_editor.hpp"
 #include "atomic_file.hpp"
 #include "schema_tabs.hpp"
 #include <QUndoGroup>
@@ -258,36 +259,6 @@ auto nextElementId(const diagram::DiagramScene& scene, const QString& elementTyp
     return candidate;
 }
 
-auto parseEditableParams(const QString& text, boost::json::object& paramsOut, QString& error) -> bool
-{
-    boost::system::error_code ec;
-    const auto parsed = boost::json::parse(text.toStdString(), ec);
-    if (ec) {
-        error = QStringLiteral("Invalid JSON: %1").arg(QString::fromUtf8(ec.message()));
-        return false;
-    }
-    if (!parsed.is_object()) {
-        error = QStringLiteral("Parameters must be a JSON object, e.g. {\"value\": 1.0}.");
-        return false;
-    }
-
-    paramsOut = parsed.as_object();
-    return true;
-}
-
-auto withDefaultedParams(const s7::ElementMetadata& metadata, const boost::json::object& params) -> boost::json::object
-{
-    auto effective = params;
-    for (const auto& parameter : metadata.parameters) {
-        // Optional parameters without a default (e.g. a generic element's
-        // `type`) stay absent: null is not a valid value for them.
-        if (effective.find(parameter.name) == effective.end() && !parameter.default_value.is_null()) {
-            effective[parameter.name] = parameter.default_value;
-        }
-    }
-    return effective;
-}
-
 auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
 {
     if (ports.empty()) {
@@ -306,23 +277,6 @@ auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
     return lines.join('\n');
 }
 
-auto parameterListSummary(const std::vector<s7::ParameterSpec>& parameters) -> QString
-{
-    if (parameters.empty()) {
-        return QStringLiteral("none");
-    }
-
-    QStringList lines;
-    lines.reserve(static_cast<int>(parameters.size()));
-    for (const auto& parameter : parameters) {
-        lines.push_back(QStringLiteral("- %1 [%2], default=%3: %4")
-                            .arg(QString::fromStdString(parameter.name),
-                                 QString::fromStdString(parameter.type),
-                                 QString::fromStdString(boost::json::serialize(parameter.default_value)),
-                                 QString::fromStdString(parameter.description.empty() ? std::string("No description") : parameter.description)));
-    }
-    return lines.join('\n');
-}
 
 } // namespace
 
@@ -688,6 +642,20 @@ void MainWindow::buildUi()
         auto* editMenu = new QMenu(QStringLiteral("&Edit"), this);
         editMenu->addAction(undoAction_);
         editMenu->addAction(redoAction_);
+        editMenu->addSeparator();
+        const auto editingAction = [&](const QString& title, const char* name, auto operation) {
+            auto* action = editMenu->addAction(title);
+            action->setObjectName(QString::fromLatin1(name));
+            connect(action, &QAction::triggered, this, [this, operation] {
+                if (auto* editor = activeDiagramEditor()) (editor->*operation)();
+            });
+        };
+        editingAction(QStringLiteral("Cu&t\tCtrl+X"), "action.cut", &diagram::DiagramEditor::cutSelection);
+        editingAction(QStringLiteral("&Copy\tCtrl+C"), "action.copy", &diagram::DiagramEditor::copySelection);
+        editingAction(QStringLiteral("&Paste\tCtrl+V"), "action.paste", &diagram::DiagramEditor::pasteSelection);
+        editingAction(QStringLiteral("Select &All\tCtrl+A"), "action.selectAll", &diagram::DiagramEditor::selectAll);
+        editMenu->addSeparator();
+        editingAction(QStringLiteral("Element &Properties…\tF4"), "action.properties", &diagram::DiagramEditor::editSelectedElement);
         const auto menus = menuBar()->actions();
         menuBar()->insertMenu(menus.size() > 1 ? menus.at(1) : nullptr, editMenu);
     }
@@ -1039,122 +1007,63 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     }
 
     QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("dialog.elementProperties"));
     dialog.setWindowTitle(QStringLiteral("Element Properties - %1").arg(elementId));
-    dialog.resize(620, 460);
-
+    dialog.resize(720, 680);
     auto* layout = new QVBoxLayout(&dialog);
-    auto* form = new QFormLayout();
+    auto* identity = new QLabel(QStringLiteral("%1 — %2").arg(elementId, elementType), &dialog);
+    identity->setTextFormat(Qt::PlainText); identity->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(identity);
+    auto* description = new QLabel(elementDescriptionForType(elementType), &dialog);
+    description->setTextFormat(Qt::PlainText); description->setWordWrap(true);
+    layout->addWidget(description);
 
-    auto* idEdit = new QLineEdit(elementId, &dialog);
-    idEdit->setReadOnly(true);
-    form->addRow(QStringLiteral("ID"), idEdit);
-
-    auto* typeEdit = new QLineEdit(elementType, &dialog);
-    typeEdit->setReadOnly(true);
-    form->addRow(QStringLiteral("Type"), typeEdit);
-
-    auto* libraryEdit = new QLineEdit(elementLibraryForType(elementType), &dialog);
-    libraryEdit->setReadOnly(true);
-    form->addRow(QStringLiteral("Library"), libraryEdit);
-
-    auto* descriptionLabel = new QLabel(elementDescriptionForType(elementType), &dialog);
-    descriptionLabel->setWordWrap(true);
-    descriptionLabel->setMinimumHeight(48);
-    form->addRow(QStringLiteral("Description"), descriptionLabel);
-
-    // Placement: the runtime node this element runs on when the diagram is deployed.
+    // Ports and deployment remain available without crowding routine tuning.
+    auto* detailsButton = new QToolButton(&dialog);
+    detailsButton->setText(QStringLiteral("Ports and deployment"));
+    detailsButton->setCheckable(true); detailsButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    detailsButton->setArrowType(Qt::RightArrow);
+    auto* details = new QWidget(&dialog); auto* form = new QFormLayout(details);
+    form->setRowWrapPolicy(QFormLayout::WrapLongRows);
+    auto* library = new QLabel(elementLibraryForType(elementType), details); library->setWordWrap(true);
+    form->addRow(QStringLiteral("Library"), library);
     const QString currentPlacement = QString::fromStdString(elementNode->element().placement);
-    auto* nodeCombo = new QComboBox(&dialog);
+    auto* nodeCombo = new QComboBox(details);
     nodeCombo->addItem(QStringLiteral("(not placed)"), QString());
-    if (headlessNodesPanel_) {
-        for (const auto& known : headlessNodesPanel_->knownNodes()) {
-            nodeCombo->addItem(QStringLiteral("%1  %2  (%3)").arg(known.nodeName, known.endpoint, known.nodeUuid.left(8)), known.nodeUuid);
-        }
-    }
-    if (!currentPlacement.isEmpty() && nodeCombo->findData(currentPlacement) < 0) {
-        nodeCombo->addItem(currentPlacement, currentPlacement);
-    }
+    if (headlessNodesPanel_) for (const auto& known : headlessNodesPanel_->knownNodes())
+        nodeCombo->addItem(QStringLiteral("%1  %2  (%3)").arg(known.nodeName, known.endpoint, known.nodeUuid.left(8)), known.nodeUuid);
+    if (!currentPlacement.isEmpty() && nodeCombo->findData(currentPlacement) < 0) nodeCombo->addItem(currentPlacement, currentPlacement);
     nodeCombo->setCurrentIndex(std::max(0, nodeCombo->findData(currentPlacement)));
-    nodeCombo->setToolTip(QStringLiteral("Runtime node this element runs on when the diagram is deployed (nodes from the Headless Nodes tool window)."));
-    form->addRow(QStringLiteral("Node"), nodeCombo);
-
+    nodeCombo->setAccessibleName(QStringLiteral("Deployment node"));
+    nodeCombo->setToolTip(QStringLiteral("Used only when deploying to a runtime node. Local simulation does not require placement."));
+    form->addRow(QStringLiteral("Deployment node"), nodeCombo);
     if (descriptor) {
-        const auto& metadata = descriptor->metadata();
-        auto* inputsLabel = new QLabel(portListSummary(metadata.input_ports), &dialog);
-        inputsLabel->setWordWrap(true);
-        form->addRow(QStringLiteral("Inputs"), inputsLabel);
-
-        auto* outputsLabel = new QLabel(portListSummary(metadata.output_ports), &dialog);
-        outputsLabel->setWordWrap(true);
-        form->addRow(QStringLiteral("Outputs"), outputsLabel);
-
-        if (metadata.variadic_inputs.enabled) {
-            auto* variadicLabel = new QLabel(
-                QStringLiteral("enabled, min=%1, max=%2, template=%3")
-                    .arg(static_cast<int>(metadata.variadic_inputs.min_count))
-                    .arg(static_cast<int>(metadata.variadic_inputs.max_count))
-                    .arg(QString::fromStdString(metadata.variadic_inputs.port_name_template)),
-                &dialog);
-            variadicLabel->setWordWrap(true);
-            form->addRow(QStringLiteral("Variadic inputs"), variadicLabel);
-        }
+        auto* inputs = new QLabel(portListSummary(descriptor->metadata().input_ports), details); inputs->setWordWrap(true); inputs->setTextFormat(Qt::PlainText);
+        auto* outputs = new QLabel(portListSummary(descriptor->metadata().output_ports), details); outputs->setWordWrap(true); outputs->setTextFormat(Qt::PlainText);
+        form->addRow(QStringLiteral("Inputs"), inputs); form->addRow(QStringLiteral("Outputs"), outputs);
     }
-
-    layout->addLayout(form);
-
-    if (descriptor) {
-        const auto& metadata = descriptor->metadata();
-        auto* paramsInfoLabel = new QLabel(parameterListSummary(metadata.parameters), &dialog);
-        paramsInfoLabel->setWordWrap(true);
-        paramsInfoLabel->setMinimumHeight(56);
-        layout->addWidget(new QLabel(QStringLiteral("Parameter specs:"), &dialog));
-        layout->addWidget(paramsInfoLabel);
-    }
-
-    auto* paramsLabel = new QLabel(QStringLiteral("Parameters (effective JSON object):"), &dialog);
-    layout->addWidget(paramsLabel);
-
-    boost::json::object paramsForDialog = elementNode->element().params;
-    if (descriptor) {
-        paramsForDialog = withDefaultedParams(descriptor->metadata(), paramsForDialog);
-    }
-    const QString currentParamsText = QString::fromStdString(boost::json::serialize(paramsForDialog));
-
-    auto* paramsEdit = new QPlainTextEdit(currentParamsText, &dialog);
-    paramsEdit->setObjectName(QStringLiteral("element.parameters"));
-    paramsEdit->setPlaceholderText(QStringLiteral("{\n  \"value\": 1.0\n}"));
-    paramsEdit->setMinimumHeight(180);
-    layout->addWidget(paramsEdit, 1);
-
+    details->setVisible(false);
+    connect(detailsButton, &QToolButton::toggled, details, &QWidget::setVisible);
+    connect(detailsButton, &QToolButton::toggled, &dialog, [detailsButton](bool checked) { detailsButton->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow); });
+    layout->addWidget(detailsButton); layout->addWidget(details);
+    auto* editor = new ui::ParameterEditor(descriptor ? std::optional{s7::ElementMetadata(descriptor->metadata())} : std::nullopt,
+                                           elementNode->element().params, &dialog);
+    layout->addWidget(editor, 1);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    boost::json::object params;
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        QString error;
+        if (!editor->readParameters(params, error)) { editor->showError(error); return; }
+        dialog.accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
-
-    while (dialog.exec() == QDialog::Accepted) {
-        boost::json::object paramsObject;
-        QString parseError;
-        if (!parseEditableParams(paramsEdit->toPlainText().trimmed(), paramsObject, parseError)) {
-            QMessageBox::warning(this, QStringLiteral("Invalid parameters"), parseError);
-            continue;
-        }
-
-        // A null optional parameter means "not set".
-        if (descriptor) {
-            for (const auto& parameter : descriptor->metadata().parameters) {
-                if (const auto it = paramsObject.find(parameter.name); !parameter.required && it != paramsObject.end() && it->value().is_null()) {
-                    paramsObject.erase(it);
-                }
-            }
-        }
-        auto element = elementNode->element();
-        element.params = paramsObject;
+    if (dialog.exec() == QDialog::Accepted) {
+        auto element = elementNode->element(); element.params = std::move(params);
         element.placement = nodeCombo->currentData().toString().toStdString();
-        scene->changeElement(elementNode, element);
+        scene->changeElement(elementNode, std::move(element));
         refreshPlacementLabels();
-
         appendLog(QStringLiteral("[studio] updated element params: %1").arg(elementId));
-        break;
     }
 }
 
@@ -1348,7 +1257,7 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
     if (diagramEditor_ && diagramEditor_->scene()) {
         const auto* scene = diagramEditor_->scene();
         for (const auto& probe : scene->probes()) {
-            probes.push_back(RunProbe{probe.name.toStdString(), probe.point.element, probe.point.port});
+            probes.push_back(RunProbe{probe.name.toStdString(), probe.point.element, probe.point.port, probe.unit.toStdString()});
         }
         const diagram::NetModel model(*scene);
         for (const auto& connection : model.observationConnections()) {
@@ -1367,7 +1276,11 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
                     channelName = names->as_array()[connection.to.port].as_string().c_str();
                 }
             }
-            probes.push_back(RunProbe{connection.to.element + "/" + channelName, connection.from.element, connection.from.port});
+            std::string unit;
+            for (const auto& probe : scene->probes()) if (probe.point == connection.from) {
+                unit = probe.unit.toStdString(); break;
+            }
+            probes.push_back(RunProbe{connection.to.element + "/" + channelName, connection.from.element, connection.from.port, unit});
         }
     }
     return probes;
@@ -1744,9 +1657,13 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     clearSamplesCheck->setChecked(clearScopesBeforeRun_);
     clearSamplesCheck->setToolTip(QStringLiteral("Unchecked: keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
 
-    form->addRow(QStringLiteral("Run time (s)"), runtimeSecondsSpin);
-    form->addRow(QStringLiteral("Discretization frequency"), frequencySpin);
-    form->addRow(QStringLiteral("Computed dt"), dtLabel);
+    form->addRow(QStringLiteral("Model duration (s)"), runtimeSecondsSpin);
+    form->addRow(QStringLiteral("Model step rate"), frequencySpin);
+    form->addRow(QStringLiteral("Model step dt"), dtLabel);
+    runtimeSecondsSpin->setAccessibleName(QStringLiteral("Model duration in seconds"));
+    runtimeSecondsSpin->setToolTip(QStringLiteral("Simulated duration, not wall-clock time. -1 runs continuously until stopped."));
+    frequencySpin->setAccessibleName(QStringLiteral("Model steps per second"));
+    frequencySpin->setToolTip(QStringLiteral("Sets the local simulation rate and effective dt of rate-dependent elements. This is not a real-time pacing limit."));
     layout->addLayout(form);
     layout->addWidget(clearSamplesCheck);
 

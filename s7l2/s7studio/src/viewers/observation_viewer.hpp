@@ -23,6 +23,7 @@ struct ObservedSample {
     std::uint64_t runId = 0;
     observation::ChannelId channel = 0;
     QString role;
+    QString unit{};
 };
 
 struct InputBinding {
@@ -71,6 +72,7 @@ private:
     std::shared_ptr<const observation::ObservationSource> source_;
     QVector<InputBinding> bindings_;
     std::uint64_t cursor_ = 0;
+    QHash<observation::ChannelId, QString> units_;
     QString readError_;
     std::uint64_t previewDropped_ = 0;
 };

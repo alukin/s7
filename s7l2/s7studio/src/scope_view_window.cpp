@@ -72,6 +72,7 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
 
     auto* rootLayout = new QVBoxLayout(this);
     auto* controls = new QHBoxLayout();
+    auto* resultsControls = new QHBoxLayout();
 
     autoScaleYCheck_ = new QCheckBox(QStringLiteral("Auto Y"), this);
     autoScaleYCheck_->setChecked(true);
@@ -79,7 +80,8 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     fitAllTimeCheck_ = new QCheckBox(QStringLiteral("Fit full run"), this);
     fitAllTimeCheck_->setChecked(true);
     controls->addWidget(fitAllTimeCheck_);
-    clearButton_ = new QPushButton(QStringLiteral("Clear current"), this);
+    clearButton_ = new QPushButton(QStringLiteral("Clear display"), this);
+    clearButton_->setToolTip(QStringLiteral("Clear this display. Captured data remains available for saving, export and reopening."));
     exportButton_ = new QPushButton(QStringLiteral("Export Full CSV"), this);
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
@@ -93,30 +95,33 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     removeButton->setObjectName(QStringLiteral("scope.removeComparisons"));
     saveButton->setToolTip(QStringLiteral("Save a snapshot of the current recording, including capture-loss warnings. Comparisons are saved separately."));
     openButton->setToolTip(QStringLiteral("Overlay saved results at their original model timestamps."));
-    controls->addWidget(saveButton);
-    controls->addWidget(openButton);
-    controls->addWidget(removeButton);
-    controls->addWidget(detailsButton);
+    resultsControls->addWidget(saveButton);
+    resultsControls->addWidget(openButton);
+    resultsControls->addWidget(removeButton);
+    resultsControls->addWidget(detailsButton);
     connect(detailsButton, &QPushButton::clicked, this, &ScopeViewWindow::showRunDetails);
     connect(saveButton, &QPushButton::clicked, this, &ScopeViewWindow::saveRunResults);
     connect(openButton, &QPushButton::clicked, this, &ScopeViewWindow::openRunResultsFile);
     connect(removeButton, &QPushButton::clicked, this, &ScopeViewWindow::clearComparisons);
     controls->addStretch(1);
     statusLabel_ = new QLabel(this);
+    statusLabel_->setObjectName(QStringLiteral("viewer.status"));
+    statusLabel_->setTextFormat(Qt::PlainText);
     statusLabel_->setWordWrap(true);
 
     rootLayout->addLayout(controls);
+    rootLayout->addLayout(resultsControls);
     rootLayout->addWidget(statusLabel_);
 
     plot_ = new viewers::LinePlotView(this);
     plot_->setLegendVisible(true);
-    plot_->setAxisTitles(QStringLiteral("time (s)"), probeName_);
-    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging in the plot."));
+    plot_->setAxisTitles(QStringLiteral("model time (s)"), QStringLiteral("value (unit unspecified)"));
+    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     rootLayout->addWidget(plot_, 1);
     timeScrollBar_ = new QScrollBar(Qt::Horizontal, this);
     timeScrollBar_->setRange(0, 10000);
     timeScrollBar_->setEnabled(false);
-    timeScrollBar_->setToolTip(QStringLiteral("Scroll the visible time range. Zoom with the mouse wheel and pan by dragging in the plot."));
+    timeScrollBar_->setToolTip(QStringLiteral("Scroll the visible time range. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     rootLayout->addWidget(timeScrollBar_);
 
     recording_.setStatusChangedHandler([this] { updateStatus(); });
@@ -161,7 +166,9 @@ auto ScopeViewWindow::probeName() const -> QString
 
 void ScopeViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
+    const bool changed = recording_.setChannelUnit(sample.role, sample.unit);
     appendSample(sample.role, sample.timeSeconds, sample.value);
+    if (changed) syncSeries(false);
 }
 
 void ScopeViewWindow::appendSample(const double timeSeconds, const double value)
@@ -190,9 +197,15 @@ void ScopeViewWindow::syncSeries(const bool restyle)
     }
     // New series get the next color; a rebuild colors in drawing order.
     for (auto it = series.cbegin(); it != series.cend(); ++it) {
-        if (lines_.contains(it.key())) continue;
+        if (lines_.contains(it.key())) { plot_->setSeriesName(lines_.value(it.key()), it->displayName()); continue; }
         lines_.insert(it.key(), plot_->addSeries(it->displayName(), styleFor(it.value(), lines_.size())));
     }
+    QSet<QString> units;
+    bool unknown = false;
+    for (const auto& entry : series) { if (entry.channelUnit.isEmpty()) unknown = true; else units.insert(entry.channelUnit); }
+    const auto yTitle = units.size() == 1 && !unknown ? QStringLiteral("value (%1)").arg(*units.begin())
+        : units.isEmpty() ? QStringLiteral("value (unit unspecified)") : QStringLiteral("value (mixed units; see legend)");
+    plot_->setAxisTitles(QStringLiteral("model time (s)"), yTitle);
     hasTimeRange_ = false;
     dirty_ = true;
 }
@@ -240,8 +253,10 @@ void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 void ScopeViewWindow::updateStatus()
 {
     const auto cacheStatus = recording_.statusText();
-    statusLabel_->setText((source() && !cacheStatus.isEmpty() ? QStringLiteral("display cache: ") : QString())
-        + cacheStatus + (sourceStatusText().isEmpty() ? QString() : QStringLiteral(" | ") + sourceStatusText()));
+    QStringList parts;
+    if (!sourceStatusText().isEmpty()) parts << sourceStatusText();
+    if (!cacheStatus.isEmpty()) parts << (source() ? QStringLiteral("display cache: ") : QString()) + cacheStatus;
+    statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
 
 void ScopeViewWindow::clearBuffers()

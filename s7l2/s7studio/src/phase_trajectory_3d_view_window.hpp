@@ -125,6 +125,7 @@ private:
     void updateStatus();
     void updateLabels();
 
+    QString xUnit_, yUnit_, zUnit_;
     QString xProbeName_;
     QString yProbeName_;
     QString zProbeName_;

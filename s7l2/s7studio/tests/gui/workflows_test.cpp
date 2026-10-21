@@ -14,6 +14,7 @@
 #include <QGraphicsView>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMenuBar>
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
 #include <QPlainTextEdit>
@@ -24,6 +25,12 @@
 #include <QDoubleSpinBox>
 #include <QTemporaryDir>
 #include <QTreeWidget>
+#include <QTabWidget>
+#include <QLabel>
+#include <QComboBox>
+#include "parameter_editor.hpp"
+#include "viewers/line_plot_view.hpp"
+#include "tool_panels.hpp"
 #include <QTextStream>
 #include <QUndoStack>
 #include <functional>
@@ -43,6 +50,13 @@ class Workflows : public QObject {
     QString artifacts_;
     bool graphicsAvailable_ = false;
 
+    static void capture(QWidget* widget, const QString& name) {
+        const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR");
+        if (directory.isEmpty()) return;
+        QDir{}.mkpath(directory);
+        QTest::qWait(150);
+        QVERIFY(widget->grab().save(directory + '/' + name + ".png"));
+    }
     QAction* action(const char* name) { return window_->findChild<QAction*>(QString::fromLatin1(name)); }
     s7studio::diagram::DiagramEditor* editor() { return window_->findChild<s7studio::diagram::DiagramEditor*>(); }
     s7studio::diagram::DiagramScene* scene() { return editor()->scene(); }
@@ -94,6 +108,7 @@ class Workflows : public QObject {
             if (!duration || !frequency || !buttons) return false;
             duration->setValue(seconds);
             frequency->setValue(1000);
+            capture(dialog, "run-configuration");
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
             return true;
         });
@@ -186,9 +201,12 @@ private slots:
             auto* text = dialog->findChild<QPlainTextEdit*>("element.parameters");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!text || !buttons) { dialog->reject(); editDriver.stop(); return; }
+            auto* tabs = dialog->findChild<QTabWidget*>("element.parameterTabs");
+            if (tabs) tabs->setCurrentIndex(1);
             text->setFocus(); QTest::keyClick(text, Qt::Key_A, Qt::ControlModifier);
             QTest::keyClicks(text, "{\"value\":2.5}");
             parametersEdited = true; editDriver.stop();
+            capture(dialog, "parameters");
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
         });
         editDriver.start(10);
@@ -206,10 +224,178 @@ private slots:
         QCOMPARE(window_->currentDocument(), saved);
         QCOMPARE(scene()->elementNode("constant_1")->element().params.at("value").to_number<double>(), 2.5);
     }
+    void typedParametersAndKeyboard() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rlc_step_symplectic.s7diagram"));
+        auto node = scene()->elementNode("state"); QVERIFY(node);
+        scene()->clearSelection(); node->setSelected(true);
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
+        bool checked = false;
+        QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [&](QDialog* dialog) {
+            auto* initial = dialog->findChild<QLineEdit*>("parameter.initial_position");
+            auto* tabs = dialog->findChild<QTabWidget*>("element.parameterTabs");
+            auto* error = dialog->findChild<QLabel*>("element.parameterError");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!initial || !tabs || !error || !buttons) return false;
+            if (initial->accessibleName() != "initial_position") return false;
+            initial->setFocus(); QTest::keyClick(initial, Qt::Key_A, Qt::ControlModifier);
+            QTest::keyClicks(initial, "invalid");
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            if (!dialog->isVisible() || error->text().isEmpty()) return false;
+            capture(dialog, "parameter-error");
+            initial->setText("0.25");
+            tabs->setCurrentIndex(1);
+            auto* json = dialog->findChild<QPlainTextEdit*>("element.parameters");
+            if (!json || !json->toPlainText().contains("2.5E-1")) return false;
+            tabs->setCurrentIndex(0); capture(dialog, "integrator-parameters");
+            QTest::keyClick(initial, Qt::Key_Tab);
+            if (QApplication::focusWidget() == initial) return false;
+            checked = true;
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        }));
+        QVERIFY(checked); QCOMPARE(node->element().params.at("initial_position").to_number<double>(), .25);
+        view->setFocus();
+        QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F4); }, [](QDialog* dialog) {
+            auto* initial = dialog->findChild<QLineEdit*>("parameter.initial_position");
+            if (!initial) return false;
+            initial->setText("0.75"); QTest::keyClick(initial, Qt::Key_Escape); return true;
+        }));
+        QCOMPARE(node->element().params.at("initial_position").to_number<double>(), .25);
+        action("action.undo")->trigger(); QCOMPARE(node->element().params.at("initial_position").to_number<double>(), 0.);
+        // Reusable editor preserves exact integer/complex values and metadata bounds.
+        s7::ElementMetadata metadata; metadata.type_name = "test";
+        metadata.parameters = {{"seed", "int", "Exact seed", 0, 0, {}, {}, false},
+            {"mode", "enum", "Mode", "a", {}, {}, {"a", "b"}, false},
+            {"enabled", "bool", "Enabled", false, {}, {}, {}, false}};
+        s7studio::ui::ParameterEditor parameters(metadata, {{"seed", std::uint64_t(18446744073709551615ULL)}});
+        boost::json::object values; QString error;
+        QVERIFY(parameters.readParameters(values, error));
+        QCOMPARE(values.at("seed").as_uint64(), std::uint64_t(18446744073709551615ULL));
+        parameters.findChild<QLineEdit*>("parameter.seed")->setText("-1");
+        QVERIFY(!parameters.readParameters(values, error)); QVERIFY(error.contains("at least"));
+        parameters.findChild<QLineEdit*>("parameter.seed")->setText("1");
+        parameters.findChild<QComboBox*>("parameter.mode")->setCurrentText("b");
+        parameters.findChild<QComboBox*>("parameter.enabled")->setCurrentText("true");
+        QVERIFY(parameters.readParameters(values, error));
+        QCOMPARE(values.at("mode").as_string(), boost::json::string("b")); QVERIFY(values.at("enabled").as_bool());
+        auto* advanced = parameters.findChild<QTabWidget*>("element.parameterTabs"); advanced->setCurrentIndex(1);
+        parameters.findChild<QPlainTextEdit*>("element.parameters")->setPlainText("{");
+        QVERIFY(!parameters.readParameters(values, error));
+        parameters.findChild<QPlainTextEdit*>("element.parameters")->setPlainText("{\"unknown\":true}");
+        QVERIFY(!parameters.readParameters(values, error)); QVERIFY(error.contains("unknown parameter"));
+        parameters.findChild<QPlainTextEdit*>("element.parameters")->setPlainText("{}");
+        advanced->setCurrentIndex(0);
+        QCOMPARE(advanced->currentIndex(), 0);
+        QVERIFY(parameters.readParameters(values, error));
+        QCOMPARE(values.at("seed").to_number<int>(), 0); // defaults restored when returning to form
+        s7::ElementMetadata strings; strings.type_name = "strings";
+        strings.parameters = {{"label", "string", "Label", "default", {}, {}, {}, false}};
+        s7studio::ui::ParameterEditor invalid(strings, {{"label", 123}});
+        QCOMPARE(invalid.findChild<QTabWidget*>("element.parameterTabs")->currentIndex(), 1);
+        QVERIFY(!invalid.readParameters(values, error)); // never coerced to the string "123"
+    }
+    void editingIntegrity() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rlc_step_symplectic.s7diagram"));
+        capture(window_.get(), "diagram");
+        qInfo() << "Menu palette" << window_->menuBar()->palette().color(QPalette::WindowText)
+                << window_->menuBar()->palette().color(QPalette::Text)
+                << window_->menuBar()->palette().color(QPalette::ButtonText)
+                << window_->menuBar()->palette().color(QPalette::Window);
+        const auto probes = scene()->probes();
+        QVERIFY(!probes.empty());
+        const auto probe = probes.front();
+        auto node = scene()->elementNode(probe.point.element); QVERIFY(node);
+        scene()->clearSelection(); node->setSelected(true);
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
+        QTest::keyClick(view->viewport(), Qt::Key_Delete);
+        QVERIFY(!scene()->elementNode(probe.point.element));
+        for (const auto& remaining : scene()->probes()) QVERIFY(remaining.point.element != probe.point.element);
+        action("action.undo")->trigger();
+        QCOMPARE(scene()->probes(), probes);
+        QVERIFY(scene()->elementNode(probe.point.element));
+        action("action.redo")->trigger();
+        QVERIFY(!scene()->elementNode(probe.point.element));
+        action("action.undo")->trigger();
+        QVERIFY(scene()->renameProbe(probe.point, "renamed"));
+        action("action.undo")->trigger(); QCOMPARE(scene()->probes(), probes);
+        scene()->removeProbe(probe.point);
+        action("action.undo")->trigger(); QCOMPARE(scene()->probes(), probes);
+        // Real keyboard clipboard operations. Everything internal, including
+        // observer links and annotation frames, must survive one undo step.
+        const auto nodeCount = scene()->elementNodes().size();
+        const auto wireCount = scene()->signalWires().size();
+        const auto frameCount = scene()->textFrames().size();
+        view->setFocus(); QTest::keyClick(view->viewport(), Qt::Key_A, Qt::ControlModifier);
+        QTest::keyClick(view->viewport(), Qt::Key_C, Qt::ControlModifier);
+        QTest::keyClick(view->viewport(), Qt::Key_V, Qt::ControlModifier);
+        QCOMPARE(scene()->elementNodes().size(), nodeCount * 2);
+        QCOMPARE(scene()->signalWires().size(), wireCount * 2);
+        QCOMPARE(scene()->textFrames().size(), frameCount * 2);
+        QCOMPARE(scene()->probes().size(), probes.size() * 2);
+        auto copied = scene()->elementNode("state_copy1"); QVERIFY(copied);
+        QCOMPARE(copied->element().params, scene()->elementNode("state")->element().params);
+        QCOMPARE(copied->element().title, scene()->elementNode("state")->element().title);
+        action("action.undo")->trigger();
+        QCOMPARE(scene()->elementNodes().size(), nodeCount);
+        QCOMPARE(scene()->probes(), probes);
+        action("action.redo")->trigger();
+        QCOMPARE(scene()->elementNodes().size(), nodeCount * 2);
+        const auto path = temporary_.filePath("clipboard.s7diagram");
+        QVERIFY(fileAction("action.saveAs", path));
+        const auto saved = window_->currentDocument();
+        action("action.closeDiagram")->trigger();
+        QVERIFY(fileAction("action.open", path));
+        if (window_->currentDocument() != saved) {
+            QFile expected(artifacts_ + "/clipboard-expected.json");
+            if (expected.open(QIODevice::WriteOnly)) expected.write(QByteArray::fromStdString(boost::json::serialize(saved)));
+        }
+        QCOMPARE(window_->currentDocument(), saved);
+        // Cutting only one selected element never duplicates outside links.
+        scene()->clearSelection(); scene()->elementNode("source")->setSelected(true);
+        view->setFocus(); QTest::keyClick(view->viewport(), Qt::Key_X, Qt::ControlModifier);
+        QVERIFY(!scene()->elementNode("source"));
+        action("action.undo")->trigger(); QVERIFY(scene()->elementNode("source"));
+        QTest::keyClick(view->viewport(), Qt::Key_V, Qt::ControlModifier);
+        QCOMPARE(scene()->elementNodes().size(), nodeCount * 2 + 1);
+        QCOMPARE(scene()->signalWires().size(), wireCount * 2);
+        capture(window_.get(), "clipboard");
+    }
+    void clipboardNestedAndBends() {
+        using namespace s7studio::diagram;
+        DiagramScene graph;
+        auto c = graph.addElement({"c", "Constant", {{"value", 2.5}}, {}, {}, "Input"}, {0, 0});
+        auto g = graph.addElement({"g", "Gain", {{"factor", .5}}, {}, {}, "Gain"}, {500, 0});
+        auto outside = graph.addElement({"outside", "Gain", {{"factor", 1.}}, {}, {}, {}}, {500, 500});
+        const QVector<QPointF> bends{{240, 200}, {400, 200}};
+        QVERIFY(graph.connectEnds(WireEnd::onPort(c, PortDirection::Output, 0), WireEnd::onPort(g, PortDirection::Input, 0), bends).isEmpty());
+        QVERIFY(graph.connectEnds(WireEnd::onPort(c, PortDirection::Output, 0), WireEnd::onPort(outside, PortDirection::Input, 0)).isEmpty());
+        const auto* descriptor = s7::ElementRegistry::instance().find("FirstOrderLag");
+        QVERIFY(descriptor && descriptor->metadata().schema_definition);
+        const auto definition = *descriptor->metadata().schema_definition;
+        auto nested = graph.addElement({"nested", "FirstOrderLag", {}, definition, {}, "Plant"}, {1000, 0});
+        auto frame = graph.addTextFrame("note", TextFrameNode::defaultParams(), {1000, 500});
+        c->setSelected(true); g->setSelected(true); nested->setSelected(true); frame->setSelected(true);
+        QVERIFY(graph.addProbe({"c", 0}, "voltage", "V"));
+        QVERIFY(graph.copySelection()); QVERIFY(graph.pasteSelection({0, 1000}));
+        auto clone = graph.elementNode("nested_copy1"); QVERIFY(clone);
+        QCOMPARE(clone->element().schema, definition);
+        auto gCopy = graph.elementNode("g_copy1"); QVERIFY(gCopy);
+        QCOMPARE(gCopy->element().params, g->element().params);
+        QCOMPARE(graph.signalWires().size(), std::size_t(3)); // two original, only one internal copied
+        std::shared_ptr<SignalWire> pasted;
+        for (const auto& wire : graph.signalWires()) if (wire->downstream.node.lock() == gCopy) pasted = wire;
+        QVERIFY(pasted); QCOMPARE(pasted->userBends.size(), bends.size());
+        QCOMPARE(pasted->userBends[1] - pasted->userBends[0], bends[1] - bends[0]);
+        QCOMPARE(graph.probes().back().unit, QString("V"));
+        graph.undoStack()->undo(); QVERIFY(!graph.elementNode("nested_copy1"));
+        QCOMPARE(graph.signalWires().size(), std::size_t(2));
+        graph.undoStack()->redo(); QVERIFY(graph.elementNode("nested_copy1"));
+    }
     void simulationAndViewers_data() {
         QTest::addColumn<QString>("diagram");
         QTest::addColumn<QString>("observerType");
         QTest::newRow("scope") << "2int_osc.s7diagram" << "Scope";
+        QTest::newRow("scope-linear") << "linear/rlc_step_symplectic.s7diagram" << "Scope";
         QTest::newRow("phase") << "2int_osc_phase_portrait.s7diagram" << "PhasePortrait";
         QTest::newRow("trajectory3d") << "3int_helix_phase_trajectory.s7diagram" << "PhaseTrajectory3D";
     }
@@ -251,16 +437,31 @@ private slots:
         if (auto* phase = dynamic_cast<s7studio::ui::PhasePortraitViewWindow*>(viewer)) QVERIFY(!phase->points().isEmpty());
         if (auto* phase = dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer)) QVERIFY(!phase->points().isEmpty());
         for (auto* quick : viewer->widget()->findChildren<QQuickWidget*>()) QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
+        capture(viewer->widget(), observerType + "-stopped");
         action("action.reset")->trigger(); QVERIFY(!runner->isRunning());
         if (auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)) QVERIFY(scope->recording().series().isEmpty());
         if (auto* phase = dynamic_cast<s7studio::ui::PhasePortraitViewWindow*>(viewer)) QVERIFY(phase->points().isEmpty());
         if (auto* phase = dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer)) QVERIFY(phase->points().isEmpty());
         completed.clear();
-        QVERIFY(configure("action.run", 1));
+        QVERIFY(configure("action.run", diagram.startsWith("linear/") ? 10 : 1));
         QTRY_VERIFY_WITH_TIMEOUT(completed.count() > 0, 10000);
         QVERIFY(completed.last().at(0).toBool());
+        auto* viewerStatus = viewer->widget()->findChild<QLabel*>("viewer.status");
+        QVERIFY(viewerStatus);
+        QTRY_VERIFY(viewerStatus->text().contains("completed"));
+        QTRY_VERIFY(!viewerStatus->text().contains("loading history"));
+        if (auto* plot = viewer->widget()->findChild<s7studio::viewers::LinePlotView*>()) {
+            const auto width = plot->xMax() - plot->xMin();
+            viewer->widget()->raise(); viewer->widget()->activateWindow();
+            QVERIFY(QTest::qWaitForWindowActive(viewer->widget()));
+            plot->setFocus(); QTRY_VERIFY(plot->hasFocus());
+            QTest::keyClick(plot, Qt::Key_Equal);
+            QVERIFY(plot->xMax() - plot->xMin() < width);
+            QTest::keyClick(plot, Qt::Key_Home);
+        }
+        capture(viewer->widget(), observerType + "-completed");
         if (auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)) {
-            const auto path = temporary_.filePath("recording.s7scope");
+            const auto path = temporary_.filePath(QString("recording-%1.s7scope").arg(QString::fromLatin1(QTest::currentDataTag())));
             auto* save = scope->findChild<QPushButton*>("scope.saveRun");
             auto* open = scope->findChild<QPushButton*>("scope.openRun");
             auto* remove = scope->findChild<QPushButton*>("scope.removeComparisons");
@@ -272,9 +473,42 @@ private slots:
             QVERIFY(modalWorkflow([open] { QTest::mouseClick(open, Qt::LeftButton); },
                 [path](QDialog* dialog) { return selectFile(dialog, path); }));
             QTRY_COMPARE(scope->recording().series().size(), liveCount * 2);
+            capture(viewer->widget(), "Scope-comparison");
             QTest::mouseClick(remove, Qt::LeftButton);
             QTRY_COMPARE(scope->recording().series().size(), liveCount);
         }
+    }
+    void keyboardRunShortcuts() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rlc_step_symplectic.s7diagram"));
+        window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
+        QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F5); }, [](QDialog* dialog) {
+            if (!dialog->findChild<QSpinBox*>("run.duration")) return false;
+            dialog->reject(); return true;
+        }));
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QVERIFY(!runner->isRunning());
+        QVERIFY(configure("action.run", -1)); QTRY_VERIFY(runner->isRunning());
+        window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        view->setFocus(); QTest::keyClick(view->viewport(), Qt::Key_F5, Qt::ShiftModifier);
+        QTRY_VERIFY(!runner->isRunning());
+    }
+    void engineeringErrorFeedback() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rlc_step_symplectic.s7diagram"));
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        auto node = scene()->elementNode("state"); QVERIFY(node);
+        auto broken = node->element(); broken.type = "UnavailableEngineeringPlugin";
+        scene()->changeElement(node, broken);
+        QVERIFY(configure("action.run", 1));
+        QTRY_VERIFY(!runner->isRunning());
+        auto* problems = window_->findChild<s7studio::ui::ProblemsPanel*>(); QVERIFY(problems);
+        QTRY_VERIFY(problems->errorCount() > 0);
+        bool actionable = false;
+        for (const auto& problem : problems->problems()) actionable |= problem.message.contains("UnavailableEngineeringPlugin");
+        QVERIFY(actionable); capture(window_.get(), "missing-element-error");
+        action("action.undo")->trigger();
+        QVERIFY(scene()->elementNode("state")->element().type == "SymplecticIntegrator");
     }
     void unsavedCloseChoices_data() {
         QTest::addColumn<int>("choice");

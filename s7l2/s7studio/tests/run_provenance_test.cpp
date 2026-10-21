@@ -44,7 +44,7 @@ private slots:
     void cleanup() { gate_->releaseAll(); runner_->reset(); runner_.reset(); }
     void metadataSurvivesEditsAndReruns() {
         auto model = schema(2.5);
-        runner_->run(model, .001, 1, {{"scope/value", "source", 0}});
+        runner_->run(model, .001, 1, {{"scope/value", "source", 0, "V"}});
         QTRY_COMPARE(gate_->entered.load(), 1);
         const auto source = runner_->recordedSource();
         const auto original = source->provenance(); QVERIFY(!original.isEmpty());
@@ -59,6 +59,7 @@ private slots:
         const auto bytes = savedSource(*source);
         QVERIFY(importedProvenance(bytes) == original);
         auto replay = configurationFromProvenance(importedProvenance(bytes));
+        QCOMPARE(replay.probes.front().unit, std::string("V"));
         QCOMPARE(replay.schemaJson.as_object().at("elements").as_array()[0].as_object().at("params").as_object().at("value").to_number<double>(), 2.5);
         gate_->releaseAll();
         runner_->run(model, .002, 1, {{"scope/value", "source", 0}});

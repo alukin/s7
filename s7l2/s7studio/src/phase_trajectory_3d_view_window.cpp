@@ -133,8 +133,12 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     }
     controls->addStretch(1);
     statusLabel_ = new QLabel(this);
-    controls->addWidget(statusLabel_);
+    statusLabel_->setObjectName(QStringLiteral("viewer.status"));
+    statusLabel_->setTextFormat(Qt::PlainText);
+    statusLabel_->setWordWrap(true);
+
     root->addLayout(controls);
+    root->addWidget(statusLabel_);
     // The Qt Quick 3D scene is created on first show (showEvent).
 
     setViewPreset(ViewPreset::Perspective);
@@ -170,6 +174,9 @@ void PhaseTrajectory3DViewWindow::showEvent(QShowEvent* event)
 
 void PhaseTrajectory3DViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
+    if (sample.role == "x") xUnit_ = sample.unit;
+    if (sample.role == "y") yUnit_ = sample.unit;
+    if (sample.role == "z") zUnit_ = sample.unit;
     if (sample.role == QStringLiteral("x")) appendXSample(sample.step, sample.value);
     if (sample.role == QStringLiteral("y")) appendYSample(sample.step, sample.value);
     if (sample.role == QStringLiteral("z")) appendZSample(sample.step, sample.value);
@@ -225,6 +232,11 @@ void PhaseTrajectory3DViewWindow::updateStatus()
         parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
     }
     if (!sourceStatusText().isEmpty()) parts << sourceStatusText();
+    QStringList missingUnits;
+    if (xUnit_.isEmpty()) missingUnits << QStringLiteral("X");
+    if (yUnit_.isEmpty()) missingUnits << QStringLiteral("Y");
+    if (zUnit_.isEmpty()) missingUnits << QStringLiteral("Z");
+    if (!missingUnits.isEmpty()) parts << QStringLiteral("Units unspecified: %1").arg(missingUnits.join(QStringLiteral(", ")));
     statusLabel_->setText(parts.join(QStringLiteral(" | ")));
 }
 
@@ -245,9 +257,9 @@ void PhaseTrajectory3DViewWindow::updateLabels()
         labels << label({e + offset, -e - offset, -t}, at(1), false);
         labels << label({-e - offset, t, e + offset}, at(2), false);
     }
-    labels << label({0.0f, -e - 2.6f * offset, e + 2.6f * offset}, QStringLiteral("X: ") + xProbeName_, true);
-    labels << label({e + 2.6f * offset, -e - 2.6f * offset, 0.0f}, QStringLiteral("Y: ") + yProbeName_, true);
-    labels << label({-e - 2.6f * offset, e + offset, e + offset}, QStringLiteral("Z: ") + zProbeName_, true);
+    labels << label({0.0f, -e - 2.6f * offset, e + 2.6f * offset}, QStringLiteral("X: ") + xProbeName_ + (xUnit_.isEmpty() ? "" : " (" + xUnit_ + ")"), true);
+    labels << label({e + 2.6f * offset, -e - 2.6f * offset, 0.0f}, QStringLiteral("Y: ") + yProbeName_ + (yUnit_.isEmpty() ? "" : " (" + yUnit_ + ")"), true);
+    labels << label({-e - 2.6f * offset, e + offset, e + offset}, QStringLiteral("Z: ") + zProbeName_ + (zUnit_.isEmpty() ? "" : " (" + zUnit_ + ")"), true);
     bridge_->setLabels(labels);
 }
 
@@ -265,6 +277,7 @@ void PhaseTrajectory3DViewWindow::setViewPreset(const ViewPreset preset)
 
 void PhaseTrajectory3DViewWindow::clearBuffers()
 {
+    xUnit_.clear(); yUnit_.clear(); zUnit_.clear();
     discardPresentationHistory();
     points_.clear();
     aligner_.clear();

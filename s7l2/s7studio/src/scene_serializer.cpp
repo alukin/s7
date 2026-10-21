@@ -244,6 +244,11 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
             ids.emplace(wire.get(), "w" + std::to_string(ids.size() + 1));
         }
     }
+    // Observer nodes load after functional elements. Canonical layout order
+    // avoids a spurious document change after paste/save/reopen.
+    std::sort(nodes.begin(), nodes.end(), [](const auto& a, const auto& b) {
+        return a.as_object().at("id").as_string() < b.as_object().at("id").as_string();
+    });
     boost::json::array wires;
     for (const auto& wire : scene.signalWires()) {
         const auto id = ids.find(wire.get());

@@ -6,6 +6,13 @@
 #include <cmath>
 #include <limits>
 namespace s7studio::observation {
+QString probeUnit(const QJsonObject& provenance, const QString& name) {
+    for (const auto& item : provenance.value("probes").toArray()) {
+        const auto probe = item.toObject();
+        if (probe.value("name").toString() == name) return probe.value("unit").toString();
+    }
+    return {};
+}
 bool validateRunProvenance(const QJsonObject& p, QString* error) {
     if (p.isEmpty()) return true;
     const auto fail = [&](const QString& message) { if (error) *error = message; return false; };
@@ -28,7 +35,7 @@ bool validateRunProvenance(const QJsonObject& p, QString* error) {
     for (const auto& entry : p.value("probes").toArray()) {
         const auto probe = entry.toObject();
         const auto port = probe.value("port").toDouble(-1);
-        if (!probe.value("name").isString() || !probe.value("element").isString()
+        if ((probe.contains("unit") && !probe.value("unit").isString()) || !probe.value("name").isString() || !probe.value("element").isString()
             || port < 0 || port > std::numeric_limits<int>::max() || std::floor(port) != port)
             return fail(QStringLiteral("Invalid provenance probe"));
     }

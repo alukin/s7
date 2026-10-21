@@ -31,6 +31,7 @@ public:
             qint64 byteOffset = 0;
         };
         QString channelName;
+        QString channelUnit;
         QString comparisonLabel;
         QString recordingWarning;
         QJsonObject sourceMetadata;
@@ -66,6 +67,7 @@ public:
     [[nodiscard]] auto series() const -> const QMap<QString, Series>& { return series_; }
 
     void appendSample(const QString& channel, double timeSeconds, double value);
+    bool setChannelUnit(const QString& channel, const QString& unit);
     // Drops the current run (live series), its loss count and storage error;
     // comparisons stay.
     void clearLive();

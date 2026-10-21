@@ -29,7 +29,7 @@ in Release builds. Tests do not write settings or recordings under `$HOME`.
 
 | CTest entry | Automated checks |
 |---|---|
-| `s7studio_gui_workflows` | Visible MainWindow; palette insertion; Edit undo/redo; element double-click and JSON parameter edits; run configuration; Save As/close/Open round trip; deletion followed by Save/Discard/Cancel; Scope, Phase Portrait and 3D observer creation; start/pause/hide/reopen/resume/stop/reset/finite rerun; Scope result save/import/remove-comparison buttons. |
+| `s7studio_gui_workflows` | Visible MainWindow; palette insertion; Edit undo/redo; element double-click/F4, typed and advanced JSON edits, inline error/cancel, exact uint64 and bounds; clipboard/probe undo/save-reopen; run configuration; Save As/close/Open round trip; deletion followed by Save/Discard/Cancel; Scope, Phase Portrait and 3D observer creation; start/pause/hide/reopen/resume/stop/reset/finite rerun; Scope result save/import/remove-comparison buttons; RLC unit legends and run labels; keyboard plot zoom/fit; missing-plugin feedback. |
 | `s7studio_gui_lineplot` | Production `LinePlot.qml` with the real C++ bridge and a known reference series; rendered curve pixels, titles and legend; wheel zoom and drag pan through QML pointer handlers. |
 | `s7studio_gui_trajectory` | Production `Trajectory3D.qml` with real trajectory/frame geometries; actual green trajectory pixels, wheel camera zoom and a camera preset changing the rendered image. A blank but successfully loaded View3D fails. |
 | `s7studio_gui_failure_artifacts` | Deliberately fail one Qt Test case, require a failing JUnit result plus screenshots/logs/document JSON; verify unavailable Xvfb produces exit 77 and a skipped JUnit result; deliberately block a child and require watchdog termination, a pre-termination screenshot and a failing process report. The injected failure is expected and does not fail this self-check. |
@@ -94,3 +94,14 @@ in 429.33 seconds; the refined failure/watchdog self-check passed in 2.48 second
 See DEVELOPMENT_PLAN.md for the exact commands and remaining release work. Software-rendered virtual
 display evidence does not establish native Windows rendering, physical-GPU,
 high-DPI or long-duration performance acceptance.
+
+
+Visual evidence can be retained on successful workflows with
+`S7_USABILITY_CAPTURE_DIR=/absolute/path` when running the GUI suite. This is
+separate from the existing failure artifacts. The tests capture actual visible
+Qt widgets at engineering workflow boundaries, including integrator properties,
+inline errors, missing elements, simulation state and saved comparisons. See
+[the 2026-10-21 usability audit](usability/2026-10-21/AUDIT.md) for baseline
+production-application desktop captures, incremental comparisons, severities
+and assessment limits. Screenshots support a heuristic review; they are not
+pixel-equality gates or substitutes for human usability testing.

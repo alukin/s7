@@ -75,6 +75,7 @@ private:
     void updateStatus();
     void addCoordinate(std::int64_t step, std::size_t axis, double value);
 
+    QString xUnit_, yUnit_, zUnit_;
     QString xProbeName_;
     QString yProbeName_;
     std::uint64_t droppedSamples_ = 0;

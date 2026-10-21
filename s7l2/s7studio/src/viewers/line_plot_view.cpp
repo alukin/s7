@@ -3,6 +3,7 @@
 #include "viewers/quick_support.hpp"
 
 #include <QQuickWidget>
+#include <QShortcut>
 #include <QVBoxLayout>
 #include <QVariantMap>
 #include <QtGraphs/QLineSeries>
@@ -87,6 +88,22 @@ LinePlotView::LinePlotView(QWidget* parent)
     : QWidget(parent)
 {
     bridge_ = new LinePlotBridge(*this);
+    setFocusPolicy(Qt::StrongFocus);
+    setAccessibleName(QStringLiteral("Observation plot"));
+    setAccessibleDescription(QStringLiteral("Plus and minus zoom, arrows pan, Home fits all data. Axes and units are shown on the plot."));
+    auto shortcut = [this](int key, auto operation) {
+        auto* action = new QShortcut(QKeySequence(key), this);
+        action->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(action, &QShortcut::activated, this, operation);
+    };
+    shortcut(Qt::Key_Plus, [this] { bridge_->zoom(.5, .5, .85); });
+    shortcut(Qt::Key_Equal, [this] { bridge_->zoom(.5, .5, .85); });
+    shortcut(Qt::Key_Minus, [this] { bridge_->zoom(.5, .5, 1 / .85); });
+    shortcut(Qt::Key_Left, [this] { bridge_->pan(-.1, 0); });
+    shortcut(Qt::Key_Right, [this] { bridge_->pan(.1, 0); });
+    shortcut(Qt::Key_Up, [this] { bridge_->pan(0, .1); });
+    shortcut(Qt::Key_Down, [this] { bridge_->pan(0, -.1); });
+    shortcut(Qt::Key_Home, [this] { fitAll(); });
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     setMinimumSize(200, 150);

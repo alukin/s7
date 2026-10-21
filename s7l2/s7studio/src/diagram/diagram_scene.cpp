@@ -159,7 +159,7 @@ private:
 bool DiagramChange::empty() const
 {
     return addedNodes.empty() && removedNodes.empty() && addedWires.empty() && removedWires.empty() && rehung.empty() && bends.empty() &&
-           elements.empty();
+           elements.empty() && !probes;
 }
 
 struct DiagramScene::Gesture {
@@ -331,7 +331,21 @@ void DiagramScene::restoreRoutes(const std::function<void(int)>& progress)
 void DiagramScene::applyChange(const DiagramChange& change, const QString& text)
 {
     if (!change.empty()) {
-        undoStack()->push(new ChangeCommand(this, change, text));
+        auto complete = change;
+        if (!complete.probes && (!change.removedNodes.empty() || !change.elements.empty())) {
+            auto remaining = probes_;
+            std::erase_if(remaining, [&](const DiagramProbe& probe) {
+                for (const auto& node : change.removedNodes)
+                    if (const auto element = std::dynamic_pointer_cast<ElementNode>(node); element && element->id() == probe.point.element) return true;
+                for (const auto& edit : change.elements) if (edit.before.id == probe.point.element) {
+                    const auto ports = elementPorts(edit.after.type, edit.after.params, edit.after.schema);
+                    if (edit.after.id != edit.before.id || probe.point.port >= std::max(static_cast<int>(ports.outputs.size()), edit.node->minimumOutputs())) return true;
+                }
+                return false;
+            });
+            if (remaining != probes_) complete.probes = std::pair{probes_, std::move(remaining)};
+        }
+        undoStack()->push(new ChangeCommand(this, std::move(complete), text));
     }
 }
 
@@ -412,6 +426,10 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
     rememberPositions();
     typesResolve_.reset();
     applying_ = false;
+    if (change.probes) {
+        probes_ = revert ? change.probes->first : change.probes->second;
+        Q_EMIT probesChanged();
+    }
     Q_EMIT diagramChanged();
 }
 
@@ -1406,28 +1424,31 @@ bool DiagramScene::addProbe(PortRef point, QString name, QString unit)
     if (std::ranges::any_of(probes_, [&](const auto& probe) { return probe.point == point; })) {
         return false;
     }
-    probes_.push_back(DiagramProbe{std::move(point), std::move(name), std::move(unit)});
-    Q_EMIT probesChanged();
+    auto after = probes_;
+    after.push_back(DiagramProbe{std::move(point), std::move(name), std::move(unit)});
+    DiagramChange change; change.probes = std::pair{probes_, std::move(after)};
+    applyChange(change, QStringLiteral("Add probe"));
     return true;
 }
 
 void DiagramScene::removeProbe(const PortRef& point)
 {
-    const auto before = probes_.size();
-    std::erase_if(probes_, [&](const auto& probe) { return probe.point == point; });
-    if (probes_.size() != before) {
-        Q_EMIT probesChanged();
-    }
+    auto after = probes_;
+    std::erase_if(after, [&](const auto& probe) { return probe.point == point; });
+    if (after == probes_) return;
+    DiagramChange change; change.probes = std::pair{probes_, std::move(after)};
+    applyChange(change, QStringLiteral("Remove probe"));
 }
 
 bool DiagramScene::renameProbe(const PortRef& point, QString name)
 {
-    for (auto& probe : probes_) {
-        if (probe.point == point) {
-            probe.name = std::move(name);
-            Q_EMIT probesChanged();
-            return true;
-        }
+    auto after = probes_;
+    for (auto& probe : after) if (probe.point == point) {
+        if (probe.name == name) return true;
+        probe.name = std::move(name);
+        DiagramChange change; change.probes = std::pair{probes_, std::move(after)};
+        applyChange(change, QStringLiteral("Rename probe"));
+        return true;
     }
     return false;
 }

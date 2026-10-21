@@ -16,6 +16,8 @@
 #include <QAbstractButton>
 #include <QPlainTextEdit>
 #include <QDialog>
+#include <QDialogButtonBox>
+#include <QPushButton>
 #include <QUndoGroup>
 #include <QUndoStack>
 #include <fstream>
@@ -125,7 +127,13 @@ int main(int argc,char** argv) {
             for(auto* widget : QApplication::topLevelWidgets())
                 if(auto* dialog=qobject_cast<QDialog*>(widget); dialog && dialog->windowTitle().startsWith("Element Properties")) {
                     auto* text=dialog->findChild<QPlainTextEdit*>();
-                    if(text) {text->setPlainText(QStringLiteral("{\"factor\":2}"));edited_properties=true;dialog->accept();}
+                    auto* parameters = dialog->findChild<QTabWidget*>("element.parameterTabs");
+                    auto* buttons = dialog->findChild<QDialogButtonBox*>();
+                    if(text && parameters && buttons) {
+                        parameters->setCurrentIndex(1);
+                        text->setPlainText(QStringLiteral("{\"factor\":2}"));
+                        edited_properties=true; buttons->button(QDialogButtonBox::Ok)->click();
+                    }
                 }
         });
         click(child,"error","Gain");
