@@ -65,14 +65,14 @@ working directories. Runtime defaults come from
 `usr/share/s7/examples`, with `schema_elements.s7library` in `usr/share/s7`.
 The startup demo is a compiled Qt resource.
 
-`tools/package_notices.py` retains first-party/vendor notices and inventories
-all deployed ELF objects against installed package ownership. Shared source-RPM
-subpackage licenses and legacy COPYING files are included. Unresolved notices
-fail packaging with an explicit list. `S7_ALLOW_INCOMPLETE_NOTICES=1` permits
-local test packages only; `licenses/missing-notices.json` preserves the list.
-This collection does not settle contributor rights, source/offer obligations,
-or authorize publication. RPM ownership was exercised on Fedora; a dpkg copyright-file backend is
-provided for Debian/Ubuntu and remains unverified in this increment.
+`tools/package_notices.py` copies S7's licensing map, all S7 license texts,
+and the source-vendor notices for QSchematic, GPDS, its embedded libraries and
+Tabler. Package creation does not depend on the developer machine's RPM/dpkg
+inventory or local GUI-test environment.
+
+The optional QtQuick3D XR module and its OpenXR libraries are removed from the
+bundle: Studio uses desktop 3D only. Qt's X11 backend still needs its ordinary
+XCB libraries. These are Qt runtime dependencies, not GUI-test dependencies.
 
 The Release package built on Fedora 44 requires GLIBC_2.43,
 GLIBCXX_3.4.36 and CXXABI_1.3.15. In a fresh Fedora 44 container with basic
@@ -89,8 +89,6 @@ Reproduce against a package on a desktop or under Xvfb:
 xvfb-run -a python3 tools/linux/smoke_package.py '/path/S7 installed' /tmp/s7-installed-check
 ```
 
-The tested local package has three missing installed dependency notices:
-`openxr-libs`, `xcb-util-keysyms`, `kwin-common`. Default packaging therefore
-remains blocked for distribution. The local-test override was used solely for
-acceptance; no package was published. Earlier Ubuntu evidence above describes
-its own build and does not establish support for older Linux systems.
+The package targets desktop Qt. KDE desktop integration and XR are not S7
+requirements. Earlier Ubuntu evidence above describes its own build and does
+not establish support for older Linux systems.

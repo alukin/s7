@@ -164,7 +164,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a timing/parity, N1b immutable provenance/replay and N1c linear analytical/Studio matrix validated; wider nonlinear/control references and external input histories remain |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | U1a editing, typed properties, viewer interpretation and screenshot audit implemented; further interaction/accessibility/performance acceptance remains |
 | C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Hosted headless and Studio jobs passed on 3026b84 and 89628cc; focused local ASan/UBSan passed; full sanitizer and Windows validation open |
-| P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Linux relocation/notice audit and 12 isolated package checks passed; distribution notices and native Windows remain open |
+| P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Linux relocation/notice audit and 12 isolated package checks passed; release notice review and native Windows remain open |
 | A1 P1 incomplete coverage | Automated references and viewer regressions cover selected cases | Execute four acceptance guarantees: document safety, numerical correctness, run/sample isolation and operational readiness; classify bundled models validated or experimental | All above; real GPU/native Windows are external evidence requirements | Representative linear/nonlinear full workflow; measure hardware, model rate vs throughput, UI responsiveness, memory/disk growth, stop latency, high DPI and long-run behavior | Linux 73-test Release suite, isolated package and 90-second operational measurement passed; broader acceptance remains open |
 
 Order: documentation baseline commit → L1 audit/migration where rights permit →
@@ -633,11 +633,10 @@ subsequent license-only and final documentation updates.
 P1: fixed executable-relative project-plugin discovery and packaged runtime
 schema lookup; embedded Studio's startup demo. Packaging uses host ELF tools
 instead of the AppImage's incompatible strip/patcher, ships Studio examples and
-schema library, and inventories dependency notices. The relocated Release
+schema library, and copies project/source-vendor license notices. The relocated Release
 package passed 12 checks inside a fresh Fedora 44 container without system Qt
-or the source checkout. Three missing installed dependency notices block normal
-distribution packaging; only the explicit local-test override was used. Nothing
-was published. The Windows platform helper cross-compiled; the existing MSYS2
+or the source checkout. Unused Qt XR/OpenXR components are excluded from the
+package. Nothing was published. The Windows platform helper cross-compiled; the existing MSYS2
 sysroot lacks Qt Qml, so updated Windows Studio/package behavior remains unverified.
 
 A1: a clean Linux Studio Release build passed 73/73 tests in 74.72 seconds,
@@ -657,5 +656,9 @@ plugin-loader and runtime-control smoke tests (3/3, 0.87 seconds), with no
 sanitizer diagnostics. This is focused local coverage, not a full sanitizer CI
 matrix. Fast-forwarded the other agent's license commit `c76cd75` before further
 pushes and verified the packaged licensing map, third-party notice file and every
-S7 license text byte-for-byte against the refreshed repository. The three missing
-installed dependency notices remain a separate distribution blocker.
+S7 license text byte-for-byte against the refreshed repository.
+
+
+GUI testing policy: future GUI checks, helpers, captures and reports stay local.
+Hosted CI now builds and tests the headless configuration only. Earlier hosted
+Studio results above are historical evidence, not the current CI policy.

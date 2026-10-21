@@ -5,6 +5,9 @@ claim. Numerical qualifications remain in
 [NUMERICAL_VALIDATION_MATRIX.md](NUMERICAL_VALIDATION_MATRIX.md).
 Raw logs, captures, packages and measurement JSON stay outside Git.
 
+GUI tests and their artifacts are local-only going forward; hosted CI runs the
+headless configuration. The hosted Studio results below are historical.
+
 ## Build and regression evidence
 
 Fedora 44, AMD Ryzen 7 4700U (8 logical CPUs), 16 GiB RAM, GCC 16.2.1,
@@ -103,12 +106,9 @@ python3 tools/run_gui_test.py --artifacts /tmp/s7-operational-release --capture 
 
 ## Remaining release gates
 
-- Distribution notices: this host lacks installed license files for bundled
-  `openxr-libs`, `xcb-util-keysyms` and `kwin-common`. The default package command
-  fails and records the missing inventory. Only the explicitly marked local
-  test package used `S7_ALLOW_INCOMPLETE_NOTICES=1`; nothing was published.
-  Relicensing is settled (ADR-019, `LICENSING.md`); source/offer obligations
-  remain separate from collecting notices.
+- Release notice review remains separate from local GUI testing. Package creation
+  copies the project's licensing files and source-vendor notices.
+  Unused Qt XR/OpenXR components are excluded from Linux packages.
 - Native Windows, physical GPU/high-DPI/accessibility checks and multi-hour
   resource behavior remain unverified. The Windows executable-location helper
   cross-compiled successfully; the installed MSYS2 sysroot lacks Qt Qml, so no

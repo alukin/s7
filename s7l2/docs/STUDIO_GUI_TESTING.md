@@ -75,16 +75,12 @@ for normal suite runs.
 
 ## Continuous integration and measured evidence
 
-The repository-root `.github/workflows/ci.yml` builds inside Fedora 44 on a Linux
-runner, with explicit GCC/CMake/Boost/OpenSSL/zlib/FFTW dependencies and a
-headless/Studio matrix. Studio additionally provisions Qt, Xvfb and Mesa. It
-builds `build-tests`, runs existing tests separately, runs the GUI label and
-uploads CTest/JUnit reports, diagnostics and images even on failure. CMake's
-compiler/Qt requirements fail configuration if the provisioned versions are too
-old. `tools/report_gui_tests.py` writes a job summary with explicit skipped results
-and fails CI if mandatory workflow/2D/artifact checks were skipped or absent.
-Hosted execution is only verified by an actual GitHub Actions run, not by
-local YAML validation.
+GUI testing is local-only by maintainer policy. Keep future GUI test helpers,
+captures and reports outside Git. The existing local commands above remain
+available; GitHub Actions runs the headless configuration with
+`S7_BUILD_STUDIO=OFF` and `S7_BUILD_GUI_REGRESSION_TESTS=OFF`. Hosted jobs do not
+install Qt/Xvfb/Mesa or upload GUI artifacts. Earlier measurements below record
+the historical validation before this policy change.
 
 Local evidence, 2026-10-20: Fedora 44, GCC 16.2.1, Qt 6.11.2, Debug build,
 Xvfb with Mesa 26.2.4 llvmpipe (LLVM 22.1.8), OpenGL 4.6. The final CI-command GUI run passed 4/4 in 2.81 seconds: 10 Qt Test cases,

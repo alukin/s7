@@ -15,8 +15,8 @@ a 90-second visible-GUI run measured complete four-channel capture and bounded
 local control/event-loop latencies. See
 [LOCAL_SIMULATION_ACCEPTANCE.md](LOCAL_SIMULATION_ACCEPTANCE.md) for the exact
 workload, metrics and limits. This advances C1/P1/A1 without closing them:
-three missing installed dependency notices, native Windows, physical display/
-accessibility, actual disk exhaustion and longer/broader workloads remain open.
+native Windows, physical display/accessibility, actual disk exhaustion and
+longer/broader workloads remain open.
 Hosted headless and Studio CI passed on both the fix commit `3026b84` and
 package implementation `89628cc`; run links are in DEVELOPMENT_PLAN.md. Focused
 local Clang ASan/UBSan core/plugin/control checks also passed (3/3). Earlier

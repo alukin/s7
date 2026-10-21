@@ -99,6 +99,12 @@ QMAKE="${QMAKE:-qmake6}" APPIMAGE_EXTRACT_AND_RUN=1 "$LINUXDEPLOY" \
     "${LIBRARIES[@]}" \
     "${QT_ARGS[@]}"
 
+# The deploy plugin copies all children of QtQuick3D, including its optional
+# XR module. Studio uses desktop 3D only; remove that module and its private
+# dependency chain before creating the package.
+rm -rf -- "$OUT/usr/qml/QtQuick3D/Xr"
+find "$OUT/usr/lib" -maxdepth 1 \( -name 'libQt6Quick3DXr.so*' -o -name 'libopenxr_loader.so*' \) -delete
+
 while IFS= read -r -d '' binary; do
     if readelf -h "$binary" >/dev/null 2>&1; then
         "${STRIP:-strip}" --strip-unneeded "$binary"

@@ -1,4 +1,4 @@
-name: S7 build and GUI regressions
+name: S7 headless build and regressions
 
 on:
   push:
@@ -10,14 +10,10 @@ permissions:
 
 jobs:
   linux:
-    name: Linux Studio=${{ matrix.studio }}
+    name: Linux headless
     runs-on: ubuntu-24.04
     container: fedora:44
     timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        studio: ['OFF', 'ON']
     defaults:
       run:
         shell: bash
@@ -31,34 +27,22 @@ jobs:
           submodules: recursive
       - name: Install compiler and dependencies
         run: |
-          if [[ '${{ matrix.studio }}' == 'ON' ]]; then
-            bash tools/install_deps_fedora.sh --no-extras
-            dnf install -y xorg-x11-server-Xvfb xorg-x11-xauth mesa-dri-drivers mesa-libGL qt6-qtdeclarative
-          else
-            bash tools/install_deps_fedora.sh --no-studio --no-extras
-          fi
+          bash tools/install_deps_fedora.sh --no-studio --no-extras
           c++ --version
           cmake --version
-      - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=${{ matrix.studio }} -DS7_BUILD_GUI_REGRESSION_TESTS=${{ matrix.studio }}
+      - name: Configure headless build
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF -DS7_BUILD_GUI_REGRESSION_TESTS=OFF
       - name: Build application and tests
         run: cmake --build build --target build-tests --parallel 2
-      - name: Headless and existing Studio regressions
-        run: ctest --test-dir build -LE gui --output-on-failure --output-junit existing-results.xml -j 2
-      - name: Qt Test and Qt Quick Test under Xvfb
-        if: ${{ !cancelled() && matrix.studio == 'ON' }}
-        run: ctest --test-dir build -L gui --no-tests=error --output-on-failure --output-junit gui-results.xml -j 2
-      - name: Report passes and explicit rendering skips
-        if: ${{ !cancelled() && matrix.studio == 'ON' }}
-        run: python3 tools/report_gui_tests.py build/gui-results.xml
-      - name: Retain screenshots, Qt diagnostics and test reports
+      - name: Headless regressions
+        run: ctest --test-dir build --no-tests=error --output-on-failure --output-junit existing-results.xml -j 2
+      - name: Retain test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: linux-studio-${{ matrix.studio }}-diagnostics
+          name: linux-headless-results
           if-no-files-found: warn
           retention-days: 14
           path: |
             s7l2/build/Testing/Temporary/
             s7l2/build/*results.xml
-            s7l2/build/s7studio/gui-artifacts/
