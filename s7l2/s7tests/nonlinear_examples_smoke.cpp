@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Independent references for the saved nonlinear teaching graphs. No runtime solver.
 #include "diagram_harness.hpp"
 #include <array>

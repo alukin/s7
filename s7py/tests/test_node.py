@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests of s7py: canonical JSON, graph semantics, diagram parts and the control protocol.
 
 Run from s7py: python3 -m unittest discover -s tests

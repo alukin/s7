@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 add_library(s7net STATIC
     src/net.cpp

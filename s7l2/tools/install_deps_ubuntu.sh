@@ -7,6 +7,10 @@
 #   --no-extras    skip optional tools (ninja, gnuplot)
 #   --windows      also the Windows cross toolchain: Clang/LLVM 22, Wine (docs/WINDOWS_BUILD.md)
 #   --dry-run      print the apt command instead of running it
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 
 WITH_STUDIO=1

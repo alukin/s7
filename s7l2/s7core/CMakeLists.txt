@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 # Embed the same headless schema-library resource shipped for inspection/editing.
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/schema_elements.s7library")
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/resources/schema_elements.s7library" S7_SCHEMA_ELEMENTS_JSON)
@@ -61,6 +64,14 @@ endif()
 # --- SDK: headers, library and CMake package for out-of-tree plugins --------
 include(GNUInstallDirs)
 install(FILES resources/schema_elements.s7library DESTINATION ${CMAKE_INSTALL_DATADIR}/s7 COMPONENT s7sdk)
+# The SDK is LGPL-3.0-or-later, which is a set of permissions on top of the GPL.
+install(FILES
+    ${PROJECT_SOURCE_DIR}/../LICENSING.md
+    ${PROJECT_SOURCE_DIR}/../LICENSES/LGPL-3.0-or-later.txt
+    ${PROJECT_SOURCE_DIR}/../LICENSES/GPL-3.0-or-later.txt
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/s7core
+    COMPONENT s7sdk
+)
 include(CMakePackageConfigHelpers)
 
 install(TARGETS ${S7CORE_SDK_TARGETS} EXPORT s7coreTargets

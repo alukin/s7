@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 
 OUT_DIR="${1:-$(cd "$(dirname "$0")/../s7runtime/examples/certs" && pwd)}"

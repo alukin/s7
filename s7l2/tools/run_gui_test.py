@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Run one GUI suite in its own Xvfb, retaining logs/XML/screenshots on failure."""
 import argparse
 import os

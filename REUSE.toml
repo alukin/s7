@@ -1,0 +1,79 @@
+version = 1
+SPDX-PackageName = "S7"
+SPDX-PackageSupplier = "Oleksiy Lukin"
+SPDX-PackageDownloadLocation = "https://github.com/alukin/s7"
+
+# Licensing map of the repository; LICENSING.md explains it. Source files carry
+# their own SPDX header, which takes precedence ("closest") over these entries.
+# Files that cannot carry a comment (diagrams, JSON, certificates, icons) are
+# licensed here. When several entries match a file, the last one applies.
+
+# Programs, tools, tests, build and CI files.
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# The runtime: the s7core plugin SDK and the libraries, programs and plugin
+# s7runtime is built from, with the build files they need.
+[[annotations]]
+path = [
+    "s7l2/CMakeLists.txt",
+    "s7l2/cmake/**",
+    "s7l2/s7core/**",
+    "s7l2/s7io/**",
+    "s7l2/s7observe/**",
+    "s7l2/s7net/**",
+    "s7l2/s7transport/**",
+    "s7l2/s7runtime/**",
+    "s7l2/s7noise/**",
+]
+precedence = "closest"
+SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
+SPDX-License-Identifier = "LGPL-3.0-or-later"
+
+# Studio and s7ctl, which load plugins: GPL with the plugin permission.
+[[annotations]]
+path = ["s7l2/s7studio/**", "s7l2/s7ctl/**"]
+precedence = "closest"
+SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
+SPDX-License-Identifier = "GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission"
+
+# Documentation.
+[[annotations]]
+path = [
+    "**/*.md",
+    "s7l2/docs/**",
+]
+precedence = "closest"
+SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# Material meant to be copied into users' own work: example models, their
+# notes and scripts, the reference third-party plugin, and the protocol
+# conformance fixtures (with their test certificates) for other implementations.
+[[annotations]]
+path = [
+    "s7l2/examples/**",
+    "s7l2/s7runtime/examples/**",
+    "s7py/examples/**",
+    "s7l2/s7runtime/tests/fixtures/**",
+    "s7l2/s7transport/tests/fixtures/**",
+]
+precedence = "closest"
+SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "s7l2/s7spectral/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
+SPDX-License-Identifier = "MIT-0"
+
+# Third-party material.
+[[annotations]]
+path = "s7l2/s7studio/resources/icons/tabler/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2020-2026 Paweł Kuna"
+SPDX-License-Identifier = "MIT"

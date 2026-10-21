@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef S7NET_INCLUDE_S7_DIAGRAM_DEPLOYMENT_HPP
 #define S7NET_INCLUDE_S7_DIAGRAM_DEPLOYMENT_HPP
 

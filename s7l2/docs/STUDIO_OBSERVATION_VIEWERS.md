@@ -68,7 +68,7 @@ Triples of the same step go through `StepAligner<3>`. The trajectory is drawn as
 - Qt ≥ 6.9 with Qml, Quick, QuickWidgets, Graphs and Quick3D (`find_package` in `s7studio/CMakeLists.txt`). 6.9 is the first release with `GraphsView.plotArea`, used to anchor zooming at the cursor. Ubuntu 26.04 ships 6.10, Fedora 44 and MSYS2 6.11.
 - At run time the QML modules `QtQuick`, `QtQml`, `QtGraphs`, `QtQuick3D` and `QtQuick3D.Helpers` must be importable: Ubuntu and Fedora packages are in `tools/install_deps_ubuntu.sh` and `tools/install_deps_fedora.sh`; `tools/windows/package.sh` copies them into `qml/`; `tools/linux/package.sh` passes the scenes to linuxdeploy-plugin-qt.
 - `-DS7_BUILD_STUDIO=OFF` builds no Qt at all, as before.
-- Licensing: Qt Graphs and Qt Quick 3D are available under GPLv3 or a commercial license (not LGPL). S7 is GPL, so this is compatible.
+- Licensing: Qt Graphs and Qt Quick 3D are available under GPLv3 or a commercial license (not LGPL). Studio is GPL-3.0-or-later, so this is compatible; the LGPL runtime libraries do not use Qt.
 
 ## Adding a viewer type
 

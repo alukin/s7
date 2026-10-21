@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 // The Headless Nodes panel's trust display: a node is trusted only when the
 // certificate it presents carries the node_uuid it claims; another node's
 // report that it is trusted is a claim, and a plain WebSocket node is

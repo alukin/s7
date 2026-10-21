@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 // Observation-viewer framework: registry, manager routing and lifecycle,
 // step alignment, Qt Graphs plot state and the Qt Quick 3D trajectory.
 #include "phase_portrait_view_window.hpp"

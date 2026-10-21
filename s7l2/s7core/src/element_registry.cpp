@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #include "s7/element_registry.hpp"
 #include <memory>
 #include <stdexcept>

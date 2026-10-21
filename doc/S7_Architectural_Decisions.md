@@ -854,6 +854,67 @@ Negative:
 
 ------------------------------------------------------------------------
 
+# ADR-019
+
+## Title
+
+Layered Licensing: LGPL Runtime, GPL Applications
+
+------------------------------------------------------------------------
+
+## Status
+
+Accepted (2026-10-21, by the maintainer)
+
+------------------------------------------------------------------------
+
+## Context
+
+S7 was distributed under GPL version 2 only. Studio uses Qt Graphs and
+Qt Quick 3D, which are available only under GPL version 3 or a commercial
+license, so GPL-2.0-only Studio binaries could not be distributed compliantly.
+
+Element plugins are loaded into the runtime and Studio processes and link
+`s7core`. Plugins of hardware or instrument vendors may not be free software,
+and applications may want to embed the headless runtime.
+
+Documentation, example models and protocol fixtures are copied into other
+people's work and other implementations.
+
+------------------------------------------------------------------------
+
+## Decision
+
+- The runtime and the plugin SDK (`s7core`, `s7io`, `s7observe`, `s7net`,
+  `s7transport`, `s7runtime`, `s7noise`) are LGPL-3.0-or-later.
+- Studio and `s7ctl` are GPL-3.0-or-later with an additional permission under
+  GPLv3 section 7 to be combined with plugins that use only the plugin
+  interface.
+- Other code (tests, tools, `s7py`) is GPL-3.0-or-later.
+- Documentation is CC-BY-4.0; example models and conformance fixtures are
+  CC0-1.0; the reference plugin `s7spectral` is MIT-0.
+- Every file states its license in SPDX form, checked with REUSE.
+
+`LICENSING.md` at the repository root is the authoritative description.
+
+------------------------------------------------------------------------
+
+## Consequences
+
+Positive:
+
+- Studio binaries can be distributed with Qt Graphs and Qt Quick 3D;
+- plugins and applications embedding the runtime may use any license;
+- protocol specifications, examples and fixtures can be reused freely.
+
+Negative:
+
+- the LGPL runtime must not depend on GPL-only code, including Qt modules
+  that are GPL-only;
+- moving code between the runtime and Studio can change its license.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

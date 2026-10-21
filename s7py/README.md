@@ -65,3 +65,7 @@ python3 -m unittest discover -s tests
 | `s7node/tls.py` | TLS contexts, certificate identity (fingerprint, SAN, EKU) |
 | `s7node/clock.py` | UTC clock synchronization state |
 | `s7node/node.py` | Configuration, state directory, server, CLI |
+
+## License
+
+GPL-3.0-or-later; the examples are CC0-1.0. See [`../LICENSING.md`](../LICENSING.md).

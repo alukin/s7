@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 // 2D line plot for Studio observation viewers. All view state (axis ranges,
 // titles, legend, series) belongs to the C++ LinePlotBridge passed in as
 // `plot`; gestures are forwarded to it rather than changing axes here.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """UTC clock and its synchronization state (S7_Control_Protocol_MVP.md 5.2, Clock)."""
 import ctypes
 import ctypes.util

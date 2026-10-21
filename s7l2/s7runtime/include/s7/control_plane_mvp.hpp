@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_MVP_HPP
 #define S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_MVP_HPP
 

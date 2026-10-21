@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // __float128 soft-float routines for Clang on x86_64 MinGW.
 //
 // Clang lowers __float128 arithmetic and conversions to libgcc calls

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 #include "run_provenance.hpp"
 #include "observation/run_metadata.hpp"
 #include "s7studio_build_identity.hpp"

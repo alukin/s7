@@ -8,6 +8,10 @@
 # Usage: tools/windows/package.sh <build-dir> <output-dir>
 #
 # Start the programs in <output-dir> from any working directory.
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 
 if [ $# -ne 2 ]; then

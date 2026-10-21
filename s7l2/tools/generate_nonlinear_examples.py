@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Reproduce explicit Van der Pol, Lorenz and Lotka–Volterra teaching graphs."""
 import json
 from pathlib import Path

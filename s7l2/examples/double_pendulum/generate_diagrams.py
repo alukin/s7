@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: CC0-1.0
+
 """Rebuild the nine small-angle double-pendulum integration examples."""
 import json
 import math

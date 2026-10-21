@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef S7TRANSPORT_INCLUDE_S7_WIRE_FORMAT_HPP
 #define S7TRANSPORT_INCLUDE_S7_WIRE_FORMAT_HPP
 

@@ -1,0 +1,25 @@
+Additional permission under GNU GPL version 3 section 7
+
+This additional permission applies to the S7 programs licensed under the GNU
+General Public License, version 3 or (at your option) any later version, that
+load S7 element plugins: S7 Studio (s7l2/s7studio) and s7ctl (s7l2/s7ctl).
+
+An "S7 element plugin" is a separately built shared library that the program
+loads at run time and that interacts with the program only through the S7
+element plugin interface: the entry points declared in
+s7core/include/s7/element_plugin.hpp and the public s7core library API they
+use. The s7core library is licensed under the GNU Lesser General Public
+License, version 3 or (at your option) any later version.
+
+If you modify this Program, or any covered work, by linking or combining it
+with an S7 element plugin (or a modified version of such a plugin), the
+licensors of this Program grant you additional permission to convey the
+resulting work. The plugin may be licensed under terms of your choice, and the
+Corresponding Source for a non-source form of such a combination need not
+include the source code of the plugin. This permission does not change the
+terms that apply to the Program itself, to s7core, or to any other part of the
+combination.
+
+You may remove this additional permission from your copy of the Program, or
+from any modified version of it, as permitted by section 7 of the GNU General
+Public License, version 3.

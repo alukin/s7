@@ -84,3 +84,7 @@ Runtime schema examples are in `s7runtime/examples/`. A `simulation` block runs 
 Nodes expect NTP-synchronized clocks: a node reports its clock state in `NODE_INFO`, and diagrams are deployed only to nodes whose worst-case clock error is within their bound (`"clock": { "max_error_ms": 250 }` in the node's schema; `"assume_synchronized": true` for tests).
 
 Runtime state (node identity, peer cache, active deployment) is stored in the directory given by `--state-dir` (default `~/.s7runtime/default-node`, for single-node development); each node needs its own, and the runtime locks it while running. With a TLS certificate, the node UUID comes from its SAN URI `spiffe://s7/node/<node_uuid>`.
+
+## License
+
+The runtime and the plugin SDK (`s7core`, `s7io`, `s7observe`, `s7net`, `s7transport`, `s7runtime`, `s7noise`) are LGPL-3.0-or-later; Studio and `s7ctl` are GPL-3.0-or-later with a permission to load plugins under any licence; tests and tools are GPL-3.0-or-later. Examples are CC0-1.0, `s7spectral` is MIT-0, and documentation is CC-BY-4.0. See [`../LICENSING.md`](../LICENSING.md).

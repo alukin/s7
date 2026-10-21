@@ -8,6 +8,10 @@
 # Wine prefix is build-win/wine-prefix, and the s7noise plugin of the build is
 # found through S7_PLUGIN_PATH (unless set). Linux paths work as arguments.
 # Example: ./run_on_wine s7runtime --schema s7runtime/examples/schema_minimal.json --state-dir /tmp/s7-wine-node --serve-seconds 5
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 

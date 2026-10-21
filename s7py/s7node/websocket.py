@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Minimal RFC 6455 WebSocket over asyncio streams (server and client).
 
 Enough for the S7 control protocol: text and binary messages, fragmentation,

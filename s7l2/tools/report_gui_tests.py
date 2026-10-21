@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Summarize CTest GUI outcomes and reject skipped mandatory workflow tests."""
 import os
 from pathlib import Path

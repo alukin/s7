@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Exercises the saved teaching graphs, including embedded controller edits.
 #include "diagram_harness.hpp"
 #include <array>

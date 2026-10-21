@@ -101,8 +101,8 @@ python3 tools/run_gui_test.py --artifacts /tmp/s7-operational-release --capture 
   `openxr-libs`, `xcb-util-keysyms` and `kwin-common`. The default package command
   fails and records the missing inventory. Only the explicitly marked local
   test package used `S7_ALLOW_INCOMPLETE_NOTICES=1`; nothing was published.
-  Contributor relicensing permissions and source/offer obligations remain
-  separate from collecting notices.
+  Relicensing is settled (ADR-019, `LICENSING.md`); source/offer obligations
+  remain separate from collecting notices.
 - Native Windows, physical GPU/high-DPI/accessibility checks and multi-hour
   resource behavior remain unverified. The Windows executable-location helper
   cross-compiled successfully; the installed MSYS2 sysroot lacks Qt Qml, so no

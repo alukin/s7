@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Conformance script for the S7 control protocol, version 1.
 
 Writes s7runtime/tests/fixtures/control_v1.json: a conversation with one node

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef S7NOISE_INCLUDE_S7NOISE_NOISE_ELEMENTS_HPP
 #define S7NOISE_INCLUDE_S7NOISE_NOISE_ELEMENTS_HPP
 

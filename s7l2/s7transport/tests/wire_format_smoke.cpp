@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Checks the wire format codec against the byte-exact fixtures written by
 // tools/gen_wire_fixtures.py (an independent reference implementation).
 #include <array>

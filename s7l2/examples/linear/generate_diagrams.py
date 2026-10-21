@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: CC0-1.0
+
 """Reproduce the linear-response teaching diagrams (standard Python only)."""
 import json
 import math

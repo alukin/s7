@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "diagram_harness.hpp"
 #include "linear_reference.hpp"
 #include <s7/schema_library.hpp>

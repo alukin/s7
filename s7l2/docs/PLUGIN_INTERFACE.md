@@ -44,7 +44,7 @@ Manifest example (`s7noise`):
 
 `element_count` must match the `elements` array length when both are present.
 
-Although the entry points are C functions, the registry pointer and `ElementDescriptor` are C++ types: a plugin must be built with the same compiler, standard library, and S7 headers as the host. `s7core` is currently a static library, so each plugin links its own copy of `s7core` code.
+Although the entry points are C functions, the registry pointer and `ElementDescriptor` are C++ types: a plugin must be built with the same compiler, standard library, and S7 headers as the host. The plugin and the host share the one `s7core` shared library (see below).
 
 ## Minimal plugin
 
@@ -85,6 +85,10 @@ set_target_properties(myplugin PROPERTIES PREFIX "lib")   # libs7*.so is not req
 ```
 
 `s7spectral/` is the reference third-party plugin: it is kept out of the main build and is built against the installed SDK by `ctest -R s7spectral_sdk_smoke` (`tools/test_third_party_plugin.sh`), which then loads it with `PluginLoader` and checks that its `WindowedFFT` element measures a sine correctly. The test is skipped when `fftw3f` is not installed.
+
+### Plugin licensing
+
+The SDK (`s7core`) and `s7runtime` are LGPL-3.0-or-later, and Studio and `s7ctl` are GPL-3.0-or-later with an [additional permission](../../LICENSES/LicenseRef-S7-plugin-permission.txt) for plugins that use only this interface. A separately distributed plugin may therefore use any licence. `s7spectral` is MIT-0, so it can be copied as the starting point of a new plugin. Details: [`LICENSING.md`](../../LICENSING.md).
 
 ## Discovery and loading
 

@@ -12,6 +12,10 @@
 #
 # Does not upload anything; upload the files it writes to <dist-dir>
 # yourself (e.g. `gh release create`, or `gh release upload`).
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 
 if [ $# -lt 2 ]; then

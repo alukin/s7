@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Loads a third-party plugin built out of tree against the installed SDK
 // (tools/test_third_party_plugin.sh builds s7spectral) and runs its element.
 #include <cmath>

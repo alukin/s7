@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 # Whole-system integration and calculation tests live here.
 # Module smoke tests belong in each subproject's `tests/` directory.

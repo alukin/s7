@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Runs the S7 control-protocol conformance script against a node.
 
 The script is s7l2/s7runtime/tests/fixtures/control_v1.json (see its README):

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef S7CORE_INCLUDE_S7_RATE_INFERENCE_HPP
 #define S7CORE_INCLUDE_S7_RATE_INFERENCE_HPP
 

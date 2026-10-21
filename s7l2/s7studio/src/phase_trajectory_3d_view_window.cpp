@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 #include "phase_trajectory_3d_view_window.hpp"
 
 #include "viewers/quick_support.hpp"

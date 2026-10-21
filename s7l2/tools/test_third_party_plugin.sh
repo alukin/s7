@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Builds s7spectral the way a third party would (against the installed SDK)
 # and loads it. Usage: test_third_party_plugin.sh <s7-build-dir> <s7-source-dir> <smoke-exe> <work-dir>
 # In a cross build, S7_TOOLCHAIN_FILE is the build's toolchain and S7_RUN runs

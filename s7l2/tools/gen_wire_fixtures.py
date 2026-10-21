@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Byte-exact fixtures for the S7 data stream wire format, version 1.
 
 An independent reference implementation of S7_Network_Wire_Protocol_v1.md

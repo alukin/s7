@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """RFC 8785 JSON Canonicalization Scheme and the S7 configuration digest.
 
 S7_Control_Protocol_MVP.md section 10.1: configuration_digest is "sha256:" plus

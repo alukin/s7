@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 # s7ctl infers stream types of plugin elements once it loads the plugin.
 # Usage: plugin_types_test.sh <s7ctl> <test plugin .so>
 set -euo pipefail

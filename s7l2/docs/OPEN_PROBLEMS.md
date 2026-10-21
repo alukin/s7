@@ -72,13 +72,14 @@ Task identifiers and acceptance tests are in DEVELOPMENT_PLAN.md's release audit
   provisions compiler/Qt/Xvfb/Mesa dependencies and runs headless/Studio and GUI
   checks with diagnostic artifacts. Local GUI and reporting checks pass. Actual
   hosted execution, sanitizer and Windows job coverage remain release work.
-- **L1 / P1 / rights decision needed:** GPLv3-or-later migration is authorized for
-  S7-owned material, but contributor rights are not yet verified. Git history includes
-  `teren-ukr <maksymgeliush@gmail.com>` changes in items.cpp/items.hpp,
-  diagram_editor.cpp/diagram_editor.hpp and main_window.cpp (24c4674, 2801427).
-  No permission/assignment has been established from this audit. s7spectral is
-  described as third-party in existing documentation and requires ownership review.
-  Do not silently relicense these files or vendored resources.
+- **L1 / P1 / relicensed 2026-10-21; notice inventory open:** the maintainer
+  decided the layered licensing of ADR-019 (`../../LICENSING.md`). The maintainer
+  holds the copyright; the only external contributor (`teren-ukr`, 24c4674,
+  2801427) gave permission; `s7spectral` is first-party and only built like a
+  third-party plugin. Every file has SPDX information (`reuse lint` passes
+  locally). Remaining: run `reuse lint` in CI; complete the bundled-library
+  notices and source offers (`../../THIRD_PARTY_NOTICES.md`, P1).
+  Vendored QSchematic/GPDS/Tabler keep their MIT licences.
 - **R1 / P0 / implementation complete:** explicit acknowledged lifecycle states,
   immutable active configuration, generation-isolated delivery, worker error
   recovery, observer transitions and safe shutdown have deterministic Qt Test

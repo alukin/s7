@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Fetch the Windows (x86_64, UCRT) sysroot for cross-building S7 on Linux.
 
 Downloads MSYS2 UCRT64 packages -- the mingw-w64 CRT and headers, GCC's

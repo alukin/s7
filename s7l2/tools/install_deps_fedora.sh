@@ -7,6 +7,10 @@
 #   --no-extras    skip optional tools (ninja, gnuplot)
 #   --dry-run      print the dnf command instead of running it
 # Windows binaries are cross-built on Ubuntu (tools/install_deps_ubuntu.sh --windows).
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 
 WITH_STUDIO=1

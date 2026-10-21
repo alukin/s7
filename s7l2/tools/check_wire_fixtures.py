@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """A second, independent decoder of the S7 data stream wire format v1.
 
 Written from S7_Network_Wire_Protocol_v1.md (sections 7, 8, 12.1), not from

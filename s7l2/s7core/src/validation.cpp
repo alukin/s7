@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #include "s7/core.hpp"
 #include "s7/rate_inference.hpp"
 #include "s7/type_inference.hpp"

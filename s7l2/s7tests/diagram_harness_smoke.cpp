@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Validates the headless diagram runner (diagram_harness.hpp,
 // ../docs/VISUAL_NUMERICAL_TESTS_PLAN.md section 2) by re-expressing Stage
 // 1.1's scalar linear decay (linear_scalar_smoke.cpp) as a Studio-openable

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Stage 0 / Stage 1.1 of ../doc/S7_Numerical_Modeling_Test_Plan.md: a
 // deterministic headless harness, then the scalar linear system
 // x_dot = a*x against its analytical solution x(t) = x0 * exp(a*t).

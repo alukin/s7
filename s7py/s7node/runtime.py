@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Steps the running graph and swaps in deployed ones (the C++ GraphHost and serving loop).
 
 A deployed graph with a model-time step dt runs on a UTC grid: step n is due

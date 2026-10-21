@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Collect unchanged notices and a dependency inventory for a staged package.
 
 This records provenance; it does not decide redistribution rights or replace
@@ -30,7 +33,11 @@ def collect(source, build, output, sysroot=None):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, destination)
 
-    copy(source.parent / 'LICENSE', 'S7/LICENSE')
+    # S7's licences: LICENSING.md maps each part to its licence text.
+    for name in ('LICENSE', 'LICENSING.md', 'THIRD_PARTY_NOTICES.md'):
+        copy(source.parent / name, 'S7/' + name)
+    for text in sorted((source.parent / 'LICENSES').glob('*.txt')):
+        copy(text, 'S7/LICENSES/' + text.name)
     copy(source / 'external/QSchematic/license.txt', 'QSchematic/license.txt')
     gpds = build / '_deps/gpds-src'
     copy(gpds / 'license.txt', 'GPDS/license.txt')
@@ -47,7 +54,7 @@ def collect(source, build, output, sysroot=None):
         shutil.copytree(license_tree, notices / 'MSYS2', dirs_exist_ok=True)
         for binary in sorted(output.rglob('*.dll')):
             inventory.append({'binary': str(binary.relative_to(output)),
-                              'notices': 'S7/LICENSE' if binary.name.startswith('libs7') else 'MSYS2',
+                              'notices': 'S7/LICENSING.md' if binary.name.startswith('libs7') else 'MSYS2',
                               'ownership': 'requires Windows package inventory review'})
     else:
         backend = 'rpm' if shutil.which('rpm') else 'dpkg' if shutil.which('dpkg-query') else ''
@@ -73,7 +80,7 @@ def collect(source, build, output, sysroot=None):
                     continue
             relative = str(binary.relative_to(output))
             if binary.name.startswith(('s7', 'libs7')):
-                inventory.append({'binary': relative, 'package': 'S7', 'notices': 'S7/LICENSE'})
+                inventory.append({'binary': relative, 'package': 'S7', 'notices': 'S7/LICENSING.md'})
                 continue
             original = originals.get(binary.name)
             package = ''

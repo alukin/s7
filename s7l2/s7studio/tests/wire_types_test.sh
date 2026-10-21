@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 # Checks Studio's wire type labels on laid-out diagrams (offscreen).
 set -euo pipefail
 # In a cross build, S7_RUN runs the target's programs (Wine); run drops the

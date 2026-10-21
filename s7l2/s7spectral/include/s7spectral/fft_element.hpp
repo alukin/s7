@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: MIT-0
+
 #ifndef S7SPECTRAL_INCLUDE_S7SPECTRAL_FFT_ELEMENT_HPP
 #define S7SPECTRAL_INCLUDE_S7SPECTRAL_FFT_ELEMENT_HPP
 

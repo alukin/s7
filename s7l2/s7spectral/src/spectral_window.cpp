@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: MIT-0
+
 #include "s7spectral/spectral_window.hpp"
 #include <stdexcept>
 #include <numbers>

@@ -6,6 +6,10 @@
 #   --release  the program from build-release/ instead of build/
 # The s7noise plugin of the build is found through S7_PLUGIN_PATH (unless set).
 # Example: ./run_on_linux s7runtime --schema s7runtime/examples/schema_minimal.json --serve-seconds 5
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 

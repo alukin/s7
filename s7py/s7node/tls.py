@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """TLS server context and certificate identity (mTLS, S7_Control_Protocol_MVP.md section 2).
 
 Certificate fields the standard library does not expose (Extended Key Usage)

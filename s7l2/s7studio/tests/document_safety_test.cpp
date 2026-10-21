@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 #include "main_window.hpp"
 #include "atomic_file.hpp"
 #include "diagram_editor.hpp"

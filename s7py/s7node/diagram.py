@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """A node's part of a deployed diagram (s7net/src/diagram_deployment.cpp).
 
 A diagram's schema places each element on a node ("node": node_uuid). The

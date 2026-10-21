@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: LGPL-3.0-or-later
+
 # Cross-builds S7 for 64-bit Windows on Linux: Clang 22 targeting MinGW-w64
 # (UCRT), against the sysroot that tools/windows/fetch_msys2_sysroot.py
 # unpacks (MSYS2 UCRT64 packages: mingw-w64 CRT, GCC's libstdc++, Boost,

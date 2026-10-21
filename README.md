@@ -25,7 +25,9 @@ The implementations interoperate through the protocols in `doc/`. Their conforma
 
 ## License
 
-GNU General Public License, version 2 ([`LICENSE`](LICENSE)).
+S7 is free software. Studio, `s7ctl`, the tests, tools and `s7py` are licensed under the GNU General Public License, version 3 or later ([`LICENSE`](LICENSE)). The runtime and the plugin SDK (`s7core` and the libraries `s7runtime` is built from) are licensed under the GNU Lesser General Public License, version 3 or later, so element plugins and applications that embed the runtime may use any licence. Documentation is CC-BY-4.0; example models and protocol fixtures are CC0-1.0. Diagrams and results you create with S7 are your own.
+
+Details, including the plugin permission and third-party components: [`LICENSING.md`](LICENSING.md).
 
 ## Development with AI tools
 

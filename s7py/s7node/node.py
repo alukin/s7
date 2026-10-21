@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The headless node: configuration, identity, control server and the stepping loop."""
 import argparse
 import asyncio

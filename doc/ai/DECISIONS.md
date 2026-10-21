@@ -49,7 +49,7 @@ This register complements existing architectural decision records in the reposit
 - **Decision:** Draw 2D viewers with Qt Graphs and the 3D trajectory with Qt Quick 3D, embedded with `QQuickWidget` in the Qt Widgets Studio. Viewer types register in a viewer registry; a per-window viewer manager owns instances and routes observed samples. QCustomPlot is removed. Observation stays outside the computational graph (ADR-011 to ADR-013); headless components stay Qt-free.
 - **Alternatives considered:** keeping QCustomPlot; other third-party plotting libraries (not evaluated, per the approved decision); Qt Graphs 3D scatter for trajectories (rejected: no continuous line).
 - **Rationale:** Qt-maintained modules, GPU rendering through Qt's RHI, a real 3D view, and a lighter vendored footprint.
-- **Consequences:** Studio requires Qt ≥ 6.9 with Qml, Quick, QuickWidgets, Graphs and Quick3D, which are GPLv3/commercial (S7 is GPL). Packages must deploy the QML modules. Qt Graphs 2D has no dashed lines, so comparison overlays use translucency. Offscreen test runs cannot render Qt Quick 3D; 3D pixels are checked manually.
+- **Consequences:** Studio requires Qt ≥ 6.9 with Qml, Quick, QuickWidgets, Graphs and Quick3D, which are GPLv3/commercial (Studio is GPL-3.0-or-later). Packages must deploy the QML modules. Qt Graphs 2D has no dashed lines, so comparison overlays use translucency. Offscreen test runs cannot render Qt Quick 3D; 3D pixels are checked manually.
 - **References:** `s7l2/docs/STUDIO_OBSERVATION_VIEWERS.md`.
 
 ## Architectural topics requiring confirmation

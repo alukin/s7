@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Deploys one diagram across two s7runtime nodes over mTLS with s7ctl, checks
 # that node B computes from node A's stream, then redeploys a changed diagram
 # and checks that the stream continues without a fault; finally restarts the

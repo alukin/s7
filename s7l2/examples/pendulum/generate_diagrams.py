@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: CC0-1.0
+
 """Generate the three large-amplitude single-pendulum benchmarks."""
 import json
 from pathlib import Path

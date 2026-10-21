@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 #include "local_runtime_v2.hpp"
 #include "local_schema_runner.hpp"
 #include "scope_sample_mailbox.hpp"

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Schema -> validate -> compile -> step, for a subset of the built-in elements.
 
 Mirrors s7core (elements.hpp, validation.cpp, runtime.cpp) for F64 signals only:

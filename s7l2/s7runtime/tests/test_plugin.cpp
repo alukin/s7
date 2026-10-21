@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // A minimal plugin for plugin_loader_smoke. Built twice: as is, and with
 // S7_TEST_PLUGIN_FAIL, where registration fails after one element was
 // registered (a duplicate type name).

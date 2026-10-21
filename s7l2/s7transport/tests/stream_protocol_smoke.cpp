@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Lossless delivery rules of the stream protocol, with a simulated link.
 #include <cstdint>
 #include <deque>

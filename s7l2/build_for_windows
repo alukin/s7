@@ -10,6 +10,10 @@
 #   --package    collect the programs and their DLLs into dist/s7-windows/ (implies --release)
 # Set S7_QT_HOST_PATH when the host Qt tools are outside /usr (e.g. Fedora).
 # Dependencies: tools/install_deps_ubuntu.sh --windows.
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 cd "$(dirname "$0")"
 

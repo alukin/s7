@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 add_executable(s7runtime
     src/main.cpp

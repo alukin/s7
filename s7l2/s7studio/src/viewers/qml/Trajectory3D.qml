@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 // 3D phase trajectory for the Studio viewer. The trajectory and frame
 // geometries, the axis labels and the camera preset come from the C++
 // Trajectory3DBridge passed in as `trajectoryView`.

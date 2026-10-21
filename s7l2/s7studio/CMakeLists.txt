@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 # Observation viewers: Qt Graphs (2D) and Qt Quick 3D in QQuickWidget. 6.9 is
 # the first release with GraphsView.plotArea, which cursor-anchored zooming

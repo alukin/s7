@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Check a relocated Linux package from a fresh working directory.
 
 Run under a usable DISPLAY (e.g. xvfb-run -a). Outputs belong in a temporary

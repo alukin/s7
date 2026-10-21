@@ -7,6 +7,10 @@
 #   --test       run the tests after building
 # Set S7_BUILD_JOBS to override the conservative default of 2 compile jobs.
 # Dependencies: tools/install_deps_ubuntu.sh. Compiler: set CXX (e.g. CXX=clang++-22) on the first build.
+
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 set -euo pipefail
 cd "$(dirname "$0")"
 

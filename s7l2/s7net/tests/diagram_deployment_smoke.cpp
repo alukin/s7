@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Splitting one diagram across nodes: placement, stream assignment and the
 // part each node runs.
 #include <chrono>

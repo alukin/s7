@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Runs the control protocol conformance script (tools/gen_control_fixtures.py,
 // s7runtime/tests/fixtures/control_v1.json) against the C++ control plane:
 // every response must have its type, its members with their JSON types, and

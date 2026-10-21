@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Plugin registration is all or nothing, and unloading removes a plugin's
 // element types before its code goes away.
 #include <iostream>

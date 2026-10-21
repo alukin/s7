@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Streams over real WebSocket connections (BeastRuntimeNetEndpoint): both
 // directions, lossless resume across dropped TCP connections, two consumers
 // with their own mTLS identities, malformed input and the inbound limit.

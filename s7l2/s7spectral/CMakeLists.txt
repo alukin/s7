@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: MIT-0
+
 # s7spectral: the reference third-party plugin. It is built out of tree,
 # against an installed S7 SDK, exactly as an external plugin would be:
 #

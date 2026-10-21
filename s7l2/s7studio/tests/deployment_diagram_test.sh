@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+
 # Placement survives Studio's editor round trip and Studio assigns the
 # streams of a diagram as "Deploy to Nodes" does (offscreen).
 set -euo pipefail

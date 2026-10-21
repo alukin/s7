@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 #ifndef S7IO_INCLUDE_S7_RECORDED_SOURCE_HPP
 #define S7IO_INCLUDE_S7_RECORDED_SOURCE_HPP
 

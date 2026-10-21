@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
 // Smoke test for RateResolver (s7/rate_inference.hpp,
 // doc/S7_Sample_Rate_Model.md), wired into Validator::validate() /
 // Compiler::compile() as a mandatory check (s7core/src/validation.cpp): every
