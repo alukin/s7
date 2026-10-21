@@ -161,7 +161,7 @@ issue status. Status starts **pending audit** unless evidence is stated.
 | D2 P0 confirmed defect / coverage | MainWindow closeEvent has no unsaved prompt; other replacement paths and nested tabs need audit | Track persisted document state across scene, parameters, probes, nested schemas and run config; central Save/Discard/Cancel guard for every replacement including remote loads and recent files | D1; nested commits and undo cleanliness must agree; failed Save cancels transition | Each dialog choice, nested edits, open/new/recent/close/load, failed save retains dirty state, full config round trip | Implemented; document safety and nested regressions pass; wider interaction coverage pending |
 | R1 P0 lifecycle complete | LocalSchemaRunner, ModelRunController, MainWindow, ViewerManager, mailbox already have lifecycle tests | Audit Idle/Prepared/Running/Paused/Stopping/Stopped/Error; stop/join on replacement; generation isolation for queued work, immutable active config, actionable failures | D2; Qt queued callbacks and shutdown ordering | Deterministic start/stop/reset/rerun, document replacement running/paused, close, stale callbacks, observers added/deleted, edit-next-run, worker recovery | Implemented; deterministic runner/window and GUI checks passed |
 | O1 P0 design decision / confirmed limitation | Worker mailbox drops oldest; ScopeRecording records only delivered values (`SCOPE_RESULTS.md`) | Authoritative worker-side bounded recording before lossy preview; choose synchronous disk/backpressure policy; propagate I/O failures, step/run IDs and completeness; preserve binary64 values | R1; disk latency reduces throughput; no unbounded buffers or claims of lossless preview | Deliberate preview overflow still yields complete authoritative results; disk-full/write failure produces incomplete status; unsupported complex probes rejected before execution | Implemented: separate sources and authoritative pre-preview capture; 69-test suite passed; final comparison refinement passed 11 affected + 4 GUI tests |
-| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a timing/parity and N1b immutable provenance/saved-config replay validated; wider independent-reference matrix and external input histories remain |
+| N1 P1 incomplete coverage | s7core rate inference and numerical harnesses exist | Audit first/last samples, fractional intervals, finite durations and pause/rerun; derive model time from step/rational rate without cumulative quantization; capture model/effective params/rate/seeds/version/run ID | R1/O1; preserve causal ordering and existing integrators | Independent oscillator, pendulum, RC/RLC/mass-spring/control references and refinement; limited Van der Pol/Lorenz metrics; same saved model headless/Studio; physical-time vs discrete sample events | N1a timing/parity, N1b immutable provenance/replay and N1c linear analytical/Studio matrix validated; wider nonlinear/control references and external input histories remain |
 | U1 P1 usability / coverage | Diagram scene, schema tabs, parameter metadata and Qt viewers exist | Audit deletion/probe undo, wires/types/layout, copy/paste/navigation and serialization; reusable metadata-driven typed parameter editor with advanced JSON; viewer axes/units, cursors, legend, comparison/run labels and warnings | D2/R1/O1; no vendor patches or GUI redesign | Diagram round trips/undo, probe cleanup, metadata validation, all three viewers multi-instance pause/hide/reopen/reset/export, long-run cleanup | Pending audit |
 | C1 P1 release infrastructure | Workflow is `s7l2/.github/workflows/ci.yml`, uses repository-root cmake and no provisioning | Root workflow with source `s7l2`, explicit supported compiler/dependencies; headless/Studio/numerical/document/lifecycle/license jobs, appropriate sanitizers and cross-Windows/Wine; Release assertions active | L1; root write approval; runners/toolchain availability must be verified | Build build-tests before CTest; validate actual hosted runs, never count unavailable jobs as passed | Root workflow/provisioning/headless/Studio GUI jobs implemented; hosted, sanitizer and Windows validation open |
 | P1 P1 release infrastructure | Linux/Windows package scripts exist | Audit arbitrary-cwd launching, installed plugins/examples/QML resources, Qt runtime and license notices; actionable dependency errors | L1/C1, packaging tools and real display | Installed-package workflow from `/tmp`, distribution notice inventory; native Windows separate from Wine | Pending audit |
@@ -547,3 +547,26 @@ results require the new v2 reader; no v1 shim was added. Dirty-build source
 changes and matching plugin implementations must be retained separately for
 reproduction. Native GPU/Windows, cross-platform RNG/bitwise equivalence, broad
 numerical-model acceptance and the measured operational envelope remain open.
+
+
+## N1c — linear reference matrix and Studio parity (2026-10-21)
+
+The [numerical matrix](NUMERICAL_VALIDATION_MATRIX.md) fixes parameters,
+initial states, methods, rates, durations and tolerances for all ten bundled
+linear diagrams. The existing analytical checks now share explicit closed-form
+references with Studio tests and use rational model time. Twenty configurations
+cover RC charge/discharge, RLC step/resonant drive and mass–spring–damper release.
+Each configured diagram is saved once and independently loaded through the
+headless loader and Studio document parser/controller/worker. Every recorded
+channel is checked for exact path parity, state error, initial/final publication,
+step/time alignment and complete capture; both rates must exhibit first-order
+refinement. The matrix classifies the remaining bundled families conservatively.
+External input histories and the wider nonlinear/control matrix remain open;
+this increment introduces no solver or runtime behavior change.
+
+N1c validation: both affected targets built; the two targeted CTest entries
+passed in 17.35 s, including all 18 ModelTimeTest cases. Measured maximum
+error was 0.0082783437 at 1 kHz and 0.0041311222 at 2 kHz (RLC resonance,
+Euler); refinement ratios across all ten models/methods were 2.000287–2.003897.
+All recorded channels matched exactly across paths. Full suite not repeated
+for this test/document-only increment. Detailed results are in the matrix.

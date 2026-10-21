@@ -12,9 +12,10 @@ the `scope` observer. All integrators default to `dt = 0.001 s`.
 | Series RLC resonant drive | [diagram](rlc_resonance_euler.s7diagram) | [diagram](rlc_resonance_symplectic.s7diagram) |
 | Mass–spring–damper release | [diagram](mass_spring_damper_euler.s7diagram) | [diagram](mass_spring_damper_symplectic.s7diagram) |
 
-Status: **experimental teaching diagrams**. The headless check below covers the
-default parameters at two rates. Manual Studio open → run → observe → edit →
-rerun has not yet been qualified. There are no nested components in these
+Status: **numerically validated within the [stated matrix](../../docs/NUMERICAL_VALIDATION_MATRIX.md)**.
+Analytical state checks and exact headless/Studio worker-recording parity cover
+the default parameters at 1 and 2 kHz. Manual Studio open → run → observe → edit →
+rerun usability has not yet been qualified. There are no nested components in these
 small graphs; edit the primitive parameters directly.
 
 ## RC: first-order response

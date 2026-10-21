@@ -1,5 +1,6 @@
 #include "lifecycle_test_support.hpp"
 #include "diagram_harness.hpp"
+#include "linear_reference.hpp"
 #include "diagram_document.hpp"
 #include <s7/schema_library.hpp>
 #include <QTemporaryDir>
@@ -105,6 +106,82 @@ private slots:
             QVERIFY(a[i].value == b[i].value);
             QVERIFY(std::abs(a[i].value - static_cast<double>(i) * dt) < 1e-18);
         }
+    }
+    void linearMatrix_data() {
+        QTest::addColumn<QString>("model");
+        QTest::addColumn<QString>("method");
+        for (const auto* model : {"rc_charge", "rc_discharge", "rlc_step", "rlc_resonance", "mass_spring_damper"})
+            for (const auto* method : {"euler", "symplectic"})
+                QTest::newRow(qPrintable(QString("%1-%2").arg(model, method))) << QString(model) << QString(method);
+    }
+    void linearMatrix() {
+        QFETCH(QString, model); QFETCH(QString, method);
+        double errors[2]{};
+        for (int refinement = 0; refinement < 2; ++refinement) {
+            const double hz = refinement ? 2000. : 1000., dt = 1 / hz;
+            const auto name = model.toStdString();
+            auto json = s7tests::read_json_object(std::filesystem::path(S7_SOURCE_DIR) /
+                "examples/linear" / (name + "_" + method.toStdString() + ".s7diagram"));
+            json["dt"] = dt;
+            s7::configure_schema_discretization(json.at("schema"), dt);
+            QTemporaryDir directory; QVERIFY(directory.isValid());
+            const auto path = std::filesystem::path(directory.path().toStdString());
+            { std::ofstream out(path / "model.s7diagram"); out << boost::json::serialize(json); }
+            { std::ofstream out(path / "model.probes.json"); out << boost::json::serialize(boost::json::object{{"probes", json.at("probes")}}); }
+            auto headless = s7tests::load_and_compile(path / "model.s7diagram", path / "model.probes.json");
+            const auto document = diagram::DiagramDocument::fromJson(s7tests::read_json_object(path / "model.s7diagram"));
+            const auto duration = static_cast<long>(s7tests::linear_duration(name));
+            const auto ticks = ui::ModelRunController::computeTicks(duration, document.dt);
+            const auto reference = s7tests::run_and_sample(headless, static_cast<std::size_t>(ticks));
+            std::vector<RunProbe> probes;
+            for (const auto& probe : headless.probes)
+                probes.push_back({probe.name, probe.point.element_id, static_cast<int>(probe.point.port)});
+            QSignalSpy completed(runner_.get(), &LocalSchemaRunner::runCompleted);
+            ui::ModelRunController controller(runner_.get());
+            controller.run(document.runtimeSchema, document.dt, ui::RunExecutionConfig{duration}, probes);
+            QTRY_COMPARE_WITH_TIMEOUT(completed.count(), 1, 30000);
+            QVERIFY2(completed[0][0].toBool(), qPrintable(completed[0][1].toString()));
+            const auto source = runner_->recordedSource();
+            QCOMPARE(source->status().samples, static_cast<std::uint64_t>(ticks) * probes.size());
+            QVERIFY(source->status().finished && !source->status().incomplete());
+            std::uint64_t cursor = 0;
+            while (cursor < source->status().samples) {
+                const auto page = source->read(cursor);
+                QVERIFY(page.error.isEmpty()); QVERIFY(page.next > cursor);
+                for (const auto& sample : page.samples) {
+                    const auto step = cursor / probes.size(), channel = cursor % probes.size();
+                    const auto& snapshot = reference[step];
+                    QCOMPARE(sample.step, static_cast<std::int64_t>(step + 1));
+                    QCOMPARE(sample.channel, static_cast<observation::ChannelId>(channel));
+                    QVERIFY(sample.timeSeconds == static_cast<double>(step + 1) / hz);
+                    QVERIFY(sample.timeSeconds == *snapshot.model_time_seconds);
+                    QCOMPARE(*snapshot.model_time_ns, std::llround(sample.timeSeconds * 1e9));
+                    QVERIFY(sample.value == snapshot.samples[channel].as_real());
+                    const auto expected = s7tests::linear_reference(name, static_cast<double>(step) / hz);
+                    // First channels are physical states; remaining input is
+                    // independently checked as the post-switch source signal.
+                    const bool rc = name.starts_with("rc_");
+                    const auto states = rc ? 1u : name.starts_with("rlc_") ? 3u : 2u;
+                    double target;
+                    if (channel < states) target = expected[channel];
+                    else if (name == "rlc_resonance") target = std::sin(2 * static_cast<double>(step) / hz);
+                    else target = name == "rc_charge" || name == "rlc_step" ? 1. : 0.;
+                    QVERIFY(std::isfinite(sample.value));
+                    const double error = std::abs(sample.value - target);
+                    if (step == 0) QVERIFY(error < 1e-12);
+                    errors[refinement] = std::max(errors[refinement], error);
+                    ++cursor;
+                }
+                QCOMPARE(cursor, page.next);
+            }
+            QCOMPARE(reference.front().step, std::size_t(1));
+            QCOMPARE(reference.back().step, static_cast<std::size_t>(ticks));
+            QCOMPARE(*reference.back().model_time_seconds, static_cast<double>(duration));
+            QVERIFY(errors[refinement] < .05);
+        }
+        QVERIFY(errors[0] / errors[1] > 1.8 && errors[0] / errors[1] < 2.2);
+        qInfo("%s %s max absolute error: %.10g -> %.10g; refinement %.6f",
+              qPrintable(model), qPrintable(method), errors[0], errors[1], errors[0] / errors[1]);
     }
     void sameSavedModel_data() {
         QTest::addColumn<QString>("file"); QTest::addColumn<double>("hz");

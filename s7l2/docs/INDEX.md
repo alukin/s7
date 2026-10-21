@@ -58,3 +58,5 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 - `s7transport/src/transport.cpp` — in-memory and WebSocket transport backends
 
 - [Automated Studio GUI tests](STUDIO_GUI_TESTING.md): Qt Test/Quick Test workflows, Xvfb, real 3D rendering, skips and failure artifacts.
+
+- [Numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md): supported linear configurations, independent references, tolerances and bundled-example classification.

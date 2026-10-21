@@ -422,7 +422,7 @@ target_link_libraries(s7studio_model_time_test PRIVATE s7studio_diagram s7studio
 set_target_properties(s7studio_model_time_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_model_time_test)
 add_test(NAME s7studio_model_time COMMAND s7studio_model_time_test)
-set_tests_properties(s7studio_model_time PROPERTIES TIMEOUT 60)
+set_tests_properties(s7studio_model_time PROPERTIES TIMEOUT 180)
 
 s7_add_test_executable(s7studio_run_provenance_test
     tests/run_provenance_test.cpp src/local_schema_runner.cpp src/local_schema_runner.hpp)
