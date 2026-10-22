@@ -1,5 +1,76 @@
 # S7 Development Plan
 
+## P0 release priority — continuous oscilloscope viewer (2026-10-22)
+
+User-directed release requirement; discuss the design next and implement as
+soon as agreed. **Not implemented.** This is a new 0.1.0 gate, overriding the
+earlier preview deferral for this specific observation feature. Finish the
+fractional-duration correction first; do not start the viewer implementation
+before the discussion.
+
+Continuous execution already exists (`runtime_seconds = -1`). The current
+Scope is an entire-run recording/comparison viewer: bounded RAM spills history
+to temporary disk. An endless run therefore grows storage until it fails.
+A bounded display cache alone does not fix the worker's authoritative journal.
+
+Required outcome: a separate hardware-style oscilloscope viewer for live,
+continuous inspection, retaining a bounded acquisition/time window. Both RAM
+and disk consumption must stay bounded when full-run recording is not selected.
+Preserve the existing Scope's explicit recording/export/comparison workflow.
+
+Discussion decisions:
+
+- Continuous-run UI: make endless operation discoverable rather than requiring
+  users to know the `-1` sentinel; retain finite fractional-duration runs.
+- Acquisition: model-time timebase/window length, channel and sample caps,
+  eviction/decimation rules and a visible indication of skipped data.
+- Hardware-style controls: channel visibility and scale/offset, timebase,
+  acquisition pause versus simulation pause, and whether the first increment
+  needs auto/normal/single edge triggering or starts with a rolling trace.
+- Capture ownership: define viewer/probe subscriptions so oscilloscope-only
+  operation does not create an unbounded full-run journal. Define mixed use
+  with recording Scopes and make any full recording an explicit choice.
+- Freeze/export: decide whether saving covers the current visible acquisition
+  window or a separate explicit recorder; never imply unlimited retained data.
+
+Implementation sequence after agreement:
+
+1. Document the acquisition/capture policy and update the observation contracts.
+2. Implement bounded worker-side acquisition and read-only viewer delivery,
+   with explicit ownership and lifecycle handling; no causal stepping changes.
+3. Register the new viewer in Studio and expose its agreed controls and status.
+4. Add offline help/example coverage and deterministic tests, then verify the
+   installed Linux package locally before recreating a release tag.
+
+Acceptance: exercise many buffer wraps and multiple channels; prove sample and
+storage bounds and preserve model timestamps/order. Verify visible acquisition
+behavior, any agreed trigger modes, simulation pause/resume/stop/reset/rerun,
+viewer open/close/reopen and shutdown. Show that oscilloscope-only continuous
+runs do not accumulate a temporary recording, while explicitly requested Scope
+recordings keep their completeness/error behavior. Measure bounded local UI
+work and resource use; preserve headless execution and existing numerical tests.
+
+## Fractional run duration correction — 2026-10-22
+
+Run Configuration, saved `studio_run.runtime_seconds` and execution config now
+accept finite fractional seconds. Whole-step calculation uses the canonical
+decimal duration and rational model rate, flooring without boundary overshoot.
+The dialog warns below 100 steps without blocking a valid short run; invalid
+negative values other than `-1` are rejected. Continuous execution remains
+available. The original v0.1.0 tag was removed locally and from origin; Help
+was already committed and pushed as 7babee8 before this correction.
+
+Release `build-tests` and the optional operational-acceptance target built.
+Model-time tests cover fractional execution, decimal/scientific boundaries,
+values just below a boundary, invalid/nonfinite durations and document parsing.
+Document safety now exercises fractional duration through save/reopen. Both
+focused entries passed (2/2, 3.54 s). The broad Release suite passed 72/73;
+the GUI test alone needed to wait for the queued completion update to re-enable
+Run. After that test synchronization correction, the whole GUI workflow suite
+passed in 6.33 s, including 125- and 99-step actual runs and warning boundaries.
+All 73 entries have passing evidence across those runs; no second full-suite
+execution is claimed. No oscilloscope implementation is included here.
+
 ## Help and About follow-up — 2026-10-22
 
 Studio now has a Help menu with F1, embedded offline articles, full-text topic

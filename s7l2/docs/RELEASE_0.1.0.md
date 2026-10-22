@@ -20,6 +20,12 @@ storage rather than crash-durable recording.
 
 ## Final checklist
 
+- [ ] **P0: continuous hardware-style oscilloscope viewer**, with bounded
+  acquisition memory/storage and no implicit full-run journal. Design discussion
+  and implementation are pending; see the priority section in
+  [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md). This user-added gate supersedes
+  the earlier deferral for this specific observation capability.
+
 - [x] Narrow release scope and document platform/feature limits.
 - [x] Verify actual disk exhaustion: an 8 MiB tmpfs produces an explicit
   incomplete/error status; all 262,144 retained samples remain readable with
@@ -33,10 +39,12 @@ storage rather than crash-durable recording.
 - [x] REUSE licensing check passes locally (503/503 files at verification);
   required step added to headless CI. Hosted execution of that new step is
   not claimed; GUI testing remains local.
-- [x] Prepare Linux archive and SHA256SUMS; tag the verified
+- [ ] Rebuild the final Linux archive and SHA256SUMS after the Help and
+  fractional-duration fixes; tag the verified
   release revision as v0.1.0. Publication uses the same artifacts.
 
-The tag and artifacts are prepared locally; no hosted release is published.
+The original v0.1.0 tag was removed locally and from origin on 2026-10-22
+before the fractional-duration correction. No hosted release is published.
 The binary bundle contains runtime libraries and notices, without Qt or other
 dependency source archives. Corresponding-source distribution is a separate
 publication concern; package metadata records the exact source RPMs.
