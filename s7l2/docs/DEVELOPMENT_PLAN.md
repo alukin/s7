@@ -8,6 +8,12 @@ earlier preview deferral for this specific observation feature. Finish the
 fractional-duration correction first; do not start the viewer implementation
 before the discussion.
 
+The proposed [live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md) now defines
+the acquisition policy, user-adjustable window, exact sample readouts, four-view
+analysis scope and staged acceptance gates. It is a design proposal, not an
+implementation or completion claim. Its milestones distinguish the bounded-live
+release requirement from full ADI OSC parity.
+
 Continuous execution already exists (`runtime_seconds = -1`). The current
 Scope is an entire-run recording/comparison viewer: bounded RAM spills history
 to temporary disk. An endless run therefore grows storage until it fails.
