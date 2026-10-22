@@ -217,6 +217,12 @@ private slots:
             Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"))));
         QVERIFY(browser->toPlainText().contains("Retain samples / channel"));
         QVERIFY(browser->toPlainText().contains("fm_frequency_detection_live.s7diagram"));
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("STUDIO_SPECTRUM.md"))));
+        QVERIFY(browser->toPlainText().contains("Windows and normalization"));
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("STUDIO_PAIR_ANALYSIS.md"))));
+        QVERIFY(browser->toPlainText().contains("positive lag means B occurs later than A"));
         capture(help, "help");
         help->close();
         action("action.help")->trigger();
@@ -233,6 +239,17 @@ private slots:
         QVERIFY(credits->toPlainText().contains("teren-ukr"));
         QVERIFY(build->toPlainText().contains("S7 Studio 0.1.0"));
         for (auto* text : about->findChildren<QTextBrowser*>()) QVERIFY(text->toPlainText().size() > 100);
+        auto* tabs = about->findChild<QTabWidget*>(); QVERIFY(tabs);
+        int legalTabs = 0;
+        for (int i = 0; i < tabs->count(); ++i) {
+            const auto title = tabs->tabText(i);
+            if (title != "Licensing" && title != "Third-party notices") continue;
+            auto* text = qobject_cast<QTextBrowser*>(tabs->widget(i)); QVERIFY(text);
+            QCOMPARE(text->source(), QUrl(title == "Licensing" ?
+                "qrc:/s7studio/legal/LICENSING.md" : "qrc:/s7studio/legal/THIRD_PARTY_NOTICES.md"));
+            ++legalTabs;
+        }
+        QCOMPARE(legalTabs, 2);
         capture(about, "about");
         about->close();
         QCOMPARE(boost::json::serialize(window_->currentDocument()), boost::json::serialize(before));

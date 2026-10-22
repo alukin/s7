@@ -85,6 +85,17 @@ are explicit integrator and function/state networks.
 - [Live AM/FM oscilloscope examples](../examples/signal_measurement/README.md):
   bounded continuous inspection, duration changes, freeze and raw hover values.
   Choose the `_live.s7diagram` variants for zero full-run recording channels.
+- **Live FFT demonstration:** open
+  `signal_measurement/am_coherent_detection_live.s7diagram`, run **2 seconds at
+  12800 Hz**, and open `carrier_scope`. In Spectrum, select `carrier_scope/carrier [1]`;
+  N=4096 and the default Hann window give a **100 Hz**, amplitude **1** carrier.
+  See [FFT controls and interpretation](STUDIO_SPECTRUM.md).
+- **Live XY and delay demonstration:** open
+  `signal_measurement/iq_correlation_live.s7diagram`, run **8 seconds at 1024 Hz**,
+  and open `iq_scope`. I/Q gives a unit circle in Constellation / XY. In Correlation,
+  select A=I, B=I_delayed_6, N=4096 and maximum |lag|=16: the peak is **+6 samples**
+  (**0.005859375 s**). All three channels use bounded live acquisition with no
+  full-run recording. See [XY/correlation controls](STUDIO_PAIR_ANALYSIS.md).
 - [AM/FM and RMS](../examples/signal_measurement/README.md): coherent AM
   detection, FM frequency estimation, a sine-amplitude RMS step and a signed
   DC RMS step. Run 2 seconds at 10 kHz. Inspect startup transients, detector

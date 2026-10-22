@@ -7,6 +7,14 @@ Observation stays outside computation (ADR-011, ADR-012, ADR-013 in `../../doc/S
 The separate [live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) uses a
 bounded acquisition source and does not journal live-only channels. The data-flow
 and full-run journal descriptions below apply to the existing recording viewers.
+Its **Time**, [**Spectrum**](STUDIO_SPECTRUM.md), and
+[**Constellation / XY** and **Correlation**](STUDIO_PAIR_ANALYSIS.md) tabs share
+coherent raw frames. Only the visible tab of a visible, non-minimized window
+submits analysis; inactive tabs stop polling and cancel pending work. Acquisition
+continues independently. Returning restarts FFT averaging/hold and XY persistence
+from retained data. Analysis uses a shared two-thread pool, separate from causal
+execution. Use the recording Scope's Save Run/CSV workflow when full-run results
+are required; live-window export remains deferred.
 
 ## Data flow
 
@@ -38,7 +46,7 @@ capture failure. A storage error fails the run and retains an incomplete prefix.
 | `ViewerRegistry` (`viewer_registry.*`) | Process-wide list of viewer types; built-ins register in `registerBuiltinViewers()`. The element picker's **Observers** category and `MainWindow` both read it. |
 | `ViewerManager` (`viewer_manager.*`) | Owns one Studio window's viewer instances keyed by (type, instance id), so a diagram can hold several viewers of one type. Creates windows only on ensure/open, binds read-only sources, refreshes bounded pages and reports preview loss; destroys windows on diagram switch/shutdown. A viewer window destroyed elsewhere is forgotten immediately. |
 | `StepAligner<N>` (`../observation/step_aligner.hpp`) | Joins N coordinate streams into points of one runtime step. Coordinates may arrive in any order; a step left incomplete after eight newer steps started is discarded and counted as dropped. |
-| `LinePlotView` (`line_plot_view.*`, `qml/LinePlot.qml`) | 2D plot: `GraphsView` with `LineSeries` in a `QQuickWidget`. Axis ranges, titles, legend and series are C++ state in `LinePlotView`/`LinePlotBridge`; wheel zoom (about the cursor, both axes) and drag pan are forwarded from QML to C++. |
+| `LinePlotView` (`line_plot_view.*`, `qml/LinePlot.qml`) | 2D plot: `GraphsView` with line/scatter series and a bounded density image in a `QQuickWidget`. Axis ranges, titles, legend and series are C++ state in `LinePlotView`/`LinePlotBridge`; wheel zoom (about the cursor, both axes) and drag pan are forwarded from QML to C++. |
 | `TrajectoryGeometry`, `TrajectoryFrameGeometry` (`trajectory_geometry.*`, `qml/Trajectory3D.qml`) | Custom `QQuick3DGeometry`: the trajectory as one line strip, the frame as a wireframe cube with ticks. `OrbitCameraController` rotates (drag) and zooms (wheel). |
 | `quick_support.*` | Creating a viewer's `QQuickWidget`, loading its scene with required properties, and tearing it down safely. |
 
@@ -69,7 +77,11 @@ Triples of the same step go through `StepAligner<3>`. The trajectory is drawn as
 
 ## Build requirements
 
-- Qt ≥ 6.9 with Qml, Quick, QuickWidgets, Graphs and Quick3D (`find_package` in `s7studio/CMakeLists.txt`). 6.9 is the first release with `GraphsView.plotArea`, used to anchor zooming at the cursor. Ubuntu 26.04 ships 6.10, Fedora 44 and MSYS2 6.11.
+- Qt ≥ 6.9 with Qml, Quick, QuickWidgets, Graphs and Quick3D (`find_package` in `s7studio/CMakeLists.txt`). 6.9 is the first release with `GraphsView.plotArea`, used to anchor zooming at the cursor. Use the repository's dependency scripts for platform packages.
+- Studio analysis also requires double-precision FFTW 3 (`fftw-devel` on Fedora,
+  `libfftw3-dev` on Ubuntu, or the Windows sysroot's FFTW package). This private
+  analysis library is separate from the out-of-tree `s7spectral` runtime plugin;
+  headless builds do not acquire an FFTW dependency through Studio.
 - At run time the QML modules `QtQuick`, `QtQml`, `QtGraphs`, `QtQuick3D` and `QtQuick3D.Helpers` must be importable: Ubuntu and Fedora packages are in `tools/install_deps_ubuntu.sh` and `tools/install_deps_fedora.sh`; `tools/windows/package.sh` copies them into `qml/`; `tools/linux/package.sh` passes the scenes to linuxdeploy-plugin-qt.
 - `-DS7_BUILD_STUDIO=OFF` builds no Qt at all, as before.
 - Licensing: Qt Graphs and Qt Quick 3D are available under GPLv3 or a commercial license (not LGPL). Studio is GPL-3.0-or-later, so this is compatible; the LGPL runtime libraries do not use Qt.

@@ -57,8 +57,29 @@ exact stored values, model time and step. Freeze holds the display while the mod
 continues. See [Live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) for
 examples, retention behavior and current limits. Run Configuration lists live and
 full-recording channel counts; live-only acquisition does not accumulate disk data.
-Select its **Spectrum** tab for real/IQ FFT analysis, window/size controls,
-amplitude/power/PSD and explicit dB references. See [Live FFT spectrum](STUDIO_SPECTRUM.md).
+
+The live oscilloscope has four tabs sharing the same acquisition:
+
+| Tab | Use it for |
+|---|---|
+| **Time** | Signals over model time, display gain/offset, and exact retained-sample hover |
+| **Spectrum** | Real or I/Q FFT, window/size selection, amplitude/power/PSD, explicit dB references, averaging and peak hold |
+| **Constellation / XY** | Two same-step channels as dots, segmented lines or density; equal numeric aspect and persistence in model steps |
+| **Correlation** | Auto- or cross-correlation, normalization, maximum lag and a peak-delay marker; positive lag means B occurs later than A |
+
+See [Live FFT spectrum](STUDIO_SPECTRUM.md) and
+[Live constellation and correlation](STUDIO_PAIR_ANALYSIS.md) for controls and
+worked examples. FFT and correlation need at least N retained consecutive samples;
+increase **Retain samples / channel** or reduce N if the view reports **Filling**.
+The model sample rate determines frequency and lag in seconds.
+
+Only the visible tab of a visible, non-minimized window analyzes data. Switching
+tabs, hiding/closing or minimizing suspends analysis while bounded acquisition
+continues. Returning analyzes the retained window and restarts FFT averages/hold
+and XY persistence. Visible windows keep updating when desktop focus moves away.
+**Freeze display** pins the displayed result and its raw input; changing analysis
+settings reanalyzes that input. **Resume live / Fit** returns to current data.
+Live-window export, paired cursors and interval statistics are not yet available.
 
 For the recording Scope and phase viewers, the plot preview can skip updates under load. Authoritative recording is
 separate; skipped preview updates do not imply lost recorded samples.
@@ -91,6 +112,14 @@ for plot and trajectory controls.
   synchronously. Let the operation finish before closing Studio.
 - **A 3D view is blank:** check that the graphics driver supports Qt Quick 3D.
   Native GPU and broader platform acceptance remain preview limitations.
+- **FFT or correlation shows Filling:** retain at least N samples per channel,
+  let the buffer fill, or choose a smaller N. Retention growth cannot restore
+  evicted history. A frozen view keeps its original input; resume live to refill.
+- **Correlation is unavailable:** inspect its status for missing steps, nonfinite
+  values or zero-energy coefficient inputs. A constant signal becomes zero-energy
+  after mean removal. Check channel bindings and normalization.
+- **XY points or FFT averages disappear after changing tabs:** analysis history
+  restarts after inactivity. Acquisition retains its bounded raw window independently.
 
 See [Preview limits](qrc:/s7studio/help/docs/RELEASE_0.1.0.md) for the qualified
 Linux platform and deferred work. **Help → About S7 Studio** lists the author,

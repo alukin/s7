@@ -1,8 +1,9 @@
 # Live oscilloscope prototype
 
-This is the bounded time-domain and FFT spectrum prototype of the
-[live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md). It is not yet the
-four-view ADI OSC parity milestone.
+This prototype provides bounded **Time**, **Spectrum**, **Constellation / XY**
+and **Correlation** tabs from the [live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md).
+Shared inspection/export features and operational qualification remain incomplete;
+the presence of four tabs does not establish the ADI OSC parity milestone.
 
 ## Try it
 
@@ -24,6 +25,22 @@ four-view ADI OSC parity milestone.
 6. **Freeze display** holds that frame while acquisition continues. Wheel zoom
    and drag pan also freeze it. **Resume live / Fit** returns to the latest window.
    Display gain, offset and visibility do not modify captured values.
+
+For analysis, choose **Spectrum** for a real channel or I/Q pair, or
+**Constellation / XY** for same-step X/Y dots, lines or density. **Correlation**
+compares A and B; a positive lag means B occurs later. These tabs consume retained
+raw values, independently of Time-tab gain/offset. FFT and correlation need N
+consecutive retained samples; **Filling** means more samples or a smaller N are
+needed. See [FFT controls](STUDIO_SPECTRUM.md) and
+[XY/correlation controls](STUDIO_PAIR_ANALYSIS.md).
+
+Only the visible tab of a visible, non-minimized window runs analysis. Hidden
+tabs stop polling and cancel queued work. Acquisition continues while the window
+is hidden or minimized; returning analyzes the retained window, restarting FFT
+averages/hold and XY persistence. Desktop focus changes alone do not suspend a
+visible window. Try `examples/signal_measurement/iq_correlation_live.s7diagram`
+at **1024 Hz for 8 seconds**: I/Q forms a unit circle, and correlation of I against
+I_delayed_6 peaks at **+6 samples** with N=4096 and maximum |lag|=16.
 
 The example uses explicit Euler integrator networks, like the original
 `2int_osc.s7diagram`. Its amplitude growth is the known numerical behavior of that

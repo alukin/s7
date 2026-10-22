@@ -22,6 +22,8 @@
 namespace s7studio {
 namespace {
 struct Topic { const char* title; const char* path; };
+constexpr Topic licensing{"Licensing", "qrc:/s7studio/legal/LICENSING.md"};
+constexpr Topic thirdPartyNotices{"Third-party notices", "qrc:/s7studio/legal/THIRD_PARTY_NOTICES.md"};
 constexpr Topic topics[] = {
     {"Getting started", "qrc:/s7studio/help/docs/STUDIO_USER_GUIDE.md"},
     {"Live oscilloscope prototype", "qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"},
@@ -32,8 +34,8 @@ constexpr Topic topics[] = {
     {"Observation viewers", "qrc:/s7studio/help/docs/STUDIO_OBSERVATION_VIEWERS.md"},
     {"Numerical validation", "qrc:/s7studio/help/docs/NUMERICAL_VALIDATION_MATRIX.md"},
     {"Preview limits", "qrc:/s7studio/help/docs/RELEASE_0.1.0.md"},
-    {"Licensing", "qrc:/s7studio/legal/LICENSING.md"},
-    {"Third-party notices", "qrc:/s7studio/legal/THIRD_PARTY_NOTICES.md"},
+    licensing,
+    thirdPartyNotices,
     {"Linear response laboratory", "qrc:/s7studio/help/examples/linear/README.md"},
     {"PI/PID control laboratory", "qrc:/s7studio/help/examples/control/README.md"},
     {"Buck converter", "qrc:/s7studio/help/examples/buck/README.md"},
@@ -197,7 +199,7 @@ void showAbout(QWidget* parent)
              QString::fromUtf8(S7_BUILD_COMPILER), QString::fromUtf8(qVersion()),
              QSysInfo::prettyProductName(), QSysInfo::currentCpuArchitecture()));
     tabs->addTab(build, QStringLiteral("Build"));
-    for (const auto& topic : {topics[6], topics[7]}) {
+    for (const auto& topic : {licensing, thirdPartyNotices}) {
         auto* text = new QTextBrowser(tabs);
         text->setSource(QUrl(QString::fromUtf8(topic.path)), QTextDocument::MarkdownResource);
         text->setOpenLinks(false);
