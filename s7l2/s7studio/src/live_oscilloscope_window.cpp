@@ -4,6 +4,9 @@
 #include "viewers/line_plot_view.hpp"
 #include "viewers/spectrum_view.hpp"
 #include "viewers/pair_analysis_view.hpp"
+#include "viewers/window_inspection_panel.hpp"
+#include <QCloseEvent>
+#include <QJsonArray>
 #include <QtGraphs/QLineSeries>
 #include <QCheckBox>
 #include <QEvent>
@@ -81,6 +84,34 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     readout_ = new QLabel(QStringLiteral("Hover over the plot to inspect stored samples. Wheel zooms; drag pans and freezes this window."), timePage);
     readout_->setObjectName("live.readout"); readout_->setWordWrap(true); readout_->setTextFormat(Qt::PlainText);
     readout_->setTextInteractionFlags(Qt::TextSelectableByMouse); timeLayout->addWidget(readout_);
+    inspection_ = new viewers::WindowInspectionPanel([this, tabs]() -> std::optional<analysis::WindowSnapshot> {
+        if (tabs->currentIndex() == 1) return spectrum_->inspectionSnapshot();
+        if (tabs->currentIndex() == 2) return constellation_->inspectionSnapshot();
+        if (tabs->currentIndex() == 3) return correlation_->inspectionSnapshot();
+        if (frame_->steps.empty()) return {};
+        auto data = analysis::timeWindow(frame_);
+        QJsonArray display;
+        for (qsizetype i = 0; i < frame_->channels.size(); ++i) display.append(QJsonObject{{"visible", controls_[i].visible->isChecked()},
+            {"gain", analysis::exactNumber(controls_[i].gain->value())}, {"offset", analysis::exactNumber(controls_[i].offset->value())}});
+        data.settings.insert("display_channels_at_pin", display); return data;
+    }, this);
+    layout->addWidget(inspection_); inspection_->setPlot(plot_);
+    connect(inspection_, &viewers::WindowInspectionPanel::pinned, this, [this] {
+        freeze_->setChecked(true);
+        // A tab may be analyzing a newer frame while displaying its preceding
+        // result. Re-pin that displayed owner even when Freeze was already on.
+        std::shared_ptr<const observation::LiveFrame> pinned;
+        if (spectrum_->isVisible()) pinned = spectrum_->setFrozen(true);
+        else if (constellation_->isVisible()) pinned = constellation_->setFrozen(true);
+        else if (correlation_->isVisible()) pinned = correlation_->setFrozen(true);
+        if (pinned) frame_ = std::move(pinned);
+        updateStatus();
+    });
+    for (auto* plot : {plot_, spectrum_->plotView(), constellation_->plotView(), correlation_->plotView()})
+        connect(plot, &viewers::LinePlotView::pointPicked, this, [this, plot](double x, double y) { if (plot->isVisible()) inspection_->pick(x, y); });
+    connect(spectrum_, &viewers::SpectrumView::inspectionInvalidated, this, [this] { if (spectrum_->isVisible()) inspection_->clear(); });
+    for (auto* view : {constellation_, correlation_}) connect(view, &viewers::PairAnalysisView::inspectionInvalidated,
+        this, [this, view] { if (view->isVisible()) inspection_->clear(); });
     status_ = new QLabel(this); status_->setObjectName("live.status"); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); layout->addWidget(status_);
     connect(seconds_, &QLineEdit::editingFinished, this, [this] {
         if (!seconds_->isModified()) return;
@@ -104,6 +135,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
             const auto pairFrame = view->setFrozen(frozen);
             if (frozen && view->isVisible() && pairFrame) frame_ = pairFrame;
         }
+        if (!frozen) inspection_->clear();
         updateStatus();
     });
     connect(follow, &QPushButton::clicked, this, [this] {
@@ -121,6 +153,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         connect(view->plotView(), &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
     }
     connect(tabs, &QTabWidget::currentChanged, this, [this](int index) {
+        inspection_->setPlot(index == 0 ? plot_ : index == 1 ? spectrum_->plotView() : index == 2 ? constellation_->plotView() : correlation_->plotView());
         inspecting_ = false; autoY_->setVisible(index == 0);
         if (index == 1) spectrum_->setFrame(frame_);
         else if (index == 2) constellation_->setFrame(frame_);
@@ -131,6 +164,8 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
 }
 LiveOscilloscopeWindow::~LiveOscilloscopeWindow()
 {
+    inspection_->clear(true);
+    delete inspection_;
     // Removing the active spectrum page changes the current tab. Disconnect
     // before tearing down either plot so that signal cannot render a dead view.
     disconnect(findChild<QTabWidget*>("live.views"), nullptr, this, nullptr);
@@ -143,6 +178,10 @@ LiveOscilloscopeWindow::~LiveOscilloscopeWindow()
     for (auto* view : {constellation_, correlation_}) {
         disconnect(view->plotView(), nullptr, this, nullptr); disconnect(view, nullptr, this, nullptr); delete view;
     }
+}
+void LiveOscilloscopeWindow::closeEvent(QCloseEvent* event)
+{
+    inspection_->cancelExport(); QWidget::closeEvent(event);
 }
 void LiveOscilloscopeWindow::changeEvent(QEvent* event)
 {
@@ -181,6 +220,7 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
 }
 void LiveOscilloscopeWindow::clearSamples()
 {
+    inspection_->clear(true);
     frame_ = std::make_shared<observation::LiveFrame>(); inspecting_ = false; freeze_->setChecked(false); spectrum_->clear();
     constellation_->clear(); correlation_->clear();
     for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});

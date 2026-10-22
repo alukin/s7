@@ -27,6 +27,13 @@ or 0.005859375 s. Six explicit Delay elements produce the delay. See
 density, freeze and inactive-view behavior. This example has a separate rate
 from the AM/FM recording examples above.
 
+Use **Pin window / A–B** or click the plot to freeze a displayed input. In Time,
+A=0 and B=4095 select 4096 retained positions; **Measure A–B** gives I/Q RMS near
+`1/sqrt(2)` V, independently of display gain/offset. Try cursors in all four tabs,
+then **Export frozen window…** as metadata-rich window JSON, raw CSV or displayed
+data CSV. See [inspection/export help](../../docs/STUDIO_WINDOW_INSPECTION.md).
+Time is still a rolling acquisition; trigger synchronization is pending.
+
 | Recording diagram | Exercise |
 |---|---|
 | [Coherent AM detection](am_coherent_detection.s7diagram) | Carrier/envelope and recovered message |

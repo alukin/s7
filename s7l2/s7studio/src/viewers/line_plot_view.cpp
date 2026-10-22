@@ -87,6 +87,12 @@ QList<QObject*> LinePlotBridge::seriesObjects() const
     QList<QObject*> result; for (auto* series : view_.allSeries()) result.push_back(series); return result;
 }
 
+void LinePlotBridge::pick(double xFraction, double yFraction)
+{
+    if (inspectionEnabled && xFraction >= 0 && xFraction <= 1 && yFraction >= 0 && yFraction <= 1)
+        emit view_.pointPicked(view_.xMin_+xFraction*(view_.xMax_-view_.xMin_), view_.yMin_+yFraction*(view_.yMax_-view_.yMin_));
+}
+
 void LinePlotBridge::hoverPoint(double xFraction, double yFraction, bool inside)
 {
     if (inspectionEnabled) emit view_.hoveredPoint(view_.xMin_+xFraction*(view_.xMax_-view_.xMin_),

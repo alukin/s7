@@ -9,6 +9,13 @@
 #include "live_oscilloscope_window.hpp"
 #include "viewers/spectrum_view.hpp"
 #include "viewers/pair_analysis_view.hpp"
+#include "viewers/window_inspection_panel.hpp"
+#include "analysis/worker_pool.hpp"
+#include <QSemaphore>
+#include <QThreadPool>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QClipboard>
 #include <QtGraphs/QLineSeries>
 #include <QQuickItem>
 #include "phase_portrait_view_window.hpp"
@@ -60,6 +67,14 @@ class Workflows : public QObject {
     std::unique_ptr<TestWindow> window_;
     QString artifacts_;
     bool graphicsAvailable_ = false;
+
+    static QQuickItem* visualItem(QQuickItem* root, const QString& name) {
+        if (root->objectName() == name) return root;
+        // Repeater delegates have visual parents which need not be their
+        // QObject ownership parents.
+        for (auto* child : root->childItems()) if (auto* found = visualItem(child, name)) return found;
+        return nullptr;
+    }
 
     static void capture(QWidget* widget, const QString& name) {
         const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR");
@@ -711,6 +726,108 @@ private slots:
         manager->openObserver("LiveOscilloscope", "iq_scope"); QTRY_VERIFY(viewer->isVisible());
         tabs->setCurrentIndex(2); QTRY_VERIFY(xy->result());
         action("action.reset")->trigger(); QVERIFY(!xy->result()); QVERIFY(!correlation->result());
+    }
+    void liveCursorsMeasurementsAndWindowExport() {
+        using namespace s7studio;
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/iq_correlation_live.s7diagram"));
+        auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &LocalSchemaRunner::runCompleted);
+        QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
+            auto* rate = dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!duration || !rate || !buttons) return false;
+            duration->setValue(8); rate->setValue(1024); buttons->button(QDialogButtonBox::Ok)->click(); return true;
+        }));
+        QTRY_COMPARE(completed.count(), 1); QVERIFY(completed.last()[0].toBool());
+        auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "iq_scope")); QVERIFY(viewer);
+        viewer->resize(1450, 1000); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
+        auto* panel = viewer->findChild<viewers::WindowInspectionPanel*>(); QVERIFY(panel);
+        auto* tabs = viewer->findChild<QTabWidget*>("live.views"); QVERIFY(tabs);
+        auto* a = panel->findChild<QSpinBox*>("inspection.a"); auto* b = panel->findChild<QSpinBox*>("inspection.b"); QVERIFY(a && b);
+        auto* active = panel->findChild<QComboBox*>("inspection.active"); QVERIFY(active);
+        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(4096));
+        auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick);
+        QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
+        auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
+        QTRY_VERIFY(graph->property("plotArea").toRectF().width() > 100);
+        auto area = graph->property("plotArea").toRectF();
+        QTest::mouseClick(quick, Qt::LeftButton, Qt::NoModifier, graph->mapToScene(QPointF(area.left()+area.width()*.4, area.center().y())).toPoint());
+        QTRY_VERIFY(panel->snapshot()); QVERIFY(viewer->findChild<QPushButton*>("live.freeze")->isChecked());
+        QVERIFY(a->value() > 0); QCOMPARE(viewer->plotView()->bridge()->selectionMarkers.size(), 2);
+        const auto oldA = a->value(); a->setFocus(); QTest::keyClick(a, Qt::Key_Right, Qt::AltModifier); QCOMPARE(a->value(), oldA+1);
+        a->setValue(0); b->setValue(4095);
+        QTRY_VERIFY(visualItem(quick->rootObject(), "viewer.cursor.B"));
+        const auto* rightCursor = visualItem(quick->rootObject(), "viewer.cursor.B");
+        QVERIFY(rightCursor->property("px").toDouble() < rightCursor->width());
+        viewer->findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(10);
+        viewer->findChild<QDoubleSpinBox*>("live.channel.0.offset")->setValue(500);
+        QTest::mouseClick(panel->findChild<QPushButton*>("inspection.measure"), Qt::LeftButton);
+        QVERIFY(panel->readout().contains("inclusive raw samples/pairs")); QVERIFY(panel->readout().contains("RMS 0.70710678118"));
+        QVERIFY(panel->readout().contains("step 4097")); QVERIFY(panel->readout().contains("step 8192"));
+        QTest::mouseClick(panel->findChild<QPushButton*>("inspection.copy"), Qt::LeftButton);
+        QCOMPARE(QApplication::clipboard()->text(), panel->readout());
+        capture(viewer, "live-time-cursors-measurements");
+        const auto saved = temporary_.filePath("frozen-window.s7window");
+        QSignalSpy exported(panel, &viewers::WindowInspectionPanel::exportFinished);
+        viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
+        QVERIFY(modalWorkflow([&] { panel->findChild<QPushButton*>("inspection.export")->click(); },
+            [&](QDialog* dialog) { return selectFile(dialog, saved); }));
+        QTRY_COMPARE(exported.count(), 1); QVERIFY(exported.last()[0].toBool());
+        QFile file(saved); QVERIFY(file.open(QIODevice::ReadOnly)); const auto document = QJsonDocument::fromJson(file.readAll());
+        QCOMPARE(document["raw_samples"].toArray().size(), 4096);
+        QVERIFY(!document["metadata"].toObject()["complete_run"].toBool());
+        QCOMPARE(document["metadata"].toObject()["raw"].toObject()["channels"].toArray()[0].toObject()["unit"].toString(), QString("V"));
+        viewer->findChild<QPushButton*>("live.follow")->click(); QVERIFY(!panel->snapshot());
+        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
+        tabs->setCurrentIndex(1);
+        auto* spectrum = viewer->findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
+        spectrum->findChild<QComboBox*>("spectrum.size")->setCurrentIndex(0);
+        spectrum->findChild<QComboBox*>("spectrum.scale")->setCurrentIndex(1);
+        spectrum->findChild<QDoubleSpinBox*>("spectrum.frequencyOffset")->setValue(1000);
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
+        QVERIFY(panel->pin()); a->setValue(1); b->setValue(2);
+        QCOMPARE(spectrum->plotView()->bridge()->selectionMarkers[0].toMap()["x"].toDouble(), 1016.);
+        QVERIFY(panel->readout().contains("Δfrequency=16 Hz"));
+        QVERIFY(panel->readout().contains("frequency_axis=1016 Hz"));
+        panel->findChild<QPushButton*>("inspection.measure")->click(); QVERIFY(panel->readout().contains("not time-domain signal RMS"));
+        QVERIFY(panel->readout().contains("Raw latest-transform input")); capture(viewer, "live-spectrum-cursors");
+        const auto csv = temporary_.filePath("spectrum.csv"); exported.clear();
+        QVERIFY(panel->exportTo(csv, analysis::WindowExportFormat::DisplayedCsv)); QTRY_COMPARE(exported.count(), 1); QVERIFY(exported.last()[0].toBool());
+        QFile csvFile(csv); QVERIFY(csvFile.open(QIODevice::ReadOnly)); const auto bytes = csvFile.readAll();
+        QVERIFY(bytes.startsWith("# {")); QVERIFY(bytes.contains("frequency_offset_hz")); QVERIFY(bytes.contains("\n1,,,16,"));
+        const auto* pinnedValues = spectrum->result()->values.data();
+        tabs->setCurrentIndex(0);
+        QSemaphore entered, release;
+        for (int i = 0; i < 2; ++i) analysis::analysisPool().start([&] { entered.release(); release.acquire(); });
+        entered.acquire(2);
+        tabs->setCurrentIndex(1); // Queue reanalysis behind both held workers.
+        const bool repinned = panel->pin(); // Freeze is already checked.
+        release.release(2);
+        QVERIFY(repinned); QVERIFY(analysis::analysisPool().waitForDone(5000));
+        QTest::qWait(50);
+        QCOMPARE(spectrum->result()->values.data(), pinnedValues); // Queued result cannot replace the cursor owner.
+        spectrum->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0); QVERIFY(!panel->snapshot());
+        tabs->setCurrentIndex(2);
+        auto* xy = viewer->findChild<viewers::PairAnalysisView*>("live.constellation"); QVERIFY(xy);
+        QTRY_VERIFY(xy->result() && xy->result()->state == analysis::PairResult::State::Ready);
+        xy->findChild<QComboBox*>("pair.mode")->setCurrentIndex(2); QVERIFY(panel->pin());
+        const auto pair = panel->snapshot()->columns[1].values[20]; panel->pick(panel->snapshot()->displayX[20], pair);
+        QVERIFY(panel->readout().contains("step ")); QVERIFY(!panel->readout().contains("Density aggregate"));
+        QCOMPARE(xy->plotView()->bridge()->selectionMarkers[0].toMap()["vertical"].toBool(), false);
+        b->setValue(100); panel->findChild<QPushButton*>("inspection.measure")->click(); capture(viewer, "live-xy-cursors");
+        tabs->setCurrentIndex(3);
+        auto* correlation = viewer->findChild<viewers::PairAnalysisView*>("live.correlation"); QVERIFY(correlation);
+        correlation->findChild<QComboBox*>("pair.size")->setCurrentIndex(0);
+        correlation->findChild<QComboBox*>("pair.second")->setCurrentIndex(2);
+        correlation->findChild<QSpinBox*>("pair.maxLag")->setValue(16);
+        QTRY_VERIFY(correlation->result() && correlation->result()->state == analysis::PairResult::State::Ready);
+        QVERIFY(panel->pin()); a->setValue(16); b->setValue(22);
+        QVERIFY(panel->readout().contains("Δlag_time=0.005859375 s"));
+        panel->findChild<QPushButton*>("inspection.measure")->click(); capture(viewer, "live-correlation-cursors");
+        action("action.reset")->trigger(); QVERIFY(!panel->snapshot()); QVERIFY(correlation->plotView()->bridge()->selectionMarkers.isEmpty());
+        viewer->close();
     }
     void liveMeasurementExamples() {
         QFETCH(QString, filename); QFETCH(QString, observer); QFETCH(QString, unit);

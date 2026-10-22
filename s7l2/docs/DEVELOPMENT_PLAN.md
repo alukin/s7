@@ -2,9 +2,12 @@
 
 ## P0 release priority — continuous oscilloscope viewer (2026-10-22)
 
-Current sequencing: FFT spectrum, constellation and correlation views are
-implemented as bounded increments; next implement shared paired cursors, interval
-measurements and saved-window export.
+Current sequencing: FFT spectrum, constellation and correlation views, shared
+paired cursors, interval measurements and frozen-window JSON/CSV export are
+implemented as bounded increments. **Next priority: edge-triggered Time acquisition
+to stabilize periodic waveforms**, using model-step crossings, pre/post-trigger
+coverage and explicit auto/normal/single semantics. The current display rolls;
+freeze and A/B cursors do not provide trigger synchronization.
 This supersedes the earlier ordering of those shared features before analysis.
 The [FFT spectrum increment](STUDIO_SPECTRUM.md) adds the private binary64 FFTW
 backend, bounded worker scheduling, real/IQ normalization, windows, power averaging
@@ -61,6 +64,44 @@ viewer open/close/reopen and shutdown. Show that oscilloscope-only continuous
 runs do not accumulate a temporary recording, while explicitly requested Scope
 recordings keep their completeness/error behavior. Measure bounded local UI
 work and resource use; preserve headless execution and existing numerical tests.
+
+### Shared inspection and window export — 2026-10-22
+
+[User/offline help](STUDIO_WINDOW_INSPECTION.md) documents persistent A/B cursors
+across all four tabs, raw/model-step or derived-bin bindings, keyboard movement,
+copyable precision, inclusive measurements and bounded JSON/CSV export. Statistics
+use scaled compensated sums and shifted variance, report nonfinite coverage and
+overflow, and ignore Time display gain/offset. Derived-bin RMS is explicitly
+distinct from signal RMS; latest-transform raw-input statistics are shown separately.
+
+Export streams an immutable admitted snapshot asynchronously, with progress,
+cancellation and atomic destination replacement. It preserves integer identities
+above 2^53, source/stored types, rational rate, raw values, computed arrays,
+normalization/settings and averaging/hold coverage. A/B annotate measurements;
+the full pinned window is exported. `.s7window` is a documented JSON export,
+not a complete-run `.s7scope` recording or an implemented import format.
+
+Release `build-tests` built and the final **78/78 native CTest entries passed in
+55.61 s with eight test jobs** on the eight-core, 15 GiB notebook. An earlier
+two-job run passed in 84.98 s. Future builds use six compile jobs and tests use
+eight jobs on this machine.
+The new backend entry covers independent measurement references, extreme scales,
+small variance, cancellation, destination preservation, nonfinite values, locale,
+round-trip values and large identities. Rendered tests exercise actual plot clicks,
+A/B movement/keyboard/copy, raw measurement independence from gain/offset,
+retention changes during frozen export, all four views and reset. Screenshots
+were reviewed. Final refinements keep right-edge cursor markers inside the plot,
+show baseband versus display coordinates, and preserve the pinned owner even when
+Freeze was already checked and an analysis request was queued. The final full
+run includes these refinements, the deterministic queued-owner regression and
+updated embedded help; its GUI workflow entry passes in **11.10 s**.
+
+The Windows Studio and inspection backend cross-build succeeds; the new backend
+entry passes under Wine (**5.08 s**). Clang AddressSanitizer/UndefinedBehaviorSanitizer
+with leak detection passes the same backend entry (**0.62 s**). Native Windows
+rendering, installed-package refresh, resource/latency soak, triggers, saved
+workspaces, image export and window import remain open. No runtime stepping or
+headless dependency change was made.
 
 ### XY/correlation and inactive analysis verification — 2026-10-22
 

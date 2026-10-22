@@ -43,6 +43,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [LIVE_OSCILLOSCOPE_PROTOTYPE.md](LIVE_OSCILLOSCOPE_PROTOTYPE.md) | Bounded Time/Spectrum/XY/Correlation workflow, retention, activity, freeze and remaining limits |
 | [STUDIO_SPECTRUM.md](STUDIO_SPECTRUM.md) | Live real/IQ FFT spectrum, windows, amplitude/power/PSD, referenced dB, bounded analysis and numerical verification |
 | [STUDIO_PAIR_ANALYSIS.md](STUDIO_PAIR_ANALYSIS.md) | Live same-step XY, persistence, density, linear correlation and inactive-view scheduling |
+| [STUDIO_WINDOW_INSPECTION.md](STUDIO_WINDOW_INSPECTION.md) | Shared A/B cursors, raw/derived region statistics, frozen-window JSON/CSV formats and cancellation |
 | [LIVE_OSCILLOSCOPE_DESIGN.md](LIVE_OSCILLOSCOPE_DESIGN.md) | Proposed bounded live oscilloscope: adjustable acquisition, exact cursor values, time/spectrum/XY/correlation, triggers, ownership and acceptance gates |
 | [SCOPE_RESULTS.md](SCOPE_RESULTS.md) | Save/open Scope results, persistent comparison overlays, capture-loss metadata and file format |
 | [RECORDING_FORMAT.md](RECORDING_FORMAT.md) | Recording sink/replay, compact binary byte layout, text headers, rates, descriptions and lifecycle |

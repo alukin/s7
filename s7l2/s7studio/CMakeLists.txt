@@ -99,6 +99,7 @@ add_library(s7studio_analysis STATIC
     src/analysis/spectrum.cpp src/analysis/spectrum.hpp
     src/analysis/spectrum_worker.cpp src/analysis/spectrum_worker.hpp)
 target_sources(s7studio_analysis PRIVATE
+    src/analysis/window_inspection.cpp src/analysis/window_inspection.hpp
     src/analysis/worker_pool.cpp src/analysis/worker_pool.hpp
     src/analysis/pair_analysis.cpp src/analysis/pair_analysis.hpp src/analysis/pair_worker.cpp)
 target_include_directories(s7studio_analysis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src PRIVATE ${S7STUDIO_FFTW_INCLUDE_DIR})
@@ -117,6 +118,7 @@ add_library(s7studio_viewers STATIC
     src/viewers/line_plot_view.hpp
     src/viewers/spectrum_view.cpp src/viewers/spectrum_view.hpp
     src/viewers/pair_analysis_view.cpp src/viewers/pair_analysis_view.hpp
+    src/viewers/window_inspection_panel.cpp src/viewers/window_inspection_panel.hpp
     src/viewers/quick_support.cpp
     src/viewers/quick_support.hpp
     src/viewers/trajectory_geometry.cpp
@@ -197,6 +199,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_SPECTRUM.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_PAIR_ANALYSIS.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_WINDOW_INSPECTION.md
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_DESIGN.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
         ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
@@ -511,6 +514,13 @@ set_target_properties(s7studio_pair_analysis_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_pair_analysis_test)
 add_test(NAME s7studio_pair_analysis COMMAND s7studio_pair_analysis_test)
 set_tests_properties(s7studio_pair_analysis PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_window_inspection_test tests/window_inspection_test.cpp)
+target_link_libraries(s7studio_window_inspection_test PRIVATE s7studio_analysis Qt6::Test)
+set_target_properties(s7studio_window_inspection_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_window_inspection_test)
+add_test(NAME s7studio_window_inspection COMMAND s7studio_window_inspection_test)
+set_tests_properties(s7studio_window_inspection PROPERTIES TIMEOUT 60)
 
 add_test(NAME s7studio_live_spectrum COMMAND s7studio --live-spectrum-check)
 set_tests_properties(s7studio_live_spectrum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)

@@ -93,6 +93,9 @@ SpectrumView::SpectrumView(QWidget* parent) : QWidget(parent)
     connect(fixedBin_, &QSpinBox::valueChanged, this, [this] { render(false); });
     connect(plot_, &LinePlotView::xRangeChanged, this, [this] { render(false); });
     connect(plot_, &LinePlotView::hovered, this, [this](double frequency, bool active) { inspect(frequency, active); });
+    connect(scale_, &QComboBox::currentIndexChanged, this, &SpectrumView::inspectionInvalidated);
+    for (auto* display : {reference_, dbOffset_, floor_, frequencyOffset_})
+        connect(display, &QDoubleSpinBox::valueChanged, this, &SpectrumView::inspectionInvalidated);
     pollTimer_ = new QTimer(this); pollTimer_->setInterval(16); connect(pollTimer_, &QTimer::timeout, this, &SpectrumView::poll);
     reconfigure();
 }
@@ -119,6 +122,7 @@ void SpectrumView::reconfigure()
     worker_.cancel(); ++revision_; result_.reset();
     plot_->bridge()->cursorVisible = false; emit plot_->bridge()->inspectionChanged();
     render(true); submit();
+    emit inspectionInvalidated();
 }
 void SpectrumView::setFrame(std::shared_ptr<const observation::LiveFrame> frame)
 {
@@ -262,6 +266,17 @@ QString SpectrumView::inspect(double frequency, bool active)
         } else readout_->setText("No FFT bin at this frequency.");
     } else readout_->setText("Hover over a spectrum bin to inspect its computed value.");
     emit plot_->bridge()->inspectionChanged(); emit inspectingChanged(inspecting_); updateStatus(); return readout_->text();
+}
+std::optional<analysis::WindowSnapshot> SpectrumView::inspectionSnapshot() const
+{
+    if (!result_ || result_->state != SpectrumResult::State::Ready) return {};
+    auto data = analysis::spectrumWindowSnapshot(*result_);
+    for (auto& x : data.displayX) x += frequencyOffset_->value();
+    data.displayAxisName = "frequency_axis"; data.displayAxisUnit = "Hz";
+    data.settings.insert("display", QJsonObject{{"db", scale_->currentIndex() == 1}, {"reference", analysis::exactNumber(reference_->value())},
+        {"db_offset", analysis::exactNumber(dbOffset_->value())}, {"floor_db", analysis::exactNumber(floor_->value())},
+        {"frequency_offset_hz", analysis::exactNumber(frequencyOffset_->value())}});
+    return data;
 }
 void SpectrumView::updateStatus()
 {

@@ -36,6 +36,7 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(bool densityVisible MEMBER densityVisible NOTIFY densityChanged)
     Q_PROPERTY(QString densitySource MEMBER densitySource NOTIFY densityChanged)
     Q_PROPERTY(QRectF densityBounds MEMBER densityBounds NOTIFY densityChanged)
+    Q_PROPERTY(QVariantList selectionMarkers MEMBER selectionMarkers NOTIFY selectionChanged)
     Q_PROPERTY(double xMin READ xMin NOTIFY xRangeChanged)
     Q_PROPERTY(double xMax READ xMax NOTIFY xRangeChanged)
     Q_PROPERTY(double yMin READ yMin NOTIFY yRangeChanged)
@@ -63,6 +64,8 @@ public:
     bool densityVisible = false;
     QString densitySource;
     QRectF densityBounds;
+    QVariantList selectionMarkers;
+    Q_INVOKABLE void pick(double xFraction, double yFraction);
     Q_INVOKABLE void hover(double fraction, bool inside);
     Q_INVOKABLE void hoverPoint(double xFraction, double yFraction, bool inside);
     Q_INVOKABLE QList<QObject*> seriesObjects() const;
@@ -75,6 +78,7 @@ public:
 signals:
     void inspectionChanged();
     void densityChanged();
+    void selectionChanged();
     void xRangeChanged();
     void yRangeChanged();
     void titlesChanged();
@@ -146,6 +150,7 @@ signals:
     // Emitted for every change of the X range, by the program or the user.
     void hovered(double time, bool active);
     void hoveredPoint(double x, double y, bool active);
+    void pointPicked(double x, double y);
     void navigated();
     void xRangeChanged(double lower, double upper);
     void yRangeChanged(double lower, double upper);

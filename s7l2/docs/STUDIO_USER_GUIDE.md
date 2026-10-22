@@ -79,7 +79,13 @@ continues. Returning analyzes the retained window and restarts FFT averages/hold
 and XY persistence. Visible windows keep updating when desktop focus moves away.
 **Freeze display** pins the displayed result and its raw input; changing analysis
 settings reanalyzes that input. **Resume live / Fit** returns to current data.
-Live-window export, paired cursors and interval statistics are not yet available.
+Use **Pin window / A–B** or click the plot to place persistent cursors and freeze
+their input. **Measure A–B** computes inclusive region statistics from raw values
+or explicitly labeled derived bins/lags. **Export frozen window…** saves bounded
+window JSON, raw CSV or displayed-data CSV with metadata; it does not start a
+recording. See [Live cursors, measurements and export](STUDIO_WINDOW_INSPECTION.md)
+for keyboard movement, units, coverage and file formats. Time acquisition is still
+rolling; periodic-display edge triggering and saved workspaces remain pending.
 
 For the recording Scope and phase viewers, the plot preview can skip updates under load. Authoritative recording is
 separate; skipped preview updates do not imply lost recorded samples.

@@ -3,8 +3,10 @@
 The **Spectrum** tab of a Live Oscilloscope analyzes the retained raw samples.
 It shares bounded acquisition with the Time tab and never creates a recording
 journal or adds an FFT element to the causal graph. See also
-[constellation and correlation](STUDIO_PAIR_ANALYSIS.md). Paired cursors, region
-measurements and export are later work.
+[constellation and correlation](STUDIO_PAIR_ANALYSIS.md) and the shared
+[A/B cursors, region measurements and frozen-window export](STUDIO_WINDOW_INSPECTION.md).
+Bin-region statistics and export use linear computed values; dB display flooring
+and frequency-axis offsets remain explicit presentation settings.
 
 ## Try it
 

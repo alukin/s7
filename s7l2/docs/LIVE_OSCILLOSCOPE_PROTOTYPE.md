@@ -2,7 +2,8 @@
 
 This prototype provides bounded **Time**, **Spectrum**, **Constellation / XY**
 and **Correlation** tabs from the [live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md).
-Shared inspection/export features and operational qualification remain incomplete;
+Shared [cursors, measurements and JSON/CSV export](STUDIO_WINDOW_INSPECTION.md) are
+available. Triggers, saved workspaces and operational qualification remain incomplete;
 the presence of four tabs does not establish the ADI OSC parity milestone.
 
 ## Try it
@@ -90,8 +91,10 @@ samples.
   windows, amplitude/power/PSD, referenced dB, power averaging and peak hold.
   [Constellation / XY and Correlation](STUDIO_PAIR_ANALYSIS.md) supply same-step
   pairs, model-step persistence/density and normalized linear correlation.
-  Triggers, paired cursors, region statistics, saved workspaces and window export
-  are not implemented here.
+  [Paired cursors, inclusive region statistics and frozen-window JSON/CSV export](STUDIO_WINDOW_INSPECTION.md)
+  share the displayed input. Triggers, saved workspaces, window import and image
+  export are not implemented here. The Time view currently rolls with acquisition;
+  it has no edge trigger to stabilize periodic waveforms.
 - One shared numeric Y axis; supplied units remain explicit. No implicit conversion
   or separate unit lanes. Colors are assigned automatically.
 - Plot refresh is capped near 30 Hz. Rendering and snapshot processing run on the

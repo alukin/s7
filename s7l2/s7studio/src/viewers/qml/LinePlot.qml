@@ -103,6 +103,53 @@ Item {
         }
     }
 
+    Item {
+        x: view.x + view.plotArea.x
+        y: view.y + view.plotArea.y
+        width: view.plotArea.width
+        height: view.plotArea.height
+        clip: true
+        Repeater {
+            model: plot.selectionMarkers
+            delegate: Item {
+                required property var modelData
+                objectName: "viewer.cursor." + modelData.label
+                width: parent.width
+                height: parent.height
+                property real px: Math.min(Math.max(0, (modelData.x - plot.xMin) / (plot.xMax - plot.xMin) * width), Math.max(0, width - 2))
+                property real py: (plot.yMax - modelData.y) / (plot.yMax - plot.yMin) * height
+                property color markerColor: modelData.label === "A" ? "#a02b8a" : "#007b70"
+                visible: modelData.x >= plot.xMin && modelData.x <= plot.xMax
+                         && (modelData.vertical || (modelData.y >= plot.yMin && modelData.y <= plot.yMax))
+                Rectangle {
+                    x: parent.px - (modelData.vertical ? 0 : 6)
+                    y: modelData.vertical ? 0 : parent.py - 6
+                    width: modelData.vertical ? 2 : 12
+                    height: modelData.vertical ? parent.height : 12
+                    color: modelData.vertical ? parent.markerColor : "transparent"
+                    border.width: modelData.vertical ? 0 : 2
+                    border.color: parent.markerColor
+                }
+                Text {
+                    text: modelData.label
+                    x: Math.min(parent.px + 5, parent.width - width - 2)
+                    y: modelData.vertical ? (modelData.label === "A" ? 0 : 16) : parent.py - 18
+                    color: parent.markerColor
+                    font.bold: true
+                }
+            }
+        }
+    }
+    TapHandler {
+        enabled: plot.inspectionEnabled
+        acceptedButtons: Qt.LeftButton
+        onTapped: (eventPoint, button) => {
+            const area = view.plotArea
+            if (area.width > 0 && area.height > 0)
+                plot.pick((eventPoint.position.x - view.x - area.x) / area.width,
+                          1 - (eventPoint.position.y - view.y - area.y) / area.height)
+        }
+    }
     HoverHandler {
         id: inspectionHover
         enabled: plot.inspectionEnabled

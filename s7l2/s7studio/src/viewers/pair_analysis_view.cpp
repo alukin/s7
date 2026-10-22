@@ -110,6 +110,9 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent) : QWidget(par
     connect(lagUnits_, &QComboBox::currentIndexChanged, this, [this] { render(true); });
     connect(fit, &QPushButton::clicked, this, [this] { render(true); });
     connect(plot_, &LinePlotView::hoveredPoint, this, [this](double x, double y, bool active) { inspect(x, y, active); });
+    connect(mode_, &QComboBox::currentIndexChanged, this, &PairAnalysisView::inspectionInvalidated);
+    connect(lagUnits_, &QComboBox::currentIndexChanged, this, &PairAnalysisView::inspectionInvalidated);
+    connect(equalAspect_, &QCheckBox::toggled, this, &PairAnalysisView::inspectionInvalidated);
     pollTimer_ = new QTimer(this); pollTimer_->setInterval(16); connect(pollTimer_, &QTimer::timeout, this, &PairAnalysisView::poll);
     render(true);
 }
@@ -127,7 +130,7 @@ void PairAnalysisView::reconfigure()
 {
     const QSignalBlocker blocker(maxLag_); maxLag_->setMaximum(size_->currentData().toInt()-1);
     second_->setEnabled(kind_ == PairKind::Constellation || mode_->currentIndex() == 0);
-    worker_.cancel(); ++revision_; result_.reset(); render(true); submit();
+    worker_.cancel(); ++revision_; result_.reset(); render(true); submit(); emit inspectionInvalidated();
 }
 void PairAnalysisView::setFrame(std::shared_ptr<const observation::LiveFrame> frame)
 {
@@ -288,6 +291,17 @@ QString PairAnalysisView::inspect(double x, double y, bool active)
         }
     } else readout_->setText(kind_ == PairKind::Constellation ? "Hover over a raw pair or density bin." : "Hover over an integer correlation lag.");
     emit plot_->bridge()->inspectionChanged(); emit inspectingChanged(inspecting_); updateStatus(); return readout_->text();
+}
+std::optional<analysis::WindowSnapshot> PairAnalysisView::inspectionSnapshot() const
+{
+    if (!result_ || result_->state != PairResult::State::Ready) return {};
+    auto data = analysis::pairWindowSnapshot(*result_);
+    if (kind_ == PairKind::Correlation && lagUnits_->currentIndex() == 0) {
+        for (auto& x : data.displayX) x /= result_->sampleRate;
+        data.displayAxisName = "lag_time"; data.displayAxisUnit = "s";
+    }
+    data.settings.insert("display", QJsonObject{{"mode", mode_->currentText()}, {"equal_numeric_aspect", equalAspect_->isChecked()}, {"lag_axis", lagUnits_->currentText()}});
+    return data;
 }
 void PairAnalysisView::updateStatus()
 {

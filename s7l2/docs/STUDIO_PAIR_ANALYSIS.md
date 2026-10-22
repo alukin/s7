@@ -93,8 +93,10 @@ averages/hold and XY persistence.
 
 Hover holds the displayed result. **Freeze display** pins its raw frame; changed
 analysis settings reanalyze that frame even after retention shrinks. **Resume
-live / Fit** returns to current acquisition. Paired cursors, interval statistics
-and saved-window export remain subsequent work.
+live / Fit** returns to current acquisition. The shared
+[A/B cursors, inclusive statistics and frozen-window export](STUDIO_WINDOW_INSPECTION.md)
+operate on the displayed raw pairs or full lag array. Density cursor placement
+selects underlying raw pairs; density hover continues to report aggregate bins.
 
 ## Verification
 

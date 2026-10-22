@@ -96,6 +96,9 @@ are explicit integrator and function/state networks.
   select A=I, B=I_delayed_6, N=4096 and maximum |lag|=16: the peak is **+6 samples**
   (**0.005859375 s**). All three channels use bounded live acquisition with no
   full-run recording. See [XY/correlation controls](STUDIO_PAIR_ANALYSIS.md).
+  For [cursors and export](STUDIO_WINDOW_INSPECTION.md), pin Time, select indices
+  0 and 4095, then measure I/Q RMS near `1/sqrt(2)` V. Export the frozen JSON/CSV;
+  display gain/offset and later retention changes do not alter its raw values.
 - [AM/FM and RMS](../examples/signal_measurement/README.md): coherent AM
   detection, FM frequency estimation, a sine-amplitude RMS step and a signed
   DC RMS step. Run 2 seconds at 10 kHz. Inspect startup transients, detector

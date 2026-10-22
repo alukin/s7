@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #pragma once
 #include "analysis/spectrum_worker.hpp"
+#include "analysis/window_inspection.hpp"
 #include <QWidget>
 class QComboBox;
 class QCheckBox;
@@ -25,8 +26,10 @@ public:
     const std::optional<analysis::SpectrumResult>& result() const { return result_; }
     LinePlotView* plotView() const { return plot_; }
     QString inspect(double frequency, bool active = true);
+    std::optional<analysis::WindowSnapshot> inspectionSnapshot() const;
 signals:
     void inspectingChanged(bool active);
+    void inspectionInvalidated();
 protected:
     void showEvent(QShowEvent*) override;
     void hideEvent(QHideEvent*) override;

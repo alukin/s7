@@ -10,7 +10,7 @@ class QPushButton;
 class QSpinBox;
 class QCheckBox;
 class QDoubleSpinBox;
-namespace s7studio::viewers { class LinePlotView; class SpectrumView; class PairAnalysisView; }
+namespace s7studio::viewers { class LinePlotView; class SpectrumView; class PairAnalysisView; class WindowInspectionPanel; }
 namespace s7studio::ui {
 class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
     Q_OBJECT
@@ -29,6 +29,7 @@ public:
     QString inspect(double time, bool active = true);
 protected:
     void changeEvent(QEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 private:
     void appendObservedSample(const viewers::ObservedSample&) override {}
     void render(bool fit);
@@ -38,6 +39,7 @@ private:
     viewers::LinePlotView* plot_;
     viewers::SpectrumView* spectrum_;
     viewers::PairAnalysisView *constellation_, *correlation_;
+    viewers::WindowInspectionPanel* inspection_;
     QLabel *status_, *readout_, *duration_;
     QPushButton* freeze_;
     QSpinBox* capacity_;

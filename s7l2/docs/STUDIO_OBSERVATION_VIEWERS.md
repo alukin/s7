@@ -14,7 +14,10 @@ submits analysis; inactive tabs stop polling and cancel pending work. Acquisitio
 continues independently. Returning restarts FFT averaging/hold and XY persistence
 from retained data. Analysis uses a shared two-thread pool, separate from causal
 execution. Use the recording Scope's Save Run/CSV workflow when full-run results
-are required; live-window export remains deferred.
+are required. [Live window inspection/export](STUDIO_WINDOW_INSPECTION.md) pins
+immutable raw/derived data for A/B cursors, inclusive statistics and asynchronous,
+atomic JSON/CSV export. Window files do not claim full-run capture or support
+recording-Scope import.
 
 ## Data flow
 
