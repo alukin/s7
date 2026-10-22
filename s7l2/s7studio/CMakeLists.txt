@@ -134,6 +134,7 @@ set_target_properties(s7studio_viewers PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_viewers)
 
 add_library(s7studio_app OBJECT
+    src/help_dialogs.cpp src/help_dialogs.hpp
     src/parameter_editor.cpp src/parameter_editor.hpp
     src/schema_tabs.cpp src/schema_tabs.hpp
     src/main_window.cpp
@@ -165,6 +166,28 @@ add_library(s7studio_app OBJECT
     src/tool_panels.cpp
     src/ui_icons.hpp
     src/ui_icons.cpp
+)
+
+add_dependencies(s7studio_app s7studio_build_identity)
+target_include_directories(s7studio_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(GLOB_RECURSE S7STUDIO_EXAMPLE_HELP CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/examples/*.md)
+qt_add_resources(s7studio_app s7studio_help
+    PREFIX /s7studio/help BASE ${PROJECT_SOURCE_DIR}
+    FILES
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_USER_GUIDE.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
+        ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVATION_VIEWERS.md
+        ${PROJECT_SOURCE_DIR}/docs/NUMERICAL_VALIDATION_MATRIX.md
+        ${PROJECT_SOURCE_DIR}/docs/RELEASE_0.1.0.md
+        ${S7STUDIO_EXAMPLE_HELP}
+)
+qt_add_resources(s7studio_app s7studio_legal
+    PREFIX /s7studio/legal BASE ${PROJECT_SOURCE_DIR}/..
+    FILES
+        ${PROJECT_SOURCE_DIR}/../LICENSING.md
+        ${PROJECT_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md
+        ${PROJECT_SOURCE_DIR}/../LICENSES/GPL-3.0-or-later.txt
 )
 
 target_include_directories(s7studio_app PUBLIC

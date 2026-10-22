@@ -1,5 +1,24 @@
 # S7 Development Plan
 
+## Help and About follow-up — 2026-10-22
+
+Studio now has a Help menu with F1, embedded offline articles, full-text topic
+filtering and Back/Forward/Home navigation. The guide includes a bundled-example
+catalogue and all family Markdown notes, preserving the numerical validation
+classification. About identifies author/maintainer Oleksiy Lukin, contributor
+teren-ukr, acknowledgements, version/build/Qt/system details and licences.
+Dialogs are modeless, reusable and owned by the main window.
+
+Release `build-tests` passed; all **73/73 CTest entries passed in 71.06 s**,
+including the four local GUI suites. The Help/About GUI regression verifies F1,
+every article, search/no matches, internal navigation, reopening, author and
+contributor credits, and unchanged diagram state. Screenshots were reviewed
+locally. A fresh read-only Fedora package passed **12/12 installed checks**;
+its embedded-demo check now also opens every help article and About credits
+without a source checkout or system Qt. REUSE passes for 507/507 files.
+No dependency sources are bundled. This follow-up does not move the existing
+v0.1.0 tag or replace its earlier artifact; those precede the Help UI.
+
 **0.1.0 scope update (2026-10-22):** ship a Linux preview under the narrower
 [release checklist](RELEASE_0.1.0.md). That checklist supersedes broader release
 gates below; multi-hour/resource, native-platform and expanded numerical work

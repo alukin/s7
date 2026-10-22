@@ -35,6 +35,8 @@
 #include "viewers/line_plot_view.hpp"
 #include "tool_panels.hpp"
 #include <QTextStream>
+#include <QTextBrowser>
+#include <QListWidget>
 #include <QUndoStack>
 #include <functional>
 #include <memory>
@@ -169,6 +171,62 @@ private slots:
             if (document.open(QIODevice::WriteOnly)) document.write(QByteArray::fromStdString(boost::json::serialize(window_->currentDocument())));
         }
         window_.reset();
+    }
+    void helpAndAbout() {
+        const auto before = window_->currentDocument();
+        QVERIFY(action("action.help"));
+        QVERIFY(action("action.about"));
+        QCOMPARE(action("action.help")->shortcut(), QKeySequence(QKeySequence::HelpContents));
+        window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* view = editor()->findChild<QGraphicsView*>();
+        QVERIFY(view); view->setFocus();
+        QTest::keyClick(view->viewport(), Qt::Key_F1);
+        QTRY_VERIFY(window_->findChild<QDialog*>("dialog.help"));
+        auto* help = window_->findChild<QDialog*>("dialog.help");
+        QTRY_VERIFY(help && help->isVisible());
+        auto* browser = help->findChild<QTextBrowser*>("help.browser");
+        auto* search = help->findChild<QLineEdit*>("help.search");
+        auto* contents = help->findChild<QListWidget*>("help.contents");
+        QVERIFY(browser && search && contents);
+        QVERIFY(browser->toPlainText().contains("First simulation"));
+        for (int i = 0; i < contents->count(); ++i) {
+            contents->setCurrentRow(i);
+            QVERIFY2(browser->toPlainText().size() > 100, qPrintable(contents->item(i)->text()));
+        }
+        search->setText("backpressure");
+        int matches = 0;
+        for (int i = 0; i < contents->count(); ++i) matches += !contents->item(i)->isHidden();
+        QVERIFY(matches > 0 && matches < contents->count());
+        search->setText("no-help-topic-matches-this-string");
+        for (int i = 0; i < contents->count(); ++i) QVERIFY(contents->item(i)->isHidden());
+        search->clear();
+        browser->setSource(QUrl("qrc:/s7studio/help/docs/STUDIO_USER_GUIDE.md"), QTextDocument::MarkdownResource);
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/SCOPE_RESULTS.md"))));
+        QVERIFY(browser->toPlainText().contains("Saving and comparing Scope results"));
+        browser->backward();
+        QVERIFY(browser->toPlainText().contains("First simulation"));
+        capture(help, "help");
+        help->close();
+        action("action.help")->trigger();
+        QCOMPARE(window_->findChildren<QDialog*>("dialog.help").size(), 1);
+        QVERIFY(help->isVisible());
+        help->close();
+        action("action.about")->trigger();
+        auto* about = window_->findChild<QDialog*>("dialog.about");
+        QVERIFY(about && about->isVisible());
+        auto* credits = about->findChild<QTextBrowser*>("about.credits");
+        auto* build = about->findChild<QTextBrowser*>("about.build");
+        QVERIFY(credits && build);
+        QVERIFY(credits->toPlainText().contains("Oleksiy Lukin"));
+        QVERIFY(credits->toPlainText().contains("teren-ukr"));
+        QVERIFY(build->toPlainText().contains("S7 Studio 0.1.0"));
+        for (auto* text : about->findChildren<QTextBrowser*>()) QVERIFY(text->toPlainText().size() > 100);
+        capture(about, "about");
+        about->close();
+        QCOMPARE(boost::json::serialize(window_->currentDocument()), boost::json::serialize(before));
+        QVERIFY(!window_->documentModified());
     }
     void editParametersSaveOpen() {
         auto* panel = window_->findChild<s7studio::ui::ElementPickerPanel*>();

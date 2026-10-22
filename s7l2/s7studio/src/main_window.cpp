@@ -3,6 +3,7 @@
 
 #include "main_window.hpp"
 #include "parameter_editor.hpp"
+#include "help_dialogs.hpp"
 #include "atomic_file.hpp"
 #include "schema_tabs.hpp"
 #include <QUndoGroup>
@@ -602,6 +603,22 @@ void MainWindow::buildUi()
     auto* scopeTempDirectoryAction = settingsMenu->addAction(QStringLiteral("Scope temporary data directory…"));
     connect(scopeTempDirectoryAction, &QAction::triggered,
             this, &MainWindow::chooseScopeTemporaryDirectory);
+
+    auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
+    helpMenu->setObjectName(QStringLiteral("menu.help"));
+    auto* contentsAction = helpMenu->addAction(QStringLiteral("S7 Studio &Help"));
+    contentsAction->setObjectName(QStringLiteral("action.help"));
+    contentsAction->setShortcut(QKeySequence::HelpContents);
+    connect(contentsAction, &QAction::triggered, this, [this] { showHelp(this); });
+    helpMenu->addSeparator();
+    auto* aboutAction = helpMenu->addAction(QStringLiteral("&About S7 Studio…"));
+    aboutAction->setObjectName(QStringLiteral("action.about"));
+    aboutAction->setMenuRole(QAction::AboutRole);
+    connect(aboutAction, &QAction::triggered, this, [this] { showAbout(this); });
+    auto* aboutQtAction = helpMenu->addAction(QStringLiteral("About &Qt…"));
+    aboutQtAction->setObjectName(QStringLiteral("action.aboutQt"));
+    aboutQtAction->setMenuRole(QAction::AboutQtRole);
+    connect(aboutQtAction, &QAction::triggered, this, [this] { QMessageBox::aboutQt(this); });
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;

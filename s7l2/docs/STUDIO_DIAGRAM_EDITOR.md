@@ -27,6 +27,14 @@ The diagram sources build as the `s7studio_diagram` library, shared by `s7studio
 
 ## Main window
 
+**Help → S7 Studio Help** (F1) opens the embedded offline guide, with article
+search, a bundled-examples catalogue, family notes and Back/Forward/Home
+navigation. Help windows are modeless and reused when reopened.
+**Help → About S7 Studio** lists author Oleksiy Lukin, contributor teren-ukr,
+acknowledgements, version/revision/compiler/Qt/system details and licence texts.
+**About Qt** is also available. Help works without a source checkout or network;
+explicit HTTPS links open the system browser.
+
 The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills the middle, everything else is a tool window with a button on a stripe at the window edge. The left stripe holds the bottom windows' buttons (at its bottom end), the right stripe the right windows'. An area shows one tool window at a time; its button or shortcut shows it, pressed again it hides it. Side windows run the full height; the bottom window sits between them.
 
 | Tool window | Area | Shortcut | Content |

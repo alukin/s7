@@ -5,6 +5,7 @@
 #include "local_schema_runner.hpp"
 #include "scope_sample_mailbox.hpp"
 #include "main_window.hpp"
+#include "help_dialogs.hpp"
 #include "scope_view_window.hpp"
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
@@ -38,6 +39,9 @@
 #include <QDir>
 #include <QMenu>
 #include <QLabel>
+#include <QDialog>
+#include <QListWidget>
+#include <QTextBrowser>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QImage>
@@ -1053,7 +1057,23 @@ int runBundledDemoCheck(int argc, char** argv)
     auto* editor = window.findChild<s7studio::diagram::DiagramEditor*>();
     if (!QFile::exists(":/s7/demo_startup.s7diagram") || !editor || editor->scene()->elementNodes().empty())
         throw std::runtime_error("Bundled startup diagram unavailable");
-    std::cout << "Embedded startup diagram loaded\n";
+    s7studio::showHelp(&window);
+    auto* help = window.findChild<QDialog*>(QStringLiteral("dialog.help"));
+    auto* contents = help ? help->findChild<QListWidget*>(QStringLiteral("help.contents")) : nullptr;
+    auto* browser = help ? help->findChild<QTextBrowser*>(QStringLiteral("help.browser")) : nullptr;
+    if (!contents || !browser || contents->count() < 20)
+        throw std::runtime_error("Bundled help catalogue unavailable");
+    for (int i = 0; i < contents->count(); ++i) {
+        contents->setCurrentRow(i);
+        if (browser->toPlainText().size() < 100)
+            throw std::runtime_error("Bundled help article unavailable");
+    }
+    s7studio::showAbout(&window);
+    auto* credits = window.findChild<QTextBrowser*>(QStringLiteral("about.credits"));
+    if (!credits || !credits->toPlainText().contains(QStringLiteral("Oleksiy Lukin"))
+        || !credits->toPlainText().contains(QStringLiteral("teren-ukr")))
+        throw std::runtime_error("Bundled About credits unavailable");
+    std::cout << "Embedded startup diagram, help articles and About credits loaded\n";
     return 0;
 }
 
