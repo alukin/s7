@@ -50,6 +50,10 @@ The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills 
 - The status bar shows the problem count (a click opens Problems). Run and Deploy refuse a diagram with errors and open Problems; a failed run opens Run, a failed deployment opens Deploy. Message boxes are left for actions that need an answer.
 - View > Fit Diagram to Window (Ctrl+8) zooms so the whole diagram fills the window; Fit Page (Ctrl+9) shows the whole sheet.
 - Run settings (run time, discretization frequency and the resulting dt, clearing Scope traces) are in Run > Run Configuration.
+- Run duration accepts fractional seconds (up to nine decimal places). The
+  dialog warns when a finite duration produces fewer than 100 whole steps;
+  this warning does not block the run. Invalid negative durations other than
+  `-1` (continuous) are rejected. Fractional durations persist in `studio_run`.
 - The window layout (geometry, open tool windows, toolbars) is restored at start (`QSettings`, organization `s7`, application `s7studio`).
 - `s7studio <file>` opens a diagram, schema or element library at start; `S7_STUDIO_SCREENSHOT=<png>` saves a picture of the main window and quits.
 

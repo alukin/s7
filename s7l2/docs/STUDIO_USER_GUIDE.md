@@ -14,6 +14,9 @@ navigate. Help and About can stay open while you work.
 2. Choose **Run → Run Configuration** and set model duration and
    discretization frequency. Frequency sets model time (`dt = 1/f`), not a
    promised wall-clock speed.
+   Duration accepts fractional seconds, for example `0.125`. A warning appears
+   below 100 whole model steps; short runs remain allowed. Only complete steps
+   at or before the duration boundary execute. Use `-1` for continuous runs.
 3. Start the local run from the Run menu or toolbar. Pause and resume as
    needed; Stop ends the run. Reset prepares a fresh run.
 4. Double-click a wired Scope observer to view its channels. Phase Portrait

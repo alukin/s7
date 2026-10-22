@@ -49,7 +49,7 @@ class WindowLifecycleTest : public QObject {
         QTimer::singleShot(0, window_.get(), [&] {
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!dialog) return;
-            auto* duration = dialog->findChild<QSpinBox*>("run.duration");
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
             auto* clear = dialog->findChild<QCheckBox*>("run.clearScopeTraces");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!duration || !clear || !buttons) { dialog->reject(); return; }
@@ -131,7 +131,7 @@ private slots:
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!dialog) return;
             auto* frequency = dialog->findChild<QDoubleSpinBox*>("run.frequency");
-            auto* duration = dialog->findChild<QSpinBox*>("run.duration");
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
             if (!frequency || !duration) { dialog->reject(); return; }
             frequency->setValue(2000); duration->setValue(1);
             auto* notice = dialog->findChild<QLabel*>("run.editNotice");

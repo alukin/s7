@@ -4,6 +4,7 @@
 #include "diagram_document.hpp"
 
 #include <stdexcept>
+#include <cmath>
 
 namespace s7studio::diagram {
 
@@ -102,8 +103,11 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
         if (!config->is_object()) throw std::invalid_argument("studio_run must be an object");
         doc.runConfiguration = config->as_object();
         if (const auto* seconds = doc.runConfiguration.if_contains("runtime_seconds")) {
-            if (!seconds->is_int64() || seconds->as_int64() < -1 || seconds->as_int64() > 604800)
-                throw std::invalid_argument("studio_run.runtime_seconds must be an integer in [-1, 604800]");
+            if (!seconds->is_number())
+                throw std::invalid_argument("studio_run.runtime_seconds must be a finite number in [0, 604800], or -1 for continuous execution");
+            const double duration = seconds->to_number<double>();
+            if (!std::isfinite(duration) || (duration < 0 && duration != -1) || duration > 604800)
+                throw std::invalid_argument("studio_run.runtime_seconds must be a finite number in [0, 604800], or -1 for continuous execution");
         }
         if (const auto* clear = doc.runConfiguration.if_contains("clear_scope_traces"); clear && !clear->is_bool())
             throw std::invalid_argument("studio_run.clear_scope_traces must be boolean");

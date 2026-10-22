@@ -267,7 +267,7 @@ private:
     QFontComboBox* textFrameFontCombo_ = nullptr;
     QSpinBox* textFrameFontSizeSpin_ = nullptr;
     double discretizationFrequencyHz_ = 1000.0;
-    long runtimeSeconds_ = 60;
+    double runtimeSeconds_ = 60;
     bool clearScopesBeforeRun_ = true;
     bool shuttingDown_ = false;
 };

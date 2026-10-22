@@ -18,7 +18,7 @@ struct RunDuration {
 };
 
 struct RunExecutionConfig {
-    long runtimeSeconds = 60; // -1 means continuous until user stops
+    double runtimeSeconds = 60; // -1 means continuous until user stops
 };
 
 struct RunActionState {
@@ -36,7 +36,7 @@ public:
 
     // Include only whole model steps at or before a finite duration boundary.
     [[nodiscard]] static long computeTicks(int hours, int minutes, int seconds, double dt);
-    [[nodiscard]] static long computeTicks(long runtimeSeconds, double dt);
+    [[nodiscard]] static long computeTicks(double runtimeSeconds, double dt);
 
     void run(const boost::json::value& runtimeJson,
              double dt,

@@ -55,13 +55,13 @@ int main(int argc, char** argv) {
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, dir.path());
         const auto input = dir.filePath("input.s7diagram");
         QString error;
-        const QByteArray bytes(R"({"document_kind":"s7.diagram","dt":0.001,"schema":{"name":"safe","elements":[],"connections":[]},"studio_run":{"runtime_seconds":123,"clear_scope_traces":false}})");
+        const QByteArray bytes(R"({"document_kind":"s7.diagram","dt":0.001,"schema":{"name":"safe","elements":[],"connections":[]},"studio_run":{"runtime_seconds":0.125,"clear_scope_traces":false}})");
         require(s7studio::writeFileAtomically(input, bytes, error), "write fixture");
         Window window;
         window.openPath(input);
         require(!window.documentModified(), "opened document clean");
         const auto original = window.currentDocument();
-        require(original.as_object().at("studio_run").as_object().at("runtime_seconds").as_int64() == 123, "run duration restored");
+        require(original.as_object().at("studio_run").as_object().at("runtime_seconds").to_number<double>() == .125, "fractional run duration restored");
         edit(window);
         const auto edited = window.currentDocument();
         choose(QMessageBox::Cancel);

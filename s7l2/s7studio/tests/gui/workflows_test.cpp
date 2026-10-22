@@ -105,9 +105,9 @@ class Workflows : public QObject {
     bool fileAction(const char* name, const QString& path) {
         return dialogAction(name, [path](QDialog* dialog) { return selectFile(dialog, path); });
     }
-    bool configure(const char* name, int seconds) {
+    bool configure(const char* name, double seconds) {
         return dialogAction(name, [seconds](QDialog* dialog) {
-            auto* duration = dialog->findChild<QSpinBox*>("run.duration");
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
             auto* frequency = dialog->findChild<QDoubleSpinBox*>("run.frequency");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!duration || !frequency || !buttons) return false;
@@ -227,6 +227,49 @@ private slots:
         about->close();
         QCOMPARE(boost::json::serialize(window_->currentDocument()), boost::json::serialize(before));
         QVERIFY(!window_->documentModified());
+    }
+    void fractionalRunDuration() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rc_charge_euler.s7diagram"));
+        QVERIFY(dialogAction("action.runConfiguration", [](QDialog* dialog) {
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
+            auto* frequency = dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* notice = dialog->findChild<QLabel*>("run.durationNotice");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!duration || !frequency || !notice || !buttons) return false;
+            const auto ok = buttons->button(QDialogButtonBox::Ok);
+            frequency->setValue(1000);
+            duration->setValue(.099);
+            if (!notice->isVisible() || !notice->text().contains("99 steps") || !ok->isEnabled()) return false;
+            duration->setValue(.1);
+            if (notice->isVisible()) return false;
+            frequency->setValue(500);
+            if (!notice->isVisible() || !notice->text().contains("50 steps")) return false;
+            duration->setValue(-.5);
+            if (ok->isEnabled() || !notice->text().contains("Invalid duration")) return false;
+            duration->setValue(-1);
+            if (notice->isVisible() || !ok->isEnabled()) return false;
+            duration->setValue(0);
+            if (!notice->isVisible() || !notice->text().contains("0 steps")) return false;
+            frequency->setValue(1000);
+            duration->setValue(.125);
+            capture(dialog, "fractional-run-configuration");
+            ok->click();
+            return true;
+        }));
+        QCOMPARE(window_->currentDocument().as_object().at("studio_run").as_object()
+            .at("runtime_seconds").to_number<double>(), .125);
+        const auto saved = temporary_.filePath("fractional-duration.s7diagram");
+        QVERIFY(fileAction("action.saveAs", saved));
+        QVERIFY(fileAction("action.open", saved));
+        QVERIFY(configure("action.run", .125));
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>();
+        QVERIFY(runner);
+        QTRY_COMPARE(runner->state(), s7studio::RunState::Completed);
+        QCOMPARE(runner->completedTicks(), 125L);
+        QTRY_VERIFY(action("action.run")->isEnabled());
+        QVERIFY(configure("action.run", .099)); // Warning remains non-blocking.
+        QTRY_COMPARE(runner->state(), s7studio::RunState::Completed);
+        QCOMPARE(runner->completedTicks(), 99L);
     }
     void editParametersSaveOpen() {
         auto* panel = window_->findChild<s7studio::ui::ElementPickerPanel*>();
@@ -545,7 +588,7 @@ private slots:
         QVERIFY(QTest::qWaitForWindowActive(window_.get()));
         auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view); view->setFocus();
         QVERIFY(modalWorkflow([view] { QTest::keyClick(view->viewport(), Qt::Key_F5); }, [](QDialog* dialog) {
-            if (!dialog->findChild<QSpinBox*>("run.duration")) return false;
+            if (!dialog->findChild<QDoubleSpinBox*>("run.duration")) return false;
             dialog->reject(); return true;
         }));
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);

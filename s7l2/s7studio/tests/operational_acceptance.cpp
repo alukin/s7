@@ -78,7 +78,7 @@ int main(int argc, char** argv) try {
         QTimer::singleShot(0, window.get(), [&] {
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!dialog) return;
-            auto* duration = dialog->findChild<QSpinBox*>("run.duration");
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
             auto* frequency = dialog->findChild<QDoubleSpinBox*>("run.frequency");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!duration || !frequency || !buttons) { dialog->reject(); return; }

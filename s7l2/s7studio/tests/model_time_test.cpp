@@ -8,6 +8,7 @@
 #include <s7/schema_library.hpp>
 #include <QTemporaryDir>
 #include <fstream>
+#include <cmath>
 
 using namespace s7studio;
 class ModelTimeTest : public QObject {
@@ -56,6 +57,38 @@ private slots:
                 QCOMPARE(page.samples.back().step, 3);
                 QCOMPARE(page.samples.back().timeSeconds, .9);
             }
+        }
+    }
+    void fractionalDurationBoundaries() {
+        using Controller = ui::ModelRunController;
+        QCOMPARE(Controller::computeTicks(.3, .1), 3L);
+        QCOMPARE(Controller::computeTicks(.001, 1. / 44100), 44L);
+        QCOMPARE(Controller::computeTicks(.099, .001), 99L);
+        QCOMPARE(Controller::computeTicks(.1, .001), 100L);
+        QCOMPARE(Controller::computeTicks(std::nextafter(.1, 0.), .001), 99L);
+        QCOMPARE(Controller::computeTicks(.000000001, .000000001), 1L);
+        QCOMPARE(Controller::computeTicks(.0000000001, .000000001), 0L);
+        QCOMPARE(Controller::computeTicks(-0., .001), 0L);
+        QVERIFY_EXCEPTION_THROWN(static_cast<void>(Controller::computeTicks(-.5, .001)), std::invalid_argument);
+        QVERIFY_EXCEPTION_THROWN(static_cast<void>(Controller::computeTicks(std::numeric_limits<double>::infinity(), .001)), std::invalid_argument);
+        QVERIFY_EXCEPTION_THROWN(static_cast<void>(Controller::computeTicks(std::numeric_limits<double>::quiet_NaN(), .001)), std::invalid_argument);
+        ui::ModelRunController controller(runner_.get());
+        gate_->releaseAll();
+        controller.run(schema(), .001, ui::RunExecutionConfig{.125}, {{"scope/v", "source", 0}});
+        QTRY_COMPARE(runner_->state(), RunState::Completed);
+        QCOMPARE(runner_->completedTicks(), 125L);
+    }
+    void fractionalDurationDocumentValidation() {
+        for (double seconds : {0., .125, 604800., -1.}) {
+            boost::json::object json{{"document_kind", "s7.diagram"}, {"dt", .001},
+                {"schema", schema()}, {"studio_run", {{"runtime_seconds", seconds}}}};
+            const auto document = diagram::DiagramDocument::fromJson(json);
+            QCOMPARE(document.runConfiguration.at("runtime_seconds").to_number<double>(), seconds);
+        }
+        for (const auto& seconds : {boost::json::value(-.5), boost::json::value(604800.1),
+                                   boost::json::value("0.125"), boost::json::value(std::numeric_limits<double>::infinity())}) {
+            boost::json::object json{{"studio_run", {{"runtime_seconds", seconds}}}};
+            QVERIFY_EXCEPTION_THROWN(static_cast<void>(diagram::DiagramDocument::fromJson(json)), std::invalid_argument);
         }
     }
     void runRateMustMatchIntegrator() {
@@ -133,7 +166,7 @@ private slots:
             { std::ofstream out(path / "model.probes.json"); out << boost::json::serialize(boost::json::object{{"probes", json.at("probes")}}); }
             auto headless = s7tests::load_and_compile(path / "model.s7diagram", path / "model.probes.json");
             const auto document = diagram::DiagramDocument::fromJson(s7tests::read_json_object(path / "model.s7diagram"));
-            const auto duration = static_cast<long>(s7tests::linear_duration(name));
+            const double duration = s7tests::linear_duration(name);
             const auto ticks = ui::ModelRunController::computeTicks(duration, document.dt);
             const auto reference = s7tests::run_and_sample(headless, static_cast<std::size_t>(ticks));
             std::vector<RunProbe> probes;

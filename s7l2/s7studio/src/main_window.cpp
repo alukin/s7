@@ -1647,11 +1647,13 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     }
     auto* form = new QFormLayout();
 
-    auto* runtimeSecondsSpin = new QSpinBox(&dialog);
+    auto* runtimeSecondsSpin = new QDoubleSpinBox(&dialog);
     runtimeSecondsSpin->setObjectName(QStringLiteral("run.duration"));
+    runtimeSecondsSpin->setDecimals(9);
     runtimeSecondsSpin->setRange(-1, 604800);
+    runtimeSecondsSpin->setSingleStep(0.1);
     runtimeSecondsSpin->setSpecialValueText(QStringLiteral("-1 (continuous)"));
-    runtimeSecondsSpin->setValue(static_cast<int>(std::clamp<long>(runtimeSeconds_, -1, 604800)));
+    runtimeSecondsSpin->setValue(std::clamp(runtimeSeconds_, -1.0, 604800.0));
 
     auto* frequencySpin = new QDoubleSpinBox(&dialog);
     frequencySpin->setObjectName(QStringLiteral("run.frequency"));
@@ -1688,6 +1690,27 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     layout->addWidget(clearSamplesCheck);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    auto* durationNotice = new QLabel(&dialog);
+    durationNotice->setObjectName(QStringLiteral("run.durationNotice"));
+    durationNotice->setWordWrap(true);
+    layout->addWidget(durationNotice);
+    const auto validateDuration = [runtimeSecondsSpin, frequencySpin, durationNotice, buttons] {
+        try {
+            const auto steps = ui::ModelRunController::computeTicks(runtimeSecondsSpin->value(), 1.0 / frequencySpin->value());
+            buttons->button(QDialogButtonBox::Ok)->setEnabled(true);
+            durationNotice->setText(steps >= 0 && steps < 100
+                ? QStringLiteral("Warning: this simulation runs for %1 steps, fewer than 100. Increase the duration or model step rate for more samples.").arg(steps)
+                : QString{});
+            durationNotice->setVisible(steps >= 0 && steps < 100);
+        } catch (const std::exception& ex) {
+            durationNotice->setText(QStringLiteral("Invalid duration: %1").arg(QString::fromUtf8(ex.what())));
+            durationNotice->show();
+            buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+        }
+    };
+    connect(runtimeSecondsSpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, validateDuration);
+    connect(frequencySpin, qOverload<double>(&QDoubleSpinBox::valueChanged), &dialog, validateDuration);
+    validateDuration();
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
@@ -1850,7 +1873,7 @@ bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     deploymentStreams_ = document.streams;
 
     runtimeSeconds_ = document.runConfiguration.contains("runtime_seconds")
-        ? document.runConfiguration.at("runtime_seconds").to_number<long>() : 60;
+        ? document.runConfiguration.at("runtime_seconds").to_number<double>() : 60;
     clearScopesBeforeRun_ = !document.runConfiguration.contains("clear_scope_traces")
         || document.runConfiguration.at("clear_scope_traces").as_bool();
     if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(!clearScopesBeforeRun_);
