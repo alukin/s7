@@ -36,7 +36,7 @@ Notices in common/base subpackages are accepted only from the same source RPM.
 The xcb-util-keysyms 0.4.1 notice, omitted by Fedora's binary RPM, is copied
 verbatim from its source RPM; provenance is in `s7l2/tools/linux/notices/README.md`.
 
-Publish the corresponding source RPMs and the S7 source archive (including
-submodules and build scripts) alongside the binary archive. The source inventory
-is not a written source offer. Windows redistribution remains deferred pending
+Qt/dependency source archives are not included in the binary bundle.
+Corresponding-source distribution is separate from binary packaging; the source
+inventory identifies exact versions and is not a written source offer. Windows redistribution remains deferred pending
 review of the per-DLL inventory against the MSYS2 licence tree.

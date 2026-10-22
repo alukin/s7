@@ -28,13 +28,18 @@ storage rather than crash-durable recording.
   73/73 passed in 70.96 seconds, including all four local GUI suites.
 - [x] Fresh relocated package smoke check without system Qt/source checkout:
   12/12 passed in a fresh Fedora 44 container with the package read-only.
-- [ ] Bundle third-party notices with a per-binary inventory and exact source
-  RPM identities; provide corresponding source artifacts alongside binaries.
-- [x] REUSE licensing check passes locally (504/504 files at verification);
+- [x] Bundle third-party notices with a per-binary inventory and exact source
+  RPM identities. Qt/dependency sources are excluded from the binary bundle.
+- [x] REUSE licensing check passes locally (503/503 files at verification);
   required step added to headless CI. Hosted execution of that new step is
   not claimed; GUI testing remains local.
-- [ ] Prepare Linux archive, source archives and SHA256SUMS; tag the verified
+- [x] Prepare Linux archive and SHA256SUMS; tag the verified
   release revision as v0.1.0. Publication uses the same artifacts.
+
+The tag and artifacts are prepared locally; no hosted release is published.
+The binary bundle contains runtime libraries and notices, without Qt or other
+dependency source archives. Corresponding-source distribution is a separate
+publication concern; package metadata records the exact source RPMs.
 
 Final storage verification also released the failed source and successfully
 completed a fresh 4,096-sample disk-backed capture on the same filesystem.

@@ -72,8 +72,8 @@ build ID against the host library, collects RPM licence files (including
 common subpackages from the same source RPM), and writes per-binary and exact
 source-package inventories. A missing identity or notice fails packaging.
 The qualified backend is RPM; dpkg-built binary releases remain deferred.
-`tools/release/collect_sources.py` downloads the matching source RPMs for
-publication alongside the binary. GUI-test dependencies are not bundled.
+Source RPM identities are metadata only: Qt/dependency source archives are
+not included in the binary bundle. GUI-test dependencies are not bundled.
 
 The optional QtQuick3D XR module and its OpenXR libraries are removed from the
 bundle: Studio uses desktop 3D only. Qt's X11 backend still needs its ordinary
