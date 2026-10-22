@@ -1,6 +1,6 @@
 # Live oscilloscope prototype
 
-This is the first time-domain prototype of the
+This is the bounded time-domain and FFT spectrum prototype of the
 [live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md). It is not yet the
 four-view ADI OSC parity milestone.
 
@@ -69,12 +69,15 @@ samples.
 
 ## Current limits
 
-- Time-domain view only. FFT, constellation, correlation, triggers, paired cursors,
+- The [Spectrum tab](STUDIO_SPECTRUM.md) now supplies real/IQ FFT analysis,
+  windows, amplitude/power/PSD, referenced dB, power averaging and peak hold.
+  Constellation, correlation, triggers, paired cursors,
   region statistics, saved workspaces and window export are not implemented here.
 - One shared numeric Y axis; supplied units remain explicit. No implicit conversion
   or separate unit lanes. Colors are assigned automatically.
 - Plot refresh is capped near 30 Hz. Rendering and snapshot processing run on the
-  UI thread with fixed data caps. Throughput, latency targets, long-duration resource
+  UI thread with fixed data caps; FFT analysis uses a bounded shared worker pool.
+  Throughput, latency targets, long-duration resource
   behavior and native Windows rendering still require qualification.
 - The prototype does not claim full design completion or ADI OSC parity.
 

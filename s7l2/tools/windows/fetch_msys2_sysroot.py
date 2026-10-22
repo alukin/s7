@@ -35,7 +35,7 @@ PREFIX = "mingw-w64-ucrt-x86_64-"
 TOOLCHAIN = ["gcc", "gcc-libs", "crt", "headers", "winpthreads", "libwinpthread"]
 CORE = ["boost", "openssl", "zlib"]
 # Studio's observation viewers: Qt Quick (declarative), Qt Graphs, Qt Quick 3D.
-STUDIO = ["qt6-base", "qt6-declarative", "qt6-graphs", "qt6-quick3d"]
+STUDIO = ["qt6-base", "qt6-declarative", "qt6-graphs", "qt6-quick3d", "fftw"]
 SPECTRAL = ["fftw", "pkgconf"]
 
 # Dependencies needed only to run the Windows-hosted compiler or build tools,
@@ -100,7 +100,7 @@ def main() -> None:
     parser.add_argument("dest", nargs="?", default=pathlib.Path.home() / ".cache/s7/msys2-ucrt64", type=pathlib.Path)
     parser.add_argument("--mirror", default="https://repo.msys2.org/mingw/ucrt64")
     parser.add_argument("--no-studio", action="store_true", help="skip Qt6 (for -DS7_BUILD_STUDIO=OFF)")
-    parser.add_argument("--no-spectral", action="store_true", help="skip FFTW (needed only by s7spectral)")
+    parser.add_argument("--no-spectral", action="store_true", help="skip plugin prerequisites; Studio still requires FFTW")
     args = parser.parse_args()
     if shutil.which("zstd") is None:
         sys.exit("error: the zstd command is required (apt install zstd)")

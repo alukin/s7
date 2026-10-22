@@ -20,6 +20,7 @@ struct LiveChannel { QString name; QString unit; QString sourceType; };
 struct LiveStatus { bool finished; QString error; std::uint64_t received; };
 struct LiveFrame {
     std::uint64_t runId = 0, generation = 0, received = 0, evicted = 0, gaps = 0;
+    std::uint64_t rateNumerator = 0, rateDenominator = 1;
     std::size_t capacity = 0;
     bool finished = false;
     QString error;

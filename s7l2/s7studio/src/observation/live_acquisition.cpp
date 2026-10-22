@@ -120,7 +120,8 @@ std::optional<LiveFrame> LiveAcquisition::snapshot() const
         result.evicted = received_ - count_; result.gaps = gaps_; result.capacity = capacity_;
         result.finished = finished_; result.error = error_; count = count_; first = received_ - count_;
     }
-    result.dt = dt_; result.channels = channels_; result.provenance = provenance_;
+    result.dt = dt_; result.rateNumerator = rateNumerator_; result.rateDenominator = rateDenominator_;
+    result.channels = channels_; result.provenance = provenance_;
     result.steps.resize(count); result.times.resize(count);
     const auto width = static_cast<std::size_t>(channels_.size());
     result.values.resize(count*width);

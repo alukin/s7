@@ -7,6 +7,8 @@
 #include "element_picker_panel.hpp"
 #include "scope_view_window.hpp"
 #include "live_oscilloscope_window.hpp"
+#include "viewers/spectrum_view.hpp"
+#include <QtGraphs/QLineSeries>
 #include <QQuickItem>
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
@@ -549,6 +551,62 @@ private slots:
         QTest::addColumn<QString>("filename"); QTest::addColumn<QString>("observer"); QTest::addColumn<QString>("unit");
         QTest::newRow("am") << "am_coherent_detection" << "carrier_scope" << "V";
         QTest::newRow("fm") << "fm_frequency_detection" << "frequency_scope" << "Hz";
+    }
+    void liveSpectrumAnalysis() {
+        using namespace s7studio;
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/am_coherent_detection_live.s7diagram"));
+        auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy complete(runner, &LocalSchemaRunner::runCompleted);
+        QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
+            auto* rate = dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!duration || !rate || !buttons) return false;
+            duration->setValue(2); rate->setValue(12800);
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton); return true;
+        }));
+        QTRY_COMPARE(complete.count(), 1); QVERIFY(complete.last()[0].toBool()); QVERIFY(!runner->recordedSource());
+        auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "carrier_scope")); QVERIFY(viewer);
+        viewer->resize(1280, 720); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
+        auto* tabs = viewer->findChild<QTabWidget*>("live.views"); QVERIFY(tabs);
+        QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier, tabs->tabBar()->tabRect(1).center());
+        auto* spectrum = viewer->findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
+        auto* source = spectrum->findChild<QComboBox*>("spectrum.channel"); QVERIFY(source);
+        QTRY_VERIFY(source->count() == 3);
+        const auto carrier = source->findText("/carrier [", Qt::MatchContains); QVERIFY(carrier >= 0); source->setCurrentIndex(carrier);
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
+        const auto& initial = *spectrum->result();
+        const auto peak = static_cast<std::size_t>(std::max_element(initial.values.begin(), initial.values.end())-initial.values.begin());
+        QCOMPARE(initial.frequencies[peak], 100.); QVERIFY(std::abs(initial.values[peak]-1) < 1e-10);
+        QCOMPARE(initial.lastStep, std::int64_t(25600)); QCOMPARE(initial.size, std::size_t(4096));
+        auto* quick = spectrum->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
+        auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
+        QTRY_VERIFY(graph->property("plotArea").toRectF().width() > 100);
+        const auto area = graph->property("plotArea").toRectF();
+        const auto position = graph->mapToScene(QPointF(area.left()+area.width()*100/6400, area.center().y())).toPoint();
+        QTest::mouseMove(quick, position);
+        QTRY_VERIFY(spectrum->findChild<QLabel*>("spectrum.readout")->text().contains("Computed spectrum"));
+        QVERIFY(spectrum->findChild<QLabel*>("spectrum.readout")->text().contains("100 Hz baseband"));
+        capture(viewer, "live-spectrum-am-carrier");
+        QTest::mouseMove(tabs->tabBar(), tabs->tabBar()->tabRect(1).center());
+        auto* size = spectrum->findChild<QComboBox*>("spectrum.size"); QVERIFY(size); size->setCurrentIndex(size->findData(65536));
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Filling);
+        QVERIFY(spectrum->plotView()->series().first()->points().isEmpty());
+        size->setCurrentIndex(size->findData(1024));
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
+        auto* scale = spectrum->findChild<QComboBox*>("spectrum.scale"); scale->setCurrentIndex(1);
+        QVERIFY(spectrum->plotView()->yTitle().contains("dB re 1"));
+        capture(viewer, "live-spectrum-db");
+        auto* freeze = viewer->findChild<QPushButton*>("live.freeze"); freeze->setChecked(true);
+        const auto end = spectrum->result()->lastStep;
+        viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
+        QCOMPARE(spectrum->result()->lastStep, end);
+        spectrum->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0);
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
+        QCOMPARE(spectrum->result()->lastStep, end); QCOMPARE(spectrum->result()->size, std::size_t(1024));
+        action("action.reset")->trigger(); QVERIFY(!spectrum->result());
+        QVERIFY(spectrum->plotView()->series().first()->points().isEmpty());
     }
     void liveMeasurementExamples() {
         QFETCH(QString, filename); QFETCH(QString, observer); QFETCH(QString, unit);

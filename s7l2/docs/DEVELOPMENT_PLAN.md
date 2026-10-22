@@ -2,6 +2,13 @@
 
 ## P0 release priority — continuous oscilloscope viewer (2026-10-22)
 
+Current sequencing: finish the FFT spectrum, constellation and correlation views,
+then implement shared paired cursors, interval measurements and saved-window export.
+This supersedes the earlier ordering of those shared features before analysis.
+The [FFT spectrum increment](STUDIO_SPECTRUM.md) adds the private binary64 FFTW
+backend, bounded worker scheduling, real/IQ normalization, windows, power averaging
+and referenced dB. Full four-view/operational qualification remains open.
+
 The first [time-domain prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) is implemented:
 bounded worker-side acquisition, live/recording subscriptions, online retention
 settings, freeze/resume, raw-sample hover and extrema-preserving display reduction.
@@ -50,6 +57,52 @@ viewer open/close/reopen and shutdown. Show that oscilloscope-only continuous
 runs do not accumulate a temporary recording, while explicitly requested Scope
 recordings keep their completeness/error behavior. Measure bounded local UI
 work and resource use; preserve headless execution and existing numerical tests.
+
+### FFT spectrum verification — 2026-10-22
+
+The Release `build-tests` target built and **76/76 native CTest entries passed in
+72.94 s**, including the new numerical/worker suite, the rendered AM carrier/bin
+inspection workflow, frozen reanalysis after retention shrink, and the packaged
+program's `--live-spectrum-check`. Numerical coverage includes independent
+long-double DFT and time-domain power references, five windows, real/IQ, explicit
+dB references, linear averaging, skipped hops, cancellation and raw-frame ownership
+when a prior hop is reused. A tab-removal callback into an already deleted Time
+plot was found by the rendered test and fixed before this full passing run.
+
+The backend/worker suite also cross-built against the existing Windows Qt Core/Test
+and FFTW import library, and passed under Wine (4.95 s). The full Studio cross-build
+is blocked by the existing sysroot's missing Qt QML component; this does not establish
+Windows UI parity. The native backend suite passed Clang AddressSanitizer and
+UndefinedBehaviorSanitizer (0.40 s). A fresh headless configure succeeds without
+discovering FFTW, and dependency-script dry runs retain it only where required.
+
+A fresh 313 MiB package passed **13/13 installed checks** in the local Fedora 44
+container with the package mounted read-only. The added check executes a causal
+oscillator through live-only capture, verifies a 64 Hz / 2 V Hann FFT, loads the
+QML plot and saves a screenshot, reviewed at 1280×720. The package contains the
+double-precision FFTW library, GPL notices and exact Fedora source-package identity.
+
+An initial backend-only timing sample on AMD Ryzen 7 4700U, Fedora 44, GCC 16.2.1,
+FFTW 3.3.10 measured p50/p95/max **0.131/0.144/0.240 ms** at N=4096 and
+**4.089/4.669/5.488 ms** at N=65536. Each size used 30 warmup and 300 timed real,
+periodic-Hann, amplitude transforms at Fs=100 kHz, including input checks/windowing
+and normalization, with cached plans and no GUI/acquisition cost. This ran while
+other verification work was active and is not an end-to-end latency qualification.
+The opt-in `s7studio_spectrum_benchmark` target reproduces this workload; no machine
+timing threshold is imposed by CTest. Long-duration/full-workload qualification,
+native Windows rendering, constellation/correlation and the shared inspection/export
+features remain open.
+
+### Windows QML dependency follow-up — 2026-10-22
+
+Installed the missing target QML/Quick/QuickWidgets/Graphs/Quick3D dependencies
+with the repository's verified MSYS2 sysroot fetcher (48 packages, matching Qt
+6.12.0 modules). CMake now configures the full Studio cross-build, and Studio,
+the FFT test and the live acquisition test all compile and link successfully.
+The Windows FFT numerical/worker entry passes under Wine 11.0. The two GUI entries
+abort on Wine's unimplemented `mscms.dll.WcsCreateIccProfile`; this is a separate
+Wine runtime limitation after resolving QML discovery, not a passing UI result.
+Native Windows rendering qualification remains open.
 
 ### Prototype verification — 2026-10-22
 

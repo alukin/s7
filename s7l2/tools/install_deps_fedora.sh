@@ -3,7 +3,7 @@
 #
 # Usage: tools/install_deps_fedora.sh [--no-studio] [--no-spectral] [--no-extras] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
-#   --no-spectral  skip FFTW (needed only by the s7spectral plugin)
+#   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
 #   --no-extras    skip optional tools (ninja, gnuplot)
 #   --dry-run      print the dnf command instead of running it
 # Windows binaries are cross-built on Ubuntu (tools/install_deps_ubuntu.sh --windows).
@@ -71,8 +71,8 @@ if (( WITH_STUDIO )); then
   )
 fi
 
-# s7spectral plugin: single-precision FFTW.
-if (( WITH_SPECTRAL )); then
+# Studio uses binary64 FFTW; s7spectral independently uses single precision.
+if (( WITH_STUDIO || WITH_SPECTRAL )); then
   PACKAGES+=(fftw-devel)
 fi
 

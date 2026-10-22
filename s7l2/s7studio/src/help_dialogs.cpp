@@ -25,6 +25,7 @@ struct Topic { const char* title; const char* path; };
 constexpr Topic topics[] = {
     {"Getting started", "qrc:/s7studio/help/docs/STUDIO_USER_GUIDE.md"},
     {"Live oscilloscope prototype", "qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"},
+    {"Live FFT spectrum", "qrc:/s7studio/help/docs/STUDIO_SPECTRUM.md"},
     {"Bundled examples", "qrc:/s7studio/help/docs/STUDIO_EXAMPLES.md"},
     {"Saving and comparing results", "qrc:/s7studio/help/docs/SCOPE_RESULTS.md"},
     {"Observation viewers", "qrc:/s7studio/help/docs/STUDIO_OBSERVATION_VIEWERS.md"},

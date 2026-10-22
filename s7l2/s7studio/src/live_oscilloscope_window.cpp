@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "live_oscilloscope_window.hpp"
 #include "viewers/line_plot_view.hpp"
+#include "viewers/spectrum_view.hpp"
 #include <QtGraphs/QLineSeries>
 #include <QCheckBox>
 #include <QDoubleSpinBox>
@@ -12,6 +13,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
@@ -43,7 +45,11 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     auto* follow = new QPushButton(QStringLiteral("Resume live / Fit"), this); follow->setObjectName("live.follow"); toolbar->addWidget(follow);
     autoY_ = new QCheckBox(QStringLiteral("Auto Y"), this); autoY_->setObjectName("live.autoY"); autoY_->setChecked(true); toolbar->addWidget(autoY_);
     toolbar->addStretch(); layout->addLayout(toolbar);
-    auto* channelBox = new QGroupBox(QStringLiteral("Channels — display only; raw values remain unchanged"), this);
+    auto* tabs = new QTabWidget(this); tabs->setObjectName("live.views");
+    auto* timePage = new QWidget(tabs); auto* timeLayout = new QVBoxLayout(timePage); timeLayout->setContentsMargins(0, 0, 0, 0);
+    spectrum_ = new viewers::SpectrumView(tabs);
+    tabs->addTab(timePage, "Time"); tabs->addTab(spectrum_, "Spectrum"); layout->addWidget(tabs, 1);
+    auto* channelBox = new QGroupBox(QStringLiteral("Channels — display only; raw values remain unchanged"), timePage);
     auto* grid = new QGridLayout(channelBox);
     grid->addWidget(new QLabel("Channel / supplied unit", channelBox), 0, 0);
     grid->addWidget(new QLabel("Display gain", channelBox), 0, 1);
@@ -62,14 +68,14 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         connect(gain, &QDoubleSpinBox::valueChanged, this, [this] { render(false); });
         connect(offset, &QDoubleSpinBox::valueChanged, this, [this] { render(false); });
     }
-    layout->addWidget(channelBox);
-    plot_ = new viewers::LinePlotView(this); plot_->setObjectName("live.plot");
+    timeLayout->addWidget(channelBox);
+    plot_ = new viewers::LinePlotView(timePage); plot_->setObjectName("live.plot");
     plot_->setAxisTitles("Model time (s)", "Value (supplied units; shared numeric axis)"); plot_->setLegendVisible(true);
     plot_->bridge()->inspectionEnabled = true;
-    layout->addWidget(plot_, 1);
-    readout_ = new QLabel(QStringLiteral("Hover over the plot to inspect stored samples. Wheel zooms; drag pans and freezes this window."), this);
+    timeLayout->addWidget(plot_, 1);
+    readout_ = new QLabel(QStringLiteral("Hover over the plot to inspect stored samples. Wheel zooms; drag pans and freezes this window."), timePage);
     readout_->setObjectName("live.readout"); readout_->setWordWrap(true); readout_->setTextFormat(Qt::PlainText);
-    readout_->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(readout_);
+    readout_->setTextInteractionFlags(Qt::TextSelectableByMouse); timeLayout->addWidget(readout_);
     status_ = new QLabel(this); status_->setObjectName("live.status"); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); layout->addWidget(status_);
     connect(seconds_, &QLineEdit::editingFinished, this, [this] {
         if (!seconds_->isModified()) return;
@@ -87,6 +93,8 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     });
     connect(freeze_, &QPushButton::toggled, this, [this](bool frozen) {
         freeze_->setText(frozen ? QStringLiteral("Display frozen") : QStringLiteral("Freeze display"));
+        const auto pinned = spectrum_->setFrozen(frozen);
+        if (frozen && spectrum_->isVisible() && pinned) frame_ = pinned;
         updateStatus();
     });
     connect(follow, &QPushButton::clicked, this, [this] {
@@ -97,13 +105,25 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     connect(plot_, &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
     connect(plot_, &viewers::LinePlotView::xRangeChanged, this, [this] { render(false); });
     connect(plot_, &viewers::LinePlotView::hovered, this, [this](double time, bool active) { inspect(time, active); });
+    connect(spectrum_, &viewers::SpectrumView::inspectingChanged, this, [this](bool active) { inspecting_ = active; updateStatus(); });
+    connect(spectrum_->plotView(), &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
+    connect(tabs, &QTabWidget::currentChanged, this, [this](int index) {
+        inspecting_ = false; autoY_->setVisible(index == 0);
+        if (index == 1) spectrum_->setFrame(frame_); else render(true);
+    });
     updateStatus();
 }
 LiveOscilloscopeWindow::~LiveOscilloscopeWindow()
 {
+    // Removing the active spectrum page changes the current tab. Disconnect
+    // before tearing down either plot so that signal cannot render a dead view.
+    disconnect(findChild<QTabWidget*>("live.views"), nullptr, this, nullptr);
     // QML hover teardown must not call into members after their destruction.
     disconnect(plot_, nullptr, this, nullptr);
     delete plot_;
+    disconnect(spectrum_->plotView(), nullptr, this, nullptr);
+    disconnect(spectrum_, nullptr, this, nullptr);
+    delete spectrum_;
 }
 viewers::ViewerType LiveOscilloscopeWindow::viewerType()
 {
@@ -132,7 +152,7 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
 }
 void LiveOscilloscopeWindow::clearSamples()
 {
-    frame_ = {}; inspecting_ = false; freeze_->setChecked(false);
+    frame_ = std::make_shared<observation::LiveFrame>(); inspecting_ = false; freeze_->setChecked(false); spectrum_->clear();
     for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});
     plot_->bridge()->cursorVisible = false; emit plot_->bridge()->inspectionChanged();
     readout_->setText("Hover over the plot for exact stored sample values."); updateStatus();
@@ -145,28 +165,31 @@ bool LiveOscilloscopeWindow::refreshSource()
     if (freeze_->isChecked() || inspecting_) { updateStatus(); return false; }
     auto snapshot = live_->snapshot();
     if (!snapshot) { updateStatus("Snapshot expired during copying; waiting for a coherent window."); return false; }
-    frame_ = std::move(*snapshot); render(true); updateStatus(); return false;
+    frame_ = std::make_shared<observation::LiveFrame>(std::move(*snapshot));
+    if (spectrum_->isVisible()) spectrum_->setFrame(frame_); else render(true);
+    updateStatus(); return false;
 }
 void LiveOscilloscopeWindow::render(bool fit)
 {
     if (rendering_) return;
     rendering_ = true;
-    if (fit && !frame_.times.empty()) {
-        const double last = frame_.times.back();
-        plot_->setXRange(last - static_cast<double>(frame_.capacity-1)*frame_.dt, last);
+    const auto& frame = *frame_;
+    if (fit && !frame.times.empty()) {
+        const double last = frame.times.back();
+        plot_->setXRange(last - static_cast<double>(frame.capacity-1)*frame.dt, last);
     }
     traceWarning_.clear();
     for (qsizetype channel = 0; channel < plot_->series().size(); ++channel) {
         auto* series = plot_->series()[channel];
         QList<QPointF> points;
-        if (channel < frame_.channels.size() && controls_[channel].visible->isChecked()) {
+        if (channel < frame.channels.size() && controls_[channel].visible->isChecked()) {
             // Suppress discontinuous/nonfinite channels rather than draw false bridges.
             bool continuous = true;
-            for (std::size_t i = 0; i < frame_.steps.size(); ++i) {
-                if ((i && frame_.steps[i] != frame_.steps[i-1]+1) ||
-                    !std::isfinite(frame_.values[i*static_cast<std::size_t>(frame_.channels.size())+static_cast<std::size_t>(channel)])) { continuous = false; break; }
+            for (std::size_t i = 0; i < frame.steps.size(); ++i) {
+                if ((i && frame.steps[i] != frame.steps[i-1]+1) ||
+                    !std::isfinite(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(channel)])) { continuous = false; break; }
             }
-            if (continuous) points = frame_.envelope(static_cast<std::size_t>(channel), static_cast<std::size_t>(std::max(64, plot_->width())), plot_->xMin(), plot_->xMax());
+            if (continuous) points = frame.envelope(static_cast<std::size_t>(channel), static_cast<std::size_t>(std::max(64, plot_->width())), plot_->xMin(), plot_->xMax());
             else traceWarning_ = "Discontinuous/nonfinite trace hidden; raw inspection remains available.";
             for (auto& point : points) point.setY(point.y()*controls_[channel].gain->value()+controls_[channel].offset->value());
             if (std::ranges::any_of(points, [](const auto& point) { return !std::isfinite(point.y()); })) {
@@ -182,18 +205,19 @@ void LiveOscilloscopeWindow::render(bool fit)
 }
 QString LiveOscilloscopeWindow::inspect(double time, bool active)
 {
-    inspecting_ = active && !frame_.times.empty();
-    const auto sample = active ? frame_.nearest(time) : std::nullopt;
+    const auto& frame = *frame_;
+    inspecting_ = active && !frame.times.empty();
+    const auto sample = active ? frame.nearest(time) : std::nullopt;
     plot_->bridge()->cursorVisible = sample.has_value();
     if (sample) {
         const auto i = *sample;
-        plot_->bridge()->cursorX = frame_.times[i];
+        plot_->bridge()->cursorX = frame.times[i];
         QString text = QStringLiteral("Stored sample • run %1 • step %2 • model time %3 s")
-            .arg(frame_.runId).arg(frame_.steps[i]).arg(frame_.times[i], 0, 'g', 17);
-        for (qsizetype c = 0; c < frame_.channels.size(); ++c) if (controls_[c].visible->isChecked()) {
-            const auto& channel = frame_.channels[c];
+            .arg(frame.runId).arg(frame.steps[i]).arg(frame.times[i], 0, 'g', 17);
+        for (qsizetype c = 0; c < frame.channels.size(); ++c) if (controls_[c].visible->isChecked()) {
+            const auto& channel = frame.channels[c];
             text += QStringLiteral("\n%1 = %2 %3 (source %4 → stored f64)").arg(channel.name)
-                .arg(frame_.values[i*static_cast<std::size_t>(frame_.channels.size())+static_cast<std::size_t>(c)], 0, 'g', 17)
+                .arg(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(c)], 0, 'g', 17)
                 .arg(channel.unit.isEmpty() ? QStringLiteral("[unit unspecified]") : channel.unit, channel.sourceType);
         }
         readout_->setText(text);
@@ -208,10 +232,11 @@ void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
         .arg(static_cast<double>(live_->capacity()-1)*live_->dt(), 0, 'g', 10)
         .arg(static_cast<double>(live_->allocatedBytes())/(1024*1024), 0, 'f', 2));
     const auto acquisitionStatus = live_->status();
+    const auto& frame = *frame_;
     status_->setText(QStringLiteral("Run %1 • %2 • %3 • %4/%5 samples/channel • received %6 • evicted %7 • gaps %8%9%10")
-        .arg(frame_.runId).arg(freeze_->isChecked() ? "Frozen snapshot" : inspecting_ ? "Inspecting displayed frame" : "Following latest")
-        .arg(acquisitionStatus.finished ? "Run finished" : "Acquisition active").arg(frame_.times.size()).arg(live_->capacity())
-        .arg(frame_.received).arg(frame_.evicted).arg(frame_.gaps)
+        .arg(frame.runId).arg(freeze_->isChecked() ? "Frozen snapshot" : inspecting_ ? "Inspecting displayed frame" : "Following latest")
+        .arg(acquisitionStatus.finished ? "Run finished" : "Acquisition active").arg(frame.times.size()).arg(live_->capacity())
+        .arg(frame.received).arg(frame.evicted).arg(frame.gaps)
         .arg(acquisitionStatus.error.isEmpty() ? QString() : " • ERROR: " + acquisitionStatus.error)
         .arg((traceWarning_ + settingsError_ + suffix).isEmpty() ? QString() : " • " + traceWarning_ + settingsError_ + suffix));
 }

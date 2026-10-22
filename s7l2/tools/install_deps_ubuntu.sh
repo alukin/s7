@@ -3,7 +3,7 @@
 #
 # Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-spectral] [--no-extras] [--windows] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
-#   --no-spectral  skip FFTW (needed only by the s7spectral plugin)
+#   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
 #   --no-extras    skip optional tools (ninja, gnuplot)
 #   --windows      also the Windows cross toolchain: Clang/LLVM 22, Wine (docs/WINDOWS_BUILD.md)
 #   --dry-run      print the apt command instead of running it
@@ -78,8 +78,8 @@ if (( WITH_STUDIO )); then
   )
 fi
 
-# s7spectral plugin: single-precision FFTW.
-if (( WITH_SPECTRAL )); then
+# Studio uses binary64 FFTW; s7spectral independently uses single precision.
+if (( WITH_STUDIO || WITH_SPECTRAL )); then
   PACKAGES+=(libfftw3-dev)
 fi
 

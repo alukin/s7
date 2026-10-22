@@ -97,6 +97,7 @@ public:
     [[nodiscard]] auto series() const -> const QList<QLineSeries*>& { return series_; }
     [[nodiscard]] auto isOverlay(const QLineSeries* series) const -> bool;
     void setSeriesName(QLineSeries* series, const QString& name);
+    void setSeriesVisible(QLineSeries* series, bool visible);
     // Replaces the series' points and refreshes the legend if needed.
     static void setPoints(QLineSeries* series, const QList<QPointF>& points);
 

@@ -7,6 +7,8 @@
 #include "main_window.hpp"
 #include "help_dialogs.hpp"
 #include "scope_view_window.hpp"
+#include "live_oscilloscope_window.hpp"
+#include "viewers/spectrum_view.hpp"
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
 #include "viewers/line_plot_view.hpp"
@@ -47,6 +49,8 @@
 #include <QImage>
 #include <QGraphicsView>
 #include <QTimer>
+#include <QTabWidget>
+#include <QQuickWidget>
 #include <QPainter>
 
 #include <boost/json.hpp>
@@ -1078,6 +1082,47 @@ int runBundledDemoCheck(int argc, char** argv)
 }
 
 // Exercise delivery, late opening and reopening with the actual oscillator.
+int runLiveSpectrumCheck(int argc, char** argv)
+{
+    QApplication app(argc, argv);
+    registerElements();
+    const boost::json::object model{{"name", "installed-spectrum-check"}, {"dt", 1./1024},
+        {"elements", boost::json::array{boost::json::object{{"id", "tone"}, {"type", "AnalogOscillator"},
+            {"params", {{"amplitude", 2.}, {"frequency_hz", 64.}, {"sample_rate_hz", 1024.}}}}}},
+        {"connections", boost::json::array{}}};
+    s7studio::LocalSchemaRunner runner;
+    runner.run(model, 1./1024, 8192, {{"live/tone", "tone", 0, "V", false, "live"}});
+    const auto deadline = std::chrono::steady_clock::now()+std::chrono::seconds(20);
+    auto wait = [&](const auto& predicate) {
+        while (!predicate() && std::chrono::steady_clock::now() < deadline) {
+            app.processEvents(); std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        if (!predicate()) throw std::runtime_error("Live spectrum check timed out");
+    };
+    wait([&] { return !runner.isRunning(); });
+    if (runner.state() != s7studio::RunState::Completed || runner.recordedSource())
+        throw std::runtime_error("Live-only capture failed or created a recording journal");
+    s7studio::ui::LiveOscilloscopeWindow viewer("installed-spectrum");
+    viewer.attachLiveSource(runner.liveSources().value("live")); viewer.resize(1280, 720); viewer.show();
+    viewer.findChild<QTabWidget*>("live.views")->setCurrentIndex(1); viewer.refreshSource();
+    auto* spectrum = viewer.findChild<s7studio::viewers::SpectrumView*>();
+    wait([&] { return spectrum->result().has_value(); });
+    const auto& result = *spectrum->result();
+    if (result.state != s7studio::analysis::SpectrumResult::State::Ready || result.lastStep != 8192 || result.values.size() != 2049)
+        throw std::runtime_error("Missing coherent FFT result");
+    const auto peak = static_cast<std::size_t>(std::max_element(result.values.begin(), result.values.end())-result.values.begin());
+    if (result.frequencies[peak] != 64 || std::abs(result.values[peak]-2) > 1e-10)
+        throw std::runtime_error("Installed FFT has incorrect tone frequency/amplitude");
+    if (spectrum->plotView()->series().first()->points().isEmpty()) throw std::runtime_error("Spectrum was not plotted");
+    wait([&] { return spectrum->plotView()->quickWidget() && spectrum->plotView()->quickWidget()->status() == QQuickWidget::Ready; });
+    if (const auto png = qEnvironmentVariable("S7_SPECTRUM_PNG"); !png.isEmpty()) {
+        for (int i = 0; i < 20; ++i) { app.processEvents(); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+        if (!viewer.grab().save(png)) throw std::runtime_error("Cannot save spectrum screenshot");
+    }
+    std::cout << "Live spectrum: bounded capture, 64 Hz / 2 V Hann FFT and QML plot passed\n";
+    return 0;
+}
+
 int runScopeRunCheck(int argc, char** argv)
 {
     QApplication app(argc, argv);
@@ -1188,6 +1233,8 @@ int main(int argc, char** argv) try
     if (hasArg(argc, argv, "--scope-run-check")) {
         return runScopeRunCheck(argc, argv);
     }
+
+    if (hasArg(argc, argv, "--live-spectrum-check")) return runLiveSpectrumCheck(argc, argv);
 
     if (hasArg(argc, argv, "--smoke")) {
         return runSmoke();

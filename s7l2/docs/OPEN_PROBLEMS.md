@@ -3,8 +3,9 @@
 **New P0 release requirement (2026-10-22):** a separate bounded live
 oscilloscope for continuous runs. Existing `-1` execution is continuous but
 Scope recording grows on disk. See DEVELOPMENT_PLAN.md's priority section;
-the [time-domain prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) now implements bounded
-acquisition and raw hover inspection. Four-view analysis, triggers, export and
+the [prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) now implements bounded
+acquisition, raw hover inspection and [FFT spectrum](STUDIO_SPECTRUM.md).
+Constellation/correlation, triggers, shared cursors/measurements/export and
 operational qualification remain open under the [design](LIVE_OSCILLOSCOPE_DESIGN.md).
 
 For 0.1.0, the [Linux preview checklist](RELEASE_0.1.0.md) defines the release

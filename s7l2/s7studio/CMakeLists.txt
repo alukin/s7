@@ -90,6 +90,18 @@ target_include_directories(s7studio_results PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/s
 target_link_libraries(s7studio_results PUBLIC s7studio_observation Qt6::Core)
 s7_enable_project_warnings(s7studio_results)
 
+# Studio analysis is independent of the out-of-tree s7spectral runtime plugin.
+# find_path/find_library obey the Windows toolchain's sysroot search policy.
+find_path(S7STUDIO_FFTW_INCLUDE_DIR fftw3.h REQUIRED)
+find_library(S7STUDIO_FFTW_LIBRARY NAMES fftw3 libfftw3-3 REQUIRED)
+add_library(s7studio_analysis STATIC
+    src/analysis/fft.cpp src/analysis/fft.hpp
+    src/analysis/spectrum.cpp src/analysis/spectrum.hpp
+    src/analysis/spectrum_worker.cpp src/analysis/spectrum_worker.hpp)
+target_include_directories(s7studio_analysis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src PRIVATE ${S7STUDIO_FFTW_INCLUDE_DIR})
+target_link_libraries(s7studio_analysis PUBLIC s7studio_observation PRIVATE ${S7STUDIO_FFTW_LIBRARY})
+s7_enable_project_warnings(s7studio_analysis)
+
 add_library(s7studio_viewers STATIC
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
@@ -100,6 +112,7 @@ add_library(s7studio_viewers STATIC
     src/observation/step_aligner.hpp
     src/viewers/line_plot_view.cpp
     src/viewers/line_plot_view.hpp
+    src/viewers/spectrum_view.cpp src/viewers/spectrum_view.hpp
     src/viewers/quick_support.cpp
     src/viewers/quick_support.hpp
     src/viewers/trajectory_geometry.cpp
@@ -122,7 +135,7 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
 )
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
-    s7studio_observation s7studio_results
+    s7studio_observation s7studio_results s7studio_analysis
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
@@ -178,6 +191,7 @@ qt_add_resources(s7studio_app s7studio_help
     FILES
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_USER_GUIDE.md
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_SPECTRUM.md
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_DESIGN.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
         ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
@@ -478,3 +492,18 @@ set_target_properties(s7studio_live_oscilloscope_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_live_oscilloscope_test)
 add_test(NAME s7studio_live_oscilloscope COMMAND s7studio_live_oscilloscope_test)
 set_tests_properties(s7studio_live_oscilloscope PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 90)
+
+s7_add_test_executable(s7studio_spectrum_test tests/spectrum_test.cpp)
+target_link_libraries(s7studio_spectrum_test PRIVATE s7studio_analysis Qt6::Test)
+set_target_properties(s7studio_spectrum_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_spectrum_test)
+add_test(NAME s7studio_spectrum COMMAND s7studio_spectrum_test)
+set_tests_properties(s7studio_spectrum PROPERTIES TIMEOUT 60)
+
+add_test(NAME s7studio_live_spectrum COMMAND s7studio --live-spectrum-check)
+set_tests_properties(s7studio_live_spectrum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+# Opt-in backend timing; deliberately excluded from build-tests and CTest.
+add_executable(s7studio_spectrum_benchmark EXCLUDE_FROM_ALL tests/spectrum_benchmark.cpp)
+target_link_libraries(s7studio_spectrum_benchmark PRIVATE s7studio_analysis)
+s7_enable_project_warnings(s7studio_spectrum_benchmark)

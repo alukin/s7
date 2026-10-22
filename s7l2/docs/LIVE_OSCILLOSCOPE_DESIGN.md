@@ -1,7 +1,8 @@
 # Live oscilloscope design
 
-Status: target implementation contract, 2026-10-22. The first time-domain
-[prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) implements a bounded subset; the full
+Status: target implementation contract, 2026-10-22. The time-domain and
+[FFT spectrum](STUDIO_SPECTRUM.md) [prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md)
+implements a bounded subset; the full
 analysis scope and acceptance targets below remain unfulfilled.
 
 The live oscilloscope is a separate, bounded observation instrument for continuous

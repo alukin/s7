@@ -58,6 +58,7 @@ auto LinePlotBridge::legend() const -> QVariantList
 {
     QVariantList entries;
     for (const auto* series : view_.series_) {
+        if (!series->isVisible()) continue;
         entries.push_back(QVariantMap{{QStringLiteral("name"), series->name()},
                                       {QStringLiteral("color"), series->color()},
                                       {QStringLiteral("overlay"), view_.isOverlay(series)}});
@@ -195,6 +196,12 @@ void LinePlotView::setSeriesName(QLineSeries* series, const QString& name)
     if (series->name() == name) return;
     series->setName(name);
     emitLegendChanged();
+}
+
+void LinePlotView::setSeriesVisible(QLineSeries* series, bool visible)
+{
+    if (series->isVisible() == visible) return;
+    series->setVisible(visible); emitLegendChanged();
 }
 
 void LinePlotView::setPoints(QLineSeries* series, const QList<QPointF>& points)

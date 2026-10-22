@@ -57,6 +57,8 @@ exact stored values, model time and step. Freeze holds the display while the mod
 continues. See [Live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) for
 examples, retention behavior and current limits. Run Configuration lists live and
 full-recording channel counts; live-only acquisition does not accumulate disk data.
+Select its **Spectrum** tab for real/IQ FFT analysis, window/size controls,
+amplitude/power/PSD and explicit dB references. See [Live FFT spectrum](STUDIO_SPECTRUM.md).
 
 For the recording Scope and phase viewers, the plot preview can skip updates under load. Authoritative recording is
 separate; skipped preview updates do not imply lost recorded samples.

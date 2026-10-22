@@ -58,7 +58,8 @@ def check(package, artifacts):
         run('reopen-check', package / 's7studio', '--normalize', saved, reopened)
         if json.loads(saved.read_text()) != json.loads(reopened.read_text()):
             raise RuntimeError('Saved/reopened diagram changed')
-        for mode in ('scope-run', 'phase-portrait', 'phase-trajectory-3d'):
+        env['S7_SPECTRUM_PNG'] = str(artifacts / 'live-spectrum.png')
+        for mode in ('scope-run', 'phase-portrait', 'phase-trajectory-3d', 'live-spectrum'):
             run(mode, package / 's7studio', '--' + mode + '-check')
         (artifacts / 'summary.json').write_text(json.dumps({'checks': results, 'package': str(package),
             'checks_passed': True}, indent=2) + '\n')

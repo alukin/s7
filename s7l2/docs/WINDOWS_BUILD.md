@@ -11,7 +11,7 @@ tools/install_deps_ubuntu.sh --windows      # clang-22, lld-22, llvm-22, wine, z
 tools/windows/fetch_msys2_sysroot.py        # ~150 MB into ~/.cache/s7/msys2-ucrt64
 ```
 
-The fetch script downloads the MSYS2 UCRT64 packages S7 needs (mingw-w64 CRT and headers, GCC's libstdc++ and runtime DLLs, Boost, OpenSSL, zlib, Qt6 with Qt Quick, Qt Graphs and Qt Quick 3D, FFTW) and everything they depend on, checks their SHA-256 sums against the repository database and unpacks them into one sysroot. `--no-studio` skips Qt, `--no-spectral` skips FFTW; another directory can be given as an argument (then pass `-DS7_MINGW_SYSROOT=<dir>` to CMake). MSYS2 is a rolling distribution: rerunning the script updates the sysroot to the packages it ships now.
+The fetch script downloads the MSYS2 UCRT64 packages S7 needs (mingw-w64 CRT and headers, GCC's libstdc++ and runtime DLLs, Boost, OpenSSL, zlib, Qt6 with Qt Quick, Qt Graphs and Qt Quick 3D, FFTW) and everything they depend on, checks their SHA-256 sums against the repository database and unpacks them into one sysroot. Studio uses double-precision FFTW for spectrum analysis; the separate `s7spectral` plugin uses single precision. `--no-studio` skips Qt; FFTW is skipped only when both `--no-studio` and `--no-spectral` are selected. Another directory can be given as an argument (then pass `-DS7_MINGW_SYSROOT=<dir>` to CMake). MSYS2 is a rolling distribution: rerunning the script updates the sysroot to the packages it ships now.
 
 ## Build and test
 

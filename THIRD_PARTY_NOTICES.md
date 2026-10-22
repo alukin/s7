@@ -19,7 +19,7 @@ installed licence files of every bundled library, and an inventory
 | [Boost](https://www.boost.org/) (JSON, System) | all programs | BSL-1.0 | installed licence files |
 | [OpenSSL 3](https://www.openssl.org/) | runtime, transport, Studio, s7ctl | Apache-2.0 | installed licence files |
 | [zlib](https://zlib.net/) | s7core | Zlib | installed licence files |
-| [FFTW 3](https://www.fftw.org/) | `s7spectral` only (not packaged) | GPL-2.0-or-later | n/a |
+| [FFTW 3](https://www.fftw.org/) | Studio spectrum (double precision); separate `s7spectral` plugin (single precision) | GPL-2.0-or-later | installed licence files and exact source-package inventory for the bundled Studio library |
 
 On Fedora Linux the collector matches deployed ELF build IDs and full Qt
 paths, then looks up the RPM that owns each bundled library and copies its
