@@ -23,6 +23,9 @@ class LinePlotView;
 class LinePlotBridge : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool inspectionEnabled MEMBER inspectionEnabled NOTIFY inspectionChanged)
+    Q_PROPERTY(bool cursorVisible MEMBER cursorVisible NOTIFY inspectionChanged)
+    Q_PROPERTY(double cursorX MEMBER cursorX NOTIFY inspectionChanged)
     Q_PROPERTY(double xMin READ xMin NOTIFY xRangeChanged)
     Q_PROPERTY(double xMax READ xMax NOTIFY xRangeChanged)
     Q_PROPERTY(double yMin READ yMin NOTIFY yRangeChanged)
@@ -44,6 +47,10 @@ public:
     [[nodiscard]] auto legendVisible() const -> bool;
     [[nodiscard]] auto legend() const -> QVariantList;
 
+    bool inspectionEnabled = false;
+    bool cursorVisible = false;
+    double cursorX = 0;
+    Q_INVOKABLE void hover(double fraction, bool inside);
     Q_INVOKABLE QList<QObject*> seriesObjects() const;
     // fx, fy: the anchor as a fraction of the plot area from its left/bottom
     // edge; factor < 1 zooms in. Both axes, like the wheel in QCustomPlot.
@@ -52,6 +59,7 @@ public:
     Q_INVOKABLE void pan(double dxFraction, double dyFraction);
 
 signals:
+    void inspectionChanged();
     void xRangeChanged();
     void yRangeChanged();
     void titlesChanged();
@@ -116,6 +124,8 @@ public:
 
 signals:
     // Emitted for every change of the X range, by the program or the user.
+    void hovered(double time, bool active);
+    void navigated();
     void xRangeChanged(double lower, double upper);
     void yRangeChanged(double lower, double upper);
 

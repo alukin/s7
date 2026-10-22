@@ -20,6 +20,8 @@ struct RunProbe {
     std::string element;
     int port = 0;
     std::string unit{};
+    bool record = true; // Explicit full-run journal subscription.
+    std::string liveGroup{}; // Nonempty: bounded live acquisition workspace.
     bool operator==(const RunProbe&) const = default;
 };
 

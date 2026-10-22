@@ -4,6 +4,7 @@
 #pragma once
 
 #include "observation/observation_source.hpp"
+#include "observation/live_acquisition.hpp"
 
 #include <QString>
 #include <QStringList>
@@ -50,7 +51,8 @@ public:
                       QVector<InputBinding> bindings, bool clear = true);
     void setBindings(QVector<InputBinding> bindings) { bindings_ = std::move(bindings); }
     // One bounded page per UI turn. Returns whether more history remains.
-    bool refreshSource();
+    virtual bool refreshSource();
+    virtual void attachLiveSource(std::shared_ptr<observation::LiveAcquisition>) {}
     virtual void setComparisonSources(const QVector<ComparisonBinding>&) {}
     void setPreviewDroppedCount(std::uint64_t dropped) { previewDropped_ = dropped; }
     [[nodiscard]] auto source() const { return source_; }

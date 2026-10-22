@@ -19,6 +19,8 @@ are explicit integrator and function/state networks.
   startup demonstration.
 - `2int_osc.s7diagram`: a two-integrator oscillator; inspect the Scope and
   observe forward Euler's outward amplitude drift.
+- `2int_osc_live.s7diagram`: the bounded live oscilloscope prototype; change
+  acquisition length and inspect exact samples. See [prototype usage](LIVE_OSCILLOSCOPE_PROTOTYPE.md).
 - [2D phase portrait](../examples/2int_osc_phase_portrait.md): the same
   oscillator with X/Y state observation. Run 10 seconds at 1, 10 or 100 kHz;
   compare the almost circular orbit with its time trace.
@@ -80,6 +82,9 @@ are explicit integrator and function/state networks.
   acquisition, a 20→22 Hz frequency step, a phase step, and an out-of-range
   35 Hz reference. Run 6 seconds at 1 kHz; compare phase error, tuning control
   and frequency estimates. The detector receives phase directly.
+- [Live AM/FM oscilloscope examples](../examples/signal_measurement/README.md):
+  bounded continuous inspection, duration changes, freeze and raw hover values.
+  Choose the `_live.s7diagram` variants for zero full-run recording channels.
 - [AM/FM and RMS](../examples/signal_measurement/README.md): coherent AM
   detection, FM frequency estimation, a sine-amplitude RMS step and a signed
   DC RMS step. Run 2 seconds at 10 kHz. Inspect startup transients, detector

@@ -6,6 +6,7 @@
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
 #include "scope_view_window.hpp"
+#include "live_oscilloscope_window.hpp"
 
 #include <utility>
 
@@ -43,6 +44,7 @@ auto ViewerRegistry::find(const QString& typeId) const -> const ViewerType*
 void registerBuiltinViewers(ViewerRegistry& registry)
 {
     registry.add(ui::ScopeViewWindow::viewerType());
+    registry.add(ui::LiveOscilloscopeWindow::viewerType());
     registry.add(ui::PhasePortraitViewWindow::viewerType());
     registry.add(ui::PhaseTrajectory3DViewWindow::viewerType());
 }

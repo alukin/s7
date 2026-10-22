@@ -1,6 +1,8 @@
 # Live oscilloscope design
 
-Status: proposed implementation contract; no implementation is claimed. 2026-10-22.
+Status: target implementation contract, 2026-10-22. The first time-domain
+[prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) implements a bounded subset; the full
+analysis scope and acceptance targets below remain unfulfilled.
 
 The live oscilloscope is a separate, bounded observation instrument for continuous
 and finite S7 runs. Its completed feature set must meet the documented analysis

@@ -50,6 +50,7 @@ public:
     void deliver(const ScopeSampleBatch& batch, const std::function<QString(const QString&)>& observerType);
     void present(std::shared_ptr<const observation::ObservationSource> source, std::uint64_t previewDropped,
                  const std::function<QString(const QString&)>& observerType);
+    void presentLive(observation::LiveSources sources);
     void clearSamples();
     void beginRun(const QString& previousRunLabel, bool preserveScopes);
     void setDroppedSampleCount(std::uint64_t dropped);
@@ -79,6 +80,7 @@ private:
     observation::ObservationSession session_;
     std::shared_ptr<const observation::ObservationSource> externalSource_;
     QHash<QString, QString> recordedTypes_;
+    observation::LiveSources liveSources_;
     const ViewerRegistry& registry_;
     QHash<QString, Instance> instances_;
     std::uint64_t dropped_ = 0;

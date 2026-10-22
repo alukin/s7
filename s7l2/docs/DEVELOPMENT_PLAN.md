@@ -2,17 +2,12 @@
 
 ## P0 release priority — continuous oscilloscope viewer (2026-10-22)
 
-User-directed release requirement; discuss the design next and implement as
-soon as agreed. **Not implemented.** This is a new 0.1.0 gate, overriding the
-earlier preview deferral for this specific observation feature. Finish the
-fractional-duration correction first; do not start the viewer implementation
-before the discussion.
-
-The proposed [live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md) now defines
-the acquisition policy, user-adjustable window, exact sample readouts, four-view
-analysis scope and staged acceptance gates. It is a design proposal, not an
-implementation or completion claim. Its milestones distinguish the bounded-live
-release requirement from full ADI OSC parity.
+The first [time-domain prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) is implemented:
+bounded worker-side acquisition, live/recording subscriptions, online retention
+settings, freeze/resume, raw-sample hover and extrema-preserving display reduction.
+The [design](LIVE_OSCILLOSCOPE_DESIGN.md) remains the target for four-view analysis,
+triggers and qualification. Prototype implementation does not close the release
+acceptance gate or establish ADI OSC parity.
 
 Continuous execution already exists (`runtime_seconds = -1`). The current
 Scope is an entire-run recording/comparison viewer: bounded RAM spills history
@@ -24,7 +19,7 @@ continuous inspection, retaining a bounded acquisition/time window. Both RAM
 and disk consumption must stay bounded when full-run recording is not selected.
 Preserve the existing Scope's explicit recording/export/comparison workflow.
 
-Discussion decisions:
+Design/implementation tracking (see the design for decisions):
 
 - Continuous-run UI: make endless operation discoverable rather than requiring
   users to know the `-1` sentinel; retain finite fractional-duration runs.
@@ -39,7 +34,7 @@ Discussion decisions:
 - Freeze/export: decide whether saving covers the current visible acquisition
   window or a separate explicit recorder; never imply unlimited retained data.
 
-Implementation sequence after agreement:
+Delivery sequence:
 
 1. Document the acquisition/capture policy and update the observation contracts.
 2. Implement bounded worker-side acquisition and read-only viewer delivery,
@@ -55,6 +50,28 @@ viewer open/close/reopen and shutdown. Show that oscilloscope-only continuous
 runs do not accumulate a temporary recording, while explicitly requested Scope
 recordings keep their completeness/error behavior. Measure bounded local UI
 work and resource use; preserve headless execution and existing numerical tests.
+
+### Prototype verification — 2026-10-22
+
+Resumed the interrupted implementation and completed the Release `build-tests`
+build. Display gain/offset overflow now hides the affected trace with an explicit
+message while preserving raw inspection; the hover cursor stays inside the visible
+time range. Regression coverage includes the aggregate eight-channel limit across
+workspaces and rejection before stepping when a ninth channel is requested.
+
+The full native suite passed 65/74 entries inside the sandbox; the remaining nine
+were blocked by socket/Xvfb restrictions and all passed with those restrictions
+lifted (9/9, 16.26 s). After the final viewer changes, all seven focused acquisition,
+viewer and rendered GUI entries passed together (7/7, 7.74 s). All 74 entries have
+passing evidence across these runs; a second full-suite execution is not claimed.
+Rendered screenshots of hover, freeze and multichannel AM/FM views were reviewed.
+
+A fresh 310 MiB Linux package passed 12/12 installed checks in the local Fedora 44
+container with the package mounted read-only, including bundled help/examples,
+save/reopen and existing observation viewers. This is packaging/regression evidence,
+not a live-acquisition soak or performance qualification. Four-view analysis,
+triggers, saved workspaces/window export, native Windows rendering and the design's
+long-duration resource/latency acceptance gates remain open. No release tag was made.
 
 ## Fractional run duration correction — 2026-10-22
 

@@ -1,0 +1,219 @@
+{
+  "id": "untitled",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297.0,
+    "height_mm": 210.0
+  },
+  "schema": {
+    "name": "untitled",
+    "elements": [
+      {
+        "id": "eulerintegrator_1",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "eulerintegrator_2",
+        "type": "EulerIntegrator",
+        "params": {
+          "dt": 0.001
+        }
+      },
+      {
+        "id": "adder_1",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ],
+          "overflow": "saturate"
+        }
+      },
+      {
+        "id": "constant_1",
+        "type": "Constant",
+        "params": {
+          "value": 0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "eulerintegrator_1",
+        "from_port": 0,
+        "to_element": "eulerintegrator_2",
+        "to_port": 0
+      },
+      {
+        "from_element": "eulerintegrator_2",
+        "from_port": 0,
+        "to_element": "adder_1",
+        "to_port": 1
+      },
+      {
+        "from_element": "adder_1",
+        "from_port": 0,
+        "to_element": "eulerintegrator_1",
+        "to_port": 0
+      },
+      {
+        "from_element": "constant_1",
+        "from_port": 0,
+        "to_element": "adder_1",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "eulerintegrator_1",
+        "position": [
+          18,
+          14
+        ]
+      },
+      {
+        "id": "eulerintegrator_2",
+        "position": [
+          31,
+          14
+        ]
+      },
+      {
+        "id": "adder_1",
+        "position": [
+          6,
+          14
+        ]
+      },
+      {
+        "id": "constant_1",
+        "position": [
+          2,
+          5
+        ]
+      },
+      {
+        "id": "live_1",
+        "position": [
+          44,
+          14
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "v"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "adder_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "eulerintegrator_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "eulerintegrator_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "eulerintegrator_2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "eulerintegrator_2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "adder_1",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "constant_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "adder_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs5",
+        "from": {
+          "wire": "w3",
+          "at": [
+            44,
+            14
+          ]
+        },
+        "to": {
+          "port": [
+            "live_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": []
+  }
+}

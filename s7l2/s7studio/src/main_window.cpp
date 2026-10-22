@@ -352,6 +352,7 @@ void MainWindow::resetLocalRun()
     ++runGeneration_;
     disconnect(runner_, nullptr, this, nullptr);
     runner_->reset();
+    viewers_->presentLive({});
     runObserverTypes_.clear();
     observersFrozen_ = false;
     connectRunnerSignals();
@@ -745,7 +746,7 @@ void MainWindow::onElementRequested(const QString& elementType, const QString& /
     const bool observer = elementType.startsWith(observerPrefix)
         && viewers::ViewerRegistry::instance().find(elementType.mid(observerPrefix.size()));
     const QString actualType = observer ? elementType.mid(observerPrefix.size()) : elementType;
-    const bool scopeObserver = actualType == QStringLiteral("Scope");
+    const bool scopeObserver = actualType == QStringLiteral("Scope") || actualType == QStringLiteral("LiveOscilloscope");
     const auto* descriptor = observer ? nullptr : s7::ElementRegistry::instance().find(actualType.toStdString());
     diagram::ElementNode::Element element;
     element.id = nextElementId(*scene, actualType).toStdString();
@@ -1094,6 +1095,7 @@ void MainWindow::onScopeSamplesAvailable()
     const auto configuration = runner_->activeConfiguration();
     if (!configuration || batch.runId != configuration->id) return;
     // Capture already happened on the worker; this only attaches read-only data.
+    viewers_->presentLive(runner_->liveSources());
     viewers_->present(runner_->recordedSource(), batch.dropped,
         [this](const QString& observerId) { return observerViewerType(observerId); });
     if (batch.dropped > 0) {
@@ -1300,7 +1302,16 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
             for (const auto& probe : scene->probes()) if (probe.point == connection.from) {
                 unit = probe.unit.toStdString(); break;
             }
-            probes.push_back(RunProbe{connection.to.element + "/" + channelName, connection.from.element, connection.from.port, unit});
+            const auto observer = scene->elementNode(connection.to.element);
+            const bool live = observer && observer->element().type == "LiveOscilloscope";
+            if (observer) {
+                const auto* units = json_utils::findObjectValue(observer->element().params, "channel_units");
+                if (units && units->is_array() && connection.to.port >= 0 &&
+                    connection.to.port < static_cast<int>(units->as_array().size()) && units->as_array()[connection.to.port].is_string())
+                    unit = units->as_array()[connection.to.port].as_string().c_str();
+            }
+            probes.push_back(RunProbe{connection.to.element + "/" + channelName, connection.from.element,
+                connection.from.port, unit, !live, live ? connection.to.element : std::string{}});
         }
     }
     return probes;
@@ -1655,6 +1666,28 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     runtimeSecondsSpin->setSpecialValueText(QStringLiteral("-1 (continuous)"));
     runtimeSecondsSpin->setValue(std::clamp(runtimeSeconds_, -1.0, 604800.0));
 
+    auto* continuous = new QCheckBox(QStringLiteral("Run continuously until stopped"), &dialog);
+    continuous->setObjectName(QStringLiteral("run.continuous"));
+    continuous->setChecked(runtimeSeconds_ == -1.0);
+    runtimeSecondsSpin->setEnabled(!continuous->isChecked());
+    connect(continuous, &QCheckBox::toggled, &dialog, [runtimeSecondsSpin](bool enabled) {
+        runtimeSecondsSpin->setEnabled(!enabled);
+        if (enabled) runtimeSecondsSpin->setValue(-1.0);
+        else if (runtimeSecondsSpin->value() == -1.0) runtimeSecondsSpin->setValue(60.0);
+    });
+    connect(runtimeSecondsSpin, &QDoubleSpinBox::valueChanged, &dialog, [continuous](double value) {
+        continuous->setChecked(value == -1.0);
+    });
+    form->addRow(continuous);
+    const auto captureProbes = currentRunProbes();
+    const auto recordingChannels = std::ranges::count_if(captureProbes, [](const auto& probe) { return probe.record; });
+    const auto liveChannels = std::ranges::count_if(captureProbes, [](const auto& probe) { return !probe.liveGroup.empty(); });
+    auto* captureSummary = new QLabel(QStringLiteral("Live acquisition: %1 channels, bounded RAM. Full-run recording: %2 channels (Scope, phase viewers and named probes). Recording retains the entire run and grows on disk.")
+        .arg(liveChannels).arg(recordingChannels), &dialog);
+    captureSummary->setWordWrap(true);
+    captureSummary->setObjectName(QStringLiteral("run.captureSummary"));
+    form->addRow(captureSummary);
+
     auto* frequencySpin = new QDoubleSpinBox(&dialog);
     frequencySpin->setObjectName(QStringLiteral("run.frequency"));
     frequencySpin->setDecimals(6);
@@ -1782,6 +1815,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
     }
     observersFrozen_ = true;
     controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_}, probes);
+    viewers_->presentLive(runner_->liveSources());
     refreshActions();
 }
 

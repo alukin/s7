@@ -10,6 +10,8 @@
 #include <s7/transport.hpp>
 
 #include <chrono>
+#include <map>
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -83,7 +85,9 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
     scopeMailbox_.clear(id);
     auto storage = storage_;
     if (storage.temporaryDirectory.isEmpty()) storage.temporaryDirectory = qEnvironmentVariable("S7STUDIO_RECORDING_TEMP_DIR");
-    recording_ = std::make_shared<observation::ObservationSource>(id, std::move(storage));
+    const bool liveOnly = !probes.empty() && std::ranges::none_of(probes, [](const auto& p) { return p.record; });
+    recording_ = liveOnly ? nullptr : std::make_shared<observation::ObservationSource>(id, std::move(storage));
+    liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); probeValues_.clear();
     probeChannels_.clear();
     completedTicks_.store(0);
     pauseRequested_.store(false);
@@ -114,7 +118,8 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
         worker_ = std::thread([this, configuration = configuration_] { executeRunLoop(configuration); });
     } catch (const std::exception& ex) {
         releaseRuntime();
-        recording_->finish(false, QString::fromUtf8(ex.what()));
+        if (recording_) recording_->finish(false, QString::fromUtf8(ex.what()));
+        for (auto& route : liveRoutes_) if (route.source) route.source->finish(QStringLiteral("Run preparation failed."));
         state_.store(RunState::Error);
         publishState(RunState::Error, id);
         if (id != generation_.load()) return;
@@ -122,7 +127,8 @@ void LocalSchemaRunner::run(const boost::json::value& schemaJson, double dt, lon
         emit runCompleted(false, QString::fromUtf8(ex.what()));
     } catch (...) {
         releaseRuntime();
-        recording_->finish(false, QStringLiteral("Unknown preparation exception."));
+        if (recording_) recording_->finish(false, QStringLiteral("Unknown preparation exception."));
+        for (auto& route : liveRoutes_) if (route.source) route.source->finish(QStringLiteral("Run preparation failed."));
         state_.store(RunState::Error);
         publishState(RunState::Error, id);
         if (id != generation_.load()) return;
@@ -142,7 +148,11 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
     auto graph = s7::Compiler::compile(*schema_);
     runtime_ = std::make_unique<s7::NodeRuntime>(std::move(graph));
     runtime_->set_model_time_rate(s7::Rate::from_seconds(configuration.dt));
-    recording_->setProvenance(std::move(prepared.provenance));
+    if (recording_) recording_->setProvenance(prepared.provenance);
+    std::map<std::string, std::size_t> groups;
+    std::vector<QVector<observation::LiveChannel>> liveChannels;
+    std::map<std::pair<std::string, int>, std::size_t> uniqueReads;
+    std::size_t liveCount = 0;
     s7::ObservationService observation(*runtime_);
     std::set<std::string> names;
     for (const auto& probe : configuration.probes) {
@@ -152,13 +162,34 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
         if (sample.is_complex())
             throw std::invalid_argument("Probe '" + probe.name + "' has unsupported complex type " +
                 std::string(s7::signal_type_name(sample.type)) + "; scalar viewers require a real-valued output.");
-        probeChannels_.push_back(recording_->channel(QString::fromStdString(probe.name),
-            QString::fromUtf8(s7::signal_type_name(sample.type).data(), static_cast<int>(s7::signal_type_name(sample.type).size()))));
+        const auto type = QString::fromStdString(std::string(s7::signal_type_name(sample.type)));
+        probeChannels_.push_back(probe.record ? recording_->channel(QString::fromStdString(probe.name), type) : 0);
+        const auto index = readIndices_.size();
+        auto read = uniqueReads.emplace(std::pair{probe.element, probe.port}, index).first;
+        readIndices_.push_back(read->second);
+        if (!probe.record && probe.liveGroup.empty()) throw std::invalid_argument("Probe has no capture subscription.");
+        if (!probe.liveGroup.empty()) {
+            if (++liveCount > observation::LiveAcquisition::maxChannels)
+                throw std::invalid_argument("Prototype supports at most 8 live channels across all workspaces.");
+            auto [group, added] = groups.emplace(probe.liveGroup, groups.size());
+            if (added) { liveChannels.emplace_back(); liveRoutes_.emplace_back(); }
+            liveChannels[group->second].push_back({QString::fromStdString(probe.name), QString::fromStdString(probe.unit), type});
+            liveRoutes_[group->second].probes.push_back(index);
+        }
         if (sample.type != s7::SignalType::F64) {
             const auto message = QStringLiteral("[runtime] probe %1: %2 is explicitly converted to stored binary64; wider scalar values may round.")
                 .arg(QString::fromStdString(probe.name)).arg(QString::fromStdString(std::string(s7::signal_type_name(sample.type))));
             postRunEvent(configuration.id, [this, message] { emit logMessage(message); });
         }
+    }
+    probeValues_.resize(configuration.probes.size());
+    for (const auto& [name, index] : groups) {
+        auto source = std::make_shared<observation::LiveAcquisition>(configuration.id, configuration.dt,
+            std::move(liveChannels[index]), prepared.provenance,
+            s7::Rate::from_seconds(configuration.dt).numerator, s7::Rate::from_seconds(configuration.dt).denominator);
+        liveSources_.insert(QString::fromStdString(name), source);
+        liveRoutes_[index].source = source;
+        liveRoutes_[index].values.resize(liveRoutes_[index].probes.size());
     }
 }
 
@@ -210,14 +241,24 @@ void LocalSchemaRunner::emitScopeSamples()
     s7::ObservationService observation(*runtime_);
     bool notify = false;
     const auto id = configuration_->id;
+    std::int64_t step = 0;
+    double timeSeconds = 0;
     for (std::size_t i = 0; i < probes_.size(); ++i) {
-        const auto& probe = probes_[i];
-        const auto sample = observation.sample_output(probe.element, static_cast<std::size_t>(probe.port));
-        const double timeSeconds = sample.model_time_seconds.value();
-        const auto value = sample.to_display_double();
-        if (!recording_->append({probeChannels_[i], static_cast<std::int64_t>(sample.step), timeSeconds, value}))
-            throw std::runtime_error("Observation capture failed: " + recording_->status().storageError.toStdString());
-        notify |= scopeMailbox_.push(ScopeSample{probe.name, static_cast<long>(sample.step), timeSeconds, value, id});
+        if (readIndices_[i] == i) {
+            const auto sample = observation.sample_output(probes_[i].element, static_cast<std::size_t>(probes_[i].port));
+            step = static_cast<std::int64_t>(sample.step);
+            timeSeconds = sample.model_time_seconds.value();
+            probeValues_[i] = sample.to_display_double();
+        } else probeValues_[i] = probeValues_[readIndices_[i]];
+        if (probes_[i].record) {
+            if (!recording_->append({probeChannels_[i], step, timeSeconds, probeValues_[i]}))
+                throw std::runtime_error("Observation capture failed: " + recording_->status().storageError.toStdString());
+            notify |= scopeMailbox_.push(ScopeSample{probes_[i].name, static_cast<long>(step), timeSeconds, probeValues_[i], id});
+        }
+    }
+    for (auto& route : liveRoutes_) {
+        for (std::size_t i = 0; i < route.probes.size(); ++i) route.values[i] = probeValues_[route.probes[i]];
+        route.source->append(step, timeSeconds, route.values);
     }
     if (notify) postRunEvent(id, [this] { emit scopeSamplesAvailable(); });
 }
@@ -233,6 +274,7 @@ void LocalSchemaRunner::finalizeRun(std::uint64_t id, bool success, const std::s
         const auto status = recording_->status();
         if (detail.isEmpty()) detail = status.storageError.isEmpty() ? status.runError : status.storageError;
     }
+    for (auto& route : liveRoutes_) if (route.source) route.source->finish(detail);
     RunState terminal;
     {
         std::lock_guard lock(controlMutex_);
@@ -296,6 +338,8 @@ void LocalSchemaRunner::reset()
     releaseRuntime();
     configuration_.reset();
     recording_.reset();
+    for (auto& route : liveRoutes_) if (route.source) route.source->finish();
+    liveSources_.clear(); liveRoutes_.clear(); readIndices_.clear(); probeValues_.clear();
     probeChannels_.clear();
     probes_.clear();
     scopeMailbox_.clear();

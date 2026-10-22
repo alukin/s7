@@ -83,6 +83,30 @@ Item {
         }
     }
 
+    HoverHandler {
+        id: inspectionHover
+        enabled: plot.inspectionEnabled
+        function updateReadout() {
+            const area = view.plotArea
+            const x = point.position.x - view.x - area.x
+            const y = point.position.y - view.y - area.y
+            plot.hover(area.width > 0 ? x / area.width : 0,
+                       hovered && x >= 0 && x <= area.width && y >= 0 && y <= area.height)
+        }
+        onPointChanged: updateReadout()
+        onHoveredChanged: updateReadout()
+    }
+    Rectangle {
+        objectName: "viewer.sampleCursor"
+        visible: plot.inspectionEnabled && plot.cursorVisible
+                 && plot.cursorX >= plot.xMin && plot.cursorX <= plot.xMax
+        x: view.x + view.plotArea.x + (plot.cursorX - plot.xMin) / (plot.xMax - plot.xMin) * view.plotArea.width
+        y: view.y + view.plotArea.y
+        width: 1
+        height: view.plotArea.height
+        color: "#707070"
+    }
+
     // Wheel: zoom both axes about the cursor. Drag: pan.
     WheelHandler {
         target: null

@@ -749,7 +749,7 @@ auto DiagramScene::connectEnds(const WireEnd& a, const WireEnd& b, QVector<QPoin
     DiagramChange change;
     change.addedWires.push_back(wire);
     applyChange(change, QStringLiteral("Connect"));
-    if (const auto target = downstream.node.lock(); target && target->element().type == "Scope" &&
+    if (const auto target = downstream.node.lock(); target && (target->element().type == "Scope" || target->element().type == "LiveOscilloscope") &&
         downstream.index == static_cast<int>(target->inputs().size()) - 1) {
         auto element = target->element();
         element.params["channel_count"] = static_cast<int>(target->inputs().size());

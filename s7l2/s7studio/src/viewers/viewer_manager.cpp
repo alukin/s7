@@ -73,7 +73,8 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     connect(window, &QObject::destroyed, this, [this, key] { forget(key); });
     viewer->setDroppedSampleCount(dropped_);
     instances_.insert(key, Instance{typeId, spec.instanceId, window, viewer, spec});
-    viewer->attachSource(source(), bindingsFor(instances_[key], source()));
+    if (typeId == QStringLiteral("LiveOscilloscope")) viewer->attachLiveSource(liveSources_.value(spec.instanceId));
+    else viewer->attachSource(source(), bindingsFor(instances_[key], source()));
     viewer->setPreviewDroppedCount(externalSource_ ? dropped_ : 0);
     bindComparisons(instances_[key]);
     viewer->refreshSource();
@@ -177,6 +178,7 @@ void ViewerManager::bindViews(bool clear)
 {
     for (const auto& instance : std::as_const(instances_)) {
         if (!instance.window) continue;
+        if (instance.typeId == QStringLiteral("LiveOscilloscope")) continue;
         if (instance.viewer->source() != source())
             instance.viewer->attachSource(source(), bindingsFor(instance, source()), clear);
         else instance.viewer->setBindings(bindingsFor(instance, source()));
@@ -196,7 +198,16 @@ void ViewerManager::beginRun(const QString& previousRunLabel, bool preserveScope
     session_.beginRun();
     externalSource_.reset();
     recordedTypes_.clear();
+    presentLive({});
     bindViews(false);
+}
+
+void ViewerManager::presentLive(observation::LiveSources sources)
+{
+    liveSources_ = std::move(sources);
+    for (const auto& instance : std::as_const(instances_))
+        if (instance.window && instance.typeId == QStringLiteral("LiveOscilloscope"))
+            instance.viewer->attachLiveSource(liveSources_.value(instance.instanceId));
 }
 
 void ViewerManager::clearSamples()
@@ -217,6 +228,7 @@ void ViewerManager::closeAll()
     session_.clearHistory();
     externalSource_.reset();
     recordedTypes_.clear();
+    liveSources_.clear();
     dropped_ = 0;
     ++generation_;
     for (const auto& instance : instances) {

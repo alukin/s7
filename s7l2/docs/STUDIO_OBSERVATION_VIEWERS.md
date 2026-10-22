@@ -4,6 +4,10 @@ Studio shows observed signals in viewer windows: **Scope** (signals over model t
 
 Observation stays outside computation (ADR-011, ADR-012, ADR-013 in `../../doc/S7_Architectural_Decisions.md`): viewers read samples and never step, pause or alter the runtime. Nothing here touches `s7core`, `s7runtime` or `s7observe`, which remain free of Qt.
 
+The separate [live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) uses a
+bounded acquisition source and does not journal live-only channels. The data-flow
+and full-run journal descriptions below apply to the existing recording viewers.
+
 ## Data flow
 
 ```text

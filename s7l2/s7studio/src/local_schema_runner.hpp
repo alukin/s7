@@ -7,6 +7,7 @@
 #include "local_runtime_v2.hpp"
 #include "scope_sample_mailbox.hpp"
 #include "observation/observation_source.hpp"
+#include "observation/live_acquisition.hpp"
 
 #include <QObject>
 #include <QString>
@@ -44,6 +45,7 @@ public:
     [[nodiscard]] RunState state() const override { return state_.load(); }
     [[nodiscard]] auto activeConfiguration() const -> std::shared_ptr<const RunConfiguration> { return configuration_; }
     [[nodiscard]] auto recordedSource() const -> std::shared_ptr<const observation::ObservationSource> { return recording_; }
+    [[nodiscard]] auto liveSources() const -> observation::LiveSources { return liveSources_; }
     [[nodiscard]] long completedTicks() const { return completedTicks_.load(); }
     [[nodiscard]] bool isRunning() const override;
     [[nodiscard]] bool isPaused() const override;
@@ -91,6 +93,15 @@ private:
     const observation::StorageOptions storage_;
     std::shared_ptr<observation::ObservationSource> recording_;
     std::vector<observation::ChannelId> probeChannels_;
+    observation::LiveSources liveSources_;
+    struct LiveRoute {
+        std::shared_ptr<observation::LiveAcquisition> source;
+        std::vector<std::size_t> probes;
+        std::vector<double> values;
+    };
+    std::vector<LiveRoute> liveRoutes_;
+    std::vector<std::size_t> readIndices_; // Deduplicate reads of identical output ports.
+    std::vector<double> probeValues_;
 };
 
 } // namespace s7studio

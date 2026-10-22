@@ -70,9 +70,15 @@ QList<QObject*> LinePlotBridge::seriesObjects() const
     return {view_.series_.cbegin(), view_.series_.cend()};
 }
 
+void LinePlotBridge::hover(double fraction, bool inside)
+{
+    if (inspectionEnabled) emit view_.hovered(view_.xMin_ + fraction * (view_.xMax_ - view_.xMin_), inside);
+}
+
 void LinePlotBridge::zoom(const double fx, const double fy, const double factor)
 {
     if (!(factor > 0.0) || !std::isfinite(factor)) return;
+    emit view_.navigated();
     const double anchorX = view_.xMin_ + std::clamp(fx, 0.0, 1.0) * (view_.xMax_ - view_.xMin_);
     const double anchorY = view_.yMin_ + std::clamp(fy, 0.0, 1.0) * (view_.yMax_ - view_.yMin_);
     view_.setXRange(anchorX - (anchorX - view_.xMin_) * factor, anchorX + (view_.xMax_ - anchorX) * factor);
@@ -81,6 +87,7 @@ void LinePlotBridge::zoom(const double fx, const double fy, const double factor)
 
 void LinePlotBridge::pan(const double dxFraction, const double dyFraction)
 {
+    emit view_.navigated();
     const double dx = dxFraction * (view_.xMax_ - view_.xMin_);
     const double dy = dyFraction * (view_.yMax_ - view_.yMin_);
     if (dx != 0.0) view_.setXRange(view_.xMin_ + dx, view_.xMax_ + dx);

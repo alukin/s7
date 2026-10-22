@@ -65,13 +65,13 @@ bool isAxisObserverElementType(const std::string_view type)
 
 bool isObserverElementType(const std::string_view type)
 {
-    return type == "Scope" || isAxisObserverElementType(type);
+    return type == "Scope" || type == "LiveOscilloscope" || isAxisObserverElementType(type);
 }
 
 auto elementPorts(const std::string_view type, const boost::json::object& params, const boost::json::value& nestedSchema)
     -> ElementPorts
 {
-    if (type == "Scope") {
+    if (type == "Scope" || type == "LiveOscilloscope") {
         const int count = std::max(0, json_utils::intValue(params, "channel_count", 0));
         auto inputs = numbered("signal", count);
         inputs.push_back(QStringLiteral("+")); // connection target that grows the observer

@@ -58,12 +58,13 @@ s7_enable_project_warnings(s7studio_diagram)
 # registry, manager and shared plot/3D components, and the Scope, Phase
 # Portrait and 3D Phase Trajectory windows. Shared by Studio and its tests.
 add_library(s7studio_observation STATIC
+    src/observation/live_acquisition.cpp src/observation/live_acquisition.hpp
     src/observation/observation_source.cpp
     src/observation/observation_source.hpp
     src/observation/run_metadata.cpp src/observation/run_metadata.hpp
 )
 target_include_directories(s7studio_observation PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(s7studio_observation PUBLIC Qt6::Core)
+target_link_libraries(s7studio_observation PUBLIC Qt6::Core PRIVATE Boost::headers)
 s7_enable_project_warnings(s7studio_observation)
 
 add_custom_target(s7studio_build_identity
@@ -104,6 +105,7 @@ add_library(s7studio_viewers STATIC
     src/viewers/trajectory_geometry.cpp
     src/viewers/trajectory_geometry.hpp
     src/scope_sample_mailbox.hpp
+    src/live_oscilloscope_window.cpp src/live_oscilloscope_window.hpp
     src/scope_view_window.cpp
     src/scope_view_window.hpp
     src/phase_portrait_view_window.cpp
@@ -175,6 +177,8 @@ qt_add_resources(s7studio_app s7studio_help
     PREFIX /s7studio/help BASE ${PROJECT_SOURCE_DIR}
     FILES
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_USER_GUIDE.md
+        ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md
+        ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_DESIGN.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
         ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVATION_VIEWERS.md
@@ -465,3 +469,12 @@ set_tests_properties(s7studio_run_provenance PROPERTIES TIMEOUT 60)
 # not a portable performance assertion in the ordinary regression suite.
 add_executable(s7studio_operational_acceptance EXCLUDE_FROM_ALL tests/operational_acceptance.cpp)
 target_link_libraries(s7studio_operational_acceptance PRIVATE s7studio_app)
+
+# Bounded live acquisition and prototype interaction, including real runner routing.
+s7_add_test_executable(s7studio_live_oscilloscope_test tests/live_oscilloscope_test.cpp
+    src/local_schema_runner.cpp src/local_schema_runner.hpp src/model_run_controller.cpp)
+target_link_libraries(s7studio_live_oscilloscope_test PRIVATE s7studio_diagram s7studio_viewers Qt6::Test Threads::Threads)
+set_target_properties(s7studio_live_oscilloscope_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_live_oscilloscope_test)
+add_test(NAME s7studio_live_oscilloscope COMMAND s7studio_live_oscilloscope_test)
+set_tests_properties(s7studio_live_oscilloscope PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 90)

@@ -6,6 +6,8 @@
 #include "diagram/diagram_scene.hpp"
 #include "element_picker_panel.hpp"
 #include "scope_view_window.hpp"
+#include "live_oscilloscope_window.hpp"
+#include <QQuickItem>
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
 #include "viewers/viewer_manager.hpp"
@@ -207,6 +209,10 @@ private slots:
         QVERIFY(browser->toPlainText().contains("Saving and comparing Scope results"));
         browser->backward();
         QVERIFY(browser->toPlainText().contains("First simulation"));
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"))));
+        QVERIFY(browser->toPlainText().contains("Retain samples / channel"));
+        QVERIFY(browser->toPlainText().contains("fm_frequency_detection_live.s7diagram"));
         capture(help, "help");
         help->close();
         action("action.help")->trigger();
@@ -494,6 +500,87 @@ private slots:
         graph.undoStack()->undo(); QVERIFY(!graph.elementNode("nested_copy1"));
         QCOMPARE(graph.signalWires().size(), std::size_t(2));
         graph.undoStack()->redo(); QVERIFY(graph.elementNode("nested_copy1"));
+    }
+    void liveOscilloscopePrototype() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live.s7diagram"));
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        QVERIFY(QMetaObject::invokeMethod(editor(), "elementNodeDoubleClicked", Qt::DirectConnection,
+            Q_ARG(QString, "live_1"), Q_ARG(QString, "LiveOscilloscope"), Q_ARG(int, 1)));
+        auto* viewer = dynamic_cast<s7studio::ui::LiveOscilloscopeWindow*>(manager->find("LiveOscilloscope", "live_1")); QVERIFY(viewer);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(configure("action.run", 2)); QTRY_COMPARE(completed.count(), 1);
+        QVERIFY(completed.last()[0].toBool()); QVERIFY(!runner->recordedSource());
+        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(2000));
+        auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
+        viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
+        auto* count = viewer->findChild<QSpinBox*>("live.samples"); QVERIFY(count);
+        count->setValue(1001); QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(1001));
+        auto* seconds = viewer->findChild<QLineEdit*>("live.seconds"); QVERIFY(seconds);
+        seconds->setFocus(); seconds->selectAll(); QTest::keyClicks(seconds, "0.5"); QTest::keyClick(seconds, Qt::Key_Return);
+        QTRY_COMPARE(count->value(), 501); QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(501));
+        auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
+        const auto area = graph->property("plotArea").toRectF(); QVERIFY(area.width() > 0);
+        const auto center = graph->mapToScene(area.center()).toPoint();
+        QTest::mouseMove(quick, center); QTRY_VERIFY(viewer->plotView()->bridge()->cursorVisible);
+        auto* readout = viewer->findChild<QLabel*>("live.readout"); QVERIFY(readout);
+        QTRY_VERIFY(readout->text().contains("Stored sample")); QVERIFY(readout->text().contains("step"));
+        const auto index = viewer->displayedFrame().nearest(viewer->plotView()->bridge()->cursorX); QVERIFY(index);
+        QVERIFY(readout->text().contains(QString::number(viewer->displayedFrame().values[*index], 'g', 17)));
+        capture(viewer, "live-oscilloscope-hover");
+        auto* cursor = quick->rootObject()->findChild<QQuickItem*>("viewer.sampleCursor"); QVERIFY(cursor);
+        QVERIFY(cursor->isVisible());
+        const auto lower = viewer->plotView()->xMin(), upper = viewer->plotView()->xMax();
+        viewer->plotView()->setXRange(upper + .1, upper + .2);
+        QTRY_VERIFY(!cursor->isVisible());
+        viewer->plotView()->setXRange(lower, upper);
+        QTRY_VERIFY(cursor->isVisible());
+        auto* freeze = viewer->findChild<QPushButton*>("live.freeze"); QTest::mouseClick(freeze, Qt::LeftButton); QVERIFY(freeze->isChecked());
+        const auto frameEnd = viewer->displayedFrame().steps.back();
+        count->setValue(128); manager->refreshViews(); QCOMPARE(viewer->displayedFrame().steps.back(), frameEnd);
+        capture(viewer, "live-oscilloscope-frozen");
+        QTest::mouseClick(viewer->findChild<QPushButton*>("live.follow"), Qt::LeftButton);
+        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
+        viewer->close(); QVERIFY(!viewer->isVisible());
+        manager->openObserver("LiveOscilloscope", "live_1"); QTRY_VERIFY(viewer->isVisible());
+        action("action.reset")->trigger(); QVERIFY(viewer->displayedFrame().steps.empty());
+    }
+    void liveMeasurementExamples_data() {
+        QTest::addColumn<QString>("filename"); QTest::addColumn<QString>("observer"); QTest::addColumn<QString>("unit");
+        QTest::newRow("am") << "am_coherent_detection" << "carrier_scope" << "V";
+        QTest::newRow("fm") << "fm_frequency_detection" << "frequency_scope" << "Hz";
+    }
+    void liveMeasurementExamples() {
+        QFETCH(QString, filename); QFETCH(QString, observer); QFETCH(QString, unit);
+        const auto directory = QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/";
+        QVERIFY(fileAction("action.open", directory + filename + "_live.s7diagram"));
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
+            auto* rate = dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* summary = dialog->findChild<QLabel*>("run.captureSummary");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!duration || !rate || !summary || !buttons) return false;
+            if (!summary->text().contains("Live acquisition: 7 channels") || !summary->text().contains("Full-run recording: 0 channels")) return false;
+            duration->setValue(2); rate->setValue(10000);
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton); return true;
+        }));
+        QTRY_COMPARE(completed.count(), 1); QVERIFY(completed.last()[0].toBool());
+        QVERIFY(!runner->recordedSource());
+        int channels = 0;
+        for (const auto& source : runner->liveSources()) {
+            const auto frame = source->snapshot(); QVERIFY(frame); QVERIFY(frame->finished);
+            QCOMPARE(frame->steps.back(), std::int64_t(20000)); QCOMPARE(frame->steps.size(), std::size_t(4096));
+            channels += static_cast<int>(frame->channels.size());
+            for (const auto& channel : frame->channels) QVERIFY(!channel.unit.isEmpty());
+        }
+        QCOMPARE(channels, 7);
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* viewer = dynamic_cast<s7studio::ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", observer)); QVERIFY(viewer);
+        QTRY_VERIFY(!viewer->displayedFrame().steps.empty());
+        const auto readout = viewer->inspect(viewer->displayedFrame().times.back()); QVERIFY(readout.contains(unit));
+        capture(viewer, filename + "-live");
     }
     void simulationAndViewers_data() {
         QTest::addColumn<QString>("diagram");

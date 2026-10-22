@@ -1,0 +1,49 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+#pragma once
+#include "viewers/observation_viewer.hpp"
+#include <QElapsedTimer>
+#include <QWidget>
+class QLabel;
+class QLineEdit;
+class QPushButton;
+class QSpinBox;
+class QCheckBox;
+class QDoubleSpinBox;
+namespace s7studio::viewers { class LinePlotView; }
+namespace s7studio::ui {
+class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
+    Q_OBJECT
+public:
+    explicit LiveOscilloscopeWindow(QString id);
+    ~LiveOscilloscopeWindow() override;
+    static viewers::ViewerType viewerType();
+    QWidget* widget() override { return this; }
+    void attachLiveSource(std::shared_ptr<observation::LiveAcquisition> source) override;
+    bool refreshSource() override;
+    void clearSamples() override;
+    void setDroppedSampleCount(std::uint64_t) override {}
+    void beginRun(const QString&, bool) override { attachLiveSource({}); }
+    viewers::LinePlotView* plotView() const { return plot_; }
+    const observation::LiveFrame& displayedFrame() const { return frame_; }
+    QString inspect(double time, bool active = true);
+private:
+    void appendObservedSample(const viewers::ObservedSample&) override {}
+    void render(bool fit);
+    void updateStatus(const QString& suffix = {});
+    std::shared_ptr<observation::LiveAcquisition> live_;
+    observation::LiveFrame frame_;
+    viewers::LinePlotView* plot_;
+    QLabel *status_, *readout_, *duration_;
+    QPushButton* freeze_;
+    QSpinBox* capacity_;
+    QLineEdit* seconds_;
+    QCheckBox* autoY_;
+    struct ChannelControls { QCheckBox* visible; QDoubleSpinBox *gain, *offset; };
+    QVector<ChannelControls> controls_;
+    bool inspecting_ = false, rendering_ = false;
+    std::optional<std::size_t> requestedCapacity_;
+    QString traceWarning_, settingsError_;
+    QElapsedTimer cadence_;
+};
+}

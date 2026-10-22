@@ -16,7 +16,7 @@ navigate. Help and About can stay open while you work.
    promised wall-clock speed.
    Duration accepts fractional seconds, for example `0.125`. A warning appears
    below 100 whole model steps; short runs remain allowed. Only complete steps
-   at or before the duration boundary execute. Use `-1` for continuous runs.
+   at or before the duration boundary execute. Select **Run continuously until stopped** for continuous runs.
 3. Start the local run from the Run menu or toolbar. Pause and resume as
    needed; Stop ends the run. Reset prepares a fresh run.
 4. Double-click a wired Scope observer to view its channels. Phase Portrait
@@ -50,7 +50,15 @@ A run freezes its configuration. Edits made during execution apply to the
 next run. Pause takes effect at a completed causal step. Stop and close wait
 for the current element operation, so a slow plugin can delay them.
 
-The plot preview can skip updates under load. Authoritative recording is
+For bounded live inspection, add **Observers → Live oscilloscope (prototype)**,
+connect its inputs and double-click it. Its settings change the acquisition window
+in samples or model seconds during a run. Hover snaps to raw samples and shows
+exact stored values, model time and step. Freeze holds the display while the model
+continues. See [Live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) for
+examples, retention behavior and current limits. Run Configuration lists live and
+full-recording channel counts; live-only acquisition does not accumulate disk data.
+
+For the recording Scope and phase viewers, the plot preview can skip updates under load. Authoritative recording is
 separate; skipped preview updates do not imply lost recorded samples.
 Temporary recording uses disk after a bounded memory buffer. If storage fills,
 the run stops with an explicit error and the retained recording is incomplete.
