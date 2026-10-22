@@ -93,7 +93,7 @@ SpectrumView::SpectrumView(QWidget* parent) : QWidget(parent)
     connect(fixedBin_, &QSpinBox::valueChanged, this, [this] { render(false); });
     connect(plot_, &LinePlotView::xRangeChanged, this, [this] { render(false); });
     connect(plot_, &LinePlotView::hovered, this, [this](double frequency, bool active) { inspect(frequency, active); });
-    auto* timer = new QTimer(this); timer->setInterval(16); connect(timer, &QTimer::timeout, this, &SpectrumView::poll); timer->start();
+    pollTimer_ = new QTimer(this); pollTimer_->setInterval(16); connect(pollTimer_, &QTimer::timeout, this, &SpectrumView::poll);
     reconfigure();
 }
 SpectrumView::~SpectrumView()
@@ -142,12 +142,12 @@ void SpectrumView::setFrame(std::shared_ptr<const observation::LiveFrame> frame)
 }
 void SpectrumView::submit()
 {
-    if (!isVisible() || !frame_) { updateStatus(); return; }
-    worker_.submit(frame_, settings(), revision_); updateStatus();
+    if (suspended_ || !isVisible() || !frame_) { updateStatus(); return; }
+    ++submitted_; worker_.submit(frame_, settings(), revision_); updateStatus();
 }
 void SpectrumView::poll()
 {
-    if (!isVisible() || inspecting_) return;
+    if (suspended_ || !isVisible() || inspecting_) return;
     if (auto result = worker_.takeResult()) {
         if (!frame_ || result->revision != revision_ || result->runId != frame_->runId || result->generation != frame_->generation) return;
         result_ = std::move(*result); render(true);
@@ -169,10 +169,17 @@ std::shared_ptr<const observation::LiveFrame> SpectrumView::setFrozen(bool froze
     }
     updateStatus(); return frame_;
 }
-void SpectrumView::showEvent(QShowEvent* event) { QWidget::showEvent(event); submit(); }
+void SpectrumView::showEvent(QShowEvent* event) { QWidget::showEvent(event); if (!suspended_) pollTimer_->start(); submit(); }
 void SpectrumView::hideEvent(QHideEvent* event)
 {
-    worker_.cancel(); inspecting_ = false; emit inspectingChanged(false); QWidget::hideEvent(event);
+    pollTimer_->stop(); worker_.cancel(); inspecting_ = false; emit inspectingChanged(false); QWidget::hideEvent(event);
+}
+void SpectrumView::setSuspended(bool suspended)
+{
+    if (suspended_ == suspended) return;
+    suspended_ = suspended;
+    if (suspended) { pollTimer_->stop(); worker_.cancel(); }
+    else if (isVisible()) { pollTimer_->start(); submit(); }
 }
 QString SpectrumView::quantityUnit() const
 {

@@ -1,23 +1,12 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "analysis/spectrum_worker.hpp"
+#include "analysis/worker_pool.hpp"
 #include <QThreadPool>
 #include <atomic>
 #include <mutex>
 
 namespace s7studio::analysis {
-namespace {
-QThreadPool& pool()
-{
-    // Initialize the FFTW planner lock before the pool, so it outlives all jobs
-    // during static destruction. Individual engines own their plans and scratch.
-    Fft::initialize();
-    static QThreadPool threads;
-    static const bool initialized = [] { threads.setMaxThreadCount(2); return true; }();
-    (void)initialized;
-    return threads;
-}
-}
 struct SpectrumWorker::State {
     struct Request {
         std::shared_ptr<const observation::LiveFrame> frame;
@@ -34,7 +23,7 @@ struct SpectrumWorker::State {
     SpectrumAnalyzer analyzer;
     std::shared_ptr<const observation::LiveFrame> analyzedFrame;
 };
-SpectrumWorker::SpectrumWorker() : state_(std::make_shared<State>()) { (void)pool(); }
+SpectrumWorker::SpectrumWorker() : state_(std::make_shared<State>()) { (void)analysisPool(); }
 SpectrumWorker::~SpectrumWorker() { cancel(); }
 void SpectrumWorker::cancel()
 {
@@ -51,7 +40,7 @@ void SpectrumWorker::submit(std::shared_ptr<const observation::LiveFrame> frame,
         if (state_->running) return;
         state_->running = true;
     }
-    pool().start([state = state_] {
+    analysisPool().start([state = state_] {
         for (;;) {
             std::optional<State::Request> request;
             {

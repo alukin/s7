@@ -9,13 +9,20 @@
 #include <QString>
 #include <QVariantList>
 #include <QWidget>
+#include <QImage>
+#include <QRectF>
+#include <QSet>
+#include <cstdint>
 
 class QLineSeries;
 class QQuickWidget;
+class QXYSeries;
+class QScatterSeries;
 
 namespace s7studio::viewers {
 
 class LinePlotView;
+class DensityProvider;
 
 // What LinePlot.qml binds to: axis ranges and titles, the legend, and the
 // series to show. Wheel and drag gestures come back as zoom()/pan(), so the
@@ -26,6 +33,9 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(bool inspectionEnabled MEMBER inspectionEnabled NOTIFY inspectionChanged)
     Q_PROPERTY(bool cursorVisible MEMBER cursorVisible NOTIFY inspectionChanged)
     Q_PROPERTY(double cursorX MEMBER cursorX NOTIFY inspectionChanged)
+    Q_PROPERTY(bool densityVisible MEMBER densityVisible NOTIFY densityChanged)
+    Q_PROPERTY(QString densitySource MEMBER densitySource NOTIFY densityChanged)
+    Q_PROPERTY(QRectF densityBounds MEMBER densityBounds NOTIFY densityChanged)
     Q_PROPERTY(double xMin READ xMin NOTIFY xRangeChanged)
     Q_PROPERTY(double xMax READ xMax NOTIFY xRangeChanged)
     Q_PROPERTY(double yMin READ yMin NOTIFY yRangeChanged)
@@ -50,7 +60,11 @@ public:
     bool inspectionEnabled = false;
     bool cursorVisible = false;
     double cursorX = 0;
+    bool densityVisible = false;
+    QString densitySource;
+    QRectF densityBounds;
     Q_INVOKABLE void hover(double fraction, bool inside);
+    Q_INVOKABLE void hoverPoint(double xFraction, double yFraction, bool inside);
     Q_INVOKABLE QList<QObject*> seriesObjects() const;
     // fx, fy: the anchor as a fraction of the plot area from its left/bottom
     // edge; factor < 1 zooms in. Both axes, like the wheel in QCustomPlot.
@@ -60,6 +74,7 @@ public:
 
 signals:
     void inspectionChanged();
+    void densityChanged();
     void xRangeChanged();
     void yRangeChanged();
     void titlesChanged();
@@ -92,6 +107,10 @@ public:
     ~LinePlotView() override;
 
     auto addSeries(const QString& name, const SeriesStyle& style) -> QLineSeries*;
+    auto addScatterSeries(const QString& name, QColor color) -> QScatterSeries*;
+    static void setScatterPoints(QScatterSeries* series, const QList<QPointF>& points);
+    void setLegendEntryVisible(QXYSeries* series, bool visible);
+    void setDensityImage(QImage image, QRectF bounds = {});
     void removeSeries(QLineSeries* series);
     void clearSeries();
     [[nodiscard]] auto series() const -> const QList<QLineSeries*>& { return series_; }
@@ -126,6 +145,7 @@ public:
 signals:
     // Emitted for every change of the X range, by the program or the user.
     void hovered(double time, bool active);
+    void hoveredPoint(double x, double y, bool active);
     void navigated();
     void xRangeChanged(double lower, double upper);
     void yRangeChanged(double lower, double upper);
@@ -137,15 +157,21 @@ private:
     friend class LinePlotBridge;
     void ensureQuickScene();
     void emitLegendChanged();
-    void retire(QLineSeries* series);
+    void retire(QXYSeries* series);
+    QList<QXYSeries*> allSeries() const;
 
     LinePlotBridge* bridge_ = nullptr;
     QQuickWidget* quick_ = nullptr;
     QList<QLineSeries*> series_;
+    QList<QScatterSeries*> scatterSeries_;
+    QSet<QXYSeries*> hiddenLegend_;
+    QImage densityImage_;
+    DensityProvider* densityProvider_ = nullptr; // Owned by the QML engine.
+    std::uint64_t densityRevision_ = 0;
     QList<QLineSeries*> overlays_;
     // Removed series, emptied: GraphsView cleans removed series up on its
     // next polish, so they must outlive the scene (deleted after it).
-    QList<QLineSeries*> retired_;
+    QList<QXYSeries*> retired_;
     QString xTitle_;
     QString yTitle_;
     bool legendVisible_ = false;

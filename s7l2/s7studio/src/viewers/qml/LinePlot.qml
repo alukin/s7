@@ -83,6 +83,26 @@ Item {
         }
     }
 
+    Item {
+        x: view.x + view.plotArea.x
+        y: view.y + view.plotArea.y
+        width: view.plotArea.width
+        height: view.plotArea.height
+        clip: true
+        visible: plot.densityVisible
+        Image {
+            objectName: "viewer.density"
+            source: plot.densitySource
+            cache: false
+            asynchronous: false
+            smooth: false
+            x: (plot.densityBounds.x - plot.xMin) / (plot.xMax - plot.xMin) * parent.width
+            y: (plot.yMax - plot.densityBounds.y - plot.densityBounds.height) / (plot.yMax - plot.yMin) * parent.height
+            width: plot.densityBounds.width / (plot.xMax - plot.xMin) * parent.width
+            height: plot.densityBounds.height / (plot.yMax - plot.yMin) * parent.height
+        }
+    }
+
     HoverHandler {
         id: inspectionHover
         enabled: plot.inspectionEnabled
@@ -91,6 +111,8 @@ Item {
             const x = point.position.x - view.x - area.x
             const y = point.position.y - view.y - area.y
             plot.hover(area.width > 0 ? x / area.width : 0,
+                       hovered && x >= 0 && x <= area.width && y >= 0 && y <= area.height)
+            plot.hoverPoint(area.width > 0 ? x / area.width : 0, area.height > 0 ? 1 - y / area.height : 0,
                        hovered && x >= 0 && x <= area.width && y >= 0 && y <= area.height)
         }
         onPointChanged: updateReadout()

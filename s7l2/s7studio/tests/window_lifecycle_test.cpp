@@ -236,6 +236,10 @@ private slots:
         QVERIFY(retired.isNull() && manager()->viewers().empty());
         QCoreApplication::sendPostedEvents();
         QVERIFY(manager()->viewers().empty());
+        // A paused worker can reach Stopped before the transient Stopping
+        // notification is published. The replacement run must not rely on
+        // that notification to open this reused test gate.
+        gate_->releaseAll();
         QVERIFY(start(1));
         QVERIFY(runner()->activeConfiguration()->id > id);
         QTRY_COMPARE(runner()->state(), s7studio::RunState::Completed);

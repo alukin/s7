@@ -1,0 +1,363 @@
+{
+  "id": "iq_correlation_live",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "schema": {
+    "name": "IQ circle and six-step causal delay",
+    "elements": [
+      {
+        "id": "i",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 16,
+          "sample_rate_hz": 1024,
+          "phase": 0
+        }
+      },
+      {
+        "id": "q",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 16,
+          "sample_rate_hz": 1024,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "delay_1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "delay_2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "delay_3",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "delay_4",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "delay_5",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "delay_6",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "i",
+        "from_port": 0,
+        "to_element": "delay_1",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay_1",
+        "from_port": 0,
+        "to_element": "delay_2",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay_2",
+        "from_port": 0,
+        "to_element": "delay_3",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay_3",
+        "from_port": 0,
+        "to_element": "delay_4",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay_4",
+        "from_port": 0,
+        "to_element": "delay_5",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay_5",
+        "from_port": 0,
+        "to_element": "delay_6",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "i",
+        "position": [
+          4,
+          8
+        ]
+      },
+      {
+        "id": "q",
+        "position": [
+          16,
+          8
+        ]
+      },
+      {
+        "id": "delay_1",
+        "position": [
+          28,
+          20
+        ]
+      },
+      {
+        "id": "delay_2",
+        "position": [
+          40,
+          20
+        ]
+      },
+      {
+        "id": "delay_3",
+        "position": [
+          52,
+          20
+        ]
+      },
+      {
+        "id": "delay_4",
+        "position": [
+          64,
+          20
+        ]
+      },
+      {
+        "id": "delay_5",
+        "position": [
+          76,
+          20
+        ]
+      },
+      {
+        "id": "delay_6",
+        "position": [
+          88,
+          20
+        ]
+      },
+      {
+        "id": "iq_scope",
+        "position": [
+          100,
+          8
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "I",
+            "Q",
+            "I_delayed_6"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "i",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "delay_1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay_2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "delay_2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay_3",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "delay_3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay_4",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "delay_4",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay_5",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "delay_5",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay_6",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs0",
+        "from": {
+          "port": [
+            "i",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "iq_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs1",
+        "from": {
+          "port": [
+            "q",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "iq_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs2",
+        "from": {
+          "port": [
+            "delay_6",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "iq_scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": []
+  },
+  "probes": []
+}

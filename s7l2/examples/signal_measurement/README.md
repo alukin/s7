@@ -18,6 +18,15 @@ Hover shows raw sample values; Freeze holds only the display. Acquisition settin
 can change during the run. See [prototype help](../../docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md).
 The original four diagrams remain the full-recording numerical-reference examples.
 
+For XY and correlation, open [IQ circle and causal delay](iq_correlation_live.s7diagram)
+and run **8 seconds at 1024 Hz** (3 live channels, no recording). In `iq_scope`,
+select Constellation / XY with I and Q to see a unit circle. For Correlation,
+select A=I, B=I_delayed_6, N=4096 and maximum |lag|=16: the peak is +6 samples,
+or 0.005859375 s. Six explicit Delay elements produce the delay. See
+[analysis help](../../docs/STUDIO_PAIR_ANALYSIS.md) for normalization, persistence,
+density, freeze and inactive-view behavior. This example has a separate rate
+from the AM/FM recording examples above.
+
 | Recording diagram | Exercise |
 |---|---|
 | [Coherent AM detection](am_coherent_detection.s7diagram) | Carrier/envelope and recovered message |

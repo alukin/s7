@@ -9,6 +9,7 @@ class QDoubleSpinBox;
 class QSpinBox;
 class QLineEdit;
 class QLabel;
+class QTimer;
 namespace s7studio::viewers {
 class LinePlotView;
 class SpectrumView : public QWidget {
@@ -18,6 +19,8 @@ public:
     ~SpectrumView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
     void clear();
+    void setSuspended(bool suspended);
+    std::uint64_t analysisRequestCount() const { return submitted_; }
     std::shared_ptr<const observation::LiveFrame> setFrozen(bool frozen);
     const std::optional<analysis::SpectrumResult>& result() const { return result_; }
     LinePlotView* plotView() const { return plot_; }
@@ -39,7 +42,9 @@ private:
     analysis::SpectrumWorker worker_;
     std::shared_ptr<const observation::LiveFrame> frame_;
     std::optional<analysis::SpectrumResult> result_;
-    std::uint64_t revision_ = 1;
+    std::uint64_t revision_ = 1, submitted_ = 0;
+    QTimer* pollTimer_;
+    bool suspended_ = false;
     bool inspecting_ = false, frozen_ = false, rendering_ = false;
     QComboBox *mode_, *channel_, *quadrature_, *size_, *window_, *quantity_, *scale_, *average_, *marker_;
     QSpinBox *count_, *fixedBin_;

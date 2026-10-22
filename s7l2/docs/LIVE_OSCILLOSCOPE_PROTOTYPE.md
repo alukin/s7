@@ -71,12 +71,16 @@ samples.
 
 - The [Spectrum tab](STUDIO_SPECTRUM.md) now supplies real/IQ FFT analysis,
   windows, amplitude/power/PSD, referenced dB, power averaging and peak hold.
-  Constellation, correlation, triggers, paired cursors,
-  region statistics, saved workspaces and window export are not implemented here.
+  [Constellation / XY and Correlation](STUDIO_PAIR_ANALYSIS.md) supply same-step
+  pairs, model-step persistence/density and normalized linear correlation.
+  Triggers, paired cursors, region statistics, saved workspaces and window export
+  are not implemented here.
 - One shared numeric Y axis; supplied units remain explicit. No implicit conversion
   or separate unit lanes. Colors are assigned automatically.
 - Plot refresh is capped near 30 Hz. Rendering and snapshot processing run on the
-  UI thread with fixed data caps; FFT analysis uses a bounded shared worker pool.
+  UI thread with fixed data caps; FFT, XY and correlation use a bounded shared
+  worker pool. Only the visible tab of a visible, non-minimized window submits
+  work; inactive analysis cancels queued jobs and stops polling.
   Throughput, latency targets, long-duration resource
   behavior and native Windows rendering still require qualification.
 - The prototype does not claim full design completion or ADI OSC parity.

@@ -2,8 +2,9 @@
 
 The **Spectrum** tab of a Live Oscilloscope analyzes the retained raw samples.
 It shares bounded acquisition with the Time tab and never creates a recording
-journal or adds an FFT element to the causal graph. Correlation, constellation,
-paired cursors, region measurements and export are later work.
+journal or adds an FFT element to the causal graph. See also
+[constellation and correlation](STUDIO_PAIR_ANALYSIS.md). Paired cursors, region
+measurements and export are later work.
 
 ## Try it
 
@@ -80,13 +81,15 @@ on a discontinuity. More retention does not force every hop to be processed.
 Changes to run, acquisition generation, input, N, rate, window, mean removal or
 normalization reset analysis state. Pure display changes preserve it.
 
-The worker pool has two threads shared by all spectrum panels, with one active
+The worker pool has two threads shared by all FFT, XY and correlation panels, with one active
 and one replaceable pending request per panel. Replaced pending requests and
 skipped model hops are separate counters. Jobs check cancellation during input
 processing and after the bounded FFT. A result owns its exact input frame and
 shows its run and inclusive step interval. While computing, a preceding result
 is labeled **Updating**. Stale run/configuration completions are discarded.
-Hiding or closing the window cancels its queued analysis; capture continues.
+Switching away, hiding/closing or minimizing cancels queued analysis and stops
+polling; capture continues. Returning analyzes retained data and restarts
+averages/hold. Desktop focus changes do not suspend a visible oscilloscope.
 
 Hover snaps to a computed bin, reports its frequency/value/normalization, and
 holds the displayed result until the pointer leaves. Peak and fixed-bin markers

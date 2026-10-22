@@ -10,12 +10,27 @@
 #include <QVBoxLayout>
 #include <QVariantMap>
 #include <QtGraphs/QLineSeries>
+#include <QtGraphs/QScatterSeries>
+#include <QQuickImageProvider>
+#include <QQmlEngine>
+#include <mutex>
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
 namespace s7studio::viewers {
+class DensityProvider : public QQuickImageProvider {
+public:
+    DensityProvider() : QQuickImageProvider(QQuickImageProvider::Image) {}
+    void setImage(QImage image) { std::lock_guard lock(mutex_); image_ = std::move(image); }
+    QImage requestImage(const QString&, QSize* size, const QSize&) override {
+        std::lock_guard lock(mutex_); if (size) *size = image_.size(); return image_;
+    }
+private:
+    std::mutex mutex_;
+    QImage image_;
+};
 
 namespace {
 
@@ -57,18 +72,25 @@ auto LinePlotBridge::legendVisible() const -> bool { return view_.legendVisible_
 auto LinePlotBridge::legend() const -> QVariantList
 {
     QVariantList entries;
-    for (const auto* series : view_.series_) {
-        if (!series->isVisible()) continue;
+    for (auto* series : view_.allSeries()) {
+        if (!series->isVisible() || view_.hiddenLegend_.contains(series)) continue;
+        const auto* line = qobject_cast<const QLineSeries*>(series);
         entries.push_back(QVariantMap{{QStringLiteral("name"), series->name()},
                                       {QStringLiteral("color"), series->color()},
-                                      {QStringLiteral("overlay"), view_.isOverlay(series)}});
+                                      {QStringLiteral("overlay"), line && view_.isOverlay(line)}});
     }
     return entries;
 }
 
 QList<QObject*> LinePlotBridge::seriesObjects() const
 {
-    return {view_.series_.cbegin(), view_.series_.cend()};
+    QList<QObject*> result; for (auto* series : view_.allSeries()) result.push_back(series); return result;
+}
+
+void LinePlotBridge::hoverPoint(double xFraction, double yFraction, bool inside)
+{
+    if (inspectionEnabled) emit view_.hoveredPoint(view_.xMin_+xFraction*(view_.xMax_-view_.xMin_),
+        view_.yMin_+yFraction*(view_.yMax_-view_.yMin_), inside);
 }
 
 void LinePlotBridge::hover(double fraction, bool inside)
@@ -139,6 +161,9 @@ void LinePlotView::ensureQuickScene()
 {
     if (quick_) return;
     quick_ = createQuickWidget();
+    densityProvider_ = new DensityProvider;
+    densityProvider_->setImage(densityImage_);
+    quick_->engine()->addImageProvider("s7density", densityProvider_);
     layout()->addWidget(quick_);
     loadQuickScene(*quick_, QStringLiteral("LinePlot.qml"), {{QStringLiteral("plot"), QVariant::fromValue<QObject*>(bridge_)}});
 }
@@ -159,6 +184,31 @@ auto LinePlotView::addSeries(const QString& name, const SeriesStyle& style) -> Q
     return series;
 }
 
+auto LinePlotView::addScatterSeries(const QString& name, QColor color) -> QScatterSeries*
+{
+    auto* series = new QScatterSeries(this); series->setName(name); series->setColor(color);
+    scatterSeries_.push_back(series); emit bridge_->seriesAdded(series); emitLegendChanged(); return series;
+}
+void LinePlotView::setScatterPoints(QScatterSeries* series, const QList<QPointF>& points) { series->replace(points); }
+void LinePlotView::setLegendEntryVisible(QXYSeries* series, bool visible)
+{
+    if (visible) hiddenLegend_.remove(series); else hiddenLegend_.insert(series); emitLegendChanged();
+}
+QList<QXYSeries*> LinePlotView::allSeries() const
+{
+    QList<QXYSeries*> all;
+    for (auto* series : series_) all.push_back(series);
+    for (auto* series : scatterSeries_) all.push_back(series);
+    return all;
+}
+void LinePlotView::setDensityImage(QImage image, QRectF bounds)
+{
+    densityImage_ = std::move(image); if (densityProvider_) densityProvider_->setImage(densityImage_);
+    bridge_->densityVisible = !densityImage_.isNull(); bridge_->densityBounds = bounds;
+    bridge_->densitySource = bridge_->densityVisible ? QStringLiteral("image://s7density/%1").arg(++densityRevision_) : QString();
+    emit bridge_->densityChanged();
+}
+
 void LinePlotView::removeSeries(QLineSeries* series)
 {
     if (!series_.removeOne(series)) return;
@@ -167,7 +217,7 @@ void LinePlotView::removeSeries(QLineSeries* series)
     emitLegendChanged();
 }
 
-void LinePlotView::retire(QLineSeries* series)
+void LinePlotView::retire(QXYSeries* series)
 {
     emit bridge_->seriesRemoved(series);
     if (!quick_) {
@@ -181,8 +231,11 @@ void LinePlotView::retire(QLineSeries* series)
 void LinePlotView::clearSeries()
 {
     const auto all = std::exchange(series_, {});
+    const auto scatter = std::exchange(scatterSeries_, {});
     overlays_.clear();
+    hiddenLegend_.clear();
     for (auto* series : all) retire(series);
+    for (auto* series : scatter) retire(series);
     emitLegendChanged();
 }
 
@@ -251,7 +304,8 @@ auto LinePlotView::fitYToVisibleData() -> bool
 {
     double low = std::numeric_limits<double>::infinity();
     double high = -std::numeric_limits<double>::infinity();
-    for (const auto* series : series_) {
+    for (const auto* series : allSeries()) {
+        if (!series->isVisible()) continue;
         for (const auto& point : series->points()) {
             if (point.x() < xMin_ || point.x() > xMax_) continue;
             low = std::min(low, point.y());
@@ -268,7 +322,8 @@ auto LinePlotView::fitAll() -> bool
 {
     double xLow = std::numeric_limits<double>::infinity(), xHigh = -xLow;
     double yLow = xLow, yHigh = -xLow;
-    for (const auto* series : series_) {
+    for (const auto* series : allSeries()) {
+        if (!series->isVisible()) continue;
         for (const auto& point : series->points()) {
             xLow = std::min(xLow, point.x());
             xHigh = std::max(xHigh, point.x());

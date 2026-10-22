@@ -2,12 +2,16 @@
 
 ## P0 release priority — continuous oscilloscope viewer (2026-10-22)
 
-Current sequencing: finish the FFT spectrum, constellation and correlation views,
-then implement shared paired cursors, interval measurements and saved-window export.
+Current sequencing: FFT spectrum, constellation and correlation views are
+implemented as bounded increments; next implement shared paired cursors, interval
+measurements and saved-window export.
 This supersedes the earlier ordering of those shared features before analysis.
 The [FFT spectrum increment](STUDIO_SPECTRUM.md) adds the private binary64 FFTW
 backend, bounded worker scheduling, real/IQ normalization, windows, power averaging
-and referenced dB. Full four-view/operational qualification remains open.
+and referenced dB. [XY/correlation](STUDIO_PAIR_ANALYSIS.md) adds raw paired plots,
+model-step persistence/density and normalized linear correlation. Only the visible
+tab of a visible, non-minimized window submits analysis; inactive tabs cancel
+queued work and stop polling. Full operational qualification remains open.
 
 The first [time-domain prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) is implemented:
 bounded worker-side acquisition, live/recording subscriptions, online retention
@@ -57,6 +61,36 @@ viewer open/close/reopen and shutdown. Show that oscilloscope-only continuous
 runs do not accumulate a temporary recording, while explicitly requested Scope
 recordings keep their completeness/error behavior. Measure bounded local UI
 work and resource use; preserve headless execution and existing numerical tests.
+
+### XY/correlation and inactive analysis verification — 2026-10-22
+
+Release `build-tests` built and **77/77 native CTest entries passed in 77.38 s**.
+The new backend entry has 17 passing cases, including independent direct sums
+for every correlation normalization, signed delays, maximum N, extreme scales,
+zero energy, raw XY/density, persistence eviction/deduplication, repeated storage
+wraps and cancellation. The rendered workflow runs the new causal IQ/six-Delay
+example, checks the unit circle, actual QML hover, equal aspect, density image,
+positive six-sample delay, frozen reanalysis, close/reopen and reset. Screenshots
+of XY, density and correlation were reviewed. Scheduling assertions verify that
+hidden tabs and minimized windows submit no analysis, while returning resumes it.
+
+An initial full run exposed an existing lifecycle-test race: a paused worker can
+stop before its transient Stopping notification, leaving the reused test gate
+closed for the next run. The fixture now explicitly opens the gate after checking
+replacement/teardown. Runtime behavior is unchanged; the final full run above
+includes this correction. Constant subnormal XY inputs also retain valid density
+bin bounds rather than dividing by a rounded-to-zero axis span.
+
+The full Windows Studio cross-build succeeds with both views. FFT and paired
+numerical/worker entries pass under Wine (**2/2, 10.05 s**); GUI execution still
+has the Wine 11.0 color-management limitation recorded below. The same two backend
+suites pass Clang AddressSanitizer/UndefinedBehaviorSanitizer (**2/2, 1.13 s**),
+including leak detection outside the sandbox's ptrace restriction.
+
+This increment adds no runtime/plugin dependency or stepping changes. It does not
+claim an installed-package refresh, native Windows rendering, long-run resource
+qualification or full design parity. Shared paired cursors, interval measurements,
+saved-window export and trigger/workspace features remain open.
 
 ### FFT spectrum verification — 2026-10-22
 

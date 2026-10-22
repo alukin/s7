@@ -10,7 +10,7 @@ class QPushButton;
 class QSpinBox;
 class QCheckBox;
 class QDoubleSpinBox;
-namespace s7studio::viewers { class LinePlotView; class SpectrumView; }
+namespace s7studio::viewers { class LinePlotView; class SpectrumView; class PairAnalysisView; }
 namespace s7studio::ui {
 class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
     Q_OBJECT
@@ -27,6 +27,8 @@ public:
     viewers::LinePlotView* plotView() const { return plot_; }
     const observation::LiveFrame& displayedFrame() const { return *frame_; }
     QString inspect(double time, bool active = true);
+protected:
+    void changeEvent(QEvent* event) override;
 private:
     void appendObservedSample(const viewers::ObservedSample&) override {}
     void render(bool fit);
@@ -35,6 +37,7 @@ private:
     std::shared_ptr<const observation::LiveFrame> frame_ = std::make_shared<observation::LiveFrame>();
     viewers::LinePlotView* plot_;
     viewers::SpectrumView* spectrum_;
+    viewers::PairAnalysisView *constellation_, *correlation_;
     QLabel *status_, *readout_, *duration_;
     QPushButton* freeze_;
     QSpinBox* capacity_;

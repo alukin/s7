@@ -1,9 +1,10 @@
 # Live oscilloscope design
 
-Status: target implementation contract, 2026-10-22. The time-domain and
-[FFT spectrum](STUDIO_SPECTRUM.md) [prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md)
-implements a bounded subset; the full
-analysis scope and acceptance targets below remain unfulfilled.
+Status: target implementation contract, 2026-10-22. The
+[prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) includes time-domain,
+[FFT spectrum](STUDIO_SPECTRUM.md), and [XY/correlation](STUDIO_PAIR_ANALYSIS.md)
+views. These implement a bounded subset; the full inspection, export and
+operational acceptance targets below remain unfulfilled.
 
 The live oscilloscope is a separate, bounded observation instrument for continuous
 and finite S7 runs. Its completed feature set must meet the documented analysis
