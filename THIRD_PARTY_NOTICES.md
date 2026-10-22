@@ -21,20 +21,22 @@ installed licence files of every bundled library, and an inventory
 | [zlib](https://zlib.net/) | s7core | Zlib | installed licence files |
 | [FFTW 3](https://www.fftw.org/) | `s7spectral` only (not packaged) | GPL-2.0-or-later | n/a |
 
-On Linux the collector looks up the distribution package that owns each
-bundled library (rpm or dpkg) and copies its installed licence files; packaging
-fails when a notice cannot be found. On Windows it copies the MSYS2 sysroot's
+On Fedora Linux the collector matches deployed ELF build IDs and full Qt
+paths, then looks up the RPM that owns each bundled library and copies its
+installed licence files. Packaging fails when a notice cannot be found.
+The Linux release backend is RPM-only; dpkg hosts are not qualified.
+On Windows it copies the MSYS2 sysroot's
 `share/licenses/` tree.
 
-## Open packaging work
+## Linux preview distribution
 
-Before binary packages are published (release item P1 in
-`s7l2/docs/DEVELOPMENT_PLAN.md`):
+The package includes `licenses/inventory.json` and `licenses/source-packages.json`:
+these identify the deployed binaries, notices and exact Fedora source RPMs.
+Notices in common/base subpackages are accepted only from the same source RPM.
+The xcb-util-keysyms 0.4.1 notice, omitted by Fedora's binary RPM, is copied
+verbatim from its source RPM; provenance is in `s7l2/tools/linux/notices/README.md`.
 
-- **Linux:** resolve the libraries whose installed notices are missing on the
-  build host (`licenses/missing-notices.json`; see `s7l2/tools/linux/NOTES.md`).
-  The dpkg backend has not yet been exercised.
-- **Windows:** review the per-DLL inventory against the MSYS2 licence tree.
-- **Qt and other LGPL libraries:** state in the package where the
-  corresponding source can be obtained (the Qt version and the distribution or
-  MSYS2 source package it was built from).
+Publish the corresponding source RPMs and the S7 source archive (including
+submodules and build scripts) alongside the binary archive. The source inventory
+is not a written source offer. Windows redistribution remains deferred pending
+review of the per-DLL inventory against the MSYS2 licence tree.

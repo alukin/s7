@@ -1,5 +1,9 @@
 # S7 Open Problems
 
+For 0.1.0, the [Linux preview checklist](RELEASE_0.1.0.md) defines the release
+gates and explicitly deferred work. Historical open items below are retained
+as backlog and do not expand that agreed scope.
+
 Date: 2026-10-21
 Status: living document — update in place as items are resolved or found; do not create a new dated copy.
 

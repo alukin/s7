@@ -67,8 +67,13 @@ The startup demo is a compiled Qt resource.
 
 `tools/package_notices.py` copies S7's licensing map, all S7 license texts,
 and the source-vendor notices for QSchematic, GPDS, its embedded libraries and
-Tabler. Package creation does not depend on the developer machine's RPM/dpkg
-inventory or local GUI-test environment.
+Tabler. For the Fedora-built 0.1.0 preview it also matches each deployed ELF's
+build ID against the host library, collects RPM licence files (including
+common subpackages from the same source RPM), and writes per-binary and exact
+source-package inventories. A missing identity or notice fails packaging.
+The qualified backend is RPM; dpkg-built binary releases remain deferred.
+`tools/release/collect_sources.py` downloads the matching source RPMs for
+publication alongside the binary. GUI-test dependencies are not bundled.
 
 The optional QtQuick3D XR module and its OpenXR libraries are removed from the
 bundle: Studio uses desktop 3D only. Qt's X11 backend still needs its ordinary

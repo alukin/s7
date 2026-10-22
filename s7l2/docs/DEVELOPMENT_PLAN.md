@@ -1,5 +1,10 @@
 # S7 Development Plan
 
+**0.1.0 scope update (2026-10-22):** ship a Linux preview under the narrower
+[release checklist](RELEASE_0.1.0.md). That checklist supersedes broader release
+gates below; multi-hour/resource, native-platform and expanded numerical work
+is deferred explicitly. Historical evidence below retains its original scope.
+
 Simulation follows the [analog-computer model](SIMULATION_MODEL.md): dynamics
 are explicit element networks. RK4 and other independent solvers belong in
 test references, not a new runtime simulation engine.

@@ -106,6 +106,12 @@ python3 tools/run_gui_test.py --artifacts /tmp/s7-operational-release --capture 
 
 ## Remaining release gates
 
+For 0.1.0 these are superseded by the narrower
+[Linux preview checklist](RELEASE_0.1.0.md). The items below remain broader
+acceptance work. Actual disk exhaustion was subsequently verified on
+2026-10-22: an 8 MiB tmpfs retained 262,144 exact, readable samples and an
+explicit incomplete/error status after ENOSPC (revision 0f40caf).
+
 - Release notice review remains separate from local GUI testing. Package creation
   copies the project's licensing files and source-vendor notices.
   Unused Qt XR/OpenXR components are excluded from Linux packages.

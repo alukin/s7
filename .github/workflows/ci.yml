@@ -30,6 +30,12 @@ jobs:
           bash tools/install_deps_fedora.sh --no-studio --no-extras
           c++ --version
           cmake --version
+      - name: Check licensing metadata
+        run: |
+          dnf install -y python3-pip
+          python3 -m venv /tmp/s7-reuse
+          /tmp/s7-reuse/bin/pip install reuse==6.2.0
+          /tmp/s7-reuse/bin/reuse --no-multiprocessing --root .. lint
       - name: Configure headless build
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF -DS7_BUILD_GUI_REGRESSION_TESTS=OFF
       - name: Build application and tests

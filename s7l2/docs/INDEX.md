@@ -6,6 +6,9 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 
 ## Start here
 
+The [0.1.0 Linux preview checklist](RELEASE_0.1.0.md) defines the current
+release scope, verified checks and known limits.
+
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the next release: dependable Studio simulation with the bundled runtime, acceptance criteria, and deferred backlog.
 3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.

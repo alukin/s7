@@ -1,5 +1,9 @@
 # S7 (s7l2)
 
+Preparing **0.1.0 as a Linux preview** of local Studio simulation. See the
+[release checklist and known limits](docs/RELEASE_0.1.0.md) for the supported
+platform, qualified examples and explicitly deferred work.
+
 S7 is a platform for constructing, executing, and observing distributed causal systems: a schema of elements and connections is validated, compiled into an executable graph, and stepped by a headless runtime. Studio is an optional GUI client.
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.

@@ -53,5 +53,5 @@ if [ -n "$WINDOWS_BUILD" ]; then
     echo "Wrote $DIST/$NAME.zip"
 fi
 
-(cd "$DIST" && sha256sum ./*.tar.gz ./*.zip 2>/dev/null > SHA256SUMS)
+(cd "$DIST" && shopt -s nullglob && archives=(./*.tar.gz ./*.zip) && sha256sum "${archives[@]}" > SHA256SUMS)
 echo "Wrote $DIST/SHA256SUMS"
