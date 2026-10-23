@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #pragma once
+#include "analysis/time_view_worker.hpp"
 #include "viewers/observation_viewer.hpp"
 #include <QElapsedTimer>
 #include <QWidget>
@@ -34,6 +35,8 @@ protected:
 private:
     void appendObservedSample(const viewers::ObservedSample&) override {}
     void render(bool fit);
+    analysis::TimeViewSettings timeViewSettings(bool prepare, bool fit) const;
+    void presentTimeResult(const analysis::TimeViewResult& result);
     void updateStatus(const QString& suffix = {});
     void applyTriggerSettings();
     std::shared_ptr<observation::LiveAcquisition> live_;
@@ -52,6 +55,9 @@ private:
     QSpinBox *triggerPre_, *triggerHoldoff_, *triggerTimeout_;
     QLabel* triggerStatus_;
     observation::TriggerSettings requestedTrigger_;
+    analysis::TimeViewWorker timeWorker_;
+    std::uint64_t timeRequestRevision_ = 0, requestedCaptureId_ = 0;
+    bool requestedCaptureFinished_ = false;
     struct ChannelControls { QCheckBox* visible; QDoubleSpinBox *gain, *offset; };
     QVector<ChannelControls> controls_;
     bool inspecting_ = false, rendering_ = false;

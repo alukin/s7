@@ -26,6 +26,20 @@ The [design](LIVE_OSCILLOSCOPE_DESIGN.md) remains the target for four-view analy
 triggers and qualification. Prototype implementation does not close the release
 acceptance gate or establish ADI OSC parity.
 
+Follow-up for sporadic Live Oscilloscope UI freezes: bounded acquisition snapshot
+copying and Time reduction now run on the shared analysis pool, with one active
+request and a replaceable latest pending request per viewer. Qt Graphs updates
+remain on the GUI thread. The rendered GUI workflow passed a 35-second,
+eight-channel load (30 seconds paced at 100 ksample/s, then 5 seconds unthrottled)
+with a 90 ms maximum gap on its 10 ms UI timer under Xvfb/software rendering.
+A 30-minute synthetic acquisition soak processed 1.492 billion samples at about
+828,700 samples/s using 1.001 CPU cores and 33 MiB peak RSS; its 20 MiB acquisition
+reservation remained fixed. These checks do not characterize runtime graph cost,
+full Qt plot throughput, or native Windows rendering. The Windows cross-build
+and Wine trigger test passed; the Live Oscilloscope Wine test aborted because
+Wine's `mscms.dll` does not implement `WcsCreateIccProfile`, so Windows GUI
+behavior remains unqualified.
+
 Continuous execution already exists (`runtime_seconds = -1`). The current
 Scope is an entire-run recording/comparison viewer: bounded RAM spills history
 to temporary disk. An endless run therefore grows storage until it fails.

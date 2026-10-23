@@ -98,7 +98,8 @@ find_library(S7STUDIO_FFTW_LIBRARY NAMES fftw3 libfftw3-3 REQUIRED)
 add_library(s7studio_analysis STATIC
     src/analysis/fft.cpp src/analysis/fft.hpp
     src/analysis/spectrum.cpp src/analysis/spectrum.hpp
-    src/analysis/spectrum_worker.cpp src/analysis/spectrum_worker.hpp)
+    src/analysis/spectrum_worker.cpp src/analysis/spectrum_worker.hpp
+    src/analysis/time_view_worker.cpp src/analysis/time_view_worker.hpp)
 target_sources(s7studio_analysis PRIVATE
     src/analysis/window_inspection.cpp src/analysis/window_inspection.hpp
     src/analysis/worker_pool.cpp src/analysis/worker_pool.hpp
@@ -538,3 +539,8 @@ set_tests_properties(s7studio_live_spectrum PROPERTIES ENVIRONMENT "QT_QPA_PLATF
 add_executable(s7studio_spectrum_benchmark EXCLUDE_FROM_ALL tests/spectrum_benchmark.cpp)
 target_link_libraries(s7studio_spectrum_benchmark PRIVATE s7studio_analysis)
 s7_enable_project_warnings(s7studio_spectrum_benchmark)
+
+# Opt-in acquisition/trigger performance and bounded-memory workload.
+add_executable(s7studio_live_trigger_benchmark EXCLUDE_FROM_ALL tests/live_trigger_benchmark.cpp)
+target_link_libraries(s7studio_live_trigger_benchmark PRIVATE s7studio_observation Threads::Threads)
+s7_enable_project_warnings(s7studio_live_trigger_benchmark)

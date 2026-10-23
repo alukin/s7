@@ -88,3 +88,40 @@ limit (eight single-channel workspaces), excluding immutable display/export
 snapshots, schema provenance and Qt/GPU storage. There is no recording journal or
 unbounded trigger history. Capture continues when a window is hidden; inactive
 FFT/XY/correlation panels still submit no analysis work.
+
+Snapshot copying and Time-trace reduction use the same bounded worker pool as FFT
+and pair analysis. A viewer replaces its pending request instead of building a
+queue when it falls behind. Qt Graphs series updates still happen on the UI thread;
+the pool does not parallelize Qt rendering.
+
+On 2026-10-23, an 8-channel, 4096-position Normal-trigger synthetic acquisition
+ran unthrottled for 30 minutes with a 30 Hz snapshot consumer. It processed
+1,491,707,364 samples (828,717 samples/s), used 1.001 CPU cores and 33 MiB peak
+RSS, with a fixed 20 MiB acquisition reservation. Append latency was 0.978 us
+median and 1.467 us at p95; snapshot-copy time was 0.067 ms median and 0.102 ms
+at p95. Consumer lag was 3,896 samples at p95 and 4,102 maximum. This synthetic
+backend workload does not include runtime graph execution or Qt rendering.
+
+The GUI workflow also kept a 10 ms timer responsive during 30 seconds of paced
+100 ksample/s input followed by 5 seconds unthrottled, across eight channels; the
+worst timer gap was 90 ms in Linux Xvfb/software rendering. This checks UI
+responsiveness during the workload, not full plot throughput or desktop rendering.
+
+## Reproducible acquisition workload
+
+Build the opt-in backend benchmark and compare the raw rolling ring with the
+triggered path:
+
+```bash
+cmake --build build-release --target s7studio_live_trigger_benchmark --parallel 6
+build-release/s7studio/s7studio_live_trigger_benchmark --seconds 30 --rate 100000 --mode rolling
+build-release/s7studio/s7studio_live_trigger_benchmark --seconds 30 --rate 100000 --mode normal
+build-release/s7studio/s7studio_live_trigger_benchmark --seconds 30 --rate 0 --mode normal
+```
+
+The harness uses eight channels, 4096 retained positions, a 30 Hz snapshot
+consumer, and the same generated signal in both modes. `--rate 0` runs as fast as
+the producer can step. It reports achieved samples/s, append latency, snapshot
+copy time, consumer lag in samples, CPU cores used, RSS and reserved acquisition
+storage. This isolates the acquisition/snapshot backend; it does not include a
+runtime graph, Qt Graphs paint time, or desktop input-to-photon latency.

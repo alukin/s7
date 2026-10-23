@@ -99,12 +99,18 @@ samples.
   and advanced trigger types are not supplied.
 - One shared numeric Y axis; supplied units remain explicit. No implicit conversion
   or separate unit lanes. Colors are assigned automatically.
-- Plot refresh is capped near 30 Hz. Rendering and snapshot processing run on the
-  UI thread with fixed data caps; FFT, XY and correlation use a bounded shared
-  worker pool. Only the visible tab of a visible, non-minimized window submits
-  work; inactive analysis cancels queued jobs and stops polling.
-  Throughput, latency targets, long-duration resource
-  behavior and native Windows rendering still require qualification.
+- Plot refresh is capped near 30 Hz. Snapshot copying and Time-trace reduction
+  run on the bounded worker pool shared with FFT, XY and correlation. Qt Graphs
+  series updates remain on the UI thread. Each Time window keeps at most one
+  active and one replaceable pending request; inactive tabs do no analysis.
+  A Linux Xvfb workflow ran the visible 8-channel Time view for 30 seconds at
+  100 ksample/s paced plus 5 seconds unthrottled; a 10 ms UI timer's maximum
+  observed gap was 90 ms. A separate 30-minute synthetic acquisition soak
+  processed 1.492 billion samples at 828,717 samples/s, used 1.001 CPU cores,
+  peaked at 33 MiB RSS, and retained its fixed 20 MiB acquisition reservation.
+  That soak measured only the synthetic acquisition and snapshot backend. It did
+  not exercise runtime graph execution or Qt painting. Throughput, native desktop
+  rendering and Windows rendering still need qualification.
 - The prototype does not claim full design completion or ADI OSC parity.
 
 ## Verification

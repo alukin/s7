@@ -5,6 +5,7 @@
 #include "viewers/spectrum_view.hpp"
 #include "viewers/pair_analysis_view.hpp"
 #include "viewers/window_inspection_panel.hpp"
+#include <QDebug>
 #include <QCloseEvent>
 #include <QJsonArray>
 #include <QtGraphs/QLineSeries>
@@ -20,9 +21,12 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <limits>
 
 namespace s7studio::ui {
 LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
@@ -150,6 +154,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     connect(capacity_, &QSpinBox::valueChanged, this, [this](int value) {
         settingsError_.clear(); seconds_->setModified(false);
         requestedCapacity_ = static_cast<std::size_t>(value);
+        timeWorker_.cancel(); ++timeRequestRevision_; requestedCaptureId_ = 0; cadence_.invalidate();
         if (live_) {
             live_->setCapacity(static_cast<std::size_t>(value));
             if (requestedTrigger_.mode != observation::TriggerMode::Rolling && !freeze_->isChecked()) clearSamples();
@@ -169,7 +174,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     });
     connect(follow, &QPushButton::clicked, this, [this] {
         inspecting_ = false; freeze_->setChecked(false); plot_->bridge()->cursorVisible = false;
-        emit plot_->bridge()->inspectionChanged(); cadence_.invalidate(); refreshSource(); render(true);
+        emit plot_->bridge()->inspectionChanged(); render(true); cadence_.invalidate(); refreshSource();
     });
     connect(autoY_, &QCheckBox::toggled, this, [this] { render(false); });
     connect(plot_, &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
@@ -189,13 +194,21 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         else if (index == 3) correlation_->setFrame(frame_);
         else {
             if (requestedTrigger_.mode != observation::TriggerMode::Rolling && !freeze_->isChecked()) frame_ = std::make_shared<observation::LiveFrame>();
-            cadence_.invalidate(); refreshSource(); render(true);
+            render(true); cadence_.invalidate(); refreshSource();
         }
     });
+    // ViewerManager refreshes managed windows, while tests, embedded use and
+    // standalone windows may have no manager poller. Keep worker results moving
+    // to the GUI thread in either case; cadence_ coalesces duplicate polls.
+    auto* refreshTimer = new QTimer(this);
+    refreshTimer->setInterval(16);
+    connect(refreshTimer, &QTimer::timeout, this, [this] { refreshSource(); });
+    refreshTimer->start();
     updateStatus();
 }
 LiveOscilloscopeWindow::~LiveOscilloscopeWindow()
 {
+    timeWorker_.cancel();
     inspection_->clear(true);
     delete inspection_;
     // Removing the active spectrum page changes the current tab. Disconnect
@@ -253,6 +266,7 @@ void LiveOscilloscopeWindow::applyTriggerSettings()
 void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveAcquisition> source)
 {
     if (live_ == source) return;
+    timeWorker_.cancel(); ++timeRequestRevision_; requestedCaptureId_ = 0;
     live_ = std::move(source); clearSamples();
     const int count = live_ ? static_cast<int>(live_->channels().size()) : 0;
     static const QColor colors[]{QColor("#1565c0"), QColor("#c62828"), QColor("#00875a"), QColor("#8e24aa"), QColor("#c25e00"), QColor("#007b83"), QColor("#544d00"), QColor("#555555")};
@@ -279,6 +293,7 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
 }
 void LiveOscilloscopeWindow::clearSamples()
 {
+    timeWorker_.cancel(); ++timeRequestRevision_; requestedCaptureId_ = 0;
     inspection_->clear(true);
     frame_ = std::make_shared<observation::LiveFrame>(); inspecting_ = false; freeze_->setChecked(false); spectrum_->clear();
     constellation_->clear(); correlation_->clear();
@@ -289,22 +304,43 @@ void LiveOscilloscopeWindow::clearSamples()
 bool LiveOscilloscopeWindow::refreshSource()
 {
     if (!live_ || !isVisible() || isMinimized()) return false;
+    if (auto result = timeWorker_.takeResult()) {
+        if (result->sourceSnapshot && result->revision == timeRequestRevision_) requestedCaptureId_ = 0;
+        if (result->revision == timeRequestRevision_ &&
+            (!result->sourceSnapshot || (!freeze_->isChecked() && !inspecting_))) {
+            if (result->frame && !(result->preparedTime && !plot_->isVisible())) {
+                frame_ = result->frame;
+                traceWarning_ = result->warning;
+                if (result->preparedTime && plot_->isVisible()) presentTimeResult(*result);
+                else if (spectrum_->isVisible()) spectrum_->setFrame(frame_);
+                else if (constellation_->isVisible()) constellation_->setFrame(frame_);
+                else if (correlation_->isVisible()) correlation_->setFrame(frame_);
+            }
+            if (!result->warning.isEmpty()) traceWarning_ = result->warning;
+            if (result->snapshotMs > 25 || result->prepareMs > 25)
+                qWarning().noquote() << "Live oscilloscope worker slow stage: snapshot" << result->snapshotMs
+                                     << "ms, reduction" << result->prepareMs << "ms";
+            updateStatus();
+        }
+    }
     if (cadence_.isValid() && cadence_.elapsed() < 33) return false;
     cadence_.restart();
     if (freeze_->isChecked() || inspecting_) { updateStatus(); return false; }
     const bool triggeredTime = plot_->isVisible() && requestedTrigger_.mode != observation::TriggerMode::Rolling;
+    std::uint64_t captureId = 0;
+    bool finished = false;
     if (triggeredTime) {
         const auto state = live_->triggerStatus();
-        if (!state.captureId || (frame_->trigger && frame_->trigger->id == state.captureId && frame_->finished == state.finished)) { updateStatus(); return false; }
+        captureId = state.captureId; finished = state.finished;
+        if (!captureId || (frame_->trigger && frame_->trigger->id == captureId && frame_->finished == finished) ||
+            (requestedCaptureId_ == captureId && requestedCaptureFinished_ == finished)) { updateStatus(); return false; }
     }
-    auto snapshot = triggeredTime ? live_->triggerSnapshot() : live_->snapshot();
-    if (!snapshot) { updateStatus("Snapshot expired during copying; waiting for a coherent window."); return false; }
-    frame_ = std::make_shared<observation::LiveFrame>(std::move(*snapshot));
-    if (spectrum_->isVisible()) spectrum_->setFrame(frame_);
-    else if (constellation_->isVisible()) constellation_->setFrame(frame_);
-    else if (correlation_->isVisible()) correlation_->setFrame(frame_);
-    else render(true);
-    updateStatus(); return false;
+    const bool prepareTime = plot_->isVisible();
+    auto settings = timeViewSettings(prepareTime, prepareTime);
+    ++timeRequestRevision_;
+    timeWorker_.submitSource(live_, triggeredTime, settings, timeRequestRevision_);
+    if (triggeredTime) { requestedCaptureId_ = captureId; requestedCaptureFinished_ = finished; }
+    return false;
 }
 void LiveOscilloscopeWindow::render(bool fit)
 {
@@ -312,8 +348,9 @@ void LiveOscilloscopeWindow::render(bool fit)
     rendering_ = true;
     const auto& frame = *frame_;
     const bool triggered = frame.trigger && frame.trigger->triggered;
-    plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged();
-    plot_->setAxisTitles(triggered ? "Time from sampled trigger (model s)" : "Model time (s)", "Value (supplied units; shared numeric axis)");
+    if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
+    const QString xTitle = triggered ? "Time from sampled trigger (model s)" : "Model time (s)";
+    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Value (supplied units; shared numeric axis)");
     if (fit && !frame.times.empty()) {
         if (triggered) {
             const auto pre = static_cast<std::size_t>(frame.trigger->settings.pretriggerPercent)*(frame.capacity-1)/100;
@@ -324,30 +361,53 @@ void LiveOscilloscopeWindow::render(bool fit)
             const double last = frame.times.back(); plot_->setXRange(last-static_cast<double>(frame.capacity-1)*frame.dt, last);
         }
     }
-    traceWarning_.clear();
-    for (qsizetype channel = 0; channel < plot_->series().size(); ++channel) {
-        auto* series = plot_->series()[channel];
-        QList<QPointF> points;
-        if (channel < frame.channels.size() && controls_[channel].visible->isChecked()) {
-            // Suppress discontinuous/nonfinite channels rather than draw false bridges.
-            bool continuous = true;
-            for (std::size_t i = 0; i < frame.steps.size(); ++i) {
-                if ((i && frame.steps[i] != frame.steps[i-1]+1) ||
-                    !std::isfinite(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(channel)])) { continuous = false; break; }
-            }
-            if (continuous) points = frame.envelope(static_cast<std::size_t>(channel), static_cast<std::size_t>(std::max(64, plot_->width())), plot_->xMin(), plot_->xMax());
-            else traceWarning_ = "Discontinuous/nonfinite trace hidden; raw inspection remains available.";
-            for (auto& point : points) point.setY(point.y()*controls_[channel].gain->value()+controls_[channel].offset->value());
-            if (std::ranges::any_of(points, [](const auto& point) { return !std::isfinite(point.y()); })) {
-                points.clear();
-                traceWarning_ = "Display gain/offset overflow; trace hidden. Reduce gain/offset; raw inspection remains available.";
-            }
-        }
-        viewers::LinePlotView::setPoints(series, points);
-    }
-    if (autoY_->isChecked()) plot_->fitYToVisibleData();
     rendering_ = false;
-    updateStatus();
+    if (!frame.steps.empty() && plot_->isVisible()) {
+        ++timeRequestRevision_; requestedCaptureId_ = 0;
+        timeWorker_.submitFrame(frame_, timeViewSettings(true, false), timeRequestRevision_);
+    } else {
+        for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});
+        traceWarning_.clear(); updateStatus();
+    }
+}
+
+analysis::TimeViewSettings LiveOscilloscopeWindow::timeViewSettings(bool prepare, bool fit) const
+{
+    analysis::TimeViewSettings settings;
+    settings.buckets = static_cast<std::size_t>(std::max(64, plot_->width()));
+    settings.lower = fit ? -std::numeric_limits<double>::infinity() : plot_->xMin();
+    settings.upper = fit ? std::numeric_limits<double>::infinity() : plot_->xMax();
+    settings.prepareTime = prepare; settings.autoY = autoY_->isChecked(); settings.fitX = fit;
+    for (qsizetype i = 0; i < controls_.size(); ++i) {
+        const auto channel = static_cast<std::size_t>(i);
+        settings.visible[channel] = controls_[i].visible->isChecked();
+        settings.gain[channel] = controls_[i].gain->value(); settings.offset[channel] = controls_[i].offset->value();
+    }
+    return settings;
+}
+
+void LiveOscilloscopeWindow::presentTimeResult(const analysis::TimeViewResult& result)
+{
+    if (!result.frame) return;
+    const auto started = std::chrono::steady_clock::now();
+    rendering_ = true;
+    const bool triggered = result.frame->trigger && result.frame->trigger->triggered;
+    if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
+    const QString xTitle = triggered ? "Time from sampled trigger (model s)" : "Model time (s)";
+    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Value (supplied units; shared numeric axis)");
+    if (result.hasXRange) plot_->setXRange(result.xMin, result.xMax);
+    for (qsizetype i = 0; i < plot_->series().size(); ++i)
+        viewers::LinePlotView::setPoints(plot_->series()[i], static_cast<std::size_t>(i) < result.points.size() ? result.points[static_cast<std::size_t>(i)] : QList<QPointF>{});
+    traceWarning_ = result.warning;
+    if (autoY_->isChecked() && result.hasYRange) {
+        const double pad = result.yMax == result.yMin ? std::max(0.5, std::abs(result.yMin)*.05) : (result.yMax-result.yMin)*.04;
+        plot_->setYRange(result.yMin-pad, result.yMax+pad);
+    }
+    rendering_ = false;
+    const double uiMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-started).count();
+    if (uiMs > 50) qWarning().noquote() << "Live oscilloscope GUI series update took" << uiMs
+                                        << "ms after worker snapshot" << result.snapshotMs
+                                        << "ms and reduction" << result.prepareMs << "ms";
 }
 QString LiveOscilloscopeWindow::inspect(double time, bool active)
 {
@@ -391,11 +451,12 @@ void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
     triggerStatus_->setText(triggerError_.isEmpty() ? triggerText : triggerError_+" • "+triggerText);
     const auto acquisitionStatus = live_->status();
     const auto& frame = *frame_;
+    const QString timeWork = plot_->isVisible() && timeWorker_.busy() ? " • Preparing latest Time frame" : QString();
     status_->setText(QStringLiteral("Run %1 • %2 • %3 • %4/%5 samples/channel • received %6 • evicted %7 • gaps %8%9%10")
         .arg(frame.runId).arg(freeze_->isChecked() ? "Frozen snapshot" : inspecting_ ? "Inspecting displayed frame" : "Following latest")
         .arg(acquisitionStatus.finished ? "Run finished" : "Acquisition active").arg(frame.times.size()).arg(live_->capacity())
         .arg(frame.received).arg(frame.evicted).arg(frame.gaps)
         .arg(acquisitionStatus.error.isEmpty() ? QString() : " • ERROR: " + acquisitionStatus.error)
-        .arg((traceWarning_ + settingsError_ + suffix).isEmpty() ? QString() : " • " + traceWarning_ + settingsError_ + suffix));
+        .arg((traceWarning_ + settingsError_ + suffix + timeWork).isEmpty() ? QString() : " • " + traceWarning_ + settingsError_ + suffix + timeWork));
 }
 } // namespace s7studio::ui

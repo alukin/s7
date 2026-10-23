@@ -53,6 +53,9 @@
 #include <QUndoStack>
 #include <functional>
 #include <memory>
+#include <atomic>
+#include <thread>
+#include <chrono>
 
 class TestWindow : public s7studio::MainWindow {
 public:
@@ -576,7 +579,8 @@ private slots:
         const auto frameEnd = viewer->displayedFrame().steps.back();
         count->setValue(128); manager->refreshViews(); QCOMPARE(viewer->displayedFrame().steps.back(), frameEnd);
         capture(viewer, "live-oscilloscope-frozen");
-        QTest::mouseClick(viewer->findChild<QPushButton*>("live.follow"), Qt::LeftButton);
+        auto* follow = viewer->findChild<QPushButton*>("live.follow"); QVERIFY(follow);
+        QTest::mouseMove(follow, follow->rect().center()); QTest::mouseClick(follow, Qt::LeftButton);
         QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
         viewer->close(); QVERIFY(!viewer->isVisible());
         manager->openObserver("LiveOscilloscope", "live_1"); QTRY_VERIFY(viewer->isVisible());
@@ -885,6 +889,44 @@ private slots:
         level->setText("nan"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
         viewer->refreshSource(); QVERIFY(viewer->findChild<QLabel*>("trigger.status")->text().contains("Invalid trigger"));
         action("action.reset")->trigger(); QVERIFY(viewer->displayedFrame().steps.empty());
+    }
+    void liveOscilloscopeWorkerKeepsUiResponsive() {
+        using namespace s7studio;
+        QVector<observation::LiveChannel> channels;
+        for (int i = 0; i < 8; ++i) channels.push_back({QStringLiteral("channel_%1").arg(i), "V", "f64"});
+        auto source = std::make_shared<observation::LiveAcquisition>(77, 1e-5, channels, QJsonObject{}, 100000, 1);
+        ui::LiveOscilloscopeWindow viewer("worker-stress"); viewer.resize(1400, 900); viewer.attachLiveSource(source); viewer.show();
+        auto* triggerMode = viewer.findChild<QComboBox*>("trigger.mode"); QVERIFY(triggerMode); triggerMode->setCurrentIndex(2);
+        QElapsedTimer pulseClock; pulseClock.start();
+        qint64 previousPulse = 0, maximumGapMs = 0; int pulses = 0;
+        QTimer pulse; pulse.setInterval(10); connect(&pulse, &QTimer::timeout, &viewer, [&] {
+            const auto now = pulseClock.elapsed(); if (previousPulse) maximumGapMs = std::max(maximumGapMs, now-previousPulse);
+            previousPulse = now; ++pulses;
+        }); pulse.start();
+        std::atomic<bool> done{false};
+        std::jthread producer([&] {
+            const auto start = std::chrono::steady_clock::now();
+            std::array<double, 8> values{};
+            auto appendStep = [&](std::int64_t step) {
+                values[0] = static_cast<double>(step%100-50)/50.0;
+                for (std::size_t channel = 1; channel < values.size(); ++channel)
+                    values[channel] = static_cast<double>((static_cast<std::uint64_t>(step)*(channel+3))%2048)/1024.0-1.0;
+                source->append(step, static_cast<double>(step)*1e-5, values);
+            };
+            for (std::int64_t step = 1; step <= 3000000; ++step) {
+                appendStep(step);
+                if (step%1000 == 0) std::this_thread::sleep_until(start+std::chrono::microseconds(step*10));
+            }
+            const auto overloadUntil = std::chrono::steady_clock::now()+std::chrono::seconds(5);
+            for (std::int64_t step = 3000001; std::chrono::steady_clock::now() < overloadUntil; ++step) appendStep(step);
+            source->finish(); done.store(true, std::memory_order_release);
+        });
+        QTRY_VERIFY_WITH_TIMEOUT(done.load(std::memory_order_acquire), 45000);
+        producer.join();
+        QTRY_VERIFY_WITH_TIMEOUT(viewer.displayedFrame().trigger.has_value(), 2000);
+        QTest::qWait(100); pulse.stop();
+        qInfo() << "Live Time stress: 8 channels, 100 ksample/s paced plus 5 s unthrottled; UI timer pulses" << pulses << "max gap" << maximumGapMs << "ms";
+        QVERIFY(pulses > 0); QVERIFY2(maximumGapMs < 250, "UI event loop stalled for at least 250 ms during live Time updates");
     }
     void liveMeasurementExamples() {
         QFETCH(QString, filename); QFETCH(QString, observer); QFETCH(QString, unit);

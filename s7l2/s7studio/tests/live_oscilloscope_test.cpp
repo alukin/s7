@@ -195,15 +195,16 @@ private slots:
         viewer.attachLiveSource(source); viewer.show();
         viewer.refreshSource();
         QTRY_COMPARE(viewer.displayedFrame().steps.size(), std::size_t(2));
+        QTRY_COMPARE(viewer.plotView()->series().front()->points().size(), 2);
         auto* gain = viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain"); QVERIFY(gain);
         auto* freeze = viewer.findChild<QPushButton*>("live.freeze"); QVERIFY(freeze);
         freeze->setChecked(true); gain->setValue(1e6);
-        QVERIFY(viewer.plotView()->series().front()->points().isEmpty());
+        QTRY_VERIFY(viewer.plotView()->series().front()->points().isEmpty());
         QTRY_VERIFY(viewer.findChild<QLabel*>("live.status")->text().contains("overflow"));
         QCOMPARE(viewer.displayedFrame().values.back(), values[0]);
         QVERIFY(viewer.inspect(.002).contains(QString::number(values[0], 'g', 17)));
         gain->setValue(1);
-        QCOMPARE(viewer.plotView()->series().front()->points().size(), 2);
+        QTRY_COMPARE(viewer.plotView()->series().front()->points().size(), 2);
     }
 };
 QTEST_MAIN(LiveOscilloscopeTest)

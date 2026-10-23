@@ -132,7 +132,7 @@ Automated tests cannot judge rendering, interaction feel or GPU backends. Check 
 - Qt Graphs 2D line series have no dash patterns; Scope comparison overlays are told apart by translucency, width and the legend swatch instead of dashes.
 - Zoom changes both axes together; there is no box zoom or per-axis wheel zoom yet.
 - Drawn-point caps (Phase Portrait 200,000, 3D 500,000) bound rendering work; source-backed exports are independent of display trimming.
-- Live rendering throughput is not characterized. With software rendering (offscreen CI, Wine) a visible Qt Graphs plot costs far more UI-thread time than QCustomPlot's raster drawing did: in `s7studio_scope_lifecycle` a Scope left visible during an unthrottled run made the UI fall behind and the mailbox drop samples under Wine, so that test records hidden. Check on GPU desktops that a visible viewer keeps up at the intended rates (manual test 5).
+- Time-view preparation now runs off the UI thread. The Linux GUI workflow keeps a 10 ms UI timer responsive during 30 seconds at 100 ksample/s plus 5 seconds unthrottled (8 channels); under Xvfb/software rendering its worst timer gap was 90 ms. This is a responsiveness check, not a plot-throughput or input-to-photon guarantee. A separate 30-minute synthetic acquisition soak completed at about 828,700 samples/s using one CPU core, with 33 MiB peak RSS and the fixed 20 MiB reservation. That backend soak does not exercise a runtime graph or Qt rendering. GPU desktop and native Windows rendering still need manual qualification (test 5).
 - Offscreen QML/geometry checks do not establish 3D rendering; the separate Xvfb GUI suite checks actual pixels/camera behavior when OpenGL works.
 
 ## Run notification isolation
