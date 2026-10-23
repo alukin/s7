@@ -103,12 +103,34 @@ Item {
         }
     }
 
+    Binding {
+        target: plot
+        property: "plotAreaSize"
+        value: Qt.size(view.plotArea.width, view.plotArea.height)
+    }
+
     Item {
         x: view.x + view.plotArea.x
         y: view.y + view.plotArea.y
         width: view.plotArea.width
         height: view.plotArea.height
         clip: true
+        // Rings on the samples the pointer tooltip describes.
+        Repeater {
+            model: plot.hoverMarkers
+            delegate: Rectangle {
+                required property var modelData
+                objectName: "viewer.hoverMarker"
+                x: (modelData.x - plot.xMin) / (plot.xMax - plot.xMin) * parent.width - width / 2
+                y: (plot.yMax - modelData.y) / (plot.yMax - plot.yMin) * parent.height - height / 2
+                width: 9
+                height: 9
+                radius: 4.5
+                color: "#ccffffff"
+                border.width: 2
+                border.color: modelData.color
+            }
+        }
         Repeater {
             model: plot.selectionMarkers
             delegate: Item {
@@ -173,6 +195,15 @@ Item {
         }
         onPointChanged: updateReadout()
         onHoveredChanged: updateReadout()
+    }
+    // A wheel zoom moves the data under a still pointer; refresh its readout.
+    Connections {
+        target: plot
+        enabled: inspectionHover.hovered
+        property bool busy: false
+        function refresh() { if (!busy) { busy = true; inspectionHover.updateReadout(); busy = false } }
+        function onXRangeChanged() { refresh() }
+        function onYRangeChanged() { refresh() }
     }
     Rectangle {
         objectName: "viewer.sampleCursor"
@@ -263,6 +294,49 @@ Item {
                         text: entry.modelData.name
                         font.pixelSize: 12
                         color: "#202020"
+                    }
+                }
+            }
+        }
+    }
+
+    // Translucent value box beside the pointer; it flips sides near the edges.
+    Rectangle {
+        id: hoverTip
+        objectName: "viewer.hoverTip"
+        readonly property point pointer: inspectionHover.point.position
+        visible: plot.inspectionEnabled && inspectionHover.hovered && plot.hoverTip.length > 0
+        width: tipColumn.implicitWidth + 14
+        height: tipColumn.implicitHeight + 10
+        x: pointer.x + 18 + width <= root.width ? pointer.x + 18 : Math.max(0, pointer.x - 18 - width)
+        y: Math.max(0, Math.min(pointer.y + 18 + height <= root.height ? pointer.y + 18 : pointer.y - 18 - height,
+                                root.height - height))
+        color: "#d9ffffff"
+        border.color: "#99707070"
+        radius: 4
+
+        Column {
+            id: tipColumn
+            x: 7
+            y: 5
+            spacing: 2
+            Repeater {
+                model: plot.hoverTip
+                Row {
+                    id: tipRow
+                    required property var modelData
+                    spacing: 6
+                    Rectangle {
+                        visible: tipRow.modelData.color !== undefined
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 12
+                        height: 3
+                        color: tipRow.modelData.color !== undefined ? tipRow.modelData.color : "transparent"
+                    }
+                    Text {
+                        text: tipRow.modelData.text
+                        font.pixelSize: 12
+                        color: tipRow.modelData.color !== undefined ? "#202020" : "#505050"
                     }
                 }
             }

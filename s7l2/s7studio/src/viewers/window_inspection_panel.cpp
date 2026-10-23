@@ -6,7 +6,7 @@
 #include <QClipboard>
 #include <QComboBox>
 #include <QFileDialog>
-#include <QHBoxLayout>
+#include <QGridLayout>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -26,25 +26,26 @@ WindowInspectionPanel::WindowInspectionPanel(Capture capture, QWidget* parent) :
 {
     setObjectName("live.inspection");
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
-    auto* cursors = new QHBoxLayout;
-    auto* pinButton = new QPushButton("Pin window / A–B", this); pinButton->setObjectName("inspection.pin"); cursors->addWidget(pinButton);
-    active_ = new QComboBox(this); active_->setObjectName("inspection.active"); active_->addItems({"Click sets A", "Click sets B"}); cursors->addWidget(active_);
-    auto index = [&](const char* name, const QString& label) {
-        cursors->addWidget(new QLabel(label, this)); auto* spin = new QSpinBox(this); spin->setObjectName(name);
-        spin->setRange(0, 0); spin->setMaximumWidth(110); spin->setEnabled(false); cursors->addWidget(spin); return spin;
+    // Stacked rows so the panel fits a narrow side column next to the plot.
+    auto* cursors = new QGridLayout;
+    auto* pinButton = new QPushButton("Pin window / A–B", this); pinButton->setObjectName("inspection.pin"); cursors->addWidget(pinButton, 0, 0, 1, 2);
+    active_ = new QComboBox(this); active_->setObjectName("inspection.active"); active_->addItems({"Click sets A", "Click sets B"}); cursors->addWidget(active_, 0, 2, 1, 2);
+    auto index = [&](const char* name, const QString& label, int column) {
+        cursors->addWidget(new QLabel(label, this), 1, column); auto* spin = new QSpinBox(this); spin->setObjectName(name);
+        spin->setRange(0, 0); spin->setMaximumWidth(110); spin->setEnabled(false); cursors->addWidget(spin, 1, column+1); return spin;
     };
-    a_ = index("inspection.a", "A index"); b_ = index("inspection.b", "B index");
-    auto* measure = new QPushButton("Measure A–B", this); measure->setObjectName("inspection.measure"); cursors->addWidget(measure);
-    auto* copy = new QPushButton("Copy readout", this); copy->setObjectName("inspection.copy"); cursors->addWidget(copy); cursors->addStretch();
+    a_ = index("inspection.a", "A index", 0); b_ = index("inspection.b", "B index", 2);
+    auto* measure = new QPushButton("Measure A–B", this); measure->setObjectName("inspection.measure"); cursors->addWidget(measure, 2, 0, 1, 2);
+    auto* copy = new QPushButton("Copy readout", this); copy->setObjectName("inspection.copy"); cursors->addWidget(copy, 2, 2, 1, 2);
     layout->addLayout(cursors);
     readout_ = new QPlainTextEdit(this); readout_->setObjectName("inspection.readout"); readout_->setReadOnly(true);
     readout_->setMaximumHeight(125); readout_->hide(); layout->addWidget(readout_);
-    auto* exports = new QHBoxLayout;
-    format_ = new QComboBox(this); format_->setObjectName("inspection.format"); format_->addItems({"Window JSON (.s7window)", "Raw acquisition CSV", "Displayed data CSV"}); exports->addWidget(format_);
-    export_ = new QPushButton("Export frozen window…", this); export_->setObjectName("inspection.export"); exports->addWidget(export_);
-    cancel_ = new QPushButton("Cancel export", this); cancel_->setObjectName("inspection.cancel"); cancel_->setEnabled(false); exports->addWidget(cancel_);
+    auto* exports = new QGridLayout;
+    format_ = new QComboBox(this); format_->setObjectName("inspection.format"); format_->addItems({"Window JSON (.s7window)", "Raw acquisition CSV", "Displayed data CSV"}); exports->addWidget(format_, 0, 0, 1, 2);
+    export_ = new QPushButton("Export frozen window…", this); export_->setObjectName("inspection.export"); exports->addWidget(export_, 1, 0);
+    cancel_ = new QPushButton("Cancel export", this); cancel_->setObjectName("inspection.cancel"); cancel_->setEnabled(false); exports->addWidget(cancel_, 1, 1);
     status_ = new QLabel("Click a plot or pin a window for exact A/B cursors. Alt+Left/Right moves the selected cursor one position.", this);
-    status_->setObjectName("inspection.status"); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); exports->addWidget(status_, 1); layout->addLayout(exports);
+    status_->setObjectName("inspection.status"); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); exports->addWidget(status_, 2, 0, 1, 2); layout->addLayout(exports);
     connect(pinButton, &QPushButton::clicked, this, [this] { pin(); });
     connect(a_, &QSpinBox::valueChanged, this, [this] { updateReadout(); });
     connect(b_, &QSpinBox::valueChanged, this, [this] { updateReadout(); });

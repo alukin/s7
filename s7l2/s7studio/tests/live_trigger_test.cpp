@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "observation/live_acquisition.hpp"
 #include <QtTest>
+#include <QJsonDocument>
 #include <atomic>
 #include <thread>
 #include <cmath>
+#include <random>
 using namespace s7studio::observation;
 namespace {
 void append(LiveAcquisition& a, std::int64_t step, double value) { const double values[]{value, -value}; a.append(step, static_cast<double>(step)/1024, values); }
@@ -13,6 +15,44 @@ TriggerSettings settings(TriggerMode mode = TriggerMode::Normal) { TriggerSettin
 class TriggerTest : public QObject {
     Q_OBJECT
 private slots:
+    void noisySineNeedsHysteresisForOneFlank() {
+        // 2 Hz sine plus Gaussian noise (sigma 0.15) at 1 kHz, as in examples/demo_diagram2.
+        auto fallingCaptures = [](double hysteresis) {
+            LiveAcquisition a(1, .001, {{"x", "V", "f64"}, {"y", "A", "f64"}}, {}, 1000, 1);
+            auto s = settings(TriggerMode::Normal); s.hysteresis = hysteresis; a.configureTrigger(s);
+            std::mt19937_64 rng(42); std::normal_distribution<double> noise(0, .15);
+            std::uint64_t seen = 0; int captures = 0, falling = 0;
+            for (int i = 1; i <= 120000; ++i) {
+                const double v[]{std::sin(2*M_PI*2*i*.001)+noise(rng), 0}; a.append(i, i*.001, v);
+                const auto id = a.triggerStatus().captureId;
+                if (id == seen) continue;
+                seen = id; const auto f = a.triggerSnapshot(); if (!f || !f->trigger->triggered) continue;
+                ++captures; if (std::cos(2*M_PI*2*static_cast<double>(f->trigger->step)*.001) < 0) ++falling;
+            }
+            return std::pair{captures, falling};
+        };
+        const auto [noisy, wrong] = fallingCaptures(0); QVERIFY(noisy > 20); QVERIFY(wrong > noisy/4); // noise crossings on the falling flank
+        const auto [clean, none] = fallingCaptures(1); QVERIFY(clean > 20); QCOMPARE(none, 0);       // band wider than the noise
+    }
+    void presetJsonValidatesAndRoundTrips() {
+        QString error;
+        auto defaults = triggerSettingsFromJson({}, &error); QVERIFY(defaults); QVERIFY(error.isEmpty());
+        QVERIFY(*defaults == TriggerSettings{});
+        TriggerSettings s; s.mode = TriggerMode::Single; s.channel = 2; s.rising = false; s.level = std::nextafter(.25, 1.);
+        s.hysteresis = 1e-3; s.pretriggerPercent = 40; s.holdoffSteps = 7; s.autoTimeoutSteps = 900000000;
+        const auto json = triggerSettingsToJson(s);
+        QCOMPARE(json["mode"].toString(), QString("single")); QCOMPARE(json["edge"].toString(), QString("falling"));
+        const auto text = QJsonDocument(json).toJson(QJsonDocument::Compact);
+        const auto back = triggerSettingsFromJson(QJsonDocument::fromJson(text).object()); QVERIFY(back); QVERIFY(*back == s);
+        const auto partial = triggerSettingsFromJson({{"mode", "auto"}, {"hysteresis", 1}}); QVERIFY(partial);
+        QCOMPARE(partial->mode, TriggerMode::Auto); QCOMPARE(partial->hysteresis, 1.); QCOMPARE(partial->pretriggerPercent, 25);
+        const QList<QJsonObject> bad{{{"mode", "free"}}, {{"edge", 1}}, {{"channel", 1.5}}, {{"channel", 8}}, {{"level", "0"}},
+            {{"hysteresis", -1}}, {{"pretrigger_percent", 101}}, {{"auto_timeout_steps", 0}}, {{"holdoff_steps", 2e9}}};
+        for (const auto& json : bad) {
+            QVERIFY2(!triggerSettingsFromJson(json, &error), QJsonDocument(json).toJson().constData());
+            QVERIFY(!error.isEmpty());
+        }
+    }
     void periodicFramesStayAlignedWithoutGuiPolling() {
         LiveAcquisition a(1, 1./1024, {{"x", "V", "f64"}, {"y", "A", "f64"}}, {}, 1024, 1);
         a.setCapacity(9); QVERIFY(a.configureTrigger(settings())); const auto allocated = a.allocatedBytes();

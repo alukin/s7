@@ -11,6 +11,10 @@
 #include <QSpinBox>
 #include <QDoubleSpinBox>
 #include <QLabel>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QSignalSpy>
+#include <QCheckBox>
 #include <QTemporaryDir>
 #include <QDir>
 #include <cmath>
@@ -205,6 +209,61 @@ private slots:
         QVERIFY(viewer.inspect(.002).contains(QString::number(values[0], 'g', 17)));
         gain->setValue(1);
         QTRY_COMPARE(viewer.plotView()->series().front()->points().size(), 2);
+    }
+    void triggerPresetIsAppliedButNotReportedAsEdit() {
+        ui::LiveOscilloscopeWindow viewer("live");
+        QSignalSpy edited(&viewer, &ui::LiveOscilloscopeWindow::triggerSettingsEdited);
+        observation::TriggerSettings preset; preset.mode = observation::TriggerMode::Auto; preset.channel = 1; preset.hysteresis = 1;
+        viewer.setTriggerSettings(preset);
+        QCOMPARE(edited.count(), 0); QVERIFY(viewer.triggerSettings() == preset);
+        QCOMPARE(viewer.findChild<QComboBox*>("trigger.mode")->currentText(), QString("Auto"));
+        QCOMPARE(viewer.findChild<QLineEdit*>("trigger.hysteresis")->text(), QString("1"));
+        // Applied before the first sample once a run attaches, including the source channel.
+        auto source = std::make_shared<LiveAcquisition>(15, .001,
+            QVector<observation::LiveChannel>{{"live/a", "V", "f64"}, {"live/b", "V", "f64"}});
+        viewer.attachLiveSource(source);
+        QCOMPARE(source->triggerStatus().state, observation::TriggerState::Filling);
+        QCOMPARE(viewer.findChild<QComboBox*>("trigger.channel")->currentIndex(), 1);
+        QCOMPARE(edited.count(), 0);
+        auto* level = viewer.findChild<QLineEdit*>("trigger.level");
+        level->setText("0.5"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
+        QCOMPARE(edited.count(), 1); QCOMPARE(viewer.triggerSettings().level, .5);
+    }
+    void hoverTipFollowsDrawnTraces() {
+        auto source = std::make_shared<LiveAcquisition>(14, .001,
+            QVector<observation::LiveChannel>{{"live/up", "V", "f64"}, {"live/flat", "", "f64"}});
+        for (int i = 1; i <= 100; ++i) { const double v[]{i*.01, -.5}; source->append(i, i*.001, v); }
+        ui::LiveOscilloscopeWindow viewer("live");
+        viewer.attachLiveSource(source); viewer.resize(1100, 740); viewer.show();
+        QTRY_COMPARE(viewer.displayedFrame().steps.size(), std::size_t(100));
+        QTRY_COMPARE(viewer.plotView()->series().front()->points().size(), 100);
+        auto* bridge = viewer.plotView()->bridge();
+        QTRY_VERIFY(bridge->plotAreaSize.width() > 100 && bridge->plotAreaSize.height() > 100);
+        auto* freeze = viewer.findChild<QPushButton*>("live.freeze"); QVERIFY(freeze); freeze->setChecked(true);
+        viewer.plotView()->setXRange(0, .1); viewer.plotView()->setYRange(-1, 1.1);
+        auto text = [](const QVariantList& rows) { QStringList lines; for (const auto& row : rows) lines << row.toMap()["text"].toString(); return lines.join('\n'); };
+        // On a stored sample: header with its step, value with unit, and a marker on it.
+        auto rows = viewer.hoverTip(.05, .5);
+        QCOMPARE(rows.size(), 2); QVERIFY(text(rows).contains("step 50")); QVERIFY(text(rows).contains("live/up = 0.5 V"));
+        QCOMPARE(bridge->hoverMarkers.size(), 1);
+        QCOMPARE(bridge->hoverMarkers.front().toMap()["y"].toDouble(), .5);
+        // Away from every trace: nothing to show.
+        QVERIFY(viewer.hoverTip(.05, .2).isEmpty()); QVERIFY(bridge->hoverTip.isEmpty());
+        // Zoomed in so samples are far apart: a point on the drawn segment still counts.
+        viewer.plotView()->setXRange(.0495, .0515); viewer.plotView()->setYRange(.48, .53);
+        rows = viewer.hoverTip(.05075, .5075);
+        QVERIFY(text(rows).contains("live/up = 0.51 V")); QVERIFY(text(rows).contains("step 51"));
+        // A unitless channel; hidden channels are never reported.
+        viewer.plotView()->setXRange(0, .1); viewer.plotView()->setYRange(-1, 1.1);
+        QVERIFY(text(viewer.hoverTip(.02, -.5)).contains("live/flat = -0.5"));
+        viewer.findChild<QCheckBox*>("live.channel.1.visible")->setChecked(false);
+        QTRY_VERIFY(viewer.plotView()->series()[1]->points().isEmpty());
+        QVERIFY(viewer.hoverTip(.02, -.5).isEmpty());
+        // Display gain moves the trace; raw stays primary, the shown value is labelled.
+        viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(2);
+        QTRY_COMPARE(viewer.plotView()->series().front()->points().at(49).y(), 1.);
+        QVERIFY(text(viewer.hoverTip(.05, 1)).contains("live/up = 0.5 V (shown 1)"));
+        QVERIFY(viewer.hoverTip(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
     }
 };
 QTEST_MAIN(LiveOscilloscopeTest)

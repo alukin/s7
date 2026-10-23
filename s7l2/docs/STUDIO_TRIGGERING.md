@@ -9,7 +9,7 @@ the model and never changes its causal execution or sample rate.
 
 1. Open `examples/signal_measurement/iq_correlation_live.s7diagram` and open
    `iq_scope` **before starting the run**. Set retention to **128 samples**.
-2. In Time, choose **Normal**, Source **I**, **Rising**, Level **0.25**,
+2. In Time, choose **Normal**, Trigger input **I**, **Rising**, Level **0.25**,
    Hysteresis **0.02**, and Pre-trigger **25%**. Level/hysteresis accept scientific
    notation; press Enter to apply edited numbers. Thresholds use supplied raw
    source units, independently of display gain, offset and visibility.
@@ -24,6 +24,31 @@ Settings made in an existing window apply before the first step of a new run.
 Changing trigger settings on a running model starts fresh trigger history.
 Enabling triggering after a run has finished does not retrospectively search its
 retained data. Use Rolling to inspect that data, or configure triggering and rerun.
+
+## Saved trigger settings
+
+Trigger settings are saved with the diagram as the LiveOscilloscope observer's
+optional `trigger` parameter, and are applied when its window opens, before any
+run data arrives:
+
+```json
+"trigger": {"mode": "auto", "channel": 0, "edge": "rising", "level": 0,
+            "hysteresis": 1, "pretrigger_percent": 25, "holdoff_steps": 0,
+            "auto_timeout_steps": 4096}
+```
+
+Every key is optional; missing keys take the defaults above, except `mode`,
+which defaults to `rolling`, and `hysteresis`, which defaults to `0`. `channel`
+is the zero-based observer input (shown as **Trigger input**). Diagrams without
+the parameter open in Rolling mode as before. A malformed or out-of-range value
+rejects the whole preset with a log message; the window then keeps its defaults.
+Applying a setting in the window updates the parameter as an undoable diagram
+edit, so Save keeps it.
+
+`examples/demo_diagram2.s7diagram` adds Gaussian noise (sigma 0.15) to a 2 Hz
+sine. With zero hysteresis, noise produces rising sample-to-sample crossings on
+the falling flank too, so captures alternate between flanks. Its preset uses a
+hysteresis of 1 (arm below -0.5, fire above +0.5), wider than the noise peaks.
 
 ## Modes
 

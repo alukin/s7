@@ -3,6 +3,9 @@
 #include "observation/live_acquisition.hpp"
 #include <algorithm>
 #include <cmath>
+#include <QStringList>
+#include <limits>
+#include <type_traits>
 
 namespace s7studio::observation {
 double LiveFrame::plottedTime(std::size_t i) const
@@ -30,6 +33,59 @@ QJsonObject triggerMetadata(const LiveFrame& f)
         {"capture_id", QString::number(t.id)}, {"triggered", t.triggered}, {"partial", t.partial}, {"sampled_trigger_step", QString::number(t.step)},
         {"sampled_trigger_time_s", QString::number(t.time, 'g', 17)}, {"expected_positions", static_cast<int>(f.capacity)},
         {"captured_positions", static_cast<int>(f.steps.size())}, {"interpolated", false}};
+}
+namespace {
+constexpr const char* modeNames[]{"rolling", "auto", "normal", "single"};
+// Matches the window's spin boxes so a loaded preset is always editable there.
+constexpr double maxSteps = 1e9;
+}
+std::optional<TriggerSettings> triggerSettingsFromJson(const QJsonObject& json, QString* error)
+{
+    TriggerSettings s;
+    QString problem;
+    auto integer = [&](const char* key, double low, double high, auto& out) {
+        if (!json.contains(key) || !problem.isEmpty()) return;
+        const auto value = json.value(key);
+        const double number = value.toDouble(std::numeric_limits<double>::quiet_NaN());
+        if (!value.isDouble() || !(number >= low && number <= high) || std::trunc(number) != number)
+            problem = QStringLiteral("%1 must be an integer from %2 to %3").arg(key).arg(low, 0, 'g', 10).arg(high, 0, 'g', 10);
+        else out = static_cast<std::remove_reference_t<decltype(out)>>(number);
+    };
+    auto real = [&](const char* key, double& out) {
+        if (!json.contains(key) || !problem.isEmpty()) return;
+        const auto value = json.value(key);
+        if (!value.isDouble() || !std::isfinite(value.toDouble())) problem = QStringLiteral("%1 must be a finite number").arg(key);
+        else out = value.toDouble();
+    };
+    auto choice = [&](const char* key, std::initializer_list<const char*> names, int& out) {
+        if (!json.contains(key) || !problem.isEmpty()) return;
+        const auto text = json.value(key).toString();
+        int index = 0;
+        for (const auto* name : names) { if (text == QLatin1String(name)) { out = index; return; } ++index; }
+        QStringList allowed; for (const auto* name : names) allowed << name;
+        problem = QStringLiteral("%1 must be one of %2").arg(key, allowed.join(", "));
+    };
+    int mode = 0, edge = 0;
+    choice("mode", {modeNames[0], modeNames[1], modeNames[2], modeNames[3]}, mode);
+    choice("edge", {"rising", "falling"}, edge);
+    integer("channel", 0, static_cast<double>(LiveAcquisition::maxChannels-1), s.channel);
+    real("level", s.level); real("hysteresis", s.hysteresis);
+    integer("pretrigger_percent", 0, 100, s.pretriggerPercent);
+    integer("holdoff_steps", 0, maxSteps, s.holdoffSteps);
+    integer("auto_timeout_steps", 1, maxSteps, s.autoTimeoutSteps);
+    s.mode = static_cast<TriggerMode>(mode); s.rising = edge == 0;
+    if (problem.isEmpty() && (s.hysteresis < 0 || !std::isfinite(s.level-s.hysteresis/2) || !std::isfinite(s.level+s.hysteresis/2) ||
+                              (s.hysteresis > 0 && !(s.level-s.hysteresis/2 < s.level+s.hysteresis/2))))
+        problem = QStringLiteral("hysteresis must be nonnegative and representable around the level");
+    if (error) *error = problem;
+    if (!problem.isEmpty()) return {};
+    return s;
+}
+QJsonObject triggerSettingsToJson(const TriggerSettings& s)
+{
+    return {{"mode", modeNames[static_cast<int>(s.mode)]}, {"channel", static_cast<double>(s.channel)}, {"edge", s.rising ? "rising" : "falling"},
+        {"level", s.level}, {"hysteresis", s.hysteresis}, {"pretrigger_percent", s.pretriggerPercent},
+        {"holdoff_steps", static_cast<double>(s.holdoffSteps)}, {"auto_timeout_steps", static_cast<double>(s.autoTimeoutSteps)}};
 }
 void LiveAcquisition::resetTriggerLocked(bool discard)
 {

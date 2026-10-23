@@ -62,6 +62,10 @@ struct LiveFrame {
         double upper = std::numeric_limits<double>::infinity()) const;
 };
 QJsonObject triggerMetadata(const LiveFrame& frame);
+// A LiveOscilloscope observer's saved "trigger" preset. Missing keys keep the
+// defaults; any malformed or out-of-range key rejects the whole preset.
+std::optional<TriggerSettings> triggerSettingsFromJson(const QJsonObject& json, QString* error = nullptr);
+QJsonObject triggerSettingsToJson(const TriggerSettings& settings);
 
 // Fixed allocation, no disk. One producer appends complete same-step frames;
 // readers copy in small chunks and abandon expired snapshots without blocking

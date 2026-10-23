@@ -11,6 +11,7 @@
 #include <QWidget>
 #include <QImage>
 #include <QRectF>
+#include <QSizeF>
 #include <QSet>
 #include <cstdint>
 
@@ -38,6 +39,13 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(QString densitySource MEMBER densitySource NOTIFY densityChanged)
     Q_PROPERTY(QRectF densityBounds MEMBER densityBounds NOTIFY densityChanged)
     Q_PROPERTY(QVariantList selectionMarkers MEMBER selectionMarkers NOTIFY selectionChanged)
+    // Pixel size of the plot area, written by QML, so owners can measure
+    // pointer distances in pixels rather than axis units.
+    Q_PROPERTY(QSizeF plotAreaSize MEMBER plotAreaSize NOTIFY plotAreaChanged)
+    // Pointer tooltip rows ({text, color?}) and on-curve markers ({x, y, color})
+    // in data coordinates. Empty rows hide the tooltip.
+    Q_PROPERTY(QVariantList hoverTip MEMBER hoverTip NOTIFY hoverTipChanged)
+    Q_PROPERTY(QVariantList hoverMarkers MEMBER hoverMarkers NOTIFY hoverTipChanged)
     Q_PROPERTY(double xMin READ xMin NOTIFY xRangeChanged)
     Q_PROPERTY(double xMax READ xMax NOTIFY xRangeChanged)
     Q_PROPERTY(double yMin READ yMin NOTIFY yRangeChanged)
@@ -67,6 +75,8 @@ public:
     QString densitySource;
     QRectF densityBounds;
     QVariantList selectionMarkers;
+    QSizeF plotAreaSize;
+    QVariantList hoverTip, hoverMarkers;
     Q_INVOKABLE void pick(double xFraction, double yFraction);
     Q_INVOKABLE void hover(double fraction, bool inside);
     Q_INVOKABLE void hoverPoint(double xFraction, double yFraction, bool inside);
@@ -81,6 +91,8 @@ signals:
     void inspectionChanged();
     void densityChanged();
     void selectionChanged();
+    void plotAreaChanged();
+    void hoverTipChanged();
     void xRangeChanged();
     void yRangeChanged();
     void titlesChanged();

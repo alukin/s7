@@ -61,6 +61,11 @@ public:
 
     [[nodiscard]] static auto observerIdOf(const QString& probeName) -> QString;
 
+signals:
+    // A new instance exists but has no source yet: owners of its diagram
+    // settings can configure it before any data arrives.
+    void viewerCreated(const QString& typeId, const QString& instanceId, s7studio::viewers::ObservationViewer* viewer);
+
 private:
     struct Instance {
         QString typeId;

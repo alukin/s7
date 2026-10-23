@@ -73,6 +73,7 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     connect(window, &QObject::destroyed, this, [this, key] { forget(key); });
     viewer->setDroppedSampleCount(dropped_);
     instances_.insert(key, Instance{typeId, spec.instanceId, window, viewer, spec});
+    emit viewerCreated(typeId, spec.instanceId, viewer);
     if (typeId == QStringLiteral("LiveOscilloscope")) viewer->attachLiveSource(liveSources_.value(spec.instanceId));
     else viewer->attachSource(source(), bindingsFor(instances_[key], source()));
     viewer->setPreviewDroppedCount(externalSource_ ? dropped_ : 0);

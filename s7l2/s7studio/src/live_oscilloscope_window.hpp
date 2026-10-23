@@ -4,6 +4,7 @@
 #include "analysis/time_view_worker.hpp"
 #include "viewers/observation_viewer.hpp"
 #include <QElapsedTimer>
+#include <QVariantList>
 #include <QWidget>
 class QLabel;
 class QLineEdit;
@@ -29,6 +30,16 @@ public:
     viewers::LinePlotView* plotView() const { return plot_; }
     const observation::LiveFrame& displayedFrame() const { return *frame_; }
     QString inspect(double time, bool active = true);
+    // Tooltip rows for traces drawn within a few pixels of the pointer at
+    // (x, y) in plot coordinates; empty when no trace is near.
+    QVariantList hoverTip(double x, double y, bool active = true);
+    // Applies saved trigger settings, e.g. a diagram preset, without
+    // reporting them back through triggerSettingsEdited().
+    void setTriggerSettings(const observation::TriggerSettings& settings);
+    const observation::TriggerSettings& triggerSettings() const { return requestedTrigger_; }
+signals:
+    // The user changed and applied trigger settings in this window.
+    void triggerSettingsEdited();
 protected:
     void changeEvent(QEvent* event) override;
     void closeEvent(QCloseEvent* event) override;

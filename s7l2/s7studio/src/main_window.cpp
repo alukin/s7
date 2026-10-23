@@ -25,6 +25,7 @@
 #include "scope_sample_mailbox.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
+#include "live_oscilloscope_window.hpp"
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/io.hpp>
@@ -40,6 +41,7 @@
 #include <qschematic/scene.hpp>
 
 #include <QDateTime>
+#include <QJsonDocument>
 #include <QTimer>
 #include <QAction>
 #include <QActionGroup>
@@ -289,6 +291,13 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
     , runtimeSchema_(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}})
 {
     viewers_ = new viewers::ViewerManager(viewers::ViewerRegistry::instance(), this);
+    connect(viewers_, &viewers::ViewerManager::viewerCreated, this,
+        [this](const QString& typeId, const QString& instanceId, viewers::ObservationViewer* viewer) {
+            auto* live = typeId == QStringLiteral("LiveOscilloscope") ? dynamic_cast<ui::LiveOscilloscopeWindow*>(viewer->widget()) : nullptr;
+            if (!live) return;
+            applyTriggerPreset(instanceId, true);
+            connect(live, &ui::LiveOscilloscopeWindow::triggerSettingsEdited, this, [this, instanceId] { storeTriggerPreset(instanceId); });
+        });
     runner_ = new LocalSchemaRunner(this);
     controller_ = std::make_unique<ui::ModelRunController>(runner_);
 
@@ -1127,6 +1136,45 @@ auto MainWindow::observerViewerType(const QString& observerId) const -> QString
     return QStringLiteral("Scope");
 }
 
+void MainWindow::applyTriggerPreset(const QString& observerId, bool reportInvalid)
+{
+    auto* live = dynamic_cast<ui::LiveOscilloscopeWindow*>(viewers_->find(QStringLiteral("LiveOscilloscope"), observerId));
+    const auto node = live && diagramEditor_ && diagramEditor_->scene() ? diagramEditor_->scene()->elementNode(observerId.toStdString()) : nullptr;
+    if (!node || node->element().type != "LiveOscilloscope") return;
+    // An observer saved without a preset uses the defaults, as it always did.
+    observation::TriggerSettings settings;
+    if (const auto* preset = json_utils::findObjectValue(node->element().params, "trigger")) {
+        QString error;
+        const auto json = QJsonDocument::fromJson(QByteArray::fromStdString(boost::json::serialize(*preset)));
+        const auto parsed = preset->is_object() ? observation::triggerSettingsFromJson(json.object(), &error) : std::nullopt;
+        if (!parsed) {
+            if (reportInvalid)
+                appendLog(QStringLiteral("[studio] %1: ignoring saved trigger settings: %2")
+                    .arg(observerId, preset->is_object() ? error : QStringLiteral("trigger must be an object")));
+            return;
+        }
+        settings = *parsed;
+    }
+    live->setTriggerSettings(settings);
+}
+
+void MainWindow::storeTriggerPreset(const QString& observerId)
+{
+    auto* live = dynamic_cast<ui::LiveOscilloscopeWindow*>(viewers_->find(QStringLiteral("LiveOscilloscope"), observerId));
+    auto* scene = diagramEditor_ ? diagramEditor_->scene() : nullptr;
+    const auto node = live && scene ? scene->elementNode(observerId.toStdString()) : nullptr;
+    if (!node || node->element().type != "LiveOscilloscope") return;
+    const auto json = QJsonDocument(observation::triggerSettingsToJson(live->triggerSettings())).toJson(QJsonDocument::Compact);
+    auto element = node->element();
+    auto preset = boost::json::parse(json.toStdString());
+    if (const auto* old = element.params.if_contains("trigger"); old && *old == preset) return;
+    element.params["trigger"] = std::move(preset);
+    // Trigger settings act on the running acquisition at once, unlike other edits.
+    storingTriggerPreset_ = true;
+    scene->changeElement(node, std::move(element));
+    storingTriggerPreset_ = false;
+}
+
 bool MainWindow::observerMatchesActiveRun(const QString& observerId) const
 {
     if (!observersFrozen_) return true;
@@ -1228,8 +1276,14 @@ void MainWindow::connectSceneSignals()
     connect(scene, &diagram::DiagramScene::probesChanged, wireTypeTimer_, qOverload<>(&QTimer::start),
             Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::onProbesChanged, Qt::UniqueConnection);
+    // Undo/redo of a stored preset updates the open window.
+    connect(scene, &diagram::DiagramScene::diagramChanged, this, [this, scene] {
+        if (storingTriggerPreset_) return;
+        for (const auto& node : scene->elementNodes())
+            if (node->element().type == "LiveOscilloscope") applyTriggerPreset(QString::fromStdString(node->id()), false);
+    });
     const auto reportNextRunEdit = [this] {
-        if (!shuttingDown_ && runner_->isRunning())
+        if (!shuttingDown_ && !storingTriggerPreset_ && runner_->isRunning())
             statusBar()->showMessage(QStringLiteral("Edits apply to the next run; the active simulation keeps its starting configuration."), 6000);
     };
     connect(scene, &diagram::DiagramScene::diagramChanged, this, reportNextRunEdit);

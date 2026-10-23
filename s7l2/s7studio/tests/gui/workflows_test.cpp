@@ -555,6 +555,8 @@ private slots:
         auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
         viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
         auto* count = viewer->findChild<QSpinBox*>("live.samples"); QVERIFY(count);
+        // A pointer left over the plot by an earlier test holds the frame for inspection.
+        QTest::mouseMove(count, count->rect().center());
         count->setValue(1001); QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(1001));
         auto* seconds = viewer->findChild<QLineEdit*>("live.seconds"); QVERIFY(seconds);
         seconds->setFocus(); seconds->selectAll(); QTest::keyClicks(seconds, "0.5"); QTest::keyClick(seconds, Qt::Key_Return);
@@ -568,6 +570,29 @@ private slots:
         const auto index = viewer->displayedFrame().nearest(viewer->plotView()->bridge()->cursorX); QVERIFY(index);
         QVERIFY(readout->text().contains(QString::number(viewer->displayedFrame().values[*index], 'g', 17)));
         capture(viewer, "live-oscilloscope-hover");
+        // Pointer on the trace: a translucent value box beside it and a ring on the sample.
+        const auto& shown = viewer->displayedFrame(); const auto sample = shown.times.size()/2;
+        auto* view = viewer->plotView();
+        const QPointF onTrace(area.left()+(shown.plottedTime(sample)-view->xMin())/(view->xMax()-view->xMin())*area.width(),
+            area.top()+(view->yMax()-shown.values[sample*static_cast<std::size_t>(shown.channels.size())])/(view->yMax()-view->yMin())*area.height());
+        QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
+        auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
+        QTRY_VERIFY(tip->isVisible()); QVERIFY(!view->bridge()->hoverMarkers.isEmpty());
+        QVERIFY(view->bridge()->hoverTip.last().toMap()["text"].toString().contains(shown.channels.front().name));
+        capture(viewer, "live-oscilloscope-hover-tip", true);
+        {   // On the trace itself the translucent tooltip and an on-curve marker appear.
+            auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
+            const auto& frame = viewer->displayedFrame(); auto* plot = viewer->plotView();
+            const auto i = frame.times.size()/2;
+            const QPointF onCurve(area.left()+(frame.plottedTime(i)-plot->xMin())/(plot->xMax()-plot->xMin())*area.width(),
+                                  area.top()+(plot->yMax()-frame.values[i*frame.channels.size()])/(plot->yMax()-plot->yMin())*area.height());
+            QTest::mouseMove(quick, graph->mapToScene(onCurve).toPoint());
+            QTRY_VERIFY(tip->isVisible());
+            QVERIFY(plot->bridge()->hoverTip.size() >= 2); QCOMPARE(plot->bridge()->hoverMarkers.size(), 1);
+            QVERIFY(plot->bridge()->hoverTip[1].toMap()["text"].toString().startsWith(frame.channels.front().name + " = "));
+            capture(viewer, "live-oscilloscope-hover-tip", true);
+            QTest::mouseMove(quick, center);
+        }
         auto* cursor = quick->rootObject()->findChild<QQuickItem*>("viewer.sampleCursor"); QVERIFY(cursor);
         QVERIFY(cursor->isVisible());
         const auto lower = viewer->plotView()->xMin(), upper = viewer->plotView()->xMax();
@@ -621,9 +646,11 @@ private slots:
         QCOMPARE(initial.lastStep, std::int64_t(25600)); QCOMPARE(initial.size, std::size_t(4096));
         auto* quick = spectrum->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
         auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
+        // Zoom so a pixel is much narrower than the 3.125 Hz bin spacing at any plot width.
+        spectrum->plotView()->setXRange(50, 150);
         QTRY_VERIFY(graph->property("plotArea").toRectF().width() > 100);
         const auto area = graph->property("plotArea").toRectF();
-        const auto position = graph->mapToScene(QPointF(area.left()+area.width()*100/6400, area.center().y())).toPoint();
+        const auto position = graph->mapToScene(area.center()).toPoint();
         QTest::mouseMove(quick, position);
         QTRY_VERIFY(spectrum->findChild<QLabel*>("spectrum.readout")->text().contains("Computed spectrum"));
         QVERIFY(spectrum->findChild<QLabel*>("spectrum.readout")->text().contains("100 Hz baseband"));
@@ -842,6 +869,7 @@ private slots:
         viewer->resize(1400, 1050); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
         viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
         auto* mode = viewer->findChild<QComboBox*>("trigger.mode"); QVERIFY(mode); mode->setCurrentIndex(3);
+        QTest::mouseMove(mode, mode->rect().center()); // keep a stray pointer from holding the frame for inspection
         auto* level = viewer->findChild<QLineEdit*>("trigger.level"); auto* hyst = viewer->findChild<QLineEdit*>("trigger.hysteresis"); QVERIFY(level && hyst);
         level->setText("0.25"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
         hyst->setText("0.02"); QVERIFY(QMetaObject::invokeMethod(hyst, "editingFinished", Qt::DirectConnection));
@@ -889,6 +917,50 @@ private slots:
         level->setText("nan"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
         viewer->refreshSource(); QVERIFY(viewer->findChild<QLabel*>("trigger.status")->text().contains("Invalid trigger"));
         action("action.reset")->trigger(); QVERIFY(viewer->displayedFrame().steps.empty());
+    }
+    void liveTriggerPresetFromDiagram() {
+        using namespace s7studio;
+        // A plugin-free copy of the two-integrator oscillator with a saved trigger preset.
+        QFile source(QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live.s7diagram"); QVERIFY(source.open(QIODevice::ReadOnly));
+        auto document = QJsonDocument::fromJson(source.readAll()).object();
+        auto diagram = document["diagram"].toObject(); auto nodes = diagram["nodes"].toArray();
+        for (auto&& value : nodes) {
+            auto node = value.toObject(); if (node["id"] != "live_1") continue;
+            auto params = node["params"].toObject();
+            params["trigger"] = QJsonObject{{"mode", "normal"}, {"edge", "rising"}, {"level", 0}, {"hysteresis", .2}};
+            node["params"] = params; value = node;
+        }
+        diagram["nodes"] = nodes; document["diagram"] = diagram;
+        const auto path = temporary_.filePath("triggered_oscillator.s7diagram");
+        QFile copy(path); QVERIFY(copy.open(QIODevice::WriteOnly)); copy.write(QJsonDocument(document).toJson()); copy.close();
+        QVERIFY(fileAction("action.open", path));
+        auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(manager);
+        QVERIFY(QMetaObject::invokeMethod(editor(), "elementNodeDoubleClicked", Qt::DirectConnection,
+            Q_ARG(QString, "live_1"), Q_ARG(QString, "LiveOscilloscope"), Q_ARG(int, 1)));
+        auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->find("LiveOscilloscope", "live_1")); QVERIFY(viewer);
+        // The saved preset is active before the run; omitted keys keep their defaults.
+        QCOMPARE(viewer->triggerSettings().mode, observation::TriggerMode::Normal); QCOMPARE(viewer->triggerSettings().hysteresis, .2);
+        QCOMPARE(viewer->triggerSettings().pretriggerPercent, 25);
+        auto* hysteresis = viewer->findChild<QLineEdit*>("trigger.hysteresis"); QVERIFY(hysteresis);
+        QCOMPARE(hysteresis->text(), QString("0.2"));
+        auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &LocalSchemaRunner::runCompleted);
+        QVERIFY(configure("action.run", 20)); QTRY_COMPARE(completed.count(), 1); QVERIFY(completed.last()[0].toBool());
+        QTRY_VERIFY(viewer->displayedFrame().trigger && viewer->displayedFrame().trigger->triggered);
+        // Fired on the rising flank: first sample at/above level+H/2 after one below it.
+        const auto& frame = viewer->displayedFrame();
+        const auto k = static_cast<std::size_t>(frame.trigger->step-frame.steps.front()); QVERIFY(k > 0);
+        QVERIFY(frame.values[k] >= .1); QVERIFY(frame.values[k-1] < .1); QCOMPARE(frame.plottedTime(k), 0.);
+        capture(viewer, "live-trigger-preset", true);
+        // Applying a change in the window updates the diagram parameter, undoably.
+        auto stored = [&] { return scene()->elementNode("live_1")->element().params.at("trigger").at("hysteresis").to_number<double>(); };
+        const bool modifiedBefore = window_->documentModified();
+        hysteresis->setText("0.3"); QVERIFY(QMetaObject::invokeMethod(hysteresis, "editingFinished", Qt::DirectConnection));
+        QCOMPARE(stored(), .3); QTRY_VERIFY(window_->documentModified());
+        scene()->undoStack()->undo();
+        QCOMPARE(stored(), .2); QCOMPARE(viewer->triggerSettings().hysteresis, .2); QCOMPARE(hysteresis->text(), QString("0.2"));
+        QTRY_COMPARE(window_->documentModified(), modifiedBefore);
+        viewer->close();
     }
     void liveOscilloscopeWorkerKeepsUiResponsive() {
         using namespace s7studio;

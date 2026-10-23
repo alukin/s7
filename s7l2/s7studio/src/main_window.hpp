@@ -126,6 +126,9 @@ private:
     void resetLocalRun();
     void retireRunForShutdown();
     bool observerMatchesActiveRun(const QString& observerId) const;
+    // Live oscilloscope trigger settings persist as the observer's "trigger" param.
+    void applyTriggerPreset(const QString& observerId, bool reportInvalid);
+    void storeTriggerPreset(const QString& observerId);
     void refreshActions();
     // The viewer type recording a diagram observer (its element type), or
     // Scope for probes that belong to no diagram observer.
@@ -270,6 +273,7 @@ private:
     double runtimeSeconds_ = 60;
     bool clearScopesBeforeRun_ = true;
     bool shuttingDown_ = false;
+    bool storingTriggerPreset_ = false;
 };
 
 } // namespace s7studio
