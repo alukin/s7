@@ -72,6 +72,10 @@ Comments and whitespace in this illustration are not file bytes.
 
 ## Gnuplot text, version 1
 
+Readers accept LF and Windows CRLF line endings in headers and sample rows.
+JSON escapes inside descriptions retain their content; newline normalization
+applies only to the physical line delimiter.
+
 The file starts with these **seven header lines, in this order**:
 
 ```text

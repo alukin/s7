@@ -22,7 +22,18 @@ BUILD="$1" OUT="$2"
 SOURCE="$(cd "$(dirname "$0")/../.." && pwd)"
 SYSROOT="$(sed -n 's/^S7_MINGW_SYSROOT:PATH=//p' "$BUILD/CMakeCache.txt")"
 SUFFIX="$(sed -n 's/^S7_LLVM_SUFFIX:STRING=//p' "$BUILD/CMakeCache.txt")"
-OBJDUMP="llvm-objdump${SUFFIX}"
+find_tool() {
+    for candidate in "$@"; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            command -v "$candidate"
+            return
+        fi
+    done
+    echo "error: no tool found among: $*" >&2
+    return 1
+}
+OBJDUMP="$(find_tool "llvm-objdump${SUFFIX}" llvm-objdump x86_64-w64-mingw32-objdump objdump)"
+STRIP="$(find_tool "llvm-strip${SUFFIX}" llvm-strip x86_64-w64-mingw32-strip strip)"
 [ -d "$SYSROOT/bin" ] || { echo "error: $BUILD is not a Windows cross build (no S7_MINGW_SYSROOT)" >&2; exit 1; }
 
 rm -rf "$OUT"
@@ -59,12 +70,13 @@ cp -r "$SOURCE/s7runtime/examples" "$OUT/examples"
 mkdir -p "$OUT/share/s7"
 cp -r "$SOURCE/examples" "$OUT/share/s7/examples"
 cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/share/s7/"
+cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/share/s7/"
 
 # Symbol tables are no use without the build tree (the sysroot's DLLs are stripped).
-"llvm-strip${SUFFIX}" --strip-all "$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll
+"$STRIP" --strip-all "$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll
 
 # The DLLs a module imports that the sysroot provides (the rest are Windows').
-imports() { "$OBJDUMP" -p "$1" | sed -n 's/^ *DLL Name: //p'; }
+imports() { "$OBJDUMP" -p "$1" | sed -n 's/^[[:space:]]*DLL Name:[[:space:]]*//p'; }
 pending=("$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll "$OUT"/platforms/*.dll "$OUT"/styles/*.dll)
 if [ -d "$OUT/qml" ]; then
     while IFS= read -r -d '' module; do pending+=("$module"); done < <(find "$OUT/qml" -name '*.dll' -print0)

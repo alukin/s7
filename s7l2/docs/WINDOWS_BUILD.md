@@ -24,7 +24,7 @@ cmake --build build-win --target build-tests --parallel
 ctest --test-dir build-win --output-on-failure
 ```
 
-Test without `-DCMAKE_BUILD_TYPE=Release`: several smoke tests check with `assert()`, which Release (`NDEBUG`) compiles out. Configure a separate Release build (`-B build-win-release -DCMAKE_BUILD_TYPE=Release`) for the binaries you package.
+Release builds retain assertions in test executables through the project's `s7_add_test_executable` helper. Configure the package build with `-B build-win-release -DCMAKE_BUILD_TYPE=Release` and build `build-tests` before running CTest.
 
 `-DS7_BUILD_STUDIO=OFF` builds without Qt. The toolchain file's cache variables: `S7_MINGW_SYSROOT` (the sysroot), `S7_LLVM_SUFFIX` (`-22`: the tools are `clang++-22`, `llvm-objdump-22`, ...), `S7_QT_HOST_PATH` (`/usr`: the host Qt whose moc, uic and rcc generate code for the Windows Qt).
 

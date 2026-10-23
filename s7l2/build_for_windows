@@ -4,7 +4,7 @@
 # (docs/WINDOWS_BUILD.md). Fetches the sysroot on the first run.
 #
 # Usage: ./build_for_windows [--release] [--no-studio] [--test] [--package]
-#   --release    optimized build in build-win-release/ (tests that use assert() check nothing there)
+#   --release    optimized build in build-win-release/ (test assertions remain enabled)
 #   --no-studio  skip s7studio (no Qt needed)
 #   --test       run the tests under Wine after building
 #   --package    collect the programs and their DLLs into dist/s7-windows/ (implies --release)

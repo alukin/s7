@@ -45,7 +45,8 @@ Licences of third-party code stay with that code:
 
 S7 also uses Qt 6 (LGPL-3.0 or GPL-3.0; Qt Graphs and Qt Quick 3D are GPL-3.0
 only, which Studio's licence satisfies), Boost (BSL-1.0), OpenSSL 3 (Apache-2.0),
-zlib (Zlib), tinyxml2 (Zlib) and, for `s7spectral` only, FFTW (GPL-2.0-or-later).
+zlib (Zlib), tinyxml2 (Zlib) and FFTW (GPL-2.0-or-later) for Studio spectrum
+analysis and the optional `s7spectral` plugin.
 Release packages carry the notices of the libraries they bundle; see
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 

@@ -1,9 +1,10 @@
-# S7 0.1.0 — Linux preview
+# S7 0.1.0 preview
 
 Scope agreed 2026-10-22. This checklist supersedes broader release gates in
 DEVELOPMENT_PLAN.md, OPEN_PROBLEMS.md and LOCAL_SIMULATION_ACCEPTANCE.md for
 0.1.0. Amended 2026-10-23 to include separate control/data listeners as requested
-by the maintainer. Deferred work remains in the backlog.
+by the maintainer, and to publish an experimental Windows x86-64 build.
+Deferred work remains in the backlog.
 
 ## Supported scope
 
@@ -20,8 +21,17 @@ change in subsequent releases. This is a preview, with temporary observation
 storage rather than crash-durable recording.
 
 The preview also includes separate mTLS control and encrypted/trusted-plaintext
-data listeners for headless nodes on this Linux target; see
+data listeners for headless nodes; see
 [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md).
+
+Windows x86-64 binaries are cross-built with Clang 22 and MSYS2 Qt 6.12.
+They are an **experimental preview**: 64 of 77 Release tests pass under Wine;
+13 Studio GUI tests are blocked by Wine's unimplemented
+`mscms.dll.WcsCreateIccProfile`. Native Windows GUI acceptance is still pending.
+Packaged runtime/CLI startup, Studio headless smoke, default schema discovery
+and noise-plugin loading pass without build-tree or sysroot DLL paths.
+The Windows run also exposed a CRLF recording-reader defect, now fixed and
+covered by real/complex LF and CRLF replay regressions on both platforms.
 
 ## Final checklist
 
@@ -42,7 +52,7 @@ data listeners for headless nodes on this Linux target; see
   incomplete/error status; all 262,144 retained samples remain readable with
   exact step/time/value data (2026-10-22, revision 0f40caf).
 - [x] Studio-enabled Release rebuild and complete regression suite: **81/81
-  passed** in 58.57 seconds on 2026-10-23, including both split-node profiles,
+  passed** in 57.26 seconds on 2026-10-23, including both split-node profiles,
   all four local GUI suites and the Live Oscilloscope responsiveness test.
 - [x] Fresh relocated Linux package smoke check without a source checkout:
   **13/13 passed** from a relocated package under Xvfb/llvmpipe on Fedora 44,
@@ -50,31 +60,35 @@ data listeners for headless nodes on this Linux target; see
   Both split-node profiles also pass with the packaged runtime/CLI, including
   the independent Python peer, redeployment and restart/recovery. The package,
   test drivers and run state are outside the checkout, which is not mounted.
-- [x] Bundle third-party notices with a per-binary inventory and exact source
-  RPM identities. Qt/dependency sources are excluded from the binary bundle.
-- [x] REUSE licensing check passes locally (503/503 files at verification);
-  required step added to headless CI. Hosted execution of that new step is
-  not claimed; GUI testing remains local.
-- [ ] Rebuild the final Linux archive and SHA256SUMS from the fully verified
-  release revision; tag it `v0.1.0` and publish those exact artifacts.
+- [x] Windows Release suite: **64/77 passed**, with the 13 Wine GUI blockers
+  described above; installed-package startup checks: **4/4 passed**.
+- [x] Bundle third-party notices with per-binary inventories and exact source
+  package identities: 313 Linux ELF files, 84 Windows PE files from S7 and
+  28 MSYS2 packages. Qt/dependency sources are excluded from binary bundles.
+- [x] REUSE licensing check passes locally (all tracked files at verification).
+  The check is also required by headless CI.
+- Final archives, checksums, validation evidence and source tag are published
+  at [the v0.1.0 release](https://github.com/alukin/s7/releases/tag/v0.1.0).
+  Its validation asset records the final artifact checks and source revision.
 
 The original v0.1.0 tag was removed locally and from origin on 2026-10-22
-before the fractional-duration correction. No hosted release is published.
+before the fractional-duration correction. The publication above uses the
+subsequently verified source revision.
 The binary bundle contains runtime libraries and notices, without Qt or other
 dependency source archives. Corresponding-source distribution is a separate
-publication concern; package metadata records the exact source RPMs.
+publication concern; package metadata records exact source-package identities.
 
 Final storage verification also released the failed source and successfully
 completed a fresh 4,096-sample disk-backed capture on the same filesystem.
 The notice inventory covers 313 deployed ELF files; every referenced notice
-exists. Linux-only archive/checksum generation passed through
+exists. Linux and Windows archive/checksum generation uses
 `tools/release/make_release.sh`.
 
 ## Explicitly deferred
 
 - Multi-hour soak, larger graph/channel/viewer envelopes and large interactive
   import/export performance. Bulk operations can block the UI.
-- Native Windows packages and platform acceptance; other Linux distributions.
+- Native Windows platform acceptance; other Linux distributions.
 - Physical GPU, high-DPI and accessibility acceptance beyond local automated
   rendering/interaction checks.
 - Broader nonlinear/chaotic numerical qualification, new integration methods,

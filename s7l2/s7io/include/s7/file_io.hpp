@@ -61,6 +61,14 @@ inline auto trim_left(const std::string& line) -> std::string {
     return line.substr(it);
 }
 
+inline bool read_text_line(std::istream& in, std::string& line) {
+    if (!std::getline(in, line)) return false;
+    // Recordings are read in binary mode. Accept the Windows text delimiter
+    // without changing escaped carriage returns inside JSON descriptions.
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    return true;
+}
+
 } // namespace detail
 
 template <typename T>
@@ -202,24 +210,24 @@ public:
     auto read_header(std::istream& in) const -> void override {
         std::string line;
 
-        if (!std::getline(in, line) || detail::trim_left(line) != "# s7 gnuplot sample file") {
+        if (!detail::read_text_line(in, line) || detail::trim_left(line) != "# s7 gnuplot sample file") {
             detail::throw_bad_format("invalid gnuplot header");
         }
-        if (!std::getline(in, line) || detail::trim_left(line) != "# format=gnuplot-text") {
+        if (!detail::read_text_line(in, line) || detail::trim_left(line) != "# format=gnuplot-text") {
             detail::throw_bad_format("missing gnuplot format marker");
         }
-        if (!std::getline(in,line) || detail::trim_left(line)!="# version=1") detail::throw_bad_format("unsupported gnuplot version");
-        if (!std::getline(in, line) || detail::trim_left(line) != std::string("# signal=") + std::string(detail::SignalTraits<T>::name)) {
+        if (!detail::read_text_line(in,line) || detail::trim_left(line)!="# version=1") detail::throw_bad_format("unsupported gnuplot version");
+        if (!detail::read_text_line(in, line) || detail::trim_left(line) != std::string("# signal=") + std::string(detail::SignalTraits<T>::name)) {
             detail::throw_bad_format("signal type does not match gnuplot file");
         }
-        if (!std::getline(in,line) || !detail::trim_left(line).starts_with("# rate=")) detail::throw_bad_format("missing recording rate");
+        if (!detail::read_text_line(in,line) || !detail::trim_left(line).starts_with("# rate=")) detail::throw_bad_format("missing recording rate");
         this->rate_=detail::parse_recording_rate(detail::trim_left(line).substr(7));
-        if (!std::getline(in,line) || !detail::trim_left(line).starts_with("# description=")) detail::throw_bad_format("missing recording description");
+        if (!detail::read_text_line(in,line) || !detail::trim_left(line).starts_with("# description=")) detail::throw_bad_format("missing recording description");
         const auto description=boost::json::parse(detail::trim_left(line).substr(14));
         if (!description.is_string()) detail::throw_bad_format("recording description must be a JSON string");
         this->description_=detail::recording_description(std::string(description.as_string()));
         const std::string columns=std::is_same_v<T,RealValue> ? "sample_index value" : "sample_index real imag";
-        if (!std::getline(in,line) || detail::trim_left(line)!="# columns="+columns) detail::throw_bad_format("invalid recording columns");
+        if (!detail::read_text_line(in,line) || detail::trim_left(line)!="# columns="+columns) detail::throw_bad_format("invalid recording columns");
     }
 
     auto write_sample(std::ostream& out, std::uint64_t sample_index, const T& value) const -> void override {
@@ -233,7 +241,7 @@ public:
 
     [[nodiscard]] auto read_sample(std::istream& in, std::uint64_t& sample_index, T& value) const -> bool override {
         std::string line;
-        while (std::getline(in, line)) {
+        while (detail::read_text_line(in, line)) {
             line = detail::trim_left(line);
             if (line.empty() || line.front() == '#') {
                 continue;

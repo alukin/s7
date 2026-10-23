@@ -25,8 +25,13 @@ On Fedora Linux the collector matches deployed ELF build IDs and full Qt
 paths, then looks up the RPM that owns each bundled library and copies its
 installed licence files. Packaging fails when a notice cannot be found.
 The Linux release backend is RPM-only; dpkg hosts are not qualified.
-On Windows it copies the MSYS2 sysroot's
-`share/licenses/` tree.
+On Windows it matches each deployed PE file to the installed MSYS2 package
+archive and checks DLL bytes against the sysroot. The inventory records binary
+SHA256 values, exact package versions, archive hashes and notice paths. Notices
+come from `share/licenses/` or another licence path owned by that package
+(for example ICU's data directory). FFTW 3.3.11-2 omits its installed notices;
+verbatim upstream notices are supplied from the verified source archive, with
+provenance in `s7l2/tools/windows/notices/README.md`.
 
 ## Linux preview distribution
 
@@ -38,5 +43,7 @@ verbatim from its source RPM; provenance is in `s7l2/tools/linux/notices/README.
 
 Qt/dependency source archives are not included in the binary bundle.
 Corresponding-source distribution is separate from binary packaging; the source
-inventory identifies exact versions and is not a written source offer. Windows redistribution remains deferred pending
-review of the per-DLL inventory against the MSYS2 licence tree.
+inventory identifies exact versions and is not a written source offer. The
+Windows preview also includes exact MSYS2 source-package identities and the
+completed per-binary notice inventory. Native Windows UI qualification remains
+separate from the cross-build and Wine verification.

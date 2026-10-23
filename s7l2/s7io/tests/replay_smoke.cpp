@@ -65,6 +65,28 @@ template <typename T> void playback(const std::filesystem::path& path, bool bina
         rejects([&] {RecordedSource<T> source(path,8,kind);});
     }
 }
+template <typename T> void text_line_endings(const std::filesystem::path& path) {
+    using namespace s7::io;
+    constexpr bool real=std::is_same_v<T,s7::RealValue>;
+    for(const std::string ending : {"\n","\r\n"}) {
+        std::ofstream file(path,std::ios::binary|std::ios::trunc);
+        for(const std::string line : {"# s7 gnuplot sample file","# format=gnuplot-text","# version=1",
+                                     real ? "# signal=F64" : "# signal=C64", "# rate=8/1",
+                                     "# description=\"First\\r\\nSecond\"",
+                                     real ? "# columns=sample_index value" : "# columns=sample_index real imag",
+                                     real ? "0 1.25" : "0 1.25 -2.5", real ? "1 -3.5" : "1 -3.5 4.75"})
+            file<<line<<ending;
+        file.close();
+        RecordedSource<T> source(path,0,RecordingFormat::Gnuplot,ReplayEnd::Repeat);
+        require(source.description()=="First\r\nSecond","Line delimiters must not change escaped description content");
+        require(source.declared_rate()==s7::Rate::from_hz(8),"Text newline fixture rate");
+        for(int n=0;n<4;++n) {
+            if constexpr(real) require(sample(source)==(n%2 ? -3.5 : 1.25),"LF/CRLF real playback");
+            else require(sample(source)==(n%2 ? s7::ComplexValue(-3.5,4.75) : s7::ComplexValue(1.25,-2.5)),"LF/CRLF complex playback");
+        }
+    }
+}
+
 void registered_sink(const std::filesystem::path& path) {
     auto& registry=s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);s7::register_io_elements(registry);
@@ -150,6 +172,8 @@ int main() {
             playback<s7::ComplexValue>(temp.dir/(binary ? "complex.bin" : "complex.dat"),binary,{1,2},{-3,4});
         }
         registered_sink(temp.dir/"registered.s7bin");
+        text_line_endings<s7::RealValue>(temp.dir/"newlines-real.dat");
+        text_line_endings<s7::ComplexValue>(temp.dir/"newlines-complex.dat");
         binary_header(temp.dir/"header.s7bin");
         invalid(temp.dir/"invalid.dat");
         std::cout<<"Recording replay: real/complex formats, EOF modes, registry and malformed data passed\n";
