@@ -1,5 +1,8 @@
 # AGENTS.md
 
+## Communication preferences
+- Communicate with the user only in English or Ukrainian. Never use Russian.
+
 ## Mission-critical orientation
 - S7 is a **causal graph runtime**: schema -> validate -> compile -> execute -> observe (`README.md`, `../doc/S7_Runtime_Architecture.md`).
 - Prioritize **causality over clock time** and keep network boundaries explicit (`../doc/S7_Architecture_Overview.md`, `../doc/S7_Architectural_Decisions.md`).
