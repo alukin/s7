@@ -3,12 +3,15 @@
 ## P0 release priority — continuous oscilloscope viewer (2026-10-22)
 
 Current sequencing: FFT spectrum, constellation and correlation views, shared
-paired cursors, interval measurements and frozen-window JSON/CSV export are
-implemented as bounded increments. **Next priority: edge-triggered Time acquisition
-to stabilize periodic waveforms**, using model-step crossings, pre/post-trigger
-coverage and explicit auto/normal/single semantics. The current display rolls;
-freeze and A/B cursors do not provide trigger synchronization.
-This supersedes the earlier ordering of those shared features before analysis.
+paired cursors, interval measurements, frozen-window JSON/CSV export and sampled
+edge-triggered Time acquisition are implemented as bounded increments. The
+trigger supports Auto, Normal and Single modes, rising/falling edges, hysteresis,
+pre-trigger coverage, holdoff and partial stopped captures. See
+[triggering help](STUDIO_TRIGGERING.md). Full operational qualification remains
+open; the implementation does not establish ADI OSC parity or sub-sample phase
+interpolation. Verification on 2026-10-23: all 79 native CTest tests passed,
+including the trigger GUI workflow; focused trigger/inspection ASan+UBSan tests
+passed, and the Windows cross-build completed.
 The [FFT spectrum increment](STUDIO_SPECTRUM.md) adds the private binary64 FFTW
 backend, bounded worker scheduling, real/IQ normalization, windows, power averaging
 and referenced dB. [XY/correlation](STUDIO_PAIR_ANALYSIS.md) adds raw paired plots,

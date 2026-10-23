@@ -19,6 +19,11 @@ immutable raw/derived data for A/B cursors, inclusive statistics and asynchronou
 atomic JSON/CSV export. Window files do not claim full-run capture or support
 recording-Scope import.
 
+[Edge triggering](STUDIO_TRIGGERING.md) runs in `LiveAcquisition::append()` on
+the producer. Fixed double capture banks preserve one completed frame while the
+next is collected; a trigger-relative Time axis leaves absolute raw timestamps
+unchanged. Analysis workers, rendering and trigger capture remain separate.
+
 ## Data flow
 
 ```text

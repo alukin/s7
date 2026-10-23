@@ -9,6 +9,7 @@
 #include <QJsonArray>
 #include <QtGraphs/QLineSeries>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QEvent>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
@@ -57,6 +58,23 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     correlation_ = new viewers::PairAnalysisView(analysis::PairKind::Correlation, tabs);
     tabs->addTab(timePage, "Time"); tabs->addTab(spectrum_, "Spectrum");
     tabs->addTab(constellation_, "Constellation / XY"); tabs->addTab(correlation_, "Correlation"); layout->addWidget(tabs, 1);
+    auto* triggerBox = new QGroupBox("Time synchronization — sampled edge trigger", timePage);
+    auto* tg = new QGridLayout(triggerBox);
+    auto combo = [&](const char* name, const QStringList& items) { auto* c = new QComboBox(triggerBox); c->setObjectName(name); c->addItems(items); return c; };
+    auto field = [&](int row, int col, const QString& text, QWidget* widget) { tg->addWidget(new QLabel(text, triggerBox), row, col*2); tg->addWidget(widget, row, col*2+1); };
+    triggerMode_ = combo("trigger.mode", {"Rolling", "Auto", "Normal", "Single"}); field(0, 0, "Mode", triggerMode_);
+    triggerChannel_ = combo("trigger.channel", {"Channel 1"}); field(0, 1, "Source / unit", triggerChannel_);
+    triggerEdge_ = combo("trigger.edge", {"Rising", "Falling"}); field(0, 2, "Edge", triggerEdge_);
+    triggerLevel_ = new QLineEdit("0", triggerBox); triggerLevel_->setObjectName("trigger.level"); triggerLevel_->setMaximumWidth(100); field(0, 3, "Level", triggerLevel_);
+    triggerHysteresis_ = new QLineEdit("0", triggerBox); triggerHysteresis_->setObjectName("trigger.hysteresis"); triggerHysteresis_->setMaximumWidth(100); field(0, 4, "Hysteresis", triggerHysteresis_);
+    auto spin = [&](const char* name, int low, int high, int value) { auto* c = new QSpinBox(triggerBox); c->setObjectName(name); c->setRange(low, high); c->setValue(value); return c; };
+    triggerPre_ = spin("trigger.pre", 0, 100, 25); triggerPre_->setSuffix(" %"); field(1, 0, "Pre-trigger", triggerPre_);
+    triggerHoldoff_ = spin("trigger.holdoff", 0, 1000000000, 0); field(1, 1, "Holdoff (steps)", triggerHoldoff_);
+    triggerTimeout_ = spin("trigger.timeout", 1, 1000000000, 4096); field(1, 2, "Auto timeout (steps)", triggerTimeout_);
+    auto* rearm = new QPushButton("Rearm", triggerBox); rearm->setObjectName("trigger.rearm"); tg->addWidget(rearm, 1, 6, 1, 2);
+    triggerStatus_ = new QLabel("Rolling acquisition; select an edge trigger for stable periodic traces.", triggerBox);
+    triggerStatus_->setObjectName("trigger.status"); triggerStatus_->setWordWrap(true); triggerStatus_->setTextFormat(Qt::PlainText); tg->addWidget(triggerStatus_, 2, 0, 1, 10);
+    timeLayout->addWidget(triggerBox);
     auto* channelBox = new QGroupBox(QStringLiteral("Channels — display only; raw values remain unchanged"), timePage);
     auto* grid = new QGridLayout(channelBox);
     grid->addWidget(new QLabel("Channel / supplied unit", channelBox), 0, 0);
@@ -113,6 +131,13 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     for (auto* view : {constellation_, correlation_}) connect(view, &viewers::PairAnalysisView::inspectionInvalidated,
         this, [this, view] { if (view->isVisible()) inspection_->clear(); });
     status_ = new QLabel(this); status_->setObjectName("live.status"); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); layout->addWidget(status_);
+    for (auto* c : {triggerMode_, triggerChannel_, triggerEdge_}) connect(c, &QComboBox::currentIndexChanged, this, [this] { applyTriggerSettings(); });
+    for (auto* c : {triggerPre_, triggerHoldoff_, triggerTimeout_}) connect(c, &QSpinBox::valueChanged, this, [this] { applyTriggerSettings(); });
+    for (auto* c : {triggerLevel_, triggerHysteresis_}) connect(c, &QLineEdit::editingFinished, this, [this] { applyTriggerSettings(); });
+    connect(rearm, &QPushButton::clicked, this, [this] {
+        if (live_) live_->rearmTrigger();
+        inspection_->clear(); freeze_->setChecked(false); inspecting_ = false; updateStatus();
+    });
     connect(seconds_, &QLineEdit::editingFinished, this, [this] {
         if (!seconds_->isModified()) return;
         if (!live_) { updateStatus("Start a run before entering a model-time duration."); return; }
@@ -125,7 +150,11 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     connect(capacity_, &QSpinBox::valueChanged, this, [this](int value) {
         settingsError_.clear(); seconds_->setModified(false);
         requestedCapacity_ = static_cast<std::size_t>(value);
-        if (live_) { live_->setCapacity(static_cast<std::size_t>(value)); updateStatus("Retention applied between complete steps; growth fills forward."); }
+        if (live_) {
+            live_->setCapacity(static_cast<std::size_t>(value));
+            if (requestedTrigger_.mode != observation::TriggerMode::Rolling && !freeze_->isChecked()) clearSamples();
+            updateStatus("Retention applied between complete steps; growth fills forward.");
+        }
     });
     connect(freeze_, &QPushButton::toggled, this, [this](bool frozen) {
         freeze_->setText(frozen ? QStringLiteral("Display frozen") : QStringLiteral("Freeze display"));
@@ -158,7 +187,10 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         if (index == 1) spectrum_->setFrame(frame_);
         else if (index == 2) constellation_->setFrame(frame_);
         else if (index == 3) correlation_->setFrame(frame_);
-        else render(true);
+        else {
+            if (requestedTrigger_.mode != observation::TriggerMode::Rolling && !freeze_->isChecked()) frame_ = std::make_shared<observation::LiveFrame>();
+            cadence_.invalidate(); refreshSource(); render(true);
+        }
     });
     updateStatus();
 }
@@ -198,6 +230,26 @@ viewers::ViewerType LiveOscilloscopeWindow::viewerType()
     return {"LiveOscilloscope", "Live oscilloscope (prototype)", "N→live", "Bounded time window; adjustable retention and exact sample inspection. Does not record the full run.", {},
         [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* { return new LiveOscilloscopeWindow(spec.instanceId); }};
 }
+void LiveOscilloscopeWindow::applyTriggerSettings()
+{
+    bool levelOk = false, hysteresisOk = false;
+    auto settings = requestedTrigger_;
+    settings.level = triggerLevel_->text().toDouble(&levelOk); settings.hysteresis = triggerHysteresis_->text().toDouble(&hysteresisOk);
+    if (!levelOk || !hysteresisOk || !std::isfinite(settings.level) || !std::isfinite(settings.hysteresis) || settings.hysteresis < 0 ||
+        !std::isfinite(settings.level-settings.hysteresis/2) || !std::isfinite(settings.level+settings.hysteresis/2) ||
+        (settings.hysteresis > 0 && !(settings.level-settings.hysteresis/2 < settings.level+settings.hysteresis/2))) {
+        triggerError_ = "Invalid trigger level/hysteresis; enter finite numbers and a nonnegative, representable hysteresis. Previous settings remain active.";
+        triggerStatus_->setText(triggerError_); return;
+    }
+    settings.mode = static_cast<observation::TriggerMode>(triggerMode_->currentIndex()); settings.channel = static_cast<std::size_t>(std::max(0, triggerChannel_->currentIndex()));
+    settings.rising = triggerEdge_->currentIndex() == 0; settings.pretriggerPercent = triggerPre_->value();
+    settings.holdoffSteps = static_cast<std::uint64_t>(triggerHoldoff_->value()); settings.autoTimeoutSteps = static_cast<std::uint64_t>(triggerTimeout_->value());
+    QString error;
+    if (live_ && !live_->configureTrigger(settings, &error)) { triggerError_ = error; triggerStatus_->setText(error); return; }
+    triggerError_.clear();
+    if (settings != requestedTrigger_) { requestedTrigger_ = settings; clearSamples(); }
+    updateStatus();
+}
 void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveAcquisition> source)
 {
     if (live_ == source) return;
@@ -214,6 +266,13 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
         plot_->setSeriesName(plot_->series()[i], controls_[i].visible->text());
     }
     if (live_) {
+        {
+            const QSignalBlocker blocker(triggerChannel_); triggerChannel_->clear();
+            for (const auto& c : live_->channels()) triggerChannel_->addItem(c.name+" ["+(c.unit.isEmpty() ? "unit unspecified" : c.unit)+"]");
+            triggerChannel_->setCurrentIndex(static_cast<int>(std::min(requestedTrigger_.channel, static_cast<std::size_t>(count-1))));
+            requestedTrigger_.channel = static_cast<std::size_t>(triggerChannel_->currentIndex());
+        }
+        live_->configureTrigger(requestedTrigger_);
         if (requestedCapacity_) live_->setCapacity(*requestedCapacity_);
         const QSignalBlocker blocker(capacity_); capacity_->setValue(static_cast<int>(live_->capacity())); }
     cadence_.invalidate(); updateStatus();
@@ -224,7 +283,7 @@ void LiveOscilloscopeWindow::clearSamples()
     frame_ = std::make_shared<observation::LiveFrame>(); inspecting_ = false; freeze_->setChecked(false); spectrum_->clear();
     constellation_->clear(); correlation_->clear();
     for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});
-    plot_->bridge()->cursorVisible = false; emit plot_->bridge()->inspectionChanged();
+    plot_->bridge()->cursorVisible = false; plot_->bridge()->triggerVisible = false; emit plot_->bridge()->inspectionChanged();
     readout_->setText("Hover over the plot for exact stored sample values."); updateStatus();
 }
 bool LiveOscilloscopeWindow::refreshSource()
@@ -233,7 +292,12 @@ bool LiveOscilloscopeWindow::refreshSource()
     if (cadence_.isValid() && cadence_.elapsed() < 33) return false;
     cadence_.restart();
     if (freeze_->isChecked() || inspecting_) { updateStatus(); return false; }
-    auto snapshot = live_->snapshot();
+    const bool triggeredTime = plot_->isVisible() && requestedTrigger_.mode != observation::TriggerMode::Rolling;
+    if (triggeredTime) {
+        const auto state = live_->triggerStatus();
+        if (!state.captureId || (frame_->trigger && frame_->trigger->id == state.captureId && frame_->finished == state.finished)) { updateStatus(); return false; }
+    }
+    auto snapshot = triggeredTime ? live_->triggerSnapshot() : live_->snapshot();
     if (!snapshot) { updateStatus("Snapshot expired during copying; waiting for a coherent window."); return false; }
     frame_ = std::make_shared<observation::LiveFrame>(std::move(*snapshot));
     if (spectrum_->isVisible()) spectrum_->setFrame(frame_);
@@ -247,9 +311,18 @@ void LiveOscilloscopeWindow::render(bool fit)
     if (rendering_) return;
     rendering_ = true;
     const auto& frame = *frame_;
+    const bool triggered = frame.trigger && frame.trigger->triggered;
+    plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged();
+    plot_->setAxisTitles(triggered ? "Time from sampled trigger (model s)" : "Model time (s)", "Value (supplied units; shared numeric axis)");
     if (fit && !frame.times.empty()) {
-        const double last = frame.times.back();
-        plot_->setXRange(last - static_cast<double>(frame.capacity-1)*frame.dt, last);
+        if (triggered) {
+            const auto pre = static_cast<std::size_t>(frame.trigger->settings.pretriggerPercent)*(frame.capacity-1)/100;
+            const double post = static_cast<double>(frame.capacity-1-pre);
+            const double end = frame.rateNumerator ? post*static_cast<double>(frame.rateDenominator)/static_cast<double>(frame.rateNumerator) : post*frame.dt;
+            plot_->setXRange(frame.plottedTime(0), end);
+        } else {
+            const double last = frame.times.back(); plot_->setXRange(last-static_cast<double>(frame.capacity-1)*frame.dt, last);
+        }
     }
     traceWarning_.clear();
     for (qsizetype channel = 0; channel < plot_->series().size(); ++channel) {
@@ -280,11 +353,11 @@ QString LiveOscilloscopeWindow::inspect(double time, bool active)
 {
     const auto& frame = *frame_;
     inspecting_ = active && !frame.times.empty();
-    const auto sample = active ? frame.nearest(time) : std::nullopt;
+    const auto sample = active ? frame.nearestPlotted(time) : std::nullopt;
     plot_->bridge()->cursorVisible = sample.has_value();
     if (sample) {
         const auto i = *sample;
-        plot_->bridge()->cursorX = frame.times[i];
+        plot_->bridge()->cursorX = frame.plottedTime(i);
         QString text = QStringLiteral("Stored sample • run %1 • step %2 • model time %3 s")
             .arg(frame.runId).arg(frame.steps[i]).arg(frame.times[i], 0, 'g', 17);
         for (qsizetype c = 0; c < frame.channels.size(); ++c) if (controls_[c].visible->isChecked()) {
@@ -293,17 +366,29 @@ QString LiveOscilloscopeWindow::inspect(double time, bool active)
                 .arg(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(c)], 0, 'g', 17)
                 .arg(channel.unit.isEmpty() ? QStringLiteral("[unit unspecified]") : channel.unit, channel.sourceType);
         }
+        if (frame.trigger && frame.trigger->triggered) text += QStringLiteral("\nTrigger-relative time = %1 s; sampled trigger step %2").arg(frame.plottedTime(i), 0, 'g', 17).arg(frame.trigger->step);
         readout_->setText(text);
     } else readout_->setText(active ? "No retained sample at this model time." : "Hover over the plot for exact stored sample values.");
     emit plot_->bridge()->inspectionChanged(); updateStatus(); return readout_->text();
 }
 void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
 {
-    if (!live_) { status_->setText("No live acquisition attached. Connect signals to this observer and start a run."); duration_->setText("Waiting for run"); return; }
+    if (!live_) {
+        status_->setText("No live acquisition attached. Connect signals to this observer and start a run."); duration_->setText("Waiting for run");
+        triggerStatus_->setText(triggerError_.isEmpty() ? "Trigger settings apply before acquisition starts on the next run." : triggerError_); return;
+    }
     if (!seconds_->hasFocus() && !seconds_->isModified()) seconds_->setText(QString::number(static_cast<double>(live_->capacity()-1)*live_->dt(), 'g', 12));
     duration_->setText(QStringLiteral("%1 s maximum span • %2 MiB reserved")
         .arg(static_cast<double>(live_->capacity()-1)*live_->dt(), 0, 'g', 10)
         .arg(static_cast<double>(live_->allocatedBytes())/(1024*1024), 0, 'f', 2));
+    const auto trigger = live_->triggerStatus();
+    const char* states[]{"Rolling", "Filling pre-trigger history", "Armed — waiting for edge", "Collecting post-trigger", "Holdoff", "Held single capture — Rearm to capture again"};
+    QString triggerText = QString::fromLatin1(states[static_cast<int>(trigger.state)]);
+    if (trigger.finished && !trigger.captureId && requestedTrigger_.mode != observation::TriggerMode::Rolling) triggerText += " • Run finished without a completed trigger; rearm needs new samples.";
+    if (frame_->trigger) triggerText += QStringLiteral(" • showing capture %1 • %2%3 • sampled step %4").arg(frame_->trigger->id)
+        .arg(frame_->trigger->triggered ? "Triggered" : "Auto timeout: UNTRIGGERED").arg(frame_->trigger->partial ? " • PARTIAL post-trigger interval" : "").arg(frame_->trigger->step);
+    if (trigger.aborted) triggerText += QStringLiteral(" • interrupted captures %1 (gap/nonfinite source)").arg(trigger.aborted);
+    triggerStatus_->setText(triggerError_.isEmpty() ? triggerText : triggerError_+" • "+triggerText);
     const auto acquisitionStatus = live_->status();
     const auto& frame = *frame_;
     status_->setText(QStringLiteral("Run %1 • %2 • %3 • %4/%5 samples/channel • received %6 • evicted %7 • gaps %8%9%10")

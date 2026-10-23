@@ -3,7 +3,8 @@
 This prototype provides bounded **Time**, **Spectrum**, **Constellation / XY**
 and **Correlation** tabs from the [live oscilloscope design](LIVE_OSCILLOSCOPE_DESIGN.md).
 Shared [cursors, measurements and JSON/CSV export](STUDIO_WINDOW_INSPECTION.md) are
-available. Triggers, saved workspaces and operational qualification remain incomplete;
+available. [Auto/Normal/Single edge triggering](STUDIO_TRIGGERING.md) stabilizes
+periodic Time traces. Saved workspaces and operational qualification remain incomplete;
 the presence of four tabs does not establish the ADI OSC parity milestone.
 
 ## Try it
@@ -61,8 +62,8 @@ setting requires an attached run so its rational model rate is known.
 Each ring reserves twice the maximum logical positions before stepping starts.
 The spare physical history lets a snapshot copy 256-frame chunks while the producer
 continues. No worker allocation or whole-window copy occurs during resize. The
-worst ring allocation under the aggregate eight-channel limit is 24 MiB (eight
-single-channel workspaces); this excludes bounded display snapshots, Qt/GPU data
+worst reserved ring/capture-bank allocation under the aggregate eight-channel limit is 48 MiB (eight
+single-channel workspaces, including two fixed trigger capture banks per workspace); this excludes bounded display snapshots, Qt/GPU data
 and schema provenance. Logical retention is independent of the fixed reservation.
 Snapshots whose physical data is overwritten during copying are discarded and
 retried on a later refresh, with an explicit status message.
@@ -92,9 +93,10 @@ samples.
   [Constellation / XY and Correlation](STUDIO_PAIR_ANALYSIS.md) supply same-step
   pairs, model-step persistence/density and normalized linear correlation.
   [Paired cursors, inclusive region statistics and frozen-window JSON/CSV export](STUDIO_WINDOW_INSPECTION.md)
-  share the displayed input. Triggers, saved workspaces, window import and image
-  export are not implemented here. The Time view currently rolls with acquisition;
-  it has no edge trigger to stabilize periodic waveforms.
+  share the displayed input. [Sampled edge triggers](STUDIO_TRIGGERING.md) operate
+  at the producer's full rate, independently of rendering. Saved workspaces,
+  window import and image export are not implemented here. Trigger interpolation
+  and advanced trigger types are not supplied.
 - One shared numeric Y axis; supplied units remain explicit. No implicit conversion
   or separate unit lanes. Colors are assigned automatically.
 - Plot refresh is capped near 30 Hz. Rendering and snapshot processing run on the

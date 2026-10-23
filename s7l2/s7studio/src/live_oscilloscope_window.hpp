@@ -10,6 +10,7 @@ class QPushButton;
 class QSpinBox;
 class QCheckBox;
 class QDoubleSpinBox;
+class QComboBox;
 namespace s7studio::viewers { class LinePlotView; class SpectrumView; class PairAnalysisView; class WindowInspectionPanel; }
 namespace s7studio::ui {
 class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
@@ -34,6 +35,7 @@ private:
     void appendObservedSample(const viewers::ObservedSample&) override {}
     void render(bool fit);
     void updateStatus(const QString& suffix = {});
+    void applyTriggerSettings();
     std::shared_ptr<observation::LiveAcquisition> live_;
     std::shared_ptr<const observation::LiveFrame> frame_ = std::make_shared<observation::LiveFrame>();
     viewers::LinePlotView* plot_;
@@ -45,11 +47,16 @@ private:
     QSpinBox* capacity_;
     QLineEdit* seconds_;
     QCheckBox* autoY_;
+    QComboBox *triggerMode_, *triggerChannel_, *triggerEdge_;
+    QLineEdit *triggerLevel_, *triggerHysteresis_;
+    QSpinBox *triggerPre_, *triggerHoldoff_, *triggerTimeout_;
+    QLabel* triggerStatus_;
+    observation::TriggerSettings requestedTrigger_;
     struct ChannelControls { QCheckBox* visible; QDoubleSpinBox *gain, *offset; };
     QVector<ChannelControls> controls_;
     bool inspecting_ = false, rendering_ = false;
     std::optional<std::size_t> requestedCapacity_;
-    QString traceWarning_, settingsError_;
+    QString traceWarning_, settingsError_, triggerError_;
     QElapsedTimer cadence_;
 };
 }

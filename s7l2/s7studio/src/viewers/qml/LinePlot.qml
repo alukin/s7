@@ -140,6 +140,15 @@ Item {
             }
         }
     }
+    Item {
+        visible: plot.triggerVisible && plot.xMin <= 0 && plot.xMax >= 0
+        x: Math.min(view.x + view.plotArea.x - plot.xMin / (plot.xMax - plot.xMin) * view.plotArea.width,
+                    view.x + view.plotArea.x + view.plotArea.width - 2)
+        y: view.y + view.plotArea.y
+        height: view.plotArea.height
+        Rectangle { width: 1; height: parent.height; color: "#ed6c02" }
+        Text { text: "T"; x: -10; color: "#b34a00"; font.bold: true }
+    }
     TapHandler {
         enabled: plot.inspectionEnabled
         acceptedButtons: Qt.LeftButton

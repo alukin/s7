@@ -217,7 +217,7 @@ request show Freezing; never claim the screen is frozen before its data is pinne
 If a browsed interval expires before pinning, report expiration rather than
 substitute new samples. A frozen result can be saved after the run ends.
 
-Required triggering: Auto, Normal and Single edge acquisition; rising/falling,
+Implemented trigger subset: Auto, Normal and Single edge acquisition; rising/falling,
 source, threshold in source units, hysteresis, pre-trigger percentage, and holdoff.
 Define rising edge as arming at/below `level-hysteresis/2` and firing at/above
 `level+hysteresis/2`; falling is symmetric. Zero hysteresis requires a genuine
@@ -237,7 +237,9 @@ until Rearm, while the live ring continues. Auto emits an explicitly untriggered
 window after a configurable model-time timeout. Stop before post-trigger completion
 preserves a labeled partial capture. Rearm/holdoff begins after the capture end;
 triggers during collection/holdoff are deliberately ignored. Bound retained trigger
-history to one completed frame initially; no automatic disk saving.
+history to one completed frame initially; no automatic disk saving. Backend and
+Studio workflow checks cover triggering, but full operational qualification and
+native Windows GUI rendering remain open.
 
 ## 7. Exact cursor and measurements
 

@@ -31,6 +31,7 @@ class LinePlotBridge : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool inspectionEnabled MEMBER inspectionEnabled NOTIFY inspectionChanged)
+    Q_PROPERTY(bool triggerVisible MEMBER triggerVisible NOTIFY inspectionChanged)
     Q_PROPERTY(bool cursorVisible MEMBER cursorVisible NOTIFY inspectionChanged)
     Q_PROPERTY(double cursorX MEMBER cursorX NOTIFY inspectionChanged)
     Q_PROPERTY(bool densityVisible MEMBER densityVisible NOTIFY densityChanged)
@@ -59,6 +60,7 @@ public:
     [[nodiscard]] auto legend() const -> QVariantList;
 
     bool inspectionEnabled = false;
+    bool triggerVisible = false;
     bool cursorVisible = false;
     double cursorX = 0;
     bool densityVisible = false;

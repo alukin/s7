@@ -76,8 +76,9 @@ class Workflows : public QObject {
         return nullptr;
     }
 
-    static void capture(QWidget* widget, const QString& name) {
-        const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR");
+    static void capture(QWidget* widget, const QString& name, bool retainArtifact = false) {
+        auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR");
+        if (directory.isEmpty() && retainArtifact) directory = qEnvironmentVariable("S7_GUI_ARTIFACT_DIR");
         if (directory.isEmpty()) return;
         QDir{}.mkpath(directory);
         QTest::qWait(150);
@@ -828,6 +829,62 @@ private slots:
         panel->findChild<QPushButton*>("inspection.measure")->click(); capture(viewer, "live-correlation-cursors");
         action("action.reset")->trigger(); QVERIFY(!panel->snapshot()); QVERIFY(correlation->plotView()->bridge()->selectionMarkers.isEmpty());
         viewer->close();
+    }
+    void liveEdgeTriggerSynchronization() {
+        using namespace s7studio;
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/iq_correlation_live.s7diagram"));
+        auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "iq_scope")); QVERIFY(viewer);
+        viewer->resize(1400, 1050); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
+        viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
+        auto* mode = viewer->findChild<QComboBox*>("trigger.mode"); QVERIFY(mode); mode->setCurrentIndex(3);
+        auto* level = viewer->findChild<QLineEdit*>("trigger.level"); auto* hyst = viewer->findChild<QLineEdit*>("trigger.hysteresis"); QVERIFY(level && hyst);
+        level->setText("0.25"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
+        hyst->setText("0.02"); QVERIFY(QMetaObject::invokeMethod(hyst, "editingFinished", Qt::DirectConnection));
+        auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(runner); QSignalSpy completed(runner, &LocalSchemaRunner::runCompleted);
+        auto run = [&] { return dialogAction("action.run", [](QDialog* dialog) {
+            auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration"); auto* rate = dialog->findChild<QDoubleSpinBox*>("run.frequency");
+            auto* buttons = dialog->findChild<QDialogButtonBox*>(); if (!duration || !rate || !buttons) return false;
+            duration->setValue(8); rate->setValue(1024); buttons->button(QDialogButtonBox::Ok)->click(); return true;
+        }); };
+        QVERIFY(run()); QTRY_COMPARE(completed.count(), 1); QVERIFY(completed.last()[0].toBool());
+        QTRY_VERIFY(viewer->displayedFrame().trigger.has_value());
+        const auto first = viewer->displayedFrame();
+        QVERIFY(first.trigger->triggered); QVERIFY(!first.trigger->partial); QCOMPARE(first.steps.size(), std::size_t(128));
+        QCOMPARE(first.steps[31], first.trigger->step); QCOMPARE(first.plottedTime(31), 0.);
+        QVERIFY(first.trigger->step < 200); // Configured before stepping, rather than after the finite run finished.
+        QVERIFY(viewer->plotView()->bridge()->triggerVisible); QVERIFY(viewer->plotView()->xTitle().contains("Time from sampled trigger"));
+        QVERIFY(viewer->findChild<QLabel*>("trigger.status")->text().contains("Held single capture"));
+        QVERIFY(viewer->inspect(0).contains("Trigger-relative time = 0 s")); viewer->inspect(0, false);
+        capture(viewer, "live-single-trigger", true);
+        mode->setCurrentIndex(2); QTRY_VERIFY(action("action.run")->isEnabled()); QVERIFY(run());
+        QTRY_COMPARE(completed.count(), 2); QVERIFY(completed.last()[0].toBool());
+        QTRY_VERIFY(viewer->displayedFrame().trigger && viewer->displayedFrame().runId != first.runId && viewer->displayedFrame().finished);
+        const auto normal = viewer->displayedFrame(); QVERIFY(normal.trigger->triggered); QVERIFY(normal.trigger->partial);
+        QVERIFY(normal.trigger->step > first.trigger->step+1000); QCOMPARE(normal.plottedTime(31), 0.);
+        QCOMPARE(normal.trigger->step%64, first.trigger->step%64);
+        for (std::size_t i = 0; i < normal.steps.size(); ++i) {
+            QCOMPARE(normal.plottedTime(i), first.plottedTime(i));
+            QVERIFY(std::abs(normal.values[i*3]-first.values[i*3]) < 1e-10);
+        }
+        QVERIFY(viewer->findChild<QLabel*>("trigger.status")->text().contains("PARTIAL"));
+        auto* panel = viewer->findChild<viewers::WindowInspectionPanel*>(); QVERIFY(panel); QVERIFY(panel->pin());
+        QCOMPARE(panel->snapshot()->displayX[31], 0.); QCOMPARE(panel->snapshot()->axis[31], normal.times[31]);
+        viewer->findChild<QSpinBox*>("inspection.a")->setValue(31);
+        QVERIFY(panel->readout().contains("trigger_time=0 s"));
+        const auto path = temporary_.filePath("triggered.s7window"); QSignalSpy exported(panel, &viewers::WindowInspectionPanel::exportFinished);
+        QVERIFY(panel->exportTo(path, analysis::WindowExportFormat::WindowJson)); QTRY_COMPARE(exported.count(), 1); QVERIFY(exported.last()[0].toBool());
+        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly)); const auto json = QJsonDocument::fromJson(file.readAll());
+        const auto trigger = json["metadata"].toObject()["raw"].toObject()["trigger"].toObject();
+        QVERIFY(trigger["triggered"].toBool()); QVERIFY(trigger["partial"].toBool());
+        QCOMPARE(trigger["sampled_trigger_step"].toString(), QString::number(normal.trigger->step));
+        QCOMPARE(json["displayed_rows"].toArray()[31].toObject()["display_axis"].toString(), QString("0"));
+        capture(viewer, "live-normal-trigger-cursors", true);
+        mode->setCurrentIndex(0); QTRY_VERIFY(!viewer->displayedFrame().steps.empty());
+        QVERIFY(!viewer->plotView()->bridge()->triggerVisible); QVERIFY(!viewer->displayedFrame().trigger);
+        level->setText("nan"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
+        viewer->refreshSource(); QVERIFY(viewer->findChild<QLabel*>("trigger.status")->text().contains("Invalid trigger"));
+        action("action.reset")->trigger(); QVERIFY(viewer->displayedFrame().steps.empty());
     }
     void liveMeasurementExamples() {
         QFETCH(QString, filename); QFETCH(QString, observer); QFETCH(QString, unit);

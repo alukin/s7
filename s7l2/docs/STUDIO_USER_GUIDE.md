@@ -84,8 +84,12 @@ their input. **Measure A–B** computes inclusive region statistics from raw val
 or explicitly labeled derived bins/lags. **Export frozen window…** saves bounded
 window JSON, raw CSV or displayed-data CSV with metadata; it does not start a
 recording. See [Live cursors, measurements and export](STUDIO_WINDOW_INSPECTION.md)
-for keyboard movement, units, coverage and file formats. Time acquisition is still
-rolling; periodic-display edge triggering and saved workspaces remain pending.
+for keyboard movement, units, coverage and file formats. To stabilize periodic
+Time traces, configure **Time synchronization** before starting a run: select
+Auto/Normal/Single, source, edge, raw threshold, hysteresis, pre-trigger and holdoff.
+The sampled trigger stays at time zero; absolute timestamps remain intact. See
+[Live edge-trigger synchronization](STUDIO_TRIGGERING.md) for a worked example,
+timeout/partial-capture behavior and sampling limits. Saved workspaces remain pending.
 
 For the recording Scope and phase viewers, the plot preview can skip updates under load. Authoritative recording is
 separate; skipped preview updates do not imply lost recorded samples.

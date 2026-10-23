@@ -376,6 +376,12 @@ void MainWindow::connectRunnerSignals()
     connect(runner_, &LocalSchemaRunner::ticksProgress, this, [this, generation](long completed, long total) {
         if (!shuttingDown_ && generation == runGeneration_) onTickProgress(completed, total);
     });
+    connect(runner_, &LocalSchemaRunner::stateChanged, this, [this, generation](RunState state) {
+        // Prepared is published synchronously before the producer starts, so
+        // open live windows can apply retention/trigger settings to short runs.
+        if (!shuttingDown_ && generation == runGeneration_ && state == RunState::Prepared)
+            viewers_->presentLive(runner_->liveSources());
+    });
     connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, [this, generation] {
         if (!shuttingDown_ && generation == runGeneration_) onScopeSamplesAvailable();
     });

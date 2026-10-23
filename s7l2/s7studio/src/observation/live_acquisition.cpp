@@ -23,9 +23,13 @@ QList<QPointF> LiveFrame::envelope(std::size_t channel, std::size_t buckets, dou
     QList<QPointF> result;
     if (channel >= static_cast<std::size_t>(channels.size()) || times.empty()) return result;
     const auto stride = static_cast<std::size_t>(channels.size());
-    if (upper < times.front() || lower > times.back() || lower > upper) return result;
-    auto first = static_cast<std::size_t>(std::lower_bound(times.begin(), times.end(), lower) - times.begin());
-    auto last = static_cast<std::size_t>(std::upper_bound(times.begin(), times.end(), upper) - times.begin());
+    if (upper < plottedTime(0) || lower > plottedTime(times.size()-1) || lower > upper) return result;
+    auto bound = [&](double value, bool inclusive) {
+        std::size_t lo = 0, hi = times.size();
+        while (lo < hi) { const auto mid = (lo+hi)/2; if (plottedTime(mid) < value || (inclusive && plottedTime(mid) == value)) lo = mid+1; else hi = mid; }
+        return lo;
+    };
+    auto first = bound(lower, false), last = bound(upper, true);
     if (first > 0) --first; // Preserve line intersections with viewport boundaries.
     if (last < times.size()) ++last;
     const auto bucketSize = std::max<std::size_t>(1, (last - first + std::max<std::size_t>(1, buckets) - 1) / std::max<std::size_t>(1, buckets));
@@ -46,7 +50,7 @@ QList<QPointF> LiveFrame::envelope(std::size_t channel, std::size_t buckets, dou
         std::sort(std::begin(indices), std::end(indices));
         auto previous = times.size();
         for (auto i : indices) if (i != previous) {
-            result.push_back({times[i], values[i*stride+channel]}); previous = i;
+            result.push_back({plottedTime(i), values[i*stride+channel]}); previous = i;
         }
     }
     return result;
@@ -58,6 +62,10 @@ LiveAcquisition::LiveAcquisition(std::uint64_t id, double dt, QVector<LiveChanne
         throw std::invalid_argument("Live acquisition requires a positive dt and 1–8 channels.");
     steps_.resize(storagePositions); times_.resize(storagePositions);
     values_.resize(storagePositions * static_cast<std::size_t>(channels_.size()));
+    for (auto& bank : triggerBanks_) {
+        bank.steps.resize(maxPositions); bank.times.resize(maxPositions);
+        bank.values.resize(maxPositions*static_cast<std::size_t>(channels_.size()));
+    }
 }
 void LiveAcquisition::append(std::int64_t step, double time, std::span<const double> values)
 {
@@ -65,21 +73,24 @@ void LiveAcquisition::append(std::int64_t step, double time, std::span<const dou
         throw std::invalid_argument("Invalid live acquisition frame.");
     std::lock_guard lock(mutex_);
     if (finished_) throw std::logic_error("Live acquisition is finished.");
+    bool gap = false;
     if (received_) {
         const auto previous = static_cast<std::size_t>((received_-1) % storagePositions);
         if (step <= steps_[previous] || time <= times_[previous]) throw std::invalid_argument("Live steps/time must increase.");
-        if (step - steps_[previous] != 1) ++gaps_;
+        gap = step != steps_[previous]+1;
+        if (gap) ++gaps_;
     }
     const auto slot = static_cast<std::size_t>(received_ % storagePositions);
     steps_[slot] = step; times_[slot] = time;
     std::copy(values.begin(), values.end(), values_.begin() + static_cast<std::ptrdiff_t>(slot*values.size()));
     ++received_; count_ = std::min(count_ + 1, capacity_);
+    appendTriggerLocked(step, time, values, gap);
 }
 bool LiveAcquisition::setCapacity(std::size_t capacity)
 {
     if (capacity < 2 || capacity > maxPositions) return false;
     std::lock_guard lock(mutex_);
-    if (capacity != capacity_) { capacity_ = capacity; count_ = std::min(count_, capacity); ++generation_; }
+    if (capacity != capacity_) { capacity_ = capacity; count_ = std::min(count_, capacity); ++generation_; resetTriggerLocked(true); }
     return true;
 }
 bool LiveAcquisition::setDuration(const QString& seconds, QString* error)
@@ -107,7 +118,9 @@ std::size_t LiveAcquisition::capacity() const { std::lock_guard lock(mutex_); re
 LiveStatus LiveAcquisition::status() const { std::lock_guard lock(mutex_); return {finished_, error_, received_}; }
 std::size_t LiveAcquisition::allocatedBytes() const
 {
-    return steps_.capacity()*sizeof(std::int64_t) + (times_.capacity()+values_.capacity())*sizeof(double);
+    auto bytes = steps_.capacity()*sizeof(std::int64_t) + (times_.capacity()+values_.capacity())*sizeof(double);
+    for (const auto& bank : triggerBanks_) bytes += bank.steps.capacity()*sizeof(std::int64_t)+(bank.times.capacity()+bank.values.capacity())*sizeof(double);
+    return bytes;
 }
 std::optional<LiveFrame> LiveAcquisition::snapshot() const
 {
@@ -139,5 +152,9 @@ std::optional<LiveFrame> LiveAcquisition::snapshot() const
     }
     return result;
 }
-void LiveAcquisition::finish(const QString& error) { std::lock_guard lock(mutex_); if (!finished_) { finished_ = true; error_ = error; } }
+void LiveAcquisition::finish(const QString& error)
+{
+    std::lock_guard lock(mutex_);
+    if (!finished_) { if (collecting_) publishTriggerLocked(true); finished_ = true; error_ = error; }
+}
 } // namespace s7studio::observation

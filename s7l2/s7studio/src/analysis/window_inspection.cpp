@@ -84,7 +84,7 @@ QJsonObject rawMetadata(const observation::LiveFrame& f)
     return {{"run_id", QString::number(f.runId)}, {"generation", QString::number(f.generation)}, {"received", QString::number(f.received)},
         {"evicted", QString::number(f.evicted)}, {"gaps_seen", QString::number(f.gaps)}, {"capacity", static_cast<int>(f.capacity)},
         {"rate_numerator", QString::number(f.rateNumerator)}, {"rate_denominator", QString::number(f.rateDenominator)},
-        {"dt_s", exactNumber(f.dt)}, {"finished", f.finished}, {"error", f.error}, {"provenance", f.provenance},
+        {"dt_s", exactNumber(f.dt)}, {"finished", f.finished}, {"error", f.error}, {"provenance", f.provenance}, {"trigger", observation::triggerMetadata(f)},
         {"first_step", QString::number(f.steps.front())}, {"last_step", QString::number(f.steps.back())}, {"channels", channels}};
 }
 QByteArray json(const QJsonObject& value) { return QJsonDocument(value).toJson(QJsonDocument::Compact); }
@@ -101,6 +101,11 @@ WindowSnapshot timeWindow(std::shared_ptr<const observation::LiveFrame> frame)
         WindowColumn column{f.channels[static_cast<qsizetype>(c)].name, f.channels[static_cast<qsizetype>(c)].unit, {}};
         for (std::size_t i = 0; i < f.steps.size(); ++i) column.values.push_back(f.values[i*width+c]);
         d.columns.push_back(std::move(column));
+    }
+    if (f.trigger && f.trigger->triggered) {
+        for (std::size_t i = 0; i < d.displayX.size(); ++i) d.displayX[i] = f.plottedTime(i);
+        d.displayAxisName = "trigger_time"; d.displayAxisUnit = "s";
+        d.settings.insert("trigger", observation::triggerMetadata(f));
     }
     interval(d, f.steps.front(), f.steps.back()); return d;
 }

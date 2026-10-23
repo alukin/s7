@@ -100,8 +100,9 @@ window requests cancellation; export never pauses causal execution.
 These files are bounded-window exports, not complete-run `.s7scope` recordings.
 Studio does not yet reopen `.s7window` files. Use the recording Scope's Save Run /
 Open Run workflow for that purpose. Plot-image export and saved workspaces remain
-future work. Time acquisition is still rolling; edge triggering for stable periodic
-display is a separate pending increment.
+future work. [Edge triggering](STUDIO_TRIGGERING.md) stabilizes periodic Time
+traces. In triggered captures, raw timestamps stay absolute, display coordinates
+are trigger-relative, and export metadata records the sampled edge and coverage.
 
 ## Try it
 

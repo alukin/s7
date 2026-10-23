@@ -30,6 +30,7 @@ constexpr Topic topics[] = {
     {"Live FFT spectrum", "qrc:/s7studio/help/docs/STUDIO_SPECTRUM.md"},
     {"Live constellation and correlation", "qrc:/s7studio/help/docs/STUDIO_PAIR_ANALYSIS.md"},
     {"Live cursors, measurements and export", "qrc:/s7studio/help/docs/STUDIO_WINDOW_INSPECTION.md"},
+    {"Live edge-trigger synchronization", "qrc:/s7studio/help/docs/STUDIO_TRIGGERING.md"},
     {"Bundled examples", "qrc:/s7studio/help/docs/STUDIO_EXAMPLES.md"},
     {"Saving and comparing results", "qrc:/s7studio/help/docs/SCOPE_RESULTS.md"},
     {"Observation viewers", "qrc:/s7studio/help/docs/STUDIO_OBSERVATION_VIEWERS.md"},

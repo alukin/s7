@@ -32,7 +32,12 @@ A=0 and B=4095 select 4096 retained positions; **Measure A–B** gives I/Q RMS n
 `1/sqrt(2)` V, independently of display gain/offset. Try cursors in all four tabs,
 then **Export frozen window…** as metadata-rich window JSON, raw CSV or displayed
 data CSV. See [inspection/export help](../../docs/STUDIO_WINDOW_INSPECTION.md).
-Time is still a rolling acquisition; trigger synchronization is pending.
+For [stable Time synchronization](../../docs/STUDIO_TRIGGERING.md), open `iq_scope`
+before running, retain 128 samples, and choose Normal, source I, Rising, level
+0.25, hysteresis 0.02 and 25% pre-trigger. At 1024 Hz the 16 Hz waveform stays
+aligned to its sampled edge at T=0. Single holds one capture; Rearm waits for a
+new one while raw acquisition continues. Stopping during post-trigger collection
+preserves a labeled partial frame.
 
 | Recording diagram | Exercise |
 |---|---|

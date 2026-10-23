@@ -59,6 +59,7 @@ s7_enable_project_warnings(s7studio_diagram)
 # Portrait and 3D Phase Trajectory windows. Shared by Studio and its tests.
 add_library(s7studio_observation STATIC
     src/observation/live_acquisition.cpp src/observation/live_acquisition.hpp
+    src/observation/live_trigger.cpp
     src/observation/observation_source.cpp
     src/observation/observation_source.hpp
     src/observation/run_metadata.cpp src/observation/run_metadata.hpp
@@ -200,6 +201,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_SPECTRUM.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_PAIR_ANALYSIS.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_WINDOW_INSPECTION.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_TRIGGERING.md
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_DESIGN.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
         ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
@@ -521,6 +523,13 @@ set_target_properties(s7studio_window_inspection_test PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_window_inspection_test)
 add_test(NAME s7studio_window_inspection COMMAND s7studio_window_inspection_test)
 set_tests_properties(s7studio_window_inspection PROPERTIES TIMEOUT 60)
+
+s7_add_test_executable(s7studio_live_trigger_test tests/live_trigger_test.cpp)
+target_link_libraries(s7studio_live_trigger_test PRIVATE s7studio_observation Qt6::Test Threads::Threads)
+set_target_properties(s7studio_live_trigger_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_live_trigger_test)
+add_test(NAME s7studio_live_trigger COMMAND s7studio_live_trigger_test)
+set_tests_properties(s7studio_live_trigger PROPERTIES TIMEOUT 60)
 
 add_test(NAME s7studio_live_spectrum COMMAND s7studio --live-spectrum-check)
 set_tests_properties(s7studio_live_spectrum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
