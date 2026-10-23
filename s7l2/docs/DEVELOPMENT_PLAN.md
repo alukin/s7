@@ -38,7 +38,10 @@ reservation remained fixed. These checks do not characterize runtime graph cost,
 full Qt plot throughput, or native Windows rendering. The Windows cross-build
 and Wine trigger test passed; the Live Oscilloscope Wine test aborted because
 Wine's `mscms.dll` does not implement `WcsCreateIccProfile`, so Windows GUI
-behavior remains unqualified.
+behavior remains unqualified. The refreshed relocated Fedora 44 Linux package
+smoke check passed 13/13, now including a real-model Live Oscilloscope Time plot
+and FFT/QML rendering. The final archive is prepared locally; no release tag or
+GitHub release has been created.
 
 Continuous execution already exists (`runtime_seconds = -1`). The current
 Scope is an entire-run recording/comparison viewer: bounded RAM spills history

@@ -22,7 +22,11 @@ def check(package, artifacts):
     for name in ('LD_LIBRARY_PATH', 'QT_PLUGIN_PATH', 'QML2_IMPORT_PATH', 'QML_IMPORT_PATH', 'S7_PLUGIN_PATH'):
         env.pop(name, None)
     env.update(XDG_CONFIG_HOME=str(artifacts / 'config'), XDG_CACHE_HOME=str(artifacts / 'cache'),
-               LIBGL_ALWAYS_SOFTWARE='1', QSG_RHI_BACKEND='opengl')
+               LIBGL_ALWAYS_SOFTWARE='1', QSG_RHI_BACKEND='opengl', QT_QPA_PLATFORM='xcb')
+    env.pop('WAYLAND_DISPLAY', None)
+    runtime = artifacts / 'runtime'
+    runtime.mkdir(mode=0o700, exist_ok=True)
+    env['XDG_RUNTIME_DIR'] = str(runtime)
     results = []
     with tempfile.TemporaryDirectory(prefix='s7-installed-') as directory:
         cwd = Path(directory)
@@ -59,8 +63,10 @@ def check(package, artifacts):
         if json.loads(saved.read_text()) != json.loads(reopened.read_text()):
             raise RuntimeError('Saved/reopened diagram changed')
         env['S7_SPECTRUM_PNG'] = str(artifacts / 'live-spectrum.png')
-        for mode in ('scope-run', 'phase-portrait', 'phase-trajectory-3d', 'live-spectrum'):
-            run(mode, package / 's7studio', '--' + mode + '-check')
+        for name, mode in (('scope-run', 'scope-run'), ('phase-portrait', 'phase-portrait'),
+                           ('phase-trajectory-3d', 'phase-trajectory-3d'),
+                           ('live-oscilloscope-spectrum', 'live-spectrum')):
+            run(name, package / 's7studio', '--' + mode + '-check')
         (artifacts / 'summary.json').write_text(json.dumps({'checks': results, 'package': str(package),
             'checks_passed': True}, indent=2) + '\n')
     print(f'{len(results)} installed-package checks passed')

@@ -1104,7 +1104,13 @@ int runLiveSpectrumCheck(int argc, char** argv)
         throw std::runtime_error("Live-only capture failed or created a recording journal");
     s7studio::ui::LiveOscilloscopeWindow viewer("installed-spectrum");
     viewer.attachLiveSource(runner.liveSources().value("live")); viewer.resize(1280, 720); viewer.show();
-    viewer.findChild<QTabWidget*>("live.views")->setCurrentIndex(1); viewer.refreshSource();
+    auto* tabs = viewer.findChild<QTabWidget*>("live.views");
+    wait([&] { return viewer.displayedFrame().steps.size() == 4096; });
+    wait([&] { return !viewer.plotView()->series().first()->points().isEmpty(); });
+    wait([&] { return viewer.plotView()->quickWidget() && viewer.plotView()->quickWidget()->status() == QQuickWidget::Ready; });
+    if (viewer.displayedFrame().steps.back() != 8192)
+        throw std::runtime_error("Live Time view did not retain the newest model samples");
+    tabs->setCurrentIndex(1); viewer.refreshSource();
     auto* spectrum = viewer.findChild<s7studio::viewers::SpectrumView*>();
     wait([&] { return spectrum->result().has_value(); });
     const auto& result = *spectrum->result();
@@ -1119,7 +1125,7 @@ int runLiveSpectrumCheck(int argc, char** argv)
         for (int i = 0; i < 20; ++i) { app.processEvents(); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
         if (!viewer.grab().save(png)) throw std::runtime_error("Cannot save spectrum screenshot");
     }
-    std::cout << "Live spectrum: bounded capture, 64 Hz / 2 V Hann FFT and QML plot passed\n";
+    std::cout << "Live oscilloscope Time and spectrum: bounded capture, newest samples, 64 Hz / 2 V Hann FFT and QML plots passed\n";
     return 0;
 }
 

@@ -20,28 +20,32 @@ storage rather than crash-durable recording.
 
 ## Final checklist
 
-- [ ] **P0: continuous hardware-style oscilloscope viewer**, with bounded
-  acquisition memory/storage and no implicit full-run journal. Design discussion
-  and implementation are pending; see the priority section in
-  [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md). This user-added gate supersedes
-  the earlier deferral for this specific observation capability.
+- [x] **P0: continuous hardware-style oscilloscope viewer**, with bounded
+  acquisition memory/storage and no implicit full-run journal. Implementation,
+  edge-triggered acquisition, FFT/XY/correlation, window inspection/export and
+  worker-side Time preparation are covered by the current native suite and
+  documented in [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
+- [x] Refreshed installed-package smoke check: the real-model live Time plot and
+  FFT/QML workflows pass with the package relocated outside the source checkout.
 
 - [x] Narrow release scope and document platform/feature limits.
 - [x] Verify actual disk exhaustion: an 8 MiB tmpfs produces an explicit
   incomplete/error status; all 262,144 retained samples remain readable with
   exact step/time/value data (2026-10-22, revision 0f40caf).
-- [x] Final Studio-enabled Release rebuild and complete regression suite:
-  73/73 passed in 70.96 seconds, including all four local GUI suites.
-- [x] Fresh relocated package smoke check without system Qt/source checkout:
-  12/12 passed in a fresh Fedora 44 container with the package read-only.
+- [x] Studio-enabled Release rebuild and complete regression suite: **79/79
+  passed** in 93.86 seconds on 2026-10-23, including all four local GUI suites
+  and the Live Oscilloscope worker responsiveness test.
+- [x] Fresh relocated Linux package smoke check without a source checkout:
+  **13/13 passed** from a relocated package under Xvfb/llvmpipe on Fedora 44,
+  including the real-model Live Oscilloscope Time plot and FFT/QML workflows.
+  The package path and run state are outside the checkout.
 - [x] Bundle third-party notices with a per-binary inventory and exact source
   RPM identities. Qt/dependency sources are excluded from the binary bundle.
 - [x] REUSE licensing check passes locally (503/503 files at verification);
   required step added to headless CI. Hosted execution of that new step is
   not claimed; GUI testing remains local.
-- [ ] Rebuild the final Linux archive and SHA256SUMS after the Help and
-  fractional-duration fixes; tag the verified
-  release revision as v0.1.0. Publication uses the same artifacts.
+- [ ] Rebuild the final Linux archive and SHA256SUMS from the fully verified
+  release revision; tag it `v0.1.0` and publish those exact artifacts.
 
 The original v0.1.0 tag was removed locally and from origin on 2026-10-22
 before the fractional-duration correction. No hosted release is published.
