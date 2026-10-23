@@ -343,7 +343,7 @@ namespace detail {
 
 } // namespace detail
 
-/// Adder: weighted sum of N inputs (N = weights.size(), at least 2), computed
+/// Adder: weighted sum of N inputs (N = weights.size(), 2 to 64), computed
 /// in the accumulator type Acc (default: the input type). Arithmetic types.
 template <SignalType Type, SignalType Acc = Type>
 class AdderT final : public Element {
@@ -355,9 +355,12 @@ public:
     explicit AdderT(std::vector<value_type> weights = {Ops::one(), Ops::one()},
                     Overflow overflow = Overflow::Saturate)
         : Element("Adder")
-        , weights_(weights.empty() ? std::vector<value_type>{Ops::one(), Ops::one()} : std::move(weights))
+        , weights_(std::move(weights))
         , overflow_(overflow)
     {
+        if (weights_.size() < 2 || weights_.size() > 64) {
+            throw std::invalid_argument("Adder weights must define between 2 and 64 inputs.");
+        }
         for (std::size_t index = 0; index < weights_.size(); ++index) {
             register_input(index, detail::sum_port_name(index), Type, nullptr);
         }
@@ -380,7 +383,7 @@ private:
     value_type output_value_{};
 };
 
-/// Multiply: product of N inputs, each scaled by its factor, computed in the
+/// Multiply: product of 2 to 64 inputs, each scaled by its factor, computed in the
 /// accumulator type Acc (default: the input type). Arithmetic types.
 template <SignalType Type, SignalType Acc = Type>
 class MultiplyT final : public Element {
@@ -392,9 +395,12 @@ public:
     explicit MultiplyT(std::vector<value_type> factors = {Ops::one(), Ops::one()},
                        Overflow overflow = Overflow::Saturate)
         : Element("Multiply")
-        , factors_(factors.empty() ? std::vector<value_type>{Ops::one(), Ops::one()} : std::move(factors))
+        , factors_(std::move(factors))
         , overflow_(overflow)
     {
+        if (factors_.size() < 2 || factors_.size() > 64) {
+            throw std::invalid_argument("Multiply factors must define between 2 and 64 inputs.");
+        }
         for (std::size_t index = 0; index < factors_.size(); ++index) {
             register_input(index, detail::sum_port_name(index), Type, nullptr);
         }

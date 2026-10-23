@@ -16,6 +16,10 @@
 #include <vector>
 
 #include <boost/json.hpp>
+#include <boost/asio/ssl.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/ssl.hpp>
+#include <boost/beast/websocket.hpp>
 
 #include <s7/control_plane_mvp.hpp>
 #include <s7/net.hpp>
@@ -220,7 +224,7 @@ int main()
         }
     }
 
-    {
+    for (const bool require_client_cert : {true, false}) {
         const auto cert_dir = std::filesystem::path(S7_TEST_CERT_DIR);
         assert(std::filesystem::exists(cert_dir / "s7_root_ca.cert.pem"));
         assert(std::filesystem::exists(cert_dir / "s7_runtime_node.cert.pem"));
@@ -231,7 +235,7 @@ int main()
         tls_cfg.cert_file = (cert_dir / "s7_runtime_node.cert.pem").string();
         tls_cfg.key_file = (cert_dir / "s7_runtime_node.key.pem").string();
         tls_cfg.ca_file = (cert_dir / "s7_root_ca.cert.pem").string();
-        tls_cfg.require_client_cert = true;
+        tls_cfg.require_client_cert = require_client_cert;
 
         s7::transport::BeastRuntimeNetEndpoint tls_server;
         s7::transport::BeastRuntimeNetEndpoint tls_client;
@@ -245,6 +249,43 @@ int main()
         const auto response_text = tls_client.request_control_json(R"json({"type":"HELLO","request_id":"hello-tls","protocol_version":1})json");
         const auto response = boost::json::parse(response_text).as_object();
         assert(response.at("type").as_string() == "HELLO_OK");
+
+        // The live conformance script also connects without a certificate.
+        // Optional certificates admit that peer, without authorizing mutations.
+        boost::asio::io_context io;
+        boost::asio::ssl::context context{boost::asio::ssl::context::tls_client};
+        context.load_verify_file(tls_cfg.ca_file);
+        context.set_verify_mode(boost::asio::ssl::verify_peer);
+        boost::beast::websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>> anonymous{io, context};
+        bool handshake_rejected = false;
+        try {
+            auto& socket = boost::beast::get_lowest_layer(anonymous);
+            socket.expires_after(std::chrono::seconds(5));
+            socket.connect({boost::asio::ip::make_address("127.0.0.1"), tls_port});
+            anonymous.next_layer().handshake(boost::asio::ssl::stream_base::client);
+            anonymous.handshake("127.0.0.1", "/control");
+        } catch (const std::exception&) {
+            if (!require_client_cert) throw;
+            handshake_rejected = true;
+        }
+        assert(handshake_rejected == require_client_cert);
+        if (!require_client_cert) {
+            const auto send = [&anonymous](const boost::json::object& request) {
+                anonymous.write(boost::asio::buffer(boost::json::serialize(request)));
+                boost::beast::flat_buffer buffer;
+                anonymous.read(buffer);
+                return boost::json::parse(boost::beast::buffers_to_string(buffer.data())).as_object();
+            };
+            const auto hello = send({{"type", "HELLO"}, {"request_id", "anonymous-hello"}, {"protocol_version", 1}});
+            assert(hello.at("type").as_string() == "HELLO_OK");
+            for (const auto* type : {"PREPARE_DEPLOYMENT", "COMMIT_DEPLOYMENT", "ABORT_DEPLOYMENT"}) {
+                const auto denied = send({{"type", type}, {"request_id", "anonymous-mutation"}, {"protocol_version", 1},
+                                          {"studio", {{"role", "control"}}}});
+                assert(denied.at("type").as_string() == "ERROR");
+                assert(denied.at("code").as_string() == "CERTIFICATE_REQUIRED");
+            }
+            anonymous.close(boost::beast::websocket::close_code::normal);
+        }
     }
 
     {

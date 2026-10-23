@@ -230,7 +230,9 @@ Errors MUST NOT disclose private key material, credentials, or sensitive local p
 
 ## 10. Relationship to Implementation
 
-The C++ runtime is the reference implementation; `s7runtime_control_fixtures_smoke` runs the conformance script of section 9 against it. Other implementations are checked with the same script. The Python node `s7py` passes it over mTLS except the data-stream steps, since it has no data plane yet (`s7py/tools/check_control_fixtures.py --skip-streams`).
+The C++ runtime is the reference implementation; `s7runtime_control_fixtures_smoke` runs the conformance script of section 9 against its control plane with an accepting deployment host, without compiling graphs or performing TLS handshakes. Other implementations are checked with the same script. The Python node `s7py` passes it over mTLS except the data-stream steps, since it has no data plane yet (`s7py/tools/check_control_fixtures.py --skip-streams`).
+
+A live C++ node defaults to requiring a client certificate during the TLS handshake. The script also uses an anonymous peer, so a live conformance-test node must explicitly set `websocket.server.tls.require_client_cert` to `false`; certificates supplied by clients are still verified, and mutation authorization still requires the pinned control certificate. Anonymous TLS mutations return `CERTIFICATE_REQUIRED`, while mutations without TLS return `UNAUTHORIZED`. The Python runner accounts for this difference. See [the fixture setup](../s7l2/s7runtime/tests/fixtures/README.md) for the configuration and remaining node prerequisites.
 
 ### 10.1 Implemented behavior (C++ runtime, 2026-10-06)
 

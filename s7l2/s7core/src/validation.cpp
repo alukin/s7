@@ -35,15 +35,19 @@ PrototypeMap prototypes_of(const InstanceMap& instances) {
 
 class GraphAlgorithms {
 public:
-    static AdjacencyMap build_adjacency(const Schema& schema, const PrototypeMap& prototypes) {
+    static AdjacencyMap build_feedthrough_adjacency(const Schema& schema, const PrototypeMap& prototypes) {
         AdjacencyMap adjacency;
 
-        for (const auto& [id, _] : prototypes) {
-            adjacency[id] = {};
+        // Every cycle must cross causal memory. One memory element somewhere
+        // in an SCC does not break other, direct-feedthrough cycles in it.
+        for (const auto& [id, info] : prototypes) {
+            if (!info.has_causal_memory) {
+                adjacency[id] = {};
+            }
         }
 
         for (const auto& connection : schema.connections()) {
-            if (prototypes.contains(connection.from_element) && prototypes.contains(connection.to_element)) {
+            if (adjacency.contains(connection.from_element) && adjacency.contains(connection.to_element)) {
                 adjacency[connection.from_element].push_back(connection.to_element);
             }
         }
@@ -221,24 +225,13 @@ private:
 class CycleRulesValidator {
 public:
     static void validate(const Schema& schema, const PrototypeMap& prototypes, std::vector<std::string>& errors) {
-        const auto adjacency = GraphAlgorithms::build_adjacency(schema, prototypes);
+        const auto adjacency = GraphAlgorithms::build_feedthrough_adjacency(schema, prototypes);
         const auto components = GraphAlgorithms::strongly_connected_components(adjacency);
 
         for (const auto& component : components) {
             const bool cyclic =
                 component.size() > 1 || (component.size() == 1 && GraphAlgorithms::has_self_loop(component.front(), adjacency));
-            if (!cyclic) {
-                continue;
-            }
-
-            bool has_memory = false;
-
-            for (const auto& id : component) {
-                const auto& info = prototypes.at(id);
-                has_memory = has_memory || info.has_causal_memory;
-            }
-
-            if (!has_memory) {
+            if (cyclic) {
                 errors.emplace_back("Cycle detected without causal memory.");
             }
         }

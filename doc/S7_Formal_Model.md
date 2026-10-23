@@ -292,8 +292,12 @@ Examples:
 
 - Delay
 - PreviousValue
+- EulerIntegrator
+- TrapezoidIntegrator in its default implicit mode
 
-Keeping State does not make an Element causal memory. An Accumulator (y[n] = y[n-1] + x[n]), a TrapezoidIntegrator or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit causal-memory Element. A forward-Euler integrator (EulerIntegrator, y[n+1] = y[n] + dt·x[n]) is causal memory.
+Keeping State does not make an Element causal memory. An Accumulator (y[n] = y[n-1] + x[n]), a TrapezoidIntegrator in sampled mode or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit causal-memory Element. A forward-Euler integrator (EulerIntegrator, y[n+1] = y[n] + dt·x[n]) is causal memory.
+
+The default implicit TrapezoidIntegrator publishes its current state and stages the next state for the following step, like EulerIntegrator. Coupled implicit integrators compute their next states together by reevaluating only stateless derivative dependencies; this does not permit direct-feedthrough cycles. Sampled mode instead integrates a supplied sequence and uses the current input. See [the TrapezoidIntegrator numerical contract](../s7l2/docs/TRAPEZOID_INTEGRATION.md).
 
 A nested Schema has direct feedthrough. It adds no delay beyond the Elements it contains, and it cannot close an outer cycle even if it contains causal memory internally.
 
@@ -337,7 +341,9 @@ Let:
 
 denote the strongly connected components of a Functional Graph.
 
-A Functional Graph is valid if every SCC with cardinality greater than one contains at least one Causal Memory Element.
+The cycle condition is satisfied if and only if removing all Causal Memory Elements and their incident connections leaves an acyclic graph. Equivalently, every SCC of that remaining graph must contain exactly one Element and no self-loop. Other graph validity requirements, including types, ports and rates, still apply.
+
+A Causal Memory Element somewhere in an SCC of the original graph is not sufficient: the same SCC can also contain a cycle with no causal memory. For example, a -> b -> a remains invalid even when a -> Delay -> a makes all three Elements strongly connected.
 
 ------------------------------------------------------------------------
 

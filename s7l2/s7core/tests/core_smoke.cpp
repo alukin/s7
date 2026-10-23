@@ -119,10 +119,113 @@ boost::json::value make_schema_library_json()
     )json");
 }
 
+void test_cycles_inside_memory_scc()
+{
+    // A direct-feedthrough cycle must be rejected even when a second cycle
+    // through causal memory puts every element in the same SCC.
+    for (const bool self_loop : {false, true}) {
+        for (const bool reversed : {false, true}) {
+            s7::Schema schema{"mixed_cycles"};
+            schema.set_rate(s7::Rate::from_hz(1));
+            std::vector<std::pair<std::string, s7::ElementFactory>> elements{
+                {"a", [] { return std::make_unique<s7::Adder>(); }},
+                {"b", [] { return std::make_unique<s7::Gain>(); }},
+                {"memory", [] { return std::make_unique<s7::Delay>(); }},
+            };
+            if (reversed) std::ranges::reverse(elements);
+            for (auto& [id, factory] : elements) schema.add_element(id, std::move(factory));
+            schema.connect("a", 0, "b", 0);
+            schema.connect(self_loop ? "a" : "b", 0, "a", 0);
+            schema.connect("b", 0, "memory", 0);
+            schema.connect("memory", 0, "a", 1);
+
+            const auto validation = s7::Validator::validate(schema);
+            assert(!validation.ok());
+            assert(std::ranges::any_of(validation.errors, [](const std::string& error) {
+                return error.find("Cycle detected without causal memory") != std::string::npos;
+            }));
+            bool rejected_by_validation = false;
+            try {
+                static_cast<void>(s7::Compiler::compile(schema));
+            } catch (const std::invalid_argument& error) {
+                rejected_by_validation = std::string_view{error.what()}.find("Cycle detected without causal memory") != std::string_view::npos;
+            }
+            assert(rejected_by_validation);
+        }
+    }
+
+    // Removing a memory self-loop leaves an empty, valid feedthrough graph.
+    s7::Schema memory_loop{"memory_self_loop"};
+    memory_loop.set_rate(s7::Rate::from_hz(1));
+    memory_loop.add_element("memory", [] { return std::make_unique<s7::Delay>(3.0); });
+    memory_loop.connect("memory", 0, "memory", 0);
+    assert(s7::Validator::validate(memory_loop).ok());
+    s7::NodeRuntime runtime{s7::Compiler::compile(memory_loop)};
+    for (int step = 0; step < 3; ++step) {
+        runtime.step();
+        assert(runtime.real_output_of("memory") == 3.0);
+    }
+}
+
+void test_variadic_input_bounds()
+{
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    for (const auto* type : {"Adder", "Multiply"}) {
+        const bool adder = std::string_view{type} == "Adder";
+        const auto* descriptor = registry.find(type);
+        assert(descriptor);
+        for (const std::size_t count : {0, 1, 2, 64, 65}) {
+            const bool valid = count >= 2 && count <= 64;
+            bool constructed = false;
+            try {
+                const std::vector<double> factors(count, 1.0);
+                const auto element = adder ? std::unique_ptr<s7::Element>{std::make_unique<s7::Adder>(factors)}
+                                           : std::unique_ptr<s7::Element>{std::make_unique<s7::Multiply>(factors)};
+                assert(element->input_count() == count);
+                constructed = true;
+            } catch (const std::invalid_argument& error) {
+                assert(std::string_view{error.what()}.find("between 2 and 64") != std::string_view::npos);
+            }
+            assert(constructed == valid);
+
+            boost::json::array factors;
+            for (std::size_t index = 0; index < count; ++index) factors.push_back(1.0);
+            s7::Schema schema{"variadic_bounds"};
+            schema.set_rate(s7::Rate::from_hz(1));
+            schema.add_element("one", [] { return std::make_unique<s7::Constant>(1.0); });
+            schema.add_element(s7::make_element_spec("operation", *descriptor,
+                {{"type", "F64"}, {adder ? "weights" : "factors", std::move(factors)}}));
+            for (std::size_t index = 0; index < count; ++index) schema.connect("one", 0, "operation", index);
+            const auto validation = s7::Validator::validate(schema);
+            assert(validation.ok() == valid);
+            if (valid) {
+                s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+                runtime.step();
+                assert(runtime.real_output_of("operation") == (adder ? static_cast<double>(count) : 1.0));
+            } else {
+                assert(std::ranges::any_of(validation.errors, [type, count](const std::string& error) {
+                    return error.find("Element 'operation' (" + std::string{type} + ")") != std::string::npos &&
+                           error.find(count < 2 ? "at least 2" : "between 2 and 64") != std::string::npos;
+                }));
+                bool rejected = false;
+                try {
+                    static_cast<void>(s7::Compiler::compile(schema));
+                } catch (const std::invalid_argument&) {
+                    rejected = true;
+                }
+                assert(rejected);
+            }
+        }
+    }
+}
+
 } // namespace
 
 int main() try
 {
+    test_cycles_inside_memory_scc();
+    test_variadic_input_bounds();
     {
         auto constant = std::make_unique<s7::Constant>(1.0);
         assert(constant->output_ports().size() == 1);
