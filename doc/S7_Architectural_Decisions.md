@@ -915,6 +915,55 @@ Negative:
 
 ------------------------------------------------------------------------
 
+# ADR-020
+
+## Title
+
+Independent Control and Data Listeners with Explicit Data Security Profiles
+
+## Status
+
+Accepted 2026-10-23 by the maintainer; required before the 0.1.0 preview.
+
+## Context
+
+Headless implementations in Python and other languages should be able to
+implement authenticated control independently of bulk data. Loopback and
+explicitly trusted LAN deployments on constrained devices need a data path
+without mandatory payload encryption. No Raspberry Pi performance result is
+claimed; throughput and CPU cost must be measured on the target device.
+
+## Decision
+
+Support independent `/control` and `/data` listeners within one runtime and
+transport. In split mode control requires mTLS client certificates and retains
+certificate role/pinned-fingerprint mutation authorization. A control client
+opens no implicit data connection. Shared listeners remain available.
+
+Data defaults to `mtls`. An operator may explicitly select `trusted_plaintext`
+for loopback or a trusted LAN. Both local node policy and committed deployment
+endpoints declare that choice. Plaintext data uses claimed node UUIDs and
+relies on network trust; control authentication does not authenticate that
+separate socket. It provides no cryptographic confidentiality, packet integrity
+or proof of peer identity. Do not add per-packet cryptography to this mode or
+automatically fall back from an encrypted connection.
+
+Listener advertisement and configuration are language-neutral. The binary
+wire format, explicit graph boundaries, per-stream sequencing, ACK/RESUME,
+backpressure and restart-fault semantics remain unchanged. Local observation
+continues to use memory. Networked observation APIs are separate work.
+
+## Consequences
+
+Implementations can keep control on mTLS while choosing encrypted or trusted
+plaintext data. A plaintext data listener never accepts control operations.
+Deployments must describe separate endpoints and their security profiles;
+applications must display plaintext as a network-trust policy rather than
+certificate-authenticated data. See the [configuration and interoperability
+guide](../s7l2/docs/SPLIT_TRANSPORT.md).
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

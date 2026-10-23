@@ -53,7 +53,9 @@ namespace s7::deployment {
 struct RuntimeNode {
     std::string node_uuid;
     std::string name;
-    std::string endpoint; // ws:// or wss:// URL other nodes connect to
+    std::string endpoint; // control URL; also data URL in shared-listener mode
+    std::string data_endpoint{}; // optional independent data listener
+    std::string data_security{}; // with data_endpoint: "mtls" or "trusted_plaintext"
 };
 
 struct StreamEndpoint {

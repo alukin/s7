@@ -124,6 +124,7 @@ mkdir -p "$OUT/usr/share/s7/runtime" "$OUT/usr/share/s7"
 cp -r "$SOURCE/s7runtime/examples" "$OUT/usr/share/s7/runtime/examples"
 cp -r "$SOURCE/examples" "$OUT/usr/share/s7/examples"
 cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/usr/share/s7/"
+cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/usr/share/s7/"
 python3 "$SOURCE/tools/package_notices.py" "$SOURCE" "$BUILD" "$OUT"
 
 # Base libraries every distro with a working desktop provides: these must

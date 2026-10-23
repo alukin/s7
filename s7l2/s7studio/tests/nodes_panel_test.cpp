@@ -62,7 +62,8 @@ struct FakeNode {
             } else if (type == "GET_NODE_INFO") {
                 response["type"] = "NODE_INFO";
                 response["node"] = json::object{{"node_uuid", claimed_uuid}, {"node_name", name}};
-                response["network"] = json::object{{"listen_url", url}};
+                response["network"] = json::object{{"listen_url", url}, {"data_listen_url", "ws://127.0.0.1:9200"},
+                                                    {"data_security", "trusted_plaintext"}, {"separate_data_listener", true}};
             } else {
                 response["type"] = "PEERS";
                 response["peers"] = peers;
@@ -115,6 +116,13 @@ int main(int argc, char** argv)
 
     std::map<std::string, std::string> trust;
     for (const auto& node : panel.knownNodes()) {
+        if (node.trustState == QStringLiteral("verified")) {
+            if (node.dataEndpoint != QStringLiteral("ws://127.0.0.1:9200") || node.dataSecurity != QStringLiteral("trusted_plaintext")) {
+                return fail("verified node's separate data endpoint was not retained");
+            }
+        } else if (!node.dataEndpoint.isEmpty() || !node.dataSecurity.isEmpty()) {
+            return fail("unverified node supplied data endpoint configuration");
+        }
         trust[node.nodeUuid.toStdString()] = node.trustState.toStdString();
         std::printf("%s %s %s\n", node.nodeUuid.toStdString().c_str(), node.endpoint.toStdString().c_str(),
                     node.trustState.toStdString().c_str());

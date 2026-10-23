@@ -13,6 +13,9 @@ inside Studio through **Help → S7 Studio Help** (F1).
 The [0.1.0 Linux preview checklist](RELEASE_0.1.0.md) defines the current
 release scope, verified checks and known limits.
 
+The [0.2.0 C++ goals](RELEASE_0.2.0.md) are parallel execution within one runtime
+and qualified multi-node operation on local and remote hosts.
+
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the next release: dependable Studio simulation with the bundled runtime, acceptance criteria, and deferred backlog.
 3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
@@ -31,6 +34,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | Document | Content |
 |---|---|
 | `S7_Transport_Architecture.md` | `s7transport` / `s7runtime` / `s7net` boundaries, security and data-plane baseline |
+| [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) | Separate mTLS control and configurable encrypted/trusted-plaintext data listeners, configuration and cross-language contract |
 
 ## Developer guides
 

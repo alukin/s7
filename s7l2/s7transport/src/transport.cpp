@@ -4,6 +4,7 @@
 #include "s7/transport.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstring>
@@ -198,6 +199,11 @@ auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl
     }
 
     parsed.host = host_port.substr(0, colon_pos);
+    if (parsed.host.starts_with('[') && parsed.host.ends_with(']')) {
+        parsed.host = parsed.host.substr(1, parsed.host.size() - 2);
+    } else if (parsed.host.find(':') != std::string::npos) {
+        throw std::invalid_argument("IPv6 WebSocket addresses must be bracketed: '" + url + "'.");
+    }
     parsed.port = host_port.substr(colon_pos + 1);
     parsed.target = path_pos == std::string::npos ? "/" : url.substr(path_pos);
     return parsed;
@@ -876,8 +882,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         boost::asio::post(io, [self = shared_from_this()] {
             self->stopping = true;
             boost::system::error_code ignored;
-            if (self->acceptor) {
-                self->acceptor->close(ignored);
+            for (const auto& listener : self->listeners) {
+                if (listener) listener->acceptor.close(ignored);
             }
             self->tick_timer.cancel();
             for (const auto& connection : std::vector<ConnectionPtr>(self->connections.begin(), self->connections.end())) {
@@ -1198,15 +1204,24 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
 
     // ---- server -------------------------------------------------------------
 
-    void accept()
+    struct Listener {
+        Tcp::acceptor acceptor;
+        std::shared_ptr<ssl::context> tls;
+        ListenerChannels channels;
+
+        Listener(boost::asio::io_context& io, std::shared_ptr<ssl::context> context, ListenerChannels allowed)
+            : acceptor(io), tls(std::move(context)), channels(allowed) {}
+    };
+
+    void accept(const std::shared_ptr<Listener>& listener)
     {
-        acceptor->async_accept([self = shared_from_this()](const boost::system::error_code& ec, Tcp::socket socket) {
+        listener->acceptor.async_accept([self = shared_from_this(), listener](const boost::system::error_code& ec, Tcp::socket socket) {
             if (self->stopping || ec == boost::asio::error::operation_aborted) {
                 return;
             }
             if (ec) {
                 self->record_error("accept failed: " + ec.message());
-                self->accept();
+                self->accept(listener);
                 return;
             }
             std::size_t inbound = 0;
@@ -1218,34 +1233,39 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 boost::system::error_code ignored;
                 socket.close(ignored);
             } else {
-                self->handshake_inbound(std::move(socket));
+                self->handshake_inbound(std::move(socket), listener);
             }
-            self->accept();
+            self->accept(listener);
         });
     }
 
-    void handshake_inbound(Tcp::socket socket)
+    void handshake_inbound(Tcp::socket socket, const std::shared_ptr<Listener>& listener)
     {
         auto connection = std::make_shared<Connection>(*this);
         auto request = std::make_shared<http::request<http::string_body>>();
         auto buffer = std::make_shared<boost::beast::flat_buffer>();
-        auto finish = [self = shared_from_this(), connection, request](const boost::system::error_code& ec) {
+        auto finish = [self = shared_from_this(), connection, request, listener](const boost::system::error_code& ec) {
             if (ec || self->stopping) {
                 return;
             }
             const auto target = std::string(request->target());
-            if (!target.ends_with("/data") && !target.ends_with("/control")) {
-                connection->with_ws([](auto& ws) {
-                    ws.async_close(websocket::close_code::policy_error, [](const boost::system::error_code&) {});
-                });
+            const bool data = target.ends_with("/data");
+            const bool control = target.ends_with("/control");
+            if ((!data && !control) || (data && listener->channels == ListenerChannels::Control) ||
+                (control && listener->channels == ListenerChannels::Data)) {
+                ++self->connections_rejected;
+                // This connection is not registered. Close the socket now;
+                // an asynchronous close here could outlive its owner or wait
+                // indefinitely for a peer to finish the close handshake.
+                connection->close();
                 return;
             }
             connection->is_data = target.ends_with("/data");
             connection->claimed_node = std::string((*request)[kNodeHeader]);
             self->register_connection(connection);
         };
-        if (server_tls) {
-            connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(std::move(socket)), *server_tls);
+        if (listener->tls) {
+            connection->tls = std::make_unique<TlsWs>(boost::beast::tcp_stream(std::move(socket)), *listener->tls);
             boost::beast::get_lowest_layer(*connection->tls).expires_after(std::chrono::seconds(10));
             connection->tls->next_layer().async_handshake(
                 ssl::stream_base::server, [self = shared_from_this(), connection, request, buffer, finish](const boost::system::error_code& ec) {
@@ -1311,6 +1331,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         ParsedWebSocketUrl url;
         std::shared_ptr<ssl::context> tls;
         bool control{false};
+        bool data{true};
         bool reconnect_scheduled{false};
         std::string expected_node_uuid; // data peers over TLS: the producer's identity
     };
@@ -1348,7 +1369,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     // Connects the link's channels; reports through `done` once all finished.
     void connect_link(const LinkPtr& link, std::function<void(std::exception_ptr)> done)
     {
-        const std::vector<bool> channels = link->control ? std::vector<bool>{false, true} : std::vector<bool>{true};
+        std::vector<bool> channels;
+        if (link->control) channels.push_back(false);
+        if (link->data) channels.push_back(true);
         auto pending = std::make_shared<std::size_t>(channels.size());
         auto failure = std::make_shared<std::exception_ptr>();
         auto complete = [done, pending, failure](std::exception_ptr error) {
@@ -1372,7 +1395,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         connection->is_data = is_data;
         connection->link = link;
         const auto target = ws_target_for_path(url, is_data ? "/data" : "/control");
-        const auto host = url.host + ":" + url.port;
+        const auto host = (url.host.find(':') != std::string::npos ? "[" + url.host + "]" : url.host) + ":" + url.port;
         auto fail = [complete](const boost::system::error_code& ec, const char* stage) {
             complete(std::make_exception_ptr(std::runtime_error(std::string("connect failed (") + stage + "): " + ec.message())));
         };
@@ -1495,8 +1518,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     // I/O thread only:
     std::string node_uuid; // this node, announced in handshakes
     bool stopping{false};
-    std::optional<Tcp::acceptor> acceptor;
-    std::shared_ptr<ssl::context> server_tls;
+    std::array<std::shared_ptr<Listener>, 2> listeners;
     std::unordered_map<std::string, LinkPtr> links;
     std::unordered_set<ConnectionPtr> connections;
     std::unordered_map<std::uint64_t, std::weak_ptr<Connection>> consumer_sources; // consumer handle -> data source (lock: table.mutex)
@@ -1535,7 +1557,8 @@ void BeastRuntimeNetEndpoint::set_node_uuid(const std::string& node_uuid)
     impl_->run_on_io([&] { impl_->node_uuid = node_uuid; });
 }
 
-auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls, const std::string& bind_address)
+auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const TlsConfig& tls, const std::string& bind_address,
+                                               const ListenerChannels channels)
     -> std::uint16_t
 {
     std::shared_ptr<ssl::context> context;
@@ -1551,15 +1574,16 @@ auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
         context->set_verify_mode(tls.require_client_cert ? (ssl::verify_peer | ssl::verify_fail_if_no_peer_cert) : ssl::verify_peer);
     }
     return impl_->run_on_io([&]() -> std::uint16_t {
-        if (impl_->acceptor) {
-            const auto listening = impl_->acceptor->local_endpoint().port();
-            if (port == 0 || listening == port) {
+        auto& slot = impl_->listeners[channels == ListenerChannels::Data ? 1 : 0];
+        if (slot) {
+            const auto listening = slot->acceptor.local_endpoint().port();
+            if ((port == 0 || listening == port) && slot->channels == channels) {
                 return listening;
             }
             throw std::logic_error("BeastRuntimeNetEndpoint server is already listening on another port.");
         }
-        impl_->server_tls = context;
-        Tcp::acceptor acceptor(impl_->io);
+        auto listener = std::make_shared<Impl::Listener>(impl_->io, context, channels);
+        auto& acceptor = listener->acceptor;
         const auto address = boost::asio::ip::make_address(
             !bind_address.empty() ? bind_address : (context ? std::string("0.0.0.0") : std::string("127.0.0.1")));
         const Tcp::endpoint endpoint(address, port);
@@ -1567,10 +1591,16 @@ auto BeastRuntimeNetEndpoint::configure_server(const std::uint16_t port, const T
         acceptor.set_option(Tcp::acceptor::reuse_address(true));
         acceptor.bind(endpoint);
         acceptor.listen();
-        impl_->acceptor.emplace(std::move(acceptor));
-        impl_->accept();
-        return impl_->acceptor->local_endpoint().port();
+        slot = listener;
+        impl_->accept(listener);
+        return acceptor.local_endpoint().port();
     });
+}
+
+auto BeastRuntimeNetEndpoint::configure_data_server(const std::uint16_t port, const TlsConfig& tls,
+                                                    const std::string& bind_address) -> std::uint16_t
+{
+    return configure_server(port, tls, bind_address, ListenerChannels::Data);
 }
 
 namespace {
@@ -1594,13 +1624,14 @@ auto make_client_tls(const ParsedWebSocketUrl& url, const TlsConfig& tls) -> std
 
 } // namespace
 
-void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls)
+void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls, const bool connect_data)
 {
     auto link = std::make_shared<Impl::Link>();
     link->key = Impl::kClientLink;
     link->url = parse_ws_url(url);
     link->tls = make_client_tls(link->url, tls);
     link->control = true;
+    link->data = connect_data;
     auto result = std::make_shared<std::promise<void>>();
     auto future = result->get_future();
     boost::asio::post(impl_->io, [impl = impl_, link, result] {
@@ -1623,7 +1654,13 @@ void BeastRuntimeNetEndpoint::set_data_peers(const std::vector<DataPeer>& peers,
         auto link = std::make_shared<Impl::Link>();
         link->key = "data:" + peer.url + "#" + peer.node_uuid;
         link->url = parse_ws_url(peer.url);
-        link->tls = make_client_tls(link->url, tls);
+        if (peer.trusted_plaintext && link->url.secure) {
+            throw std::invalid_argument("trusted_plaintext data requires a ws:// endpoint.");
+        }
+        if (!peer.trusted_plaintext && tls.enabled && !link->url.secure) {
+            throw std::invalid_argument("Plaintext data with TLS node credentials requires explicit trusted_plaintext permission.");
+        }
+        link->tls = make_client_tls(link->url, peer.trusted_plaintext ? TlsConfig{} : tls);
         link->expected_node_uuid = peer.node_uuid;
         wanted.push_back(std::move(link));
     }

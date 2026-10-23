@@ -69,6 +69,7 @@ enum class NodeIdentity : std::uint8_t {
 struct DataPeer {
     std::string url;
     std::string node_uuid; // expected identity of its certificate (empty: not checked)
+    bool trusted_plaintext{false}; // explicit permission to use ws:// with TLS node credentials
 
     bool operator==(const DataPeer&) const = default;
 };
@@ -87,6 +88,8 @@ struct TlsConfig {
     std::string ca_file;
     bool require_client_cert{true};
 };
+
+enum class ListenerChannels { Both, Control, Data };
 
 [[nodiscard]] auto parse_ws_url(const std::string& url) -> ParsedWebSocketUrl;
 
@@ -249,12 +252,16 @@ public:
     // system choose; returns the port listened on. An empty bind_address
     // listens on all interfaces with TLS and on loopback (127.0.0.1) without:
     // a plain WebSocket node is reachable from other hosts only if asked.
-    auto configure_server(std::uint16_t port, const TlsConfig& tls = {}, const std::string& bind_address = {}) -> std::uint16_t;
+    auto configure_server(std::uint16_t port, const TlsConfig& tls = {}, const std::string& bind_address = {},
+                          ListenerChannels channels = ListenerChannels::Both) -> std::uint16_t;
+    // Independent data-only listener, sharing streams and the I/O thread.
+    auto configure_data_server(std::uint16_t port, const TlsConfig& tls = {}, const std::string& bind_address = {}) -> std::uint16_t;
     // Connects this endpoint's outbound control and data connections (replacing
     // previous ones) and keeps them connected: a dropped connection is
     // re-established with backoff and its streams resume. Throws if the first
-    // connection attempt fails.
-    void configure_client(const std::string& url, const TlsConfig& tls = {});
+    // connection attempt fails. Set connect_data=false for control-only
+    // clients and when data uses a separate endpoint.
+    void configure_client(const std::string& url, const TlsConfig& tls = {}, bool connect_data = true);
     // Keeps a /data connection to each of these peers (in addition to the
     // client connection), connecting new ones and closing those no longer
     // listed. A peer that cannot be reached is retried with backoff; this

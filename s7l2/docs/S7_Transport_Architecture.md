@@ -117,7 +117,10 @@ public:
 
 Transport and runtime must enforce:
 
-- TLS 1.3 + mutual TLS
+- mutual TLS for control mutations and the encrypted data profile
+- explicit `trusted_plaintext` data on loopback/trusted LANs, with separate
+  listeners and no encrypted-to-plaintext fallback; see
+  [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) and ADR-020
 - node identity in SAN URI: `spiffe://s7/node/<uuid>`
 - role classification in X.509 v3 Extended Key Usage, with S7 key-purpose OIDs next to `serverAuth`/`clientAuth`:
   - runtime-node purpose
@@ -130,12 +133,12 @@ Only `control-node` role may perform control mutations.
 
 ## Peer and Channel Model
 
-A runtime node MAY maintain simultaneous peer connections to multiple runtime nodes. Each peer connection pair uses one authenticated identity and two WebSocket paths:
+A runtime node MAY maintain simultaneous peer connections to multiple runtime nodes. Control and data use independent WebSocket connections, with shared or separate listeners:
 
 - `/control` for authenticated control messages (JSON)
 - `/data` for multiplexed binary data packets
 
-The control and data connections for a peer MUST be bound to the same authenticated peer identity. A data connection can carry multiple configured streams for that peer. Stream routing is by configured stream identity; an implementation MUST NOT use packet arrival order to infer causal ordering across separate streams or peer connections. The current Beast endpoint still keeps one data/control socket pair and must be changed to support this model.
+In split mode the mTLS control listener accepts only `/control`, and the data listener accepts only `/data`. The encrypted data profile verifies the peer certificate's node identity; explicit `trusted_plaintext` uses claimed node identity within a trusted network. Control authentication does not authenticate a separate plaintext socket. A data connection can carry multiple configured streams for that peer. Stream routing is by configured stream identity; an implementation MUST NOT use packet arrival order to infer causal ordering across separate streams or peer connections. Control-only clients need no data connection.
 
 ---
 

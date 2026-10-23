@@ -53,6 +53,15 @@ struct WebSocketServerConfig {
     // is reachable from other hosts only when an address is given).
     std::string bind_address;
     transport::TlsConfig tls{};
+    std::string advertise_address{}; // reachable hostname/address, when bind_address is a wildcard
+};
+
+struct DataServerConfig {
+    bool enabled{};
+    std::uint16_t port{};
+    std::string bind_address;
+    std::string advertise_address;
+    std::string security{"mtls"}; // "mtls" or explicit "trusted_plaintext"
 };
 
 struct WebSocketClientConfig {
@@ -98,6 +107,7 @@ struct RuntimeSchemaDefinition {
     std::vector<SchemaPortBinding> exposed_inputs;
     std::vector<SchemaPortBinding> exposed_outputs;
     WebSocketServerConfig server;
+    DataServerConfig data_server;
     WebSocketClientConfig client;
     SimulationConfig simulation;
     ExecutionConfig execution;
@@ -205,6 +215,8 @@ private:
     std::string runtime_instance_uuid_;
     std::shared_ptr<ControlPlaneMvp> control_plane_;
     transport::RuntimeNetEndpointPtr network_endpoint_;
+    mutable std::atomic<std::uint16_t> control_port_{0};
+    mutable std::atomic<std::uint16_t> data_port_{0};
 
     class GraphHost;
     friend class GraphHost;

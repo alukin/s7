@@ -416,6 +416,44 @@ void test_prepare_expiry()
     expect(!host->active_value, "expired deployment did not activate");
 }
 
+void test_plaintext_data_requires_policy()
+{
+    // Validate against the credentials actually used for outgoing data, even
+    // when this node gets its identity from its outbound TLS client.
+    for (const bool client_identity : {false, true}) {
+        auto definition = s7::JsonSchemaLoader::load_from_json(constant_gain_fragment(1.0));
+        const s7::transport::TlsConfig tls{.enabled = true,
+            .cert_file = cert_path("s7_runtime_node.cert.pem"), .key_file = cert_path("s7_runtime_node.key.pem"),
+            .ca_file = cert_path("s7_root_ca.cert.pem")};
+        definition.server.enabled = !client_identity;
+        definition.client.enabled = client_identity;
+        if (client_identity) definition.client.tls = tls;
+        else definition.server.tls = tls;
+        definition.control = studio_authorization();
+        definition.clock.assume_synchronized = true;
+        auto diagram = diagram_on_node(constant_gain_fragment(2.0));
+        const std::string other = "33333333-4444-5555-6666-777777777777";
+        diagram["runtime_nodes"].as_array().push_back(json::object{{"node_uuid", other}, {"endpoint", "ws://127.0.0.1:9003"}});
+        diagram["schema"].as_object()["elements"].as_array()[0].as_object()["node"] = other;
+        expect(s7::deployment::assign_streams(diagram, [](const auto&, auto) { return std::optional{s7::SignalType::F64}; }).empty(), "policy test stream assignment");
+        auto request = prepare_request("plaintext-policy", 1, 0, constant_gain_fragment(2.0));
+        auto& configuration = request["deployment"].as_object()["configuration"].as_object();
+        configuration["diagram"] = std::move(diagram);
+        configuration.erase("configuration_digest");
+        configuration["configuration_digest"] = s7::configuration_digest(configuration);
+        const auto state_dir = make_temp_state_dir("plaintext-policy");
+        {
+            s7::RuntimeService service{definition, state_dir};
+            service.initialize_graph();
+            const auto response = json::parse(service.handle_control_request_json(verified_peer("s7_studio.cert.pem"), json::serialize(request))).as_object();
+            expect(response.at("prepare_status").as_string() == "NOT_READY" &&
+                   json::serialize(response).find("Plaintext data endpoints require explicit") != std::string::npos,
+                   "plaintext peer refused during prepare with either TLS credential source: " + json::serialize(response));
+        }
+        std::filesystem::remove_all(state_dir);
+    }
+}
+
 // End to end: a runtime node over mTLS, deployed by the pinned Studio.
 void test_runtime_deployment_over_mtls()
 {
@@ -1127,6 +1165,7 @@ try {
     test_base64url();
     test_chunked_transfer();
     test_runtime_deployment_over_mtls();
+    test_plaintext_data_requires_policy();
     test_large_deployment_over_mtls();
     test_clock_loss();
     test_grid_pacing();

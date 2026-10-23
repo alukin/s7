@@ -1,5 +1,12 @@
 # S7 Open Problems
 
+**Additional 0.1.0 requirement (2026-10-23):** separate control and data listeners
+with mTLS control and explicit encrypted/trusted-plaintext data modes for
+loopback and trusted LANs. This is required before the preview, with Python and
+other headless nodes as interoperability targets. Implementation and acceptance
+are tracked in [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) and the
+[transport contract](SPLIT_TRANSPORT.md).
+
 **New P0 release requirement (2026-10-22):** a separate bounded live
 oscilloscope for continuous runs. Existing `-1` execution is continuous but
 Scope recording grows on disk. See DEVELOPMENT_PLAN.md's priority section;

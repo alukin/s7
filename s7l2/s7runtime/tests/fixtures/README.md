@@ -63,3 +63,9 @@ The Python runner (`s7py/tools/check_control_fixtures.py`) handles this
 transport-dependent error. `s7runtime_control_smoke` checks both settings:
 required certificates reject anonymous handshakes, while optional certificates
 allow anonymous `HELLO` and refuse anonymous deployment mutations.
+
+The anonymous-peer script above uses a shared-listener test node. Split mode
+requires client certificates on control; its missing-certificate case is rejected
+during TLS rather than returning a JSON error. Split-mode interoperability is
+covered by the independent Python peer and real-node tests described in
+[SPLIT_TRANSPORT.md](../../../docs/SPLIT_TRANSPORT.md).

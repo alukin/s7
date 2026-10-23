@@ -35,6 +35,8 @@ public:
         QString nodeName;
         QString endpoint;
         QString trustState;
+        QString dataEndpoint{};
+        QString dataSecurity{};
     };
     // Discovered nodes with a known node_uuid, sorted by name.
     [[nodiscard]] auto knownNodes() const -> QVector<KnownNode>;
@@ -67,6 +69,8 @@ private:
         QString certificateCommonName;
         QString certificateFingerprintSha256;
         QString trustState;
+        QString dataEndpoint;
+        QString dataSecurity;
         QString reachability;
         QString osFamily;
         QString architecture;

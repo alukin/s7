@@ -186,14 +186,23 @@ int main(int argc, char** argv) {
                 std::cout << "websocket.server.starting on port " << definition.server.port << "...\n";
                 std::cout.flush();
             }
-            service.start_websocket_server();
+            const auto control_port = service.start_websocket_server();
             if (definition.server.enabled) {
                 const bool tls = definition.server.tls.enabled;
                 const auto bind = !definition.server.bind_address.empty() ? definition.server.bind_address
                                   : tls                                  ? std::string("0.0.0.0")
                                                                          : std::string("127.0.0.1");
-                std::cout << "websocket.server.listening at " << (tls ? "wss://" : "ws://") << bind << ':' << definition.server.port
+                std::cout << "websocket.server.listening at " << (tls ? "wss://" : "ws://")
+                          << (bind.find(':') != std::string::npos ? "[" + bind + "]" : bind) << ':' << control_port
                           << (tls || !definition.server.bind_address.empty() ? "" : " (loopback only: plain WebSocket)") << "\n";
+                std::cout.flush();
+            }
+            if (definition.data_server.enabled) {
+                const auto info = boost::json::parse(service.handle_control_request_json({},
+                    R"({"type":"GET_NODE_INFO","request_id":"startup","protocol_version":1})")).as_object();
+                const auto& network = info.at("network").as_object();
+                std::cout << "websocket.data_server.listening at " << network.at("data_listen_url").as_string()
+                          << " security=" << definition.data_server.security << '\n';
                 std::cout.flush();
             }
             

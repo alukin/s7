@@ -2,7 +2,8 @@
 
 Scope agreed 2026-10-22. This checklist supersedes broader release gates in
 DEVELOPMENT_PLAN.md, OPEN_PROBLEMS.md and LOCAL_SIMULATION_ACCEPTANCE.md for
-0.1.0. Deferred work remains in the backlog.
+0.1.0. Amended 2026-10-23 to include separate control/data listeners as requested
+by the maintainer. Deferred work remains in the backlog.
 
 ## Supported scope
 
@@ -18,8 +19,16 @@ Experimental examples remain experimental. APIs, formats and protocols can
 change in subsequent releases. This is a preview, with temporary observation
 storage rather than crash-durable recording.
 
+The preview also includes separate mTLS control and encrypted/trusted-plaintext
+data listeners for headless nodes on this Linux target; see
+[SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md).
+
 ## Final checklist
 
+- [x] Separate mTLS control and configurable encrypted/trusted-plaintext data
+  listeners, with endpoint discovery, deployment and cross-language regressions;
+  refreshed Release suite and installed Linux package. See
+  [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md).
 - [x] **P0: continuous hardware-style oscilloscope viewer**, with bounded
   acquisition memory/storage and no implicit full-run journal. Implementation,
   edge-triggered acquisition, FFT/XY/correlation, window inspection/export and
@@ -32,13 +41,15 @@ storage rather than crash-durable recording.
 - [x] Verify actual disk exhaustion: an 8 MiB tmpfs produces an explicit
   incomplete/error status; all 262,144 retained samples remain readable with
   exact step/time/value data (2026-10-22, revision 0f40caf).
-- [x] Studio-enabled Release rebuild and complete regression suite: **79/79
-  passed** in 93.86 seconds on 2026-10-23, including all four local GUI suites
-  and the Live Oscilloscope worker responsiveness test.
+- [x] Studio-enabled Release rebuild and complete regression suite: **81/81
+  passed** in 58.57 seconds on 2026-10-23, including both split-node profiles,
+  all four local GUI suites and the Live Oscilloscope responsiveness test.
 - [x] Fresh relocated Linux package smoke check without a source checkout:
   **13/13 passed** from a relocated package under Xvfb/llvmpipe on Fedora 44,
   including the real-model Live Oscilloscope Time plot and FFT/QML workflows.
-  The package path and run state are outside the checkout.
+  Both split-node profiles also pass with the packaged runtime/CLI, including
+  the independent Python peer, redeployment and restart/recovery. The package,
+  test drivers and run state are outside the checkout, which is not mounted.
 - [x] Bundle third-party notices with a per-binary inventory and exact source
   RPM identities. Qt/dependency sources are excluded from the binary bundle.
 - [x] REUSE licensing check passes locally (503/503 files at verification);

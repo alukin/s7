@@ -27,6 +27,10 @@ Each runtime node MAY execute only its assigned graph fragment. The configuratio
 
 Control messages use a WebSocket connection at the `/control` path. The connection MAY use `ws://` for local development and testing. A trusted network deployment MUST use `wss://` with mutual TLS (mTLS).
 
+Control and data MAY use independent listeners. A split control listener requires mTLS client certificates and accepts only `/control`; data uses its separately configured `mtls` or explicitly trusted `trusted_plaintext` profile (the wire protocol, Section 10). Control authorization is unchanged. Clients implementing only control connect only to `/control`.
+
+A split node advertises `NODE_INFO.network.data_listen_url`, `data_security` (`mtls` or `trusted_plaintext`) and `separate_data_listener: true`, alongside the existing control `listen_url`. The committed diagram's `runtime_nodes` entries carry `data_endpoint` and `data_security` together. Endpoint discovery does not grant control authority or prove the identity of a plaintext data peer. See [the split transport guide](../s7l2/docs/SPLIT_TRANSPORT.md).
+
 For trusted membership, the receiver MUST:
 
 1. validate the peer certificate chain against configured trust roots;
@@ -232,7 +236,9 @@ Errors MUST NOT disclose private key material, credentials, or sensitive local p
 
 The C++ runtime is the reference implementation; `s7runtime_control_fixtures_smoke` runs the conformance script of section 9 against its control plane with an accepting deployment host, without compiling graphs or performing TLS handshakes. Other implementations are checked with the same script. The Python node `s7py` passes it over mTLS except the data-stream steps, since it has no data plane yet (`s7py/tools/check_control_fixtures.py --skip-streams`).
 
-A live C++ node defaults to requiring a client certificate during the TLS handshake. The script also uses an anonymous peer, so a live conformance-test node must explicitly set `websocket.server.tls.require_client_cert` to `false`; certificates supplied by clients are still verified, and mutation authorization still requires the pinned control certificate. Anonymous TLS mutations return `CERTIFICATE_REQUIRED`, while mutations without TLS return `UNAUTHORIZED`. The Python runner accounts for this difference. See [the fixture setup](../s7l2/s7runtime/tests/fixtures/README.md) for the configuration and remaining node prerequisites.
+A live C++ node defaults to requiring a client certificate during the TLS handshake. The script also uses an anonymous peer, so this conformance-test node uses shared-listener mode and explicitly sets `websocket.server.tls.require_client_cert` to `false`; certificates supplied by clients are still verified, and mutation authorization still requires the pinned control certificate. Anonymous TLS mutations return `CERTIFICATE_REQUIRED`, while mutations without TLS return `UNAUTHORIZED`. The Python runner accounts for this difference. See [the fixture setup](../s7l2/s7runtime/tests/fixtures/README.md) for the configuration and remaining node prerequisites.
+
+Split-listener mode keeps required client certificates on control, so a peer without a certificate is rejected during TLS. Its transport isolation and cross-language behavior are checked separately by the split-node tests and independent Python peer described in the split transport guide.
 
 ### 10.1 Implemented behavior (C++ runtime, 2026-10-06)
 

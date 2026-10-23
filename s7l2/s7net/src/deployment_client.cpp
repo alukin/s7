@@ -192,7 +192,7 @@ auto BeastControlRequester::operator()(const RuntimeNode& node, const json::obje
     auto& client = clients_[node.endpoint];
     if (!client) {
         auto endpoint = std::make_shared<transport::BeastRuntimeNetEndpoint>();
-        endpoint->configure_client(node.endpoint, tls_);
+        endpoint->configure_client(node.endpoint, tls_, false);
         // Over TLS, the node's certificate must be the node the diagram names.
         if (endpoint->server_certificate() && !node.node_uuid.empty()) {
             const auto identity = transport::check_node_identity(endpoint->server_certificate(), node.node_uuid);

@@ -22,6 +22,8 @@ class DiagramScene;
 struct NodeAddress {
     QString name;
     QString endpoint;
+    QString dataEndpoint{};
+    QString dataSecurity{};
 };
 
 // The document as it is deployed: `runtime_nodes` lists every node an

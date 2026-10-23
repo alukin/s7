@@ -29,6 +29,10 @@ auto deploymentDiagram(const DiagramDocument& document, const QMap<QString, Node
         if (const auto it = known.find(QString::fromStdString(uuid)); it != known.end()) {
             entry["name"] = it->name.toStdString();
             entry["endpoint"] = it->endpoint.toStdString();
+            if (!it->dataEndpoint.isEmpty()) {
+                entry["data_endpoint"] = it->dataEndpoint.toStdString();
+                entry["data_security"] = it->dataSecurity.toStdString();
+            }
         }
         nodes.push_back(std::move(entry));
     }

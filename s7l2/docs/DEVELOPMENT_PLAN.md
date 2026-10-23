@@ -1,5 +1,42 @@
 # S7 Development Plan
 
+## 0.2.0 C++ goals — agreed 2026-10-23
+
+After the preview, prioritize multithreading within a single runtime and
+dependable multi-node execution on local and remote hosts. The
+[0.2.0 plan](RELEASE_0.2.0.md) records causal/threading invariants, the existing
+two-node MVP baseline, cross-language coverage and the acceptance work still
+to define. This records future goals; it does not expand the 0.1.0 gates below.
+
+## Additional 0.1.0 requirement — separate control/data listeners (2026-10-23)
+
+User-directed before the preview release: keep control mutations on mTLS and
+allow bulk data on an explicitly trusted loopback/LAN without encryption.
+The [split transport contract](SPLIT_TRANSPORT.md) defines independent listeners,
+node configuration, discovery and committed data endpoint/security fields.
+This is intended to support Python and other headless implementations as well
+as constrained devices; no target-device performance claim is made.
+
+Acceptance: encrypted and trusted-plaintext data modes; control/data path
+isolation; required client certificates on the split control listener; explicit
+local and deployed policy with no fallback; IPv4/IPv6; verified Studio discovery;
+real-node deployment, redeployment, restart/recovery and an independent Python
+peer. Rebuild and run the complete Release suite and refresh the installed
+Linux package before declaring the new gate complete. Local observation remains
+in-process; adding remote observation APIs is separate work.
+
+Local verification (2026-10-23): Release `build-tests` passed; all **81/81**
+CTest entries passed in **58.57 s**, including the new two-node encrypted and
+trusted-plaintext profiles, both TLS credential-source policy checks and all
+four GUI suites. Clang ASan/UBSan transport coverage passed with leak detection
+(1/1, 11.22 s), including channel rejection and IPv4/IPv6 reconnect behavior.
+A refreshed relocated package passed **13/13** installed checks plus both
+split-node deployment/redeployment/restart/recovery scenarios in the Fedora 44
+container without a checkout mount. Each profile also passed the independent
+Python WebSocket peer. The guide is included in the package. This completes
+the added local preview gate; no target-device performance, native Windows,
+hosted CI execution, release tag or published artifact is claimed.
+
 ## P0 release priority — continuous oscilloscope viewer (2026-10-22)
 
 Current sequencing: FFT spectrum, constellation and correlation views, shared

@@ -59,6 +59,10 @@ Plain `ws://` nodes listen on 127.0.0.1 only. To reach one from another host, se
 
 ## 4) Optional mTLS run
 
+For mTLS control with a separate encrypted or trusted-plaintext data listener,
+see [Separate control and data listeners](SPLIT_TRANSPORT.md). That guide covers
+loopback, trusted LAN interfaces, deployment endpoints and other languages.
+
 Test certificates are in `s7runtime/examples/certs` (development fixtures only). To regenerate them:
 
 ```bash

@@ -512,6 +512,69 @@ transport::TlsConfig tls_for(const char* name)
     return t;
 }
 
+void test_separate_listeners()
+{
+    constexpr const char* producer_id = "11111111-2222-3333-4444-555555555555";
+    constexpr const char* consumer_id = "33333333-4444-5555-6666-777777777777";
+    for (const auto* address : {"127.0.0.1", "::1"}) {
+        transport::BeastRuntimeNetEndpoint producer_node, consumer_node, studio;
+        producer_node.set_node_uuid(producer_id);
+        consumer_node.set_node_uuid(consumer_id);
+        std::atomic<int> control_requests{0};
+        producer_node.set_control_request_handler([&](const auto&, const auto&) {
+            ++control_requests;
+            return std::string{"{\"ok\":true}"};
+        });
+        const auto control_port = producer_node.configure_server(0, tls_for("s7_runtime_node"), "127.0.0.1",
+                                                                 transport::ListenerChannels::Control);
+        const auto data_port = producer_node.configure_data_server(0, {}, address);
+        const auto control_url = "wss://127.0.0.1:" + std::to_string(control_port);
+        const auto data_url = std::string("ws://") + (std::string(address) == "::1" ? "[::1]" : address) + ":" + std::to_string(data_port);
+        expect(transport::parse_ws_url(data_url).host == address, "IPv4/IPv6 URL resolves without brackets");
+        studio.configure_client(control_url, tls_for("s7_studio"), false);
+        expect(studio.request_control_json("{}") == "{\"ok\":true}", "TLS control works independently");
+        expect(studio.stats().data_connections == 0, "control-only client opens no data socket");
+
+        bool rejected = false;
+        try { consumer_node.set_data_peers({{data_url, producer_id}}, tls_for("s7_runtime_node_b")); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        expect(rejected, "TLS credentials cannot silently select plaintext data");
+        rejected = false;
+        try { consumer_node.set_data_peers({{control_url, producer_id, true}}, tls_for("s7_runtime_node_b")); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        expect(rejected, "explicit plaintext policy refuses a TLS endpoint");
+
+        consumer_node.set_data_peers({{data_url, producer_id, true}}, tls_for("s7_runtime_node_b"));
+        expect(wait_for([&] { return consumer_node.stats().data_connections == 1; }), "plain data connects alongside TLS control");
+        auto c = config("8d3e4f5a-6b7c-4890-a123-456789abcdef");
+        c.producer_node = producer_id;
+        c.consumer_nodes = {consumer_id};
+        const auto producer = producer_node.open_producer(c);
+        const auto consumer = consumer_node.open_consumer(c);
+        transfer(producer_node, producer, {{&consumer_node, consumer}}, 10000);
+        consumer_node.set_data_peers({});
+        expect(wait_for([&] { return consumer_node.stats().data_connections == 0; }), "data disconnects independently");
+        expect(studio.request_control_json("{}") == "{\"ok\":true}", "control remains usable while data is disconnected");
+        consumer_node.set_data_peers({{data_url, producer_id, true}}, tls_for("s7_runtime_node_b"));
+        transfer(producer_node, producer, {{&consumer_node, consumer}}, 10000);
+        expect(consumer_node.stream_statuses().front().fault == stream::FaultCode::None, "data resumes without a stream fault");
+
+        if (std::string(address) == "127.0.0.1") {
+            const int before = control_requests.load();
+            RawClient wrong(data_port, "/control");
+            boost::beast::flat_buffer buffer;
+            boost::system::error_code ec;
+            wrong.ws.read(buffer, ec);
+            expect(static_cast<bool>(ec), "data listener closes control connections");
+            expect(control_requests == before, "plaintext listener never invokes the control handler");
+        }
+        const auto refused_before = producer_node.stats().connections_rejected;
+        transport::BeastRuntimeNetEndpoint wrong_data;
+        wrong_data.set_data_peers({{control_url, producer_id}}, tls_for("s7_runtime_node_b"));
+        expect(wait_for([&] { return producer_node.stats().connections_rejected > refused_before; }), "control listener refuses data connections");
+    }
+}
+
 // Peer identity comes from the verified certificate, not from the URL.
 void test_node_identity()
 {
@@ -745,6 +808,7 @@ try {
     test_mutual_streams_over_two_connections();
     test_data_peer_retried();
     test_node_identity();
+    test_separate_listeners();
     test_plain_server_binds_loopback();
     test_plain_consumers_on_two_nodes();
     test_stream_bound_to_its_nodes();

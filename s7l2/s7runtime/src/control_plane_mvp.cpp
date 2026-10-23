@@ -28,6 +28,20 @@ constexpr std::size_t kMaxTransferBytes = 256 * 1024 * 1024;
 constexpr std::size_t kMaxTransfers = 4; // in progress or completed, at a time
 constexpr std::int64_t kMaxActivationDelayNs = 60'000'000'000; // activate_at_ns at most this far ahead
 
+auto node_part(const boost::json::object& diagram, const std::string& uuid) -> NodePart
+{
+    NodePart part{deployment::extract_node_schema(diagram, uuid), deployment::producer_endpoints(diagram, uuid),
+                  deployment::model_time_step_ns(diagram), {}, {}};
+    for (const auto& node : deployment::parse_runtime_nodes(diagram)) {
+        if (node.node_uuid == uuid) {
+            part.data_endpoint = node.data_endpoint;
+            part.data_security = node.data_security;
+            break;
+        }
+    }
+    return part;
+}
+
 [[nodiscard]] auto now_utc_iso8601() -> std::string
 {
     const auto now = std::chrono::system_clock::now();
@@ -655,7 +669,7 @@ auto ControlPlaneMvp::restore_deployment() -> RestoreOutcome
         const auto& diagram = diagram_value->as_object();
         auto node_schema = deployment::extract_node_schema(diagram, descriptor_.node_uuid);
         const auto step_ns = deployment::model_time_step_ns(diagram);
-        auto staged = options_.deployment_host->stage(NodePart{node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid), step_ns});
+        auto staged = options_.deployment_host->stage(node_part(diagram, descriptor_.node_uuid));
         // Back on the deployment's grid: the next slot of its original
         // activation time (the steps missed while down are not caught up).
         std::optional<std::int64_t> activate_at;
@@ -805,6 +819,9 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     network["listen_url"] = descriptor_.listen_url;
     network["control_path"] = "/control";
     network["data_path"] = "/data";
+    if (options_.network_info) {
+        for (const auto& [key, value] : options_.network_info()) network[key] = value;
+    }
     out["network"] = network;
 
     boost::json::array libraries;
@@ -1244,8 +1261,7 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
             throw std::invalid_argument("No element of the diagram is placed on this node (" + descriptor_.node_uuid + ").");
         }
         node_schema = deployment::extract_node_schema(diagram, descriptor_.node_uuid);
-        staged = options_.deployment_host->stage(NodePart{node_schema, deployment::producer_endpoints(diagram, descriptor_.node_uuid),
-                                                          deployment::model_time_step_ns(diagram)});
+        staged = options_.deployment_host->stage(node_part(diagram, descriptor_.node_uuid));
     } catch (const std::exception& ex) {
         boost::json::array issues;
         issues.emplace_back(make_issue("INVALID_CONFIGURATION", "configuration", deployment_id, ex.what()));

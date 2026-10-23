@@ -20,7 +20,7 @@ The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** express protocol requi
 
 ## 2. Scope and Guarantees
 
-The MVP data transport is a WebSocket binary message per S7 data packet. A runtime node MAY maintain simultaneous connections to multiple peer nodes. Each connection is authenticated and associated with one peer identity; the `/data` channel carries the configured streams exchanged with that peer. A stream has one configured producer at a time and follows an explicit network connection of the committed configuration: the producer node sends it directly to its consumer node(s). Nodes do not relay streams for other nodes in the MVP (Section 12.1, item 5).
+The MVP data transport is a WebSocket binary message per S7 data packet. A runtime node MAY maintain simultaneous connections to multiple peer nodes. Each connection is associated with one peer identity according to its configured security profile (Section 10); the `/data` channel carries the configured streams exchanged with that peer. A stream has one configured producer at a time and follows an explicit network connection of the committed configuration: the producer node sends it directly to its consumer node(s). Nodes do not relay streams for other nodes in the MVP (Section 12.1, item 5).
 
 Each packet carries a per-stream sequence number. **Delivery guarantee (MVP):** while producer and consumer processes keep running, every packet of a stream is delivered to the consumer graph exactly once and in order, across connection loss and reconnects. This is achieved with an in-memory send log, cumulative acknowledgements and replay on resume (Section 12.1, item 2). A crash or restart of either process is not covered: it MUST be detected and reported as stream state loss, never silently skipped.
 
@@ -190,7 +190,7 @@ Complex integer types exist so that raw SDR I/Q samples travel at their native w
 
 Before accepting a packet, a receiver MUST check:
 
-1. the authenticated peer is the configured producer for `stream_id`;
+1. the peer is the configured producer for `stream_id` (certificate-authenticated in `mtls`, claimed within the explicitly trusted network in `trusted_plaintext`);
 2. the stream exists and is active in the receiver's committed configuration;
 3. packet structure, lengths, and type match the negotiated stream descriptor;
 4. sequence behavior follows Section 4;
@@ -200,7 +200,13 @@ A malformed or unauthorized packet MUST NOT be delivered to graph elements. The 
 
 ## 10. Security and Integrity
 
-Trusted data streams MUST use the authenticated mTLS WebSocket connection described in the control protocol. TLS protects packets in transit and authenticates the peer certificate. The receiver MUST bind the stream producer to that authenticated node identity.
+The default encrypted data profile is `mtls`: data uses `wss://` with verified peer certificates, and the receiver MUST bind the stream producer to that authenticated node identity.
+
+An operator MAY explicitly select `trusted_plaintext` for loopback or a trusted LAN. Data then uses plain `ws://` with the peer UUID claimed in the `S7-Node` handshake header. This profile provides no cryptographic confidentiality, integrity or proof of data-peer identity; it trusts the network. Authenticating control over mTLS does not authenticate a separate plaintext socket. Type, producer/consumer routing, sequence, timestamps, ACK/RESUME, backpressure and restart-fault rules remain unchanged, without adding per-packet cryptography.
+
+In split-listener mode the control listener MUST require mTLS and accept only `/control`; the data listener MUST accept only `/data`. Control mutations retain the certificate role and pinned-fingerprint authorization of the control protocol. The committed diagram declares `runtime_nodes[].data_endpoint` and `data_security` together, with `wss://` for `mtls` and `ws://` for `trusted_plaintext`. A split node MUST reject a mismatched local policy, and a consumer MUST explicitly permit trusted plaintext locally before connecting to a producer in that mode. An encrypted connection failure MUST NOT cause automatic plaintext fallback.
+
+Shared listeners remain supported. A control-only client MUST NOT need a `/data` connection. See [ADR-020](S7_Architectural_Decisions.md#adr-020) and the [implementation/configuration guide](../s7l2/docs/SPLIT_TRANSPORT.md).
 
 The sequence number is public and predictable by design. It is an ordering and discontinuity detector, not a secret or authentication token. The stream ID SHOULD be generated with a cryptographically secure random source when created. This draft does not add Proof of History, a hash chain, or a separate per-packet authenticator.
 
@@ -264,9 +270,9 @@ There is one stream per producing output port with consumers on other nodes (a f
 
 *Implemented 2026-10-05.* The diagram lists the nodes in `runtime_nodes` (`node_uuid`, `name`, `endpoint`) and the streams in `streams`. Every node receives the whole diagram in `PREPARE_DEPLOYMENT` and runs its part: its elements and their local connections, with a `NetSink` (producer end) or `NetSource` (consumer end), pinned to the stream type, for each stream. A consumer node connects a `/data` connection to each producer node's endpoint. A redeployment that keeps a stream continues it without loss, because a node keeps a stream's state while its graph is replaced. Each stream end knows the nodes at the other end (`NetSink.consumer_nodes`, `NetSource.producer_node`), so the stream is bound to them (item 5).
 
-**5. Routing (decided 2026-10-05).** A stream follows the explicit network connection in the schema: the producer node sends it only on its connection to each configured consumer node, identified by the authenticated peer certificate, and a consumer accepts it only from the configured producer. Nodes do not relay streams in the MVP. Relaying through intermediate nodes may be needed later for unstable networks; to keep that possible, `stream_id`, sequence numbers and acknowledgements are end-to-end between producer and consumer, and packets carry no hop-specific fields.
+**5. Routing (decided 2026-10-05).** A stream follows the explicit network connection in the schema: the producer node sends it only on its connection to each configured consumer node, identified by its peer node under the selected security profile, and a consumer accepts it only from the configured producer. Nodes do not relay streams in the MVP. Relaying through intermediate nodes may be needed later for unstable networks; to keep that possible, `stream_id`, sequence numbers and acknowledgements are end-to-end between producer and consumer, and packets carry no hop-specific fields.
 
-*Implemented 2026-10-06.* A connection's peer node is the node identity of its verified certificate over mTLS. Over plain WebSocket it is the node the peer announces in the handshake (`S7-Node` header) or, for a data peer the node connects to, the node configured for that endpoint; a data peer announcing another node is refused (`identity mismatch`). Plain WebSocket identities are claims and do not make a deployment trusted, but they keep consumers apart and streams on their configured connections. A consumer sends `RESUME` for a stream only on connections to its producer node and refuses packets for that stream on any other connection (counted as `unauthorized`, recorded as `UNAUTHORIZED_PRODUCER`, connection closed). A producer serves a stream only to its consumer nodes and ignores other `RESUME`s (`unauthorized`, `UNAUTHORIZED_CONSUMER`). Refusals do not fault the stream: a peer that has no part in a stream cannot stop it.
+*Implemented 2026-10-06.* A connection's peer node is the node identity of its verified certificate over mTLS. Over plain WebSocket it is the node the peer announces in the handshake (`S7-Node` header) or, for a data peer the node connects to, the node configured for that endpoint; a data peer announcing another node is refused (`identity mismatch`). Plain WebSocket identities are claims: `trusted_plaintext` explicitly relies on network trust rather than proving those identities. They keep consumers apart and streams on their configured connections. A consumer sends `RESUME` for a stream only on connections to its producer node and refuses packets for that stream on any other connection (counted as `unauthorized`, recorded as `UNAUTHORIZED_PRODUCER`, connection closed). A producer serves a stream only to its consumer nodes and ignores other `RESUME`s (`unauthorized`, `UNAUTHORIZED_CONSUMER`). Refusals do not fault the stream: a peer that has no part in a stream cannot stop it.
 
 ## 13. Relationship to Implementation
 
@@ -274,7 +280,7 @@ The C++ reference implementation (2026-10-05) implements:
 
 - the packet format of Section 7, the control messages and 12-bit packing (`s7l2/s7transport/include/s7/wire_format.hpp`), checked against byte-exact fixtures (`s7l2/s7transport/tests/fixtures/wire_v1.json`) produced by an independent Python encoder (`s7l2/tools/gen_wire_fixtures.py`);
 - the delivery rules of Section 12.1 item 2: batching, send log, cumulative ACK, RESUME and replay, per-consumer positions, backpressure with `SEND_LOG_OVERFLOW`, `UNDERRUN`, and durable sequence-range reservation (`stream_protocol.hpp`);
-- the WebSocket transport carrying them (`BeastRuntimeNetEndpoint`): one `/data` and one `/control` connection per peer pair, reconnect with resume, mTLS consumer identity;
+- the WebSocket transport carrying them (`BeastRuntimeNetEndpoint`): independent `/data` and `/control` connections, shared or split listeners, reconnect with resume, and consumer identity under the selected security profile;
 - `GET_STREAM_STATUS` and `RECOVER_STREAM` (`S7_Control_Protocol_MVP.md` section 10.1);
 - binding of each stream to its producer and consumer nodes (Section 9 item 1, Section 12.1 item 5);
 - timestamp profiles (Sections 6 and 7.1): derived times on uniformly sampled streams, `TIMESTAMPS` records on the others, checked by the consumer (`TIMESTAMP_PROFILE_MISMATCH`), and each received element's times reported to the graph side (`ReceiveResult::timestamps`, `NetSource::last_timestamps()`);

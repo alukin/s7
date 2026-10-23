@@ -200,6 +200,25 @@ void test_node_parts()
            "B connects to A and expects A's identity");
     expect(deployment::producer_endpoints(diagram, kA).empty(), "A consumes nothing");
 
+    auto split = diagram;
+    auto& producer_node = split["runtime_nodes"].as_array()[0].as_object();
+    producer_node["endpoint"] = "wss://127.0.0.1:9101";
+    producer_node["data_endpoint"] = "ws://127.0.0.1:9201";
+    producer_node["data_security"] = "trusted_plaintext";
+    expect(deployment::producer_endpoints(split, kB) == std::vector<s7::transport::DataPeer>{{"ws://127.0.0.1:9201", kA, true}},
+           "data routing selects the separate plaintext endpoint and explicit policy");
+    for (const auto* bad : {"mtls", "unknown"}) {
+        producer_node["data_security"] = bad;
+        bool rejected = false;
+        try { static_cast<void>(deployment::producer_endpoints(split, kB)); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        expect(rejected, "invalid data policy or scheme is refused");
+    }
+    producer_node["data_security"] = "mtls";
+    producer_node["data_endpoint"] = "wss://127.0.0.1:9201";
+    expect(deployment::producer_endpoints(split, kB) == std::vector<s7::transport::DataPeer>{{"wss://127.0.0.1:9201", kA}},
+           "separate encrypted data endpoint preserves certificate identity checks");
+
     // Run A and B in one process: B's graph computes from A's values.
     auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     s7::RuntimeNetContext::set_endpoint(endpoint);

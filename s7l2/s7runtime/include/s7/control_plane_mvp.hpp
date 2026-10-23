@@ -79,6 +79,8 @@ struct NodePart {
     boost::json::object schema;                  // deployment::extract_node_schema
     std::vector<transport::DataPeer> data_peers; // the nodes producing the streams it consumes
     std::optional<std::int64_t> model_time_step_ns; // the diagram's `dt`: one step of model time
+    std::string data_endpoint{};
+    std::string data_security{};
 };
 
 // Runs deployed configurations on behalf of the control plane.
@@ -124,6 +126,8 @@ struct ControlPlaneOptions {
     // clock domain (NODE_INFO.clock_sync, clock_domains).
     std::function<clock::SyncStatus()> clock_sync;
     std::int64_t max_clock_error_ns{250'000'000};
+    // Actual bound/advertised listener addresses, including ephemeral ports.
+    std::function<boost::json::object()> network_info;
 };
 
 class ControlPlaneMvp {

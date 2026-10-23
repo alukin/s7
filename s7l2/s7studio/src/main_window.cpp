@@ -2588,7 +2588,7 @@ void MainWindow::deployToNodes()
     }
     QMap<QString, diagram::NodeAddress> known;
     for (const auto& node : headlessNodesPanel_->knownNodes()) {
-        known[node.nodeUuid] = diagram::NodeAddress{node.nodeName, node.endpoint};
+        known[node.nodeUuid] = diagram::NodeAddress{node.nodeName, node.endpoint, node.dataEndpoint, node.dataSecurity};
     }
     boost::json::object deployment;
     s7::deployment::OutputTypeLookup types;

@@ -177,6 +177,17 @@ auto parse_runtime_nodes(const json::object& diagram) -> std::vector<RuntimeNode
             if (const auto* endpoint = node.if_contains("endpoint"); endpoint && endpoint->is_string()) {
                 entry.endpoint = std::string(endpoint->as_string());
             }
+            if (node.contains("data_endpoint") || node.contains("data_security")) {
+                entry.data_endpoint = string_field(node, "data_endpoint", "runtime node");
+                entry.data_security = string_field(node, "data_security", "runtime node");
+                const auto url = transport::parse_ws_url(entry.data_endpoint);
+                if (entry.data_security != "mtls" && entry.data_security != "trusted_plaintext") {
+                    throw std::invalid_argument("runtime node data_security must be 'mtls' or 'trusted_plaintext'.");
+                }
+                if (url.secure != (entry.data_security == "mtls")) {
+                    throw std::invalid_argument("runtime node data_endpoint scheme conflicts with data_security.");
+                }
+            }
             nodes.push_back(std::move(entry));
         }
     }
@@ -527,9 +538,10 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
 
 auto producer_endpoints(const json::object& diagram, const std::string_view node_uuid) -> std::vector<transport::DataPeer>
 {
-    std::unordered_map<std::string, std::string> endpoints;
+    std::unordered_map<std::string, transport::DataPeer> endpoints;
     for (const auto& node : parse_runtime_nodes(diagram)) {
-        endpoints[node.node_uuid] = node.endpoint;
+        endpoints[node.node_uuid] = {node.data_endpoint.empty() ? node.endpoint : node.data_endpoint,
+                                     node.node_uuid, node.data_security == "trusted_plaintext"};
     }
     std::vector<transport::DataPeer> result;
     for (const auto& stream : parse_streams(diagram)) {
@@ -538,11 +550,11 @@ auto producer_endpoints(const json::object& diagram, const std::string_view node
             continue;
         }
         const auto it = endpoints.find(stream.producer.node_uuid);
-        if (it == endpoints.end() || it->second.empty()) {
+        if (it == endpoints.end() || it->second.url.empty()) {
             throw std::invalid_argument("Stream " + wire::to_string(stream.stream_id) + ": producer node " + stream.producer.node_uuid +
                                         " has no endpoint in 'runtime_nodes'.");
         }
-        transport::DataPeer peer{it->second, stream.producer.node_uuid};
+        auto peer = it->second;
         if (std::ranges::find(result, peer) == result.end()) {
             result.push_back(std::move(peer));
         }

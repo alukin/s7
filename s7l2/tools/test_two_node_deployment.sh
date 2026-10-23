@@ -7,7 +7,7 @@
 # and checks that the stream continues without a fault; finally restarts the
 # producer node, which restores its deployment, and recovers the stream.
 #
-# Usage: test_two_node_deployment.sh <build dir> <source dir>
+# Usage: test_two_node_deployment.sh <build dir> <source dir> [mtls|trusted_plaintext]
 set -euo pipefail
 # In a cross build, S7_RUN runs the target's programs (Wine) and
 # S7_EXE_SUFFIX is their file suffix; run drops the \r of their \r\n output.
@@ -17,6 +17,7 @@ run() { if [ -n "${S7_RUN:-}" ]; then "$S7_RUN" "$@" | tr -d '\r'; else "$@"; fi
 
 BUILD="$1"
 SRC="$2"
+DATA_SECURITY="${3:-shared}"
 CERTS="$SRC/s7runtime/examples/certs"
 RUNTIME="$BUILD/s7runtime/s7runtime${S7_EXE_SUFFIX:-}"
 CTL="$BUILD/s7ctl/s7ctl${S7_EXE_SUFFIX:-}"
@@ -35,7 +36,12 @@ PORT_B=$((PORT_A + 1))
 NODE_A="11111111-2222-3333-4444-555555555555"
 NODE_B="33333333-4444-5555-6666-777777777777"
 OID="2.25.4266950079767543379770189370854073200"
-STUDIO_FP="$(openssl x509 -in "$CERTS/s7_studio.cert.pem" -noout -fingerprint -sha256 | sed 's/.*=//; s/://g' | tr 'A-F' 'a-f')"
+STUDIO_FP="$(python3 - "$CERTS/s7_studio.cert.pem" <<'PY'
+import hashlib, ssl, sys
+from pathlib import Path
+print(hashlib.sha256(ssl.PEM_cert_to_DER_cert(Path(sys.argv[1]).read_text())).hexdigest())
+PY
+)"
 TLS=(--cert "$CERTS/s7_studio.cert.pem" --key "$CERTS/s7_studio.key.pem" --ca "$CERTS/s7_root_ca.cert.pem")
 
 # node_config <cert name> <port>: a node's startup schema (an idle graph).
@@ -86,6 +92,27 @@ EOF
 }
 diagram 10 > "$WORK/diagram.json"
 
+if [ "$DATA_SECURITY" != shared ]; then
+  python3 - "$WORK" "$DATA_SECURITY" "$PORT_A" "$PORT_B" <<'PY'
+import json, sys
+from pathlib import Path
+directory, security = Path(sys.argv[1]), sys.argv[2]
+assert security in ('mtls', 'trusted_plaintext')
+diagram = json.loads((directory / 'diagram.json').read_text())
+for index, (name, control_port) in enumerate(zip(('a', 'b'), map(int, sys.argv[3:]))):
+    path = directory / (name + '.json')
+    schema = json.loads(path.read_text())
+    data_port = control_port + 2
+    schema['websocket']['server']['bind_address'] = '127.0.0.1'
+    schema['websocket']['data_server'] = {'enabled': True, 'port': data_port, 'bind_address': '127.0.0.1', 'security': security}
+    path.write_text(json.dumps(schema))
+    node = diagram['runtime_nodes'][index]
+    node['data_endpoint'] = ('wss' if security == 'mtls' else 'ws') + '://127.0.0.1:' + str(data_port)
+    node['data_security'] = security
+(directory / 'diagram.json').write_text(json.dumps(diagram))
+PY
+fi
+
 "${RUN[@]}" "$RUNTIME" --schema "$WORK/a.json" --state-dir "$WORK/state-a" --serve-seconds 60 > "$WORK/a.log" 2>&1 &
 PIDS+=($!)
 "${RUN[@]}" "$RUNTIME" --schema "$WORK/b.json" --state-dir "$WORK/state-b" --serve-seconds 60 > "$WORK/b.log" 2>&1 &
@@ -114,6 +141,19 @@ grep -q "is node $NODE_B, not node $NODE_A" "$WORK/swapped.log" || fail "identit
 run "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-none.json" || true
 grep -q REVISION_NOT_FOUND "$WORK/config-none.json" || fail "a node was deployed despite the mismatch: $(cat "$WORK/config-none.json")"
 
+if [ "$DATA_SECURITY" != shared ]; then
+  python3 - "$WORK/diagram.json" "$WORK/wrong-policy.json" <<'PY'
+import json, sys
+diagram = json.load(open(sys.argv[1]))
+node = diagram['runtime_nodes'][0]
+node['data_security'] = 'mtls' if node['data_security'] == 'trusted_plaintext' else 'trusted_plaintext'
+node['data_endpoint'] = node['data_endpoint'].replace('ws://', 'wss://') if node['data_security'] == 'mtls' else node['data_endpoint'].replace('wss://', 'ws://')
+json.dump(diagram, open(sys.argv[2], 'w'))
+PY
+  if run "$CTL" deploy "$WORK/wrong-policy.json" "${TLS[@]}" > "$WORK/wrong-policy.log" 2>&1; then fail "deployed a mismatched data policy"; fi
+  grep -q 'data listener policy\|not enabled trusted_plaintext' "$WORK/wrong-policy.log" || fail "data policy mismatch not reported: $(cat "$WORK/wrong-policy.log")"
+fi
+
 # 1) Deploy; keep the diagram with its streams for the next deployment. With
 #    dt both nodes step on one 20 ms UTC grid from the same activation time.
 run "$CTL" deploy "$WORK/diagram.json" "${TLS[@]}" --write "$WORK/deployed.json" > "$WORK/deploy1.log" || fail "first deployment: $(cat "$WORK/deploy1.log")"
@@ -122,6 +162,18 @@ ACTIVATE_AT="$(sed -n 's/^activate_at_ns //p' "$WORK/deploy1.log")"
 sleep 1
 run "$CTL" info "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/info-a.json"
 run "$CTL" info "wss://127.0.0.1:$PORT_B" "${TLS[@]}" > "$WORK/info-b.json"
+if [ "$DATA_SECURITY" != shared ]; then
+  python3 "$SRC/tools/check_split_listeners.py" "wss://127.0.0.1:$PORT_A" "$CERTS" "$NODE_A" || fail "Python split-listener peer"
+  python3 - "$WORK/info-a.json" "$WORK/info-b.json" "$DATA_SECURITY" <<'PY' || fail "split transport not advertised"
+import json, sys
+for path in sys.argv[1:3]:
+    network = json.load(open(path))['network']
+    assert network['listen_url'].startswith('wss://'), network
+    assert network['data_security'] == sys.argv[3] and network['separate_data_listener'], network
+    assert network['data_listen_url'].startswith('wss://' if sys.argv[3] == 'mtls' else 'ws://'), network
+    assert network['data_listen_url'] != network['listen_url'], network
+PY
+fi
 python3 - "$WORK/info-a.json" "$WORK/info-b.json" "$ACTIVATE_AT" <<'EOF2' || fail "the nodes do not share the grid: $(cat "$WORK/info-a.json" "$WORK/info-b.json")"
 import json, sys
 a, b = (json.load(open(path))["state"]["timing"] for path in sys.argv[1:3])

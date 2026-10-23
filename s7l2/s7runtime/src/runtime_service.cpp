@@ -63,6 +63,31 @@ std::string expect_string(const boost::json::object& object, const std::string_v
     return it->value().as_string().c_str();
 }
 
+void validate_data_server(const RuntimeSchemaDefinition& definition)
+{
+    const auto& data = definition.data_server;
+    if (data.security != "mtls" && data.security != "trusted_plaintext") {
+        throw std::invalid_argument("websocket.data_server.security must be 'mtls' or 'trusted_plaintext'.");
+    }
+    if (!data.enabled) return;
+    if (!definition.server.enabled || !definition.server.tls.enabled || !definition.server.tls.require_client_cert) {
+        throw std::invalid_argument("A separate data listener requires an enabled mTLS control server with required client certificates.");
+    }
+    if (data.port && data.port == definition.server.port) {
+        throw std::invalid_argument("Separate control and data listeners must use different ports.");
+    }
+}
+
+auto listener_url(const bool secure, const std::string& bind_address, const std::string& advertise_address,
+                  const std::uint16_t port) -> std::string
+{
+    auto host = advertise_address.empty() ? bind_address : advertise_address;
+    if (host.empty() || host == "0.0.0.0") host = "127.0.0.1";
+    if (host == "::") host = "::1";
+    if (host.find(':') != std::string::npos) host = "[" + host + "]";
+    return std::string(secure ? "wss://" : "ws://") + host + ":" + std::to_string(port);
+}
+
 auto signal_type_from_string(const std::string_view value) -> SignalType
 {
     return parse_signal_type(value);
@@ -223,6 +248,7 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
             const auto& server_obj = expect_object(server_it->value(), "server");
             definition.server.enabled = get_bool(server_obj, "enabled", false);
             definition.server.port = get_u16_port(server_obj, "port", 0);
+            if (server_obj.contains("advertise_address")) definition.server.advertise_address = expect_string(server_obj, "advertise_address");
             if (const auto bind_it = server_obj.find("bind_address"); bind_it != server_obj.end()) {
                 if (!bind_it->value().is_string()) {
                     throw std::invalid_argument("Expected string field 'websocket.server.bind_address'.");
@@ -244,6 +270,16 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
                 definition.server.tls.require_client_cert = get_bool(tls_obj, "require_client_cert", true);
             }
         }
+
+        if (const auto* value = websocket_obj.if_contains("data_server")) {
+            const auto& data = expect_object(*value, "websocket.data_server");
+            definition.data_server.enabled = get_bool(data, "enabled", false);
+            definition.data_server.port = get_u16_port(data, "port", 0);
+            if (data.contains("bind_address")) definition.data_server.bind_address = expect_string(data, "bind_address");
+            if (data.contains("advertise_address")) definition.data_server.advertise_address = expect_string(data, "advertise_address");
+            if (data.contains("security")) definition.data_server.security = expect_string(data, "security");
+        }
+        validate_data_server(definition);
 
         const auto client_it = websocket_obj.find("client");
         if (client_it != websocket_obj.end()) {
@@ -736,6 +772,22 @@ public:
             }
         }
         const auto definition = JsonSchemaLoader::load_from_json(node_schema);
+        const auto& data = service_.definition_.data_server;
+        const bool network_graph = std::ranges::any_of(definition.elements, [](const auto& element) {
+            return element.type == "NetSink" || element.type == "NetSource";
+        });
+        if (network_graph && data.enabled && (part.data_endpoint.empty() || part.data_security != data.security)) {
+            throw std::invalid_argument("Deployed node data_endpoint/data_security must match its separate data listener policy.");
+        }
+        for (const auto& peer : part.data_peers) {
+            if (peer.trusted_plaintext && (!data.enabled || data.security != "trusted_plaintext")) {
+                throw std::invalid_argument("This node has not enabled trusted_plaintext data transport.");
+            }
+            if (!peer.trusted_plaintext && (service_.definition_.server.tls.enabled || service_.definition_.client.tls.enabled) &&
+                !transport::parse_ws_url(peer.url).secure) {
+                throw std::invalid_argument("Plaintext data endpoints require explicit trusted_plaintext policy.");
+            }
+        }
         const auto schema = build_schema_from_definition(definition);
         // The diagram's model-time step (doc/S7_Sample_Rate_Model.md): seeds
         // every element on this node with no rate of its own. Exact (an
@@ -816,6 +868,7 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
     , control_plane_(nullptr)
     , network_endpoint_(nullptr)
 {
+    validate_data_server(definition_);
     if (state_dir_.empty()) {
         throw std::invalid_argument("RuntimeService requires a node state directory.");
     }
@@ -849,6 +902,20 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
             .on_stream_recovered = [this] { ++stream_recoveries_; },
             .clock_sync = [this] { return clock_sync(); },
             .max_clock_error_ns = static_cast<std::int64_t>(definition_.clock.max_error_ms * 1e6),
+            .network_info = [this] {
+                boost::json::object network;
+                const auto& control = definition_.server;
+                if (control.enabled) network["listen_url"] = listener_url(control.tls.enabled, control.bind_address,
+                    control.advertise_address, control_port_.load() ? control_port_.load() : control.port);
+                const auto& data = definition_.data_server;
+                if (data.enabled) {
+                    network["data_listen_url"] = listener_url(data.security == "mtls", data.bind_address, data.advertise_address,
+                        data_port_.load() ? data_port_.load() : data.port);
+                    network["data_security"] = data.security;
+                    network["separate_data_listener"] = true;
+                }
+                return network;
+            },
         });
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
@@ -1222,6 +1289,12 @@ void RuntimeService::print_summary(std::ostream& out) const {
     out << "runtime.websocket.server.tls.enabled=" << (definition_.server.tls.enabled ? "true" : "false") << '\n';
     out << "runtime.websocket.server.tls.cert_file=" << definition_.server.tls.cert_file << '\n';
     out << "runtime.websocket.server.tls.ca_file=" << definition_.server.tls.ca_file << '\n';
+    out << "runtime.websocket.data_server.enabled=" << (definition_.data_server.enabled ? "true" : "false") << '\n';
+    if (definition_.data_server.enabled) {
+        out << "runtime.websocket.data_server.security=" << definition_.data_server.security << '\n';
+        out << "runtime.websocket.data_server.bind_address=" << definition_.data_server.bind_address << '\n';
+        out << "runtime.websocket.data_server.port=" << definition_.data_server.port << '\n';
+    }
     out << "runtime.websocket.client.enabled=" << (definition_.client.enabled ? "true" : "false") << '\n';
     out << "runtime.websocket.client.url=" << definition_.client.url << '\n';
     out << "runtime.websocket.client.tls.enabled=" << (definition_.client.tls.enabled ? "true" : "false") << '\n';
@@ -1338,7 +1411,14 @@ std::uint16_t RuntimeService::start_websocket_server() const {
         return 0;
     }
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        return beast_endpoint->configure_server(definition_.server.port, definition_.server.tls, definition_.server.bind_address);
+        const auto& data = definition_.data_server;
+        if (data.enabled) {
+            const auto tls = data.security == "mtls" ? definition_.server.tls : transport::TlsConfig{};
+            data_port_ = beast_endpoint->configure_data_server(data.port, tls, data.bind_address);
+        }
+        control_port_ = beast_endpoint->configure_server(definition_.server.port, definition_.server.tls, definition_.server.bind_address,
+            data.enabled ? transport::ListenerChannels::Control : transport::ListenerChannels::Both);
+        return control_port_;
     }
     return 0;
 }
@@ -1351,7 +1431,7 @@ void RuntimeService::connect_websocket_client() const {
         throw std::invalid_argument("WebSocket client is enabled but URL is empty.");
     }
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        beast_endpoint->configure_client(definition_.client.url, definition_.client.tls);
+        beast_endpoint->configure_client(definition_.client.url, definition_.client.tls, !definition_.data_server.enabled);
     }
 }
 

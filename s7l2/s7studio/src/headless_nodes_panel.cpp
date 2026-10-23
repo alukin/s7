@@ -157,7 +157,7 @@ auto request_control_once(const QString& endpoint,
 {
     try {
         const auto parsed = s7::transport::parse_ws_url(endpoint.toStdString());
-        const auto host_port = parsed.host + ":" + parsed.port;
+        const auto host_port = (parsed.host.find(':') != std::string::npos ? "[" + parsed.host + "]" : parsed.host) + ":" + parsed.port;
         const auto target = control_target_for_parsed(parsed);
         const auto tls = tlsConfigForRequest(caFile, certFile, keyFile, parsed.secure);
 
@@ -399,6 +399,10 @@ void HeadlessNodesPanel::refreshNow()
             }
             if (!node.nodeUuid.isEmpty()) merged.nodeUuid = node.nodeUuid;
             if (!node.nodeName.isEmpty()) merged.nodeName = node.nodeName;
+            if (node.directlyChecked) {
+                merged.dataEndpoint = node.dataEndpoint;
+                merged.dataSecurity = node.dataSecurity;
+            }
             if (!node.certificateCommonName.isEmpty()) merged.certificateCommonName = node.certificateCommonName;
             if (!node.certificateFingerprintSha256.isEmpty()) merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
             // Trust established by contacting the node itself is never
@@ -487,6 +491,8 @@ void HeadlessNodesPanel::refreshNow()
                     }
                     if (const auto networkIt = object.find("network"); networkIt != object.end() && networkIt->value().is_object()) {
                         const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
+                        node.dataEndpoint = jsonString(networkIt->value().as_object(), "data_listen_url");
+                        node.dataSecurity = jsonString(networkIt->value().as_object(), "data_security");
                         if (!listenUrl.isEmpty()) {
                             node.endpoint = listenUrl;
                         }
@@ -779,7 +785,9 @@ auto HeadlessNodesPanel::knownNodes() const -> QVector<KnownNode>
     QMutexLocker locker(&refreshMutex_);
     for (const auto& node : nodes_) {
         if (!node.nodeUuid.isEmpty() && !node.endpoint.isEmpty()) {
-            result.push_back(KnownNode{node.nodeUuid, node.nodeName, node.endpoint, node.trustState});
+            const bool verified = node.directlyChecked && node.trustState == QStringLiteral("verified");
+            result.push_back(KnownNode{node.nodeUuid, node.nodeName, node.endpoint, node.trustState,
+                                      verified ? node.dataEndpoint : QString{}, verified ? node.dataSecurity : QString{}});
         }
     }
     std::sort(result.begin(), result.end(), [](const KnownNode& a, const KnownNode& b) {

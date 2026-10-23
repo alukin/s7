@@ -47,6 +47,27 @@ std::filesystem::path make_temp_state_dir(const std::string& label)
 int main()
 {
     {
+        auto config = boost::json::parse(R"({"name":"split","dt":1,"elements":[],"connections":[],
+            "websocket":{"server":{"enabled":true,"port":9002,"tls":{"enabled":true}},
+                         "data_server":{"enabled":true,"port":9003,"security":"trusted_plaintext"}}})").as_object();
+        const auto valid = s7::JsonSchemaLoader::load_from_json(config);
+        assert(valid.data_server.enabled && valid.data_server.security == "trusted_plaintext");
+        for (const auto* failure : {"unknown-mode", "same-port", "no-tls", "optional-cert", "no-control"}) {
+            auto bad = config;
+            auto& websocket = bad["websocket"].as_object();
+            auto& control = websocket["server"].as_object();
+            if (std::string_view{failure} == "unknown-mode") websocket["data_server"].as_object()["security"] = "auto";
+            if (std::string_view{failure} == "same-port") websocket["data_server"].as_object()["port"] = 9002;
+            if (std::string_view{failure} == "no-tls") control["tls"].as_object()["enabled"] = false;
+            if (std::string_view{failure} == "optional-cert") control["tls"].as_object()["require_client_cert"] = false;
+            if (std::string_view{failure} == "no-control") control["enabled"] = false;
+            bool rejected = false;
+            try { static_cast<void>(s7::JsonSchemaLoader::load_from_json(bad)); }
+            catch (const std::invalid_argument&) { rejected = true; }
+            assert(rejected);
+        }
+    }
+    {
         // A recorded source is available through the runtime schema loader,
         // including to services constructed without the CLI registration path.
         const auto state_dir = make_temp_state_dir("recorded-source");
