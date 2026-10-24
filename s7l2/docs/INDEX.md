@@ -14,12 +14,18 @@ The [0.1.0 Linux preview checklist](RELEASE_0.1.0.md) defines the current
 release scope, verified checks and known limits.
 
 [Studio manual-test findings for a possible 0.1.1](STUDIO_0.1.1_TRIAGE.md)
-are being collected and analyzed before fixes are selected.
+record the maintenance backlog.
+The [0.1.1 interface design and implementation plan](RELEASE_0.1.1.md)
+proposes concrete layouts, menu organization, persistence, configuration
+ownership, implementation order and acceptance checks for review. Networking
+work, including Trusted Networks and node configuration/control/restart, is
+assigned to 0.2.0; 0.1.1 focuses on local Studio workflows.
 The [main menu review](STUDIO_MENU_REVIEW.md) records the current structure and
 a proposed reorganization for planning.
 
 The [0.2.0 goals](RELEASE_0.2.0.md) are parallel execution within one runtime,
-qualified multi-node operation on local and remote hosts, certificate viewing
+qualified multi-node operation on local and remote hosts, remote node
+control/configuration/restart and Trusted Networks settings, certificate viewing
 and node certificate creation, and Studio printing of diagrams and observation
 graphs.
 

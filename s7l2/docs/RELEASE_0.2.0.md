@@ -4,6 +4,9 @@ Runtime/node goals agreed with the maintainer on 2026-10-23; Studio diagram
 and observation-graph printing added at the maintainer's request on 2026-10-24.
 Certificate viewing and node certificate creation added on 2026-10-24 as part
 of the networking release scope.
+The maintainer subsequently assigned remote node control/restart, Trusted
+Networks, runtime node configuration editing and other networking work to
+0.2.0, excluding them from the 0.1.1 maintenance release.
 Implementation of these release goals belongs to 0.2.0.
 The [0.1.0 checklist](RELEASE_0.1.0.md) remains the current release gate.
 
@@ -60,6 +63,51 @@ conformance checks for further language implementations.
 Publish measured CPU, memory, throughput and latency for representative workloads
 and both data security profiles. Qualify constrained hardware such as Raspberry
 Pi separately when available; desktop results do not establish its performance.
+
+## Remote node administration and Trusted Networks
+
+Provide the remote node control, configuration and restart workflow as part of
+0.2.0. This includes ST-009 (Settings → Trusted Networks…), Studio discovery and
+credential settings, runtime node configuration editing, and effective network
+policy/status. The release assignment supersedes earlier 0.1.1 planning.
+Existing 0.1.0 networking remains available during 0.1.1; menu reorganization
+there does not expand its behavior.
+
+Plan three configuration owners explicitly:
+
+- Studio: discovery endpoints, CA/client certificate/private-key paths and
+  refresh preferences, with one settings model shared by Settings and nodes UI.
+- Diagram: verified control/data endpoints and data security profiles in
+  `runtime_nodes`, applied through the existing deployment transaction.
+- Runtime node: listener enablement, bind/advertise addresses and ports,
+  `websocket.data_server.security`, outgoing connection/TLS settings and
+  `control` controller-purpose/fingerprint authorization configuration.
+
+Current `s7ctl config`/GET_NETWORK_CONFIGURATION retrieves the active deployment;
+its name does not imply access to node startup/listener configuration.
+RuntimeService's deployment host keeps node settings outside graph deployment.
+No existing operation writes listener configuration or restarts the process.
+Design the actual administration contract before implementation: configuration
+read/validate/stage/commit behavior, persistence and application timing,
+revision conflicts, cancellation/recovery, and process supervision/restart
+ownership. A local file editor can complement that workflow; saving a draft
+must not claim remote installation, activation or restart.
+
+Control mutations must continue to use transport-verified ControlPeer identity,
+required certificate purpose and pinned fingerprint. A JSON trust field or
+plaintext data policy cannot grant control authority. Separate changing trust
+material from checking a node's current identity, and preserve explicit encrypted
+or trusted-plaintext data policy without fallback. Keep credential creation and
+inspection coordinated with the certificate tools below.
+
+Acceptance must cover configuration validation and unrelated-field preservation,
+failed/atomic persistence, stale revisions, unauthorized operations, changed
+control endpoints/credentials/pins, lost connections during apply/restart,
+idempotent retry/reconciliation and observed effective state after reconnect.
+Test both data profiles, committed-deployment policy agreement, restart/stream
+recovery and separate Studio/diagram/node ownership with real node processes.
+Define supported remote hosts, supervision backends and packaged workflows during
+0.2.0 planning; source inspection alone does not qualify remote administration.
 
 ## Certificate viewer and node certificate creation
 
@@ -164,8 +212,9 @@ both workstreams. Studio remains an optional client; improvements to it should
 support these workflows without moving execution logic into the GUI.
 Plan and qualify Studio printing as an additional release workstream, with its
 own viewer/output matrix and packaging checks.
-Plan certificate viewing/creation alongside multi-node setup, so networking
-acceptance uses the new provisioning workflow as well as protocol fixtures.
+Plan certificate viewing/creation and remote node administration alongside
+multi-node setup, so networking acceptance uses the provisioning and
+configuration/restart workflows as well as protocol fixtures.
 
 Additional integration methods, implicit multi-rate conversion, durable stream
 journals and a new remote-observation API are not implied by these goals. Their

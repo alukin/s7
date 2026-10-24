@@ -1,8 +1,30 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: collection and analysis only. No fixes authorized in this phase.
+Status: interface design/planning requested; no application changes in this phase.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
+
+## Planning started — 2026-10-24
+
+The maintainer accepted the proposed release work order and requested step 1,
+interface design and acceptance checks. The concrete proposal is in
+[RELEASE_0.1.1.md](RELEASE_0.1.1.md), including menus, Observers layout and
+lifecycle, persistence, controls, packaging and verification. Trusted Networks
+and runtime node configuration editing were considered in the initial draft
+and subsequently assigned to 0.2.0, as clarified below. Earlier collection-only
+statements below describe the findings phase; planning is now authorized.
+Proposed choices remain for review before their implementation.
+
+## Networking scope correction — 2026-10-24
+
+The maintainer clarified that remote node control, restart and other networking
+work belong to **0.2.0**, outside 0.1.1. This includes ST-009 Trusted Networks,
+Studio connection-setting changes and runtime node configuration editing.
+The earlier request to include runtime configuration editing establishes the
+requirement, but does not keep it in 0.1.1. The 0.2.0 plan now tracks it.
+In 0.1.1, menu cleanup may regroup existing network commands without extending
+their behavior. Earlier networking proposals below are historical design inputs,
+not active 0.1.1 implementation requirements.
 
 ## Release scope clarification — 2026-10-24
 
@@ -33,8 +55,8 @@ list. In particular:
 - ST-007/ST-008: understandable element descriptions, right-click information
   and dragging existing library elements onto the canvas are UX improvements
   to element discovery, configuration and placement.
-- ST-009: expose existing trusted-network configuration through Settings;
-  define its precise scope and configuration ownership during planning.
+- ST-009: deferred to 0.2.0 by the subsequent networking scope correction.
+  Trusted Networks and runtime node configuration editing are not 0.1.1 work.
 - Printing is explicitly assigned to 0.2.0 below.
 
 ## Interface planning decision — 2026-10-24
@@ -43,8 +65,9 @@ The user confirmed that the proposed interface changes will be planned before
 implementation. Continue collecting and analyzing findings for now. Before
 coding these changes, prepare a concrete design and implementation plan covering
 control choices, layout, scope, Qt Widgets/Quick integration, packaging and
-acceptance checks. ST-002 through ST-009 are inputs to that planning;
-individual recommendations remain subject to the maintenance scope above.
+acceptance checks. ST-002 through ST-008 are inputs to 0.1.1 planning; ST-009
+is assigned to 0.2.0. Individual recommendations remain subject to the
+maintenance scope and subsequent networking correction above.
 
 ## Findings
 
@@ -209,8 +232,9 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
 
 ### ST-005 — Main menu organization and labels are inconsistent
 
-- **Specific Settings requirement:** add **Trusted Networks…** to Settings,
-  exposing existing network trust configuration (ST-009).
+- **Settings requirement, deferred to 0.2.0:** add **Trusted Networks…** to
+  Settings, exposing network trust configuration (ST-009). Do not add this
+  entry in 0.1.1.
 - **Specific Page menu requirement:** move the top-level Page menu under
   **Diagram → Page**, as clarified on 2026-10-24. Retain its existing paper
   sizes and Portrait/Landscape options and their active-diagram scope. This
@@ -468,8 +492,14 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
   Cover representative built-in/schema/plugin/observer types, duplicate types,
   category rows, invalid payloads, cancellation and drops outside the canvas.
 
-### ST-009 — Settings entry for Trusted Networks
+### ST-009 — Settings entry for Trusted Networks — deferred to 0.2.0
 
+- **Current release assignment:** the maintainer assigned remote node control,
+  restart and other networking work to 0.2.0. This includes this finding and
+  the requested runtime node configuration editing. The earlier 0.1.1 file
+  editor/settings proposal is superseded; use [the 0.2.0 plan](RELEASE_0.2.0.md)
+  for configuration ownership, administration-contract planning and acceptance.
+  The source evidence and original requirements below remain design inputs.
 - **Requested:** 2026-10-24. Add **Settings → Trusted Networks…**, since the
   underlying functionality exists but lacks a settings interface.
 - **Classification/status:** settings/discoverability UX improvement for
@@ -509,11 +539,16 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
 
 ## Explicitly assigned to 0.2.0
 
+- **Networking and remote node administration:** ST-009 Trusted Networks,
+  Studio connection settings, runtime node configuration editing, remote
+  control/restart and related networking work. This supersedes their earlier
+  proposed inclusion in 0.1.1. See [the 0.2.0 plan](RELEASE_0.2.0.md).
+
 - **Certificate viewer and node certificate creation program:** requested
   2026-10-24 as part of the networking release. Track scope, provisioning and
   acceptance in [the 0.2.0 goals](RELEASE_0.2.0.md). These are additional tools,
-  separate from the maintenance UX task of exposing existing Trusted Networks
-  settings (ST-009).
+  coordinated with Trusted Networks settings and node administration
+  (ST-009), which are also assigned to 0.2.0.
 - **Printing diagrams and observation graphs:** requested 2026-10-24 as a
   0.2.0 release goal. Studio currently has no print workflow and printing has
   not been tested. Scope, planning questions and acceptance requirements are

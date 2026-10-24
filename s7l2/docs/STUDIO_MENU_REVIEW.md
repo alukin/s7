@@ -4,6 +4,10 @@ Date: 2026-10-24. Related finding: ST-005 in
 [manual-test triage](STUDIO_0.1.1_TRIAGE.md).
 
 Status: analysis and proposal for planning. No menu implementation changes.
+The subsequent [0.1.1 interface plan](RELEASE_0.1.1.md) selects a concrete menu
+map and example chooser for review, with action scope and acceptance checks.
+Its proposed map supersedes the alternatives below when reviewing that design;
+this document retains the original source inventory and analysis.
 Maintenance scope is improvement of existing features only. Reorganizing
 existing commands and embedding existing observer views in the Observers panel
 are UX improvements within maintenance planning. New S7 capabilities remain
@@ -88,9 +92,10 @@ The user settled on moving the top-level **Page** menu into **Diagram**.
 Use **Diagram → Page** for the existing paper sizes and orientation options;
 this supersedes the briefly proposed Settings placement.
 These remain settings of the active diagram, not global application defaults.
-Add **Settings → Trusted Networks…** as explicitly requested, providing a
-settings interface for existing network trust configuration; ST-009 tracks the
-required configuration-scope review.
+The requested **Settings → Trusted Networks…** entry and ST-009 are deferred
+to 0.2.0 under the maintainer's subsequent networking scope correction.
+0.1.1 menu cleanup may regroup existing network actions, but adds no network
+settings or administration workflow.
 
 | Menu | Proposed responsibility and existing actions |
 |---|---|
@@ -100,7 +105,7 @@ required configuration-scope review.
 | Diagram | Drawing mode, Text Frame insertion, Text Frame formatting; Page submenu for paper size and orientation |
 | Run | Run Configuration; Run/Pause/Resume/Stop; Reset; consistently named policy for keeping previous Scope traces |
 | Nodes | Deploy to Nodes, Open Deployed Diagram; a link to the existing Headless Nodes panel if useful |
-| Settings | Trusted Networks…; Scope temporary data directory; add other preferences only when implemented |
+| Settings | Scope Temporary Data Directory…; Trusted Networks is deferred to 0.2.0 |
 | Help | S7 Studio Help; About S7 Studio, About Qt |
 
 An alternative to a new Nodes top-level menu is a clearly separated Nodes
