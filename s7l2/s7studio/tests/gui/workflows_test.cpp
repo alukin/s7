@@ -45,8 +45,15 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include "parameter_editor.hpp"
+#include "schema_tabs.hpp"
 #include "viewers/line_plot_view.hpp"
 #include "tool_panels.hpp"
+#include <QAccessible>
+#include <QMenu>
+#include <QToolBar>
+#include <QToolButton>
+#include <QToolTip>
+#include <QWheelEvent>
 #include <QTextStream>
 #include <QTextBrowser>
 #include <QListWidget>
@@ -1118,6 +1125,134 @@ private slots:
             QTest::mouseClick(remove, Qt::LeftButton);
             QTRY_COMPARE(scope->recording().series().size(), liveCount);
         }
+    }
+    void diagramZoomShortcuts_data() {
+        QTest::addColumn<int>("key");
+        QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
+        QTest::newRow("equal") << int(Qt::Key_Equal) << Qt::KeyboardModifiers(Qt::ControlModifier);
+        QTest::newRow("plus") << int(Qt::Key_Plus) << Qt::KeyboardModifiers(Qt::ControlModifier);
+        QTest::newRow("shift-plus") << int(Qt::Key_Plus) << Qt::KeyboardModifiers(Qt::ControlModifier | Qt::ShiftModifier);
+        QTest::newRow("keypad-plus") << int(Qt::Key_Plus) << Qt::KeyboardModifiers(Qt::ControlModifier | Qt::KeypadModifier);
+    }
+    void diagramZoomShortcuts() {
+        QFETCH(int, key);
+        QFETCH(Qt::KeyboardModifiers, modifiers);
+        window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        view->setFocus();
+        QTRY_VERIFY(view->hasFocus());
+        editor()->resetZoom();
+        QSignalSpy zoomed(view, SIGNAL(zoomChanged(qreal))); QVERIFY(zoomed.isValid());
+        QTest::keyClick(view->viewport(), Qt::Key(key), modifiers);
+        QCOMPARE(zoomed.count(), 1);
+        QVERIFY(std::abs(view->transform().m11() - 1.15) < 1e-6);
+        zoomed.clear();
+        QTest::keyClick(view->viewport(), Qt::Key_Minus, Qt::ControlModifier);
+        QCOMPARE(zoomed.count(), 1);
+        QVERIFY(std::abs(view->transform().m11() - 1.0) < 1e-6);
+    }
+    void diagramZoomFocusAndOtherInputs() {
+        window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        editor()->resetZoom();
+        // Canvas zoom shortcuts must leave focused library text entry alone.
+        auto* picker = window_->findChild<s7studio::ui::ElementPickerPanel*>(); QVERIFY(picker);
+        auto* search = picker->findChild<QLineEdit*>(); QVERIFY(search);
+        search->setFocus(); QTRY_VERIFY(search->hasFocus());
+        const auto before = view->transform();
+        QTest::keyClick(search, Qt::Key_Plus, Qt::ControlModifier);
+        QCOMPARE(view->transform(), before);
+        QTest::keyClick(search, Qt::Key_Equal, Qt::ControlModifier);
+        QCOMPARE(view->transform(), before);
+        QTest::keyClick(search, Qt::Key_Minus, Qt::ControlModifier);
+        QCOMPARE(view->transform(), before);
+        QTest::keyClicks(search, "Gain"); QCOMPARE(search->text(), QStringLiteral("Gain"));
+
+        auto* zoomIn = action("action.zoomIn"); auto* zoomOut = action("action.zoomOut");
+        QVERIFY(zoomIn && zoomOut);
+        // Activate the visible View menu through keyboard dispatch.
+        QMenu* viewMenu = nullptr;
+        for (auto* menu : window_->menuBar()->findChildren<QMenu*>())
+            if (menu->actions().contains(zoomIn)) viewMenu = menu;
+        QVERIFY(viewMenu);
+        viewMenu->popup(window_->menuBar()->mapToGlobal(QPoint(0, window_->menuBar()->height())));
+        QTRY_VERIFY(viewMenu->isVisible());
+        viewMenu->setActiveAction(zoomIn);
+        QTest::keyClick(viewMenu, Qt::Key_Return);
+        QTRY_VERIFY(!viewMenu->isVisible());
+        QVERIFY(std::abs(view->transform().m11() - 1.15) < 1e-6);
+        view->setFocus(); QTRY_VERIFY(view->hasFocus());
+        const QPoint position = view->viewport()->rect().center();
+        QWheelEvent wheel(QPointF(position), QPointF(view->viewport()->mapToGlobal(position)),
+            QPoint(), QPoint(0, -120), Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(view->viewport(), &wheel);
+        QVERIFY(std::abs(view->transform().m11() - 1.0) < 1e-6);
+
+        // A nested editor receives zoom; its inactive root keeps its scale.
+        auto nested = scene()->addElement({"nested", "Schema", {}, boost::json::object{
+            {"name", "nested"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}}, {}, "Plant"}, {0, 0});
+        QVERIFY(nested);
+        auto* schemaTabs = window_->findChild<s7studio::SchemaTabs*>(); QVERIFY(schemaTabs);
+        auto* child = schemaTabs->open(editor(), "nested"); QVERIFY(child);
+        auto* childView = child->findChild<QGraphicsView*>(); QVERIFY(childView);
+        QCoreApplication::processEvents();
+        child->resetZoom(); childView->setFocus(); QTRY_VERIFY(childView->hasFocus());
+        QTest::keyClick(childView->viewport(), Qt::Key_Equal, Qt::ControlModifier);
+        QVERIFY(std::abs(childView->transform().m11() - 1.15) < 1e-6);
+        QVERIFY(std::abs(view->transform().m11() - 1.0) < 1e-6);
+    }
+    void runToolbarPresentation() {
+        auto* toolbar = window_->findChild<QToolBar*>("toolbar.run"); QVERIFY(toolbar);
+        QCOMPARE(toolbar->actions().size(), 6);
+        // Real hover must show descriptions even when a button is disabled.
+        const auto checkTooltip = [&](QAction* command) {
+            auto* button = qobject_cast<QToolButton*>(toolbar->widgetForAction(command));
+            QVERIFY(button);
+            window_->activateWindow();
+            QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+            QTest::mouseMove(window_->menuBar(), window_->menuBar()->rect().center());
+            QToolTip::hideText();
+            QTRY_VERIFY(!QToolTip::isVisible());
+            QTest::mouseMove(button, button->rect().center());
+            QTRY_VERIFY2_WITH_TIMEOUT(QToolTip::isVisible(), qPrintable(command->text()), 3000);
+            QTRY_COMPARE(QToolTip::text(), command->toolTip());
+        };
+        window_->raise(); window_->activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        QVERIFY(!action("action.pause")->isEnabled());
+        for (auto* command : toolbar->actions()) {
+            auto* button = qobject_cast<QToolButton*>(toolbar->widgetForAction(command)); QVERIFY(button);
+            QCOMPARE(button->toolButtonStyle(), Qt::ToolButtonIconOnly);
+            QVERIFY(!command->icon().isNull());
+            QVERIFY(!command->toolTip().isEmpty());
+            QVERIFY(command->toolTip() != command->text());
+            auto* accessible = QAccessible::queryAccessibleInterface(button); QVERIFY(accessible);
+            // Qt omits a dialog-opening ellipsis from the accessible name.
+            QCOMPARE(accessible->text(QAccessible::Name), QString(command->text()).remove("..."));
+            checkTooltip(command);
+        }
+        capture(toolbar, "run-toolbar-idle", true);
+        // Hover needs a sustained run, without unrelated full-run recording I/O.
+        QVERIFY(scene()->addElement({"source", "Constant", {{"value", 1.0}}, {}, {}, "Source"}, {0, 0}));
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QVERIFY(configure("action.run", -1)); QTRY_VERIFY(runner->isRunning());
+        QTRY_VERIFY(!action("action.run")->isEnabled());
+        checkTooltip(action("action.run"));
+        capture(toolbar, "run-toolbar-running", true);
+        QTest::mouseClick(toolbar->widgetForAction(action("action.pause")), Qt::LeftButton);
+        QTRY_VERIFY(runner->isPaused());
+        QTRY_VERIFY(action("action.resume")->isEnabled());
+        capture(toolbar, "run-toolbar-paused", true);
+        QTest::mouseClick(toolbar->widgetForAction(action("action.resume")), Qt::LeftButton);
+        QTRY_VERIFY(!runner->isPaused());
+        QTest::mouseClick(toolbar->widgetForAction(action("action.stop")), Qt::LeftButton);
+        QTRY_VERIFY(!runner->isRunning());
+        QTRY_VERIFY(action("action.run")->isEnabled());
+        capture(toolbar, "run-toolbar-stopped", true);
+        QTest::mouseClick(toolbar->widgetForAction(action("action.reset")), Qt::LeftButton);
+        QCOMPARE(runner->state(), s7studio::RunState::Idle);
     }
     void keyboardRunShortcuts() {
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/linear/rlc_step_symplectic.s7diagram"));

@@ -19,6 +19,8 @@ navigate. Help and About can stay open while you work.
    at or before the duration boundary execute. Select **Run continuously until stopped** for continuous runs.
 3. Start the local run from the Run menu or toolbar. Pause and resume as
    needed; Stop ends the run. Reset prepares a fresh run.
+   The Run toolbar uses icons; hover over any button, including a disabled
+   button, to see its description. Full action names remain in the Run menu.
 4. Double-click a wired Scope observer to view its channels. Phase Portrait
    uses X/Y inputs; 3D Phase Trajectory uses X/Y/Z inputs from the same steps.
 5. Save the diagram with **File → Save As**. Save a recording separately with
@@ -43,6 +45,10 @@ memory. Check the Problems tool window for errors before running.
 or replacing it; the Save/Discard/Cancel prompt protects unsaved changes.
 **View → Fit Diagram to Window** fits the contents; **View → Fit Page** fits
 the sheet. Page settings affect the diagram sheet.
+With the root or nested diagram focused, **Ctrl++** or **Ctrl+=** zooms in
+and **Ctrl+-** zooms out. Shifted Plus and keypad Plus are supported.
+**Ctrl+mouse wheel** also zooms. These shortcuts leave focused text fields
+alone; View menu zoom commands still operate on the active diagram.
 
 ## Running and observing
 

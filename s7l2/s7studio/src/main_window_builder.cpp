@@ -64,7 +64,10 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.runAction->setShortcut(QKeySequence(Qt::Key_F5));
     actions.stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
     actions.runParametersAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
+    actions.runParametersAction->setToolTip(QStringLiteral("Configure local simulation duration and sample rate (Ctrl+Shift+R)."));
     actions.runAction->setToolTip(QStringLiteral("Run local simulation (F5). Model time is independent of wall-clock speed."));
+    actions.pauseAction->setToolTip(QStringLiteral("Pause simulation after the current causal step, retaining captured results."));
+    actions.resumeAction->setToolTip(QStringLiteral("Resume the paused simulation from its current state."));
     actions.stopAction->setToolTip(QStringLiteral("Stop simulation (Shift+F5), retaining captured results."));
     actions.resetAction->setToolTip(QStringLiteral("Reset simulation and clear the current viewer presentation."));
 
@@ -113,7 +116,7 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
 
     auto* runToolBar = window->addToolBar("Run");
     runToolBar->setObjectName(QStringLiteral("toolbar.run"));
-    runToolBar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    runToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     runToolBar->addAction(actions.runParametersAction);
     runToolBar->addAction(actions.runAction);
     runToolBar->addAction(actions.pauseAction);

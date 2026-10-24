@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: interface design/planning requested; no application changes in this phase.
+Status: ST-001/ST-002 implemented and locally verified; other interface work remains in planning.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24
@@ -38,8 +38,8 @@ operates an existing feature; it must not introduce a new capability implicitly.
 The recommendations below are a collected backlog, not an approved feature
 list. In particular:
 
-- ST-001/ST-002: shortcut and toolbar readability fixes are maintenance
-  candidates.
+- ST-001/ST-002: the maintainer requested implementation of the shortcut and
+  toolbar readability fixes after the design step.
 - ST-003/ST-004: restrict maintenance planning to better presentation of
   existing settings and workflows. New tools, measurement functions or
   acquisition behavior remain future work.
@@ -75,8 +75,18 @@ maintenance scope and subsequent networking correction above.
 
 - **Reported:** 2026-10-24. In the diagram, `Ctrl+-` works but `Ctrl++`
   does not. Expected: the shortcuts zoom out and in, respectively.
-- **Status:** user-reported; source inspected; not independently reproduced.
-  No implementation changes made.
+- **Status:** shortcut variants independently reproduced on Linux with Qt
+  6.11.2/Xvfb: Ctrl+= does nothing; Ctrl+Shift+Plus falls through to the vendor
+  view's different zoom increment. Ctrl+Plus and keypad Plus use the action's
+  intended increment. This reproduces key-interpretation defects, not the
+  reporter's unspecified physical keyboard session. Fix implemented; local
+  verification is recorded in [the release plan](RELEASE_0.1.1.md).
+- **Resolution:** register all standard zoom bindings plus explicit Ctrl+=,
+  Ctrl+Plus and Ctrl+Shift+Plus alternatives. Associate the actions with root
+  and nested editors using widget-and-children shortcut scope; focused library
+  text fields keep text input, while menu zoom remains available. No vendor
+  edits. GUI checks exercise dispatch and require exactly one intended zoom
+  increment per keypress, plus zoom-out, menu/Ctrl+wheel and nested routing.
 - **Provisional severity:** minor usability defect: keyboard zoom-in is
   unavailable through the reported shortcut. Menu and wheel behavior have not
   been confirmed in the reported session.
@@ -84,7 +94,7 @@ maintenance scope and subsequent networking correction above.
   `Ctrl++`; zoom-out works and zoom-in does not. Exact platform, build, keyboard
   layout, physical key combination (including Shift or keypad), focus and
   starting zoom are not yet recorded.
-- **Source evidence:**
+- **Original source evidence (before the fix):**
   - `s7studio/src/main_window.cpp`: Zoom In/Out actions each use
     `setShortcut(QKeySequence::ZoomIn/ZoomOut)` and call the active editor.
   - `s7studio/src/diagram_editor.cpp`: the editor's key handler delegates
@@ -92,7 +102,7 @@ maintenance scope and subsequent networking correction above.
     `zoomBy(1.15)`. Ctrl+wheel uses the editor's zoom functions.
   - `external/QSchematic/qschematic/view.cpp` (read only): its fallback handles
     Control with `Key_Plus` or `Key_Minus`, with no `Key_Equal` case.
-- **Working hypothesis:** shortcut/key interpretation, particularly the
+- **Original working hypothesis:** shortcut/key interpretation, particularly the
   plus/equal key and Shift or keypad modifiers. The action installs a single
   standard shortcut rather than explicitly supplying alternative bindings;
   the fallback also requires an actual Plus key event. This suggests a path
@@ -111,14 +121,21 @@ maintenance scope and subsequent networking correction above.
   visible.
 - **Requested presentation:** use icon-only buttons in the Run toolbar and
   show descriptive text in tooltips on mouse hover.
-- **Status:** user-reported; source inspected; visual contrast not
-  independently reproduced. No implementation changes made.
+- **Status:** requested icon-only presentation implemented. The original
+  disabled-text contrast in the user's theme remains unmeasured. Local
+  verification is recorded in [the release plan](RELEASE_0.1.1.md).
+- **Resolution:** the six existing Run toolbar buttons use icons only. Run
+  Configuration, Pause and Resume now have explicit descriptive tooltips,
+  alongside the existing Run/Stop/Reset descriptions. Keep the original menu
+  action text and Qt accessible names. Use Qt's existing tooltip behavior;
+  no custom disabled-button event handling is needed. GUI checks cover real
+  hover, enabled/disabled states and pause/resume/stop/reset button activation.
 - **Provisional severity:** minor visual/usability defect, with an explicit
   preference for a more compact toolbar.
 - **Reproduction from report:** inspect inactive buttons in the Run toolbar.
   Exact platform, build, theme, display scaling and affected buttons are not
   yet recorded. Treat "inactive" as disabled pending confirmation.
-- **Source evidence:** `s7studio/src/main_window_builder.cpp` constructs
+- **Original source evidence (before the fix):** `s7studio/src/main_window_builder.cpp` constructs
   `toolbar.run` with `Qt::ToolButtonTextBesideIcon`. All six actions (Run
   Configuration, Run, Pause, Resume, Stop, Reset) already have icons. The
   window stylesheet sets disabled toolbar button text to `palette(mid)`.

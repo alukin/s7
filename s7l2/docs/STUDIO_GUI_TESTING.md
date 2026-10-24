@@ -42,6 +42,14 @@ QTRY conditions, rather than arbitrary waits. The existing numerical and
 non-invasive-observation tests still provide value/reference accuracy coverage;
 GUI tests do not replace those guarantees.
 
+The workflow suite also covers diagram zoom shortcuts (Ctrl+=, Ctrl+Plus,
+Shift+Plus and keypad Plus), a single zoom change per keypress, zoom-out,
+View menu/Ctrl+wheel zoom, focused library text entry and nested-editor routing.
+Run toolbar checks use real hover for every action, including disabled buttons,
+verify accessible names and icon-only presentation, and click through
+pause/resume/stop/reset. Successful toolbar state captures are retained in the
+workflow artifact directory.
+
 ## Displays, rendering and skips
 
 `tools/run_gui_test.py` starts Xvfb with `-displayfd` for atomic display allocation,

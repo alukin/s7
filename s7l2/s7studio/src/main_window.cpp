@@ -418,7 +418,9 @@ void MainWindow::buildActions()
     openDeployedAction_ = actions.openDeployedAction;
 
     zoomInAction_ = new QAction("Zoom In", this);
+    zoomInAction_->setObjectName(QStringLiteral("action.zoomIn"));
     zoomOutAction_ = new QAction("Zoom Out", this);
+    zoomOutAction_->setObjectName(QStringLiteral("action.zoomOut"));
     resetZoomAction_ = new QAction("Actual Size", this);
     fitPageAction_ = new QAction("Fit Page", this);
     overlayScopeTracesAction_ = new QAction("Overlay Scope Traces", this);
@@ -483,8 +485,21 @@ void MainWindow::buildActions()
 
     zoomInAction_->setIcon(ui::icon(QStringLiteral("zoom-in")));
     zoomOutAction_->setIcon(ui::icon(QStringLiteral("zoom-out")));
-    zoomInAction_->setShortcut(QKeySequence::ZoomIn);
-    zoomOutAction_->setShortcut(QKeySequence::ZoomOut);
+    auto zoomInShortcuts = QKeySequence::keyBindings(QKeySequence::ZoomIn);
+    // Main-keyboard '+' can carry Shift; Ctrl+= also works without Shift.
+    // Handle both through the action, rather than the vendor view's different
+    // zoom increment. Qt normalizes KeypadModifier for shortcut matching.
+    for (const auto& shortcut : {QKeySequence(Qt::CTRL | Qt::Key_Equal),
+                                 QKeySequence(Qt::CTRL | Qt::Key_Plus),
+                                 QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Plus)}) {
+        if (!zoomInShortcuts.contains(shortcut)) zoomInShortcuts.append(shortcut);
+    }
+    zoomInAction_->setShortcuts(zoomInShortcuts);
+    zoomOutAction_->setShortcuts(QKeySequence::keyBindings(QKeySequence::ZoomOut));
+    // Menus remain available while editing text, but canvas shortcuts should
+    // only dispatch from a root or nested diagram editor.
+    zoomInAction_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    zoomOutAction_->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     resetZoomAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_0));
     fitPageAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_9));
     fitDiagramAction_->setText(QStringLiteral("Fit Diagram to Window"));
@@ -638,9 +653,11 @@ void MainWindow::buildUi()
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
+    diagramEditor_->addActions({zoomInAction_, zoomOutAction_});
     schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
     connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
     connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
+        editor->addActions({zoomInAction_, zoomOutAction_});
         connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
         connect(editor->scene(),&QGraphicsScene::selectionChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QSchematic::Scene::modeChanged,this,[this,editor](int mode) {

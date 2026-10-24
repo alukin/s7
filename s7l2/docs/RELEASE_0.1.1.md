@@ -1,6 +1,7 @@
 # S7 0.1.1 — interface design and implementation plan
 
-Date: 2026-10-24. Status: proposed design for review; no application changes.
+Date: 2026-10-24. Status: ST-001/ST-002 implemented and locally verified; remaining
+interface work is a proposed design for review.
 
 The maintainer accepted the proposed order of work and requested step 1:
 settle the interface design and acceptance checks. This document makes the
@@ -9,6 +10,31 @@ implementation completion, visual qualification or release readiness.
 The findings and original requirements remain in
 [STUDIO_0.1.1_TRIAGE.md](STUDIO_0.1.1_TRIAGE.md); the existing menu inventory
 is in [STUDIO_MENU_REVIEW.md](STUDIO_MENU_REVIEW.md).
+
+## Implemented increment — ST-001/ST-002, 2026-10-24
+
+The maintainer requested both isolated fixes after the design step:
+
+- Zoom In registers the standard platform bindings plus Ctrl+=, Ctrl+Plus and
+  Ctrl+Shift+Plus. Root/nested editor shortcut scope leaves focused text fields
+  alone; menu zoom remains available. No vendor changes.
+- The six Run toolbar actions use icons only, retaining menu labels and
+  accessible names. All have descriptive tooltips, including when disabled.
+
+Baseline Linux Qt 6.11.2/Xvfb tests reproduced ignored Ctrl+= and the different
+Shift+Plus fallback increment. After the fix, all four tested zoom-in variants
+(including keypad Plus) produce exactly one 1.15× zoom change. Focus, nested
+routing, zoom-out, View menu and Ctrl+wheel checks pass. Real hover verifies
+every toolbar description, including disabled Pause/Resume/Stop and disabled
+Run during execution; toolbar clicks cover pause/resume/stop/reset. State
+screenshots are retained outside Git in the workflow artifacts.
+
+Verification: native Studio Release rebuild; **7/7** selected CTest entries pass
+(all four GUI suites, run/window lifecycle and Studio smoke), with **33 passing
+workflow cases** and no skips. Windows Studio Release cross-build and the
+**1/1 Wine Studio smoke** pass. This is not native Windows keyboard/rendering
+qualification, physical-display/theme/high-DPI acceptance, or the complete
+0.1.1 release gate. Offline help and triage are updated with the new behavior.
 
 ## Scope and decisions to review
 
@@ -428,6 +454,7 @@ networking work, including ST-009 and runtime node configuration editing, belong
 to 0.2.0. Section 5 records that boundary; the earlier proposed networking
 implementation increment has been removed from this release.
 
-Source inspection supports the implementation mapping above. No fresh GUI
-reproduction, prototype rendering, performance run or application test suite
-was performed for this documentation-only planning step.
+Source inspection supports the implementation mapping above. The initial design
+step was documentation-only; subsequent ST-001/ST-002 reproduction and regression
+evidence is recorded above. The remaining design and broader release acceptance
+are not implemented or qualified by that increment.
