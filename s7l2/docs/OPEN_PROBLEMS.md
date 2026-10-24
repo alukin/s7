@@ -181,6 +181,41 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 ## Simulation accuracy — known integrator limits; systematic comparison deferred
 
+- **Historical feedback-settling input (maintainer, 2026-10-24):** the first S7
+  implementation, roughly 30 years ago, used iterations to settle feedback-
+  connected diagram regions; the maintainer reports that even 5–10 iterations
+  significantly improved simulation accuracy. The maintainer subsequently
+  clarified that these 30-plus-year-old recollections are fuzzy: poor Euler
+  accuracy in feedback was solved then, but the actual method is not remembered.
+  Neither Euler–Cromer nor the exact loop-settling algorithm is established as
+  that historical solution. Record this as a research input,
+  not measured evidence for the current runtime or an implemented 0.1.1 change.
+  Revisit how estimates are refined within one model step, which states are
+  held fixed and committed once, convergence/error handling and the applicable
+  model classes. Repeatedly calling stateful element steps is not an equivalent
+  settling operation: it can advance state more than once. Preserve explicit
+  causal memory and local analog-computer networks. The current coupled
+  Trapezoid endpoint solve already performs bounded within-step fixed-point
+  iteration; any broader feedback-settling method needs its own contract and
+  independent numerical comparisons. No new release assignment is decided.
+
+- **Research task — Euler feedback accuracy:** reproduce the long-run drift
+  reported for `2int_osc`, then compare the current explicit Euler graph,
+  existing Euler–Cromer/Symplectic compositions and coupled Trapezoid within
+  their documented applicability. Separate amplitude, energy, phase and state
+  errors; vary timestep and run length against independent references. Study
+  what the proposed settling iterations would evaluate and commit before
+  prototyping them. Do not identify the historical algorithm by inference or
+  promise a fixed accuracy multiplier. The 0.1.1 oscillator follow-up is a
+  planned investigation/example improvement, not authorization to change core
+  execution ordering or introduce a global solver during the UI work.
+  The maintainer explicitly reaffirmed the analog-computer approach and named
+  Siebert's *Circuits, Signals, and Systems* as the original inspiration.
+  [SIMULATION_MODEL.md](SIMULATION_MODEL.md) records the verified book reference,
+  relevant chapter reading plan and current full-text access limitation. Treat
+  the book as a requested design reference, not as a method already studied or
+  evidence that the earlier algorithm has been recovered.
+
 - **Found (2026-10-19) via `examples/2int_osc.s7diagram`:** the continuous harmonic oscillator (x' = −v, v' = x, x(0)=1) conserves amplitude 1.0 (eigenvalues ±i), while the realization built from two plain `EulerIntegrator` elements has growing amplitude. Root-caused, not just observed: forward Euler applied simultaneously to both state variables gives the discrete step matrix `[[1, −dt], [dt, 1]]`, whose eigenvalues are `1 ± i·dt` with modulus `sqrt(1+dt²) > 1` — every step multiplies the amplitude by that factor. Verified headlessly (dt=0.001): measured amplitude matched the exact closed-form prediction `amplitude(t) = (sqrt(1+dt²))^(t/dt)` to floating-point precision at every checkpoint from t=10s to t=200s (+10.5% drift by t=200s). This is a property of forward Euler on any marginally-stable ("center") linear system, not an S7 defect.
 - **Partial mitigation implemented (2026-10-19):** `SymplecticIntegrator` (`s7core/include/s7/elements.hpp`'s `SymplecticIntegratorT<Type>`, semi-implicit Euler / Euler-Cromer: `v[n+1] = v[n] + dt·a[n]`, `x[n+1] = x[n] + dt·v[n+1]`, one `acceleration` input, `position`/`velocity` outputs; the bound requires acceleration to depend only on position, not velocity). Verified against the same oscillator (x'' = −x via `Gain(−1)` feeding its own `acceleration` input): amplitude stayed within [0.99975, 1.00025] over a 400 s run (vs. plain Euler's +10.5% at only 200 s) — bounded, not drifting. Regression-tested by `s7tests/symplectic_oscillator_smoke.cpp` (`s7tests_symplectic_oscillator_smoke`), which pins both the plain-Euler drift (against the closed-form growth factor) and the symplectic integrator's bound. **Equivalent to an existing-element composition, found afterward:** `Gain(dt)` feeding an `Accumulator` (`Feedthrough::Direct`, so its updated value is visible the same step) for velocity, wired into an `EulerIntegrator` (causal memory, closes the loop) for position, is the identical semi-implicit Euler recursion — verified to bound amplitude the same way. `SymplecticIntegrator` is the one-element convenience for this specific x''=a(x) pattern, not the only way to reach it; an earlier claim in this conversation that no composition of existing elements could do this was wrong.
 - **Coupled-linear comparison and implicit trapezoid implemented (2026-10-19):** nine diagrams in [`examples/double_pendulum`](../examples/double_pendulum/README.md) cover slow, fast and mixed modes with Euler, Symplectic and implicit Trapezoid. The earlier supplied-sample-plus-delay arrangement was first order and had substantial energy growth. Default Trapezoid is now causal memory with a coupled implicit endpoint solve; its diagrams need no artificial delays. Tests require second-order state convergence and bounded quadratic energy error on this linear model at 1/10/100 kHz over 20 seconds. The solver uses at most 64 fixed-point iterations and reports nonconvergence; this does not establish stiff-system support. See [the contract](TRAPEZOID_INTEGRATION.md) and the examples README for current results. Broader nonlinear/stiff/chaotic comparative research remains open.

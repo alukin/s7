@@ -1,6 +1,6 @@
 # S7 0.1.1 — interface design and implementation plan
 
-Date: 2026-10-24. Status: ST-001/ST-002 implemented and locally verified; remaining
+Date: 2026-10-24. Status: ST-001/ST-002/ST-005 and font/palette fixes locally verified; remaining
 interface work is a proposed design for review.
 
 The maintainer accepted the proposed order of work and requested step 1:
@@ -36,6 +36,40 @@ workflow cases** and no skips. Windows Studio Release cross-build and the
 qualification, physical-display/theme/high-DPI acceptance, or the complete
 0.1.1 release gate. Offline help and triage are updated with the new behavior.
 
+## Implemented increment — ST-005, fonts and palette, 2026-10-24
+
+Menus now follow File, Edit, View, Diagram, Run, Nodes, Settings and Help.
+Page and existing drawing/text-frame actions are under Diagram; zoom/fit are
+under View without duplicate Fit Diagram placement. Nodes groups the existing
+network actions. Library operation labels describe their actual behavior.
+Keep Previous Scope Traces has the same positive wording and setting in Run
+and Run Configuration. Editing commands register real shortcuts, respect text
+focus, and use the active root/nested diagram when editing the canvas.
+
+Example Diagrams opens the standard file chooser in the distribution's examples
+directory, as requested. Selected documents are parsed and their layout staged
+before current-document replacement. Cancel, bad layout and failed Save preserve
+the document; cancellation and preflight failure also preserve a paused run.
+Examples open as working copies, with a new destination required by Save.
+There is no custom example dialog/catalog or `example_diagrams.hpp`.
+
+New text frames and the toolbar font-size control default to 10 pt. Smaller
+user-selected sizes remain available, including 4 pt in the regression check.
+All 62 bundled frames specify at least 10 pt; only the two previously at 9 pt
+needed file changes. Toolbar backgrounds and icon colors follow the Qt/KDE
+palette, including subsequent palette changes and disabled icon colors.
+Light/dark rendered captures are kept outside Git.
+
+Verification: **9/9** selected native Studio CTest entries passed (53.54 s),
+including all four GUI suites, run/window lifecycle, document safety, schema
+editing and smoke; **39 workflow cases** passed without skips. The native GUI
+test executable also passed the example-file-dialog workflow from both Linux
+and Windows package directory layouts after relocation, with `/tmp` as its
+working directory. These are directory-lookup checks against host Qt, not a
+fresh binary-distribution/platform qualification. Windows Studio Release
+cross-build and **1/1 Wine Studio smoke** pass; native Windows GUI acceptance
+remains separate.
+
 ## Scope and decisions to review
 
 Improve the existing local 0.1.0 workflows: edit, configure, run and observe.
@@ -49,7 +83,7 @@ actions without extending their behavior.
 |---|---|
 | Application shell | Qt Widgets controls; retain Qt Graphs/Quick 3D for existing plots. Keep the current Qt 6.9 minimum. |
 | Menu order | File, Edit, View, Diagram, Run, Nodes, Settings, Help. Nodes has its own menu so local execution and remote deployment have explicit homes. |
-| Examples | File → Example Diagrams… opens a searchable chooser with descriptions and qualification labels. |
+| Examples | File → Example Diagrams… opens the standard file chooser in the distribution's examples directory; descriptions and qualification remain in offline help. |
 | Observers | Replace the Probes dock with a selectable list of compact observer previews in the right dock area. |
 | Initial preview selection | None selected until the user chooses; never expand every observer automatically. |
 | Preview persistence | Save ordered observer identities and collapsed state in diagram presentation metadata. Keep dock geometry in application settings. |
@@ -106,11 +140,11 @@ information access without changing observer/schema double-click gestures.
 
 ### Example chooser
 
-Use a modal dialog with a search field, category/list pane, description pane,
-Open and Cancel. Entries show title, relative bundled path and the existing
-supported/experimental qualification. Use the bundled example documentation as
-the content source. Show available `.s7diagram` files, including their variants;
-do not treat all runtime fixture JSON files as user examples.
+Use the standard file chooser, as clarified by the maintainer during
+implementation. Start in the distribution's examples directory and filter for
+`.s7diagram` files. No separate example catalog, custom dialog or dialog header
+is needed. The existing bundled examples guide and numerical validation matrix
+provide descriptions and qualification limits through offline help.
 
 Resolve examples from the installed package location relative to the executable:
 Linux `usr/share/s7/examples` and Windows `share/s7/examples`; retain an explicit
@@ -123,6 +157,52 @@ An example opens as an unsaved working copy: Save asks for a destination and
 does not overwrite the package. Cancel at either dialog leaves the document
 and active run unchanged. Reuse the document-loading transaction; do not use
 the demo loader's empty-schema fallback for a failed example open.
+
+### Toolbar palette and text-frame defaults — 2026-10-24
+
+The maintainer reported faint toolbar icons with a KDE palette. Preserve Qt/KDE
+palette integration: draw the toolbar background with the Button role, render
+neutral icons with ButtonText and disabled icons with Disabled/ButtonText, and
+resolve colors at paint time so palette changes do not leave stale icon colors.
+Keep Run/Stop accents legible against the same palette background.
+
+Text frames and the toolbar's font-size control default to **10 pt**. This is
+not a minimum: users may choose smaller sizes (the integer controls allow
+1–72 pt), and existing smaller fonts in user documents remain valid. Update
+bundled example text frames to at least 10 pt, preserving larger sizes. The
+inventory contains 62 text frames; 60 already used 10 pt, and the two 9 pt
+frames are raised to 10 pt. Diagram zoom continues to scale text normally.
+
+### Planned oscillator example improvement — 2026-10-24
+
+The maintainer requested adding this work to the 0.1.1 plan: investigate and
+improve long-run oscillator accuracy, with an Euler–Cromer (semi-implicit Euler)
+companion to `2int_osc` as a candidate using the existing SymplecticIntegrator
+or its explicit Gain/Accumulator/EulerIntegrator composition. The recollection
+of solving Euler feedback accuracy in the original S7 over 30 years ago is
+explicitly uncertain; the earlier algorithm is not remembered. Research is
+needed, and Euler–Cromer must not be presented as the recovered historical method.
+Its candidate update uses velocity first, then position with the new velocity.
+Keep causal dependencies explicit; changing element insertion order alone
+must not change the two EulerIntegrator elements' causal-memory semantics.
+
+This work item is planned, not implemented or newly qualified. During its
+implementation, document the old/new amplitude and phase behavior for a
+600-second run at the example's timestep, with energy error and timestep
+comparisons against independent references. See the research task in
+[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) and the Siebert reference/reading status in
+[SIMULATION_MODEL.md](SIMULATION_MODEL.md). Preserve the reaffirmed
+analog-computer approach. Describe observed error and timestep
+limits without promising a universal 1000× accuracy improvement. No new
+integration method or global solver is required.
+
+The maintainer also authorized using examples from Siebert's book with source
+references. Once the relevant text is available and read, select suitable
+examples for this investigation and realize them as explicit S7 networks.
+Record edition/chapter/page/example or problem identifiers, any model changes,
+and independent numerical checks in each example's documentation. The current
+source-access limitation and attribution convention are in SIMULATION_MODEL.md;
+this records permission and planned work, not completed book-derived examples.
 
 ## 2. Element information and placement — ST-007/ST-008
 
@@ -375,6 +455,7 @@ workflow. The order follows the maintainer's accepted release sequence:
 | 1 — Design | This plan, menu review and triage links | Review the menu, wireframes, persistence, release boundary and proposed budgets; settle remaining decisions before their implementation. |
 | 2 — Isolated fixes | main_window actions, main_window_builder toolbar, Studio GUI workflows | Reproduce and fix actual keyboard dispatch; disabled-button tooltip and icon checks. |
 | 3 — Shell/examples | main_window_builder, main_window document loading, packaged example lookup | Actual menu activation, focused editing and installed example loading/replacement protection. |
+| 3b — Oscillator accuracy research/example | Investigate Euler feedback drift; compare existing methods and consider an Euler–Cromer companion, without claiming to recover the maintainer's uncertain historical method | At implementation time, compare amplitude/energy/phase over 600 seconds and different timesteps against independent references; preserve causal execution; no new global solver. |
 | 4a — Information | element metadata at its owning modules, element_picker_panel, shared information widget and Properties | Complete parameter inventory, representative semantic checks and long-text layout/accessibility. |
 | 4b — Drag placement | element_picker_panel, diagram_editor/project-owned scene adapters, shared element creation | Real drag/drop, zoom/pan, root/nested placement, undo/redo and save/reopen. |
 | 5a — Observer presentation boundary | viewers registry/manager, reusable plot presentations, observation tail preparation and shared settings owner | Two independent presentations of one source; no capture/trigger changes on preview creation. |

@@ -46,6 +46,7 @@
 #include <QCheckBox>
 #include "parameter_editor.hpp"
 #include "schema_tabs.hpp"
+#include "ui_icons.hpp"
 #include "viewers/line_plot_view.hpp"
 #include "tool_panels.hpp"
 #include <QAccessible>
@@ -54,6 +55,8 @@
 #include <QToolButton>
 #include <QToolTip>
 #include <QWheelEvent>
+#include <QDirIterator>
+#include <QScopeGuard>
 #include <QTextStream>
 #include <QTextBrowser>
 #include <QListWidget>
@@ -149,6 +152,16 @@ class Workflows : public QObject {
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
             return true;
         });
+    }
+    void activateMenu(const char* menuName, QAction* command) {
+        auto* menu = window_->findChild<QMenu*>(QString::fromLatin1(menuName));
+        QVERIFY(menu && command);
+        window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        QTest::mouseClick(window_->menuBar(), Qt::LeftButton, Qt::NoModifier,
+            window_->menuBar()->actionGeometry(menu->menuAction()).center());
+        QTRY_VERIFY(menu->isVisible());
+        menu->setActiveAction(command);
+        QTest::keyClick(menu, Qt::Key_Return);
     }
 private slots:
     void initTestCase() {
@@ -1126,6 +1139,218 @@ private slots:
             QTRY_COMPARE(scope->recording().series().size(), liveCount);
         }
     }
+    void menuOrganizationAndTracePolicy() {
+        QStringList names;
+        for (auto* entry : window_->menuBar()->actions()) {
+            QVERIFY(entry->menu()); names.append(entry->menu()->objectName());
+        }
+        QCOMPARE(names, QStringList({"menu.file", "menu.edit", "menu.view", "menu.diagram",
+                                    "menu.run", "menu.nodes", "menu.settings", "menu.help"}));
+        auto* view = window_->findChild<QMenu*>("menu.view");
+        auto* diagram = window_->findChild<QMenu*>("menu.diagram");
+        auto* run = window_->findChild<QMenu*>("menu.run");
+        auto* nodes = window_->findChild<QMenu*>("menu.nodes");
+        auto* page = window_->findChild<QMenu*>("menu.page");
+        QVERIFY(view && diagram && run && nodes && page);
+        QVERIFY(view->actions().contains(action("action.fitDiagram")));
+        QVERIFY(!diagram->actions().contains(action("action.fitDiagram")));
+        QVERIFY(diagram->actions().contains(page->menuAction()));
+        QVERIFY(nodes->actions().contains(action("action.deploy")));
+        QVERIFY(!run->actions().contains(action("action.deploy")));
+        QVERIFY(!window_->findChild<QAction*>("action.trustedNetworks"));
+        auto* keep = action("action.keepScopeTraces"); QVERIFY(keep);
+        QVERIFY(run->actions().contains(keep)); QVERIFY(!view->actions().contains(keep));
+        activateMenu("menu.run", keep);
+        QVERIFY(keep->isChecked());
+        QVERIFY(!window_->currentDocument().as_object().at("studio_run").as_object().at("clear_scope_traces").as_bool());
+        QVERIFY(dialogAction("action.runConfiguration", [](QDialog* dialog) {
+            auto* check = dialog->findChild<QCheckBox*>("run.keepScopeTraces");
+            if (!check || !check->isChecked() || check->text() != "Keep Previous Scope Traces") return false;
+            check->setChecked(false);
+            QTest::mouseClick(dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        }));
+        QVERIFY(!keep->isChecked());
+        QVERIFY(window_->currentDocument().as_object().at("studio_run").as_object().at("clear_scope_traces").as_bool());
+        activateMenu("menu.diagram", page->menuAction());
+        QTRY_VERIFY(page->isVisible());
+        page->setActiveAction(action("action.paperA5")); QTest::keyClick(page, Qt::Key_Return);
+        QCOMPARE(std::min(editor()->pageLayout().widthMm, editor()->pageLayout().heightMm), 148.);
+        activateMenu("menu.diagram", action("action.drawWire"));
+        QCOMPARE(scene()->mode(), s7studio::diagram::DiagramScene::DrawMode);
+        activateMenu("menu.diagram", action("action.selectMove"));
+        QCOMPARE(scene()->mode(), QSchematic::Scene::NormalMode);
+        QVERIFY(action("action.selectMove")->isChecked());
+    }
+    void editingMenuTextFocus() {
+        window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto node = scene()->addElement({"source", "Constant", {{"value", 1.}}, {}, {}, "Source"}, {0, 0});
+        QVERIFY(node); node->setSelected(true);
+        auto* picker = window_->findChild<s7studio::ui::ElementPickerPanel*>(); QVERIFY(picker);
+        auto* search = picker->findChild<QLineEdit*>(); QVERIFY(search);
+        search->setFocus(); QTRY_VERIFY(search->hasFocus());
+        QTest::keyClicks(search, "text");
+        activateMenu("menu.edit", action("action.selectAll"));
+        QCOMPARE(search->selectedText(), QStringLiteral("text"));
+        activateMenu("menu.edit", action("action.copy"));
+        QCOMPARE(QApplication::clipboard()->text(), QStringLiteral("text"));
+        activateMenu("menu.edit", action("action.delete"));
+        QVERIFY(search->text().isEmpty()); QVERIFY(scene()->elementNode("source"));
+        activateMenu("menu.edit", action("action.undo"));
+        QCOMPARE(search->text(), QStringLiteral("text"));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        view->setFocus(); QTRY_VERIFY(view->hasFocus());
+        QTest::keyClick(view->viewport(), Qt::Key_Delete);
+        QVERIFY(!scene()->elementNode("source"));
+        QTest::keyClick(view->viewport(), Qt::Key_Z, Qt::ControlModifier);
+        QVERIFY(scene()->elementNode("source"));
+        QCOMPARE(action("action.copy")->shortcut(), QKeySequence(QKeySequence::Copy));
+        QVERIFY(!action("action.copy")->text().contains('\t'));
+    }
+    void exampleFileChooser() {
+        const auto before = window_->currentDocument();
+        const QDir app(QCoreApplication::applicationDirPath());
+        QString expected = QString(S7_GUI_EXAMPLES_DIR);
+        for (const auto& base : {QStringLiteral("../share/s7"), QStringLiteral("share/s7")}) {
+            if (QFileInfo(app.filePath(base)).isDir()) { expected = QDir::cleanPath(app.filePath(base + "/examples")); break; }
+        }
+        QVERIFY(modalWorkflow([this] { activateMenu("menu.file", action("action.examples")); }, [&](QDialog* dialog) {
+            auto* file = qobject_cast<QFileDialog*>(dialog);
+            if (!file || file->directory().absolutePath() != expected || !file->nameFilters().front().contains("*.s7diagram")) return false;
+            capture(file, "example-file-chooser", true);
+            file->reject(); return true;
+        }));
+        QCOMPARE(window_->currentDocument(), before);
+        QVERIFY(dialogAction("action.examples", [&](QDialog* dialog) {
+            return selectFile(dialog, expected + "/linear/rc_charge_euler.s7diagram");
+        }));
+        QVERIFY(scene()->elementNode("state"));
+        // Save uses a new destination, never the bundled source file.
+        const auto copy = temporary_.filePath("example-copy.s7diagram");
+        QVERIFY(fileAction("action.save", copy)); QVERIFY(QFileInfo::exists(copy));
+    }
+    void exampleReplacementSafety() {
+        const auto input = temporary_.filePath("existing.s7diagram");
+        QVERIFY(QFile::copy(QString(S7_GUI_EXAMPLES_DIR) + "/linear/rc_charge_euler.s7diagram", input));
+        QVERIFY(fileAction("action.open", input));
+        QVERIFY(scene()->addElement({"unsaved", "Constant", {}, {}, {}, "Unsaved"}, {0, 0}));
+        const auto pending = window_->currentDocument();
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        runner->run(pending.as_object().at("schema"), .001, -1, {});
+        QTRY_VERIFY(runner->isRunning()); runner->pause(); QTRY_VERIFY(runner->isPaused());
+        const auto example = QString(S7_GUI_EXAMPLES_DIR) + "/linear/rc_discharge_euler.s7diagram";
+        const auto openExample = [&](const QString& path) {
+            QVERIFY(QMetaObject::invokeMethod(window_.get(), "openExampleDiagram", Qt::DirectConnection, Q_ARG(QString, path)));
+        };
+        QVERIFY(modalWorkflow([&] { openExample(example); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Cancel), Qt::LeftButton); return true;
+        }));
+        QCOMPARE(window_->currentDocument(), pending);
+        QVERIFY(runner->isPaused());
+        const auto invalid = temporary_.filePath("bad-example.s7diagram");
+        QFile broken(invalid); QVERIFY(broken.open(QIODevice::WriteOnly));
+        broken.write("{\"document_kind\":\"s7.diagram\",\"schema\":{\"elements\":[{\"id\":\"x\",\"type\":\"Constant\"},{\"id\":\"x\",\"type\":\"Constant\"}],\"connections\":[]}}"); broken.close();
+        QVERIFY(modalWorkflow([&] { openExample(invalid); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box || !box->text().contains("twice")) return false;
+            QTest::mouseClick(box->button(QMessageBox::Ok), Qt::LeftButton); return true;
+        }));
+        QCOMPARE(window_->currentDocument(), pending);
+        QVERIFY(runner->isPaused());
+        QVERIFY(modalWorkflow([&] { openExample(example); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Save), Qt::LeftButton); return true;
+        }));
+        QFile saved(input); QVERIFY(saved.open(QIODevice::ReadOnly));
+        QVERIFY(saved.readAll().contains("unsaved"));
+        saved.close();
+        QVERIFY(!scene()->elementNode("unsaved"));
+        QCOMPARE(runner->state(), s7studio::RunState::Idle);
+        window_->openPath(input);
+        QVERIFY(scene()->addElement({"second_unsaved", "Constant", {}, {}, {}, "Unsaved"}, {0, 0}));
+        const auto failedSaveDocument = window_->currentDocument();
+        QVERIFY(QFile::rename(input, input + ".preserved")); QVERIFY(QDir{}.mkdir(input));
+        bool saveFailed = false;
+        QTimer responder;
+        connect(&responder, &QTimer::timeout, this, [&] {
+            auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+            if (!box) return;
+            if (box->windowTitle() == "Unsaved changes") QTest::mouseClick(box->button(QMessageBox::Save), Qt::LeftButton);
+            else if (box->windowTitle() == "Save failed") { saveFailed = true; QTest::mouseClick(box->button(QMessageBox::Ok), Qt::LeftButton); }
+        });
+        responder.start(10); openExample(example); responder.stop();
+        QVERIFY(saveFailed); QCOMPARE(window_->currentDocument(), failedSaveDocument);
+        QVERIFY(modalWorkflow([&] { openExample(example); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Discard), Qt::LeftButton); return true;
+        }));
+        QVERIFY(!scene()->elementNode("second_unsaved"));
+    }
+    void textFrameFontDefaultsAndExamples() {
+        auto* size = window_->findChild<QSpinBox*>("frame.toolbarFontSize"); QVERIFY(size);
+        QCOMPARE(size->value(), 10); QCOMPARE(size->minimum(), 1);
+        s7studio::diagram::TextFrameNode defaults("default", {});
+        QCOMPARE(defaults.params().at("font_size").as_int64(), 10);
+        s7studio::diagram::TextFrameNode small("small", {{"font_size", 4}});
+        QCOMPARE(small.params().at("font_size").as_int64(), 4);
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_phase_portrait.s7diagram"));
+        auto frames = scene()->textFrames(); QVERIFY(!frames.empty());
+        scene()->clearSelection(); frames.front()->setSelected(true);
+        QVERIFY(dialogAction("action.textFrameFont", [](QDialog* dialog) {
+            auto* points = dialog->findChild<QSpinBox*>("frame.fontSize"); if (!points) return false;
+            points->setValue(4);
+            QTest::mouseClick(dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok), Qt::LeftButton); return true;
+        }));
+        QCOMPARE(frames.front()->params().at("font_size").as_int64(), 4);
+        int framesChecked = 0;
+        QDirIterator files(QString(S7_GUI_EXAMPLES_DIR), {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
+        while (files.hasNext()) {
+            QFile file(files.next()); QVERIFY(file.open(QIODevice::ReadOnly));
+            const auto root = QJsonDocument::fromJson(file.readAll()).object();
+            for (const auto& value : root["diagram"].toObject()["text_frames"].toArray()) {
+                ++framesChecked;
+                QVERIFY2(value.toObject()["params"].toObject()["font_size"].toInt() >= 10, qPrintable(file.fileName()));
+            }
+        }
+        QVERIFY(framesChecked >= 62);
+    }
+    void toolbarPaletteChanges() {
+        const auto previous = QApplication::palette();
+        const auto restore = qScopeGuard([previous] { QApplication::setPalette(previous); });
+        const auto icon = action("action.runConfiguration")->icon();
+        auto* toolbar = window_->findChild<QToolBar*>("toolbar.run"); QVERIFY(toolbar);
+        for (const bool dark : {false, true}) {
+            const QColor background = dark ? QColor("#202020") : QColor("#eeeeee");
+            const QColor foreground = dark ? QColor("#ffffff") : QColor("#101010");
+            const QColor disabled = dark ? QColor("#999999") : QColor("#666666");
+            auto palette = previous;
+            palette.setColor(QPalette::Button, background); palette.setColor(QPalette::ButtonText, foreground);
+            palette.setColor(QPalette::Disabled, QPalette::ButtonText, disabled);
+            QApplication::setPalette(palette); QCoreApplication::processEvents();
+            for (const auto mode : {QIcon::Normal, QIcon::Disabled}) {
+                const auto image = icon.pixmap(QSize(24, 24), mode).toImage();
+                int pixels = 0;
+                const auto expected = mode == QIcon::Normal ? foreground : disabled;
+                for (int y = 0; y < image.height(); ++y) for (int x = 0; x < image.width(); ++x) {
+                    const auto color = image.pixelColor(x, y);
+                    if (color.alpha() > 200) {
+                        ++pixels;
+                        // Premultiplied alpha round-trips can change a channel
+                        // by one level at antialiased SVG edges.
+                        QVERIFY(std::abs(color.red() - expected.red()) <= 2);
+                        QVERIFY(std::abs(color.green() - expected.green()) <= 2);
+                        QVERIFY(std::abs(color.blue() - expected.blue()) <= 2);
+                    }
+                }
+                QVERIFY(pixels > 0);
+            }
+            const auto image = toolbar->grab().toImage(); int matching = 0;
+            for (int y = 0; y < image.height(); ++y) for (int x = 0; x < image.width(); ++x)
+                matching += image.pixelColor(x, y).rgb() == background.rgb();
+            QVERIFY(matching > image.width() * image.height() / 3);
+            capture(toolbar, dark ? "run-toolbar-dark" : "run-toolbar-light", true);
+        }
+    }
     void diagramZoomShortcuts_data() {
         QTest::addColumn<int>("key");
         QTest::addColumn<Qt::KeyboardModifiers>("modifiers");
@@ -1230,7 +1455,7 @@ private slots:
             QVERIFY(command->toolTip() != command->text());
             auto* accessible = QAccessible::queryAccessibleInterface(button); QVERIFY(accessible);
             // Qt omits a dialog-opening ellipsis from the accessible name.
-            QCOMPARE(accessible->text(QAccessible::Name), QString(command->text()).remove("..."));
+            QCOMPARE(accessible->text(QAccessible::Name), QString(command->text()).remove("...").remove(QChar(0x2026)));
             checkTooltip(command);
         }
         capture(toolbar, "run-toolbar-idle", true);

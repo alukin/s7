@@ -1,10 +1,17 @@
 # Bundled examples
 
-Choose a model below, open its `.s7diagram` with **File → Open**, set Run
+Choose a model below with **File → Example Diagrams…**, or open a saved
+`.s7diagram` with **File → Open Diagram…**. Set Run
 Configuration as described in its article, and double-click the named observer
 after starting the run. The Linux package stores diagrams and their notes in
 `usr/share/s7/examples`, relative to its installation directory. All articles
 listed here are embedded in Help and remain available offline.
+
+The original S7 design was inspired by William McC. Siebert's
+[*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/),
+MIT Press. Planned book adaptations will cite the edition, chapter, page and
+example/problem identifier in their own notes. Existing diagrams are not
+attributed to particular book examples without checking the source text.
 
 Start with the **linear response laboratory** for reference-qualified examples.
 Other families demonstrate techniques and have the limits below. Changing a
@@ -15,8 +22,8 @@ are explicit integrator and function/state networks.
 ## Starter and viewer demonstrations
 
 - `demo1.s7diagram`: an introductory diagram for learning the editor and local
-  run workflow. **File → Load Demo Diagram** opens the separate embedded
-  startup demonstration.
+  run workflow, available through **File → Example Diagrams…**. The embedded
+  startup demonstration remains the fallback when no recent diagram opens.
 - `2int_osc.s7diagram`: a two-integrator oscillator; inspect the Scope and
   observe forward Euler's outward amplitude drift.
 - `2int_osc_live.s7diagram`: the bounded live oscilloscope prototype; change

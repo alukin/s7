@@ -342,7 +342,7 @@
           "text": "3D PHASE TRAJECTORY: X/Y = oscillator states; Z = third integrator.\nDouble-click PhaseTrajectory3D to see XY, XZ and YZ projections of a helix.\nInitial state (1, 0, 0); dz/dt = 0.2. Forward Euler causes slow radial drift.\nRun 10 model seconds at 1 or 10 kHz. The original Scope shows Y.",
           "width": 980.0,
           "height": 100.0,
-          "font_size": 9
+          "font_size": 10
         }
       }
     ]

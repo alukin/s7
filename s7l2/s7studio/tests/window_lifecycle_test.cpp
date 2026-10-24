@@ -50,10 +50,10 @@ class WindowLifecycleTest : public QObject {
             auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
             if (!dialog) return;
             auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
-            auto* clear = dialog->findChild<QCheckBox*>("run.clearScopeTraces");
+            auto* clear = dialog->findChild<QCheckBox*>("run.keepScopeTraces");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!duration || !clear || !buttons) { dialog->reject(); return; }
-            duration->setValue(seconds); clear->setChecked(!preserve);
+            duration->setValue(seconds); clear->setChecked(preserve);
             accepted = true;
             buttons->button(QDialogButtonBox::Ok)->click();
         });

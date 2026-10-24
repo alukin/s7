@@ -9,8 +9,9 @@
 
 namespace s7studio::ui {
 
-// A monochrome SVG icon drawn in `color` (normal, active, selected, and a
-// faded variant for disabled).
+// A monochrome SVG with a palette-adjusted accent. Disabled icons use the
+// palette's disabled button text color. Colors resolve when rendered, so icons
+// follow application palette changes without rebuilding actions.
 [[nodiscard]] auto themedIcon(const QString& resourcePath, const QColor& color) -> QIcon;
 
 // A Tabler icon (resources/icons/tabler/<name>.svg) in the palette's button

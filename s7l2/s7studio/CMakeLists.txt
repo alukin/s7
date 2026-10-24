@@ -157,6 +157,7 @@ set_target_properties(s7studio_viewers PROPERTIES AUTOMOC ON)
 s7_enable_project_warnings(s7studio_viewers)
 
 add_library(s7studio_app OBJECT
+    src/editor_actions.cpp src/editor_actions.hpp
     src/help_dialogs.cpp src/help_dialogs.hpp
     src/parameter_editor.cpp src/parameter_editor.hpp
     src/schema_tabs.cpp src/schema_tabs.hpp
@@ -192,6 +193,7 @@ add_library(s7studio_app OBJECT
 )
 
 add_dependencies(s7studio_app s7studio_build_identity)
+target_compile_definitions(s7studio_app PRIVATE S7STUDIO_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples")
 target_include_directories(s7studio_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(GLOB_RECURSE S7STUDIO_EXAMPLE_HELP CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/examples/*.md)
 qt_add_resources(s7studio_app s7studio_help

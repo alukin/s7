@@ -6,6 +6,11 @@ other local state elements. Its dynamics emerge from their state transitions
 and connections. A schema is itself an element, so a reusable controller or
 plant is another graph built from these same elements.
 
+The maintainer reaffirmed this direction on 2026-10-24 and identified William
+McC. Siebert's *Circuits, Signals, and Systems* as the book that inspired the
+first S7 implementation. This is the maintainer's design-history statement,
+not a reconstruction of its unknown numerical algorithm.
+
 The functional graph defines causality. Runtime validates and executes that
 graph; it does not replace it with a global differential-equation problem.
 New simulation features must preserve this model. Do not add graph-wide RK4,
@@ -98,6 +103,44 @@ ordering, hidden delays and implementation defects.
 Higher precision or a smaller timestep alone is not proof of correctness.
 Use appropriate independent references and measures: equilibrium, transient
 response, phase, amplitude, energy or attractor geometry as appropriate.
+
+## Siebert reference and reading status — 2026-10-24
+
+Reference: William McC. Siebert, *Circuits, Signals, and Systems*, MIT Press;
+[publisher record](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)
+and [Google Books contents](https://books.google.com/books/about/Circuits_Signals_and_Systems.html?id=zBTUiIrb2WIC).
+
+The publisher/catalogue and accessible contents have been reviewed. Full chapter
+text was not accessible through the checked publisher/preview routes, and the
+[Internet Archive edition](https://archive.org/details/circuitssignalss0000sieb_z6i3)
+is access-restricted. **The book has not yet been read in full.** A readable copy
+is needed before attributing specific numerical or realization techniques to it.
+
+Proposed first reading, based on the table of contents rather than chapter
+text already studied:
+
+- Chapter 1, circuit dynamic equations and their solutions (starts p. 1).
+- Chapter 5, interconnected systems and feedback (p. 139).
+- Chapter 6, feedback dynamics (p. 163).
+- Chapter 7, discrete-time signals and difference equations (p. 207).
+
+Use that reading to study explicit circuit/block realizations and separate
+continuous-system behavior from the discrete transitions used to approximate
+it. The analog-computer and causal-memory contracts above remain the design
+boundary; neither locating the book nor the maintainer's tentative recollections
+authorize hidden global solver passes. Euler feedback/settling research and the
+uncertainty about the historical method are recorded in
+[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
+
+The maintainer authorized adapting examples from this book and referencing it.
+For each adaptation, record the edition, chapter, printed page and example or
+problem number after reading the source; distinguish any S7 parameter or
+model changes. Express the model as an explicit S7 integrator/function/state
+network, document equations, units, initial conditions and the valid numerical
+envelope, and check it against an independent reference. Reference the source
+in the example's README/diagram notes and the examples catalogue. These are
+original S7 realizations of the model; no unread passage or existing example
+is to be retroactively attributed to a specific book example by inference.
 
 ## Existing numerical-stage implementation
 

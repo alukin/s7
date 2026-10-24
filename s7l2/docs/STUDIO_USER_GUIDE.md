@@ -8,9 +8,11 @@ navigate. Help and About can stay open while you work.
 
 ## First simulation
 
-1. Choose **File → Load Demo Diagram**, or open a saved `.s7diagram` with
-   **File → Open**. Installed examples are in `usr/share/s7/examples` beneath
-   the Linux package directory.
+1. Choose **File → Example Diagrams…**. The standard file chooser starts in
+   the distribution's examples directory. Open a saved diagram with
+   **File → Open Diagram…**. Installed examples are in `usr/share/s7/examples`
+   beneath the Linux package directory, or `share/s7/examples` on Windows.
+   Examples open as working copies; Save asks for your own destination.
 2. Choose **Run → Run Configuration** and set model duration and
    discretization frequency. Frequency sets model time (`dt = 1/f`), not a
    promised wall-clock speed.
@@ -44,13 +46,27 @@ memory. Check the Problems tool window for errors before running.
 **Ctrl+Z / Ctrl+Shift+Z** undo and redo edits. Save the diagram before closing
 or replacing it; the Save/Discard/Cancel prompt protects unsaved changes.
 **View → Fit Diagram to Window** fits the contents; **View → Fit Page** fits
-the sheet. Page settings affect the diagram sheet.
+the sheet. **Diagram → Page** sets the active diagram's paper size and
+orientation. Drawing and text-frame commands are also under **Diagram**.
+Text frames default to **10 pt**; the toolbar and **Diagram → Text Frame →
+Font and Size…** allow **1–72 pt**, including sizes below 10. Bundled examples
+use at least 10 pt. Text scales normally with diagram zoom.
 With the root or nested diagram focused, **Ctrl++** or **Ctrl+=** zooms in
 and **Ctrl+-** zooms out. Shifted Plus and keypad Plus are supported.
 **Ctrl+mouse wheel** also zooms. These shortcuts leave focused text fields
 alone; View menu zoom commands still operate on the active diagram.
 
+Toolbar colors follow the Qt application palette supplied by the desktop
+(including KDE's Qt integration). Icons update with palette changes; disabled
+icons use the palette's disabled text color.
+
 ## Running and observing
+
+**Run → Keep Previous Scope Traces** and the identically labelled setting in
+Run Configuration control whether the next run keeps the preceding Scope
+recording as a comparison. This does not clear or modify an active run.
+The **Nodes** menu groups the existing remote deployment commands and opens
+the Headless Nodes panel. Local simulation commands stay under **Run**.
 
 A run freezes its configuration. Edits made during execution apply to the
 next run. Pause takes effect at a completed causal step. Stop and close wait

@@ -7,7 +7,10 @@
 #include "ui_icons.hpp"
 
 #include <QAction>
+#include <QApplication>
+#include <QEvent>
 #include <QMainWindow>
+#include <QMenu>
 #include <QMenuBar>
 #include <QToolBar>
 #include <Qt>
@@ -15,33 +18,63 @@
 #include <QTabWidget>
 
 namespace s7studio::ui {
+namespace {
+class ToolbarPalette final : public QObject {
+public:
+    explicit ToolbarPalette(QMainWindow* window) : QObject(window), window_(window)
+    {
+        window_->installEventFilter(this);
+        apply();
+    }
+private:
+    void apply()
+    {
+        // Stylesheet palette expressions can retain the palette from their
+        // first polish. Resolve the same role again on desktop palette changes.
+        window_->setStyleSheet(QStringLiteral("QToolBar { background: %1; } QToolBar QToolButton { color: palette(button-text); } QToolBar QToolButton:disabled { color: palette(mid); }")
+            .arg(QApplication::palette().color(QPalette::Button).name()));
+    }
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (watched == window_ && event->type() == QEvent::ApplicationPaletteChange) apply();
+        return false;
+    }
+    QMainWindow* window_;
+};
+}
 
 auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
 {
     MainWindowActions actions;
-    actions.openAction = new QAction("Open...", window);
+    actions.openAction = new QAction("Open Diagram…", window);
     actions.closeDiagramAction = new QAction("Close Diagram", window);
     actions.saveAction = new QAction("Save", window);
-    actions.saveAsAction = new QAction("Save As...", window);
-    actions.loadLibraryAction = new QAction("Load Element Library...", window);
-    actions.saveLibraryAction = new QAction("Save Schema Library...", window);
-    actions.loadDemoAction = new QAction("Load Demo Diagram", window);
+    actions.saveAsAction = new QAction("Save As…", window);
+    actions.loadLibraryAction = new QAction("Load Element Library…", window);
+    actions.saveLibraryAction = new QAction("Save Diagram as Library Element…", window);
+    actions.examplesAction = new QAction("Example Diagrams…", window);
     actions.fitDiagramAction = new QAction("Fit Diagram to View", window);
     actions.exitAction = new QAction("Exit", window);
 
     actions.runAction = new QAction("Run", window);
-    actions.runParametersAction = new QAction("Run Parameters...", window);
+    actions.runParametersAction = new QAction("Run Configuration…", window);
     actions.pauseAction = new QAction("Pause", window);
     actions.resumeAction = new QAction("Resume", window);
     actions.stopAction = new QAction("Stop", window);
     actions.resetAction = new QAction("Reset", window);
-    actions.deployAction = new QAction("Deploy to Nodes...", window);
-    actions.openDeployedAction = new QAction("Open Deployed Diagram...", window);
+    actions.deployAction = new QAction("Deploy to Nodes…", window);
+    actions.openDeployedAction = new QAction("Open Deployed Diagram…", window);
 
     actions.openAction->setObjectName(QStringLiteral("action.open"));
     actions.closeDiagramAction->setObjectName(QStringLiteral("action.closeDiagram"));
     actions.saveAction->setObjectName(QStringLiteral("action.save"));
     actions.saveAsAction->setObjectName(QStringLiteral("action.saveAs"));
+    actions.loadLibraryAction->setObjectName(QStringLiteral("action.loadLibrary"));
+    actions.saveLibraryAction->setObjectName(QStringLiteral("action.saveLibrary"));
+    actions.examplesAction->setObjectName(QStringLiteral("action.examples"));
+    actions.fitDiagramAction->setObjectName(QStringLiteral("action.fitDiagram"));
+    actions.deployAction->setObjectName(QStringLiteral("action.deploy"));
+    actions.openDeployedAction->setObjectName(QStringLiteral("action.openDeployed"));
     actions.runAction->setObjectName(QStringLiteral("action.run"));
     actions.runParametersAction->setObjectName(QStringLiteral("action.runConfiguration"));
     actions.pauseAction->setObjectName(QStringLiteral("action.pause"));
@@ -60,7 +93,6 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     actions.resetAction->setIcon(icon(QStringLiteral("refresh")));
     actions.deployAction->setIcon(icon(QStringLiteral("cloud-upload")));
     actions.openDeployedAction->setIcon(icon(QStringLiteral("cloud-download")));
-    actions.runParametersAction->setText(QStringLiteral("Run Configuration..."));
     actions.runAction->setShortcut(QKeySequence(Qt::Key_F5));
     actions.stopAction->setShortcut(QKeySequence(Qt::SHIFT | Qt::Key_F5));
     actions.runParametersAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R));
@@ -74,40 +106,53 @@ auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
     return actions;
 }
 
-void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions)
+auto MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions) -> MainWindowMenus
 {
     // Some platform styles draw a dark menu/toolbar while exposing light
     // Window/WindowText roles. Text/ButtonText follow the actual controls.
     window->menuBar()->setStyleSheet(QStringLiteral("QMenuBar { color: palette(text); } QMenuBar::item:disabled { color: palette(mid); }"));
-    window->setStyleSheet(QStringLiteral("QToolBar QToolButton { color: palette(button-text); } QToolBar QToolButton:disabled { color: palette(mid); }"));
-    auto* fileMenu = window->menuBar()->addMenu("&File");
-    fileMenu->setObjectName(QStringLiteral("menu.file"));
+    new ToolbarPalette(window);
+    MainWindowMenus menus;
+    const auto menu = [window](const char* title, const char* name) {
+        auto* result = window->menuBar()->addMenu(QString::fromUtf8(title));
+        result->setObjectName(QString::fromLatin1(name));
+        return result;
+    };
+    menus.file = menu("&File", "menu.file");
+    menus.edit = menu("&Edit", "menu.edit");
+    menus.view = menu("&View", "menu.view");
+    menus.diagram = menu("&Diagram", "menu.diagram");
+    menus.run = menu("&Run", "menu.run");
+    menus.nodes = menu("&Nodes", "menu.nodes");
+    menus.settings = menu("&Settings", "menu.settings");
+    menus.help = menu("&Help", "menu.help");
+    auto* fileMenu = menus.file;
     fileMenu->addAction(actions.openAction);
     fileMenu->addAction(actions.closeDiagramAction);
     fileMenu->addSeparator();
     fileMenu->addAction(actions.saveAction);
     fileMenu->addAction(actions.saveAsAction);
-    fileMenu->addAction(actions.loadLibraryAction);
-    fileMenu->addAction(actions.saveLibraryAction);
     fileMenu->addSeparator();
-    fileMenu->addAction(actions.loadDemoAction);
+    auto* libraries = fileMenu->addMenu(QStringLiteral("Element Libraries"));
+    libraries->setObjectName(QStringLiteral("menu.libraries"));
+    libraries->addAction(actions.loadLibraryAction);
+    libraries->addAction(actions.saveLibraryAction);
+    fileMenu->addSeparator();
+    fileMenu->addAction(actions.examplesAction);
     fileMenu->addSeparator();
     fileMenu->addAction(actions.exitAction);
 
-    auto* diagramMenu = window->menuBar()->addMenu("&Diagram");
-    diagramMenu->addAction(actions.fitDiagramAction);
-
-    auto* runMenu = window->menuBar()->addMenu("&Run");
-    runMenu->addAction(actions.runAction);
+    auto* runMenu = menus.run;
     runMenu->addAction(actions.runParametersAction);
+    runMenu->addSeparator();
+    runMenu->addAction(actions.runAction);
     runMenu->addAction(actions.pauseAction);
     runMenu->addAction(actions.resumeAction);
     runMenu->addAction(actions.stopAction);
     runMenu->addSeparator();
     runMenu->addAction(actions.resetAction);
-    runMenu->addSeparator();
-    runMenu->addAction(actions.deployAction);
-    runMenu->addAction(actions.openDeployedAction);
+    menus.nodes->addAction(actions.deployAction);
+    menus.nodes->addAction(actions.openDeployedAction);
 
     auto* fileToolBar = window->addToolBar("File");
     fileToolBar->setObjectName(QStringLiteral("toolbar.file"));
@@ -123,6 +168,7 @@ void MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     runToolBar->addAction(actions.resumeAction);
     runToolBar->addAction(actions.stopAction);
     runToolBar->addAction(actions.resetAction);
+    return menus;
 }
 
 auto MainWindowBuilder::buildCentralWidgets(QMainWindow* window) -> MainWindowWidgets

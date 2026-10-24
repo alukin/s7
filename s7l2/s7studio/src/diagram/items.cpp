@@ -298,7 +298,7 @@ auto TextFrameNode::defaultParams() -> boost::json::object
         {"line_color", "#444444"},
         {"fill_color", "#fff4cc"},
         {"font_family", "Sans Serif"},
-        {"font_size", 12},
+        {"font_size", kDefaultFontPoints},
         {"width", 260.0},
         {"height", 120.0},
     };
@@ -316,7 +316,7 @@ void TextFrameNode::setParams(const boost::json::object& params)
     };
     params_["width"] = std::max(80.0, number("width", 260.0));
     params_["height"] = std::max(40.0, number("height", 120.0));
-    params_["font_size"] = std::max(6, json_utils::intValue(params_, "font_size", 12));
+    params_["font_size"] = std::max(kMinimumFontPoints, json_utils::intValue(params_, "font_size", kDefaultFontPoints));
     setSize(params_.at("width").as_double(), params_.at("height").as_double());
     update();
 }
@@ -338,7 +338,7 @@ void TextFrameNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QW
     painter->drawRect(sizeRect());
 
     QFont font(QString::fromStdString(json_utils::stringValue(params_, "font_family", "Sans Serif")));
-    font.setPointSize(json_utils::intValue(params_, "font_size", 12));
+    font.setPointSize(json_utils::intValue(params_, "font_size", kDefaultFontPoints));
     painter->setFont(font);
     painter->setPen(color("text_color", "#202020"));
     QTextOption option(Qt::AlignLeft | Qt::AlignTop);

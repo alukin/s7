@@ -127,8 +127,8 @@ Deleting a wire deletes the connection to its input; wires hanging on it move up
 - **Elements and observers:** move by dragging (wires follow and are re-routed on release); Delete removes the selection. Double-click or select and press F4/Enter: element properties with metadata-driven fields, inline validation and Advanced JSON; ports and deployment are expandable; `Scope` opens a multi-channel plot window; `TextFrame` edits text.
 - **Element Library tool window:** double-click adds an element; schema libraries can be loaded and saved from the File menu.
 - **Placement:** the element properties dialog has a Node field listing the nodes found in the Headless Nodes tool window; placed elements show `@ <node>` under them.
-- Run > Deploy to Nodes...: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes tool window (the Studio certificate pinned by the nodes). It runs off the UI thread; the Deploy tool window shows each node's outcome; nothing is committed unless every node is ready.
-- Run > Open Deployed Diagram...: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
+- Nodes → Deploy to Nodes…: deploys the diagram to the nodes its elements are placed on, over mTLS with the CA, certificate and key set in the Headless Nodes tool window (the Studio certificate pinned by the nodes). It runs off the UI thread; the Deploy tool window shows each node's outcome; nothing is committed unless every node is ready.
+- Nodes → Open Deployed Diagram…: loads the diagram a node runs (`GET_NETWORK_CONFIGURATION`) into the editor.
 
 ## Diagram file format (`.s7diagram`, version 2)
 
@@ -230,7 +230,7 @@ show the original snapshot if the diagram changes. Opening a newly added or
 rewired/retyped observer asks the user to rerun through a log/status message;
 it cannot silently subscribe to an old graph. Destroying and recreating a viewer
 uses its existing run binding, while a newly started run clears all phase alignment
-and live history. With **Clear scope traces before run** unchecked, the preceding
+and live history. With **Keep Previous Scope Traces** checked, the preceding
 Scope trace becomes a separately labelled `Run <ID>` comparison (including its
 capture-loss/storage warnings), rather than appending restarted timestamps to one
 series. Existing saved comparisons remain available; phase views restart.

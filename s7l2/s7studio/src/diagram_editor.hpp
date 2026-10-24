@@ -50,6 +50,7 @@ public:
     void cutSelection();
     void pasteSelection();
     void selectAll();
+    void deleteSelection();
     void editSelectedElement();
     void setPageLayout(const DiagramPageLayout& pageLayout);
     [[nodiscard]] auto pageLayout() const -> DiagramPageLayout;

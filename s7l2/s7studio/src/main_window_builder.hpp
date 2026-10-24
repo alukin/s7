@@ -5,6 +5,7 @@
 
 class QAction;
 class QMainWindow;
+class QMenu;
 class QTabWidget;
 
 namespace s7studio {
@@ -22,7 +23,7 @@ struct MainWindowActions {
     QAction* saveAsAction = nullptr;
     QAction* loadLibraryAction = nullptr;
     QAction* saveLibraryAction = nullptr;
-    QAction* loadDemoAction = nullptr;
+    QAction* examplesAction = nullptr;
     QAction* fitDiagramAction = nullptr;
     QAction* exitAction = nullptr;
     QAction* runAction = nullptr;
@@ -35,6 +36,17 @@ struct MainWindowActions {
     QAction* openDeployedAction = nullptr;
 };
 
+struct MainWindowMenus {
+    QMenu* file = nullptr;
+    QMenu* edit = nullptr;
+    QMenu* view = nullptr;
+    QMenu* diagram = nullptr;
+    QMenu* run = nullptr;
+    QMenu* nodes = nullptr;
+    QMenu* settings = nullptr;
+    QMenu* help = nullptr;
+};
+
 struct MainWindowWidgets {
     QTabWidget* diagramTabs = nullptr;
     diagram::DiagramEditor* diagramEditor = nullptr;
@@ -44,7 +56,7 @@ class MainWindowBuilder
 {
 public:
     [[nodiscard]] static auto createActions(QMainWindow* window) -> MainWindowActions;
-    static void buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions);
+    [[nodiscard]] static auto buildMenuAndToolbar(QMainWindow* window, const MainWindowActions& actions) -> MainWindowMenus;
     [[nodiscard]] static auto buildCentralWidgets(QMainWindow* window) -> MainWindowWidgets;
 };
 

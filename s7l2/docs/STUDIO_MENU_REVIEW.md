@@ -3,7 +3,11 @@
 Date: 2026-10-24. Related finding: ST-005 in
 [manual-test triage](STUDIO_0.1.1_TRIAGE.md).
 
-Status: analysis and proposal for planning. No menu implementation changes.
+Status: ST-005 implemented and locally verified; this document retains the
+0.1.0 inventory and original review. The final map and evidence are in the
+[0.1.1 release plan](RELEASE_0.1.1.md). Example Diagrams uses the standard file
+chooser in the distribution's examples directory, per the maintainer's later
+clarification. Trusted Networks remains deferred to 0.2.0.
 The subsequent [0.1.1 interface plan](RELEASE_0.1.1.md) selects a concrete menu
 map and example chooser for review, with action scope and acceptance checks.
 Its proposed map supersedes the alternatives below when reviewing that design;
@@ -15,7 +19,7 @@ outside this scope.
 The initial report was general; subsequent specific menu requests are recorded
 below. Source findings come from inspection, not a fresh GUI run.
 
-## Current structure
+## 0.1.0 structure before implementation
 
 Source: `s7studio/src/main_window_builder.cpp`, `MainWindow::buildActions()`
 and `MainWindow::buildUi()` in `s7studio/src/main_window.cpp`, and

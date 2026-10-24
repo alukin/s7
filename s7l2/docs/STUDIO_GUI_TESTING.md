@@ -50,6 +50,14 @@ verify accessible names and icon-only presentation, and click through
 pause/resume/stop/reset. Successful toolbar state captures are retained in the
 workflow artifact directory.
 
+The menu increment additionally checks menu order and action ownership,
+Page/drawing activation, shared trace-retention wording, editing in text fields,
+standard example file selection, working-copy Save, replacement Cancel/Save/
+Discard/failed Save, and rejected layout preserving a paused run. Font checks
+cover the 10 pt default, a 4 pt user choice, and all bundled example frames.
+Palette checks use rendered pixels for light/dark toolbar backgrounds and
+normal/disabled icon colors after an application palette change.
+
 ## Displays, rendering and skips
 
 `tools/run_gui_test.py` starts Xvfb with `-displayfd` for atomic display allocation,

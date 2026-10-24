@@ -20,8 +20,11 @@ proposes concrete layouts, menu organization, persistence, configuration
 ownership, implementation order and acceptance checks for review. Networking
 work, including Trusted Networks and node configuration/control/restart, is
 assigned to 0.2.0; 0.1.1 focuses on local Studio workflows.
-The [main menu review](STUDIO_MENU_REVIEW.md) records the current structure and
-a proposed reorganization for planning.
+The [main menu review](STUDIO_MENU_REVIEW.md) retains the original inventory;
+implemented menu, shortcut, toolbar, font and palette increments and their
+verification are recorded in the 0.1.1 plan. The simulation guide records
+Siebert's book as the maintainer's stated design inspiration, with reading
+status and attribution rules for planned example adaptations.
 
 The [0.2.0 goals](RELEASE_0.2.0.md) are parallel execution within one runtime,
 qualified multi-node operation on local and remote hosts, remote node

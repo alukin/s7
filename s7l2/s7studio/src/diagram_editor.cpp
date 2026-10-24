@@ -166,6 +166,7 @@ DiagramEditor::DiagramEditor(QWidget* parent)
 }
 
 void DiagramEditor::copySelection() { _scene->copySelection(); }
+void DiagramEditor::deleteSelection() { _scene->handleKey(Qt::Key_Delete, Qt::NoModifier); }
 void DiagramEditor::cutSelection() {
     if (_scene->copySelection()) _scene->deleteSelection();
 }

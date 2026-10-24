@@ -138,6 +138,8 @@ class TextFrameNode final : public QSchematic::Items::Node
     Q_DISABLE_COPY_MOVE(TextFrameNode)
 
 public:
+    static constexpr int kMinimumFontPoints = 1;
+    static constexpr int kDefaultFontPoints = 10;
     TextFrameNode(std::string id, const boost::json::object& params);
 
     [[nodiscard]] const std::string& id() const { return id_; }

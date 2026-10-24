@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: ST-001/ST-002 implemented and locally verified; other interface work remains in planning.
+Status: ST-001/ST-002/ST-005/ST-010 implemented and locally verified; other interface work remains in planning.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24
@@ -130,6 +130,13 @@ maintenance scope and subsequent networking correction above.
   action text and Qt accessible names. Use Qt's existing tooltip behavior;
   no custom disabled-button event handling is needed. GUI checks cover real
   hover, enabled/disabled states and pause/resume/stop/reset button activation.
+- **Palette follow-up:** the maintainer reported faint toolbar icons with KDE.
+  Automated captures exposed a mismatch between pale icons and the painted
+  background. Toolbars now paint the Qt palette's Button background; icons
+  resolve ButtonText/Disabled ButtonText while rendering, and palette changes
+  refresh the stylesheet background. Run/Stop accents are adjusted for contrast.
+  Light/dark palette pixel checks and rendered captures pass. This does not
+  claim qualification of every physical desktop/KDE theme.
 - **Provisional severity:** minor visual/usability defect, with an explicit
   preference for a more compact toolbar.
 - **Reproduction from report:** inspect inactive buttons in the Run toolbar.
@@ -263,9 +270,16 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
   and preserve unsaved-document Save/Discard/Cancel behavior.
 - **Reported/requested:** 2026-10-24. The main menu is inconsistent; analyze
   and update it. Applies to the planning-before-implementation decision above.
-- **Status:** source-reviewed; implementation deferred. The initial report
-  was general; subsequent specific requests are recorded above. No independent
-  GUI run was performed.
+- **Status:** implemented and locally verified. Final menus and evidence are
+  recorded in [the release plan](RELEASE_0.1.1.md). Existing network behavior
+  is unchanged; ST-009 remains in 0.2.0.
+- **Resolution:** explicit menu order, Page under Diagram, zoom/fit under View,
+  existing remote actions under Nodes, grouped library commands, real editing
+  shortcuts with text/canvas focus routing, and consistent Keep Previous Scope
+  Traces wording. Example Diagrams uses the standard file chooser rooted in
+  the distribution's examples directory; the maintainer explicitly simplified
+  the earlier custom/searchable chooser proposal. Save/Discard/Cancel, staged
+  layout validation and working-copy save behavior are covered by GUI checks.
 - **Classification:** usability/organization enhancement; provisional minor
   severity. Shortcut behavior found during review needs verification.
 - **Analysis:** duplicated Fit Diagram placement; an almost empty Diagram menu
@@ -553,6 +567,21 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
   produce clear errors, and effective configuration/application timing is
   visible. Test relevant discovery/deployment behavior under both existing
   data security profiles, without changing unrelated local simulation.
+
+### ST-010 — Text-frame defaults and bundled example readability
+
+- **Requested:** 2026-10-24. Use 10 pt by default in text frames and the toolbar
+  font-size control, and update examples with small text frames.
+- **Clarification:** 10 pt is not a minimum for user documents. Users must be
+  able to choose 6 pt or smaller. Controls now allow 1–72 pt; loaded valid small
+  sizes remain unchanged. Desktop toolbar UI fonts still follow Qt/KDE settings.
+- **Status:** implemented and locally verified. New frames/default control use
+  10 pt. All 62 bundled text frames are at least 10 pt; 60 already were 10 pt,
+  and the two 9 pt frames were updated in the 2D phase and 3D helix examples.
+  No example integration behavior was changed.
+- **Checks:** default/loaded values, choosing 4 pt through the frame-font dialog,
+  and a scan of every bundled diagram's text-frame sizes. Diagram text continues
+  to scale with diagram zoom.
 
 ## Explicitly assigned to 0.2.0
 

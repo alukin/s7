@@ -80,7 +80,7 @@ configuration and numerical contracts.
 In `s7studio`:
 
 1. Build or open the schema/diagram you want to package.
-2. Use `File -> Save Schema Library...`.
+2. Use `File → Element Libraries → Save Diagram as Library Element…`.
 3. Choose output file (`.s7library` or `.json`).
 4. Fill metadata fields (`type_name`, display name, category, version).
 
@@ -94,7 +94,7 @@ Result:
 
 In `s7studio`:
 
-1. Use `File -> Load Element Library...`.
+1. Use `File → Element Libraries → Load Element Library…`.
 2. Select a `s7.element_library` document.
 3. The element types from that file are registered.
 
@@ -108,7 +108,7 @@ You can also open library files via `File -> Open...`.
 - Bundled and user-loaded schema elements appear in the separate **Schema elements** category.
 - Double-click an instance to view/edit its embedded graph in a new tab; double-click nested schema elements to navigate deeper.
 - Edits affect that instance and propagate into the parent diagram, preserving the exposed interface and internal layout. The registry/library template is unchanged.
-- Save and Run use the root diagram; Save Schema Library from a schema tab exports that schema.
+- Save and Run use the root diagram; Save Diagram as Library Element from a schema tab exports that schema.
 
 ---
 

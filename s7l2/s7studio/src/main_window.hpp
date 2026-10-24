@@ -10,6 +10,7 @@
 #include "tool_panels.hpp"
 
 #include <QHash>
+#include <QList>
 #include <QMainWindow>
 #include <QPointer>
 #include <QVector>
@@ -88,6 +89,9 @@ private slots:
     void loadElementLibrary();
     void saveSchemaLibrary();
     void loadDemoDiagram();
+    void chooseExampleDiagram();
+    bool openExampleDiagram(const QString& path);
+    void chooseTextFrameFont();
     void fitDiagramToView();
     void zoomDiagramIn();
     void zoomDiagramOut();
@@ -206,7 +210,7 @@ private:
     QAction* saveAsAction_ = nullptr;
     QAction* loadLibraryAction_ = nullptr;
     QAction* saveLibraryAction_ = nullptr;
-    QAction* loadDemoAction_ = nullptr;
+    QAction* examplesAction_ = nullptr;
     QAction* fitDiagramAction_ = nullptr;
     QAction* exitAction_ = nullptr;
     QAction* runAction_ = nullptr;
@@ -231,6 +235,8 @@ private:
     QAction* portraitPageAction_ = nullptr;
     QAction* landscapePageAction_ = nullptr;
     QAction* addTextFrameAction_ = nullptr;
+    QList<QAction*> editorShortcuts_;
+    QAction* textFrameFontAction_ = nullptr;
     QAction* textColorAction_ = nullptr;
     QAction* lineColorAction_ = nullptr;
     QAction* fillColorAction_ = nullptr;

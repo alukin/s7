@@ -19,6 +19,7 @@
 #include "headless_nodes_panel.hpp"
 #include "json_utils.hpp"
 #include "main_window_builder.hpp"
+#include "editor_actions.hpp"
 #include "tool_windows.hpp"
 #include "ui_icons.hpp"
 #include "scene_serializer.hpp"
@@ -405,7 +406,7 @@ void MainWindow::buildActions()
     saveAsAction_ = actions.saveAsAction;
     loadLibraryAction_ = actions.loadLibraryAction;
     saveLibraryAction_ = actions.saveLibraryAction;
-    loadDemoAction_ = actions.loadDemoAction;
+    examplesAction_ = actions.examplesAction;
     fitDiagramAction_ = actions.fitDiagramAction;
     exitAction_ = actions.exitAction;
     runAction_ = actions.runAction;
@@ -423,39 +424,50 @@ void MainWindow::buildActions()
     zoomOutAction_->setObjectName(QStringLiteral("action.zoomOut"));
     resetZoomAction_ = new QAction("Actual Size", this);
     fitPageAction_ = new QAction("Fit Page", this);
-    overlayScopeTracesAction_ = new QAction("Overlay Scope Traces", this);
+    overlayScopeTracesAction_ = new QAction("Keep Previous Scope Traces", this);
+    overlayScopeTracesAction_->setObjectName(QStringLiteral("action.keepScopeTraces"));
     overlayScopeTracesAction_->setCheckable(true);
     overlayScopeTracesAction_->setChecked(false);
-    overlayScopeTracesAction_->setToolTip("Keep previous scope traces when starting a new run");
+    overlayScopeTracesAction_->setToolTip("On the next run, keep the preceding Scope recording as a labelled comparison. Phase views always restart.");
+    connect(overlayScopeTracesAction_, &QAction::triggered, this, [this](bool keep) {
+        clearScopesBeforeRun_ = !keep;
+        setWindowModified(documentModified());
+    });
 
-    modeNormalAction_ = new QAction("Normal Mode", this);
+    modeNormalAction_ = new QAction("Select/Move", this);
+    modeNormalAction_->setObjectName(QStringLiteral("action.selectMove"));
     modeNormalAction_->setCheckable(true);
+    connect(modeNormalAction_, &QAction::triggered, this, [this] { setDiagramMode(QSchematic::Scene::NormalMode); });
     modeNormalAction_->setChecked(true);
     modeNormalAction_->setToolTip("Switch to Normal mode (move/select elements)");
-    const QColor drawIconColor = palette().color(QPalette::ButtonText);
-    modeNormalAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/pointer.svg"), drawIconColor));
+    modeNormalAction_->setIcon(ui::icon(QStringLiteral("pointer")));
 
     modeWireAction_ = new QAction("Wire Mode", this);
+    modeWireAction_->setObjectName(QStringLiteral("action.drawWire"));
     modeWireAction_->setCheckable(true);
     modeWireAction_->setText(QStringLiteral("Wire Draw"));
     modeWireAction_->setToolTip("Draw wires click by click: a port or wire, bends, then a port or wire (Esc cancels). "
                                 "In normal mode, drag from a port to connect, or Alt+drag from a wire.");
     modeWireAction_->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_W));
-    modeWireAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/vector-bezier-2.svg"), drawIconColor));
+    modeWireAction_->setIcon(ui::icon(QStringLiteral("vector-bezier-2")));
 
-    addTextFrameAction_ = new QAction("Text Frame", this);
+    addTextFrameAction_ = new QAction("Insert Text Frame", this);
+    addTextFrameAction_->setObjectName(QStringLiteral("action.insertTextFrame"));
     addTextFrameAction_->setToolTip("Insert a diagram-only text frame");
-    addTextFrameAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/text-caption.svg"), drawIconColor));
+    addTextFrameAction_->setIcon(ui::icon(QStringLiteral("text-caption")));
 
-    textColorAction_ = new QAction("Text Color", this);
+    textColorAction_ = new QAction("Text Color…", this);
+    textColorAction_->setObjectName(QStringLiteral("action.textColor"));
     textColorAction_->setToolTip("Set selected text frame text color");
-    textColorAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/text-color.svg"), drawIconColor));
-    lineColorAction_ = new QAction("Line Color", this);
+    textColorAction_->setIcon(ui::icon(QStringLiteral("text-color")));
+    lineColorAction_ = new QAction("Line Color…", this);
+    lineColorAction_->setObjectName(QStringLiteral("action.lineColor"));
     lineColorAction_->setToolTip("Set selected text frame border color");
-    lineColorAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/border-style-2.svg"), drawIconColor));
-    fillColorAction_ = new QAction("Fill Color", this);
+    lineColorAction_->setIcon(ui::icon(QStringLiteral("border-style-2")));
+    fillColorAction_ = new QAction("Fill Color…", this);
+    fillColorAction_->setObjectName(QStringLiteral("action.fillColor"));
     fillColorAction_->setToolTip("Set selected text frame background color");
-    fillColorAction_->setIcon(ui::themedIcon(QStringLiteral(":/icons/tabler/bucket.svg"), drawIconColor));
+    fillColorAction_->setIcon(ui::icon(QStringLiteral("bucket")));
 
     paperA5Action_ = new QAction("A5", this);
     paperA4Action_ = new QAction("A4", this);
@@ -464,6 +476,12 @@ void MainWindow::buildActions()
     portraitPageAction_ = new QAction("Portrait", this);
     landscapePageAction_ = new QAction("Landscape", this);
 
+    paperA5Action_->setObjectName(QStringLiteral("action.paperA5"));
+    paperA4Action_->setObjectName(QStringLiteral("action.paperA4"));
+    paperA3Action_->setObjectName(QStringLiteral("action.paperA3"));
+    paperLetterAction_->setObjectName(QStringLiteral("action.paperLetter"));
+    portraitPageAction_->setObjectName(QStringLiteral("action.pagePortrait"));
+    landscapePageAction_->setObjectName(QStringLiteral("action.pageLandscape"));
     paperA5Action_->setCheckable(true);
     paperA4Action_->setCheckable(true);
     paperA3Action_->setCheckable(true);
@@ -517,7 +535,7 @@ void MainWindow::buildActions()
     connect(saveAsAction_, &QAction::triggered, this, &MainWindow::saveDocumentAs);
     connect(loadLibraryAction_, &QAction::triggered, this, &MainWindow::loadElementLibrary);
     connect(saveLibraryAction_, &QAction::triggered, this, &MainWindow::saveSchemaLibrary);
-    connect(loadDemoAction_, &QAction::triggered, this, &MainWindow::loadDemoDiagram);
+    connect(examplesAction_, &QAction::triggered, this, &MainWindow::chooseExampleDiagram);
     connect(fitDiagramAction_, &QAction::triggered, this, [this] {
         if (activeDiagramEditor()) {
             activeDiagramEditor()->fitDiagramInView();
@@ -569,7 +587,7 @@ void MainWindow::buildUi()
     actions.saveAsAction = saveAsAction_;
     actions.loadLibraryAction = loadLibraryAction_;
     actions.saveLibraryAction = saveLibraryAction_;
-    actions.loadDemoAction = loadDemoAction_;
+    actions.examplesAction = examplesAction_;
     actions.fitDiagramAction = fitDiagramAction_;
     actions.exitAction = exitAction_;
     actions.runAction = runAction_;
@@ -581,7 +599,7 @@ void MainWindow::buildUi()
     actions.deployAction = deployAction_;
     actions.openDeployedAction = openDeployedAction_;
 
-    ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
+    const auto menus = ui::MainWindowBuilder::buildMenuAndToolbar(this, actions);
     recentDiagramsMenu_ = new QMenu(QStringLiteral("Recent Diagrams"), this);
     recentDiagramsMenu_->setObjectName(QStringLiteral("menu.recentDiagrams"));
     findChild<QMenu*>(QStringLiteral("menu.file"))->insertMenu(closeDiagramAction_, recentDiagramsMenu_);
@@ -602,8 +620,10 @@ void MainWindow::buildUi()
     textFrameFontCombo_->setMinimumContentsLength(10);
     diagramDrawToolBar_->addWidget(textFrameFontCombo_);
     textFrameFontSizeSpin_ = new QSpinBox(diagramDrawToolBar_);
-    textFrameFontSizeSpin_->setRange(6, 72);
-    textFrameFontSizeSpin_->setPrefix(QStringLiteral("Pt "));
+    textFrameFontSizeSpin_->setObjectName(QStringLiteral("frame.toolbarFontSize"));
+    textFrameFontSizeSpin_->setRange(diagram::TextFrameNode::kMinimumFontPoints, 72);
+    textFrameFontSizeSpin_->setValue(diagram::TextFrameNode::kDefaultFontPoints);
+    textFrameFontSizeSpin_->setSuffix(QStringLiteral(" pt"));
     diagramDrawToolBar_->addWidget(textFrameFontSizeSpin_);
 
     connect(textFrameFontCombo_, &QFontComboBox::currentFontChanged,
@@ -611,7 +631,7 @@ void MainWindow::buildUi()
     connect(textFrameFontSizeSpin_, qOverload<int>(&QSpinBox::valueChanged),
             this, &MainWindow::setSelectedTextFrameFontSize);
 
-    auto* viewMenu = menuBar()->addMenu("&View");
+    auto* viewMenu = menus.view;
     viewMenu->addAction(zoomInAction_);
     viewMenu->addAction(zoomOutAction_);
     viewMenu->addAction(resetZoomAction_);
@@ -619,9 +639,25 @@ void MainWindow::buildUi()
     viewMenu->addAction(fitDiagramAction_);
     viewMenu->addAction(fitPageAction_);
     viewMenu->addSeparator();
-    viewMenu->addAction(overlayScopeTracesAction_);
+    menus.run->addSeparator();
+    menus.run->addAction(overlayScopeTracesAction_);
 
-    auto* pageMenu = menuBar()->addMenu("&Page");
+    auto* diagramMenu = menus.diagram;
+    diagramMenu->addAction(modeNormalAction_);
+    diagramMenu->addAction(modeWireAction_);
+    diagramMenu->addSeparator();
+    diagramMenu->addAction(addTextFrameAction_);
+    auto* formatting = diagramMenu->addMenu(QStringLiteral("Text Frame"));
+    formatting->setObjectName(QStringLiteral("menu.textFrame"));
+    textFrameFontAction_ = formatting->addAction(QStringLiteral("Font and Size…"));
+    textFrameFontAction_->setObjectName(QStringLiteral("action.textFrameFont"));
+    connect(textFrameFontAction_, &QAction::triggered, this, &MainWindow::chooseTextFrameFont);
+    formatting->addAction(textColorAction_);
+    formatting->addAction(lineColorAction_);
+    formatting->addAction(fillColorAction_);
+    diagramMenu->addSeparator();
+    auto* pageMenu = diagramMenu->addMenu(QStringLiteral("Page"));
+    pageMenu->setObjectName(QStringLiteral("menu.page"));
     pageMenu->addAction(paperA5Action_);
     pageMenu->addAction(paperA4Action_);
     pageMenu->addAction(paperA3Action_);
@@ -630,12 +666,12 @@ void MainWindow::buildUi()
     pageMenu->addAction(portraitPageAction_);
     pageMenu->addAction(landscapePageAction_);
 
-    auto* settingsMenu = menuBar()->addMenu("&Settings");
-    auto* scopeTempDirectoryAction = settingsMenu->addAction(QStringLiteral("Scope temporary data directory…"));
+    auto* settingsMenu = menus.settings;
+    auto* scopeTempDirectoryAction = settingsMenu->addAction(QStringLiteral("Scope Temporary Data Directory…"));
     connect(scopeTempDirectoryAction, &QAction::triggered,
             this, &MainWindow::chooseScopeTemporaryDirectory);
 
-    auto* helpMenu = menuBar()->addMenu(QStringLiteral("&Help"));
+    auto* helpMenu = menus.help;
     helpMenu->setObjectName(QStringLiteral("menu.help"));
     auto* contentsAction = helpMenu->addAction(QStringLiteral("S7 Studio &Help"));
     contentsAction->setObjectName(QStringLiteral("action.help"));
@@ -653,17 +689,17 @@ void MainWindow::buildUi()
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
-    diagramEditor_->addActions({zoomInAction_, zoomOutAction_});
     schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
     connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
     connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
-        editor->addActions({zoomInAction_, zoomOutAction_});
+        editor->addActions(editorShortcuts_);
         connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
         connect(editor->scene(),&QGraphicsScene::selectionChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QSchematic::Scene::modeChanged,this,[this,editor](int mode) {
             if (activeDiagramEditor()==editor && modeWireAction_) {
                 const QSignalBlocker blocker(modeWireAction_);
                 modeWireAction_->setChecked(mode==diagram::DiagramScene::DrawMode);
+                modeNormalAction_->setChecked(mode==QSchematic::Scene::NormalMode);
             }
         });
         connect(editor->scene(),&diagram::DiagramScene::statusMessage,this,[this](const QString& message) {statusBar()->showMessage(message,6000);});
@@ -677,41 +713,18 @@ void MainWindow::buildUi()
         if (modeWireAction_) {
             const QSignalBlocker blocker(modeWireAction_);
             modeWireAction_->setChecked(editor->scene()->mode()==diagram::DiagramScene::DrawMode);
+            modeNormalAction_->setChecked(editor->scene()->mode()==QSchematic::Scene::NormalMode);
         }
     });
-    if (diagramEditor_ && diagramEditor_->scene()) {
-        auto* stack = schemaTabs_->undoGroup();
-        undoAction_ = stack->createUndoAction(this, QStringLiteral("&Undo"));
-        undoAction_->setObjectName(QStringLiteral("action.undo"));
-        undoAction_->setShortcut(QKeySequence::Undo);
-        undoAction_->setIcon(ui::icon(QStringLiteral("arrow-back-up")));
-        redoAction_ = stack->createRedoAction(this, QStringLiteral("&Redo"));
-        redoAction_->setObjectName(QStringLiteral("action.redo"));
-        redoAction_->setShortcut(QKeySequence::Redo);
-        redoAction_->setIcon(ui::icon(QStringLiteral("arrow-forward-up")));
-        diagramDrawToolBar_->insertAction(diagramDrawToolBar_->actions().value(0), redoAction_);
-        diagramDrawToolBar_->insertAction(redoAction_, undoAction_);
-        diagramDrawToolBar_->insertSeparator(diagramDrawToolBar_->actions().value(2));
-        auto* editMenu = new QMenu(QStringLiteral("&Edit"), this);
-        editMenu->addAction(undoAction_);
-        editMenu->addAction(redoAction_);
-        editMenu->addSeparator();
-        const auto editingAction = [&](const QString& title, const char* name, auto operation) {
-            auto* action = editMenu->addAction(title);
-            action->setObjectName(QString::fromLatin1(name));
-            connect(action, &QAction::triggered, this, [this, operation] {
-                if (auto* editor = activeDiagramEditor()) (editor->*operation)();
-            });
-        };
-        editingAction(QStringLiteral("Cu&t\tCtrl+X"), "action.cut", &diagram::DiagramEditor::cutSelection);
-        editingAction(QStringLiteral("&Copy\tCtrl+C"), "action.copy", &diagram::DiagramEditor::copySelection);
-        editingAction(QStringLiteral("&Paste\tCtrl+V"), "action.paste", &diagram::DiagramEditor::pasteSelection);
-        editingAction(QStringLiteral("Select &All\tCtrl+A"), "action.selectAll", &diagram::DiagramEditor::selectAll);
-        editMenu->addSeparator();
-        editingAction(QStringLiteral("Element &Properties…\tF4"), "action.properties", &diagram::DiagramEditor::editSelectedElement);
-        const auto menus = menuBar()->actions();
-        menuBar()->insertMenu(menus.size() > 1 ? menus.at(1) : nullptr, editMenu);
-    }
+    const auto editing = ui::buildEditorActions(this, menus.edit, schemaTabs_->undoGroup(), [this] { return activeDiagramEditor(); });
+    undoAction_ = editing.undo;
+    redoAction_ = editing.redo;
+    editorShortcuts_ = editing.shortcuts;
+    editorShortcuts_.append({zoomInAction_, zoomOutAction_});
+    diagramEditor_->addActions(editorShortcuts_);
+    diagramDrawToolBar_->insertAction(modeWireAction_, undoAction_);
+    diagramDrawToolBar_->insertAction(modeWireAction_, redoAction_);
+    diagramDrawToolBar_->insertSeparator(modeWireAction_);
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     s7::register_io_elements(registry);
@@ -737,6 +750,11 @@ void MainWindow::buildUi()
             this, &MainWindow::onElementRequested);
     headlessNodesPanel_ = new ui::HeadlessNodesPanel(this);
     buildToolWindows();
+    auto* headlessNodes = new QAction(QStringLiteral("Headless Nodes"), this);
+    headlessNodes->setObjectName(QStringLiteral("action.headlessNodes"));
+    connect(headlessNodes, &QAction::triggered, this, [this] { toolWindows_->show(headlessNodesDock_); });
+    menus.nodes->insertAction(deployAction_, headlessNodes);
+    menus.nodes->insertSeparator(deployAction_);
     viewMenu->addSeparator();
     viewMenu->addMenu(toolWindows_->menu());
     viewMenu->addAction(toolWindows_->hideAllAction());
@@ -1254,6 +1272,9 @@ void MainWindow::resetDiagramZoom()
 {
     if (activeDiagramEditor() && activeDiagramEditor()->scene()) {
         activeDiagramEditor()->scene()->setMode(mode);
+        const QSignalBlocker wire(modeWireAction_), normal(modeNormalAction_);
+        modeWireAction_->setChecked(mode == diagram::DiagramScene::DrawMode);
+        modeNormalAction_->setChecked(mode == QSchematic::Scene::NormalMode);
     }
 }
 
@@ -1268,6 +1289,7 @@ void MainWindow::connectSceneSignals()
         if (modeWireAction_) {
             const QSignalBlocker blockerWire(modeWireAction_);
             modeWireAction_->setChecked(mode == diagram::DiagramScene::DrawMode);
+            modeNormalAction_->setChecked(mode == QSchematic::Scene::NormalMode);
         }
     });
     connect(scene, &diagram::DiagramScene::statusMessage, this, [this](const QString& message) {
@@ -1479,6 +1501,36 @@ void MainWindow::setSelectedTextFrameTextColor()
     syncTextFrameStyleControls();
 }
 
+void MainWindow::chooseTextFrameFont()
+{
+    const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
+    if (!frame) return;
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("dialog.textFrameFont"));
+    dialog.setWindowTitle(QStringLiteral("Text Frame Font and Size"));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout;
+    auto* family = new QFontComboBox(&dialog);
+    family->setObjectName(QStringLiteral("frame.fontFamily"));
+    family->setCurrentFont(QFont(QString::fromStdString(json_utils::stringValue(frame->params(), "font_family", "Sans Serif"))));
+    auto* size = new QSpinBox(&dialog);
+    size->setObjectName(QStringLiteral("frame.fontSize"));
+    size->setRange(diagram::TextFrameNode::kMinimumFontPoints, 72); size->setValue(json_utils::intValue(frame->params(), "font_size", diagram::TextFrameNode::kDefaultFontPoints));
+    form->addRow(QStringLiteral("Font family"), family);
+    form->addRow(QStringLiteral("Size (points)"), size);
+    layout->addLayout(form);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() != QDialog::Accepted) return;
+    auto params = frame->params();
+    params["font_family"] = family->currentFont().family().toStdString();
+    params["font_size"] = size->value();
+    frame->setParams(params);
+    syncTextFrameStyleControls();
+}
+
 void MainWindow::setSelectedTextFrameLineColor()
 {
     const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
@@ -1535,7 +1587,7 @@ void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
         return;
     }
     auto params = frame->params();
-    params["font_size"] = std::max(6, pointSize);
+    params["font_size"] = std::max(diagram::TextFrameNode::kMinimumFontPoints, pointSize);
     frame->setParams(params);
 }
 
@@ -1544,6 +1596,7 @@ void MainWindow::syncTextFrameStyleControls()
     const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     const bool enabled = static_cast<bool>(frame);
 
+    if (textFrameFontAction_) textFrameFontAction_->setEnabled(enabled);
     if (textColorAction_) textColorAction_->setEnabled(enabled);
     if (lineColorAction_) lineColorAction_->setEnabled(enabled);
     if (fillColorAction_) fillColorAction_->setEnabled(enabled);
@@ -1561,7 +1614,7 @@ void MainWindow::syncTextFrameStyleControls()
     }
     if (textFrameFontSizeSpin_) {
         const QSignalBlocker blocker(textFrameFontSizeSpin_);
-        textFrameFontSizeSpin_->setValue(std::max(6, json_utils::intValue(params, "font_size", 12)));
+        textFrameFontSizeSpin_->setValue(std::max(diagram::TextFrameNode::kMinimumFontPoints, json_utils::intValue(params, "font_size", diagram::TextFrameNode::kDefaultFontPoints)));
     }
 }
 
@@ -1784,10 +1837,10 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
             &dialog,
             [refreshDtLabel](const double valueHz) { refreshDtLabel(valueHz); });
 
-    auto* clearSamplesCheck = new QCheckBox(QStringLiteral("Clear scope traces before run"), &dialog);
-    clearSamplesCheck->setObjectName(QStringLiteral("run.clearScopeTraces"));
-    clearSamplesCheck->setChecked(clearScopesBeforeRun_);
-    clearSamplesCheck->setToolTip(QStringLiteral("Unchecked: keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
+    auto* clearSamplesCheck = new QCheckBox(QStringLiteral("Keep Previous Scope Traces"), &dialog);
+    clearSamplesCheck->setObjectName(QStringLiteral("run.keepScopeTraces"));
+    clearSamplesCheck->setChecked(!clearScopesBeforeRun_);
+    clearSamplesCheck->setToolTip(QStringLiteral("On the next run, keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
 
     form->addRow(QStringLiteral("Model duration (s)"), runtimeSecondsSpin);
     form->addRow(QStringLiteral("Model step rate"), frequencySpin);
@@ -1830,7 +1883,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     }
 
     runtimeSeconds_ = runtimeSecondsSpin->value();
-    clearScopesBeforeRun_ = clearSamplesCheck->isChecked();
+    clearScopesBeforeRun_ = !clearSamplesCheck->isChecked();
     if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == clearScopesBeforeRun_) {
         const QSignalBlocker blocker(overlayScopeTracesAction_);
         overlayScopeTracesAction_->setChecked(!clearScopesBeforeRun_);
@@ -2091,7 +2144,7 @@ void MainWindow::restoreStartupDiagram()
 void MainWindow::openDocumentFile()
 {
     openJsonDocument(
-        QStringLiteral("Open diagram"),
+        QStringLiteral("Open Diagram"),
         QStringLiteral("Diagram, schema, or library files (*.json *.s7diagram *.s7library);;All files (*)"),
         true,
         QStringLiteral("Open failed"));
@@ -2148,7 +2201,7 @@ void MainWindow::saveDocumentAs()
     QString selectedFilter;
     const auto filePath = QFileDialog::getSaveFileName(
         this,
-        QStringLiteral("Save diagram"),
+        QStringLiteral("Save Diagram"),
         currentDiagramPath_.isEmpty() ? QStringLiteral("diagram.s7diagram") : currentDiagramPath_,
         QStringLiteral("Diagram files (*.s7diagram);;JSON files (*.json);;All files (*)"),
         &selectedFilter);
@@ -2235,7 +2288,7 @@ void MainWindow::loadElementLibrary()
 {
     const auto filePath = QFileDialog::getOpenFileName(
         this,
-        QStringLiteral("Load element library"),
+        QStringLiteral("Load Element Library"),
         QString(),
         QStringLiteral("Element libraries (*.s7library *.json);;All files (*)"));
     if (filePath.isEmpty()) {
@@ -2271,6 +2324,50 @@ void MainWindow::loadDemoDiagram()
     currentDiagramPath_.clear();
 }
 
+void MainWindow::chooseExampleDiagram()
+{
+    const QDir app(QCoreApplication::applicationDirPath());
+    QString directory = QStringLiteral(S7STUDIO_EXAMPLES_DIR);
+    for (const auto& base : {QStringLiteral("../share/s7"), QStringLiteral("share/s7")}) {
+        if (!QFileInfo(app.filePath(base)).isDir()) continue;
+        directory = QDir::cleanPath(app.filePath(base + "/examples"));
+        break;
+    }
+    if (!QFileInfo(directory).isDir()) {
+        QMessageBox::critical(this, QStringLiteral("Examples Not Found"),
+            QStringLiteral("The bundled examples directory is missing: %1").arg(QDir::toNativeSeparators(directory)));
+        return;
+    }
+    const auto path = QFileDialog::getOpenFileName(this, QStringLiteral("Example Diagrams"), directory,
+        QStringLiteral("Diagram files (*.s7diagram);;All files (*)"));
+    if (!path.isEmpty()) static_cast<void>(openExampleDiagram(path));
+}
+
+bool MainWindow::openExampleDiagram(const QString& path)
+{
+    try {
+        // Stage parsing and layout before asking to retire the current document
+        // or run. Keep these exact bytes across the Save/Discard/Cancel prompt.
+        const auto parsed = json_utils::parseFile(path);
+        if (!isDiagramDocument(parsed)) throw std::invalid_argument("The example is not an S7 diagram document.");
+        const auto document = diagram::DiagramDocument::fromJson(parsed);
+        if (!document.runtimeSchema.is_object()) throw std::invalid_argument("The example has no schema object.");
+        static_cast<void>(prepareElementTypes(document.runtimeSchema));
+        diagram::DiagramScene staged;
+        diagram::SceneSerializer{}.deserialize(document, staged);
+        if (!confirmDocumentReplacement()) return false;
+        if (!loadDiagramJson(parsed, QFileInfo(path).fileName())) return false;
+        // A bundled example is a working copy, never an implicit Save target.
+        currentDiagramPath_.clear();
+        markDocumentSaved();
+        return true;
+    } catch (const std::exception& ex) {
+        QMessageBox::critical(this, QStringLiteral("Open Example Failed"), QString::fromUtf8(ex.what()));
+        appendLog(QStringLiteral("[studio] failed to open example: %1").arg(QString::fromUtf8(ex.what())));
+        return false;
+    }
+}
+
 void MainWindow::saveSchemaLibrary()
 {
     if (schemaTabs_ && !schemaTabs_->commitAll()) {
@@ -2298,7 +2395,7 @@ void MainWindow::saveSchemaLibrary()
     QString selectedFilter;
     const auto filePath = QFileDialog::getSaveFileName(
         this,
-        QStringLiteral("Save schema library"),
+        QStringLiteral("Save Diagram as Library Element"),
         QStringLiteral("schema_library.s7library"),
         QStringLiteral("Element libraries (*.s7library *.json);;All files (*)"),
         &selectedFilter);
