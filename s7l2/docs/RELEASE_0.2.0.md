@@ -1,7 +1,10 @@
-# S7 C++ 0.2.0 — parallel runtime and local/remote nodes
+# S7 0.2.0 — parallel runtime, networking, certificate tools and printing
 
-Goals agreed with the maintainer on 2026-10-23. These are the two main C++
-release goals after the 0.1.0 preview; implementation belongs to 0.2.0.
+Runtime/node goals agreed with the maintainer on 2026-10-23; Studio diagram
+and observation-graph printing added at the maintainer's request on 2026-10-24.
+Certificate viewing and node certificate creation added on 2026-10-24 as part
+of the networking release scope.
+Implementation of these release goals belongs to 0.2.0.
 The [0.1.0 checklist](RELEASE_0.1.0.md) remains the current release gate.
 
 ## Parallel execution within one runtime
@@ -58,6 +61,100 @@ Publish measured CPU, memory, throughput and latency for representative workload
 and both data security profiles. Qualify constrained hardware such as Raspberry
 Pi separately when available; desktop results do not establish its performance.
 
+## Certificate viewer and node certificate creation
+
+Provide a certificate viewer and a node certificate creation program as part
+of the networking workflow. Both are explicit 0.2.0 goals, outside the tentative
+0.1.1 maintenance scope. Existing test-certificate generation scripts and
+Studio's certificate file fields/identity summaries do not provide this complete
+user workflow.
+
+The viewer should open certificate files and present subject/issuer, serial,
+validity, SHA-256 fingerprint, S7 node UUID from URI SAN, endpoint SANs, key
+usage/Extended Key Usage and chain information where available. Distinguish
+parsing/displaying a certificate from verifying its chain, node identity and
+authorization. Show what was actually checked, against which trust material,
+and why a check failed. Keep private-key material out of the viewer/readout.
+Plan integration with Studio's node details and Trusted Networks settings.
+
+The creation program should produce credentials usable by the existing runtime
+and control clients, with a headless workflow for node provisioning. Define
+runtime-node and Studio/control-node certificate profiles, including S7 UUID
+identity (`spiffe://s7/node/<uuid>`), endpoint identities and the appropriate
+TLS usages. Control-node issuance must preserve the required control-purpose
+EKU and explicit fingerprint pinning; creating a certificate does not authorize
+it automatically. Supply clear output paths and instructions for configuring
+the certificate, private key, CA chain and control pin.
+
+Before implementation, settle the program/CLI name, Studio entry points,
+CA creation/import and signing versus CSR workflows, permitted algorithms,
+validity defaults, key protection and renewal/replacement behavior. Reuse the
+existing identity/control contracts; do not distribute the development fixture
+CA or private keys as real credentials. Use independent generated credentials
+in acceptance, with deliberate handling of existing output files and write
+failures. Do not introduce online issuance or remote administration implicitly.
+
+Acceptance includes:
+
+- Viewer coverage for runtime/control/CA certificates, malformed input,
+  expired/not-yet-valid certificates, untrusted chains and missing/mismatched
+  node identities or usages, with accurate explanatory status.
+- Newly created credentials loaded by real runtimes and Studio/headless
+  control clients; successful mTLS discovery, split encrypted data transport
+  and an authorized deployment using the intended control profile and pin.
+- Rejection of incorrect identity, control purpose or pin. Trusted-plaintext
+  data configuration must not weaken the separate control authorization path.
+- Certificate/key matching, key/file protection, cancelled/failed output and
+  replacement/renewal configuration, including the effect on control pins.
+- Packaged Linux and Windows viewer/tool workflows and a documented multi-node
+  provisioning walkthrough that does not depend on the source checkout or test
+  fixture credentials.
+
+Keep credential tooling independent of runtime graph execution and keep Qt out
+of headless provisioning paths. Full PKI lifecycle services (such as an online
+CA or revocation distribution) require separate scope decisions.
+
+## Studio diagram and observation-graph printing
+
+Provide printing for diagrams and observation graphs. This is missing
+functionality, not a tested feature of 0.1.0: the current Studio has page-layout
+metadata but no diagram/graph print workflow. No printing acceptance has been
+performed. This goal belongs to 0.2.0, not the tentative 0.1.1 bug-fix release.
+
+Plan the print workflow before implementation, including print preview, printer
+selection and PDF output. Define diagram scope (active/root/nested diagram),
+paper size, orientation, margins, fit-to-page and whether multi-page tiling is
+required. Reuse existing diagram page settings where appropriate. Print the
+diagram content without editor selection handles or unrelated UI controls.
+
+For observation graphs, define the supported viewer matrix: Scope, Live
+Oscilloscope Time/Spectrum/XY/Correlation, Phase Portrait and 3D trajectory.
+Specify the printed range, visible channels/overlays, axes, units, legends and
+useful run/model-time identification. Settle how a 3D view is captured during
+planning. Printing a live graph must use one coherent captured display/data
+snapshot; opening a print dialog must not implicitly pause the simulation or
+change its acquisition, recording or causal execution.
+
+Acceptance must include:
+
+- Small and large diagrams, nested schemas, page sizes/orientations, scaling,
+  readable labels and complete wires; explicit checks for clipping and page
+  boundaries.
+- Each supported observation view, including multiple channels, units,
+  comparison overlays and live/frozen/paused/completed runs where applicable.
+  Verify output against the selected range and snapshot.
+- Preview and PDF inspection for resolution, font/line readability, margins,
+  color and grayscale output; preserve vector content where practical.
+- Printer/dialog cancellation, output failures and responsive operation during
+  live runs; verify that printing leaves the model and observation data intact.
+- Relocated Linux/Windows package checks for required printing components.
+  Record native print-dialog and physical-printer evidence separately from PDF
+  and automated rendering checks; neither establishes physical printing alone.
+
+Exact layouts, tiling scope, supported printers and test platforms remain
+planning decisions. Keep printing in Studio; headless runtime modules must not
+gain GUI dependencies.
+
 ## Planning and release boundary
 
 First agree the parallel execution contract, plugin/thread-safety rules and
@@ -65,6 +162,10 @@ benchmark matrix; then implement the scheduler and qualify the local/remote
 multi-node workflow. Shared headless tests and protocol fixtures should cover
 both workstreams. Studio remains an optional client; improvements to it should
 support these workflows without moving execution logic into the GUI.
+Plan and qualify Studio printing as an additional release workstream, with its
+own viewer/output matrix and packaging checks.
+Plan certificate viewing/creation alongside multi-node setup, so networking
+acceptance uses the new provisioning workflow as well as protocol fixtures.
 
 Additional integration methods, implicit multi-rate conversion, durable stream
 journals and a new remote-observation API are not implied by these goals. Their

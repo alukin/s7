@@ -13,8 +13,15 @@ inside Studio through **Help → S7 Studio Help** (F1).
 The [0.1.0 Linux preview checklist](RELEASE_0.1.0.md) defines the current
 release scope, verified checks and known limits.
 
-The [0.2.0 C++ goals](RELEASE_0.2.0.md) are parallel execution within one runtime
-and qualified multi-node operation on local and remote hosts.
+[Studio manual-test findings for a possible 0.1.1](STUDIO_0.1.1_TRIAGE.md)
+are being collected and analyzed before fixes are selected.
+The [main menu review](STUDIO_MENU_REVIEW.md) records the current structure and
+a proposed reorganization for planning.
+
+The [0.2.0 goals](RELEASE_0.2.0.md) are parallel execution within one runtime,
+qualified multi-node operation on local and remote hosts, certificate viewing
+and node certificate creation, and Studio printing of diagrams and observation
+graphs.
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the next release: dependable Studio simulation with the bundled runtime, acceptance criteria, and deferred backlog.
