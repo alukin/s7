@@ -30,8 +30,7 @@ const QColor kTrajectoryColor("#2ca02c");
 
 auto PhasePortraitViewWindow::viewerType() -> viewers::ViewerType
 {
-    return {QStringLiteral("PhasePortrait"), QStringLiteral("Phase Portrait"), QStringLiteral("2→plot"),
-            QStringLiteral("Plots one observed signal against another."), {QStringLiteral("x"), QStringLiteral("y")},
+    return {QStringLiteral("PhasePortrait"), {}, QStringLiteral("2→plot"), {}, {QStringLiteral("x"), QStringLiteral("y")},
             [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* {
                 if (spec.probeNames.size() != 2 || spec.probeNames[0].isEmpty() || spec.probeNames[1].isEmpty()
                     || spec.probeNames[0] == spec.probeNames[1]) return nullptr;

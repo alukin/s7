@@ -9,6 +9,8 @@
 #include "live_oscilloscope_window.hpp"
 
 #include <utility>
+#include <s7/metadata_json.hpp>
+#include "observer_metadata.hpp"
 
 namespace s7studio::viewers {
 
@@ -43,10 +45,17 @@ auto ViewerRegistry::find(const QString& typeId) const -> const ViewerType*
 
 void registerBuiltinViewers(ViewerRegistry& registry)
 {
-    registry.add(ui::ScopeViewWindow::viewerType());
-    registry.add(ui::LiveOscilloscopeWindow::viewerType());
-    registry.add(ui::PhasePortraitViewWindow::viewerType());
-    registry.add(ui::PhaseTrajectory3DViewWindow::viewerType());
+    static const s7::ElementMetadataLibrary metadata(s7::resources::observer_metadata);
+    const auto add = [&registry](ViewerType type) {
+        type.documentation = metadata.at(type.typeId.toStdString());
+        type.displayName = QString::fromStdString(type.documentation->display_name);
+        type.description = QString::fromStdString(type.documentation->description);
+        registry.add(std::move(type));
+    };
+    add(ui::ScopeViewWindow::viewerType());
+    add(ui::LiveOscilloscopeWindow::viewerType());
+    add(ui::PhasePortraitViewWindow::viewerType());
+    add(ui::PhaseTrajectory3DViewWindow::viewerType());
 }
 
 } // namespace s7studio::viewers

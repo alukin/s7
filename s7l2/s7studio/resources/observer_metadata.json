@@ -1,0 +1,258 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [
+    {
+      "type_name": "Scope",
+      "display_name": "Scope",
+      "description": "Plots one or more observed signals over time. Observes completed causal steps without changing the model. Double-click opens the full viewer. Channel bindings are prepared at run start; rewiring applies to the next run. Connect an output to the '+' port to add a channel. Inputs are numbered from zero.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "signal0, signal1, ...",
+          "description": "Observed real-valued outputs; '+' adds another input",
+          "type": "F64",
+          "optional": true,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "channel_count",
+          "type": "int",
+          "description": "Number of signal inputs, maintained when wiring the '+' port. Nonnegative; initially no channels. Live acquisition supports up to 8 connected channels.",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "channel_names",
+          "type": "array",
+          "description": "Optional array of channel-name strings in input order, e.g. [\"voltage\",\"current\"]. Missing/non-string entries use signal0, signal1, ... . Use distinct nonempty names for channel identity.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "channel_units",
+          "type": "array",
+          "description": "Optional array of unit-label strings in input order, e.g. [\"V\",\"A\"]. Labels do not convert values. Missing/non-string entries inherit a named signal tap's unit, otherwise the unit is unspecified.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "LiveOscilloscope",
+      "display_name": "Live oscilloscope (prototype)",
+      "description": "Bounded time window; adjustable retention and exact sample inspection. Does not record the full run. Observes completed causal steps without changing the model. Double-click opens the full viewer. Channel bindings are prepared at run start; rewiring applies to the next run. Connect an output to the '+' port to add a channel. Inputs are numbered from zero.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "signal0, signal1, ...",
+          "description": "Observed real-valued outputs; '+' adds another input",
+          "type": "F64",
+          "optional": true,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "channel_count",
+          "type": "int",
+          "description": "Number of signal inputs, maintained when wiring the '+' port. Nonnegative; initially no channels. Live acquisition supports up to 8 connected channels.",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "channel_names",
+          "type": "array",
+          "description": "Optional array of channel-name strings in input order, e.g. [\"voltage\",\"current\"]. Missing/non-string entries use signal0, signal1, ... . Use distinct nonempty names for channel identity.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "channel_units",
+          "type": "array",
+          "description": "Optional array of unit-label strings in input order, e.g. [\"V\",\"A\"]. Labels do not convert values. Missing/non-string entries inherit a named signal tap's unit, otherwise the unit is unspecified.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "trigger",
+          "type": "object",
+          "description": "Optional saved trigger preset; omitted fields use the defaults shown below. mode: string rolling/auto/normal/single (default rolling); channel: zero-based integer 0..7 (default 0), must name a connected channel; edge: string rising/falling (default rising); level: finite number in raw channel units (default 0); hysteresis: finite nonnegative width in the same units (default 0), with representable finite level +/- width/2; pretrigger_percent: integer 0..100 (default 25); holdoff_steps: integer 0..1000000000 model steps (default 0); auto_timeout_steps: integer 1..1000000000 model steps (default 4096). Rolling ignores triggering; Auto can publish an untriggered frame after its timeout; Normal waits for an edge; Single holds a capture until rearmed. Invalid saved presets are reported and ignored. Display gain/offset do not change trigger measurements. Trigger edits in the live viewer apply immediately and are saved with the diagram.",
+          "default": {
+            "auto_timeout_steps": 4096,
+            "channel": 0,
+            "edge": "rising",
+            "holdoff_steps": 0,
+            "hysteresis": 0,
+            "level": 0,
+            "mode": "rolling",
+            "pretrigger_percent": 25
+          },
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PhasePortrait",
+      "display_name": "Phase Portrait",
+      "description": "Plots one observed signal against another. Observes completed causal steps without changing the model. Double-click opens the full viewer. Channel bindings are prepared at run start; rewiring applies to the next run.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "x",
+          "description": "Observed axis value at the same model step",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "y",
+          "description": "Observed axis value at the same model step",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "channel_units",
+          "type": "array",
+          "description": "Optional array of unit-label strings in input order, e.g. [\"V\",\"A\"]. Labels do not convert values. Missing/non-string entries inherit a named signal tap's unit, otherwise the unit is unspecified.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PhaseTrajectory3D",
+      "display_name": "3D Phase Trajectory",
+      "description": "Plots three observed signals as a continuous trajectory in 3D. Observes completed causal steps without changing the model. Double-click opens the full viewer. Channel bindings are prepared at run start; rewiring applies to the next run.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "x",
+          "description": "Observed axis value at the same model step",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "y",
+          "description": "Observed axis value at the same model step",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "z",
+          "description": "Observed axis value at the same model step",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "channel_units",
+          "type": "array",
+          "description": "Optional array of unit-label strings in input order, e.g. [\"V\",\"A\"]. Labels do not convert values. Missing/non-string entries inherit a named signal tap's unit, otherwise the unit is unspecified.",
+          "default": [],
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

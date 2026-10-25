@@ -5,6 +5,8 @@
 #include "diagram_editor.hpp"
 #include "diagram/diagram_scene.hpp"
 #include "element_picker_panel.hpp"
+#include "element_documentation.hpp"
+#include "viewers/viewer_registry.hpp"
 #include "scope_view_window.hpp"
 #include "live_oscilloscope_window.hpp"
 #include "viewers/spectrum_view.hpp"
@@ -60,6 +62,9 @@
 #include <QTextStream>
 #include <QTextBrowser>
 #include <QListWidget>
+#include <QScrollBar>
+#include <QSplitter>
+#include <QContextMenuEvent>
 #include <QUndoStack>
 #include <functional>
 #include <memory>
@@ -336,6 +341,169 @@ private slots:
         QVERIFY(configure("action.run", .099)); // Warning remains non-blocking.
         QTRY_COMPARE(runner->state(), s7studio::RunState::Completed);
         QCOMPARE(runner->completedTicks(), 99L);
+    }
+    void elementDocumentationCoverage() {
+        using namespace s7studio;
+        s7::ElementCatalogService catalog(s7::ElementRegistry::instance());
+        for (const auto& entry : catalog.all_elements()) {
+            const auto& metadata = s7::ElementRegistry::instance().find(entry.type_name)->metadata();
+            const auto documentation = ui::elementDocumentation(metadata);
+            QVERIFY2(!metadata.description.empty(), entry.type_name.c_str());
+            for (const auto& parameter : metadata.parameters) {
+                QVERIFY2(!parameter.description.empty(), parameter.name.c_str());
+                QVERIFY(documentation.contains(QString::fromStdString(parameter.name) + QStringLiteral(" — ")));
+            }
+        }
+        const auto docs = [&](const char* type) { return ui::elementDocumentation(s7::ElementRegistry::instance(), type); };
+        QVERIFY(docs("Adder").contains("2..64"));
+        QVERIFY(docs("Adder").contains("accumulator_type"));
+        QVERIFY(docs("Accumulator").contains("cannot alone close a feedback loop"));
+        QVERIFY(docs("TrapezoidIntegrator").contains("Sampled mode cannot alone close a feedback loop"));
+        QVERIFY(docs("SymplecticIntegrator").contains("not exactly conserved"));
+        QVERIFY(docs("PIController").contains("Gains are signals, not JSON parameters"));
+        QVERIFY(docs("PIController").contains("Internal element settings"));
+        QVERIFY(docs("Convert").contains("required; must be supplied"));
+        QVERIFY(docs("RecordedSource").contains("no resampling"));
+        QVERIFY(docs("NetSink").contains("[numerator, denominator]"));
+        const auto live = docs("LiveOscilloscope");
+        for (const auto* key : {"channel_count", "channel_names", "channel_units", "trigger", "mode", "channel", "edge", "level",
+                                "hysteresis", "pretrigger_percent", "holdoff_steps", "auto_timeout_steps"})
+            QVERIFY2(live.contains(key), key);
+        const auto& trigger = viewers::ViewerRegistry::instance().find("LiveOscilloscope")->documentation->parameters.back();
+        QCOMPARE(trigger.default_value.at("pretrigger_percent").to_number<int>(), observation::TriggerSettings{}.pretriggerPercent);
+        QVERIFY(docs("UnavailablePlugin").contains("Documentation unavailable"));
+    }
+    void elementInformationAccess() {
+        using namespace s7studio;
+        auto* tree = window_->findChild<QTreeWidget*>("elements.tree"); QVERIFY(tree);
+        QTreeWidgetItem* gain = nullptr; QTreeWidgetItem* delay = nullptr;
+        for (int i = 0; i < tree->topLevelItemCount(); ++i)
+            for (int j = 0; j < tree->topLevelItem(i)->childCount(); ++j) {
+                auto* item = tree->topLevelItem(i)->child(j);
+                if (item->data(0, Qt::UserRole).toString() == "Gain") gain = item;
+                if (item->data(0, Qt::UserRole).toString() == "Delay") delay = item;
+            }
+        QVERIFY(gain && delay);
+        tree->setCurrentItem(gain); tree->scrollToItem(delay);
+        const auto document = window_->currentDocument();
+        // Right-click targets Delay even though Gain remains the selected row.
+        bool menuSeen = false;
+        QTimer menuDriver;
+        menuDriver.setInterval(10);
+        connect(&menuDriver, &QTimer::timeout, this, [&] {
+            auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+            if (!menu || menu->objectName() != "elements.contextMenu") return;
+            menuSeen = true; menuDriver.stop();
+            menu->setActiveAction(menu->actions().first());
+            QTest::keyClick(menu, Qt::Key_Return);
+        });
+        const auto inspect = [&](QDialog* dialog) {
+            auto* view = dialog->findChild<QPlainTextEdit*>("element.documentation");
+            if (!view || !view->isReadOnly() || !view->toPlainText().contains("Type: Delay")) {
+                qWarning() << "Context target" << (view ? view->toPlainText().left(100) : QString("No view"));
+                return false;
+            }
+            capture(dialog, "element-information", true);
+            dialog->reject(); return true;
+        };
+        const auto point = tree->visualItemRect(delay).center();
+        menuDriver.start();
+        QVERIFY(modalWorkflow([&] {
+            // Dispatch the platform context-menu event with a different row
+            // selected; Qt Test mouse events alone do not synthesize it.
+            QContextMenuEvent context(QContextMenuEvent::Mouse, point, tree->viewport()->mapToGlobal(point));
+            QApplication::sendEvent(tree->viewport(), &context);
+        }, inspect));
+        QVERIFY(menuSeen);
+        QCOMPARE(window_->currentDocument(), document);
+        // Category and empty-space context requests have no element action.
+        tree->scrollToItem(tree->topLevelItem(0));
+        auto categoryPoint = tree->visualItemRect(tree->topLevelItem(0)).center();
+        QContextMenuEvent category(QContextMenuEvent::Mouse, categoryPoint, tree->viewport()->mapToGlobal(categoryPoint));
+        QApplication::sendEvent(tree->viewport(), &category);
+        QVERIFY(!QApplication::activePopupWidget());
+        QContextMenuEvent blank(QContextMenuEvent::Mouse, {-10,-10}, tree->viewport()->mapToGlobal(QPoint(-10,-10)));
+        QApplication::sendEvent(tree->viewport(), &blank);
+        QVERIFY(!QApplication::activePopupWidget());
+        tree->setCurrentItem(delay); tree->scrollToItem(delay); tree->setFocus();
+        menuDriver.start();
+        QVERIFY(modalWorkflow([&] {
+            QTest::keyClick(tree, Qt::Key_Menu);
+        }, inspect));
+        menuDriver.start();
+        QVERIFY(modalWorkflow([&] { QTest::keyClick(tree, Qt::Key_F10, Qt::ShiftModifier); }, inspect));
+        // Edit menu reads the active canvas selection, including schema/observer types.
+        for (const auto* type : {"Gain", "PIController", "Scope"}) {
+            scene()->clearSelection();
+            auto node = scene()->addElement({std::string("info_") + type, type, {}, {}, {}, {}}, {0,0});
+            node->setSelected(true);
+            QVERIFY(dialogAction("action.elementInformation", [&](QDialog* dialog) {
+                auto* view = dialog->findChild<QPlainTextEdit*>("element.documentation");
+                if (!view || !view->toPlainText().contains(QString("Type: ") + type)) return false;
+                dialog->reject(); return true;
+            }));
+        }
+        auto* tabs = window_->findChild<SchemaTabs*>(); QVERIFY(tabs);
+        auto* nested = tabs->open(editor(), "info_PIController"); QVERIFY(nested);
+        nested->scene()->clearSelection();
+        auto state = nested->scene()->elementNode("i_state"); QVERIFY(state); state->setSelected(true);
+        QVERIFY(dialogAction("action.elementInformation", [&](QDialog* dialog) {
+            auto* view = dialog->findChild<QPlainTextEdit*>("element.documentation");
+            if (!view || !view->toPlainText().contains("Type: EulerIntegrator")) return false;
+            dialog->reject(); return true;
+        }));
+    }
+    void longElementDocumentation() {
+        using namespace s7studio;
+        auto& registry = s7::ElementRegistry::instance();
+        s7::ElementMetadata metadata;
+        metadata.type_name = "DocumentationFixture"; metadata.display_name = "Long plugin documentation";
+        metadata.category = "Documentation test";
+        metadata.description = "<img src=\"https://invalid.example/never-load\">\n";
+        for (int i = 0; i < 200; ++i) metadata.description += "Plugin paragraph " + std::to_string(i) + ": selectable documentation with a long explanation.\n";
+        metadata.description += "LAST PLUGIN PARAGRAPH";
+        metadata.parameters.push_back({"value", "string", "Fixture setting", "example", {}, {}, {}, false});
+        registry.register_element(s7::ElementDescriptor(metadata.type_name,
+            [](const s7::ElementCreationContext&) -> std::unique_ptr<s7::Element> { return {}; }, metadata));
+        scene()->clearSelection();
+        auto node = scene()->addElement({"long_docs", metadata.type_name, {}, {}, {}, {}}, {0,0});
+        node->setSelected(true);
+        const auto expected = ui::elementDocumentation(metadata);
+        const auto check = [&](QDialog* dialog, bool properties) {
+            dialog->resize(560, 460);
+            dialog->raise(); dialog->activateWindow();
+            if (!QTest::qWaitForWindowActive(dialog)) return false;
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!buttons || !buttons->isVisible() || !dialog->rect().contains(buttons->geometry())) return false;
+            auto* view = dialog->findChild<QPlainTextEdit*>("element.documentation");
+            if (!view || view->toPlainText() != expected || !view->isReadOnly()) {
+                qWarning() << "Documentation mismatch" << bool(view) << (view ? view->toPlainText().size() : 0) << expected.size();
+                return false;
+            }
+            if (properties) {
+                auto* splitter = dialog->findChild<QSplitter*>("element.propertiesSplitter");
+                if (!splitter || splitter->count() != 2) return false;
+                auto* parameter = dialog->findChild<QWidget*>("parameter.value");
+                if (!parameter || !parameter->isVisible()) return false;
+                capture(dialog, "long-element-properties", true);
+            }
+            view->setFocus(); QTest::keyClick(view, Qt::Key_End, Qt::ControlModifier);
+            QTest::qWait(20);
+            if (view->verticalScrollBar()->value() <= 0 || !view->toPlainText().contains("LAST PLUGIN PARAGRAPH")) {
+                qWarning() << "Documentation scroll" << view->verticalScrollBar()->value() << view->verticalScrollBar()->maximum() << view->textCursor().position();
+                return false;
+            }
+            view->selectAll(); view->copy();
+            if (QApplication::clipboard()->text() != expected) {
+                qWarning() << "Clipboard mismatch" << QApplication::clipboard()->text().size() << expected.size();
+                return false;
+            }
+            dialog->reject(); return true;
+        };
+        const auto before = window_->currentDocument();
+        QVERIFY(dialogAction("action.elementInformation", [&](QDialog* d) { return check(d, false); }));
+        QVERIFY(dialogAction("action.properties", [&](QDialog* d) { return check(d, true); }));
+        QCOMPARE(window_->currentDocument(), before);
     }
     void editParametersSaveOpen() {
         auto* panel = window_->findChild<s7studio::ui::ElementPickerPanel*>();

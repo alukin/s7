@@ -78,8 +78,7 @@ void Trajectory3DBridge::setViewRotation(const QVector3D rotation)
 
 auto PhaseTrajectory3DViewWindow::viewerType() -> viewers::ViewerType
 {
-    return {QStringLiteral("PhaseTrajectory3D"), QStringLiteral("3D Phase Trajectory"), QStringLiteral("3→plot"),
-            QStringLiteral("Plots three observed signals as a continuous trajectory in 3D."),
+    return {QStringLiteral("PhaseTrajectory3D"), {}, QStringLiteral("3→plot"), {},
             {QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")},
             [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* {
                 const auto& probes = spec.probeNames;

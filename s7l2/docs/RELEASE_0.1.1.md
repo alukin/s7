@@ -1,6 +1,6 @@
 # S7 0.1.1 — interface design and implementation plan
 
-Date: 2026-10-24. Status: ST-001/ST-002/ST-005 and font/palette fixes locally verified; remaining
+Date: 2026-10-24; updated 2026-10-25. Status: ST-001/ST-002/ST-005/ST-007 and font/palette fixes locally verified; remaining
 interface work is a proposed design for review.
 
 The maintainer accepted the proposed order of work and requested step 1:
@@ -69,6 +69,68 @@ working directory. These are directory-lookup checks against host Qt, not a
 fresh binary-distribution/platform qualification. Windows Studio Release
 cross-build and **1/1 Wine Studio smoke** pass; native Windows GUI acceptance
 remains separate.
+
+## Implemented increment — ST-007, JSON metadata, 2026-10-25
+
+The maintainer selected complete metadata in module-owned JSON, replacing the
+initial C++ prose approach. The 49 definitions across core, I/O, networking,
+noise, the reference spectral plugin and Studio observers are embedded at build
+time. Existing schema elements keep their JSON library definitions. C++ retains
+factories and executable behavior. ElementMetadataLibrary decodes the same
+parameter/type/port declarations used by validation and information; the SDK
+exports the embedding helper for out-of-tree plugins. Missing definitions,
+duplicate type/parameter names, malformed fields, invalid defaults and unknown
+type rules fail explicitly. Comparison of all 49 definitions before/after the
+move preserved defaults, types, bounds, choices, ports, variables, variadic rules
+and visual hints; executable factory bodies are unchanged.
+
+Element Information is available from a library row's context menu (including
+the context-menu key and Shift+F10), and from Edit for the active root/nested
+canvas selection. Categories and blank space offer no element action.
+Properties and Information share a read-only, selectable plain-text view.
+Properties uses an adjustable vertical splitter with independently scrollable
+documentation and parameters; buttons remain outside it. Long plugin text and
+markup-like strings are preserved without loading external content. Schema and
+observer double-click behavior is unchanged. The parameter inventory and audit
+sources are in [STUDIO_ELEMENT_INFORMATION.md](STUDIO_ELEMENT_INFORMATION.md).
+
+The nested-selection workflow exposed a shutdown crash: a deferred nested page
+could emit selectionChanged after toolbar actions were destroyed. MainWindow
+now disconnects every editor/scene callback before tab teardown. The new
+information workflow retains that selected-nested-editor shutdown regression.
+
+Verification: native GCC 16.2.1 / Qt 6.11.2 Release `build-tests` and the complete
+CTest suite pass **82/82** (105.61 s), including all four GUI suites and **42
+workflow cases**, without skips. The out-of-tree spectral SDK test passes.
+A fresh Release headless configuration builds and passes **5/5** selected
+core/metadata/I/O/network/noise smoke tests. Windows Studio cross-build passes;
+Wine passes **2/2** metadata and Studio smoke checks.
+
+Focused information/long-text workflows also pass at 150% and 200% on Xvfb,
+using 2160×1350 and 2880×1800 framebuffers respectively (1440×900 logical).
+The GUI wrapper now accepts `--screen-size` to preserve a meaningful logical
+workspace during scaled checks; its failure/skip/watchdog self-check passes.
+Small-dialog coverage uses 560×460 logical pixels. Captures and numerical
+metadata comparison snapshots remain outside Git under `/tmp/s7-st007-*` and
+the normal GUI artifact directory. These automated checks do not establish
+native Windows interaction/rendering, every physical desktop theme or full
+release/package qualification. No vendor code or runtime causal semantics changed.
+
+Commands used for the primary checks:
+
+```bash
+cmake --build build-release --target build-tests --parallel 2
+ctest --test-dir build-release --output-on-failure -j 2
+cmake -S . -B /tmp/s7-st007-headless -DS7_BUILD_STUDIO=OFF -DCMAKE_BUILD_TYPE=Release
+cmake --build /tmp/s7-st007-headless --target s7core_metadata_json_smoke s7core_smoke s7io_smoke s7net_smoke s7noise_smoke --parallel 2
+ctest --test-dir /tmp/s7-st007-headless -R '^(s7core_metadata_json_smoke|s7core_smoke|s7io_smoke|s7net_smoke|s7noise_smoke)$' --output-on-failure
+cmake --build build-win-release --target s7studio s7core_metadata_json_smoke --parallel 2
+ctest --test-dir build-win-release -R '^(s7core_metadata_json_smoke|s7studio_smoke)$' --output-on-failure
+```
+
+The scaled GUI command is documented in [STUDIO_GUI_TESTING.md](STUDIO_GUI_TESTING.md).
+Developer, plugin and offline Studio guides describe the JSON workflow and
+information access. ST-008 drag placement remains the next Studio increment.
 
 ## Scope and decisions to review
 
@@ -173,36 +235,19 @@ bundled example text frames to at least 10 pt, preserving larger sizes. The
 inventory contains 62 text frames; 60 already used 10 pt, and the two 9 pt
 frames are raised to 10 pt. Diagram zoom continues to scale text normally.
 
-### Planned oscillator example improvement — 2026-10-24
+### Integrator research scope correction — 2026-10-25
 
-The maintainer requested adding this work to the 0.1.1 plan: investigate and
-improve long-run oscillator accuracy, with an Euler–Cromer (semi-implicit Euler)
-companion to `2int_osc` as a candidate using the existing SymplecticIntegrator
-or its explicit Gain/Accumulator/EulerIntegrator composition. The recollection
-of solving Euler feedback accuracy in the original S7 over 30 years ago is
-explicitly uncertain; the earlier algorithm is not remembered. Research is
-needed, and Euler–Cromer must not be presented as the recovered historical method.
-Its candidate update uses velocity first, then position with the new velocity.
-Keep causal dependencies explicit; changing element insertion order alone
-must not change the two EulerIntegrator elements' causal-memory semantics.
+The maintainer clarified that integrator and feedback-settling research is a
+separate project with no release assignment yet, outside both 0.1.1 and 0.2.0.
+This supersedes the earlier planned oscillator accuracy investigation/example
+increment (3b); it is removed from this release's implementation sequence and
+acceptance gates. Research proceeds on an isolated branch, with findings reviewed
+before any release integration is considered.
 
-This work item is planned, not implemented or newly qualified. During its
-implementation, document the old/new amplitude and phase behavior for a
-600-second run at the example's timestep, with energy error and timestep
-comparisons against independent references. See the research task in
-[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) and the Siebert reference/reading status in
-[SIMULATION_MODEL.md](SIMULATION_MODEL.md). Preserve the reaffirmed
-analog-computer approach. Describe observed error and timestep
-limits without promising a universal 1000× accuracy improvement. No new
-integration method or global solver is required.
-
-The maintainer also authorized using examples from Siebert's book with source
-references. Once the relevant text is available and read, select suitable
-examples for this investigation and realize them as explicit S7 networks.
-Record edition/chapter/page/example or problem identifiers, any model changes,
-and independent numerical checks in each example's documentation. The current
-source-access limitation and attribution convention are in SIMULATION_MODEL.md;
-this records permission and planned work, not completed book-derived examples.
+The research questions remain in [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
+[SIMULATION_MODEL.md](SIMULATION_MODEL.md) retains the analog-computer contract,
+Siebert reference, reading status and attribution rules. Existing integrator
+documentation and regression coverage remain relevant to Studio maintenance.
 
 ## 2. Element information and placement — ST-007/ST-008
 
@@ -455,7 +500,6 @@ workflow. The order follows the maintainer's accepted release sequence:
 | 1 — Design | This plan, menu review and triage links | Review the menu, wireframes, persistence, release boundary and proposed budgets; settle remaining decisions before their implementation. |
 | 2 — Isolated fixes | main_window actions, main_window_builder toolbar, Studio GUI workflows | Reproduce and fix actual keyboard dispatch; disabled-button tooltip and icon checks. |
 | 3 — Shell/examples | main_window_builder, main_window document loading, packaged example lookup | Actual menu activation, focused editing and installed example loading/replacement protection. |
-| 3b — Oscillator accuracy research/example | Investigate Euler feedback drift; compare existing methods and consider an Euler–Cromer companion, without claiming to recover the maintainer's uncertain historical method | At implementation time, compare amplitude/energy/phase over 600 seconds and different timesteps against independent references; preserve causal execution; no new global solver. |
 | 4a — Information | element metadata at its owning modules, element_picker_panel, shared information widget and Properties | Complete parameter inventory, representative semantic checks and long-text layout/accessibility. |
 | 4b — Drag placement | element_picker_panel, diagram_editor/project-owned scene adapters, shared element creation | Real drag/drop, zoom/pan, root/nested placement, undo/redo and save/reopen. |
 | 5a — Observer presentation boundary | viewers registry/manager, reusable plot presentations, observation tail preparation and shared settings owner | Two independent presentations of one source; no capture/trigger changes on preview creation. |

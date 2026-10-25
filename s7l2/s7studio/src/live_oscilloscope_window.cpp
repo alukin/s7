@@ -277,7 +277,7 @@ void LiveOscilloscopeWindow::changeEvent(QEvent* event)
 }
 viewers::ViewerType LiveOscilloscopeWindow::viewerType()
 {
-    return {"LiveOscilloscope", "Live oscilloscope (prototype)", "N→live", "Bounded time window; adjustable retention and exact sample inspection. Does not record the full run.", {},
+    return {"LiveOscilloscope", {}, "N→live", {}, {},
         [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* { return new LiveOscilloscopeWindow(spec.instanceId); }};
 }
 void LiveOscilloscopeWindow::applyTriggerSettings()

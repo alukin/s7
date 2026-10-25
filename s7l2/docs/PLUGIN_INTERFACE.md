@@ -51,6 +51,8 @@ Although the entry points are C functions, the registry pointer and `ElementDesc
 ```cpp
 #include "s7/element_plugin.hpp"
 #include "s7/element_registry.hpp"
+#include "s7/metadata_json.hpp"
+#include "my_metadata.hpp"  // generated from resources/element_metadata.json
 
 static const S7PluginInfo kInfo{S7_PLUGIN_API_VERSION, 1, "example", "1.0.0", "Author"};
 
@@ -58,10 +60,11 @@ extern "C" const S7PluginInfo* s7_plugin_query() { return &kInfo; }
 
 extern "C" void s7_register_elements(void* registry_ptr) {
     auto* registry = static_cast<s7::ElementRegistry*>(registry_ptr);
+    static const s7::ElementMetadataLibrary metadata(s7::resources::my_metadata);
     registry->register_element(s7::ElementDescriptor(
         "LinearTransform",
         [](const s7::ElementCreationContext& ctx) { /* create element */ },
-        create_linear_transform_metadata()));
+        metadata.at("LinearTransform")));
 }
 ```
 
@@ -81,8 +84,17 @@ An external plugin then uses `find_package(s7core)` and links `s7::s7core`:
 find_package(s7core 0.1 REQUIRED)
 add_library(myplugin MODULE src/plugin.cpp)
 target_link_libraries(myplugin PRIVATE s7::s7core)
+s7_embed_metadata(myplugin resources/element_metadata.json my_metadata)
 set_target_properties(myplugin PROPERTIES PREFIX "lib")   # libs7*.so is not required for explicit loading
 ```
+
+Keep complete element metadata in the plugin's JSON resource: descriptions,
+ports, parameters/defaults/bounds, type variables and visual hints. The SDK
+embeds it at build time; the installed plugin needs no source-tree or runtime
+JSON path. The same declarations drive parameter checks and Studio information.
+See [the metadata format](ELEMENT_DEV_GUIDE.md#metadata) for a complete example.
+The C++ ElementMetadata interface remains available to existing third-party
+implementations.
 
 `s7spectral/` is the reference third-party plugin: it is kept out of the main build and is built against the installed SDK by `ctest -R s7spectral_sdk_smoke` (`tools/test_third_party_plugin.sh`), which then loads it with `PluginLoader` and checks that its `WindowedFFT` element measures a sine correctly. The test is skipped when `fftw3f` is not installed.
 

@@ -24,6 +24,7 @@ add_library(s7spectral MODULE
 )
 target_include_directories(s7spectral PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(s7spectral PRIVATE s7::s7core PkgConfig::FFTW3F)
+s7_embed_metadata(s7spectral resources/element_metadata.json spectral_metadata)
 target_compile_options(s7spectral PRIVATE -Wall -Wextra -Wpedantic)
 set_target_properties(s7spectral PROPERTIES PREFIX "lib")
 

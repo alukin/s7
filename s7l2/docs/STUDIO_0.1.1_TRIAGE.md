@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: ST-001/ST-002/ST-005/ST-010 implemented and locally verified; other interface work remains in planning.
+Status: ST-001/ST-002/ST-005/ST-007/ST-010 implemented and locally verified; other interface work remains in planning.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24
@@ -427,10 +427,21 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
   existing elements, documentation must describe every supported JSON
   parameter. A short summary alone is insufficient; retain it as an introduction
   followed by the complete parameter reference.
-- **Classification/status:** content and discovery UX improvement; source
-  inspected, no UI changes or description rewrite performed. The user did
-  not identify a particular missing/unclear element description.
-- **Source evidence:**
+- **Classification/status:** content and discovery UX improvement; implemented
+  and locally verified on 2026-10-25. The maintainer selected complete metadata
+  in JSON instead of long C++ documentation strings.
+- **Resolution:** module-owned embedded JSON supplies runtime and observer
+  metadata, including parameter defaults/bounds/choices, port and type rules.
+  Shared plain-text documentation is available in resizable Information and
+  split Properties dialogs. Library context actions target the clicked row;
+  keyboard access and Edit information cover root/nested canvas selections,
+  schemas and observers. Existing double-click gestures are preserved.
+  Long text supports scrolling, keyboard navigation and copying. A selected
+  nested-editor shutdown crash found by the workflow is fixed by disconnecting
+  scene callbacks before teardown. The coverage inventory is in
+  [STUDIO_ELEMENT_INFORMATION.md](STUDIO_ELEMENT_INFORMATION.md); test results
+  and platform limits are in [the release plan](RELEASE_0.1.1.md).
+- **Original source evidence (before implementation):**
   - `MainWindow::onElementNodeDoubleClicked()` already adds a word-wrapped
     description label near the top of the 720×680 properties dialog.
     `elementDescriptionForType()` uses registry metadata first, then a small
@@ -452,7 +463,7 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
     Advanced JSON tab. This does not establish complete coverage: audit against
     actual accepted JSON parameters, including type-variable pin parameters,
     optional/conditional parameters and schema/plugin definitions.
-- **Planning direction:** author/review a concise introduction plus a complete
+- **Original planning direction:** author/review a concise introduction plus a complete
   parameter reference for our existing built-in, schema-backed and observer
   types, and preserve plugin-provided documentation. Reuse existing element and
   parameter metadata across Properties, library selection and right-click

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/net.hpp"
+#include "s7/metadata_json.hpp"
+#include "net_metadata.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -15,44 +17,6 @@ namespace {
 
 std::mutex g_runtime_endpoint_mutex;
 transport::RuntimeNetEndpointPtr g_runtime_endpoint;
-
-auto make_net_metadata(const std::string& type_name,
-                       const std::string& display_name,
-                       const std::string& description,
-                       const int input_count,
-                       const int output_count) -> ElementMetadata
-{
-    ElementMetadata metadata;
-    metadata.type_name = type_name;
-    metadata.display_name = display_name;
-    metadata.description = description;
-    metadata.category = "network";
-    metadata.version = "1.0.0";
-    metadata.tags = {"network", "transport", "distributed"};
-    metadata.visual = {"box", "#5C6BC0", 140, 56, ""};
-    metadata.type_variables.push_back({"T", signal_type_sets::all.types(), "type"});
-    metadata.parameters = {
-        {"type", "type", "Pins the stream's type (otherwise inferred)", nullptr, std::nullopt, std::nullopt, {}, false},
-        {"stream_id", "string", "Stream UUID; the same on both ends", nullptr, std::nullopt, std::nullopt, {}, true},
-        {"max_elements_per_packet", "int", "Batch size", 1024, 1, std::nullopt, {}, false},
-        {"max_batch_latency_ms", "int", "Longest wait before a partial batch is sent", 10, 0, std::nullopt, {}, false},
-        {"send_log_max_packets", "int", "Unacknowledged packets kept for replay", 4096, 1, std::nullopt, {}, false},
-        {"max_block_ms", "int", "Longest publish wait on a full send log before the stream faults", 2000, 0, std::nullopt, {}, false},
-        {"max_wait_ms", "int", "Longest receive wait for data before the stream faults (underrun)", 2000, 0, std::nullopt, {}, false},
-        {"producer_node", "string", "Node UUID allowed to produce the stream (NetSource; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
-        {"consumer_nodes", "array", "Node UUIDs allowed to consume the stream (NetSink; empty: any)", nullptr, std::nullopt, std::nullopt, {}, false},
-        {"max_latency_ms", "int", "NetSource: packets arriving later than this (end to end, synchronized clocks) are counted LATE", nullptr, 1, std::nullopt, {}, false},
-        {"sample_rate", "array", "Uniform sampling [numerator, denominator] elements per second: timestamps are derived", nullptr, std::nullopt, std::nullopt, {}, false},
-        {"timestamps", "array", "Timestamp roles of the stream (MODEL_TIME, SOURCE_TIME, PROCESSING_TIME); without sample_rate every packet carries them", nullptr, std::nullopt, std::nullopt, {}, false},
-    };
-    for (int i = 0; i < input_count; ++i) {
-        metadata.input_ports.push_back({i == 0 ? "in" : "in" + std::to_string(i), "Value to publish", SignalType::F64, false, "T"});
-    }
-    for (int i = 0; i < output_count; ++i) {
-        metadata.output_ports.push_back({i == 0 ? "out" : "out" + std::to_string(i), "Received value", SignalType::F64, false, "T"});
-    }
-    return metadata;
-}
 
 stream::StreamConfig config_from_params(const ElementCreationContext& ctx)
 {
@@ -210,6 +174,7 @@ auto RuntimeNetContext::endpoint() -> transport::RuntimeNetEndpointPtr
 
 void register_net_elements(ElementRegistry& registry)
 {
+    static const ElementMetadataLibrary metadata(resources::net_metadata);
     if (registry.find("NetSink") == nullptr) {
         registry.register_element(ElementDescriptor(
             "NetSink",
@@ -219,7 +184,7 @@ void register_net_elements(ElementRegistry& registry)
                     return std::make_unique<NetSinkT<T>>(config);
                 });
             },
-            make_net_metadata("NetSink", "Net Sink", "Publishes its input to a lossless network stream.", 1, 0)));
+            metadata.at("NetSink")));
     }
 
     if (registry.find("NetSource") == nullptr) {
@@ -231,7 +196,7 @@ void register_net_elements(ElementRegistry& registry)
                     return std::make_unique<NetSourceT<T>>(config);
                 });
             },
-            make_net_metadata("NetSource", "Net Source", "Outputs the values of a lossless network stream.", 0, 1)));
+            metadata.at("NetSource")));
     }
 }
 

@@ -48,8 +48,7 @@ auto styleFor(const ScopeRecording::Series& series, const qsizetype index) -> vi
 
 auto ScopeViewWindow::viewerType() -> viewers::ViewerType
 {
-    return {QStringLiteral("Scope"), QStringLiteral("Scope"), QStringLiteral("N→plot"),
-            QStringLiteral("Plots one or more observed signals over time."), {},
+    return {QStringLiteral("Scope"), {}, QStringLiteral("N→plot"), {}, {},
             [](const viewers::ViewerInstanceSpec& spec) -> viewers::ObservationViewer* {
                 return new ScopeViewWindow(spec.instanceId, nullptr,
                     Qt::Window | Qt::WindowTitleHint | Qt::WindowSystemMenuHint |

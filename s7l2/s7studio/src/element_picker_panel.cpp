@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "element_picker_panel.hpp"
+#include "element_documentation.hpp"
 
 #include "viewers/viewer_registry.hpp"
 
@@ -22,10 +23,49 @@
 #include <QDrag>
 #include <QMouseEvent>
 #include <QFont>
+#include <QContextMenuEvent>
+#include <QKeyEvent>
+#include <QMenu>
 #include <algorithm>
 #include <map>
 
 namespace s7studio::ui {
+namespace {
+class InformationTree final : public QTreeWidget {
+public:
+    InformationTree(const s7::ElementRegistry& registry, QWidget* parent)
+        : QTreeWidget(parent), registry_(registry) {}
+protected:
+    void keyPressEvent(QKeyEvent* event) override
+    {
+        if (event->key() == Qt::Key_Menu || (event->key() == Qt::Key_F10 && event->modifiers() == Qt::ShiftModifier)) {
+            QContextMenuEvent context(QContextMenuEvent::Keyboard, {}, {});
+            contextMenuEvent(&context);
+            event->accept();
+            return;
+        }
+        QTreeWidget::keyPressEvent(event);
+    }
+    void contextMenuEvent(QContextMenuEvent* event) override
+    {
+        const bool keyboard = event->reason() == QContextMenuEvent::Keyboard;
+        const auto* item = keyboard ? currentItem() : itemAt(event->pos());
+        if (!item) return;
+        auto type = item->data(0, Qt::UserRole).toString();
+        if (type.isEmpty()) return;
+        if (type.startsWith("StudioObserver:")) type.remove(0, 15);
+        QMenu menu(this);
+        menu.setObjectName(QStringLiteral("elements.contextMenu"));
+        auto* info = menu.addAction(QStringLiteral("Element Information…"));
+        info->setObjectName(QStringLiteral("elements.information"));
+        connect(info, &QAction::triggered, this, [this, type] { showElementInformation(registry_, type, this); });
+        menu.exec(keyboard ? viewport()->mapToGlobal(visualItemRect(item).center()) : event->globalPos());
+        event->accept();
+    }
+private:
+    const s7::ElementRegistry& registry_;
+};
+}
 
 ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWidget* parent)
     : QWidget(parent), registry_(registry)
@@ -48,7 +88,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     layout->addLayout(searchLayout);
 
     // Element tree
-    elementTree_ = new QTreeWidget(this);
+    elementTree_ = new InformationTree(registry_, this);
     elementTree_->setObjectName(QStringLiteral("elements.tree"));
     elementTree_->setAccessibleName(QStringLiteral("Element library"));
     elementTree_->setColumnCount(2);

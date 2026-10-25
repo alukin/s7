@@ -1,0 +1,131 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [
+    {
+      "type_name": "WhiteNoiseGenerator",
+      "display_name": "White Noise",
+      "description": "Generates one independent Gaussian sample per causal step. Output has zero expected mean and the configured standard deviation; no inputs. A nonzero seed permits repeatable runs with the same implementation, not a cross-platform bitwise guarantee.",
+      "category": "simulation",
+      "version": "1.0.0",
+      "tags": [
+        "noise",
+        "source",
+        "stateful",
+        "random"
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "White noise output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "amplitude",
+          "type": "real",
+          "description": "Standard deviation of noise",
+          "default": 1.0,
+          "required": false,
+          "min": 0.0,
+          "max": 100.0,
+          "enum_values": []
+        },
+        {
+          "name": "seed",
+          "type": "int",
+          "description": "Random seed (0 = random)",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "max": 2147483647.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "circle",
+        "color": "#FFEB3B",
+        "max_width": 100,
+        "max_height": 50,
+        "icon_name": "noise"
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PinkNoiseGenerator",
+      "display_name": "Pink Noise",
+      "description": "Generates pink noise using 16 Voss-McCartney rows plus white noise (approximately 1/f power). Updates once per causal step; amplitude specifies expected standard deviation, not a peak bound. A nonzero seed permits repeatable runs with the same implementation.",
+      "category": "simulation",
+      "version": "1.0.0",
+      "tags": [
+        "noise",
+        "source",
+        "stateful",
+        "random",
+        "pink"
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Pink noise output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "amplitude",
+          "type": "real",
+          "description": "Standard deviation of noise",
+          "default": 1.0,
+          "required": false,
+          "min": 0.0,
+          "max": 100.0,
+          "enum_values": []
+        },
+        {
+          "name": "seed",
+          "type": "int",
+          "description": "Random seed (0 = random)",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "max": 2147483647.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "circle",
+        "color": "#FFEB3B",
+        "max_width": 100,
+        "max_height": 50,
+        "icon_name": "noise"
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

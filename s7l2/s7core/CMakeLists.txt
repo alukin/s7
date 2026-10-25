@@ -18,6 +18,7 @@ add_library(s7core SHARED
     src/elements.cpp
     src/element_registry.cpp
     src/element_catalog.cpp
+    src/metadata_json.cpp
     src/builtin_element_registry.cpp
     src/type_inference.cpp
     src/rate.cpp
@@ -25,6 +26,9 @@ add_library(s7core SHARED
     src/convert.cpp
     src/platform.cpp
 )
+
+include(cmake/S7EmbedMetadata.cmake)
+s7_embed_metadata(s7core resources/element_metadata.json core_metadata)
 
 set_target_properties(s7core PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -95,6 +99,8 @@ write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/s7coreConfigVersion
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/s7coreConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/s7coreConfigVersion.cmake
+    cmake/S7EmbedMetadata.cmake
+    cmake/metadata_resource.hpp.in
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/s7core
     COMPONENT s7sdk
 )
@@ -154,3 +160,8 @@ add_test(NAME s7core_schema_elements_smoke COMMAND s7core_schema_elements_smoke)
 s7_add_test_executable(s7core_model_time_smoke tests/model_time_smoke.cpp)
 target_link_libraries(s7core_model_time_smoke PRIVATE s7core)
 add_test(NAME s7core_model_time_smoke COMMAND s7core_model_time_smoke)
+
+s7_add_test_executable(s7core_metadata_json_smoke tests/metadata_json_smoke.cpp)
+target_link_libraries(s7core_metadata_json_smoke PRIVATE s7core)
+target_include_directories(s7core_metadata_json_smoke PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/metadata-generated)
+add_test(NAME s7core_metadata_json_smoke COMMAND s7core_metadata_json_smoke)

@@ -1,0 +1,7 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Generated from the owning module's JSON resource. Do not edit.
+#pragma once
+namespace s7::resources {
+inline constexpr char @S7_METADATA_SYMBOL@[] = R"s7metadata(@S7_METADATA_JSON@)s7metadata";
+}

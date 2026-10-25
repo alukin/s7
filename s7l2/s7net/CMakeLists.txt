@@ -15,6 +15,7 @@ target_include_directories(s7net PUBLIC
 )
 
 target_link_libraries(s7net PUBLIC s7core s7io s7transport PRIVATE OpenSSL::Crypto)
+s7_embed_metadata(s7net resources/element_metadata.json net_metadata)
 
 s7_add_test_executable(s7net_smoke
     tests/net_smoke.cpp

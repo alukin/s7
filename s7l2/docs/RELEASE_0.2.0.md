@@ -10,6 +10,11 @@ Networks, runtime node configuration editing and other networking work to
 Implementation of these release goals belongs to 0.2.0.
 The [0.1.0 checklist](RELEASE_0.1.0.md) remains the current release gate.
 
+Scope clarification (2026-10-25): integrator and feedback-settling research is a
+separate project with no release assignment yet, outside both 0.1.1 and 0.2.0.
+Its findings require review before any release integration is considered; see
+[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
+
 ## Parallel execution within one runtime
 
 Run independent work in one compiled causal graph concurrently using a bounded,

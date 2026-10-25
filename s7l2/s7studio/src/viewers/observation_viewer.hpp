@@ -5,6 +5,7 @@
 
 #include "observation/observation_source.hpp"
 #include "observation/live_acquisition.hpp"
+#include <s7/element_metadata.hpp>
 
 #include <QString>
 #include <QStringList>
@@ -103,6 +104,7 @@ struct ViewerType {
     QStringList inputSuffixes;
     // Creates a hidden, unparented viewer window; the caller owns it.
     std::function<ObservationViewer*(const ViewerInstanceSpec&)> create;
+    std::optional<s7::ElementMetadata> documentation{};
 };
 
 } // namespace s7studio::viewers

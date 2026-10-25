@@ -5,7 +5,7 @@
     {
       "type_name": "PhaseDifference",
       "display_name": "PhaseDifference",
-      "description": "Wrapped phase_a - phase_b in radians, interval [-pi,pi).",
+      "description": "Subtracts phase_b from phase_a and wraps the result into [-pi,pi) radians. Both exposed inputs and the difference output are F64 phase signals. Combinational network; no state or instance JSON parameters. Tune the internal PhaseWrap for a different interval.",
       "category": "schema_elements",
       "version": "1.0.0",
       "schema": {
@@ -63,7 +63,7 @@
     {
       "type_name": "FirstOrderLag",
       "display_name": "FirstOrderLag",
-      "description": "F64 analog first-order lag: tau*y'=input-y. tau > 0; initial output 0. Default 1 kHz.",
+      "description": "Smooths input with a first-order lag: tau*y'=input-y. Exposed F64 signals: input (signal units), tau (strictly positive seconds), output (same units as input). tau is a signal input, not a JSON parameter. Internal forward-Euler state starts at 0; choose dt small relative to tau (dt/tau < 2 for constant-tau stability). Default dt=0.001 s (1 kHz). No instance JSON parameters; tune internal state.initial_value in the nested editor.",
       "category": "schema_elements",
       "version": "1.0.0",
       "schema": {
@@ -140,7 +140,7 @@
     {
       "type_name": "RMSDetector",
       "display_name": "RMSDetector",
-      "description": "F64 exponential RMS detector: tau*q'=input^2-q; output=sqrt(q). tau >= dt recommended; initial q=0. Default 1 kHz.",
+      "description": "Estimates an exponential root-mean-square level: tau*q'=input^2-q; rms=sqrt(q). F64 input and rms use the same signal units; tau is an exposed positive time-constant signal in seconds, not a JSON parameter. Internal q starts at 0 and is limited to nonnegative values; tau >= dt is recommended. Default dt=0.001 s (1 kHz). No instance JSON parameters; the nested editor exposes the state and limiter settings.",
       "category": "schema_elements",
       "version": "1.0.0",
       "schema": {
@@ -293,7 +293,7 @@
     {
       "type_name": "PIController",
       "display_name": "PIController",
-      "description": "F64 parallel PI; normalized output [-1,1], back-calculation gain 10/s. Gains are signal inputs. Default 1 kHz.",
+      "description": "Controls from an error signal using proportional and integral paths. Exposed F64 inputs: error, kp (output/error units), ki (output/error/second). Gains are signals, not JSON parameters. control is limited to [-1,1]; unlimited exposes the pre-limit sum. Integral state starts at 0 with forward Euler; back-calculation gain is 10/s. Default dt=0.001 s (1 kHz). No instance JSON parameters; tune internal limits, initial state and tracking weight in the nested editor.",
       "category": "schema_elements",
       "version": "1.0.0",
       "schema": {
@@ -464,7 +464,7 @@
     {
       "type_name": "PIDController",
       "display_name": "PIDController",
-      "description": "F64 parallel PID (derivative on measurement, filtered with tau); normalized output [-1,1], back-calculation gain 10/s. Gains are signal inputs. Default 1 kHz.",
+      "description": "Controls reference minus measurement using proportional, integral and filtered derivative-on-measurement paths. Exposed F64 inputs: reference and measurement (same units), kp (output/input units), ki (output/input/second), kd (output*second/input), tau (positive derivative-filter seconds). Gains and tau are signals, not JSON parameters. control is limited to [-1,1]; unlimited exposes the pre-limit sum. Integral/filter states start at 0 with forward Euler; back-calculation gain is 10/s. Default dt=0.001 s (1 kHz); choose dt small relative to tau. No instance JSON parameters; tune internal limits, tracking and initial states in the nested editor.",
       "category": "schema_elements",
       "version": "1.0.0",
       "schema": {

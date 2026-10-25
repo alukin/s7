@@ -20,8 +20,10 @@ proposes concrete layouts, menu organization, persistence, configuration
 ownership, implementation order and acceptance checks for review. Networking
 work, including Trusted Networks and node configuration/control/restart, is
 assigned to 0.2.0; 0.1.1 focuses on local Studio workflows.
-The [main menu review](STUDIO_MENU_REVIEW.md) retains the original inventory;
-implemented menu, shortcut, toolbar, font and palette increments and their
+The [main menu review](STUDIO_MENU_REVIEW.md) retains the original inventory.
+The [element-information coverage inventory](STUDIO_ELEMENT_INFORMATION.md)
+records the documentation sources, supported JSON keys and information access.
+Implemented menu, shortcut, toolbar, font, palette and element-information increments and their
 verification are recorded in the 0.1.1 plan. The simulation guide records
 Siebert's book as the maintainer's stated design inspiration, with reading
 status and attribution rules for planned example adaptations.

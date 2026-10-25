@@ -1,0 +1,3839 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [
+    {
+      "type_name": "Constant",
+      "display_name": "Constant",
+      "description": "Outputs a fixed value on every causal step; has no inputs.",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "value",
+          "type": "value",
+          "description": "Output value (exact for integer types; [re, im] for complex)",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#66BB6A",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Gain",
+      "display_name": "Gain",
+      "description": "Multiplies the current input signal by a configurable factor. The output is available in the same step.",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "factor",
+          "type": "value",
+          "description": "Gain factor, of the element's type",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "overflow",
+          "type": "enum",
+          "description": "Integer arithmetic overflow: saturate clamps to the type's limits; wrap uses modular arithmetic. Does not change floating-point arithmetic.",
+          "default": "saturate",
+          "required": false,
+          "enum_values": [
+            "saturate",
+            "wrap"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Divider",
+      "display_name": "Divider",
+      "description": "Divide numerator by denominator",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "numerator",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "denominator",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "MathFunction",
+      "display_name": "Math Function",
+      "description": "Apply a scalar math function",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "function",
+          "type": "enum",
+          "description": "Function applied to the input",
+          "default": "sqrt",
+          "required": false,
+          "enum_values": [
+            "sqrt",
+            "exp",
+            "log",
+            "pow",
+            "abs",
+            "reciprocal"
+          ]
+        },
+        {
+          "name": "exponent",
+          "type": "value",
+          "description": "Exponent used when function is pow",
+          "default": 2,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Power",
+      "display_name": "Power",
+      "description": "Raise the base input to the exponent input",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "base",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "exponent",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Saturation",
+      "display_name": "Saturation",
+      "description": "Clamp an input between inclusive limits",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "lower_limit",
+          "type": "value",
+          "description": "Inclusive lower output limit in input units; must not exceed upper_limit",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "upper_limit",
+          "type": "value",
+          "description": "Inclusive upper output limit in input units; must be at least lower_limit",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "MinMax",
+      "display_name": "MinMax",
+      "description": "Select the minimum or maximum of its inputs",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in0",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "in1",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "operation",
+          "type": "enum",
+          "description": "Select minimum or maximum",
+          "default": "min",
+          "required": false,
+          "enum_values": [
+            "min",
+            "max"
+          ]
+        },
+        {
+          "name": "input_count",
+          "type": "int",
+          "description": "Number of input ports",
+          "default": 2,
+          "required": false,
+          "min": 2.0,
+          "max": 64.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": true,
+        "min_count": 2,
+        "max_count": 64,
+        "port_name_template": "in_{index}",
+        "signal_type": "F64",
+        "type_rule": "T",
+        "count_parameter": "input_count"
+      }
+    },
+    {
+      "type_name": "Sign",
+      "display_name": "Sign",
+      "description": "Return -1, 0 or 1 according to the input sign",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Comparator",
+      "display_name": "Comparator",
+      "description": "Output 1 if lhs 'operation' rhs holds, else 0",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "lhs",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "rhs",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "operation",
+          "type": "enum",
+          "description": "Relational operation applied to lhs and rhs",
+          "default": "lt",
+          "required": false,
+          "enum_values": [
+            "lt",
+            "le",
+            "gt",
+            "ge",
+            "eq",
+            "ne"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Adder",
+      "display_name": "Adder",
+      "description": "Weighted sum of N inputs",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "lhs",
+          "description": "Summation input 0 (weighted by weights[0]).",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "rhs",
+          "description": "Summation input 1 (weighted by weights[1]).",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Weighted sum output.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "A"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "weights",
+          "type": "array",
+          "description": "Array of 2..64 weights in accumulator_type (A). Input count follows array length; y = sum(weights[i] * input[i]). Example: [1,-1] subtracts the second input.",
+          "default": [
+            1,
+            1
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "overflow",
+          "type": "enum",
+          "description": "Integer arithmetic overflow: saturate clamps to the type's limits; wrap uses modular arithmetic. Does not change floating-point arithmetic.",
+          "default": "saturate",
+          "required": false,
+          "enum_values": [
+            "saturate",
+            "wrap"
+          ]
+        },
+        {
+          "name": "accumulator_type",
+          "type": "type",
+          "description": "Type of the arithmetic and the output; must hold every input value exactly (default: the input type)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        },
+        {
+          "name": "A",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "accumulator_type",
+          "defaults_to": "T"
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": true,
+        "min_count": 2,
+        "max_count": 64,
+        "port_name_template": "in_{index}",
+        "signal_type": "F64",
+        "type_rule": "T",
+        "count_parameter": "weights"
+      }
+    },
+    {
+      "type_name": "Multiply",
+      "display_name": "Multiply",
+      "description": "Product of N inputs",
+      "category": "basic",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "lhs",
+          "description": "Multiplier input 0 (scaled by factors[0]).",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "rhs",
+          "description": "Multiplier input 1 (scaled by factors[1]).",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Product output.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "A"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "factors",
+          "type": "array",
+          "description": "Array of 2..64 factors in accumulator_type (A). Input count follows array length; y = product(factors[i] * input[i]). Example: [1,1] multiplies two unscaled inputs.",
+          "default": [
+            1,
+            1
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "overflow",
+          "type": "enum",
+          "description": "Integer arithmetic overflow: saturate clamps to the type's limits; wrap uses modular arithmetic. Does not change floating-point arithmetic.",
+          "default": "saturate",
+          "required": false,
+          "enum_values": [
+            "saturate",
+            "wrap"
+          ]
+        },
+        {
+          "name": "accumulator_type",
+          "type": "type",
+          "description": "Type of the arithmetic and the output; must hold every input value exactly (default: the input type)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        },
+        {
+          "name": "A",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "accumulator_type",
+          "defaults_to": "T"
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": true,
+        "min_count": 2,
+        "max_count": 64,
+        "port_name_template": "in_{index}",
+        "signal_type": "F64",
+        "type_rule": "T",
+        "count_parameter": "factors"
+      }
+    },
+    {
+      "type_name": "Delay",
+      "display_name": "Delay",
+      "description": "Outputs the input from the previous causal step. Publishes initial_value first; supplies causal memory to close feedback loops.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "Output before the first input",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PreviousValue",
+      "display_name": "PreviousValue",
+      "description": "Outputs the input from the previous causal step. Publishes initial_value first; supplies causal memory to close feedback loops.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "Output before the first input",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Accumulator",
+      "display_name": "Accumulator (running sum)",
+      "description": "Adds the current input to its running total: y[n] = y[n-1] + x[n]. No timestep factor. Stateful direct feedthrough: its new total is visible in the same step, so it cannot alone close a feedback loop.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "A"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "Running total before the first addition, in accumulator_type (A)",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "overflow",
+          "type": "enum",
+          "description": "Integer arithmetic overflow: saturate clamps to the type's limits; wrap uses modular arithmetic. Does not change floating-point arithmetic.",
+          "default": "saturate",
+          "required": false,
+          "enum_values": [
+            "saturate",
+            "wrap"
+          ]
+        },
+        {
+          "name": "accumulator_type",
+          "type": "type",
+          "description": "Type of the arithmetic and the output; must hold every input value exactly (default: the input type)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        },
+        {
+          "name": "A",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "accumulator_type",
+          "defaults_to": "T"
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "EulerIntegrator",
+      "display_name": "Euler Integrator",
+      "description": "Integrates the input with forward Euler: y[n+1] = y[n] + dt*x[n]. Publishes initial_value first and stages the next state for the following step; can close feedback loops. Oscillator amplitude can grow with this method; timestep refinement is needed for accuracy.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "dt",
+          "type": "value",
+          "description": "Positive finite model timestep in seconds, using the signal's real component type. Must agree with the graph rate; Studio Run Configuration sets it.",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "y[0]",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "TrapezoidIntegrator",
+      "display_name": "Trapezoid Integrator",
+      "description": "Integrates the input with the trapezoidal rule. Default implicit mode solves coupled endpoint states together and supplies causal memory. Its bounded fixed-point solve reports nonconvergence; reduce dt if it fails. Sampled mode instead integrates supplied samples with direct feedthrough.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "dt",
+          "type": "value",
+          "description": "Positive finite model timestep in seconds, using the signal's real component type. Must agree with the graph rate; smaller steps can improve implicit convergence.",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "y[0]",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "mode",
+          "type": "enum",
+          "description": "implicit: y[n+1]=y[n]+dt/2*(f[n]+f[n+1]), with jointly solved feedback states; only supported side-effect-free trial dependencies may vary with the endpoint. sampled: y[n]=y[n-1]+dt/2*(input[n-1]+input[n]); first call records input and leaves initial_value unchanged. Sampled mode cannot alone close a feedback loop.",
+          "default": "implicit",
+          "required": false,
+          "enum_values": [
+            "implicit",
+            "sampled"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "SymplecticIntegrator",
+      "display_name": "Symplectic Integrator (semi-implicit Euler)",
+      "description": "Semi-implicit Euler for x'' = acceleration: v[n+1] = v[n] + dt*a[n], x[n+1] = x[n] + dt*v[n+1]; causal memory publishes position/velocity together on the following step. First-order accurate; for a position-dependent conservative harmonic oscillator, energy error is bounded within the method's stable timestep range, not exactly conserved. Velocity-dependent acceleration loses the symplectic property.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "acceleration",
+          "description": "Acceleration/force input, a(x) computed by the surrounding graph; a velocity dependency (damping) loses the symplectic energy bound.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "position",
+          "description": "Position output x[n].",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "velocity",
+          "description": "Velocity output v[n].",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "dt",
+          "type": "value",
+          "description": "Positive finite model timestep in seconds, using the signal's real component type. Must agree with the graph rate. Harmonic oscillator stability requires dt*angular_frequency < 2.",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_position",
+          "type": "value",
+          "description": "x[0]",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_velocity",
+          "type": "value",
+          "description": "v[0]",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Trig",
+      "display_name": "Trigonometric Function",
+      "description": "y = f(x): sin, cos, tan, asin, acos, atan, sinh, cosh or tanh of an arbitrary input",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "function",
+          "type": "enum",
+          "description": "Which function to apply",
+          "default": "sin",
+          "required": false,
+          "enum_values": [
+            "sin",
+            "cos",
+            "tan",
+            "asin",
+            "acos",
+            "atan",
+            "sinh",
+            "cosh",
+            "tanh"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ChirpGenerator",
+      "display_name": "Chirp Generator",
+      "description": "Phase-continuous linear or logarithmic sine frequency sweep",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "start_hz",
+          "type": "value",
+          "description": "Initial frequency in Hz",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "end_hz",
+          "type": "value",
+          "description": "Final frequency in Hz",
+          "default": 100,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sweep_samples",
+          "type": "int",
+          "description": "Sweep duration in model sample intervals",
+          "default": 1000,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "amplitude",
+          "type": "value",
+          "description": "Half peak-to-peak amplitude",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "offset",
+          "type": "value",
+          "description": "Output offset",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "phase",
+          "type": "value",
+          "description": "Initial phase in radians",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sweep",
+          "type": "enum",
+          "description": "Frequency interpolation. logarithmic requires both start_hz and end_hz to be strictly positive; linear also permits zero/negative frequencies.",
+          "default": "linear",
+          "required": false,
+          "enum_values": [
+            "linear",
+            "logarithmic"
+          ]
+        },
+        {
+          "name": "end_behavior",
+          "type": "enum",
+          "description": "Hold final frequency or repeat sweep with continuous phase",
+          "default": "hold",
+          "required": false,
+          "enum_values": [
+            "hold",
+            "repeat"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PRBSGenerator",
+      "display_name": "PRBS Generator",
+      "description": "Deterministic maximal-length PRBS7 or PRBS15 excitation",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "order",
+          "type": "int",
+          "description": "LFSR order: 7 or 15",
+          "default": 7,
+          "required": false,
+          "min": 7.0,
+          "max": 15.0,
+          "enum_values": []
+        },
+        {
+          "name": "seed",
+          "type": "int",
+          "description": "Nonzero initial LFSR state: 1..127 for order 7; 1..32767 for order 15",
+          "default": 1,
+          "required": false,
+          "min": 1.0,
+          "max": 32767.0,
+          "enum_values": []
+        },
+        {
+          "name": "bit_samples",
+          "type": "int",
+          "description": "Model samples per bit",
+          "default": 1,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "low",
+          "type": "value",
+          "description": "Zero-bit level",
+          "default": -1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "high",
+          "type": "value",
+          "description": "One-bit level",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "TriangleGenerator",
+      "display_name": "TriangleGenerator",
+      "description": "Triangle or sawtooth with configurable rise fraction Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "amplitude",
+          "type": "value",
+          "description": "Half peak-to-peak amplitude",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "offset",
+          "type": "value",
+          "description": "Output offset",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "frequency_hz",
+          "type": "value",
+          "description": "Frequency in Hz; negative reverses phase",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "phase",
+          "type": "real",
+          "description": "Initial phase in cycles (wrapped to [0,1))",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "rise_fraction",
+          "type": "real",
+          "description": "Rising fraction: 0 falling saw, 0.5 triangle, 1 rising saw",
+          "default": 0.5,
+          "required": false,
+          "min": 0.0,
+          "max": 1.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PulseGenerator",
+      "display_name": "PulseGenerator",
+      "description": "Periodic rectangular pulse source Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "low",
+          "type": "value",
+          "description": "Low level",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "high",
+          "type": "value",
+          "description": "High level",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "duty",
+          "type": "real",
+          "description": "High fraction of each period",
+          "default": 0.5,
+          "required": false,
+          "min": 0.0,
+          "max": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "frequency_hz",
+          "type": "value",
+          "description": "Frequency in Hz; negative reverses phase",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "phase",
+          "type": "real",
+          "description": "Initial phase in cycles (wrapped to [0,1))",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ImpulseGenerator",
+      "display_name": "ImpulseGenerator",
+      "description": "One-sample delta pulse with specified integral (area) Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "start_sample",
+          "type": "int",
+          "description": "Zero-based model sample of the transition or impulse",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "area",
+          "type": "value",
+          "description": "Impulse integral; pulse height is area * sample_rate_hz",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "StepGenerator",
+      "display_name": "StepGenerator",
+      "description": "Sigma step at a specified model sample Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "start_sample",
+          "type": "int",
+          "description": "Zero-based model sample of the transition or impulse",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "Level before start_sample",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "final_value",
+          "type": "value",
+          "description": "Level at and after start_sample",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ControlledOscillator",
+      "display_name": "ControlledOscillator",
+      "description": "Phase-continuous sine oscillator controlled by frequency in Hz Source values must be finite; sample_rate_hz must be finite and strictly positive. Phase is emitted before advancing to the next sample. Frequencies beyond the sampling band alias; the generator does not band-limit the waveform.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "frequency_hz",
+          "description": "Instantaneous frequency in Hz; negative frequency reverses phase. This is a signal input, not a JSON parameter.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "amplitude",
+          "type": "value",
+          "description": "Half peak-to-peak amplitude",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "offset",
+          "type": "value",
+          "description": "Output offset",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "phase",
+          "type": "value",
+          "description": "Initial phase in radians",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Switch",
+      "display_name": "Switch",
+      "description": "Select off/on input with numeric control (zero/nonzero) All inputs are current-step signals; control=0 selects off, otherwise on. No state or timestep is added.",
+      "category": "control",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "off",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "on",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "control",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "HysteresisRelay",
+      "display_name": "HysteresisRelay",
+      "description": "Relay with distinct on/off thresholds and retained state Requires finite lower_threshold < upper_threshold. Between thresholds the previous on/off state is retained; current input is evaluated in the same step.",
+      "category": "control",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "lower_threshold",
+          "type": "value",
+          "description": "Turn off at/below this threshold",
+          "default": -1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "upper_threshold",
+          "type": "value",
+          "description": "Turn on at/above this threshold",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "low_value",
+          "type": "value",
+          "description": "Off output",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "high_value",
+          "type": "value",
+          "description": "On output",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_on",
+          "type": "bool",
+          "description": "Initial state for an input in the hysteresis band",
+          "default": false,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ControlledIntegrator",
+      "display_name": "ControlledIntegrator",
+      "description": "Local causal integrator with enable, reset and state limits y[next]=clamp(y+dt*derivative) when enable is nonzero; otherwise holds state. Reset takes priority over enable and clamps reset_value. Publishes the initial state first and stages transitions for the following step. Requires finite positive dt and lower_limit <= initial_value <= upper_limit.",
+      "category": "control",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "derivative",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "enable",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "reset",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "reset_value",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "dt",
+          "type": "value",
+          "description": "Model step in seconds",
+          "default": 0.001,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "Initial published state",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "lower_limit",
+          "type": "value",
+          "description": "Lower state bound; omitted means lowest finite value",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "upper_limit",
+          "type": "value",
+          "description": "Upper state bound; omitted means highest finite value",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "reset_mode",
+          "type": "enum",
+          "description": "Reset on rising edge or every asserted sample",
+          "default": "rising",
+          "required": false,
+          "enum_values": [
+            "rising",
+            "level"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PhaseWrap",
+      "display_name": "PhaseWrap",
+      "description": "Wrap phase into a half-open interval Output lies in [lower,lower+period). period must be finite, strictly positive and representable at lower; inputs must be finite. No state or time delay.",
+      "category": "control",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "period",
+          "type": "value",
+          "description": "Interval width; omitted means 2*pi in the selected type",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "lower",
+          "type": "value",
+          "description": "Lower interval endpoint; omitted means -pi",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "FrequencyMeter",
+      "display_name": "FrequencyMeter",
+      "description": "Measure frequency from successive rising zero crossings Linearly interpolates rising zero crossings; output is 0 and valid=0 until two crossings, then holds the most recent frequency (valid=1). sample_rate_hz must be finite and positive; noisy/missing crossings affect the estimate.",
+      "category": "measurement",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "frequency_hz",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        },
+        {
+          "name": "valid",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model samples per second",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "PWM",
+      "display_name": "PWM",
+      "description": "Trailing-edge PWM; duty latched at each carrier boundary",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "duty",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "gate",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "period_samples",
+          "type": "int",
+          "description": "Samples per carrier period (frequency = sample rate / period)",
+          "default": 100,
+          "required": false,
+          "min": 2.0,
+          "max": 65504.0,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Model sample rate in Hz",
+          "default": 100000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "AnalogOscillator",
+      "display_name": "Analog Oscillator",
+      "description": "Sinusoidal source, computed in its type",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "amplitude",
+          "type": "value",
+          "description": "Signal amplitude",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "frequency_hz",
+          "type": "value",
+          "description": "Frequency in Hz",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "value",
+          "description": "Sample rate in Hz",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "phase",
+          "type": "value",
+          "description": "Initial phase (radians)",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "FirFilter",
+      "display_name": "FIR Filter",
+      "description": "Finite impulse response filter",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input signal sample.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Filtered output sample.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "A"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "taps",
+          "type": "array",
+          "description": "Nonempty coefficient array in accumulator_type (A), e.g. [0.5,0.5]. taps[0] multiplies the current sample, taps[k] the sample k steps earlier. History starts at zero.",
+          "default": [
+            1
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "overflow",
+          "type": "enum",
+          "description": "Integer arithmetic overflow: saturate clamps to the type's limits; wrap uses modular arithmetic. Does not change floating-point arithmetic.",
+          "default": "saturate",
+          "required": false,
+          "enum_values": [
+            "saturate",
+            "wrap"
+          ]
+        },
+        {
+          "name": "accumulator_type",
+          "type": "type",
+          "description": "Type of the arithmetic and the output; must hold every input value exactly (default: the input type)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        },
+        {
+          "name": "A",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "accumulator_type",
+          "defaults_to": "T"
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "IirFilter",
+      "display_name": "IIR Filter",
+      "description": "First-order recursive filter: y[n]=b0*x[n]+b1*x[n-1]-a1*y[n-1]. Previous input/output start at zero. Current input feeds through; internal history does not break an external feedback cycle.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input signal sample.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Filtered output sample.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "b0",
+          "type": "value",
+          "description": "Feedforward coefficient b0",
+          "default": 1,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "b1",
+          "type": "value",
+          "description": "Feedforward coefficient b1",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "a1",
+          "type": "value",
+          "description": "Feedback coefficient a1",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ReImToComplex",
+      "display_name": "Re/Im to Complex",
+      "description": "Combine real and imaginary channels",
+      "category": "conversion",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "re",
+          "description": "Real part.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "component(T)"
+        },
+        {
+          "name": "im",
+          "description": "Imaginary part.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "component(T)"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Complex output.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ComplexToReIm",
+      "display_name": "Complex to Re/Im",
+      "description": "Split complex input into real and imaginary channels",
+      "category": "conversion",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Complex input.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "re",
+          "description": "Real output.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "component(T)"
+        },
+        {
+          "name": "im",
+          "description": "Imaginary output.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "component(T)"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ComplexToMagnitudePhase",
+      "display_name": "Complex to Magnitude/Phase",
+      "description": "Magnitude and phase of a complex input, in its component type",
+      "category": "conversion",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Complex input.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "magnitude",
+          "description": "Magnitude output.",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "component(T)"
+        },
+        {
+          "name": "phase",
+          "description": "Phase output (radians).",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "component(T)"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Convert",
+      "display_name": "Convert",
+      "description": "Explicit type conversion (value or normalized), with stated rounding and overflow",
+      "category": "conversion",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "from"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "to"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "from",
+          "type": "type",
+          "description": "Input type (otherwise inferred)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "to",
+          "type": "type",
+          "description": "Output type (otherwise inferred)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "mode",
+          "type": "enum",
+          "description": "value: keep the number; normalized: fixed-point scaling",
+          "default": "value",
+          "required": true,
+          "enum_values": [
+            "value",
+            "normalized"
+          ]
+        },
+        {
+          "name": "rounding",
+          "type": "enum",
+          "description": "Rounding of inexact results",
+          "default": "half_even",
+          "required": false,
+          "enum_values": [
+            "half_even",
+            "toward_zero"
+          ]
+        },
+        {
+          "name": "overflow",
+          "type": "enum",
+          "description": "Out-of-range values",
+          "default": "saturate",
+          "required": false,
+          "enum_values": [
+            "saturate",
+            "fault"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "from",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "from",
+          "defaults_to": ""
+        },
+        {
+          "name": "to",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "to",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

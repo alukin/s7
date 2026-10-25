@@ -1,0 +1,192 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [
+    {
+      "type_name": "RecordedSource",
+      "display_name": "Recorded Source",
+      "description": "Replay a uniformly sampled recording using its header rate. Emits one recorded sample per step without resampling. The file's signal type must match the selected type; file errors are reported.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Recorded sample",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Recording signal type: F64 or C64",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "file_path",
+          "type": "string",
+          "description": "Recording path on the executing node",
+          "default": null,
+          "required": true,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Zero uses file rate; positive finite Hz checks it (no resampling); must agree with graph rate",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "format",
+          "type": "enum",
+          "description": "S7 recording format",
+          "default": "compact-binary",
+          "required": false,
+          "enum_values": [
+            "compact-binary",
+            "gnuplot-text"
+          ]
+        },
+        {
+          "name": "end_behavior",
+          "type": "enum",
+          "description": "Action after the last sample",
+          "default": "error",
+          "required": false,
+          "enum_values": [
+            "error",
+            "hold",
+            "repeat"
+          ]
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F64",
+            "C64"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "RecordingSink",
+      "display_name": "Recording Sink",
+      "description": "Record samples with rate and description in a documented binary or text format. Writes the current input each step; file errors are reported. The file belongs to the executing node.",
+      "category": "io",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Sample to record",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Recording signal type: F64 or C64",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "file_path",
+          "type": "string",
+          "description": "Recording path on the executing node",
+          "default": null,
+          "required": true,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Finite strictly positive model samples per second (Hz), stored in the header; must agree with graph rate",
+          "default": 1000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "format",
+          "type": "enum",
+          "description": "S7 recording format",
+          "default": "compact-binary",
+          "required": false,
+          "enum_values": [
+            "compact-binary",
+            "gnuplot-text"
+          ]
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "description": "Short UTF-8 description, at most 1024 bytes",
+          "default": "",
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F64",
+            "C64"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#42A5F5",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

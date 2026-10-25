@@ -181,6 +181,12 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 ## Simulation accuracy — known integrator limits; systematic comparison deferred
 
+- **Release boundary (maintainer, 2026-10-25):** integrator and feedback-settling
+  research is a standalone project with no release assignment yet, outside both
+  0.1.1 and 0.2.0. Keep it on an isolated research branch and review its findings
+  before considering release integration. This supersedes the earlier 0.1.1
+  oscillator investigation/example assignment.
+
 - **Historical feedback-settling input (maintainer, 2026-10-24):** the first S7
   implementation, roughly 30 years ago, used iterations to settle feedback-
   connected diagram regions; the maintainer reports that even 5–10 iterations
@@ -206,9 +212,9 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
   errors; vary timestep and run length against independent references. Study
   what the proposed settling iterations would evaluate and commit before
   prototyping them. Do not identify the historical algorithm by inference or
-  promise a fixed accuracy multiplier. The 0.1.1 oscillator follow-up is a
-  planned investigation/example improvement, not authorization to change core
-  execution ordering or introduce a global solver during the UI work.
+  promise a fixed accuracy multiplier. This standalone research does not
+  authorize changes to production core execution ordering or introduction of a
+  global solver during the UI work.
   The maintainer explicitly reaffirmed the analog-computer approach and named
   Siebert's *Circuits, Signals, and Systems* as the original inspiration.
   [SIMULATION_MODEL.md](SIMULATION_MODEL.md) records the verified book reference,

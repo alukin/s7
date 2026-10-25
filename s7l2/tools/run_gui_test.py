@@ -5,6 +5,7 @@
 """Run one GUI suite in its own Xvfb, retaining logs/XML/screenshots on failure."""
 import argparse
 import os
+import re
 from pathlib import Path
 import signal
 import select
@@ -29,10 +30,13 @@ def main():
     parser.add_argument('--artifacts', required=True, type=Path)
     parser.add_argument('--capture', required=True)
     parser.add_argument('--graphics', action='store_true')
+    parser.add_argument('--screen-size', default='1600x1000', help='Xvfb framebuffer WIDTHxHEIGHT in pixels; enlarge for high-DPI tests')
     parser.add_argument('--inner', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--timeout', type=int, default=120)
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if not re.fullmatch(r'[1-9][0-9]*x[1-9][0-9]*', args.screen_size):
+        parser.error('--screen-size must be WIDTHxHEIGHT in positive pixels')
     directory = args.artifacts.resolve()
     directory.mkdir(parents=True, exist_ok=True)
     if not args.inner:
@@ -43,7 +47,7 @@ def main():
         read_fd, write_fd = os.pipe()
         with (directory / 'xvfb.log').open('w') as server_log:
             server = subprocess.Popen(['Xvfb', '-displayfd', str(write_fd), '-screen', '0',
-                                       '1600x1000x24', '+extension', 'GLX', '+render',
+                                       args.screen_size + 'x24', '+extension', 'GLX', '+render',
                                        '-noreset', '-nolisten', 'tcp', '-ac'],
                                       pass_fds=(write_fd,), stdout=server_log, stderr=server_log)
             os.close(write_fd)

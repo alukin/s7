@@ -1,0 +1,108 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [
+    {
+      "type_name": "WindowedFFT",
+      "display_name": "Windowed FFT",
+      "description": "Estimates the strongest non-DC frequency and amplitude from a sliding FFT window. Outputs start at zero, update after a full window and then every hop_size samples, and hold between transforms. F64 input is converted to single precision for FFTW; frequency interpolation and window scalloping limit accuracy.",
+      "category": "spectral",
+      "version": "1.0.0",
+      "tags": [
+        "fft",
+        "spectral",
+        "stateful",
+        "fftw3"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input signal",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "peak_frequency_hz",
+          "description": "Dominant frequency (Hz)",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "peak_amplitude",
+          "description": "Amplitude of the dominant component",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "fft_size",
+          "type": "int",
+          "description": "FFT window size (power of 2)",
+          "default": 1024,
+          "required": false,
+          "min": 4.0,
+          "max": 65536.0,
+          "enum_values": []
+        },
+        {
+          "name": "hop_size",
+          "type": "int",
+          "description": "Model samples between transforms; must not exceed fft_size. If reducing fft_size below 512, also set hop_size, e.g. {\"fft_size\":256,\"hop_size\":128}.",
+          "default": 512,
+          "required": false,
+          "min": 1.0,
+          "max": 65536.0,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate_hz",
+          "type": "real",
+          "description": "Sample rate in Hz",
+          "default": 44100.0,
+          "required": false,
+          "min": 0.001,
+          "max": 1000000000000.0,
+          "enum_values": []
+        },
+        {
+          "name": "window_type",
+          "type": "enum",
+          "description": "Window function",
+          "default": "HANN",
+          "required": false,
+          "enum_values": [
+            "RECTANGULAR",
+            "HANN",
+            "HAMMING",
+            "BLACKMAN",
+            "BLACKMAN_HARRIS",
+            "NUTTALL"
+          ]
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#9C27B0",
+        "max_width": 120,
+        "max_height": 50,
+        "icon_name": "waveform"
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

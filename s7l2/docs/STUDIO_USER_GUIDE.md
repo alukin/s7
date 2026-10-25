@@ -37,6 +37,15 @@ Use the Element Library to add elements. Select an element and press **F4**
 or **Enter** to edit its properties. Typed fields check values; the advanced
 JSON editor is available for structured parameters.
 
+Right-click an element in the library and choose **Element Information…** for
+its full description, ports, timing notes and JSON parameter reference. Keyboard
+users can focus a library row and press the context-menu key (or Shift+F10).
+For a selected canvas element, use **Edit → Element Information…**. Information
+is read-only; text can be selected and copied. Properties shows the same
+documentation above the parameter editor, with an adjustable splitter and
+independent scrolling. Double-clicking a schema still opens its nested editor;
+double-clicking an observer still opens its viewer.
+
 Toggle wire drawing with **Ctrl+W** or the drawing toolbar, then connect output
 and input connectors. Every functional input needs a driver; types must match.
 Insert explicit conversion elements when needed. Feedback must contain causal

@@ -3,6 +3,7 @@
 
 #include "main_window.hpp"
 #include "parameter_editor.hpp"
+#include "element_documentation.hpp"
 #include "help_dialogs.hpp"
 #include "atomic_file.hpp"
 #include "schema_tabs.hpp"
@@ -209,37 +210,6 @@ auto schemaDisplayName(const boost::json::value& schemaJson, const QString& fall
     return fallback;
 }
 
-auto elementDescriptionForType(const QString& type) -> QString
-{
-    if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
-        const auto& metadata = descriptor->metadata();
-        if (!metadata.description.empty()) {
-            return QString::fromStdString(metadata.description);
-        }
-        if (metadata.schema_definition.has_value()) {
-            return QStringLiteral("Schema-based library element.");
-        }
-    }
-
-    if (type == "Constant") return QStringLiteral("Constant source: outputs a fixed value.");
-    if (type == "Gain") return QStringLiteral("Gain: multiplies input by a factor.");
-    if (type == "Adder") return QStringLiteral("Adder: weighted sum of N inputs.");
-    if (type == "Multiply") return QStringLiteral("Multiply: product of N inputs.");
-    if (type == "Delay") return QStringLiteral("Delay: outputs previous input sample (stateful).");
-    if (type == "Accumulator") return QStringLiteral("Accumulator: running sum y[n] = y[n-1] + x[n] (no time step).");
-    if (type == "EulerIntegrator") return QStringLiteral("Euler integrator: rectangle rule y[n+1] = y[n] + dt*x[n]; can close feedback loops.");
-    if (type == "TrapezoidIntegrator") return QStringLiteral("Trapezoid integrator: y[n] = y[n-1] + dt/2*(x[n] + x[n-1]).");
-    if (type == "AnalogOscillator") return QStringLiteral("Analog oscillator: sinusoidal source.");
-    if (type == "FirFilter") return QStringLiteral("FIR filter: finite impulse response filter.");
-    if (type == "IirFilter") return QStringLiteral("IIR filter: recursive filter.");
-    if (type == "PreviousValue") return QStringLiteral("PreviousValue: unit-delay output element.");
-    if (type == "ReImToComplex") return QStringLiteral("ReImToComplex: combines real/imaginary inputs.");
-    if (type == "ComplexToReIm") return QStringLiteral("ComplexToReIm: splits complex input into real and imaginary outputs.");
-    if (type == "Convert") return QStringLiteral("Convert: explicit type conversion (mode value or normalized, rounding, overflow).");
-    if (type == "ComplexToMagnitudePhase") return QStringLiteral("ComplexToMagnitudePhase: outputs magnitude and phase.");
-    return QStringLiteral("No built-in description available for this element type.");
-}
-
 auto elementLibraryForType(const QString& type) -> QString
 {
     if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
@@ -325,6 +295,12 @@ MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
     retireRunForShutdown();
+    // Nested pages can remain queued for deletion after SchemaTabs::reset().
+    // Their scene teardown must not reach actions already destroyed by QWidget.
+    for (auto* editor : findChildren<diagram::DiagramEditor*>()) {
+        disconnect(editor, nullptr, this, nullptr);
+        if (editor->scene()) disconnect(editor->scene(), nullptr, this, nullptr);
+    }
     // Tear down tab callbacks while all editors and tool widgets still exist.
     // QTabWidget otherwise emits currentChanged while its pages are destroyed.
     if (schemaTabs_) {
@@ -334,9 +310,6 @@ MainWindow::~MainWindow()
     }
     if (networkTask_.joinable()) {
         networkTask_.join(); // bounded by the control request timeouts
-    }
-    if (diagramEditor_ && diagramEditor_->scene()) {
-        disconnect(diagramEditor_->scene(), nullptr, this, nullptr);
     }
     if (runner_) {
         disconnect(runner_, nullptr, this, nullptr);
@@ -720,6 +693,23 @@ void MainWindow::buildUi()
     undoAction_ = editing.undo;
     redoAction_ = editing.redo;
     editorShortcuts_ = editing.shortcuts;
+    auto* information = menus.edit->addAction(QStringLiteral("Element Information…"));
+    information->setObjectName(QStringLiteral("action.elementInformation"));
+    connect(information, &QAction::triggered, this, [this] {
+        const auto* editor = activeDiagramEditor();
+        if (!editor) return;
+        for (const auto& node : editor->scene()->elementNodes()) if (node->isSelected()) {
+            ui::showElementInformation(s7::ElementRegistry::instance(), QString::fromStdString(node->element().type),
+                                       this, node->element().schema);
+            return;
+        }
+    });
+    connect(menus.edit, &QMenu::aboutToShow, this, [this, information] {
+        const auto* editor = activeDiagramEditor();
+        bool selected = false;
+        if (editor) for (const auto& node : editor->scene()->elementNodes()) selected |= node->isSelected();
+        information->setEnabled(selected);
+    });
     editorShortcuts_.append({zoomInAction_, zoomOutAction_});
     diagramEditor_->addActions(editorShortcuts_);
     diagramDrawToolBar_->insertAction(modeWireAction_, undoAction_);
@@ -1082,12 +1072,20 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     dialog.setWindowTitle(QStringLiteral("Element Properties - %1").arg(elementId));
     dialog.resize(720, 680);
     auto* layout = new QVBoxLayout(&dialog);
-    auto* identity = new QLabel(QStringLiteral("%1 — %2").arg(elementId, elementType), &dialog);
+    auto* splitter = new QSplitter(Qt::Vertical, &dialog);
+    splitter->setObjectName(QStringLiteral("element.propertiesSplitter"));
+    auto* documentation = new QWidget(splitter);
+    auto* documentationLayout = new QVBoxLayout(documentation);
+    documentationLayout->setContentsMargins(0, 0, 0, 0);
+    auto* identity = new QLabel(QStringLiteral("%1 — %2").arg(elementId, elementType), documentation);
     identity->setTextFormat(Qt::PlainText); identity->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    layout->addWidget(identity);
-    auto* description = new QLabel(elementDescriptionForType(elementType), &dialog);
-    description->setTextFormat(Qt::PlainText); description->setWordWrap(true);
-    layout->addWidget(description);
+    documentationLayout->addWidget(identity);
+    documentationLayout->addWidget(ui::createElementDocumentation(
+        ui::elementDocumentation(s7::ElementRegistry::instance(), elementType), documentation), 1);
+    splitter->addWidget(documentation);
+    auto* settings = new QWidget(splitter);
+    auto* settingsLayout = new QVBoxLayout(settings);
+    settingsLayout->setContentsMargins(0, 0, 0, 0);
 
     // Ports and deployment remain available without crowding routine tuning.
     auto* detailsButton = new QToolButton(&dialog);
@@ -1116,10 +1114,15 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     details->setVisible(false);
     connect(detailsButton, &QToolButton::toggled, details, &QWidget::setVisible);
     connect(detailsButton, &QToolButton::toggled, &dialog, [detailsButton](bool checked) { detailsButton->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow); });
-    layout->addWidget(detailsButton); layout->addWidget(details);
+    settingsLayout->addWidget(detailsButton); settingsLayout->addWidget(details);
     auto* editor = new ui::ParameterEditor(descriptor ? std::optional{s7::ElementMetadata(descriptor->metadata())} : std::nullopt,
                                            elementNode->element().params, &dialog);
-    layout->addWidget(editor, 1);
+    settingsLayout->addWidget(editor, 1);
+    splitter->addWidget(settings);
+    splitter->setChildrenCollapsible(false);
+    splitter->setStretchFactor(0, 1); splitter->setStretchFactor(1, 2);
+    splitter->setSizes({200, 400});
+    layout->addWidget(splitter, 1);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     boost::json::object params;
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {

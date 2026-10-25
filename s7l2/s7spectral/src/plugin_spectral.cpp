@@ -4,7 +4,8 @@
 #include "s7spectral/fft_element.hpp"
 #include "s7spectral/spectral_window.hpp"
 
-#include "s7/element_metadata.hpp"
+#include "s7/metadata_json.hpp"
+#include "spectral_metadata.hpp"
 #include "s7/element_plugin.hpp"
 #include "s7/element_registry.hpp"
 
@@ -52,32 +53,6 @@ const char* s7_plugin_manifest_json()
 
 namespace {
 
-s7::ElementMetadata windowed_fft_metadata()
-{
-    s7::ElementMetadata meta;
-    meta.type_name = "WindowedFFT";
-    meta.display_name = "Windowed FFT";
-    meta.description = "Sliding windowed FFT: dominant frequency and its amplitude";
-    meta.category = "spectral";
-    meta.version = "1.0.0";
-    meta.tags = {"fft", "spectral", "stateful", "fftw3"};
-
-    meta.input_ports.push_back({"in", "Input signal", s7::SignalType::F64, false});
-    meta.output_ports.push_back({"peak_frequency_hz", "Dominant frequency (Hz)", s7::SignalType::F64, false});
-    meta.output_ports.push_back({"peak_amplitude", "Amplitude of the dominant component", s7::SignalType::F64, false});
-
-    meta.parameters = {
-        {"fft_size", "int", "FFT window size (power of 2)", 1024, 4, 65536, {}, false},
-        {"hop_size", "int", "Samples between transforms", 512, 1, 65536, {}, false},
-        {"sample_rate_hz", "real", "Sample rate in Hz", 44100.0, 1e-3, 1e12, {}, false},
-        {"window_type", "enum", "Window function", "HANN", std::nullopt, std::nullopt,
-         {"RECTANGULAR", "HANN", "HAMMING", "BLACKMAN", "BLACKMAN_HARRIS", "NUTTALL"}, false},
-    };
-
-    meta.visual = {"box", "#9C27B0", 120, 50, "waveform"};
-    return meta;
-}
-
 s7spectral::WindowType window_type_from_name(const std::string& name)
 {
     using s7spectral::WindowType;
@@ -97,6 +72,7 @@ extern "C" {
 void s7_register_elements(void* registry_ptr)
 {
     auto* registry = static_cast<s7::ElementRegistry*>(registry_ptr);
+    static const s7::ElementMetadataLibrary metadata(s7::resources::spectral_metadata);
     registry->register_element(s7::ElementDescriptor(
         "WindowedFFT",
         [](const s7::ElementCreationContext& ctx) {
@@ -111,7 +87,7 @@ void s7_register_elements(void* registry_ptr)
                 ctx.has_param("sample_rate_hz") ? ctx.get_real("sample_rate_hz") : 44100.0,
                 window_type_from_name(ctx.has_param("window_type") ? ctx.get_string("window_type") : "HANN"));
         },
-        windowed_fft_metadata()));
+        metadata.at("WindowedFFT")));
 }
 
 } // extern "C"

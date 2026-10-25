@@ -7,6 +7,8 @@
 #include "s7/elements.hpp"
 #include "s7/schema_library.hpp"
 #include "s7_schema_elements.hpp"
+#include "s7/metadata_json.hpp"
+#include "core_metadata.hpp"
 #include "s7/signal_values.hpp"
 #include "s7/type_inference.hpp"
 
@@ -15,68 +17,6 @@
 
 namespace s7 {
 namespace {
-
-ElementMetadata make_simple_metadata(
-    const std::string& type_name,
-    const std::string& display_name,
-    const std::string& description,
-    const std::string& category,
-    int input_count,
-    int output_count)
-{
-    ElementMetadata metadata;
-    metadata.type_name = type_name;
-    metadata.display_name = display_name;
-    metadata.description = description;
-    metadata.category = category;
-    metadata.version = "1.0.0";
-    metadata.visual = {"box", "#4CAF50", 110, 52, ""};
-
-    for (int i = 0; i < input_count; ++i) {
-        PortSpec port;
-        port.name = i == 0 ? "in" : "in" + std::to_string(i);
-        port.description = "Input";
-        port.type = SignalType::F64;
-        port.optional = false;
-        metadata.input_ports.push_back(port);
-    }
-
-    for (int i = 0; i < output_count; ++i) {
-        PortSpec port;
-        port.name = i == 0 ? "out" : "out" + std::to_string(i);
-        port.description = "Output";
-        port.type = SignalType::F64;
-        port.optional = false;
-        metadata.output_ports.push_back(port);
-    }
-
-    return metadata;
-}
-
-ElementMetadata make_generic_metadata(const std::string& type_name,
-                                      const std::string& display_name,
-                                      const std::string& description,
-                                      const std::string& category,
-                                      const int input_count,
-                                      const int output_count,
-                                      const SignalTypeSet allowed)
-{
-    auto metadata = make_simple_metadata(type_name, display_name, description, category, input_count, output_count);
-    metadata.type_variables.push_back({"T", allowed.types(), "type"});
-    for (auto& port : metadata.input_ports) {
-        port.type_rule = "T";
-    }
-    for (auto& port : metadata.output_ports) {
-        port.type_rule = "T";
-    }
-    metadata.parameters.push_back({"type", "type", "Pins the element's type (otherwise inferred from connections)", nullptr, std::nullopt, std::nullopt, {}, false});
-    return metadata;
-}
-
-void add_overflow_parameter(ElementMetadata& metadata)
-{
-    metadata.parameters.push_back({"overflow", "enum", "Integer overflow rule", "saturate", std::nullopt, std::nullopt, {"saturate", "wrap"}, false});
-}
 
 Overflow overflow_param(const ElementCreationContext& ctx)
 {
@@ -123,19 +63,6 @@ std::vector<signal_storage_t<T>> param_values(const ElementCreationContext& ctx,
     return param_array<T>(ctx, name, 2);
 }
 
-// Real and complex floating-point types.
-SignalTypeSet floating_types()
-{
-    return SignalTypeSet::where([](const SignalType type) { return signal_type_info(type).is_floating(); });
-}
-
-// Real floating-point types only, no complex component (Trig: s7::math has no
-// complex-analytic sin/cos/... yet, s7/float_types.hpp).
-SignalTypeSet real_floating_types()
-{
-    return SignalTypeSet::where([](const SignalType type) { return signal_type_info(type).kind == SignalKind::Float; });
-}
-
 TrigFunction trig_function_param(const ElementCreationContext& ctx)
 {
     return ctx.has_param("function") ? trig_function_from_name(ctx.get_string("function")) : TrigFunction::Sin;
@@ -173,18 +100,6 @@ ComparatorOperation comparator_operation_param(const ElementCreationContext& ctx
     throw std::invalid_argument("Comparator operation must be one of lt, le, gt, ge, eq, ne.");
 }
 
-// Accumulating elements: input type T and accumulator type A (A defaults to T).
-void add_accumulator_variable(ElementMetadata& metadata)
-{
-    metadata.type_variables.push_back({"A", signal_type_sets::arithmetic.types(), "accumulator_type", "T"});
-    for (auto& port : metadata.output_ports) {
-        port.type_rule = "A";
-    }
-    metadata.parameters.push_back({"accumulator_type", "type",
-                                   "Type of the arithmetic and the output; must hold every input value exactly (default: the input type)",
-                                   nullptr, std::nullopt, std::nullopt, {}, false});
-}
-
 template <typename Make>
 std::unique_ptr<Element> make_accumulating(const ElementCreationContext& ctx, Make&& make)
 {
@@ -215,6 +130,8 @@ void register_builtin_elements(ElementRegistry& registry)
         return;
     }
 
+    static const ElementMetadataLibrary metadata(resources::core_metadata);
+
     registry.register_element(ElementDescriptor(
         "Constant",
         [](const ElementCreationContext& ctx) {
@@ -222,13 +139,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 return std::make_unique<ConstantT<T>>(param_value<T>(ctx, "value", signal_storage_t<T>{}));
             });
         },
-        [] {
-            auto m = make_generic_metadata("Constant", "Constant", "Constant source", "basic", 0, 1, signal_type_sets::all);
-            m.parameters.push_back({"value", "value", "Output value (exact for integer types; [re, im] for complex)", 0, std::nullopt, std::nullopt, {}, false});
-            m.visual.shape = "circle";
-            m.visual.color = "#66BB6A";
-            return m;
-        }()));
+        metadata.at("Constant")));
 
     registry.register_element(ElementDescriptor(
         "Gain",
@@ -241,12 +152,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("Gain", "Gain", "Multiply input by factor", "basic", 1, 1, signal_type_sets::arithmetic);
-            m.parameters.push_back({"factor", "value", "Gain factor, of the element's type", 1, std::nullopt, std::nullopt, {}, false});
-            add_overflow_parameter(m);
-            return m;
-        }()));
+        metadata.at("Gain")));
 
     registry.register_element(ElementDescriptor(
         "Divider",
@@ -259,13 +165,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("Divider", "Divider", "Divide numerator by denominator", "basic", 2, 1,
-                                           real_floating_types());
-            m.input_ports[0].name = "numerator";
-            m.input_ports[1].name = "denominator";
-            return m;
-        }()));
+        metadata.at("Divider")));
 
     registry.register_element(ElementDescriptor(
         "MathFunction",
@@ -279,15 +179,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("MathFunction", "Math Function", "Apply a scalar math function", "basic", 1, 1,
-                                           real_floating_types());
-            m.parameters.push_back({"function", "enum", "Function applied to the input", "sqrt", std::nullopt,
-                                    std::nullopt, {"sqrt", "exp", "log", "pow", "abs", "reciprocal"}, false});
-            m.parameters.push_back({"exponent", "value", "Exponent used when function is pow", 2, std::nullopt,
-                                    std::nullopt, {}, false});
-            return m;
-        }()));
+        metadata.at("MathFunction")));
 
     registry.register_element(ElementDescriptor(
         "Power",
@@ -300,13 +192,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("Power", "Power", "Raise the base input to the exponent input", "basic", 2, 1,
-                                           real_floating_types());
-            m.input_ports[0].name = "base";
-            m.input_ports[1].name = "exponent";
-            return m;
-        }()));
+        metadata.at("Power")));
 
     registry.register_element(ElementDescriptor(
         "Saturation",
@@ -320,13 +206,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("Saturation", "Saturation", "Clamp an input between inclusive limits", "basic", 1, 1,
-                                           signal_type_sets::real);
-            m.parameters.push_back({"lower_limit", "value", "Inclusive lower output limit", 0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"upper_limit", "value", "Inclusive upper output limit", 1, std::nullopt, std::nullopt, {}, false});
-            return m;
-        }()));
+        metadata.at("Saturation")));
 
     registry.register_element(ElementDescriptor(
         "MinMax",
@@ -340,17 +220,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("MinMax", "MinMax", "Select the minimum or maximum of its inputs", "basic", 2, 1,
-                                           signal_type_sets::real);
-            m.parameters.push_back({"operation", "enum", "Select minimum or maximum", "min", std::nullopt, std::nullopt,
-                                    {"min", "max"}, false});
-            m.parameters.push_back({"input_count", "int", "Number of input ports", 2, 2, 64, {}, false});
-            m.input_ports[0].name = "in0";
-            m.input_ports[1].name = "in1";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T", "input_count"};
-            return m;
-        }()));
+        metadata.at("MinMax")));
 
     registry.register_element(ElementDescriptor(
         "Sign",
@@ -363,10 +233,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            return make_generic_metadata("Sign", "Sign", "Return -1, 0 or 1 according to the input sign", "basic", 1, 1,
-                                         signal_type_sets::real);
-        }()));
+        metadata.at("Sign")));
 
     registry.register_element(ElementDescriptor(
         "Comparator",
@@ -379,16 +246,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("Comparator", "Comparator",
-                                           "Output 1 if lhs 'operation' rhs holds, else 0", "basic", 2, 1,
-                                           signal_type_sets::real);
-            m.parameters.push_back({"operation", "enum", "Relational operation applied to lhs and rhs", "lt", std::nullopt,
-                                    std::nullopt, {"lt", "le", "gt", "ge", "eq", "ne"}, false});
-            m.input_ports[0].name = "lhs";
-            m.input_ports[1].name = "rhs";
-            return m;
-        }()));
+        metadata.at("Comparator")));
 
     registry.register_element(ElementDescriptor(
         "Adder",
@@ -397,19 +255,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 return std::make_unique<AdderT<T, A>>(param_values<A>(ctx, "weights"), overflow_param(ctx));
             });
         },
-        [] {
-            auto m = make_generic_metadata("Adder", "Adder", "Weighted sum of N inputs", "basic", 2, 1, signal_type_sets::arithmetic);
-            m.parameters.push_back({"weights", "array", "Per-input weights; input count follows this array length", boost::json::array{1, 1}, std::nullopt, std::nullopt, {}, false});
-            add_overflow_parameter(m);
-            m.input_ports[0].name = "lhs";
-            m.input_ports[0].description = "Summation input 0 (weighted by weights[0]).";
-            m.input_ports[1].name = "rhs";
-            m.input_ports[1].description = "Summation input 1 (weighted by weights[1]).";
-            m.output_ports[0].description = "Weighted sum output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T", "weights"};
-            add_accumulator_variable(m);
-            return m;
-        }()));
+        metadata.at("Adder")));
 
     registry.register_element(ElementDescriptor(
         "Multiply",
@@ -418,19 +264,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 return std::make_unique<MultiplyT<T, A>>(param_values<A>(ctx, "factors"), overflow_param(ctx));
             });
         },
-        [] {
-            auto m = make_generic_metadata("Multiply", "Multiply", "Product of N inputs", "basic", 2, 1, signal_type_sets::arithmetic);
-            m.parameters.push_back({"factors", "array", "Per-input factors; input count follows this array length", boost::json::array{1, 1}, std::nullopt, std::nullopt, {}, false});
-            add_overflow_parameter(m);
-            m.input_ports[0].name = "lhs";
-            m.input_ports[0].description = "Multiplier input 0 (scaled by factors[0]).";
-            m.input_ports[1].name = "rhs";
-            m.input_ports[1].description = "Multiplier input 1 (scaled by factors[1]).";
-            m.output_ports[0].description = "Product output.";
-            m.variadic_inputs = {true, 2, 64, "in_{index}", SignalType::F64, "T", "factors"};
-            add_accumulator_variable(m);
-            return m;
-        }()));
+        metadata.at("Multiply")));
 
     for (const auto* name : {"Delay", "PreviousValue"}) {
         registry.register_element(ElementDescriptor(
@@ -440,11 +274,7 @@ void register_builtin_elements(ElementRegistry& registry)
                     return std::make_unique<DelayT<T>>(param_value<T>(ctx, "initial_value", signal_storage_t<T>{}), name);
                 });
             },
-            [name] {
-                auto m = make_generic_metadata(name, name, "Unit delay: outputs the previous input", "filters", 1, 1, signal_type_sets::all);
-                m.parameters.push_back({"initial_value", "value", "Output before the first input", 0, std::nullopt, std::nullopt, {}, false});
-                return m;
-            }()));
+            metadata.at(name)));
     }
 
     registry.register_element(ElementDescriptor(
@@ -454,15 +284,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 return std::make_unique<AccumulatorT<T, A>>(param_value<A>(ctx, "initial_value", {}), overflow_param(ctx));
             });
         },
-        [] {
-            auto m = make_generic_metadata("Accumulator", "Accumulator (running sum)",
-                                           "Running sum y[n] = y[n-1] + x[n], no time step; see EulerIntegrator / TrapezoidIntegrator",
-                                           "filters", 1, 1, signal_type_sets::arithmetic);
-            m.parameters.push_back({"initial_value", "value", "Initial output value", 0, std::nullopt, std::nullopt, {}, false});
-            add_overflow_parameter(m);
-            add_accumulator_variable(m);
-            return m;
-        }()));
+        metadata.at("Accumulator")));
 
     registry.register_element(ElementDescriptor(
         "EulerIntegrator",
@@ -477,14 +299,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("EulerIntegrator", "Euler Integrator",
-                                           "Forward Euler (rectangle rule): y[n+1] = y[n] + dt*x[n]; causal memory, can close loops",
-                                           "filters", 1, 1, floating_types());
-            m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"initial_value", "value", "y[0]", 0, std::nullopt, std::nullopt, {}, false});
-            return m;
-        }()));
+        metadata.at("EulerIntegrator")));
 
     registry.register_element(ElementDescriptor(
         "TrapezoidIntegrator",
@@ -500,16 +315,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("TrapezoidIntegrator", "Trapezoid Integrator",
-                                           "Implicit trapezoidal ODE step, solved jointly across feedback states; sampled mode integrates supplied samples",
-                                           "filters", 1, 1, floating_types());
-            m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"initial_value", "value", "y[0]", 0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"mode", "enum", "Implicit feedback solve or supplied-sample quadrature",
-                                    "implicit", std::nullopt, std::nullopt, {"implicit", "sampled"}, false});
-            return m;
-        }()));
+        metadata.at("TrapezoidIntegrator")));
 
     registry.register_element(ElementDescriptor(
         "SymplecticIntegrator",
@@ -524,24 +330,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata(
-                "SymplecticIntegrator", "Symplectic Integrator (semi-implicit Euler)",
-                "Semi-implicit Euler for x'' = acceleration: v[n+1] = v[n] + dt*a[n], x[n+1] = x[n] + dt*v[n+1]; "
-                "bounds a conservative oscillator's energy instead of letting it drift like EulerIntegrator",
-                "filters", 1, 2, floating_types());
-            m.parameters.push_back({"dt", "value", "Model time per step", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"initial_position", "value", "x[0]", 0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"initial_velocity", "value", "v[0]", 0, std::nullopt, std::nullopt, {}, false});
-            m.input_ports[0].name = "acceleration";
-            m.input_ports[0].description = "Acceleration/force input, a(x) computed by the surrounding graph; a "
-                                           "velocity dependency (damping) loses the symplectic energy bound.";
-            m.output_ports[0].name = "position";
-            m.output_ports[0].description = "Position output x[n].";
-            m.output_ports[1].name = "velocity";
-            m.output_ports[1].description = "Velocity output v[n].";
-            return m;
-        }()));
+        metadata.at("SymplecticIntegrator")));
 
     registry.register_element(ElementDescriptor(
         "Trig",
@@ -554,14 +343,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("Trig", "Trigonometric Function",
-                                           "y = f(x): sin, cos, tan, asin, acos, atan, sinh, cosh or tanh of an arbitrary input",
-                                           "filters", 1, 1, real_floating_types());
-            m.parameters.push_back({"function", "enum", "Which function to apply", "sin", std::nullopt, std::nullopt,
-                                    {"sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh"}, false});
-            return m;
-        }()));
+        metadata.at("Trig")));
 
     registry.register_element(ElementDescriptor(
         "ChirpGenerator",
@@ -578,20 +360,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 } else return unsupported_type(ctx);
             });
         },
-        [] {
-            auto m = make_generic_metadata("ChirpGenerator", "Chirp Generator", "Phase-continuous linear or logarithmic sine frequency sweep",
-                                           "sources", 0, 1, real_floating_types());
-            m.parameters.push_back({"start_hz", "value", "Initial frequency in Hz", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"end_hz", "value", "Final frequency in Hz", 100, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"sweep_samples", "int", "Sweep duration in model sample intervals", 1000, 1, std::nullopt, {}, false});
-            m.parameters.push_back({"sample_rate_hz", "real", "Model samples per second", 1000, 0, std::nullopt, {}, false});
-            m.parameters.push_back({"amplitude", "value", "Half peak-to-peak amplitude", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"offset", "value", "Output offset", 0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"phase", "value", "Initial phase in radians", 0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"sweep", "enum", "Frequency interpolation", "linear", std::nullopt, std::nullopt, {"linear", "logarithmic"}, false});
-            m.parameters.push_back({"end_behavior", "enum", "Hold final frequency or repeat sweep with continuous phase", "hold", std::nullopt, std::nullopt, {"hold", "repeat"}, false});
-            return m;
-        }()));
+        metadata.at("ChirpGenerator")));
 
     registry.register_element(ElementDescriptor(
         "PRBSGenerator",
@@ -606,17 +375,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 } else return unsupported_type(ctx);
             });
         },
-        [] {
-            auto m = make_generic_metadata("PRBSGenerator", "PRBS Generator", "Deterministic maximal-length PRBS7 or PRBS15 excitation",
-                                           "sources", 0, 1, real_floating_types());
-            m.parameters.push_back({"order", "int", "LFSR order: 7 or 15", 7, 7, 15, {}, false});
-            m.parameters.push_back({"seed", "int", "Nonzero initial LFSR state fitting the order", 1, 1, 32767, {}, false});
-            m.parameters.push_back({"bit_samples", "int", "Model samples per bit", 1, 1, std::nullopt, {}, false});
-            m.parameters.push_back({"sample_rate_hz", "real", "Model samples per second", 1000, 0, std::nullopt, {}, false});
-            m.parameters.push_back({"low", "value", "Zero-bit level", -1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"high", "value", "One-bit level", 1, std::nullopt, std::nullopt, {}, false});
-            return m;
-        }()));
+        metadata.at("PRBSGenerator")));
 
     for (const std::string name : {"TriangleGenerator", "PulseGenerator", "ImpulseGenerator",
                                    "StepGenerator", "ControlledOscillator"}) {
@@ -653,44 +412,7 @@ void register_builtin_elements(ElementRegistry& registry)
                     }
                 });
             },
-            [name] {
-                const bool controlled = name == "ControlledOscillator";
-                auto m = make_generic_metadata(name, name,
-                    name == "ImpulseGenerator" ? "One-sample delta pulse with specified integral (area)" :
-                    name == "StepGenerator" ? "Sigma step at a specified model sample" :
-                    name == "TriangleGenerator" ? "Triangle or sawtooth with configurable rise fraction" :
-                    name == "PulseGenerator" ? "Periodic rectangular pulse source" :
-                    "Phase-continuous sine oscillator controlled by frequency in Hz",
-                    "sources", controlled ? 1 : 0, 1, real_floating_types());
-                m.parameters.push_back({"sample_rate_hz", "real", "Model samples per second", 1000, 0, std::nullopt, {}, false});
-                if (name == "StepGenerator" || name == "ImpulseGenerator") {
-                    m.parameters.push_back({"start_sample", "int", "Zero-based model sample of the transition or impulse", 0, 0, std::nullopt, {}, false});
-                    if (name == "ImpulseGenerator") {
-                        m.parameters.push_back({"area", "value", "Impulse integral; pulse height is area * sample_rate_hz", 1, std::nullopt, std::nullopt, {}, false});
-                    } else {
-                        m.parameters.push_back({"initial_value", "value", "Level before start_sample", 0, std::nullopt, std::nullopt, {}, false});
-                        m.parameters.push_back({"final_value", "value", "Level at and after start_sample", 1, std::nullopt, std::nullopt, {}, false});
-                    }
-                } else {
-                    if (name == "PulseGenerator") {
-                        m.parameters.push_back({"low", "value", "Low level", 0, std::nullopt, std::nullopt, {}, false});
-                        m.parameters.push_back({"high", "value", "High level", 1, std::nullopt, std::nullopt, {}, false});
-                        m.parameters.push_back({"duty", "real", "High fraction of each period", 0.5, 0, 1, {}, false});
-                    } else {
-                        m.parameters.push_back({"amplitude", "value", "Half peak-to-peak amplitude", 1, std::nullopt, std::nullopt, {}, false});
-                        m.parameters.push_back({"offset", "value", "Output offset", 0, std::nullopt, std::nullopt, {}, false});
-                    }
-                    if (!controlled)
-                        m.parameters.push_back({"frequency_hz", "value", "Frequency in Hz; negative reverses phase", 1, std::nullopt, std::nullopt, {}, false});
-                    m.parameters.push_back({"phase", controlled ? "value" : "real", controlled ? "Initial phase in radians" : "Initial phase in cycles (wrapped to [0,1))", 0, std::nullopt, std::nullopt, {}, false});
-                    if (name == "TriangleGenerator")
-                        m.parameters.push_back({"rise_fraction", "real", "Rising fraction: 0 falling saw, 0.5 triangle, 1 rising saw", 0.5, 0, 1, {}, false});
-                }
-                if (controlled) m.input_ports[0].name = "frequency_hz";
-                m.visual.shape = "circle";
-                m.visual.color = "#42A5F5";
-                return m;
-            }()));
+            metadata.at(name)));
     }
 
     for (const std::string name : {"Switch", "HysteresisRelay", "ControlledIntegrator", "PhaseWrap", "FrequencyMeter"}) {
@@ -718,42 +440,7 @@ void register_builtin_elements(ElementRegistry& registry)
                     return unsupported_type(ctx);
                 });
             },
-            [name] {
-                const bool real = name=="Switch";
-                auto m=make_generic_metadata(name,name,
-                    name=="Switch" ? "Select off/on input with numeric control (zero/nonzero)" :
-                    name=="HysteresisRelay" ? "Relay with distinct on/off thresholds and retained state" :
-                    name=="ControlledIntegrator" ? "Local causal integrator with enable, reset and state limits" :
-                    name=="PhaseWrap" ? "Wrap phase into a half-open interval" :
-                    "Measure frequency from successive rising zero crossings",
-                    name=="FrequencyMeter" ? "measurement" : "control",
-                    name=="Switch" ? 3 : name=="ControlledIntegrator" ? 4 : 1,
-                    name=="FrequencyMeter" ? 2 : 1,real ? signal_type_sets::real : real_floating_types());
-                if (name=="Switch") {
-                    m.input_ports[0].name="off";m.input_ports[1].name="on";m.input_ports[2].name="control";
-                } else if (name=="HysteresisRelay") {
-                    m.parameters.push_back({"lower_threshold","value","Turn off at/below this threshold",-1,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"upper_threshold","value","Turn on at/above this threshold",1,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"low_value","value","Off output",0,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"high_value","value","On output",1,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"initial_on","bool","Initial state for an input in the hysteresis band",false,std::nullopt,std::nullopt,{},false});
-                } else if (name=="ControlledIntegrator") {
-                    m.parameters.push_back({"dt","value","Model step in seconds",0.001,0,std::nullopt,{},false});
-                    m.parameters.push_back({"initial_value","value","Initial published state",0,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"lower_limit","value","Lower state bound; omitted means lowest finite value",nullptr,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"upper_limit","value","Upper state bound; omitted means highest finite value",nullptr,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"reset_mode","enum","Reset on rising edge or every asserted sample","rising",std::nullopt,std::nullopt,{"rising","level"},false});
-                    m.input_ports[0].name="derivative";m.input_ports[1].name="enable";
-                    m.input_ports[2].name="reset";m.input_ports[3].name="reset_value";
-                } else if (name=="PhaseWrap") {
-                    m.parameters.push_back({"period","value","Interval width; omitted means 2*pi in the selected type",nullptr,std::nullopt,std::nullopt,{},false});
-                    m.parameters.push_back({"lower","value","Lower interval endpoint; omitted means -pi",nullptr,std::nullopt,std::nullopt,{},false});
-                } else {
-                    m.parameters.push_back({"sample_rate_hz","real","Model samples per second",1000,0,std::nullopt,{},false});
-                    m.output_ports[0].name="frequency_hz";m.output_ports[1].name="valid";
-                }
-                return m;
-            }()));
+            metadata.at(name)));
     }
 
     registry.register_element(ElementDescriptor(
@@ -768,15 +455,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("PWM", "PWM", "Trailing-edge PWM; duty latched at each carrier boundary",
-                                           "sources", 1, 1, real_floating_types());
-            m.parameters.push_back({"period_samples", "int", "Samples per carrier period (frequency = sample rate / period)", 100, 2, 65504, {}, false});
-            m.parameters.push_back({"sample_rate_hz", "real", "Model sample rate in Hz", 100000, 0, std::nullopt, {}, false});
-            m.input_ports[0].name = "duty";
-            m.output_ports[0].name = "gate";
-            return m;
-        }()));
+        metadata.at("PWM")));
 
     registry.register_element(ElementDescriptor(
         "AnalogOscillator",
@@ -793,17 +472,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("AnalogOscillator", "Analog Oscillator", "Sinusoidal source, computed in its type",
-                                           "sources", 0, 1, signal_type_sets::floating);
-            m.parameters.push_back({"amplitude", "value", "Signal amplitude", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"frequency_hz", "value", "Frequency in Hz", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"sample_rate_hz", "value", "Sample rate in Hz", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"phase", "value", "Initial phase (radians)", 0, std::nullopt, std::nullopt, {}, false});
-            m.visual.shape = "circle";
-            m.visual.color = "#42A5F5";
-            return m;
-        }()));
+        metadata.at("AnalogOscillator")));
 
     registry.register_element(ElementDescriptor(
         "FirFilter",
@@ -814,16 +483,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 return std::make_unique<FirFilterT<T, A>>(std::move(taps), overflow_param(ctx));
             });
         },
-        [] {
-            auto m = make_generic_metadata("FirFilter", "FIR Filter", "Finite impulse response filter", "filters", 1, 1,
-                                           signal_type_sets::arithmetic);
-            m.parameters.push_back({"taps", "array", "Filter taps, of the element's type; at least one", boost::json::array{1}, std::nullopt, std::nullopt, {}, false});
-            add_overflow_parameter(m);
-            m.input_ports[0].description = "Input signal sample.";
-            m.output_ports[0].description = "Filtered output sample.";
-            add_accumulator_variable(m);
-            return m;
-        }()));
+        metadata.at("FirFilter")));
 
     registry.register_element(ElementDescriptor(
         "IirFilter",
@@ -838,15 +498,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("IirFilter", "IIR Filter", "First-order recursive filter", "filters", 1, 1, floating_types());
-            m.parameters.push_back({"b0", "value", "Feedforward coefficient b0", 1, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"b1", "value", "Feedforward coefficient b1", 0, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"a1", "value", "Feedback coefficient a1", 0, std::nullopt, std::nullopt, {}, false});
-            m.input_ports[0].description = "Input signal sample.";
-            m.output_ports[0].description = "Filtered output sample.";
-            return m;
-        }()));
+        metadata.at("IirFilter")));
 
     registry.register_element(ElementDescriptor(
         "ReImToComplex",
@@ -859,18 +511,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("ReImToComplex", "Re/Im to Complex", "Combine real and imaginary channels", "conversion", 2, 1,
-                                           signal_type_sets::complex_all);
-            m.input_ports[0].name = "re";
-            m.input_ports[0].description = "Real part.";
-            m.input_ports[0].type_rule = "component(T)";
-            m.input_ports[1].name = "im";
-            m.input_ports[1].description = "Imaginary part.";
-            m.input_ports[1].type_rule = "component(T)";
-            m.output_ports[0].description = "Complex output.";
-            return m;
-        }()));
+        metadata.at("ReImToComplex")));
 
     registry.register_element(ElementDescriptor(
         "ComplexToReIm",
@@ -883,18 +524,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("ComplexToReIm", "Complex to Re/Im", "Split complex input into real and imaginary channels",
-                                           "conversion", 1, 2, signal_type_sets::complex_all);
-            m.input_ports[0].description = "Complex input.";
-            m.output_ports[0].name = "re";
-            m.output_ports[0].description = "Real output.";
-            m.output_ports[0].type_rule = "component(T)";
-            m.output_ports[1].name = "im";
-            m.output_ports[1].description = "Imaginary output.";
-            m.output_ports[1].type_rule = "component(T)";
-            return m;
-        }()));
+        metadata.at("ComplexToReIm")));
 
     registry.register_element(ElementDescriptor(
         "ComplexToMagnitudePhase",
@@ -907,19 +537,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 }
             });
         },
-        [] {
-            auto m = make_generic_metadata("ComplexToMagnitudePhase", "Complex to Magnitude/Phase",
-                                           "Magnitude and phase of a complex input, in its component type", "conversion", 1, 2,
-                                           signal_type_sets::complex_floating);
-            m.input_ports[0].description = "Complex input.";
-            m.output_ports[0].name = "magnitude";
-            m.output_ports[0].description = "Magnitude output.";
-            m.output_ports[0].type_rule = "component(T)";
-            m.output_ports[1].name = "phase";
-            m.output_ports[1].description = "Phase output (radians).";
-            m.output_ports[1].type_rule = "component(T)";
-            return m;
-        }()));
+        metadata.at("ComplexToMagnitudePhase")));
 
     registry.register_element(ElementDescriptor(
         "Convert",
@@ -937,21 +555,7 @@ void register_builtin_elements(ElementRegistry& registry)
             }
             return make_convert(ctx.type("from"), ctx.type("to"), options);
         },
-        [] {
-            auto m = make_simple_metadata("Convert", "Convert",
-                                          "Explicit type conversion (value or normalized), with stated rounding and overflow",
-                                          "conversion", 1, 1);
-            m.type_variables.push_back({"from", signal_type_sets::all.types(), "from"});
-            m.type_variables.push_back({"to", signal_type_sets::all.types(), "to"});
-            m.input_ports[0].type_rule = "from";
-            m.output_ports[0].type_rule = "to";
-            m.parameters.push_back({"from", "type", "Input type (otherwise inferred)", nullptr, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"to", "type", "Output type (otherwise inferred)", nullptr, std::nullopt, std::nullopt, {}, false});
-            m.parameters.push_back({"mode", "enum", "value: keep the number; normalized: fixed-point scaling", "value", std::nullopt, std::nullopt, {"value", "normalized"}, true});
-            m.parameters.push_back({"rounding", "enum", "Rounding of inexact results", "half_even", std::nullopt, std::nullopt, {"half_even", "toward_zero"}, false});
-            m.parameters.push_back({"overflow", "enum", "Out-of-range values", "saturate", std::nullopt, std::nullopt, {"saturate", "fault"}, false});
-            return m;
-        }()));
+        metadata.at("Convert")));
     SchemaLibraryLoader::register_library(SchemaLibraryLoader::load_from_json(
         boost::json::parse(detail::builtin_schema_resource)), registry);
 

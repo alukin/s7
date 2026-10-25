@@ -1,0 +1,360 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [
+    {
+      "type_name": "NetSink",
+      "display_name": "Net Sink",
+      "description": "Publishes its input to a lossless network stream.",
+      "category": "network",
+      "version": "1.0.0",
+      "tags": [
+        "network",
+        "transport",
+        "distributed"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Value to publish",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the stream's type (otherwise inferred)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "stream_id",
+          "type": "string",
+          "description": "Stream UUID; the same on both ends",
+          "default": null,
+          "required": true,
+          "enum_values": []
+        },
+        {
+          "name": "max_elements_per_packet",
+          "type": "int",
+          "description": "Batch size",
+          "default": 1024,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "max_batch_latency_ms",
+          "type": "int",
+          "description": "Longest wait before a partial batch is sent",
+          "default": 10,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "send_log_max_packets",
+          "type": "int",
+          "description": "Unacknowledged packets kept for replay",
+          "default": 4096,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "max_block_ms",
+          "type": "int",
+          "description": "Longest publish wait on a full send log before the stream faults",
+          "default": 2000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "max_wait_ms",
+          "type": "int",
+          "description": "Longest receive wait for data before the stream faults (underrun)",
+          "default": 2000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "producer_node",
+          "type": "string",
+          "description": "Node UUID allowed to produce the stream (NetSource; empty: any)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "consumer_nodes",
+          "type": "array",
+          "description": "Node UUIDs allowed to consume the stream (NetSink; empty: any)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "max_latency_ms",
+          "type": "int",
+          "description": "NetSource: packets arriving later than this (end to end, synchronized clocks) are counted LATE",
+          "default": null,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate",
+          "type": "array",
+          "description": "Two positive integers [numerator, denominator] in elements/second, e.g. [1000,1]. Uniform rate permits derived timestamps; omitted means no uniform-rate declaration. Does not resample signals.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "timestamps",
+          "type": "array",
+          "description": "Array of distinct string roles MODEL_TIME, SOURCE_TIME, PROCESSING_TIME, e.g. [\"MODEL_TIME\"]. Omitted means no timestamp roles. Without sample_rate, timestamps for declared roles travel with packets; a role declaration does not create a timestamp source.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#5C6BC0",
+        "max_width": 140,
+        "max_height": 56,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "NetSource",
+      "display_name": "Net Source",
+      "description": "Outputs the values of a lossless network stream.",
+      "category": "network",
+      "version": "1.0.0",
+      "tags": [
+        "network",
+        "transport",
+        "distributed"
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Received value",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the stream's type (otherwise inferred)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "stream_id",
+          "type": "string",
+          "description": "Stream UUID; the same on both ends",
+          "default": null,
+          "required": true,
+          "enum_values": []
+        },
+        {
+          "name": "max_elements_per_packet",
+          "type": "int",
+          "description": "Batch size",
+          "default": 1024,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "max_batch_latency_ms",
+          "type": "int",
+          "description": "Longest wait before a partial batch is sent",
+          "default": 10,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "send_log_max_packets",
+          "type": "int",
+          "description": "Unacknowledged packets kept for replay",
+          "default": 4096,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "max_block_ms",
+          "type": "int",
+          "description": "Longest publish wait on a full send log before the stream faults",
+          "default": 2000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "max_wait_ms",
+          "type": "int",
+          "description": "Longest receive wait for data before the stream faults (underrun)",
+          "default": 2000,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "producer_node",
+          "type": "string",
+          "description": "Node UUID allowed to produce the stream (NetSource; empty: any)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "consumer_nodes",
+          "type": "array",
+          "description": "Node UUIDs allowed to consume the stream (NetSink; empty: any)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "max_latency_ms",
+          "type": "int",
+          "description": "NetSource: packets arriving later than this (end to end, synchronized clocks) are counted LATE",
+          "default": null,
+          "required": false,
+          "min": 1.0,
+          "enum_values": []
+        },
+        {
+          "name": "sample_rate",
+          "type": "array",
+          "description": "Two positive integers [numerator, denominator] in elements/second, e.g. [1000,1]. Uniform rate permits derived timestamps; omitted means no uniform-rate declaration. Does not resample signals.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "timestamps",
+          "type": "array",
+          "description": "Array of distinct string roles MODEL_TIME, SOURCE_TIME, PROCESSING_TIME, e.g. [\"MODEL_TIME\"]. Omitted means no timestamp roles. Without sample_rate, timestamps for declared roles travel with packets; a role declaration does not create a timestamp source.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I12",
+            "U12",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#5C6BC0",
+        "max_width": 140,
+        "max_height": 56,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

@@ -26,7 +26,7 @@ Source: `s7core/include/s7/element.hpp`.
 
 **Math and limits.** `MathFunction` selects `sqrt`, `exp`, natural `log`, `pow`, `abs`, or `reciprocal` through its `function` parameter; `pow` uses the `exponent` parameter (default 2). `Power` computes `base` raised to a connected `exponent` input. These operate on real floating-point signals; sqrt of a negative value, log of a non-positive value, and reciprocal by zero are execution errors rather than NaN/infinite outputs. `Saturation` clamps real numeric signals to inclusive `lower_limit`/`upper_limit` values (defaults 0 and 1). `MinMax` takes 2–64 real numeric inputs and selects `min` or `max` with its `operation` parameter and `input_count`; a NaN input is ignored while another input is valid, propagating only if every input is NaN. `Sign` returns −1, 0, or 1; for unsigned inputs it returns 0 or 1. `Comparator` takes `lhs`/`rhs` real numeric inputs and an `operation` parameter (`lt`, `le`, `gt`, `ge`, `eq`, `ne`), outputting 1 or 0 in the ports' type; there is no boolean `SignalType`, so it follows `Sign`'s convention. Floating-point comparison follows IEEE 754 (NaN compares false except under `ne`).
 
-**Writing a generic element.** Write the element as a template over `SignalType` (see `GainT` in `s7/elements.hpp`; `SignalOps<Type>` gives `add`/`multiply`/`one`/`zero` with the `Overflow` rule). In its registration, declare a type variable and port rules in the metadata (`type_variables = {{"T", allowed, "type"}}`, `port.type_rule = "T"`; rules may also be `component(T)` or `complex(T)`), and in the factory dispatch on the resolved type: `visit_signal_type(ctx.type(), [&]<SignalType T>() { ... })`. Convert parameters with `signal_value_from_json<T>()`. Loaders create elements with `make_element_spec(id, descriptor, params)`, which turns the metadata into a `GenericElement` for the resolver.
+**Writing a generic element.** Write the element as a template over `SignalType` (see `GainT` in `s7/elements.hpp`; `SignalOps<Type>` gives `add`/`multiply`/`one`/`zero` with the `Overflow` rule). In its JSON resource, declare a type variable and port rules (`type_variables` contains an entry for `T` with `allowed` types and `pin_parameter: "type"`; port `type_rule` is `T`, `component(T)` or `complex(T)`), and in the factory dispatch on the resolved type: `visit_signal_type(ctx.type(), [&]<SignalType T>() { ... })`. Convert parameters with `signal_value_from_json<T>()`. Loaders create elements with `make_element_spec(id, descriptor, params)`, which turns the metadata into a `GenericElement` for the resolver.
 
 This section is the contract; built-in elements and the registry already follow it.
 
@@ -68,33 +68,76 @@ Variable input count is expressed through parameters: `Adder` takes `weights` an
 
 ## Metadata
 
-Source: `s7core/include/s7/element_metadata.hpp`.
+The in-memory API is `s7core/include/s7/element_metadata.hpp`. Author complete
+metadata in a module-owned JSON resource, rather than C++ documentation strings.
+Built-ins use `s7core/resources/element_metadata.json`; I/O, networking, noise,
+spectral and Studio observers each own their resource. Schema-backed elements
+already carry their descriptions and definitions in `.s7library` JSON.
 
-```cpp
-s7::ElementMetadata meta;
-meta.type_name = "LinearTransform";
-meta.display_name = "Linear Transform";
-meta.description = "y = x * scale + offset";
-meta.category = "basic";
-meta.version = "1.0.0";
-meta.input_ports.push_back({"in", "Input signal", s7::SignalType::F64, false});
-meta.output_ports.push_back({"out", "Output signal", s7::SignalType::F64, false});
-// ParameterSpec fields: name, type, description, default_value, min, max, enum_values, required
-meta.parameters.push_back({"scale", "real", "Multiplication factor", 1.0, std::nullopt, std::nullopt, {}, false});
-meta.parameters.push_back({"offset", "real", "Additive offset", 0.0, std::nullopt, std::nullopt, {}, false});
-meta.visual = {"box", "#4CAF50", 100, 50, ""};  // shape, color, width, height, icon
+A complete fixed-type entry looks like this (one entry inside a versioned document):
+
+```json
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "elements": [{
+    "type_name": "LinearTransform",
+    "display_name": "Linear Transform",
+    "description": "Multiplies the current input by scale and adds offset. No state or delay.",
+    "category": "basic", "version": "1.0.0", "tags": [],
+    "input_ports": [{"name":"in", "description":"Input signal", "type":"F64", "optional":false, "type_rule":""}],
+    "output_ports": [{"name":"out", "description":"Transformed signal", "type":"F64", "optional":false, "type_rule":""}],
+    "parameters": [
+      {"name":"scale", "type":"real", "description":"Dimensionless multiplier", "default":1.0, "required":false, "enum_values":[]},
+      {"name":"offset", "type":"real", "description":"Offset in output units", "default":0.0, "required":false, "enum_values":[]}
+    ],
+    "type_variables": [],
+    "visual": {"shape":"box", "color":"#4CAF50", "max_width":100, "max_height":50, "icon_name":""},
+    "variadic_inputs": {"enabled":false, "min_count":0, "max_count":0, "port_name_template":"", "signal_type":"F64", "type_rule":"", "count_parameter":""}
+  }]
+}
 ```
 
-Parameter `type` values: `real`, `int`, `string`, `bool`, `enum` (with `enum_values`), `array`.
+Parameter fields are `name`, `type`, `description`, `default`, `required`,
+`enum_values`, with optional numeric `min`/`max`. A null default means no declared
+default; explain any type-dependent fallback in the description. Required keys
+must be supplied, even when `default` gives a suggested value. Document units,
+array/object structure, conditional constraints, timing and small examples in
+plain text. Supported type labels are `real`, `int`, `string`, `bool`, `enum`,
+`type`, `array`, `object`, `value`. Factories still enforce typed signal values
+and conditional/structural constraints; `object` documentation does not add a
+new generic nested-object runtime validator.
 
-Parameters are checked against these declarations whenever an element is created through `make_element_spec` (`checked_params()`), and the factory receives them with every declared `default_value` filled in. Problems are validation errors naming the element and every bad parameter:
+Generic entries declare `type_variables`: each has `name`, `allowed` signal-type
+names, `pin_parameter`, and `defaults_to` (empty when inferred independently).
+Port `type_rule` can be empty, a variable name, `component(T)` or `complex(T)`.
+The complete built-in resource contains examples of generic, variadic and
+accumulator-type entries.
+
+Embed the resource through the SDK's CMake helper:
+
+```cmake
+find_package(s7core REQUIRED)
+# After add_library(my_plugin ...):
+s7_embed_metadata(my_plugin resources/element_metadata.json my_metadata)
+```
+
+This generates `my_metadata.hpp` with `s7::resources::my_metadata`. The resource
+is a configure dependency: editing JSON regenerates the header and rebuilds its
+consumer. Installed applications/plugins require no source-tree path or separate
+runtime metadata file. `ElementMetadataLibrary` checks the version, fields,
+parameter/type/port declarations, defaults and duplicate type/parameter names;
+missing requested entries fail with an explicit error. It never loads external
+content. The existing C++ metadata API remains available to third-party plugins.
+
+Parameters are checked against these declarations whenever an element is created through `make_element_spec` (`checked_params()`), and the factory receives them with optional non-null defaults filled in. Problems are validation errors naming the element and every bad parameter:
 
 - an undeclared parameter name (so declare every parameter your factory reads);
 - a missing `required` parameter;
 - a value of the wrong kind: `int` (integral number), `real` (number), `bool`, `string`, `enum` (one of `enum_values`), `type` (a signal type name), `array`, or `value` (number, string or array; converted to the element's type by the factory with `signal_value_from_json<T>()`);
 - a number outside `min` / `max`.
 
-Other type names are not checked. A factory can rely on declared parameters being present when they have a default.
+`checked_params()` does not generically validate nested object structure; the consuming factory owns those checks. A factory can rely on optional parameters being present when they have a non-null default. Unknown type labels are rejected by the JSON metadata loader.
 
 Conventional categories and colors used by Studio: `basic` #4CAF50, `filters` #2196F3, `io` #FF9800, `network` #9C27B0 / #5C6BC0, `conversion` #00BCD4, `simulation` #FFEB3B, `spectral` #9C27B0, `sources` #42A5F5, `custom` #795548. Shapes: `box` (processing), `circle` (sources).
 
@@ -102,15 +145,18 @@ Conventional categories and colors used by Studio: `basic` #4CAF50, `filters` #2
 
 ```cpp
 #include "s7/element_registry.hpp"
+#include "s7/metadata_json.hpp"
+#include "my_metadata.hpp"
 
+static const s7::ElementMetadataLibrary metadata(s7::resources::my_metadata);
 registry.register_element(s7::ElementDescriptor(
     "LinearTransform",
     [](const s7::ElementCreationContext& ctx) {
-        const double scale = ctx.has_param("scale") ? ctx.get_real("scale") : 1.0;
-        const double offset = ctx.has_param("offset") ? ctx.get_real("offset") : 0.0;
+        const double scale = ctx.get_real("scale");
+        const double offset = ctx.get_real("offset");
         return std::make_unique<LinearTransform>(scale, offset);
     },
-    meta));
+    metadata.at("LinearTransform")));
 ```
 
 `ElementCreationContext` offers `get_real`, `get_int`, `get_string`, and `has_param`; the `get_*` functions throw if the parameter is missing or has the wrong JSON type. `register_element` throws if the type name is already registered.

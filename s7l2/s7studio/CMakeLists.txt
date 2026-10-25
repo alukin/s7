@@ -143,6 +143,7 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
 )
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
+    s7core
     s7studio_observation s7studio_results s7studio_analysis
     Qt6::Core
     Qt6::Gui
@@ -154,12 +155,14 @@ target_link_libraries(s7studio_viewers PUBLIC
     Qt6::Quick3D
 )
 set_target_properties(s7studio_viewers PROPERTIES AUTOMOC ON)
+s7_embed_metadata(s7studio_viewers resources/observer_metadata.json observer_metadata)
 s7_enable_project_warnings(s7studio_viewers)
 
 add_library(s7studio_app OBJECT
     src/editor_actions.cpp src/editor_actions.hpp
     src/help_dialogs.cpp src/help_dialogs.hpp
     src/parameter_editor.cpp src/parameter_editor.hpp
+    src/element_documentation.cpp src/element_documentation.hpp
     src/schema_tabs.cpp src/schema_tabs.hpp
     src/main_window.cpp
     src/main_window.hpp

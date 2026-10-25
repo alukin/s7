@@ -58,6 +58,28 @@ cover the 10 pt default, a 4 pt user choice, and all bundled example frames.
 Palette checks use rendered pixels for light/dark toolbar backgrounds and
 normal/disabled icon colors after an application palette change.
 
+The element-information increment checks library context-menu event targeting
+with another row selected, context-menu key and Shift+F10, category/blank-space
+handling, Edit information for ordinary/schema/observer elements and active
+nested editors, metadata parameter coverage, and long plain-text plugin
+information. Both dialogs support copying and keyboard document navigation;
+small-dialog checks keep parameter fields and dialog buttons visible. Qt Test
+mouse events do not synthesize the platform context-menu event, so its mouse
+case explicitly dispatches that event to the real library viewport.
+
+For scaled-display checks, enlarge the framebuffer with `--screen-size` so the
+logical workspace stays within the acceptance envelope. For example, this uses
+a 1440×900 logical workspace at 200% (rather than shrinking the default Xvfb
+screen to 800×500 logical pixels):
+
+```bash
+python3 tools/run_gui_test.py --screen-size 2880x1800 \
+  --artifacts /tmp/s7-information-200 \
+  --capture build/s7studio/s7studio_gui_capture -- \
+  env QT_SCALE_FACTOR=2 build/s7studio/s7studio_gui_workflows_test \
+  elementInformationAccess longElementDocumentation
+```
+
 ## Displays, rendering and skips
 
 `tools/run_gui_test.py` starts Xvfb with `-displayfd` for atomic display allocation,

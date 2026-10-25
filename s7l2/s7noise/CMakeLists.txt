@@ -24,6 +24,7 @@ target_include_directories(s7noise PUBLIC
 target_link_libraries(s7noise PRIVATE
     s7core
 )
+s7_embed_metadata(s7noise resources/element_metadata.json noise_metadata)
 
 set_target_properties(s7noise PROPERTIES
     VERSION 1.0.0
