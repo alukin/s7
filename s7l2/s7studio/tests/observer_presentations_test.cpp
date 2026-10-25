@@ -63,6 +63,7 @@ private slots:
         for (const auto& segment : result.traces.front().segments) for (const auto& point : segment) peak |= point.y() == 1e6;
         QVERIFY(peak); QVERIFY(result.details.front().contains("step 6020"));
         const auto unavailable = preparePreview({scope(), {0,7}, source}); QVERIFY(unavailable.status.contains("Unavailable selected channel indices: 7"));
+        QVERIFY(unavailable.summary.startsWith("Unavailable channels"));
     }
     void livePreviewKeepsModelTimestampsAfter600Seconds() {
         auto descriptor = scope(2); descriptor.id = "live"; descriptor.type = "LiveOscilloscope";

@@ -1072,7 +1072,7 @@ private slots:
         auto* tabs = viewer->findChild<QTabWidget*>("live.views"); QVERIFY(tabs);
         QTest::mouseClick(tabs->tabBar(), Qt::LeftButton, Qt::NoModifier, tabs->tabBar()->tabRect(1).center());
         auto* spectrum = viewer->findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
-        auto* source = spectrum->findChild<QComboBox*>("spectrum.channel"); QVERIFY(source);
+        auto* source = spectrum->controlPanel()->findChild<QComboBox*>("spectrum.channel"); QVERIFY(source);
         QTRY_VERIFY(source->count() == 3);
         const auto carrier = source->findText("/carrier [", Qt::MatchContains); QVERIFY(carrier >= 0); source->setCurrentIndex(carrier);
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
@@ -1088,23 +1088,30 @@ private slots:
         const auto area = graph->property("plotArea").toRectF();
         const auto position = graph->mapToScene(area.center()).toPoint();
         QTest::mouseMove(quick, position);
-        QTRY_VERIFY(spectrum->findChild<QLabel*>("spectrum.readout")->text().contains("Computed spectrum"));
-        QVERIFY(spectrum->findChild<QLabel*>("spectrum.readout")->text().contains("100 Hz baseband"));
-        capture(viewer, "live-spectrum-am-carrier");
+        QTRY_VERIFY(spectrum->controlPanel()->findChild<QLabel*>("spectrum.readout")->text().contains("Computed spectrum"));
+        QVERIFY(spectrum->controlPanel()->findChild<QLabel*>("spectrum.readout")->text().contains("100 Hz baseband"));
+        const auto spectrumGeometry = spectrum->plotView()->geometry();
+        spectrum->inspect(-1); QCoreApplication::processEvents();
+        spectrum->inspect(100); QCoreApplication::processEvents();
+        QCOMPARE(spectrum->plotView()->geometry(), spectrumGeometry);
+        QVERIFY(spectrum->controlPanel()->findChild<QScrollArea*>("spectrum.readoutScroll")->height() >
+                spectrum->controlPanel()->findChild<QScrollArea*>("spectrum.statusScroll")->height()*2);
+        capture(viewer, "live-spectrum-am-carrier", true);
+        viewer->findChild<QPushButton*>("live.follow")->click(); QTRY_VERIFY(spectrum->plotView()->xMax() > 150);
         QTest::mouseMove(tabs->tabBar(), tabs->tabBar()->tabRect(1).center());
-        auto* size = spectrum->findChild<QComboBox*>("spectrum.size"); QVERIFY(size); size->setCurrentIndex(size->findData(65536));
+        auto* size = spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size"); QVERIFY(size); size->setCurrentIndex(size->findData(65536));
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Filling);
         QVERIFY(spectrum->plotView()->series().first()->points().isEmpty());
         size->setCurrentIndex(size->findData(1024));
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
-        auto* scale = spectrum->findChild<QComboBox*>("spectrum.scale"); scale->setCurrentIndex(1);
+        auto* scale = spectrum->controlPanel()->findChild<QComboBox*>("spectrum.scale"); scale->setCurrentIndex(1);
         QVERIFY(spectrum->plotView()->yTitle().contains("dB re 1"));
-        capture(viewer, "live-spectrum-db");
+        capture(viewer, "live-spectrum-db", true);
         auto* freeze = viewer->findChild<QPushButton*>("live.freeze"); freeze->setChecked(true);
         const auto end = spectrum->result()->lastStep;
         viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
         QCOMPARE(spectrum->result()->lastStep, end);
-        spectrum->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0);
+        spectrum->controlPanel()->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0);
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
         QCOMPARE(spectrum->result()->lastStep, end); QCOMPARE(spectrum->result()->size, std::size_t(1024));
         action("action.reset")->trigger(); QVERIFY(!spectrum->result());
@@ -1140,7 +1147,7 @@ private slots:
         auto* quick = xy->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
         auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
         QTRY_VERIFY(graph->property("plotArea").toRectF().width() > 100);
-        QTest::mouseClick(xy->findChild<QPushButton*>("pair.fit"), Qt::LeftButton);
+        QTest::mouseClick(xy->controlPanel()->findChild<QPushButton*>("pair.fit"), Qt::LeftButton);
         const auto area = graph->property("plotArea").toRectF();
         const double sx = (xy->plotView()->xMax()-xy->plotView()->xMin())/area.width();
         const double sy = (xy->plotView()->yMax()-xy->plotView()->yMin())/area.height();
@@ -1153,47 +1160,47 @@ private slots:
             const auto position = graph->mapToScene(QPointF(currentArea.left()+(point.x-xy->plotView()->xMin())/(xy->plotView()->xMax()-xy->plotView()->xMin())*currentArea.width(),
                 currentArea.bottom()-(point.y-xy->plotView()->yMin())/(xy->plotView()->yMax()-xy->plotView()->yMin())*currentArea.height())).toPoint();
             QTest::mouseMove(quick, position);
-            return xy->findChild<QLabel*>("pair.readout")->text().contains("Raw pair");
+            return xy->controlPanel()->findChild<QLabel*>("pair.readout")->text().contains("Raw pair");
         })());
-        capture(viewer, "live-constellation-circle");
+        capture(viewer, "live-constellation-circle", true);
         xy->inspect(0, 0, false);
-        xy->findChild<QComboBox*>("pair.mode")->setCurrentIndex(1);
+        xy->controlPanel()->findChild<QComboBox*>("pair.mode")->setCurrentIndex(1);
         QVERIFY(!xy->plotView()->series().first()->points().empty());
-        xy->findChild<QComboBox*>("pair.mode")->setCurrentIndex(2);
+        xy->controlPanel()->findChild<QComboBox*>("pair.mode")->setCurrentIndex(2);
         QVERIFY(xy->plotView()->bridge()->densityVisible);
         auto* image = quick->rootObject()->findChild<QQuickItem*>("viewer.density"); QVERIFY(image);
         QTRY_COMPARE(image->property("status").toInt(), 1); // Image.Ready, decoded by QML image provider.
         QVERIFY(xy->inspect(point.x, point.y).contains("Density aggregate")); xy->inspect(0, 0, false);
-        capture(viewer, "live-constellation-density");
+        capture(viewer, "live-constellation-density", true);
         tabs->setCurrentIndex(3);
-        correlation->findChild<QComboBox*>("pair.second")->setCurrentIndex(2);
-        correlation->findChild<QSpinBox*>("pair.maxLag")->setValue(16);
+        correlation->controlPanel()->findChild<QComboBox*>("pair.second")->setCurrentIndex(2);
+        correlation->controlPanel()->findChild<QSpinBox*>("pair.maxLag")->setValue(16);
         QTRY_VERIFY(correlation->result() && correlation->result()->state == analysis::PairResult::State::Ready);
         const auto& result = *correlation->result(); QCOMPARE(result.lags[result.peakIndex], 6);
         QVERIFY(correlation->inspect(6./1024, 0).contains("Lag 6 samples"));
-        QVERIFY(correlation->findChild<QLabel*>("pair.marker")->text().contains("overlap 4090/4096"));
-        correlation->inspect(0, 0, false); capture(viewer, "live-correlation-delay");
+        QVERIFY(correlation->controlPanel()->findChild<QLabel*>("pair.marker")->text().contains("overlap 4090/4096"));
+        correlation->inspect(0, 0, false); capture(viewer, "live-correlation-delay", true);
         const auto hiddenXY = xy->analysisRequestCount();
-        xy->findChild<QSpinBox*>("pair.persistence")->setValue(8192); // Hidden settings must not queue work.
+        xy->controlPanel()->findChild<QSpinBox*>("pair.persistence")->setValue(8192); // Hidden settings must not queue work.
         QCOMPARE(xy->analysisRequestCount(), hiddenXY);
         QCOMPARE(spectrum->analysisRequestCount(), std::uint64_t(0));
         viewer->showMinimized(); QTRY_VERIFY(viewer->isMinimized());
         const auto minimized = correlation->analysisRequestCount();
-        correlation->findChild<QCheckBox*>("pair.removeMean")->setChecked(true);
+        correlation->controlPanel()->findChild<QCheckBox*>("pair.removeMean")->setChecked(true);
         viewer->refreshSource(); QCOMPARE(correlation->analysisRequestCount(), minimized);
         viewer->showNormal(); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
         QTRY_VERIFY(correlation->result() && correlation->result()->state == analysis::PairResult::State::Ready);
         auto* freeze = viewer->findChild<QPushButton*>("live.freeze"); freeze->setChecked(true);
         const auto end = correlation->result()->lastStep;
         viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
-        correlation->findChild<QComboBox*>("pair.size")->setCurrentIndex(0);
+        correlation->controlPanel()->findChild<QComboBox*>("pair.size")->setCurrentIndex(0);
         QTRY_VERIFY(correlation->result() && correlation->result()->settings.size == 64);
         QCOMPARE(correlation->result()->lastStep, end);
         tabs->setCurrentIndex(1); QTRY_VERIFY(spectrum->analysisRequestCount() > 0);
         tabs->setCurrentIndex(0);
         const auto hiddenFFT = spectrum->analysisRequestCount(); const auto hiddenCorrelation = correlation->analysisRequestCount();
-        spectrum->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0);
-        correlation->findChild<QSpinBox*>("pair.maxLag")->setValue(8);
+        spectrum->controlPanel()->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0);
+        correlation->controlPanel()->findChild<QSpinBox*>("pair.maxLag")->setValue(8);
         QCOMPARE(spectrum->analysisRequestCount(), hiddenFFT); QCOMPARE(correlation->analysisRequestCount(), hiddenCorrelation);
         viewer->close(); QVERIFY(!viewer->isVisible());
         manager->openObserver("LiveOscilloscope", "iq_scope"); QTRY_VERIFY(viewer->isVisible());
@@ -1227,6 +1234,12 @@ private slots:
         QVERIFY(!manager->find("LiveOscilloscope", "iq_scope")); // Rendering a card never opens a full window.
         auto* preview = panel->findChild<viewers::ObserverPresentation*>(); QVERIFY(preview);
         QTRY_VERIFY(!preview->linePlot()->series().empty() && !preview->linePlot()->series().front()->points().empty());
+        auto* previewCard = panel->findChild<QWidget*>("observer.card.iq_scope"); QVERIFY(previewCard);
+        auto* previewGraph = previewCard->findChild<QWidget*>("observer.graph.iq_scope"); QVERIFY(previewGraph);
+        QVERIFY(previewGraph->height() > previewCard->height()*.6);
+        auto* previewStatus = previewCard->findChild<QLabel*>("observer.status.iq_scope");
+        QVERIFY(previewStatus->height() <= previewStatus->fontMetrics().lineSpacing()+4);
+        capture(panel, "observers-compact-live", true);
         const auto capacity = runner->liveSources()["iq_scope"]->capacity();
         panel->findChild<QPushButton*>("observer.open.iq_scope")->click();
         auto* full = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->find("LiveOscilloscope", "iq_scope")); QVERIFY(full && full->isVisible());
@@ -1243,7 +1256,7 @@ private slots:
         // Editing the next run must not replace this card's running source.
         auto node = scene()->elementNode("iq_scope"); QVERIFY(node); auto element = node->element(); element.params["channel_names"] = boost::json::array{"new_I", "Q", "I_delayed_6"}; scene()->changeElement(node, element);
         const auto details = panel->findChild<QPlainTextEdit*>("observer.details.iq_scope");
-        for (auto* button : panel->findChildren<QToolButton*>()) if (button->text()=="Channels / latest sampled values") button->setChecked(true);
+        panel->findChild<QAction*>("observer.showDetails.iq_scope")->setChecked(true);
         QTRY_VERIFY(details->toPlainText().contains("iq_scope/I")); QVERIFY(!details->toPlainText().contains("new_I"));
         auto* collapse = panel->findChild<QToolButton*>("observer.collapse.iq_scope"); collapse->setChecked(false); QTRY_COMPARE(panel->activePresentations(), 0);
         QVERIFY(scene()->observersPanel()[0].as_object().at("collapsed").as_bool());
@@ -1280,7 +1293,7 @@ private slots:
         for (const auto* id : {"preview_Scope", "preview_PhasePortrait", "preview_PhaseTrajectory3D", "iq_scope"}) {
             auto* card = panel->findChild<QWidget*>(QString("observer.card.%1").arg(id)); QVERIFY(card); scroll->ensureWidgetVisible(card);
             QTRY_VERIFY(card->findChild<viewers::ObserverPresentation*>());
-            auto* status = card->findChild<QLabel*>(QString("observer.status.%1").arg(id)); QTRY_VERIFY(status->text().contains("Recent"));
+            auto* status = card->findChild<QLabel*>(QString("observer.status.%1").arg(id)); QTRY_VERIFY(status->toolTip().contains("Recent"));
             QVERIFY(panel->activePresentations() <= 4); capture(card, QString("observers-preview-")+id,true);
         }
         // Deletion keeps the active binding/card; undo restores the selection.
@@ -1346,7 +1359,11 @@ private slots:
         for (int i = 1; i < tabs->count(); ++i) {
             tabs->setCurrentIndex(i); QCoreApplication::processEvents(); QCOMPARE(viewer.width(), 1440);
             viewer.resize(1024, 768); QCoreApplication::processEvents(); QCOMPARE(viewer.size(), QSize(1024, 768));
-            const auto* plot = tabs->currentWidget()->findChild<viewers::LinePlotView*>(); QVERIFY(plot); QVERIFY(plot->height() > viewer.height()/3);
+            auto* plot = tabs->currentWidget()->findChild<viewers::LinePlotView*>(); QVERIFY(plot); QVERIFY(plot->height() > viewer.height()*.75);
+            QVERIFY(plot->bridge()->instrumentTheme);
+            const int widthWithControls = plot->width();
+            auto* toggle = viewer.findChild<QToolButton*>("live.controlsToggle"); toggle->click(); QCoreApplication::processEvents();
+            QVERIFY(plot->width() > widthWithControls); toggle->click(); QCoreApplication::processEvents();
             capture(&viewer, QString("instrument-analysis-%1-%2").arg(i).arg(dark ? "dark" : "light")); viewer.resize(1440, 900);
         }
     }
@@ -1420,9 +1437,9 @@ private slots:
         QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
         tabs->setCurrentIndex(1);
         auto* spectrum = viewer->findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
-        spectrum->findChild<QComboBox*>("spectrum.size")->setCurrentIndex(0);
-        spectrum->findChild<QComboBox*>("spectrum.scale")->setCurrentIndex(1);
-        spectrum->findChild<QDoubleSpinBox*>("spectrum.frequencyOffset")->setValue(1000);
+        spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size")->setCurrentIndex(0);
+        spectrum->controlPanel()->findChild<QComboBox*>("spectrum.scale")->setCurrentIndex(1);
+        spectrum->controlPanel()->findChild<QDoubleSpinBox*>("spectrum.frequencyOffset")->setValue(1000);
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Ready);
         QVERIFY(panel->pin()); a->setValue(1); b->setValue(2);
         QCOMPARE(spectrum->plotView()->bridge()->selectionMarkers[0].toMap()["x"].toDouble(), 1016.);
@@ -1440,27 +1457,27 @@ private slots:
         for (int i = 0; i < 2; ++i) analysis::analysisPool().start([&] { entered.release(); release.acquire(); });
         entered.acquire(2);
         tabs->setCurrentIndex(1); // Queue reanalysis behind both held workers.
-        const bool processingVisible = !spectrum->findChild<QProgressBar*>("spectrum.processing")->isHidden();
+        const bool processingVisible = !spectrum->controlPanel()->findChild<QProgressBar*>("spectrum.processing")->isHidden();
         const bool repinned = panel->pin(); // Freeze is already checked.
         release.release(2);
         QVERIFY(repinned); QVERIFY(processingVisible); QVERIFY(analysis::analysisPool().waitForDone(5000));
         QTest::qWait(50);
-        QTRY_VERIFY(spectrum->findChild<QProgressBar*>("spectrum.processing")->isHidden());
+        QTRY_VERIFY(spectrum->controlPanel()->findChild<QProgressBar*>("spectrum.processing")->isHidden());
         QCOMPARE(spectrum->result()->values.data(), pinnedValues); // Queued result cannot replace the cursor owner.
-        spectrum->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0); QVERIFY(!panel->snapshot());
+        spectrum->controlPanel()->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0); QVERIFY(!panel->snapshot());
         tabs->setCurrentIndex(2);
         auto* xy = viewer->findChild<viewers::PairAnalysisView*>("live.constellation"); QVERIFY(xy);
         QTRY_VERIFY(xy->result() && xy->result()->state == analysis::PairResult::State::Ready);
-        xy->findChild<QComboBox*>("pair.mode")->setCurrentIndex(2); QVERIFY(panel->pin());
+        xy->controlPanel()->findChild<QComboBox*>("pair.mode")->setCurrentIndex(2); QVERIFY(panel->pin());
         const auto pair = panel->snapshot()->columns[1].values[20]; panel->pick(panel->snapshot()->displayX[20], pair);
         QVERIFY(panel->readout().contains("step ")); QVERIFY(!panel->readout().contains("Density aggregate"));
         QCOMPARE(xy->plotView()->bridge()->selectionMarkers[0].toMap()["vertical"].toBool(), false);
         b->setValue(100); panel->findChild<QPushButton*>("inspection.measure")->click(); capture(viewer, "live-xy-cursors");
         tabs->setCurrentIndex(3);
         auto* correlation = viewer->findChild<viewers::PairAnalysisView*>("live.correlation"); QVERIFY(correlation);
-        correlation->findChild<QComboBox*>("pair.size")->setCurrentIndex(0);
-        correlation->findChild<QComboBox*>("pair.second")->setCurrentIndex(2);
-        correlation->findChild<QSpinBox*>("pair.maxLag")->setValue(16);
+        correlation->controlPanel()->findChild<QComboBox*>("pair.size")->setCurrentIndex(0);
+        correlation->controlPanel()->findChild<QComboBox*>("pair.second")->setCurrentIndex(2);
+        correlation->controlPanel()->findChild<QSpinBox*>("pair.maxLag")->setValue(16);
         QTRY_VERIFY(correlation->result() && correlation->result()->state == analysis::PairResult::State::Ready);
         QVERIFY(panel->pin()); a->setValue(16); b->setValue(22);
         QVERIFY(panel->readout().contains("Δlag_time=0.005859375 s"));

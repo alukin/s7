@@ -12,12 +12,13 @@ class QLineEdit;
 class QLabel;
 class QTimer;
 class QProgressBar;
+namespace s7studio::ui { class InstrumentSidebar; }
 namespace s7studio::viewers {
 class LinePlotView;
 class SpectrumView : public QWidget {
     Q_OBJECT
 public:
-    explicit SpectrumView(QWidget* parent = nullptr);
+    explicit SpectrumView(QWidget* parent = nullptr, QWidget* controlsParent = nullptr);
     ~SpectrumView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
     void clear();
@@ -26,6 +27,8 @@ public:
     std::shared_ptr<const observation::LiveFrame> setFrozen(bool frozen);
     const std::optional<analysis::SpectrumResult>& result() const { return result_; }
     LinePlotView* plotView() const { return plot_; }
+    void fitView() { render(true); }
+    ui::InstrumentSidebar* controlPanel() const { return controls_; }
     QString inspect(double frequency, bool active = true);
     std::optional<analysis::WindowSnapshot> inspectionSnapshot() const;
 signals:
@@ -58,5 +61,6 @@ private:
     QLabel *status_, *readout_, *markerText_;
     QProgressBar* busy_;
     LinePlotView* plot_;
+    ui::InstrumentSidebar* controls_;
 };
 }

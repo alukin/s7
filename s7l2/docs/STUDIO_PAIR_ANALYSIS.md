@@ -36,8 +36,8 @@ Nonfinite pairs are counted and omitted. Missing steps and invalid pairs break
 lines. Up to 64 line segments are drawn; additional segments remain visible as
 dots with a status message. All retained pairs remain available for raw inspection.
 Within 12 screen pixels, hover chooses the nearest point, breaking exact ties
-toward the newest step. It reports step, time and stored f64 values at 17-digit
-precision; this cannot recover precision lost before acquisition.
+toward the newest step. It reports step, time and stored values with five
+significant digits. Raw samples and exports retain their full precision.
 
 Density uses a 64², 128² or 256² grid over the retained ranges. Each pair contributes
 one count; colors use a logarithmic count scale. Hover explicitly reports an

@@ -46,6 +46,9 @@ PreviewData preparePreview(const PreviewRequest& request)
         const auto frame = request.trigger.mode == observation::TriggerMode::Rolling ? request.live->snapshot() : request.live->triggerSnapshot();
         if (!frame) { result.status = "Waiting for a completed sampled trigger capture."; return result; }
         result.run = frame->runId;
+        result.summary = frame->trigger ? (frame->trigger->triggered ? "Triggered" : "Auto timeout") : "Rolling";
+        if (!frame->error.isEmpty()) result.summary.prepend("Error • ");
+        else if (frame->gaps) result.summary.prepend("Data gaps • ");
         const auto begin = frame->steps.size() > 4096 ? frame->steps.size()-4096 : 0;
         for (auto channel : selected) if (channel >= 0 && channel < samples.size() && channel < frame->channels.size())
             for (auto i = begin; i < frame->steps.size(); ++i) samples[channel].push_back({static_cast<observation::ChannelId>(channel), frame->steps[i], frame->times[i], frame->values[i*static_cast<std::size_t>(frame->channels.size())+static_cast<std::size_t>(channel)]});
@@ -57,21 +60,29 @@ PreviewData preparePreview(const PreviewRequest& request)
             .arg(frame->times.back()-frame->times[begin], 0, 'g', 6);
         if (!frame->error.isEmpty()) result.status += " • ERROR: " + frame->error;
     } else if (request.source) {
+        result.summary = "Recorded";
         result.run = request.source->runId(); const auto channels = request.source->channels();
         QVector<observation::ChannelId> ids; QVector<int> indices;
         for (auto index : selected) if (index >= 0 && index < samples.size())
             for (const auto& channel : channels) if (channel.name == request.descriptor.inputs[index].name) { ids.push_back(channel.id); indices.push_back(index); break; }
         const auto tail = request.source->tail(ids);
+        if (!tail.status.storageError.isEmpty() || !tail.status.runError.isEmpty()) result.summary.prepend("Error • ");
+        else if (tail.status.captureDropped) result.summary.prepend("Capture loss • ");
         for (int i = 0; i < tail.channels.size(); ++i) samples[indices[i]] = tail.channels[i].samples;
         result.status = QStringLiteral("Recent ≤4096 positions/channel • capture loss %1%2").arg(tail.status.captureDropped)
             .arg(tail.status.finished ? (tail.status.stopped ? " • stopped" : " • run finished") : "");
         if (!tail.status.storageError.isEmpty() || !tail.status.runError.isEmpty()) result.status += " • ERROR: " + tail.status.storageError + " " + tail.status.runError;
     } else { result.status = "Waiting for this observer's prepared run source."; return result; }
     std::size_t invalid = 0, gaps = 0;
+    std::optional<double> firstTime, lastTime;
     QStringList unavailable;
     for (auto index : selected) if (index < 0 || index >= samples.size()) unavailable.push_back(QString::number(index));
     for (auto index : selected) if (index >= 0 && index < samples.size()) {
         const auto& input = request.descriptor.inputs[index]; const auto& data = samples[index];
+        for (const auto& sample : data) if (std::isfinite(sample.timeSeconds)) {
+            firstTime = firstTime ? std::min(*firstTime, sample.timeSeconds) : sample.timeSeconds;
+            lastTime = lastTime ? std::max(*lastTime, sample.timeSeconds) : sample.timeSeconds;
+        }
         const auto label = input.name + " [" + unit(input.unit) + "]";
         result.axes.push_back(phase ? QStringList{"X", "Y", "Z"}.value(index)+" ["+unit(input.unit)+"]" : label);
         QString latest = "no sample";
@@ -126,6 +137,10 @@ PreviewData preparePreview(const PreviewRequest& request)
     result.status += QStringLiteral(" • gaps %1 • invalid/unpaired %2 • plotted %3/%4 channels").arg(gaps).arg(invalid).arg(selected.size()-unavailable.size()).arg(request.descriptor.inputs.size());
     if (!unavailable.empty()) result.status += " • Unavailable selected channel indices: " + unavailable.join(", ");
     if (result.vertices == 0) result.status += " • Waiting for finite, connected samples";
+    if (firstTime && lastTime) result.summary += QStringLiteral(" • %1–%2 s").arg(*firstTime, 0, 'g', 5).arg(*lastTime, 0, 'g', 5);
+    if (gaps || invalid) result.summary.prepend("Data gaps • ");
+    if (result.vertices == 0 && !result.summary.startsWith("Error")) result.summary = "Waiting for finite samples";
+    if (!unavailable.empty()) result.summary.prepend("Unavailable channels • ");
     return result;
 }
 
@@ -158,7 +173,7 @@ bool PreviewWorker::busy() const { std::lock_guard lock(state_->mutex); return s
 ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent) : QWidget(parent), type_(type) {
     setObjectName("observer.presentation"); auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
     if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); root->addWidget(trajectory_); }
-    else { line_ = new LinePlotView(this); line_->setLegendVisible(false); root->addWidget(line_);
+    else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true; root->addWidget(line_);
         connect(line_, &LinePlotView::navigated, this, &ObserverPresentation::navigated); }
 }
 void ObserverPresentation::present(const PreviewData& data) {

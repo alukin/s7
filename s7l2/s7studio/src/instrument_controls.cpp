@@ -11,10 +11,13 @@
 #include <QLayout>
 #include <QLocale>
 #include <QSignalBlocker>
+#include <QScrollArea>
+#include <QProgressBar>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QFocusEvent>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QLineEdit>
 #include <QRadialGradient>
 #include <QLinearGradient>
@@ -93,8 +96,13 @@ protected:
 };
 class ExactNumber : public QDoubleSpinBox {
     QLabel* summary_ = nullptr;
+    QString numericText(QString text) const {
+        if (!prefix().isEmpty() && text.startsWith(prefix())) text.remove(0, prefix().size());
+        if (!suffix().isEmpty() && text.endsWith(suffix())) text.chop(suffix().size());
+        return text.trimmed();
+    }
     void updateSummary() {
-        summary_->setText(QString::number(value(), 'g', 5));
+        summary_->setText(prefix()+QString::number(value(), 'g', 5)+suffix());
         summary_->setGeometry(lineEdit()->rect());
         summary_->setVisible(!hasFocus() && !lineEdit()->hasFocus());
     }
@@ -115,18 +123,50 @@ public:
     QSize sizeHint() const override { return {width(), QDoubleSpinBox::sizeHint().height()}; }
     QSize minimumSizeHint() const override { return {width(), QDoubleSpinBox::minimumSizeHint().height()}; }
 protected:
+    void showEvent(QShowEvent* event) override { QDoubleSpinBox::showEvent(event); updateSummary(); }
     void focusInEvent(QFocusEvent* event) override { QDoubleSpinBox::focusInEvent(event); summary_->hide(); }
     void focusOutEvent(QFocusEvent* event) override { QDoubleSpinBox::focusOutEvent(event); updateSummary(); }
     void resizeEvent(QResizeEvent* event) override { QDoubleSpinBox::resizeEvent(event); if (summary_) updateSummary(); }
     QString textFromValue(double value) const override { return QString::number(value, 'g', QLocale::FloatingPointShortest); }
-    double valueFromText(const QString& text) const override { return text.toDouble(); }
+    double valueFromText(const QString& text) const override { return numericText(text).toDouble(); }
     QValidator::State validate(QString& text, int& position) const override {
         QDoubleValidator validator(minimum(), maximum(), 323);
         validator.setLocale(QLocale::c()); validator.setNotation(QDoubleValidator::ScientificNotation);
-        return validator.validate(text, position);
+        auto number = numericText(text);
+        int cursor = std::clamp(position, 0, static_cast<int>(number.size()));
+        return validator.validate(number, cursor);
     }
 };
 }
+QDoubleSpinBox* compactNumber(QWidget* parent) { return new ExactNumber(parent); }
+InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : QWidget(parent)
+{
+    setObjectName(name+".controls");
+    auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea(this); scroll->setObjectName(name+".settingsScroll");
+    scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* content = new QWidget(scroll); settings_ = new QVBoxLayout(content);
+    settings_->setContentsMargins(10, 4, 10, 4); settings_->addStretch(); scroll->setWidget(content); root->addWidget(scroll, 1);
+    const auto textArea = [&](const QString& suffix, int lines, Qt::Alignment alignment, QLabel*& label) {
+        auto* area = new QScrollArea(this); area->setObjectName(name+suffix+"Scroll");
+        area->setWidgetResizable(true); area->setFrameShape(QFrame::NoFrame);
+        area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        label = new QLabel(area); label->setObjectName(name+suffix); label->setTextFormat(Qt::PlainText);
+        label->setWordWrap(true); label->setMargin(4); label->setAlignment(alignment);
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        area->setFixedHeight(label->fontMetrics().lineSpacing()*lines+(lines == 2 ? 12 : 16));
+        area->setWidget(label); return area;
+    };
+    root->addWidget(textArea(".readout", 8, Qt::AlignLeft | Qt::AlignTop, readout_));
+    busy_ = new QProgressBar(this); busy_->setObjectName(name+".processing"); busy_->setRange(0, 0);
+    busy_->setTextVisible(false); busy_->setMaximumHeight(12); busy_->setAccessibleName("Processing analysis");
+    auto policy = busy_->sizePolicy(); policy.setRetainSizeWhenHidden(true); busy_->setSizePolicy(policy);
+    busy_->hide(); root->addWidget(busy_);
+    root->addWidget(textArea(".status", 2, Qt::AlignLeft | Qt::AlignBottom, status_));
+}
+void InstrumentSidebar::addSection(QWidget* section) { settings_->insertWidget(settings_->count()-1, section); }
+
 ChoiceButtons::ChoiceButtons(const QStringList& labels, const QString& name, QWidget* parent) : QWidget(parent)
 {
     setObjectName(name);

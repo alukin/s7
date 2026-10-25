@@ -54,8 +54,13 @@ Pointer movement therefore cannot resize the plot or shift the settings panel.
 The plot header and dock preview status explicitly identify the retained model
 time interval, distinguishing it from the full run duration.
 
-Spectrum and paired-analysis settings retain their wrapping, bounded-height
-settings layouts.
+Spectrum, Constellation / XY and Correlation use the same right column as Time.
+Their settings scroll vertically in collapsible groups; no settings sit above
+the graph. All plots use the same dark graticule, brighter traces, five-digit
+hover readouts and compact bottom status. Time window and Window inspection
+move with the active tab while retaining their settings. Hide controls and
+Resume / Fit apply to the active plot. Technical analysis status remains in
+its tooltip and pinned-window metadata.
 
 Pre-trigger slider and percentage field share the same integer value. Rising
 and Falling are exclusive labelled buttons. Trigger mode, raw input, level,

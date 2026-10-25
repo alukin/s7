@@ -99,9 +99,10 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     root->addWidget(splitter);
     auto* tabs = new QTabWidget(splitter); tabs->setObjectName("live.views"); tabs->setDocumentMode(true);
     auto* timePage = new QWidget(tabs); auto* timeLayout = new QVBoxLayout(timePage); timeLayout->setContentsMargins(0, 0, 0, 0);
-    spectrum_ = new viewers::SpectrumView(tabs);
-    constellation_ = new viewers::PairAnalysisView(analysis::PairKind::Constellation, tabs);
-    correlation_ = new viewers::PairAnalysisView(analysis::PairKind::Correlation, tabs);
+    auto* controlPages = new QStackedWidget(this); controlPages->setObjectName("live.controlPages");
+    spectrum_ = new viewers::SpectrumView(tabs, controlPages);
+    constellation_ = new viewers::PairAnalysisView(analysis::PairKind::Constellation, tabs, controlPages);
+    correlation_ = new viewers::PairAnalysisView(analysis::PairKind::Correlation, tabs, controlPages);
     tabs->addTab(timePage, "Time"); tabs->addTab(spectrum_, "Spectrum");
     tabs->addTab(constellation_, "Constellation / XY"); tabs->addTab(correlation_, "Correlation");
     auto* side = new QWidget(splitter); side->setObjectName("live.controls");
@@ -112,10 +113,16 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     auto* follow = new QPushButton(QStringLiteral("Resume / Fit"), side); follow->setObjectName("live.follow"); buttons->addWidget(follow, 0, 1);
     autoY_ = new QCheckBox(QStringLiteral("Auto Y"), side); autoY_->setObjectName("live.autoY"); autoY_->setChecked(true); buttons->addWidget(autoY_, 1, 0, 1, 2);
     sideLayout->addLayout(buttons);
+    auto autoYPolicy = autoY_->sizePolicy(); autoYPolicy.setRetainSizeWhenHidden(true); autoY_->setSizePolicy(autoYPolicy);
+    auto* timeControls = new QWidget(controlPages); timeControls->setObjectName("live.timeControls");
+    auto* timeSideLayout = new QVBoxLayout(timeControls); timeSideLayout->setContentsMargins(0, 0, 0, 0);
+    controlPages->addWidget(timeControls); controlPages->addWidget(spectrum_->controlPanel());
+    controlPages->addWidget(constellation_->controlPanel()); controlPages->addWidget(correlation_->controlPanel());
+    sideLayout->addWidget(controlPages, 1);
     auto* scroll = new QScrollArea(side); scroll->setObjectName("live.controlsScroll"); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     auto* panel = new QWidget(scroll); auto* panelLayout = new QVBoxLayout(panel); panelLayout->setContentsMargins(10, 4, 10, 4);
-    scroll->setWidget(panel); sideLayout->addWidget(scroll, 1);
+    scroll->setWidget(panel); timeSideLayout->addWidget(scroll, 1);
     auto form = [](QWidget* box) { auto* f = new QFormLayout(box); f->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint); f->setRowWrapPolicy(QFormLayout::WrapLongRows); f->setHorizontalSpacing(12); return f; };
     auto* settings = new QWidget(panel);
     settings->setToolTip(QStringLiteral("Bounded RAM, no full-run recording."));
@@ -194,7 +201,8 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     controls_.front().select->setChecked(true);
     connect(channelGroup, &QButtonGroup::idToggled, this, [this](int index, bool checked) { if (checked) channelPages_->setCurrentIndex(index); });
     panelLayout->addWidget(new CollapsibleSection("Channels", "live.section.channels", channelBox, true, panel));
-    panelLayout->addWidget(new CollapsibleSection("Time window", "live.section.acquisition", settings, true, panel));
+    auto* acquisitionSection = new CollapsibleSection("Time window", "live.section.acquisition", settings, true, panel);
+    panelLayout->addWidget(acquisitionSection);
     panelLayout->addWidget(new CollapsibleSection("Trigger", "live.section.trigger", triggerBox, false, panel));
     plot_ = new viewers::LinePlotView(timePage); plot_->setObjectName("live.plot");
     plot_->setAxisTitles("Model time (s)", "Value (supplied units; shared numeric axis)"); plot_->setLegendVisible(true);
@@ -225,7 +233,8 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
             {"gain", analysis::exactNumber(controls_[i].gain->value())}, {"offset", analysis::exactNumber(controls_[i].offset->value())}});
         data.settings.insert("display_channels_at_pin", display); return data;
     }, this);
-    panelLayout->addWidget(new CollapsibleSection("Window inspection", "live.section.inspection", inspection_, false, panel)); panelLayout->addStretch();
+    auto* inspectionSection = new CollapsibleSection("Window inspection", "live.section.inspection", inspection_, false, panel);
+    panelLayout->addWidget(inspectionSection); panelLayout->addStretch();
     // Long names and floating-point limits must not push the plot off screen.
     side->setMinimumWidth(320); side->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     inspection_->setPlot(plot_);
@@ -249,15 +258,15 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     readoutScroll->setWidgetResizable(true); readoutScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     readoutScroll->setFixedHeight(readout_->fontMetrics().lineSpacing()*8+16);
     readout_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    readoutScroll->setWidget(readout_); sideLayout->addWidget(readoutScroll);
+    readoutScroll->setWidget(readout_); timeSideLayout->addWidget(readoutScroll);
     timeBusy_ = new QProgressBar(side); timeBusy_->setObjectName("live.processing"); timeBusy_->setRange(0, 0);
     timeBusy_->setTextVisible(false); timeBusy_->setMaximumHeight(12); timeBusy_->setAccessibleName("Preparing Time display"); timeBusy_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    auto busyPolicy = timeBusy_->sizePolicy(); busyPolicy.setRetainSizeWhenHidden(true); timeBusy_->setSizePolicy(busyPolicy); timeBusy_->hide(); sideLayout->addWidget(timeBusy_);
+    auto busyPolicy = timeBusy_->sizePolicy(); busyPolicy.setRetainSizeWhenHidden(true); timeBusy_->setSizePolicy(busyPolicy); timeBusy_->hide(); timeSideLayout->addWidget(timeBusy_);
     status_ = new QLabel(side); status_->setObjectName("live.status"); status_->setMargin(4); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText);
     auto* statusScroll = new QScrollArea(side); statusScroll->setObjectName("live.statusScroll");
     statusScroll->setWidgetResizable(true); statusScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     statusScroll->setFrameShape(QFrame::NoFrame); statusScroll->setFixedHeight(status_->fontMetrics().lineSpacing()*2+12);
-    status_->setAlignment(Qt::AlignLeft | Qt::AlignBottom); statusScroll->setWidget(status_); sideLayout->addWidget(statusScroll);
+    status_->setAlignment(Qt::AlignLeft | Qt::AlignBottom); statusScroll->setWidget(status_); timeSideLayout->addWidget(statusScroll);
     splitter->setStretchFactor(0, 1); splitter->setStretchFactor(1, 0); splitter->setSizes({780, 320});
     auto* toggle = new QToolButton(tabs); toggle->setObjectName("live.controlsToggle"); toggle->setCheckable(true); toggle->setChecked(true);
     toggle->setText(QStringLiteral("Hide controls ▸")); toggle->setToolTip(QStringLiteral("Show or hide the control column to give the plot the whole window."));
@@ -305,7 +314,12 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     });
     connect(follow, &QPushButton::clicked, this, [this] {
         inspecting_ = false; freeze_->setChecked(false); plot_->bridge()->cursorVisible = false;
-        emit plot_->bridge()->inspectionChanged(); render(true); cadence_.invalidate(); refreshSource();
+        emit plot_->bridge()->inspectionChanged();
+        if (spectrum_->isVisible()) { spectrum_->inspect(0, false); spectrum_->fitView(); }
+        else if (constellation_->isVisible()) { constellation_->inspect(0, 0, false); constellation_->fitView(); }
+        else if (correlation_->isVisible()) { correlation_->inspect(0, 0, false); correlation_->fitView(); }
+        else render(true);
+        cadence_.invalidate(); refreshSource();
     });
     connect(autoY_, &QCheckBox::toggled, this, [this] { render(false); });
     connect(plot_, &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
@@ -318,10 +332,17 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         connect(view, &viewers::PairAnalysisView::inspectingChanged, this, [this](bool active) { inspecting_ = active; updateStatus(); });
         connect(view->plotView(), &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
     }
-    connect(tabs, &QTabWidget::currentChanged, this, [this, timeOnly = QList<QWidget*>{triggerBox, channelBox, readout_}](int index) {
+    connect(tabs, &QTabWidget::currentChanged, this, [this, controlPages, panelLayout, acquisitionSection, inspectionSection](int index) {
         inspection_->setPlot(index == 0 ? plot_ : index == 1 ? spectrum_->plotView() : index == 2 ? constellation_->plotView() : correlation_->plotView());
         inspecting_ = false; autoY_->setVisible(index == 0);
-        for (auto* widget : timeOnly) widget->setVisible(index == 0);
+        if (index == 0) {
+            panelLayout->insertWidget(1, acquisitionSection);
+            panelLayout->insertWidget(panelLayout->count()-1, inspectionSection);
+        } else {
+            auto* controls = index == 1 ? spectrum_->controlPanel() : index == 2 ? constellation_->controlPanel() : correlation_->controlPanel();
+            controls->addSection(acquisitionSection); controls->addSection(inspectionSection);
+        }
+        acquisitionSection->show(); inspectionSection->show(); controlPages->setCurrentIndex(index);
         if (index == 1) spectrum_->setFrame(frame_);
         else if (index == 2) constellation_->setFrame(frame_);
         else if (index == 3) correlation_->setFrame(frame_);

@@ -45,6 +45,11 @@ private slots:
         auto* edit = number->findChild<QLineEdit*>(); QVERIFY(edit); edit->setFocus(); edit->selectAll();
         QTest::keyClicks(edit, "1.2345678901234567e-5"); QTest::keyClick(edit, Qt::Key_Return);
         QCOMPARE(number->value(), QString("1.2345678901234567e-5").toDouble());
+        std::unique_ptr<QDoubleSpinBox> frequency(ui::compactNumber(nullptr));
+        frequency->setRange(-1000, 1000); frequency->setSuffix(" Hz"); frequency->show();
+        auto* frequencyEdit = frequency->findChild<QLineEdit*>(); frequencyEdit->setFocus(); frequencyEdit->selectAll();
+        QTest::keyClicks(frequencyEdit, "123.456789012345"); QTest::keyClick(frequencyEdit, Qt::Key_Return);
+        QCOMPARE(frequency->value(), QString("123.456789012345").toDouble());
         ui::RotaryValueControl offset(ui::RotaryValueControl::Mapping::RelativeOffset, "offset"); offset.show();
         auto* offsetDial = offset.findChild<QDial*>("offset.dial"); QVERIFY(offsetDial);
         QVERIFY(!offset.findChild<QDoubleSpinBox*>("offset.span"));

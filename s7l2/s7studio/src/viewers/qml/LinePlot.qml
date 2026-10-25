@@ -13,6 +13,16 @@ Rectangle {
     objectName: "viewer.linePlot"
     required property QtObject plot
 
+    // Small dock previews need fewer labels than the full viewer.
+    function compactTickStep(span, divisions) {
+        const raw = span / Math.max(2, divisions)
+        if (!(raw > 0) || !isFinite(raw)) return 0
+        const decade = Math.pow(10, Math.floor(Math.log10(raw)))
+        const fraction = raw / decade
+        const step = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5 ? 2.5 : fraction <= 5 ? 5 : 10
+        return step * decade
+    }
+
     // Axis titles sit outside the GraphsView so they never cover tick labels.
     Text {
         id: yTitle
@@ -64,14 +74,16 @@ Rectangle {
             min: plot.xMin
             max: plot.xMax
             titleVisible: false
-            labelFormat: "%.6g"
+            labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
+            tickInterval: plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.width-90)/70)) : 0
             subTickCount: 1
         }
         axisY: ValueAxis {
             min: plot.yMin
             max: plot.yMax
             titleVisible: false
-            labelFormat: "%.6g"
+            labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
+            tickInterval: plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.height-60)/40)) : 0
             subTickCount: 1
         }
 

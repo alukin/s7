@@ -7,7 +7,25 @@ class QDoubleSpinBox;
 class QDial;
 class QLabel;
 class QToolButton;
+class QProgressBar;
+class QVBoxLayout;
 namespace s7studio::ui {
+// A shared right column: scrollable settings, stable hover area, bottom status.
+class InstrumentSidebar : public QWidget {
+public:
+    explicit InstrumentSidebar(const QString& name, QWidget* parent = nullptr);
+    void addSection(QWidget* section);
+    QLabel* readout() const { return readout_; }
+    QLabel* status() const { return status_; }
+    QProgressBar* busy() const { return busy_; }
+private:
+    QVBoxLayout* settings_;
+    QLabel *readout_, *status_;
+    QProgressBar* busy_;
+};
+
+QDoubleSpinBox* compactNumber(QWidget* parent);
+
 // Labelled, keyboard-accessible alternatives to a short enum combo box.
 class ChoiceButtons : public QWidget {
     Q_OBJECT

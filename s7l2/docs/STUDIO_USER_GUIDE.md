@@ -92,17 +92,17 @@ for the current element operation, so a slow plugin can delay them.
 For bounded live inspection, add **Observers → Live oscilloscope (prototype)**,
 connect its inputs and double-click it. Its settings change the acquisition window
 in samples or model seconds during a run. Hover snaps to raw samples and shows
-exact stored values, model time and step. Freeze holds the display while the model
+stored values, model time and step, formatted to five significant digits. Freeze holds the display while the model
 continues. See [Live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) for
 examples, retention behavior and current limits. Run Configuration lists live and
 full-recording channel counts; live-only acquisition does not accumulate disk data.
 
 **View → Tool Windows → Observers** (**Alt+3**) opens compact previews for root
-observer instances. Use **Choose Observers…** to select them; no previews are
+observer instances. Use **Observers…** to select them; no previews are
 selected initially. Each card can collapse, freeze independently or **Open** its
 full viewer. Selection and collapse state are saved with the diagram. Starting
 a run activates this dock once; choosing another dock during execution is
-respected. **Recorded Signals…** retains named tap management and ad-hoc viewers.
+respected. **Signals…** retains named tap management and ad-hoc viewers.
 See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle and
 bounded-work behavior.
 
@@ -132,7 +132,7 @@ The live oscilloscope has four tabs sharing the same acquisition:
 
 | Tab | Use it for |
 |---|---|
-| **Time** | Signals over model time, display gain/offset, and exact retained-sample hover |
+| **Time** | Signals over model time, display gain/offset, and retained-sample hover |
 | **Spectrum** | Real or I/Q FFT, window/size selection, amplitude/power/PSD, explicit dB references, averaging and peak hold |
 | **Constellation / XY** | Two same-step channels as dots, segmented lines or density; equal numeric aspect and persistence in model steps |
 | **Correlation** | Auto- or cross-correlation, normalization, maximum lag and a peak-delay marker; positive lag means B occurs later than A |
@@ -140,17 +140,20 @@ The live oscilloscope has four tabs sharing the same acquisition:
 See [Live FFT spectrum](STUDIO_SPECTRUM.md) and
 [Live constellation and correlation](STUDIO_PAIR_ANALYSIS.md) for controls and
 worked examples. FFT and correlation need at least N retained consecutive samples;
-increase **Retain samples / channel** or reduce N if the view reports **Filling**.
+increase **Samples / channel** or reduce N if the view reports **Filling**.
 The model sample rate determines frequency and lag in seconds.
-Analysis settings wrap to the available width and scroll within a bounded-height
-section. Collapse that section's header to give the plot more height.
+All four tabs use the same layout: full-height graph on the left and grouped,
+scrollable settings on the right. Hover values use five significant digits in
+an eight-line readout, with compact status at the bottom. Hide controls expands
+the active graph. Time window and Window inspection remain available on every
+tab.
 
 Only the visible tab of a visible, non-minimized window analyzes data. Switching
 tabs, hiding/closing or minimizing suspends analysis while bounded acquisition
 continues. Returning analyzes the retained window and restarts FFT averages/hold
 and XY persistence. Visible windows keep updating when desktop focus moves away.
-**Freeze display** pins the displayed result and its raw input; changing analysis
-settings reanalyzes that input. **Resume live / Fit** returns to current data.
+**Freeze** pins the displayed result and its raw input; changing analysis
+settings reanalyzes that input. **Resume / Fit** returns to current data.
 Use **Pin window / A–B** or click the plot to place persistent cursors and freeze
 their input. **Measure A–B** computes inclusive region statistics from raw values
 or explicitly labeled derived bins/lags. A and B each have a slider and an exact

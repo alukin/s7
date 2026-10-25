@@ -46,14 +46,15 @@ QList<QPointF> envelope(const std::vector<double>& x, const std::vector<double>&
     return points;
 }
 }
-PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent) : QWidget(parent), kind_(kind), worker_(kind)
+PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* controlsParent) : QWidget(parent), kind_(kind), worker_(kind)
 {
     const bool xy = kind == PairKind::Constellation;
     setObjectName(xy ? "live.constellation" : "live.correlation");
-    auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
-    auto* box = new QWidget(this);
-    auto* boxLayout = new QVBoxLayout(box);
-    auto* fields = new ui::WrappingSettings(box); boxLayout->addWidget(fields);
+    auto* layout = new QHBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
+    controls_ = new ui::InstrumentSidebar("pair", controlsParent ? controlsParent : this);
+    auto* box = controls_;
+    auto* fields = new ui::WrappingSettings(box);
+    controls_->addSection(new ui::CollapsibleSection("Channels", "pair.channels", fields, true, box));
     auto combo = [&](const char* name, const QStringList& items) {
         auto* c = new QComboBox(box); c->setObjectName(name); c->addItems(items);
         c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon); c->setMinimumContentsLength(8); return c;
@@ -67,14 +68,16 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent) : QWidget(par
     normalization_ = combo("pair.normalization", {"Raw sum", "Biased (/N)", "Unbiased (/overlap)", "Coefficient"}); normalization_->setCurrentIndex(3);
     density_ = combo("pair.densitySize", {"64", "128", "256"}); density_->setCurrentIndex(1);
     lagUnits_ = combo("pair.lagUnits", {"Model seconds", "Samples"});
-    persistence_ = new QSpinBox(box); persistence_->setObjectName("pair.persistence"); persistence_->setRange(0, 1000000000); persistence_->setSpecialValueText("Current window");
+    persistence_ = new QSpinBox(box); persistence_->setObjectName("pair.persistence"); persistence_->setRange(0, 1000000000); persistence_->setSpecialValueText("Current window"); persistence_->setFixedWidth(140);
     persistence_->setToolTip("Age in model steps. Zero uses the current raw window. Storage is capped at 65,536 finite pairs; hidden panels restart persistence.");
-    maxLag_ = new QSpinBox(box); maxLag_->setObjectName("pair.maxLag"); maxLag_->setRange(0, 4095); maxLag_->setValue(1024);
+    maxLag_ = new QSpinBox(box); maxLag_->setObjectName("pair.maxLag"); maxLag_->setRange(0, 4095); maxLag_->setValue(1024); maxLag_->setFixedWidth(110);
     equalAspect_ = new QCheckBox("Equal numeric aspect", box); equalAspect_->setObjectName("pair.equalAspect"); equalAspect_->setChecked(true);
     equalAspect_->setToolTip("Equal numeric units per pixel; no physical-unit conversion is implied.");
     removeMean_ = new QCheckBox("Remove means", box); removeMean_->setObjectName("pair.removeMean");
     absolutePeak_ = new QCheckBox("Absolute peak", box); absolutePeak_->setObjectName("pair.absolutePeak");
     auto* fit = new QPushButton("Fit", box); fit->setObjectName("pair.fit");
+    fields = new ui::WrappingSettings(box);
+    controls_->addSection(new ui::CollapsibleSection(xy ? "Display" : "Correlation", "pair.settings", fields, true, box));
     if (xy) {
         fields->addControl(equalAspect_); field("Persistence (steps)", persistence_); field("Density grid", density_);
         fields->addControl(new QLabel("Cap: 65,536 raw pairs", box)); fields->addControl(fit);
@@ -87,27 +90,19 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent) : QWidget(par
     for (auto* widget : QList<QWidget*>{density_, persistence_, equalAspect_}) if (!xy) widget->hide();
     auto* convention = new QLabel(xy ? "Same-step raw X/Y or I/Q. No symbol timing, carrier recovery or equalization." :
         "rAB[l] = Σ A[n] B[n+l]; positive lag means B occurs later than A. Edge lags have less overlap.", box);
-    convention->setWordWrap(true); boxLayout->addWidget(convention);
-    auto* settingsScroll = new QScrollArea(this); settingsScroll->setObjectName("pair.settingsScroll"); settingsScroll->setWidgetResizable(true);
-    settingsScroll->setFrameShape(QFrame::NoFrame); settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    settingsScroll->setMaximumHeight(220); settingsScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum); settingsScroll->setWidget(box);
-    auto* section = new ui::CollapsibleSection(xy ? "Constellation / XY settings" : "Correlation settings", "pair.settings", settingsScroll, true, this);
-    section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum); layout->addWidget(section);
-    busy_ = new QProgressBar(this); busy_->setObjectName("pair.processing"); busy_->setRange(0, 0); busy_->setTextVisible(false);
-    busy_->setMaximumHeight(12); busy_->setAccessibleName("Processing paired analysis"); busy_->hide(); layout->addWidget(busy_);
-    auto busyPolicy = busy_->sizePolicy(); busyPolicy.setRetainSizeWhenHidden(true); busy_->setSizePolicy(busyPolicy);
-    plot_ = new LinePlotView(this); plot_->setObjectName("pair.plot"); plot_->setLegendVisible(true); plot_->bridge()->inspectionEnabled = true;
-    plot_->addSeries(xy ? "Trajectory" : "Correlation", {QColor("#1565c0")});
-    dots_ = plot_->addScatterSeries("Raw pairs", QColor("#1565c0"));
-    newest_ = plot_->addScatterSeries(xy ? "Newest pair" : "Peak lag", QColor("#c62828"));
-    selected_ = plot_->addScatterSeries("Inspected pair", QColor("#c25e00"));
+    convention->setWordWrap(true); controls_->addSection(convention);
+    busy_ = controls_->busy(); readout_ = controls_->readout(); status_ = controls_->status();
+    plot_ = new LinePlotView(this); plot_->setObjectName("pair.plot"); plot_->setLegendVisible(true); plot_->bridge()->inspectionEnabled = true; plot_->bridge()->instrumentTheme = true;
+    plot_->addSeries(xy ? "Trajectory" : "Correlation", {QColor("#54b8ff")});
+    dots_ = plot_->addScatterSeries("Raw pairs", QColor("#54b8ff"));
+    newest_ = plot_->addScatterSeries(xy ? "Newest pair" : "Peak lag", QColor("#ff7080"));
+    selected_ = plot_->addScatterSeries("Inspected pair", QColor("#ffc36b"));
     plot_->setLegendEntryVisible(selected_, false);
     if (!xy) plot_->setLegendEntryVisible(dots_, false);
     layout->addWidget(plot_, 1);
-    marker_ = new QLabel(this); marker_->setObjectName("pair.marker"); marker_->setTextFormat(Qt::PlainText); marker_->setWordWrap(true); layout->addWidget(marker_);
-    readout_ = new QLabel(this); readout_->setObjectName("pair.readout"); readout_->setTextFormat(Qt::PlainText); readout_->setWordWrap(true);
-    readout_->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(readout_);
-    status_ = new QLabel(this); status_->setObjectName("pair.status"); status_->setTextFormat(Qt::PlainText); status_->setWordWrap(true); layout->addWidget(status_);
+    marker_ = new QLabel(box); marker_->setObjectName("pair.marker"); marker_->setTextFormat(Qt::PlainText);
+    marker_->setWordWrap(true); controls_->addSection(marker_);
+    if (!controlsParent) { controls_->setMinimumWidth(300); layout->addWidget(controls_); }
     for (auto* c : {first_, second_, size_, normalization_, density_}) connect(c, &QComboBox::currentIndexChanged, this, [this] { reconfigure(); });
     connect(mode_, &QComboBox::currentIndexChanged, this, [this, xy] { if (xy) render(true); else reconfigure(); });
     connect(persistence_, &QSpinBox::valueChanged, this, [this] { reconfigure(); });
@@ -190,7 +185,7 @@ QString PairAnalysisView::lagText(std::size_t index) const
     const auto& r = *result_; const auto lag = r.lags[index];
     const auto valueUnit = r.settings.normalization == CorrelationNormalization::Coefficient ? QStringLiteral("1") : unit(r.firstUnit)+"·"+unit(r.secondUnit);
     return QStringLiteral("Lag %1 samples • %2 s • r=%3 %4 • overlap %5/%6")
-        .arg(lag).arg(static_cast<double>(lag)/r.sampleRate, 0, 'g', 17).arg(r.correlations[index], 0, 'g', 17).arg(valueUnit)
+        .arg(lag).arg(static_cast<double>(lag)/r.sampleRate, 0, 'g', 5).arg(r.correlations[index], 0, 'g', 5).arg(valueUnit)
         .arg(r.settings.size-static_cast<std::size_t>(std::abs(lag))).arg(r.settings.size);
 }
 void PairAnalysisView::render(bool fit)
@@ -234,14 +229,14 @@ void PairAnalysisView::render(bool fit)
                 LinePlotView::setScatterPoints(dots_, all);
                 if (mode_->currentIndex() == 1) {
                     const auto count = std::min<qsizetype>(64, segments.size());
-                    while (plot_->series().size() < count) { auto* series = plot_->addSeries("Segment", {QColor("#1565c0")}); plot_->setLegendEntryVisible(series, false); }
+                    while (plot_->series().size() < count) { auto* series = plot_->addSeries("Segment", {QColor("#54b8ff")}); plot_->setLegendEntryVisible(series, false); }
                     for (qsizetype i = 0; i < count; ++i) LinePlotView::setPoints(plot_->series()[i], segments[i]);
                     if (segments.size() > count) displayWarning_ = "Line segment cap reached; remaining raw pairs are shown as dots.";
                 }
             }
             const auto& newest = r.points.back(); LinePlotView::setScatterPoints(newest_, {{newest.x, newest.y}});
             marker_->setText(QStringLiteral("Newest pair • step %1 • time %2 s • X=%3 %4 • Y=%5 %6")
-                .arg(newest.step).arg(newest.time, 0, 'g', 17).arg(newest.x, 0, 'g', 17).arg(unit(r.firstUnit)).arg(newest.y, 0, 'g', 17).arg(unit(r.secondUnit)));
+                .arg(newest.step).arg(newest.time, 0, 'g', 5).arg(newest.x, 0, 'g', 5).arg(unit(r.firstUnit)).arg(newest.y, 0, 'g', 5).arg(unit(r.secondUnit)));
         } else {
             const bool samples = lagUnits_->currentIndex() == 1;
             plot_->setAxisTitles(samples ? "Lag (samples; + means B later)" : "Lag (model s; + means B later)",
@@ -278,10 +273,10 @@ QString PairAnalysisView::inspect(double x, double y, bool active)
                 const auto ix = std::min(n-1, static_cast<std::size_t>((x-r.xMin)/(r.xMax-r.xMin)*static_cast<double>(n)));
                 const auto iy = std::min(n-1, static_cast<std::size_t>((y-r.yMin)/(r.yMax-r.yMin)*static_cast<double>(n)));
                 readout_->setText(QStringLiteral("Density aggregate • X [%1, %2] %3 • Y [%4, %5] %6 • count %7")
-                    .arg(r.xMin+static_cast<double>(ix)/static_cast<double>(n)*(r.xMax-r.xMin), 0, 'g', 17)
-                    .arg(r.xMin+static_cast<double>(ix+1)/static_cast<double>(n)*(r.xMax-r.xMin), 0, 'g', 17).arg(unit(r.firstUnit))
-                    .arg(r.yMin+static_cast<double>(iy)/static_cast<double>(n)*(r.yMax-r.yMin), 0, 'g', 17)
-                    .arg(r.yMin+static_cast<double>(iy+1)/static_cast<double>(n)*(r.yMax-r.yMin), 0, 'g', 17).arg(unit(r.secondUnit)).arg(r.density[iy*n+ix]));
+                    .arg(r.xMin+static_cast<double>(ix)/static_cast<double>(n)*(r.xMax-r.xMin), 0, 'g', 5)
+                    .arg(r.xMin+static_cast<double>(ix+1)/static_cast<double>(n)*(r.xMax-r.xMin), 0, 'g', 5).arg(unit(r.firstUnit))
+                    .arg(r.yMin+static_cast<double>(iy)/static_cast<double>(n)*(r.yMax-r.yMin), 0, 'g', 5)
+                    .arg(r.yMin+static_cast<double>(iy+1)/static_cast<double>(n)*(r.yMax-r.yMin), 0, 'g', 5).arg(unit(r.secondUnit)).arg(r.density[iy*n+ix]));
             } else readout_->setText("No density bin at this position.");
         } else {
             const auto area = plotArea(plot_); const double sx = area.width()/(plot_->xMax()-plot_->xMin()), sy = area.height()/(plot_->yMax()-plot_->yMin());
@@ -294,7 +289,7 @@ QString PairAnalysisView::inspect(double x, double y, bool active)
             if (closest) {
                 LinePlotView::setScatterPoints(selected_, {{closest->x, closest->y}});
                 readout_->setText(QStringLiteral("Raw pair • run %1 • step %2 • time %3 s • X=%4 %5 • Y=%6 %7 (stored f64)")
-                    .arg(r.runId).arg(closest->step).arg(closest->time, 0, 'g', 17).arg(closest->x, 0, 'g', 17).arg(unit(r.firstUnit)).arg(closest->y, 0, 'g', 17).arg(unit(r.secondUnit)));
+                    .arg(r.runId).arg(closest->step).arg(closest->time, 0, 'g', 5).arg(closest->x, 0, 'g', 5).arg(unit(r.firstUnit)).arg(closest->y, 0, 'g', 5).arg(unit(r.secondUnit)));
             } else readout_->setText("No raw pair within 12 screen pixels.");
         }
     } else readout_->setText(kind_ == PairKind::Constellation ? "Hover over a raw pair or density bin." : "Hover over an integer correlation lag.");
@@ -328,6 +323,15 @@ void PairAnalysisView::updateStatus()
     if (worker_.busy() && result_) text += " • Updating (showing preceding result)";
     if (worker_.replacedRequests()) text += QStringLiteral(" • replaced requests %1").arg(worker_.replacedRequests());
     if (!displayWarning_.isEmpty()) text += " • "+displayWarning_;
-    status_->setText(text);
+    status_->setToolTip(text);
+    if (result_ && result_->state == PairResult::State::Ready) {
+        const auto& r = *result_;
+        const auto summary = kind_ == PairKind::Constellation ? QStringLiteral("%1 pairs • %2 Hz").arg(r.points.size()).arg(r.sampleRate, 0, 'g', 5) :
+            QStringLiteral("N=%1 • peak lag %2 samples").arg(r.settings.size).arg(r.lags[r.peakIndex]);
+        status_->setText(QStringLiteral("%1 • %2\n%3%4")
+            .arg(frame_ && frame_->finished ? "Run finished" : "Acquiring",
+                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : "Following live", summary,
+                 displayWarning_.isEmpty() ? QString() : "\n"+displayWarning_));
+    } else status_->setText(text);
 }
 }

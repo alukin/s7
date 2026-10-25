@@ -20,7 +20,7 @@ struct PreviewData {
     QVector<Trace> traces;
     QList<TrajectoryPoint> trajectory;
     QStringList axes, details;
-    QString status;
+    QString status, summary;
     QString timeAxis = "Model time (s; recent interval)";
     std::uint64_t revision = 0, run = 0;
     std::size_t rawPositions = 0, vertices = 0;

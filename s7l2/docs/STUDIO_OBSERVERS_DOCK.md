@@ -6,29 +6,37 @@ root diagram and its local run, including when a nested schema tab is active.
 
 ## Choose previews
 
-Choose **Choose Observers…**, filter the root observer list and check the desired
+Choose **Observers…**, filter the root observer list and check the desired
 instances. **Apply** changes the selection; **Cancel** leaves it untouched.
 Initially no observers are selected. Selection does not create an observer,
 alter its connections, start recording or open full viewer windows.
 
-Each selected card has a collapse arrow, **Open** and **Remove**. Collapse keeps
-the selection; Remove removes only the preview. **Open** raises the observer's
-independent full viewer. **Freeze preview** holds that card's displayed data;
+Each selected card has one compact header: its name/collapse arrow, **Freeze**,
+**Open**, and an options menu (**⋮**). Collapse keeps the selection. **Remove
+preview** in the menu removes only the preview. **Open** raises the observer's
+independent full viewer. **Freeze** holds that card's displayed data;
 it is independent of full-viewer Freeze and simulation Pause. Navigating a 2D
-preview freezes it. Uncheck Freeze preview to follow the current data again.
+preview freezes it. Uncheck Freeze to follow the current data again.
 
 Scope cards show recent time traces, Phase Portrait cards show same-step XY,
 and Phase Trajectory 3D cards show a bounded 3D trajectory. Live Oscilloscope
 cards show the Time presentation and rolling/trigger status. Detailed analysis,
 recording/comparisons, cursors, export and acquisition controls stay in the full
-viewers. Scope and Live cards offer **Plotted channels…** for up to eight display
-channels. This never limits capture. Expand **Channels / latest sampled values**
+viewers. Scope and Live cards offer **Plotted channels…** in their options menu
+for up to eight display channels. This never limits capture. Enable **Details /
+latest values** in that menu
 to see source outputs, supplied units and each input's own latest sample step
 and model time. A set of latest values is not presented as a coherent frame.
 
 An unconnected observer remains visible with a connection message. Units that
 are not declared are labelled **unit unspecified**. Status reports gaps, invalid
 or unmatched values, capture loss, trigger state, completion and source errors.
+The graph occupies most of each card. A single status line shows the recent
+interval and acquisition state; hover it for the full status. Details includes
+full diagnostics, source bindings and latest sampled values. Long names and
+status text elide rather than growing the card. The dock toolbar groups preview
+selection and recorded signals together.
+
 Phase previews show the latest continuous segment rather than joining across
 missing or nonfinite samples. Scope Time traces likewise break at gaps.
 
@@ -56,7 +64,7 @@ work. Its causal handover and continuity requirements are in OPEN_PROBLEMS.md.
 
 ## Recorded Signals
 
-**Recorded Signals…** opens the existing named-tap list with source/units,
+**Signals…** in the dock toolbar opens the existing named-tap list with source/units,
 rename/delete and Open Scope/Open Phase Portrait actions. Wire tap creation,
 recording and saved probe annotations retain their existing behavior. Named
 taps do not become extra diagram observer elements.

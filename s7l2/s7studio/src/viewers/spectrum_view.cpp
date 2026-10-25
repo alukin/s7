@@ -21,21 +21,25 @@
 
 namespace s7studio::viewers {
 using namespace analysis;
-SpectrumView::SpectrumView(QWidget* parent) : QWidget(parent)
+SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(parent)
 {
     setObjectName("live.spectrum");
-    auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
-    auto* box = new QWidget(this);
-    auto* boxLayout = new QVBoxLayout(box);
-    auto* fields = new ui::WrappingSettings(box); boxLayout->addWidget(fields);
+    auto* layout = new QHBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
+    controls_ = new ui::InstrumentSidebar("spectrum", controlsParent ? controlsParent : this);
+    auto* box = controls_;
+    const auto group = [&](const QString& title, const QString& name, bool expanded) {
+        auto* fields = new ui::WrappingSettings(box);
+        controls_->addSection(new ui::CollapsibleSection(title, name, fields, expanded, box)); return fields;
+    };
+    auto* fields = group("Channels", "spectrum.channels", true);
     auto combo = [&](const char* name, const QStringList& items) {
         auto* control = new QComboBox(box); control->setObjectName(name); control->addItems(items);
         control->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon); control->setMinimumContentsLength(8);
         return control;
     };
     auto number = [&](const char* name, double low, double high, double value, int decimals = 6) {
-        auto* control = new QDoubleSpinBox(box); control->setObjectName(name); control->setDecimals(decimals);
-        control->setRange(low, high); control->setValue(value); control->setMaximumWidth(180); return control;
+        auto* control = ui::compactNumber(box); control->setObjectName(name); control->setDecimals(decimals);
+        control->setRange(low, high); control->setValue(value); return control;
     };
     auto field = [&](const QString& label, QWidget* control) { fields->addField(label, control); };
     mode_ = combo("spectrum.mode", {"Real (one-sided)", "I/Q (two-sided)"});
@@ -44,6 +48,7 @@ SpectrumView::SpectrumView(QWidget* parent) : QWidget(parent)
     declaredUnit_->setPlaceholderText("Optional explicit I/Q unit"); declaredUnit_->setMaximumWidth(210);
     declaredUnit_->setToolTip("Declares a shared unit for the two raw channels. Does not convert or calibrate their values.");
     field("Input", mode_); field("Source / I", channel_); field("Q", quadrature_); field("I/Q unit", declaredUnit_);
+    fields = group("Transform", "spectrum.transform", true);
     size_ = combo("spectrum.size", {});
     for (int n = 64; n <= 65536; n *= 2) size_->addItem(QString::number(n), n);
     size_->setCurrentIndex(size_->findData(4096));
@@ -52,12 +57,14 @@ SpectrumView::SpectrumView(QWidget* parent) : QWidget(parent)
     frequencyOffset_ = number("spectrum.frequencyOffset", -1e12, 1e12, 0); frequencyOffset_->setSuffix(" Hz");
     frequencyOffset_->setToolTip("Frequency-axis offset only; does not change the model rate or FFT.");
     field("FFT N", size_); field("Window", window_); fields->addControl(removeMean_); field("Axis offset", frequencyOffset_);
+    fields = group("Quantity / averaging", "spectrum.averaging", false);
     quantity_ = combo("spectrum.quantity", {"Peak amplitude", "Power / bin", "PSD"});
     quantity_->setToolTip("Power / bin is window-normalized mean-square power; PSD is power per Hz. Tone amplitude has a separate coherent-gain normalization.");
     average_ = combo("spectrum.average", {"None", "Block mean (K spectra)", "Exponential power mean"});
-    count_ = new QSpinBox(box); count_->setObjectName("spectrum.averageCount"); count_->setRange(1, 128); count_->setValue(8);
+    count_ = new QSpinBox(box); count_->setObjectName("spectrum.averageCount"); count_->setRange(1, 128); count_->setValue(8); count_->setFixedWidth(110);
     alpha_ = number("spectrum.alpha", .000001, 1, .2);
     field("Quantity", quantity_); field("Averaging", average_); field("K", count_); field("Alpha", alpha_);
+    fields = group("Display", "spectrum.display", false);
     scale_ = combo("spectrum.scale", {"Linear", "dB re explicit reference"});
     reference_ = number("spectrum.reference", 1e-12, 1e12, 1, 12);
     reference_->setToolTip("Positive reference in the chosen linear quantity's units. No implicit dBFS or dBm calibration.");
@@ -66,26 +73,19 @@ SpectrumView::SpectrumView(QWidget* parent) : QWidget(parent)
     field("Scale", scale_); field("Reference", reference_); field("Display offset", dbOffset_); field("Display floor", floor_);
     peakHold_ = new QCheckBox("Peak hold", box); peakHold_->setObjectName("spectrum.peakHold"); fields->addControl(peakHold_);
     auto* reset = new QPushButton("Reset averages / hold", box); reset->setObjectName("spectrum.reset"); fields->addControl(reset);
+    fields = group("Marker", "spectrum.markers", false);
     marker_ = combo("spectrum.marker", {"Peak bin", "Fixed bin"});
-    fixedBin_ = new QSpinBox(box); fixedBin_->setObjectName("spectrum.fixedBin"); fixedBin_->setRange(0, 65535);
+    fixedBin_ = new QSpinBox(box); fixedBin_->setObjectName("spectrum.fixedBin"); fixedBin_->setRange(0, 65535); fixedBin_->setFixedWidth(110);
     field("Marker", marker_); field("Bin", fixedBin_);
-    auto* settingsScroll = new QScrollArea(this); settingsScroll->setObjectName("spectrum.settingsScroll"); settingsScroll->setWidgetResizable(true);
-    settingsScroll->setFrameShape(QFrame::NoFrame); settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    settingsScroll->setMaximumHeight(220); settingsScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum); settingsScroll->setWidget(box);
-    auto* section = new ui::CollapsibleSection("Spectrum settings", "spectrum.settings", settingsScroll, true, this);
-    section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum); layout->addWidget(section);
-    busy_ = new QProgressBar(this); busy_->setObjectName("spectrum.processing"); busy_->setRange(0, 0); busy_->setTextVisible(false);
-    busy_->setMaximumHeight(12); busy_->setAccessibleName("Processing spectrum"); busy_->hide(); layout->addWidget(busy_);
-    auto busyPolicy = busy_->sizePolicy(); busyPolicy.setRetainSizeWhenHidden(true); busy_->setSizePolicy(busyPolicy);
+    busy_ = controls_->busy(); readout_ = controls_->readout(); status_ = controls_->status();
     plot_ = new LinePlotView(this); plot_->setObjectName("spectrum.plot"); plot_->setLegendVisible(true);
-    plot_->bridge()->inspectionEnabled = true;
-    plot_->addSeries("Spectrum", {QColor("#1565c0")}); plot_->addSeries("Peak hold", {QColor("#c25e00")});
+    plot_->bridge()->inspectionEnabled = true; plot_->bridge()->instrumentTheme = true;
+    plot_->addSeries("Spectrum", {QColor("#54b8ff")}); plot_->addSeries("Peak hold", {QColor("#ffc36b")});
     layout->addWidget(plot_, 1);
-    markerText_ = new QLabel(this); markerText_->setObjectName("spectrum.markerText"); markerText_->setTextFormat(Qt::PlainText); markerText_->setWordWrap(true); layout->addWidget(markerText_);
-    readout_ = new QLabel("Hover over a spectrum bin to inspect its computed value.", this);
-    readout_->setObjectName("spectrum.readout"); readout_->setTextFormat(Qt::PlainText); readout_->setWordWrap(true);
-    readout_->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(readout_);
-    status_ = new QLabel(this); status_->setObjectName("spectrum.status"); status_->setTextFormat(Qt::PlainText); status_->setWordWrap(true); layout->addWidget(status_);
+    markerText_ = new QLabel(box); markerText_->setObjectName("spectrum.markerText");
+    markerText_->setTextFormat(Qt::PlainText); markerText_->setWordWrap(true); controls_->addSection(markerText_);
+    readout_->setText("Hover over a spectrum bin to inspect its computed value.");
+    if (!controlsParent) { controls_->setMinimumWidth(300); layout->addWidget(controls_); }
     for (auto* control : {mode_, channel_, quadrature_, size_, window_, quantity_, average_})
         connect(control, &QComboBox::currentIndexChanged, this, [this] { reconfigure(); });
     connect(removeMean_, &QCheckBox::toggled, this, [this] { reconfigure(); });
@@ -124,6 +124,7 @@ void SpectrumView::reconfigure()
 {
     const bool iq = mode_->currentIndex() == 1, power = quantity_->currentIndex() != 0;
     quadrature_->setEnabled(iq); declaredUnit_->setEnabled(iq); average_->setEnabled(power);
+    quadrature_->parentWidget()->setVisible(iq); declaredUnit_->parentWidget()->setVisible(iq);
     if (!power) { const QSignalBlocker blocker(average_); average_->setCurrentIndex(0); }
     count_->setEnabled(power && average_->currentIndex() == 1); alpha_->setEnabled(power && average_->currentIndex() == 2);
     worker_.cancel(); ++revision_; result_.reset();
@@ -205,13 +206,13 @@ QString SpectrumView::quantityUnit() const
 QString SpectrumView::binText(std::size_t i) const
 {
     if (!result_ || i >= result_->values.size()) return {};
-    QString text = QStringLiteral("Bin %1 • %2 Hz baseband").arg(i).arg(result_->frequencies[i], 0, 'g', 17);
-    if (frequencyOffset_->value() != 0) text += QStringLiteral(" • axis %1 Hz").arg(result_->frequencies[i]+frequencyOffset_->value(), 0, 'g', 17);
-    text += QStringLiteral(" • %1 %2").arg(result_->values[i], 0, 'g', 17).arg(quantityUnit());
+    QString text = QStringLiteral("Bin %1 • %2 Hz baseband").arg(i).arg(result_->frequencies[i], 0, 'g', 5);
+    if (frequencyOffset_->value() != 0) text += QStringLiteral(" • axis %1 Hz").arg(result_->frequencies[i]+frequencyOffset_->value(), 0, 'g', 5);
+    text += QStringLiteral(" • %1 %2").arg(result_->values[i], 0, 'g', 5).arg(quantityUnit());
     if (scale_->currentIndex() == 1) {
         const double db = spectrumDecibels(result_->values[i], result_->settings.quantity, reference_->value());
-        text += QStringLiteral(" • %1 dB re %2 %3 • display offset %4 dB").arg(db, 0, 'g', 17)
-            .arg(reference_->value(), 0, 'g', 17).arg(quantityUnit()).arg(dbOffset_->value());
+        text += QStringLiteral(" • %1 dB re %2 %3 • display offset %4 dB").arg(db, 0, 'g', 5)
+            .arg(reference_->value(), 0, 'g', 5).arg(quantityUnit()).arg(dbOffset_->value());
     }
     return text;
 }
@@ -302,6 +303,13 @@ void SpectrumView::updateStatus()
         text += QStringLiteral(" • average coverage steps %1–%2").arg(result_->averageFirstStep).arg(result_->lastStep);
     if (result_ && !result_->peakHold.empty()) text += QStringLiteral(" • hold coverage steps %1–%2").arg(result_->holdFirstStep).arg(result_->lastStep);
     if (worker_.replacedRequests()) text += QStringLiteral(" • replaced pending requests %1").arg(worker_.replacedRequests());
-    status_->setText(text);
+    status_->setToolTip(text);
+    if (result_ && result_->state == SpectrumResult::State::Ready) {
+        status_->setText(QStringLiteral("%1 • %2\nN=%3 • Δf=%4 Hz%5")
+            .arg(frame_ && frame_->finished ? "Run finished" : "Acquiring",
+                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : "Following live")
+            .arg(result_->size).arg(result_->binSpacing, 0, 'g', 5)
+            .arg(result_->message.isEmpty() ? QString() : "\n"+result_->message));
+    } else status_->setText(text);
 }
 }

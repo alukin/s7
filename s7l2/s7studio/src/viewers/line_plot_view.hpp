@@ -54,6 +54,7 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(QString yTitle READ yTitle NOTIFY titlesChanged)
     Q_PROPERTY(bool legendVisible READ legendVisible NOTIFY legendChanged)
     Q_PROPERTY(QVariantList legend READ legend NOTIFY legendChanged)
+    Q_PROPERTY(bool compactAxes MEMBER compactAxes NOTIFY legendChanged)
     Q_PROPERTY(bool instrumentTheme MEMBER instrumentTheme NOTIFY legendChanged)
     Q_PROPERTY(bool checkableLegend MEMBER checkableLegend NOTIFY legendChanged)
 
@@ -72,6 +73,7 @@ public:
     bool inspectionEnabled = false;
     bool checkableLegend = false;
     bool instrumentTheme = false;
+    bool compactAxes = false;
     bool triggerVisible = false;
     bool cursorVisible = false;
     double cursorX = 0;

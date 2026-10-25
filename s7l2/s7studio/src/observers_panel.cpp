@@ -16,6 +16,8 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPixmap>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QScopedValueRollback>
 #include <QPushButton>
 #include <QScrollArea>
@@ -29,6 +31,18 @@
 namespace s7studio::ui {
 using namespace viewers;
 namespace {
+class CompactLabel : public QLabel {
+public:
+    explicit CompactLabel(QWidget* parent) : QLabel(parent) {
+        setTextFormat(Qt::PlainText); setWordWrap(false);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed); setFixedHeight(fontMetrics().lineSpacing()+2);
+    }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter painter(this); painter.setFont(font()); painter.setPen(palette().color(QPalette::WindowText));
+        painter.drawText(contentsRect(), alignment(), fontMetrics().elidedText(text(), Qt::ElideRight, contentsRect().width()));
+    }
+};
 QString text(const boost::json::object& entry, const char* field) { return QString::fromStdString(std::string(entry.at(field).as_string())); }
 const ObserverDescriptor* descriptorFor(const QVector<ObserverDescriptor>& descriptors, const QString& id, const QString& type) {
     for (const auto& descriptor : descriptors) if (descriptor.id == id && descriptor.type == type) return &descriptor;
@@ -49,7 +63,8 @@ struct ObserversPanel::Card {
     QWidget *body = nullptr, *viewport = nullptr;
     QVBoxLayout* plotLayout = nullptr;
     QLabel *status = nullptr, *placeholder = nullptr, *binding = nullptr;
-    QToolButton *toggle = nullptr, *freeze = nullptr, *channels = nullptr;
+    QToolButton *toggle = nullptr, *freeze = nullptr;
+    QAction* channels = nullptr;
     QPlainTextEdit* details = nullptr;
     QWidget* legend = nullptr;
     QStringList legendNames;
@@ -71,14 +86,18 @@ ObserversPanel::ObserversPanel(ViewerManager* manager, QWidget* parent) : QWidge
 {
     setObjectName("observers.panel"); setMinimumWidth(300);
     auto* root = new QVBoxLayout(this); root->setContentsMargins(4, 4, 4, 4);
-    auto* choose = new QPushButton("Choose Observers…", this); choose->setObjectName("observers.choose"); root->addWidget(choose);
-    root_ = label(this); root_->setObjectName("observers.root"); root->addWidget(root_);
-    state_ = label(this); state_->setObjectName("observers.state"); root->addWidget(state_);
+    root->setSpacing(3);
+    auto* toolbar = new QHBoxLayout; toolbar->setSpacing(4);
+    auto* choose = new QPushButton("Observers…", this); choose->setObjectName("observers.choose");
+    choose->setToolTip("Choose which observers to preview"); toolbar->addWidget(choose, 1);
+    auto* recordedButton = new QPushButton("Signals…", this); recordedButton->setObjectName("observers.recordedSignals");
+    recordedButton->setToolTip("Open recorded signals"); toolbar->addWidget(recordedButton); root->addLayout(toolbar);
+    root_ = new CompactLabel(this); root_->setObjectName("observers.root"); root->addWidget(root_);
+    state_ = new CompactLabel(this); state_->setObjectName("observers.state"); root->addWidget(state_);
     empty_ = label(this); empty_->setObjectName("observers.empty"); root->addWidget(empty_);
     scroll_ = new QScrollArea(this); scroll_->setObjectName("observers.scroll"); scroll_->setWidgetResizable(true); scroll_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     auto* content = new QWidget(scroll_); cardsLayout_ = new QVBoxLayout(content); cardsLayout_->setContentsMargins(0, 0, 0, 0); cardsLayout_->addStretch();
     scroll_->setWidget(content); root->addWidget(scroll_, 1);
-    auto* recordedButton = new QPushButton("Recorded Signals…", this); recordedButton->setObjectName("observers.recordedSignals"); root->addWidget(recordedButton);
     connect(recordedButton, &QPushButton::clicked, this, &ObserversPanel::recordedSignalsRequested);
     connect(choose, &QPushButton::clicked, this, &ObserversPanel::chooseObservers);
     connect(manager_, &ViewerManager::observerSettingsChanged, this, [this](const QString& id) {
@@ -93,7 +112,7 @@ ObserversPanel::ObserversPanel(ViewerManager* manager, QWidget* parent) : QWidge
 }
 ObserversPanel::~ObserversPanel() { timer_->stop(); for (auto& card : cards_) card->worker.cancel(); cards_.clear(); }
 void ObserversPanel::setDocument(QString root, QVector<ObserverDescriptor> observers, boost::json::array selection) {
-    root_->setText("Root: " + root); if (document_ == observers && selection_ == selection) return;
+    root_->setText(root); root_->setToolTip("Root diagram: "+root); if (document_ == observers && selection_ == selection) return;
     document_ = std::move(observers); selection_ = std::move(selection); synchronize();
 }
 void ObserversPanel::bindRun(std::uint64_t id, QVector<ObserverDescriptor> observers) {
@@ -107,8 +126,10 @@ void ObserversPanel::clearRun() {
     synchronize(); setRunState(RunState::Idle, 0, 0);
 }
 void ObserversPanel::setRunState(RunState state, long step, double dt, const QString& error) {
-    state_->setText(QStringLiteral("Run %1 • %2 • step %3 • model %4 s%5").arg(runId_).arg(runStateName(state)).arg(step).arg(static_cast<double>(step)*dt, 0, 'g', 12)
+    state_->setToolTip(QStringLiteral("Run %1 • %2 • step %3 • model %4 s%5").arg(runId_).arg(runStateName(state)).arg(step).arg(static_cast<double>(step)*dt, 0, 'g', 12)
         .arg(error.isEmpty() ? QString() : " • " + error));
+    state_->setText(QStringLiteral("%1 • %2 s%3").arg(runStateName(state)).arg(static_cast<double>(step)*dt, 0, 'g', 5)
+        .arg(error.isEmpty() ? QString() : " • Error: "+error));
 }
 int ObserversPanel::activePresentations() const { int active = 0; for (const auto& card : cards_) if (card->presentation) ++active; return active; }
 void ObserversPanel::updateSelection(const QString& identity, const std::function<void(boost::json::object&)>& edit) {
@@ -125,30 +146,37 @@ void ObserversPanel::synchronize()
         if (!cards_.contains(identity)) {
             auto card = std::make_shared<Card>(); card->id = id; card->type = type; card->key = identity; card->revision = ++revision_;
             card->widget = new QWidget(scroll_->widget()); card->widget->setObjectName("observer.card."+id); auto* layout = new QVBoxLayout(card->widget); layout->setContentsMargins(2, 4, 2, 4);
-            auto* title = label(card->widget); const auto* registered = ViewerRegistry::instance().find(type);
-            title->setText(id+"\n"+(registered ? registered->displayName : type)); title->setTextInteractionFlags(Qt::TextSelectableByMouse); layout->addWidget(title);
-            auto* header = new QHBoxLayout; card->toggle = new QToolButton(card->widget); card->toggle->setObjectName("observer.collapse."+id);
-            card->toggle->setCheckable(true); card->toggle->setText("Preview"); card->toggle->setAccessibleName("Expand or collapse "+id); card->toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            layout->setSpacing(3);
+            auto* header = new QHBoxLayout; header->setSpacing(3);
+            card->toggle = new QToolButton(card->widget); card->toggle->setObjectName("observer.collapse."+id);
+            card->toggle->setCheckable(true); card->toggle->setText(id); card->toggle->setAccessibleName("Expand or collapse "+id);
+            card->toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); card->toggle->setAutoRaise(true);
             card->toggle->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed); card->toggle->setToolTip(id+" · "+type); header->addWidget(card->toggle, 1);
-            auto* open = new QPushButton("Open", card->widget); open->setObjectName("observer.open."+id); header->addWidget(open);
-            auto* remove = new QPushButton("Remove", card->widget); remove->setObjectName("observer.remove."+id); header->addWidget(remove); layout->addLayout(header);
-            card->binding = label(card->widget); layout->addWidget(card->binding);
-            card->body = new QWidget(card->widget); auto* body = new QVBoxLayout(card->body); body->setContentsMargins(0, 0, 0, 0); layout->addWidget(card->body);
-            auto* tools = new QHBoxLayout; card->freeze = new QToolButton(card->body); card->freeze->setObjectName("observer.freeze."+id); card->freeze->setText("Freeze preview"); card->freeze->setCheckable(true); tools->addWidget(card->freeze);
-            card->channels = new QToolButton(card->body); card->channels->setText("Plotted channels…"); card->channels->setObjectName("observer.channels."+id); tools->addWidget(card->channels); body->addLayout(tools);
-            card->viewport = new QWidget(card->body); card->viewport->setFixedHeight(180); card->plotLayout = new QVBoxLayout(card->viewport); card->plotLayout->setContentsMargins(0, 0, 0, 0);
-            card->placeholder = label(card->viewport); card->placeholder->setText("Recent bounded preview; waiting for an active viewport."); card->plotLayout->addWidget(card->placeholder); body->addWidget(card->viewport);
+            card->freeze = new QToolButton(card->widget); card->freeze->setObjectName("observer.freeze."+id);
+            card->freeze->setText("Freeze"); card->freeze->setToolTip("Freeze this preview only"); card->freeze->setCheckable(true); header->addWidget(card->freeze);
+            auto* open = new QPushButton("Open", card->widget); open->setObjectName("observer.open."+id); open->setToolTip("Open the full viewer"); open->setFixedWidth(open->fontMetrics().horizontalAdvance("Open")+16); header->addWidget(open);
+            auto* more = new QToolButton(card->widget); more->setObjectName("observer.menu."+id); more->setText("⋮");
+            more->setAccessibleName("Preview options for "+id); more->setToolTip("Channels, details and removal");
+            more->setFixedWidth(28); more->setStyleSheet("QToolButton::menu-indicator { image: none; width: 0; }");
+            more->setPopupMode(QToolButton::InstantPopup); auto* menu = new QMenu(more); more->setMenu(menu); header->addWidget(more); layout->addLayout(header);
+            card->channels = menu->addAction("Plotted channels…"); card->channels->setObjectName("observer.channels."+id);
+            auto* details = menu->addAction("Details / latest values"); details->setObjectName("observer.showDetails."+id); details->setCheckable(true);
+            menu->addSeparator(); auto* remove = menu->addAction("Remove preview"); remove->setObjectName("observer.remove."+id);
+            card->binding = new CompactLabel(card->widget); card->binding->hide(); layout->addWidget(card->binding);
+            card->body = new QWidget(card->widget); auto* body = new QVBoxLayout(card->body); body->setContentsMargins(0, 0, 0, 0); body->setSpacing(3); layout->addWidget(card->body);
+            card->viewport = new QWidget(card->body); card->viewport->setObjectName("observer.graph."+id); card->viewport->setFixedHeight(240);
+            card->plotLayout = new QVBoxLayout(card->viewport); card->plotLayout->setContentsMargins(0, 0, 0, 0);
+            card->placeholder = label(card->viewport); card->placeholder->setText("Waiting for samples"); card->plotLayout->addWidget(card->placeholder); body->addWidget(card->viewport);
             card->legend = new QWidget(card->body); card->legend->setObjectName("observer.legend."+id); auto* legendLayout = new QGridLayout(card->legend); legendLayout->setContentsMargins(0,0,0,0); legendLayout->setSpacing(2); card->legend->hide(); body->addWidget(card->legend);
-            card->status = label(card->body); card->status->setObjectName("observer.status."+id); body->addWidget(card->status);
-            auto* details = new QToolButton(card->body); details->setText("Channels / latest sampled values"); details->setCheckable(true); body->addWidget(details);
+            card->status = new CompactLabel(card->body); card->status->setObjectName("observer.status."+id); body->addWidget(card->status);
             card->details = new QPlainTextEdit(card->body); card->details->setObjectName("observer.details."+id); card->details->setReadOnly(true); card->details->setMaximumHeight(150); card->details->hide(); body->addWidget(card->details);
             card->details->setUndoRedoEnabled(false); card->details->setMaximumBlockCount(64);
-            connect(details, &QToolButton::toggled, card->details, [card = std::weak_ptr<Card>(card)](bool shown) {
-                if (auto current = card.lock()) { current->details->setVisible(shown); if (shown && current->last) current->details->setPlainText(current->last->details.join('\n')); }
+            connect(details, &QAction::toggled, card->details, [card = std::weak_ptr<Card>(card)](bool shown) {
+                if (auto current = card.lock()) { current->details->setVisible(shown); if (shown && current->last) current->details->setPlainText(current->last->status+"\n"+current->last->details.join('\n')); }
             });
             cards_.insert(identity, card);
             connect(open, &QPushButton::clicked, this, [this, id, type] { manager_->openObserver(type, id); });
-            connect(remove, &QPushButton::clicked, this, [this, identity] {
+            connect(remove, &QAction::triggered, this, [this, identity] {
                 dismissed_.insert(identity);
                 selection_.erase(std::remove_if(selection_.begin(), selection_.end(), [&](const auto& v) { return key(text(v.as_object(), "element_id"), text(v.as_object(), "type")) == identity; }), selection_.end());
                 emit selectionChanged(selection_); synchronize();
@@ -158,7 +186,7 @@ void ObserversPanel::synchronize()
                 updateSelection(identity, [expanded](auto& value) { value["collapsed"] = !expanded; });
             });
             connect(card->freeze, &QToolButton::toggled, this, [this, identity] { if (auto card = cards_.value(identity)) { card->worker.cancel(); card->revision = ++revision_; } });
-            connect(card->channels, &QToolButton::clicked, this, [this, identity] {
+            connect(card->channels, &QAction::triggered, this, [this, identity] {
                 auto card = cards_.value(identity); if (!card) return;
                 const auto* descriptor = runId_ ? descriptorFor(run_, card->id, card->type) : descriptorFor(document_, card->id, card->type); if (!descriptor) return;
                 QDialog dialog(this); dialog.setWindowTitle("Plotted channels — "+card->id); auto* layout = new QVBoxLayout(&dialog); auto* list = new QListWidget(&dialog);
@@ -180,7 +208,7 @@ void ObserversPanel::synchronize()
         auto card = cards_.value(identity);
         if (card->selection != entry) { card->revision = ++revision_; card->worker.cancel(); }
         card->selection = entry; const bool expanded = !entry.at("collapsed").as_bool();
-        const QSignalBlocker block(card->toggle); card->toggle->setChecked(expanded); card->toggle->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow); card->body->setVisible(expanded);
+        const QSignalBlocker block(card->toggle); card->toggle->setChecked(expanded); card->toggle->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow); card->body->setVisible(expanded); card->freeze->setEnabled(expanded);
         card->channels->setVisible(type == "Scope" || type == "LiveOscilloscope");
     }
     // Deleted/type-changed active bindings remain inspectable until the run retires.
@@ -203,7 +231,9 @@ void ObserversPanel::refresh()
         const auto* configured = descriptorFor(document_, card->id, card->type);
         const auto* runBinding = runId_ ? descriptorFor(run_, card->id, card->type) : nullptr;
         const std::optional<ObserverDescriptor> binding = runBinding ? std::optional{*runBinding} : std::nullopt;
-        card->binding->setText(binding && (!configured || *binding != *configured) ? "Active-run binding retained • document changes apply next run" : runId_ && !binding ? "Next run — no matching active binding" : "");
+        const QString bindingText = binding && (!configured || *binding != *configured) ? "Edited • using active-run binding" : runId_ && !binding ? "Waiting for next run" : "";
+        card->binding->setText(bindingText); card->binding->setToolTip("Document changes apply on the next run; the active source is retained.");
+        card->binding->setVisible(!bindingText.isEmpty());
         const QRect rect(card->viewport->mapTo(scroll_->viewport(), QPoint()), card->viewport->size());
         const bool inViewport = rect.intersects(scroll_->viewport()->rect());
         const bool eligible = visible && card->toggle->isChecked() && inViewport;
@@ -224,7 +254,7 @@ void ObserversPanel::refresh()
             if (card->last) card->presentation->present(*card->last);
         }
         if (auto data = card->worker.takeResult(); data && data->revision == card->revision && (!data->run || data->run == runId_)) {
-            card->last = std::move(data); card->presentation->present(*card->last); card->status->setText(card->last->status);
+            card->last = std::move(data); card->presentation->present(*card->last); card->status->setText(card->last->summary.isEmpty() ? card->last->status : card->last->summary); card->status->setToolTip(card->last->status);
             if (card->type == "Scope" || card->type == "LiveOscilloscope") {
                 QStringList names; for (const auto& trace : card->last->traces) names.push_back(trace.name);
                 if (names != card->legendNames) {
@@ -233,12 +263,12 @@ void ObserversPanel::refresh()
                     for (int channel=0;channel<card->last->traces.size();++channel) {
                         const auto& trace = card->last->traces[channel]; auto* cell = new QWidget(card->legend); auto* row = new QHBoxLayout(cell); row->setContentsMargins(0,0,0,0); row->setSpacing(3);
                         auto* swatch = new QLabel(cell); QPixmap pixels(10,10); pixels.fill(ObserverPresentation::channelColor(card->type,trace.channel)); swatch->setPixmap(pixels); row->addWidget(swatch);
-                        auto* name = label(cell); name->setText(trace.name.section('/',-1)); name->setToolTip(trace.name); row->addWidget(name,1); grid->addWidget(cell,channel/2,channel%2);
+                        auto* name = new CompactLabel(cell); name->setText(trace.name.section('/',-1)); name->setToolTip(trace.name); row->addWidget(name,1); grid->addWidget(cell,channel/2,channel%2);
                     }
                     card->legend->setVisible(!names.empty());
                 }
             }
-            if (card->details->isVisible()) card->details->setPlainText(card->last->details.join('\n'));
+            if (card->details->isVisible()) card->details->setPlainText(card->last->status+"\n"+card->last->details.join('\n'));
         }
         if (card->freeze->isChecked()) continue;
         PreviewRequest request{*binding, selectedChannels(card->selection, static_cast<int>(binding->inputs.size())), manager_->source(), manager_->liveSource(card->id), manager_->observerTrigger(card->id), card->revision};

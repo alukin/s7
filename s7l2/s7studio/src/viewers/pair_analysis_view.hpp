@@ -11,12 +11,13 @@ class QLabel;
 class QTimer;
 class QProgressBar;
 class QScatterSeries;
+namespace s7studio::ui { class InstrumentSidebar; }
 namespace s7studio::viewers {
 class LinePlotView;
 class PairAnalysisView : public QWidget {
     Q_OBJECT
 public:
-    explicit PairAnalysisView(analysis::PairKind kind, QWidget* parent = nullptr);
+    explicit PairAnalysisView(analysis::PairKind kind, QWidget* parent = nullptr, QWidget* controlsParent = nullptr);
     ~PairAnalysisView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
     void clear();
@@ -25,6 +26,8 @@ public:
     std::shared_ptr<const observation::LiveFrame> setFrozen(bool frozen);
     const std::optional<analysis::PairResult>& result() const { return result_; }
     LinePlotView* plotView() const { return plot_; }
+    void fitView() { render(true); }
+    ui::InstrumentSidebar* controlPanel() const { return controls_; }
     QString inspect(double x, double y, bool active = true);
     std::optional<analysis::WindowSnapshot> inspectionSnapshot() const;
 signals:
@@ -57,6 +60,7 @@ private:
     QLabel *status_, *readout_, *marker_;
     QProgressBar* busy_;
     LinePlotView* plot_;
+    ui::InstrumentSidebar* controls_;
     QScatterSeries *dots_, *newest_, *selected_;
 };
 }
