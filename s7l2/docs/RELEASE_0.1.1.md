@@ -392,6 +392,33 @@ input images were reviewed. New GUI helpers/captures remain local under
 `build-release/scope-fixes-*`; permanent data/worker regressions are in the
 module tests. Native Windows/physical desktop qualification remains separate.
 
+## Rigol controls, item 6 increment 6a — 2026-10-25
+
+The maintainer requested small, resumable increments to conserve usage. The first
+increment groups Time controls under Vertical/Horizontal, compacts channel
+selection to four columns, and separates legend-name selection from visibility.
+A fixed eight-division vertical graticule supplies per-channel raw units/division
+readouts, including mixed and unspecified units. Existing independent gain and
+position settings remain the display transform; the shared axis explicitly
+shows display levels. Readouts stay in the Widgets panel so streaming scale
+updates do not rebuild the QML legend model. Original samples and acquisition
+settings are unchanged.
+
+Item 6 remains in progress. Resume with 6b: direct units/division entry and
+selected-channel axis presentation; then coarse/fine 1–2–5 steps and position
+reset, followed by markers. The optional history overview is a later increment.
+The local DS1000Z manual's selected-channel Vertical controls (page 1-12) guide
+this work.
+
+Validation: Studio Release build, the Live Oscilloscope module regression and
+Qt Quick line-plot regression pass. Seven focused GUI cases pass without skips,
+covering mixed/unspecified units, independent gain, legend selection versus
+visibility, raw-data preservation, light/dark 1024×768 layouts, long runs and
+hover. Final grid-label formatting and compact legend layout pass five affected
+GUI cases again; the rendered capture was reviewed. Local helpers/captures are
+under `build-release/rigol-6a-*` and remain outside Git. Broad suites are not
+repeated for this small presentation increment.
+
 ## Scope and decisions to review
 
 Improve the existing local 0.1.0 workflows: edit, configure, run and observe.

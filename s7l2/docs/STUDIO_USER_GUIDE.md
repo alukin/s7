@@ -123,7 +123,15 @@ observer channel bindings remain available in each preview's details.
 See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle and
 bounded-work behavior.
 
-Select a **CH n** button to adjust that channel's **Gain ×** and **Position**.
+In **Vertical**, select a **CH n** button or click its name in the plot legend
+to adjust that channel's **Gain ×** and **Position**. Selection leaves visibility
+unchanged; use the separate checkbox to show/hide a trace. For a focused legend
+row, Enter selects the channel and Space toggles visibility.
+The colored readout shows raw signal units per one of eight vertical divisions,
+such as `0.25 V/div`. Channels with different units keep independent readouts;
+an unspecified unit appears as `units/div`. The shared Y axis shows display
+levels; hover values and measurements retain original signal values. Changing
+Gain updates units/division while keeping the other channels fixed.
 The colored checkboxes beside channel buttons and in the plot legend toggle
 visibility. Each channel keeps independent settings. Numeric faces show five
 significant digits; focusing an editor or hovering its tooltip exposes the full
@@ -134,7 +142,7 @@ height. There is no half-span setting. Changing gain or position turns off
 Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
 unchanged.
 
-**Time base** sets model seconds per division across ten horizontal divisions.
+**Horizontal → Time / div** sets model seconds per division across ten horizontal divisions.
 Turn clockwise to zoom in, or edit the adjacent **s/div** field for an exact
 value. The knob, numeric readout and mouse-selected time range stay synchronized;
 the selected scale survives reruns and changes of model `dt`. Live preview wheel
@@ -156,7 +164,7 @@ Zoomed Time views use original raw samples while the visible interval is still
 retained raw. Wider overviews use bounded display samples. If fine raw detail
 has expired, the viewer says so; zooming does not reconstruct missing detail.
 
-**Channels**, **Time base**, **Analysis retention**, **Trigger** and **Window
+On the Time tab, **Vertical**, **Horizontal**, **Analysis retention**, **Trigger** and **Window
 inspection** collapse independently. The column scrolls vertically; **Hide
 controls** gives the plot the full width. Hover readouts and acquisition status
 have fixed-height scrollable areas so pointer motion does not move the layout.

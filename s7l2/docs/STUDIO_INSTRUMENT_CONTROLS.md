@@ -44,7 +44,7 @@ digits while inactive; focus and tooltips expose the complete round-tripping
 value. The compact face never changes the stored value. Gain and position sit
 side by side with their numeric fields below the knobs.
 
-Channels and Time base start expanded; Analysis retention, Trigger and Window
+Vertical and Horizontal start expanded; Analysis retention, Trigger and Window
 inspection start collapsed. All sections collapse independently. The control column scrolls
 vertically and can be hidden. Hover readouts and status use fixed-height
 scrollable viewports. Hover values and times show five significant digits. The
@@ -105,9 +105,9 @@ Controls module or external UI code is added.
 
 ## Next session: Rigol-inspired live oscilloscope UI
 
-Recorded on 2026-10-25 at the maintainer's request. This is a deferred design
-backlog, not an implementation of the broader design or a release assignment.
-The five time/preview findings below were subsequently authorized and implemented.
+Recorded on 2026-10-25 at the maintainer's request. The five time/preview
+findings and the first item-6 increment are implemented below. The remaining
+control-design proposals are still a backlog.
 The maintainer originally asked
 to finish and commit the model-time scale and automatic-preview work before
 starting another live oscilloscope UI pass.
@@ -168,6 +168,37 @@ Start with grouping, selected-channel controls and units/division. Treat the
 overview as a later increment. Review the current implementation before replacing
 controls: selected-channel gain/position, colored visibility checkboxes, a
 model-time seconds/division knob and collapsible sections already exist.
+
+### Item 6, increment 6a — grouping, selection and scale readouts
+
+Implemented 2026-10-25. Time controls now use Vertical and Horizontal groups,
+with up to eight compact channel selectors in two rows. A legend name selects
+that channel's existing gain/position controls; its checkbox still independently
+toggles visibility. Enter selects a focused legend row and Space toggles its
+visibility. The selected label is bold and uses the trace color. Long live
+legend names elide within a bounded width; full names remain in channel controls
+and accessibility text.
+
+The full Time plot uses a vertical grid spacing of one eighth of the visible
+height, anchored at display zero. Each channel's readout
+shows original signal units per division, computed from the shared visible Y
+span divided by eight and that channel's display gain. Position does not change
+this scale. Readouts refresh after Auto Y or manual Y-range/gain changes and keep
+supplied units independently (V, A, etc.); unspecified units use `units/div`.
+The shared numeric axis is explicitly a display level, since independently
+scaled mixed-unit traces have no common physical unit. Hover values, trigger
+thresholds, measurements and exports continue using original samples.
+
+This increment retains the existing gain/position controls and adds a readout;
+the units/division value is not directly editable yet. Next: increment 6b should
+provide direct units/division entry and selected-channel axis presentation,
+followed by coarse/fine 1–2–5 adjustment and position reset. Markers and the
+optional overview remain later work. Overall item 6 remains in progress.
+
+Validation: Studio rebuild, Live module and Qt Quick line-plot checks pass.
+Seven focused GUI cases pass; five affected cases pass again after final tick
+label/legend layout review. Local helpers and captures remain outside Git under
+`build-release/rigol-6a-*`. Details are in the release plan.
 
 ### Reported time/preview defects — implemented refinement, 2026-10-25
 

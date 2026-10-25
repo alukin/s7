@@ -56,9 +56,10 @@ private:
     void presentTimeResult(const analysis::TimeViewResult& result);
     void updateStatus(const QString& suffix = {});
     void applyTriggerSettings();
+    void updateVerticalReadouts();
     std::shared_ptr<observation::LiveAcquisition> live_;
     std::shared_ptr<const observation::LiveFrame> frame_ = std::make_shared<observation::LiveFrame>();
-    viewers::LinePlotView* plot_;
+    viewers::LinePlotView* plot_ = nullptr;
     viewers::SpectrumView* spectrum_;
     viewers::PairAnalysisView *constellation_, *correlation_;
     viewers::WindowInspectionPanel* inspection_;

@@ -23,6 +23,14 @@ Rectangle {
         return step * decade
     }
 
+    function verticalTickFormat(span, divisions) {
+        const step = Math.abs(span) / divisions
+        if (!(step > 0) || step < 1e-6 || step >= 1e6) return "%.4e"
+        // Fixed precision near ordinary scales keeps rounding residue around
+        // zero from producing a long scientific label across the axis title.
+        return "%." + Math.max(0, 2 - Math.floor(Math.log10(step))) + "f"
+    }
+
     // Axis titles sit outside the GraphsView so they never cover tick labels.
     Text {
         id: yTitle
@@ -83,8 +91,9 @@ Rectangle {
             min: plot.yMin
             max: plot.yMax
             titleVisible: false
-            labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.height-60)/40)) : 0
+            labelFormat: plot.verticalDivisions > 0 ? root.verticalTickFormat(max-min, plot.verticalDivisions) : plot.compactAxes ? "%.5g" : "%.6g"
+            tickInterval: plot.verticalDivisions > 0 ? (max-min)/plot.verticalDivisions : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.height-60)/40)) : 0
+            tickAnchor: 0
             subTickCount: 1
         }
 
@@ -271,7 +280,7 @@ Rectangle {
         visible: plot.legendVisible && plot.legend.length > 0
         x: view.x + view.plotArea.x + view.plotArea.width - width - 8
         y: view.y + view.plotArea.y + 8
-        width: legendColumn.implicitWidth + 16
+        width: plot.selectedLegend >= 0 ? Math.min(260, Math.max(100, view.plotArea.width * 0.55)) : legendColumn.implicitWidth + 16
         height: legendColumn.implicitHeight + 10
         color: plot.instrumentTheme ? "#ee202a35" : "#f2ffffff"
         border.color: plot.instrumentTheme ? "#455366" : "#a0a0a0"
@@ -281,6 +290,7 @@ Rectangle {
             id: legendColumn
             x: 8
             y: 5
+            width: plot.selectedLegend >= 0 ? legend.width - 16 : implicitWidth
             spacing: 2
             Repeater {
                 model: plot.legend
@@ -288,14 +298,17 @@ Rectangle {
                     id: entry
                     required property var modelData
                     spacing: 6
+                    width: plot.selectedLegend >= 0 ? legendColumn.width : implicitWidth
                     objectName: "viewer.legend.channel." + modelData.index
                     activeFocusOnTab: plot.checkableLegend
                     Accessible.role: plot.checkableLegend ? Accessible.CheckBox : Accessible.StaticText
-                    Accessible.name: modelData.name
+                    Accessible.name: modelData.name + (plot.selectedLegend === modelData.index ? " (selected channel)" : "")
                     Accessible.checkable: plot.checkableLegend
                     Accessible.checked: modelData.checked
                     Accessible.onPressAction: if (plot.checkableLegend) plot.toggleLegend(modelData.index, !modelData.checked)
                     Keys.onSpacePressed: if (plot.checkableLegend) plot.toggleLegend(modelData.index, !modelData.checked)
+                    Keys.onReturnPressed: if (plot.selectedLegend >= 0) plot.selectLegend(modelData.index)
+                    Keys.onEnterPressed: if (plot.selectedLegend >= 0) plot.selectLegend(modelData.index)
                     Item {
                         width: plot.checkableLegend ? 18 : 26
                         height: entryText.height
@@ -331,9 +344,19 @@ Rectangle {
                     }
                     Text {
                         id: entryText
+                        objectName: "viewer.legend.name." + entry.modelData.index
                         text: entry.modelData.name
+                        width: plot.selectedLegend >= 0 ? Math.max(0, entry.width - (plot.checkableLegend ? 18 : 26) - entry.spacing) : implicitWidth
+                        elide: Text.ElideRight
                         font.pixelSize: 12
-                        color: plot.instrumentTheme ? "#dde4ed" : "#202020"
+                        font.bold: plot.selectedLegend === entry.modelData.index
+                        color: plot.selectedLegend === entry.modelData.index ? entry.modelData.color : plot.instrumentTheme ? "#dde4ed" : "#202020"
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: plot.selectedLegend >= 0
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { entry.forceActiveFocus(); plot.selectLegend(entry.modelData.index) }
+                        }
                     }
                 }
             }

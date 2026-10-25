@@ -176,10 +176,14 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         selectorLayout->setContentsMargins(0, 0, 0, 0); selectorLayout->setSpacing(3);
         auto* visible = new ChannelVisibilityBox(selector); visible->setChecked(true);
         selectorLayout->addWidget(visible); selectorLayout->addWidget(select, 1);
-        selectors->addWidget(selector, i/2, i%2); channelGroup->addButton(select, i); selector->hide();
+        selectors->addWidget(selector, i/4, i%4); channelGroup->addButton(select, i); selector->hide();
         auto* page = new QWidget(channelPages_); auto* pageLayout = new QVBoxLayout(page); pageLayout->setContentsMargins(0, 0, 0, 0);
         auto* channelName = new QLabel(page); channelName->setObjectName(name + ".name"); channelName->setWordWrap(true); channelName->setTextFormat(Qt::PlainText);
         channelName->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); pageLayout->addWidget(channelName);
+        auto* scaleReadout = new QLabel(page); scaleReadout->setObjectName(name + ".unitsPerDivision");
+        scaleReadout->setTextFormat(Qt::PlainText); scaleReadout->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        scaleReadout->setFixedHeight(scaleReadout->fontMetrics().lineSpacing()+4);
+        scaleReadout->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed); pageLayout->addWidget(scaleReadout);
         auto* gainControl = new RotaryValueControl(RotaryValueControl::Mapping::LogGain, name + ".gain", page);
         auto* offsetControl = new RotaryValueControl(RotaryValueControl::Mapping::RelativeOffset, name + ".offset", page);
         auto* knobs = new QHBoxLayout; knobs->setSpacing(8);
@@ -193,25 +197,32 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         const auto adjustDisplay = [this] {
             // Hold the shared scale while a channel moves; otherwise Auto Y
             // cancels gain/position changes and moves the other channels too.
-            const QSignalBlocker block(autoY_); autoY_->setChecked(false); render(false);
+            const QSignalBlocker block(autoY_); autoY_->setChecked(false); updateVerticalReadouts(); render(false);
         };
         connect(gain, &QDoubleSpinBox::valueChanged, this, adjustDisplay);
         connect(offset, &QDoubleSpinBox::valueChanged, this, adjustDisplay);
     }
     controls_.front().select->setChecked(true);
-    connect(channelGroup, &QButtonGroup::idToggled, this, [this](int index, bool checked) { if (checked) channelPages_->setCurrentIndex(index); });
-    panelLayout->addWidget(new CollapsibleSection("Channels", "live.section.channels", channelBox, true, panel));
+    connect(channelGroup, &QButtonGroup::idToggled, this, [this](int index, bool checked) {
+        if (checked) { channelPages_->setCurrentIndex(index); updateVerticalReadouts(); }
+    });
+    panelLayout->addWidget(new CollapsibleSection("Vertical", "live.section.channels", channelBox, true, panel));
     auto* timeBase = new RotaryValueControl(RotaryValueControl::Mapping::LogTime, "live.timeScale", panel);
     timeScale_ = timeBase->number();
-    panelLayout->addWidget(new CollapsibleSection("Time base", "live.section.timeBase", timeBase, true, panel));
+    panelLayout->addWidget(new CollapsibleSection("Horizontal", "live.section.timeBase", timeBase, true, panel));
     auto* acquisitionSection = new CollapsibleSection("Analysis retention", "live.section.acquisition", settings, false, panel);
     panelLayout->addWidget(acquisitionSection);
     panelLayout->addWidget(new CollapsibleSection("Trigger", "live.section.trigger", triggerBox, false, panel));
     plot_ = new viewers::LinePlotView(timePage); plot_->setObjectName("live.plot");
-    plot_->setAxisTitles("Model time (s)", "Value (supplied units; shared numeric axis)"); plot_->setLegendVisible(true);
+    plot_->setAxisTitles("Model time (s)", "Display level (see channel units/div)"); plot_->setLegendVisible(true);
     plot_->bridge()->checkableLegend = true;
     plot_->bridge()->instrumentTheme = true; plot_->bridge()->timeDivisions = true;
     plot_->bridge()->horizontalNavigation = true;
+    plot_->bridge()->verticalDivisions = 8;
+    connect(plot_, &viewers::LinePlotView::yRangeChanged, this, &LiveOscilloscopeWindow::updateVerticalReadouts);
+    connect(plot_->bridge(), &viewers::LinePlotBridge::legendSelected, this, [this](int channel) {
+        if (live_ && channel >= 0 && channel < live_->channels().size()) controls_[channel].select->setChecked(true);
+    });
     connect(plot_->bridge(), &viewers::LinePlotBridge::legendToggled, this, [this](int channel, bool checked) {
         if (channel >= 0 && channel < controls_.size()) controls_[channel].visible->setChecked(checked);
     });
@@ -481,8 +492,10 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
         controls_[i].visible->setAccessibleName(QStringLiteral("Show channel %1: %2").arg(i+1).arg(title));
         auto checkboxPalette = controls_[i].visible->palette(); checkboxPalette.setColor(QPalette::Highlight, colors[i]);
         controls_[i].visible->setPalette(checkboxPalette);
-        controls_[i].select->setStyleSheet(QStringLiteral("QToolButton { color: %1; } QToolButton:checked { border-color: %1; }").arg(colors[i].name()));
+        controls_[i].select->setStyleSheet(QStringLiteral("QToolButton { color: %1; padding: 4px 3px; } QToolButton:checked { border-color: %1; }").arg(colors[i].name()));
         channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.name").arg(i))->setText(title);
+        auto* scaleLabel = channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.unitsPerDivision").arg(i));
+        auto scalePalette = scaleLabel->palette(); scalePalette.setColor(QPalette::WindowText, colors[i]); scaleLabel->setPalette(scalePalette);
         controls_[i].select->setToolTip(title); controls_[i].select->setAccessibleName(QStringLiteral("Select channel %1: %2").arg(i+1).arg(title));
         if (plot_->series().size() <= i) plot_->addSeries(channel.name, {colors[i]});
         plot_->setLegendEntryVisible(plot_->series()[i], true);
@@ -501,7 +514,26 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
         live_->setTimeSpan(timeScale_->value()*10);
         if (requestedCapacity_) live_->setCapacity(*requestedCapacity_);
         const QSignalBlocker blocker(capacity_); capacity_->setValue(static_cast<int>(live_->capacity())); }
-    cadence_.invalidate(); updateStatus();
+    updateVerticalReadouts(); cadence_.invalidate(); updateStatus();
+}
+void LiveOscilloscopeWindow::updateVerticalReadouts()
+{
+    if (!plot_) return;
+    const int count = live_ ? static_cast<int>(live_->channels().size()) : 0;
+    const int selected = count ? channelPages_->currentIndex() : -1;
+    auto* bridge = plot_->bridge();
+    if (bridge->selectedLegend != selected) { bridge->selectedLegend = selected; emit bridge->legendChanged(); }
+    const double division = (plot_->yMax()-plot_->yMin())/8;
+    for (int i = 0; i < count; ++i) {
+        const auto& channel = live_->channels()[i];
+        const auto unit = channel.unit.isEmpty() ? QStringLiteral("units") : channel.unit;
+        const double scale = division/controls_[i].gain->value();
+        const auto text = QStringLiteral("%1 %2/div").arg(scale, 0, 'g', 5).arg(unit);
+        auto* label = channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.unitsPerDivision").arg(i));
+        label->setText(text);
+        label->setToolTip(QStringLiteral("%1 %2/div. Original signal units per one of eight vertical divisions. Gain and position affect this channel's display only.")
+            .arg(QString::number(scale, 'g', QLocale::FloatingPointShortest), unit));
+    }
 }
 void LiveOscilloscopeWindow::clearSamples()
 {
@@ -567,7 +599,7 @@ void LiveOscilloscopeWindow::render(bool fit)
     const bool triggered = frame.trigger && frame.trigger->triggered;
     if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
     const QString xTitle = triggered ? "Time from sampled trigger (model s)" : "Model time (s)";
-    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Value (supplied units; shared numeric axis)");
+    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Display level (see channel units/div)");
     if (fit && !frame.times.empty()) {
         if (triggered) {
             const auto pre = static_cast<std::size_t>(frame.trigger->settings.pretriggerPercent)*(frame.capacity-1)/100;
@@ -612,7 +644,7 @@ void LiveOscilloscopeWindow::presentTimeResult(const analysis::TimeViewResult& r
     const bool triggered = result.frame->trigger && result.frame->trigger->triggered;
     if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
     const QString xTitle = triggered ? "Time from sampled trigger (model s)" : "Model time (s)";
-    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Value (supplied units; shared numeric axis)");
+    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Display level (see channel units/div)");
     if (result.hasXRange) {
         plot_->setXRange(result.xMin, result.xMax);
     }

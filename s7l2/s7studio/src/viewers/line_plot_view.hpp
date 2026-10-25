@@ -55,6 +55,8 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(bool legendVisible READ legendVisible NOTIFY legendChanged)
     Q_PROPERTY(QVariantList legend READ legend NOTIFY legendChanged)
     Q_PROPERTY(bool timeDivisions MEMBER timeDivisions NOTIFY legendChanged)
+    Q_PROPERTY(int verticalDivisions MEMBER verticalDivisions NOTIFY legendChanged)
+    Q_PROPERTY(int selectedLegend MEMBER selectedLegend NOTIFY legendChanged)
     Q_PROPERTY(bool compactAxes MEMBER compactAxes NOTIFY legendChanged)
     Q_PROPERTY(bool instrumentTheme MEMBER instrumentTheme NOTIFY legendChanged)
     Q_PROPERTY(bool checkableLegend MEMBER checkableLegend NOTIFY legendChanged)
@@ -75,6 +77,7 @@ public:
     bool checkableLegend = false;
     bool instrumentTheme = false;
     bool compactAxes = false, timeDivisions = false;
+    int verticalDivisions = 0, selectedLegend = -1;
     // Time instruments navigate horizontally; XY/other plots retain both axes.
     bool horizontalNavigation = false;
     bool triggerVisible = false;
@@ -96,9 +99,11 @@ public:
     // Moves the view by a fraction of the visible span (positive: right/up).
     Q_INVOKABLE void pan(double dxFraction, double dyFraction);
     Q_INVOKABLE void toggleLegend(int index, bool checked) { emit legendToggled(index, checked); }
+    Q_INVOKABLE void selectLegend(int index) { emit legendSelected(index); }
 
 signals:
     void legendToggled(int index, bool checked);
+    void legendSelected(int index);
     void inspectionChanged();
     void densityChanged();
     void selectionChanged();
