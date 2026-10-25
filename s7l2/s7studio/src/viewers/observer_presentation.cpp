@@ -56,11 +56,21 @@ PreviewData preparePreview(const PreviewRequest& request)
         for (auto channel : selected) if (channel >= 0 && channel < samples.size() && channel < frame->channels.size())
             for (auto i = begin; i < frame->steps.size(); ++i) samples[channel].push_back({static_cast<observation::ChannelId>(channel), frame->steps[i], frame->times[i], frame->values[i*static_cast<std::size_t>(frame->channels.size())+static_cast<std::size_t>(channel)]});
         if (frame->trigger && frame->trigger->triggered) { origin = frame->trigger->time; result.timeAxis = "Time from sampled trigger (s)"; }
+        if (!frame->times.empty()) {
+            const double span = request.live->timeSpan();
+            if (frame->trigger && frame->trigger->triggered) {
+                const auto pre = static_cast<std::size_t>(frame->trigger->settings.pretriggerPercent)*(frame->capacity-1)/100;
+                const double fraction = static_cast<double>(pre)/static_cast<double>(frame->capacity-1);
+                result.timeRange = std::pair{-fraction*span, (1-fraction)*span};
+            } else result.timeRange = std::pair{frame->times.back()-span, frame->times.back()};
+        }
         result.status = QStringLiteral("Recent ≤4096 positions/channel • %1 • gaps %2%3%4").arg(frame->trigger ? (frame->trigger->triggered ? "Triggered" : "Auto timeout: UNTRIGGERED") : "Rolling")
             .arg(frame->gaps).arg(frame->trigger && frame->trigger->partial ? " • PARTIAL" : "").arg(frame->finished ? " • run finished" : "");
         if (!frame->times.empty()) result.status += QStringLiteral(" • model time %1–%2 s (%3 s window)")
             .arg(frame->times[begin], 0, 'g', 10).arg(frame->times.back(), 0, 'g', 10)
             .arg(frame->times.back()-frame->times[begin], 0, 'g', 6);
+        if (result.timeRange && (result.timeRange->first < frame->plottedTime(begin)-1e-12 ||
+            result.timeRange->second > frame->plottedTime(frame->times.size()-1)+1e-12)) result.status += " • partial display history";
         if (!frame->error.isEmpty()) result.status += " • ERROR: " + frame->error;
     } else if (request.source) {
         result.summary = "Recorded";
@@ -176,7 +186,8 @@ bool PreviewWorker::busy() const { std::lock_guard lock(state_->mutex); return s
 ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent) : QWidget(parent), type_(type) {
     setObjectName("observer.presentation"); auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
     if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); root->addWidget(trajectory_); }
-    else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true; root->addWidget(line_);
+    else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true;
+        line_->bridge()->horizontalNavigation = type == "LiveOscilloscope"; root->addWidget(line_);
         connect(line_, &LinePlotView::navigated, this, &ObserverPresentation::navigated); }
 }
 void ObserverPresentation::present(const PreviewData& data) {
@@ -204,6 +215,7 @@ void ObserverPresentation::present(const PreviewData& data) {
     for (; channel < isolated_.size(); ++channel) LinePlotView::setScatterPoints(isolated_[channel], {});
     line_->setAxisTitles(type_ == "PhasePortrait" ? data.axes.value(0) : data.timeAxis, type_ == "PhasePortrait" ? data.axes.value(1) : "Value (supplied units)");
     static_cast<void>(line_->fitAll());
+    if (data.timeRange) line_->setXRange(data.timeRange->first, data.timeRange->second);
 }
 QColor ObserverPresentation::channelColor(const QString& type, int channel) {
     static const QList<QColor> scope{QColor("#1f77b4"), QColor("#d62728"), QColor("#2ca02c"), QColor("#9467bd"), QColor("#ff7f0e"), QColor("#17becf")};

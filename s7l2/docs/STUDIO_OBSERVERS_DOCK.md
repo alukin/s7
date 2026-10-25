@@ -18,12 +18,16 @@ Each selected card has one compact header: its name/collapse arrow, **Freeze**,
 preview** in the menu removes only the preview. **Open** raises the observer's
 independent full viewer. **Freeze** holds that card's displayed data;
 it is independent of full-viewer Freeze and simulation Pause. Navigating a 2D
-preview freezes it. Uncheck Freeze to follow the current data again.
+preview freezes it. Live Oscilloscope previews zoom and pan horizontally,
+leaving their amplitude range unchanged; XY/phase navigation still uses both
+axes. Uncheck Freeze to follow the current data again.
 
 Scope cards show recent time traces, Phase Portrait cards show same-step XY,
 and Phase Trajectory 3D cards show a bounded 3D trajectory. Live Oscilloscope
 cards show the Time presentation and rolling/trigger status. Rolling previews
-use the same model-time display history, independently of the raw sample rate. Detailed analysis,
+use the same model-time display history, independently of the raw sample rate. Live previews keep a model-time window
+instead of fitting a sample-count-dependent width, including sampled trigger
+captures; unavailable portions are marked as partial display history. Detailed analysis,
 recording/comparisons, cursors, export and acquisition controls stay in the full
 viewers. Scope and Live cards offer **Plotted channels…** in their options menu
 for up to eight display channels. This never limits capture. Enable **Details /
@@ -67,10 +71,13 @@ work. Its causal handover and continuity requirements are in OPEN_PROBLEMS.md.
 
 ## Recorded Signals
 
-**Signals…** in the dock toolbar opens the existing named-tap list with source/units,
+**Recorded Signals…** in the dock toolbar opens the named wire-tap list with source/units,
 rename/delete and Open Scope/Open Phase Portrait actions. Wire tap creation,
 recording and saved probe annotations retain their existing behavior. Named
-taps do not become extra diagram observer elements.
+taps do not become extra diagram observer elements. This list does not enumerate
+observer input channels. When no named taps exist, it explains **Add Probe Here**
+and the run-to-record workflow instead of showing an unexplained empty table.
+The table updates after taps are added, renamed or removed and when reopened.
 
 ## Persistence and bounded work
 

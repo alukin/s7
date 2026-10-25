@@ -18,7 +18,7 @@ struct TimeViewSettings {
     double timeSpan = 0;
 };
 struct TimeViewResult {
-    std::shared_ptr<const observation::LiveFrame> frame, rawFrame;
+    std::shared_ptr<const observation::LiveFrame> frame, rawFrame, historyFrame;
     std::array<QList<QPointF>, observation::LiveAcquisition::maxChannels> points;
     QString warning;
     std::uint64_t revision = 0;
@@ -43,7 +43,8 @@ public:
     void submitSource(std::shared_ptr<observation::LiveAcquisition> source, bool triggered,
                       TimeViewSettings settings, std::uint64_t revision);
     void submitFrame(std::shared_ptr<const observation::LiveFrame> frame,
-                     TimeViewSettings settings, std::uint64_t revision);
+                     TimeViewSettings settings, std::uint64_t revision,
+                     std::shared_ptr<const observation::LiveFrame> rawFrame = {});
     std::optional<TimeViewResult> takeResult();
     void cancel();
     bool busy() const;

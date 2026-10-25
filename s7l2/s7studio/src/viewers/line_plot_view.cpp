@@ -114,7 +114,7 @@ void LinePlotBridge::zoom(const double fx, const double fy, const double factor)
     const double anchorX = view_.xMin_ + std::clamp(fx, 0.0, 1.0) * (view_.xMax_ - view_.xMin_);
     const double anchorY = view_.yMin_ + std::clamp(fy, 0.0, 1.0) * (view_.yMax_ - view_.yMin_);
     view_.setXRange(anchorX - (anchorX - view_.xMin_) * factor, anchorX + (view_.xMax_ - anchorX) * factor);
-    view_.setYRange(anchorY - (anchorY - view_.yMin_) * factor, anchorY + (view_.yMax_ - anchorY) * factor);
+    if (!horizontalNavigation) view_.setYRange(anchorY - (anchorY - view_.yMin_) * factor, anchorY + (view_.yMax_ - anchorY) * factor);
 }
 
 void LinePlotBridge::pan(const double dxFraction, const double dyFraction)
@@ -123,7 +123,7 @@ void LinePlotBridge::pan(const double dxFraction, const double dyFraction)
     const double dx = dxFraction * (view_.xMax_ - view_.xMin_);
     const double dy = dyFraction * (view_.yMax_ - view_.yMin_);
     if (dx != 0.0) view_.setXRange(view_.xMin_ + dx, view_.xMax_ + dx);
-    if (dy != 0.0) view_.setYRange(view_.yMin_ + dy, view_.yMax_ + dy);
+    if (!horizontalNavigation && dy != 0.0) view_.setYRange(view_.yMin_ + dy, view_.yMax_ + dy);
 }
 
 LinePlotView::LinePlotView(QWidget* parent)

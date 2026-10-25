@@ -5,6 +5,8 @@
 #include "trajectory_geometry.hpp"
 #include <QWidget>
 #include <functional>
+#include <optional>
+#include <utility>
 class QScatterSeries;
 namespace s7studio::ui { class TrajectoryPlotView; }
 namespace s7studio::viewers {
@@ -22,6 +24,7 @@ struct PreviewData {
     QStringList axes, details;
     QString status, summary;
     QString timeAxis = "Model time (s; recent interval)";
+    std::optional<std::pair<double, double>> timeRange;
     std::uint64_t revision = 0, run = 0;
     std::size_t rawPositions = 0, vertices = 0;
 };

@@ -75,6 +75,8 @@ public:
     bool checkableLegend = false;
     bool instrumentTheme = false;
     bool compactAxes = false, timeDivisions = false;
+    // Time instruments navigate horizontally; XY/other plots retain both axes.
+    bool horizontalNavigation = false;
     bool triggerVisible = false;
     bool cursorVisible = false;
     double cursorX = 0;
@@ -89,7 +91,7 @@ public:
     Q_INVOKABLE void hoverPoint(double xFraction, double yFraction, bool inside);
     Q_INVOKABLE QList<QObject*> seriesObjects() const;
     // fx, fy: the anchor as a fraction of the plot area from its left/bottom
-    // edge; factor < 1 zooms in. Both axes, like the wheel in QCustomPlot.
+    // edge; factor < 1 zooms in. horizontalNavigation preserves the Y range.
     Q_INVOKABLE void zoom(double fx, double fy, double factor);
     // Moves the view by a fraction of the visible span (positive: right/up).
     Q_INVOKABLE void pan(double dxFraction, double dyFraction);

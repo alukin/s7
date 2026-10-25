@@ -355,6 +355,43 @@ outside Git under `build-release/ui-refinement-*` and `/tmp/s7-ui-*`; existing
 menu expectations and model/serialization regressions are updated in the
 repository. Native Windows/physical desktop qualification remains separate.
 
+## Live time/preview correctness refinement — 2026-10-25
+
+The maintainer authorized the five reported time/preview issues. Live Time keeps
+its seconds/division setting across source replacement and dt changes, including
+triggered views; preview bounds also use a model-time interval. Raw acquisition,
+trigger capacities, FFT/correlation retention and simulation stepping are
+unchanged. Partial history is explicit. Magnifying a retained raw interval now
+uses original samples, while the wider overview remains independently available;
+older intervals without fine samples keep the selected display envelope and an
+explicit limitation message. Real gaps are never joined.
+
+The Time knob now has a prominent adjacent exact `s/div` field. Its direction
+matches the local Rigol DS1000Z guide (HORIZONTAL SCALE, page 1-14): clockwise
+reduces the time base. Range updates synchronize dial and readout, and invalid
+signed values cannot silently become valid positive values. Preview navigation
+preserves Y for Live Oscilloscope; XY/phase navigation retains both axes.
+Recorded Signals is explicitly the named wire-tap list, with an actionable
+empty state and unchanged recording/viewer access for configured taps.
+
+Verification: Studio Release rebuild and **10/10** affected module CTest entries
+pass, covering Live acquisition/worker/hover behavior, trigger capture, previews,
+Scope/viewer/lifecycle, FFT, paired analysis and inspection/export. The full
+local GUI label passes **4/4** suites (**66 workflow cases**, no skips), including
+Qt Quick line/3D rendering and artifact self-checks. The first sandboxed GUI
+invocation could not allocate an Xvfb socket; the permitted rerun passes.
+
+Before/after focused checks reproduce and resolve coarse zoom (six line
+intervals despite 50 available raw samples), time-knob direction/readout sync,
+preview Y scaling and the unexplained Signals list. `2int_osc_live` runs for 60
+model seconds at dt=0.01/0.001/0.0001 s with the same 20-second view and three
+rising crossings; a mouse-selected span survives source replacement. Exact
+entry, invalid values, repeated zoom, real wheel dispatch, trigger-mode dt
+changes and named-tap capture/reopening pass. Rendered before/after sine and
+input images were reviewed. New GUI helpers/captures remain local under
+`build-release/scope-fixes-*`; permanent data/worker regressions are in the
+module tests. Native Windows/physical desktop qualification remains separate.
+
 ## Scope and decisions to review
 
 Improve the existing local 0.1.0 workflows: edit, configure, run and observe.

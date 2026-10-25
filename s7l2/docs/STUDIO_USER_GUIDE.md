@@ -116,7 +116,10 @@ until you choose your own selection. Use **Observers…** to change it. An expli
 empty selection is preserved when saving and reopening. Each card can collapse, freeze independently or **Open** its
 full viewer. Selection and collapse state are saved with the diagram. Starting
 a run activates this dock once; choosing another dock during execution is
-respected. **Signals…** retains named tap management and ad-hoc viewers.
+respected. **Recorded Signals…** manages explicitly named wire taps and their ad-hoc
+viewers. It lists those taps, rather than every observer input. An empty list
+explains how to use **Add Probe Here** on a connected wire and run the diagram;
+observer channel bindings remain available in each preview's details.
 See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle and
 bounded-work behavior.
 
@@ -132,6 +135,10 @@ Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
 unchanged.
 
 **Time base** sets model seconds per division across ten horizontal divisions.
+Turn clockwise to zoom in, or edit the adjacent **s/div** field for an exact
+value. The knob, numeric readout and mouse-selected time range stay synchronized;
+the selected scale survives reruns and changes of model `dt`. Live preview wheel
+zoom and drag pan move only the time axis, preserving amplitude and position.
 The default **2 s/div** shows a **20 s** rolling window at every model dt. A
 bounded display history preserves endpoints and channel extrema using at most
 4096 original sample positions. Changing dt therefore changes detail rather than
@@ -140,7 +147,15 @@ older discarded data cannot be recovered, and new coverage fills forward.
 
 **Analysis retention** separately controls full-rate samples for FFT/correlation
 and sampled trigger captures. Its default remains 4096 samples. Triggered Time
-views initially fit the capture; the Time-base knob can zoom that capture.
+views use the same seconds/division setting, independently of capture sample
+count or model `dt`. Partial display history is labelled when available samples
+cover only part of the requested interval. Use Time base to inspect a capture
+more closely.
+
+Zoomed Time views use original raw samples while the visible interval is still
+retained raw. Wider overviews use bounded display samples. If fine raw detail
+has expired, the viewer says so; zooming does not reconstruct missing detail.
+
 **Channels**, **Time base**, **Analysis retention**, **Trigger** and **Window
 inspection** collapse independently. The column scrolls vertically; **Hide
 controls** gives the plot the full width. Hover readouts and acquisition status

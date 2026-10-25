@@ -261,6 +261,7 @@ ProbesPanel::ProbesPanel(QWidget* parent)
     : QWidget(parent)
     , list_(new QTreeWidget(this))
 {
+    list_->setObjectName(QStringLiteral("signals.table"));
     list_->setColumnCount(3);
     list_->setHeaderLabels({QStringLiteral("Probe"), QStringLiteral("Taps"), QStringLiteral("Unit")});
     list_->setRootIsDecorated(false);
@@ -323,14 +324,24 @@ ProbesPanel::ProbesPanel(QWidget* parent)
     auto* content = new QWidget(this);
     auto* layout = new QVBoxLayout(content);
     layout->setContentsMargins(6, 4, 0, 0);
+    empty_ = new QLabel(QStringLiteral("No named signal taps in this diagram.\n\n"
+        "Right-click a connected wire and choose Add Probe Here, then run the diagram to record that signal.\n\n"
+        "Live Oscilloscope channels do not create recordings. Their inputs are listed in the preview's Details / latest values."), content);
+    empty_->setObjectName(QStringLiteral("signals.empty"));
+    empty_->setTextFormat(Qt::PlainText); empty_->setWordWrap(true);
+    empty_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(empty_);
     layout->addWidget(list_, 1);
     withActionBar(this, {}, content);
+    setProbes({});
 }
 
 void ProbesPanel::setProbes(std::vector<ProbeRow> probes)
 {
     probes_ = std::move(probes);
     list_->clear();
+    empty_->setVisible(probes_.empty());
+    list_->setVisible(!probes_.empty());
     for (const auto& probe : probes_) {
         auto* item = new QTreeWidgetItem(list_);
         item->setText(0, probe.name);

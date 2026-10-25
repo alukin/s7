@@ -304,6 +304,37 @@ private slots:
         QVERIFY(source.setTimeSpan(40)); const auto wider = source.timeSnapshot();
         QVERIFY(wider.envelopeGaps); QVERIFY(wider.envelopeInvalid[0]); QVERIFY(wider.envelope(0, 100).empty());
     }
+    void timeWorkerUsesRetainedRawDetailWithoutLosingOverview() {
+        auto source = std::make_shared<LiveAcquisition>(95, .001, QVector<observation::LiveChannel>{{"sine", "V", "f64"}});
+        for (int i = 1; i <= 60000; ++i) { const double value[]{std::sin(i*.1)}; source->append(i, i*.001, value); }
+        source->finish();
+        analysis::TimeViewWorker worker;
+        analysis::TimeViewSettings settings; settings.prepareTime = settings.fitX = true;
+        settings.timeSpan = .05; settings.buckets = 100; settings.visible[0] = true; settings.gain[0] = 1;
+        worker.submitSource(source, false, settings, 1);
+        QTRY_VERIFY(!worker.busy()); auto detail = worker.takeResult(); QVERIFY(detail && detail->frame && detail->historyFrame);
+        QVERIFY(!detail->frame->timeEnvelope); QVERIFY(detail->historyFrame->timeEnvelope);
+        QCOMPARE(detail->xMin, 59.95); QCOMPARE(detail->xMax, 60.);
+        QVERIFY(detail->points[0].size() >= 50); QVERIFY(detail->warning.isEmpty());
+        for (const auto& point : detail->points[0]) QVERIFY(std::abs(point.y()-std::sin(point.x()*100)) < 1e-11);
+        settings.timeSpan = 20;
+        worker.submitFrame(detail->historyFrame, settings, 2, detail->rawFrame);
+        QTRY_VERIFY(!worker.busy()); auto overview = worker.takeResult(); QVERIFY(overview && overview->frame->timeEnvelope);
+        QCOMPARE(overview->xMin, 40.); QCOMPARE(overview->xMax, 60.); QVERIFY(!overview->points[0].empty());
+        settings.fitX = false; settings.lower = 40.; settings.upper = 40.05;
+        worker.submitFrame(detail->historyFrame, settings, 3, detail->rawFrame);
+        QTRY_VERIFY(!worker.busy()); auto expired = worker.takeResult(); QVERIFY(expired && expired->frame->timeEnvelope);
+        QVERIFY(expired->warning.contains("not retained"));
+        // A genuine gap in the retained raw interval must still be reported,
+        // rather than being joined into a plausible continuous waveform.
+        auto broken = std::make_shared<LiveAcquisition>(96, .001, QVector<observation::LiveChannel>{{"sine", "V", "f64"}});
+        for (int i = 1; i <= 1000; ++i) if (i != 980) { const double value[]{std::sin(i*.1)}; broken->append(i, i*.001, value); }
+        settings.fitX = true; settings.timeSpan = .05;
+        worker.submitSource(broken, false, settings, 4);
+        QTRY_VERIFY(!worker.busy()); auto gap = worker.takeResult(); QVERIFY(gap); QVERIFY(gap->points[0].empty());
+        QVERIFY(gap->warning.contains("Discontinuous"));
+        QCOMPARE(source->dt(), .001); QCOMPARE(source->capacity(), std::size_t(4096));
+    }
     void independentChannelControlsKeepAxesAndReadoutStable() {
         auto source = std::make_shared<LiveAcquisition>(20, .001,
             QVector<observation::LiveChannel>{{"live/v", "V", "f64"}, {"live/u", "V", "f64"}});

@@ -77,7 +77,7 @@ private slots:
         QVERIFY(data.rawPositions <= 8192);
         QCOMPARE(data.traces.size(), 2);
         ObserverPresentation presentation("LiveOscilloscope"); presentation.present(data);
-        QVERIFY(presentation.linePlot()->xMin() < 580.1); QVERIFY(presentation.linePlot()->xMax() > 600.);
+        QCOMPARE(presentation.linePlot()->xMin(), 580.); QCOMPARE(presentation.linePlot()->xMax(), 600.);
         for (const auto* series : presentation.linePlot()->series()) {
             QVERIFY(std::abs(series->points().front().x()-580.) < .1); QCOMPARE(series->points().back().x(), 600.);
         }
@@ -91,6 +91,21 @@ private slots:
         const auto result = preparePreview({descriptor, {0,1}, source});
         const auto points = result.traces.front().segments.front(); QCOMPARE(points.size(), 2); QCOMPARE(points.front(), QPointF(3,-3)); QCOMPARE(points.back(), QPointF(4,-4));
         QVERIFY(result.details[0].contains("step 6")); QVERIFY(result.details[1].contains("step 5"));
+    }
+    void triggeredPreviewKeepsModelTimeSpanAcrossRates() {
+        auto descriptor = scope(); descriptor.id = "live"; descriptor.type = "LiveOscilloscope";
+        observation::TriggerSettings trigger; trigger.mode = observation::TriggerMode::Single; trigger.level = .5;
+        for (const int rate : {100, 1000, 10000}) {
+            auto live = std::make_shared<observation::LiveAcquisition>(rate, 1./rate,
+                QVector<observation::LiveChannel>{{"scope/c0", "V", "f64"}});
+            QVERIFY(live->setCapacity(101)); QVERIFY(live->configureTrigger(trigger));
+            for (int i = 1; i <= 1000; ++i) { const double value[]{i < 100 ? 0. : 1.}; live->append(i, double(i)/rate, value); }
+            live->finish();
+            const auto data = preparePreview({descriptor, {0}, {}, live, trigger});
+            QVERIFY(data.timeRange); QCOMPARE(data.timeRange->first, -5.); QCOMPARE(data.timeRange->second, 15.);
+            QVERIFY(data.status.contains("partial display history")); QVERIFY(data.timeAxis.contains("sampled trigger"));
+            QCOMPARE(live->capacity(), std::size_t(101));
+        }
     }
     void sharedSettingsAndIndependentPresentations() {
         ViewerManager manager(ViewerRegistry::instance()); observation::TriggerSettings settings;

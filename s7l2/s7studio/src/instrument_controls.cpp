@@ -107,6 +107,7 @@ class ExactNumber : public QDoubleSpinBox {
         summary_->setVisible(!hasFocus() && !lineEdit()->hasFocus());
     }
 public:
+    void refreshReadout() { updateSummary(); }
     explicit ExactNumber(QWidget* parent) : QDoubleSpinBox(parent) {
         setLocale(QLocale::c()); setDecimals(323); setKeyboardTracking(false);
         setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
@@ -114,7 +115,7 @@ public:
         setAlignment(Qt::AlignRight);
         // The compact face is presentation only. The editor and spinbox retain
         // all digits, so merely focusing or leaving it never rounds the value.
-        summary_ = new QLabel(lineEdit()); summary_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        summary_ = new QLabel(lineEdit()); summary_->setObjectName(QStringLiteral("control.numberReadout")); summary_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         summary_->setAutoFillBackground(true); summary_->setBackgroundRole(QPalette::Base);
         summary_->setForegroundRole(QPalette::Text); summary_->setAttribute(Qt::WA_TransparentForMouseEvents);
         connect(this, &QDoubleSpinBox::valueChanged, this, [this] { updateSummary(); });
@@ -133,6 +134,11 @@ protected:
         QDoubleValidator validator(minimum(), maximum(), 323);
         validator.setLocale(QLocale::c()); validator.setNotation(QDoubleValidator::ScientificNotation);
         auto number = numericText(text);
+        // Keep an out-of-range signed value editable until commit. Rejecting
+        // '-' immediately would turn a typed '-1' into the valid positive '1'.
+        if (number == "-" || number == "+") return QValidator::Intermediate;
+        bool parsed = false; const auto value = number.toDouble(&parsed);
+        if (parsed && (!std::isfinite(value) || value < minimum() || value > maximum())) return QValidator::Intermediate;
         int cursor = std::clamp(position, 0, static_cast<int>(number.size()));
         return validator.validate(number, cursor);
     }
@@ -219,17 +225,22 @@ RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWi
     dial_->setWrapping(mapping == Mapping::RelativeOffset);
     dial_->setRange(0, mapping == Mapping::LogGain ? 1200 : mapping == Mapping::LogTime ? 1800 : 999); dial_->setFixedSize(80, 80);
     dial_->setSingleStep(1); dial_->setPageStep(10);
-    dial_->setAccessibleName(title->text()); layout->addWidget(dial_, 0, Qt::AlignHCenter);
+    dial_->setAccessibleName(title->text());
     number_ = new ExactNumber(this); number_->setObjectName(name); number_->setAccessibleName(title->text() + " exact value");
     number_->setRange(mapping == Mapping::LogTime ? 1e-12 : mapping == Mapping::LogGain ? 1e-6 : -1e12, mapping != Mapping::RelativeOffset ? 1e6 : 1e12);
-    number_->setValue(mapping == Mapping::LogGain ? 1 : mapping == Mapping::LogTime ? 2 : 0); layout->addWidget(number_, 0, Qt::AlignHCenter);
+    number_->setValue(mapping == Mapping::LogGain ? 1 : mapping == Mapping::LogTime ? 2 : 0);
+    if (mapping == Mapping::LogTime) {
+        number_->setSuffix(QStringLiteral(" s/div"));
+        number_->setFixedWidth(number_->width()+number_->fontMetrics().horizontalAdvance(number_->suffix()));
+        auto* row = new QHBoxLayout; row->addWidget(dial_); row->addWidget(number_); row->addStretch(); layout->addLayout(row);
+    } else { layout->addWidget(dial_, 0, Qt::AlignHCenter); layout->addWidget(number_, 0, Qt::AlignHCenter); }
     if (mapping == Mapping::RelativeOffset) {
         dial_->setToolTip("Turn to move this channel vertically. One turn moves half the visible plot height. Numeric entry sets an exact offset.");
         const QSignalBlocker block(dial_); dial_->setValue(previousPosition_);
     } else dial_->setToolTip(mapping == Mapping::LogTime ? "Model seconds per division, ten divisions across the screen. Does not change simulation dt." : "Display multiplier for this channel. Numeric entry sets an exact gain.");
     connect(number_, &QDoubleSpinBox::valueChanged, this, [this] { updateDial(); });
     const auto applyPosition = [this](int position) {
-        if (mapping_ != Mapping::RelativeOffset) number_->setValue(std::pow(10., (mapping_ == Mapping::LogTime ? -12. : -6.) + position/100.));
+        if (mapping_ != Mapping::RelativeOffset) number_->setValue(std::pow(10., mapping_ == Mapping::LogTime ? 6.-position/100. : -6.+position/100.));
         else {
             int delta = position-previousPosition_;
             if (delta > 500) delta -= 1000;
@@ -243,6 +254,12 @@ RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWi
     connect(dial_, &QDial::actionTriggered, this, [this, applyPosition](int) { applyPosition(dial_->sliderPosition()); });
     updateDial();
 }
+void RotaryValueControl::setValueSilently(double value)
+{
+    const QSignalBlocker block(number_);
+    number_->setValue(value); updateDial();
+    static_cast<ExactNumber*>(number_)->refreshReadout();
+}
 void RotaryValueControl::setOffsetStep(double step)
 {
     if (mapping_ != Mapping::RelativeOffset || !std::isfinite(step) || step <= 0) return;
@@ -252,6 +269,6 @@ void RotaryValueControl::updateDial()
 {
     const QSignalBlocker block(dial_);
     number_->setToolTip(QString::number(number_->value(), 'g', QLocale::FloatingPointShortest));
-    if (mapping_ != Mapping::RelativeOffset) dial_->setValue(qRound((std::log10(number_->value())+(mapping_ == Mapping::LogTime ? 12. : 6.))*100.));
+    if (mapping_ != Mapping::RelativeOffset) dial_->setValue(qRound((mapping_ == Mapping::LogTime ? 6.-std::log10(number_->value()) : std::log10(number_->value())+6.)*100.));
 }
 }

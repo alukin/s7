@@ -137,6 +137,7 @@ Q_SIGNALS:
 private:
     QTreeWidget* list_;
     std::vector<ProbeRow> probes_;
+    QLabel* empty_;
 };
 
 } // namespace s7studio::ui

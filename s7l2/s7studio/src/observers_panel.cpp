@@ -90,8 +90,8 @@ ObserversPanel::ObserversPanel(ViewerManager* manager, QWidget* parent) : QWidge
     auto* toolbar = new QHBoxLayout; toolbar->setSpacing(4);
     auto* choose = new QPushButton("Observers…", this); choose->setObjectName("observers.choose");
     choose->setToolTip("Choose which observers to preview"); toolbar->addWidget(choose, 1);
-    auto* recordedButton = new QPushButton("Signals…", this); recordedButton->setObjectName("observers.recordedSignals");
-    recordedButton->setToolTip("Open recorded signals"); toolbar->addWidget(recordedButton); root->addLayout(toolbar);
+    auto* recordedButton = new QPushButton("Recorded Signals…", this); recordedButton->setObjectName("observers.recordedSignals");
+    recordedButton->setToolTip("Manage named wire taps recorded by the diagram. Live observer inputs are shown in each preview's channel details."); toolbar->addWidget(recordedButton); root->addLayout(toolbar);
     root_ = new CompactLabel(this); root_->setObjectName("observers.root"); root->addWidget(root_);
     state_ = new CompactLabel(this); state_->setObjectName("observers.state"); root->addWidget(state_);
     empty_ = label(this); empty_->setObjectName("observers.empty"); root->addWidget(empty_);

@@ -233,7 +233,7 @@ Rectangle {
         color: "#707070"
     }
 
-    // Wheel: zoom both axes about the cursor. Drag: pan.
+    // Owners choose horizontal-only or two-axis navigation in the bridge.
     WheelHandler {
         target: null
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad

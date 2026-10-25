@@ -62,13 +62,18 @@ move with the active tab while retaining their settings. Hide controls and
 Resume / Fit apply to the active plot. Technical analysis status remains in
 its tooltip and pinned-window metadata.
 
-The Time-base knob uses model seconds/division and a ten-division grid. Rolling
-Time defaults to 2 s/div independently of model dt. A separate 4096-position
+The Time-base knob and adjacent exact `s/div` editor use model seconds/division
+and a ten-division grid. Clockwise reduces seconds/division. Mouse navigation
+updates both the numeric value and dial, including its compact readout. Time
+defaults to 2 s/div independently of model dt, for rolling and triggered views;
+reruns preserve the selected time scale rather than deriving it from retention. A separate 4096-position
 history selects original endpoints and channel extrema in bounded causal buckets;
 changing this display span does not change full-rate analysis samples or the
 simulation. Existing retained history is merged when widening. Missing history
-fills forward. Sampled triggers keep their full-rate capture and can be zoomed
-with the same knob. Pinned Time-envelope statistics and exports explicitly
+fills forward. Zoomed intervals use retained original raw samples when available,
+while preserving the wider overview separately. Expired raw detail is reported
+rather than reconstructed. Sampled triggers keep their full-rate capture and can
+be zoomed with the same knob; partial display history is labelled. Pinned Time-envelope statistics and exports explicitly
 identify the selection instead of claiming full-rate measurements.
 
 Pre-trigger slider and percentage field share the same integer value. Rising
@@ -101,7 +106,9 @@ Controls module or external UI code is added.
 ## Next session: Rigol-inspired live oscilloscope UI
 
 Recorded on 2026-10-25 at the maintainer's request. This is a deferred design
-backlog, not implemented behavior or a release assignment. The maintainer asked
+backlog, not an implementation of the broader design or a release assignment.
+The five time/preview findings below were subsequently authorized and implemented.
+The maintainer originally asked
 to finish and commit the model-time scale and automatic-preview work before
 starting another live oscilloscope UI pass.
 
@@ -162,11 +169,40 @@ overview as a later increment. Review the current implementation before replacin
 controls: selected-channel gain/position, colored visibility checkboxes, a
 model-time seconds/division knob and collapsible sections already exist.
 
-### Reported bugs and required control addition — next coding session
+### Reported time/preview defects — implemented refinement, 2026-10-25
 
-Maintainer report (2026-10-25): address these during oscilloscope interface
-optimization. These observations have not yet been reproduced or root-caused;
-the exact diagram, old/new `dt` values and scale settings were not supplied.
+The maintainer authorized items 1–5 together, subsequently identifying
+`2int_osc_live` as the reported example. The exact original old/new dt pair was
+not supplied. The original reports and acceptance requirements follow below;
+the implementation resolves the confirmed paths and verifies the example at
+0.01, 0.001 and 0.0001 s.
+
+- Source attachment no longer resets a mouse-selected time scale. Triggered
+  displays no longer derive the viewport width from sample count times dt;
+  full viewers and previews keep explicit model-time spans. Missing portions
+  of a requested interval are labelled as partial display history.
+- A magnified sine previously used just six line intervals despite 50 raw
+  samples still being retained. Time preparation now uses those originals
+  whenever they cover the visible data, and keeps the wider display history
+  available for zooming out. Genuine gaps/nonfinite data remain explicit;
+  expired fine detail is reported instead of invented.
+- The existing numeric editor is now beside the Time knob with `s/div` units.
+  Silent range updates refresh dial and compact readout together. Clockwise
+  zooms in; exact entry is not quantized through the dial. Invalid signed or
+  out-of-range input retains the previous committed value.
+- Live preview wheel zoom and drag pan preserve Y; phase plots retain two-axis
+  navigation. Full Live Time navigation follows the same horizontal rule.
+- Recorded Signals is explicitly named and documents its named-tap scope.
+  Empty diagrams get instructions, and configured/captured named taps remain
+  visible through run completion and reopening.
+
+Verification: 10 affected module entries and all four GUI suites pass, with 66
+workflow cases and no skips. Local rendered checks show a smooth zoomed sine
+and a fully visible numeric field beside the knob. The complete recorded
+increment and limits are in [the release plan](RELEASE_0.1.1.md).
+
+The broader proposed Rigol control redesign above remains a separate backlog.
+The following numbered observations are retained as the original requirements.
 
 1. **Visible time span changes unexpectedly after changing model `dt`.** On
    initially running a diagram, the sine trace shows about three periods; after
@@ -218,7 +254,7 @@ adjustment descriptions. Use it to guide the interaction contract. Verify with
 a known-frequency sine at several model `dt` values, the initial run and reruns,
 and repeated zoom-in/zoom-out through both knob and numeric entry. Record the
 reproduction settings and add focused regressions for confirmed causes. These
-are deferred UI fixes; model-time display controls must not alter simulation
+are presentation fixes; model-time display controls must not alter simulation
 `dt` or runtime execution semantics.
 
 ### Constraints and acceptance for the next pass

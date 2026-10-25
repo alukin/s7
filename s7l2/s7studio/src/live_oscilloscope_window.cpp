@@ -211,6 +211,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     plot_->setAxisTitles("Model time (s)", "Value (supplied units; shared numeric axis)"); plot_->setLegendVisible(true);
     plot_->bridge()->checkableLegend = true;
     plot_->bridge()->instrumentTheme = true; plot_->bridge()->timeDivisions = true;
+    plot_->bridge()->horizontalNavigation = true;
     connect(plot_->bridge(), &viewers::LinePlotBridge::legendToggled, this, [this](int channel, bool checked) {
         if (channel >= 0 && channel < controls_.size()) controls_[channel].visible->setChecked(checked);
     });
@@ -326,15 +327,19 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     });
     connect(autoY_, &QCheckBox::toggled, this, [this] { render(false); });
     connect(timeScale_, &QDoubleSpinBox::valueChanged, this, [this] {
-        timeScaleEdited_ = true; inspection_->clear();
         if (live_ && !live_->setTimeSpan(timeScale_->value()*10)) {
+            static_cast<RotaryValueControl*>(timeScale_->parentWidget())->setValueSilently(effectiveTimeScale_);
             settingsError_ = "Time scale cannot be represented at this model dt."; updateStatus(); return;
         }
+        effectiveTimeScale_ = timeScale_->value(); inspection_->clear();
         settingsError_.clear(); render(true); cadence_.invalidate();
     });
     connect(plot_, &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
     connect(plot_, &viewers::LinePlotView::xRangeChanged, this, [this](double lower, double upper) {
-        if (!rendering_ && upper > lower) { const QSignalBlocker block(timeScale_); timeScale_->setValue((upper-lower)/10); }
+        if (!rendering_ && upper > lower) {
+            static_cast<RotaryValueControl*>(timeScale_->parentWidget())->setValueSilently((upper-lower)/10);
+            effectiveTimeScale_ = timeScale_->value();
+        }
         render(false);
     });
     connect(plot_, &viewers::LinePlotView::hovered, this, [this](double time, bool active) { inspect(time, active); });
@@ -493,7 +498,6 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
             requestedTrigger_.channel = static_cast<std::size_t>(triggerChannel_->currentIndex());
         }
         if (!triggerController_) live_->configureTrigger(requestedTrigger_);
-        if (!timeScaleEdited_) { const QSignalBlocker block(timeScale_); timeScale_->setValue(live_->timeSpan()/10); }
         live_->setTimeSpan(timeScale_->value()*10);
         if (requestedCapacity_) live_->setCapacity(*requestedCapacity_);
         const QSignalBlocker blocker(capacity_); capacity_->setValue(static_cast<int>(live_->capacity())); }
@@ -521,7 +525,7 @@ bool LiveOscilloscopeWindow::refreshSource()
             if (result->frame && !(result->preparedTime && !plot_->isVisible())) {
                 frame_ = result->frame;
                 if (result->rawFrame) rawFrame_ = result->rawFrame;
-                if (result->preparedTime) timeFrame_ = frame_;
+                if (result->preparedTime) timeFrame_ = result->historyFrame ? result->historyFrame : frame_;
                 traceWarning_ = result->warning;
                 if (result->preparedTime && plot_->isVisible()) presentTimeResult(*result);
                 else if (spectrum_->isVisible()) spectrum_->setFrame(frame_);
@@ -558,6 +562,7 @@ void LiveOscilloscopeWindow::render(bool fit)
 {
     if (rendering_) return;
     rendering_ = true;
+    const auto history = timeFrame_ ? timeFrame_ : frame_;
     const auto& frame = *frame_;
     const bool triggered = frame.trigger && frame.trigger->triggered;
     if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
@@ -576,7 +581,7 @@ void LiveOscilloscopeWindow::render(bool fit)
     rendering_ = false;
     if (!frame.steps.empty() && plot_->isVisible()) {
         ++timeRequestRevision_; requestedCaptureId_ = 0;
-        timeWorker_.submitFrame(frame_, timeViewSettings(true, false), timeRequestRevision_);
+        timeWorker_.submitFrame(history, timeViewSettings(true, false), timeRequestRevision_, rawFrame_);
     } else {
         for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});
         traceWarning_.clear(); updateStatus();
@@ -589,8 +594,7 @@ analysis::TimeViewSettings LiveOscilloscopeWindow::timeViewSettings(bool prepare
     settings.buckets = static_cast<std::size_t>(std::max(64, plot_->width()));
     settings.lower = fit ? -std::numeric_limits<double>::infinity() : plot_->xMin();
     settings.upper = fit ? std::numeric_limits<double>::infinity() : plot_->xMax();
-    settings.timeSpan = !timeScaleEdited_ && requestedTrigger_.mode != observation::TriggerMode::Rolling && live_ ?
-        static_cast<double>(live_->capacity()-1)*live_->dt() : timeScale_->value()*10;
+    settings.timeSpan = timeScale_->value()*10;
     settings.prepareTime = prepare; settings.autoY = autoY_->isChecked(); settings.fitX = fit;
     for (qsizetype i = 0; i < controls_.size(); ++i) {
         const auto channel = static_cast<std::size_t>(i);
@@ -611,7 +615,6 @@ void LiveOscilloscopeWindow::presentTimeResult(const analysis::TimeViewResult& r
     if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Value (supplied units; shared numeric axis)");
     if (result.hasXRange) {
         plot_->setXRange(result.xMin, result.xMax);
-        if (triggered && !timeScaleEdited_) { const QSignalBlocker block(timeScale_); timeScale_->setValue((result.xMax-result.xMin)/10); }
     }
     for (qsizetype i = 0; i < plot_->series().size(); ++i)
         viewers::LinePlotView::setPoints(plot_->series()[i], static_cast<std::size_t>(i) < result.points.size() ? result.points[static_cast<std::size_t>(i)] : QList<QPointF>{});
@@ -738,10 +741,16 @@ void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
     triggerStatus_->setText(triggerError_.isEmpty() ? triggerText : triggerError_+" • "+triggerText);
     const auto acquisitionStatus = live_->status();
     const auto& frame = *frame_;
-    if (!frame.times.empty()) timeRange_->setText(QStringLiteral("Model time %1–%2 s  •  displayed span %3 s%4")
+    if (!frame.times.empty()) {
+        const double tolerance = std::max(1e-12, std::abs(frame.times.back())*1e-12);
+        const bool partialHistory = plot_->xMin() < frame.plottedTime(0)-tolerance || plot_->xMax() > frame.plottedTime(frame.times.size()-1)+tolerance;
+        timeRange_->setText(QStringLiteral("Model time %1–%2 s  •  displayed span %3 s%4%5")
         .arg(frame.times.front(), 0, 'g', 10).arg(frame.times.back(), 0, 'g', 10)
         .arg(plot_->xMax()-plot_->xMin(), 0, 'g', 6)
-        .arg(frame.trigger && frame.trigger->triggered ? "  •  axis relative to sampled trigger" : "  •  rolling retained window"));
+        .arg(frame.trigger && frame.trigger->triggered ? "  •  axis relative to sampled trigger" : "  •  rolling retained window")
+        .arg(partialHistory ? "  •  partial history" : ""));
+        timeRange_->setToolTip(partialHistory ? "Available samples cover only part of the displayed interval. Time scale does not change acquisition capacity or simulation dt." : QString());
+    }
     else timeRange_->setText("Waiting for model-time samples");
     const QString timeWork = plot_->isVisible() && timeWorker_.busy() ? " • Preparing latest Time frame" : QString();
     status_->setToolTip(QStringLiteral("Run %1 • %2 • %3 • %4/%5 samples/channel • received %6 • evicted %7 • gaps %8%9%10")

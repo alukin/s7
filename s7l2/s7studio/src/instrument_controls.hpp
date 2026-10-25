@@ -59,6 +59,8 @@ public:
     enum class Mapping { LogGain, RelativeOffset, LogTime };
     RotaryValueControl(Mapping mapping, const QString& name, QWidget* parent = nullptr);
     QDoubleSpinBox* number() const { return number_; }
+    // Model/view updates must synchronize the dial without emitting an edit.
+    void setValueSilently(double value);
     void setOffsetStep(double step);
 private:
     void updateDial();
