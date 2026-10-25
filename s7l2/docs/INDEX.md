@@ -26,6 +26,11 @@ records the documentation sources, supported JSON keys and information access.
 The [instrument controls design](STUDIO_INSTRUMENT_CONTROLS.md) records real
 hardware/software references, channel selection, precise value semantics,
 inspection sliders and progress presentation.
+Its [next-session Rigol UI backlog](STUDIO_INSTRUMENT_CONTROLS.md#next-session-rigol-inspired-live-oscilloscope-ui)
+records the deferred control grouping, units/division, knob behavior, graph
+markers and overview proposals, with implementation constraints and acceptance.
+It also tracks the reported `dt`-dependent visible-period change, broken sine
+traces during time scaling, and required numeric entry beside the time knob.
 The [Observers dock guide](STUDIO_OBSERVERS_DOCK.md) describes reusable
 presentations, selection, run bindings, saved metadata and bounded preview work.
 Implemented menu, shortcut, toolbar, font, palette, element-information, library

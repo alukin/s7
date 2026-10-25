@@ -621,6 +621,110 @@ collection-stage discussion below is historical.
   and a scan of every bundled diagram's text-frame sizes. Diagram text continues
   to scale with diagram zoom.
 
+### ST-011 — Show the diagram name in the editing tab
+
+- **Requested:** 2026-10-25. Display the current diagram's name instead of the
+  generic `Diagram` editing-tab title. Recorded for a future coding session;
+  not implemented or assigned to a release here.
+- **Evidence:** `MainWindowBuilder::buildCentralWidgets` creates the root tab
+  with the literal `Diagram`. Diagram JSON already contains `schema.name` and
+  a top-level `id`; for example, `examples/2int_osc.s7diagram` currently has
+  `untitled` for both, whereas the pendulum examples have meaningful names.
+- **Metadata finding:** `DiagramDocument` has no dedicated diagram-level
+  name/description fields. The existing name is `schema.name`. There is no
+  dedicated diagram-description field or editor in the current document model;
+  element-library descriptions are separate. An extra field in JSON is not by
+  itself a supported, editable diagram description.
+- **Confirmed requirement (maintainer, 2026-10-25):** add an optional top-level
+  `description` string to diagram JSON, owned by `DiagramDocument`, for the
+  diagram's human-readable purpose and notes. Keep it separate from runtime
+  schema semantics and element descriptions. Missing descriptions mean empty
+  text; reject a present non-string value explicitly. Preserve the description
+  through load, scene edits, save, Save As and reopen, including multiline and
+  Unicode text. Add focused serialization/persistence coverage when implementing
+  it. This is recorded for the next coding session, not implemented yet.
+- **Proposed acceptance:** use the meaningful `schema.name` for the root tab,
+  with the file basename as a proposed fallback for an empty or `untitled`
+  name, and `Untitled` for an unnamed unsaved document. Refresh on open,
+  new/close, Save As and any future metadata rename; preserve nested-schema
+  tab navigation. Check long names and existing documents with placeholder names.
+  Use the confirmed top-level `description` field for diagram-description
+  persistence; plan its editing UI alongside diagram naming.
+
+### ST-012 — Mouse-grab warnings when launching Studio from a terminal
+
+- **Reported:** 2026-10-25. Running `s7studio` from a terminal prints
+  `This plugin supports grabbing the mouse only for popup windows` twice.
+  The exact launch command, build and interaction timing are not yet recorded;
+  no accompanying interaction failure was reported.
+- **Source evidence:** the exact message is present in the installed
+  `/usr/lib64/libQt6WaylandClient.so.6`; this workspace's desktop environment
+  reports a Wayland session. No explicit `grabMouse`, `releaseMouse` or
+  `setMouseGrabEnabled` calls were found in Studio or the vendored UI sources.
+  The originating widget/call stack and the reason for two messages remain
+  unconfirmed; this has not been independently reproduced.
+- **Next-session investigation:** reproduce startup under Wayland, trace both
+  warning call stacks and identify the widget or restored UI state requesting
+  the grab. Check menus/popups, diagram dragging and instrument controls for
+  actual pointer-capture failures. Address the cause in project-owned code
+  where applicable; do not globally suppress Qt warnings or patch vendored code.
+- **Acceptance:** normal startup is free of these warnings and popup dismissal,
+  focus and mouse interactions remain correct. Compare Wayland and X11 behavior
+  when validating the eventual fix. Deferred finding; no fix implemented here.
+
+### ST-013 — Promote Tool Windows to a top-level Tools menu
+
+- **Requested:** 2026-10-25. Replace the **View → Tool Windows** submenu with
+  a top-level **Tools** menu containing the existing tool-window actions.
+  Recorded for the next coding session; not implemented yet.
+- **Scope:** improve access to the existing engineering tools. Preserve each
+  action's behavior, visibility/check state and shortcuts; keep view/layout
+  commands in **View**. Update menu documentation and affected GUI checks when
+  implementing the move.
+- **Acceptance:** tools are directly discoverable under **Tools**, without the
+  extra **View → Tool Windows** navigation. Every moved action opens or toggles
+  the same window as before and accurately reflects its visibility.
+
+### ST-014 — Keep font selection visible during text editing
+
+- **Requested:** 2026-10-25. The control panel's font selector must be visible
+  while editing a text frame or other editable diagram text. Recorded for the
+  next coding session; not implemented yet.
+- **Expected behavior:** expose the applicable font controls for the active
+  text-editing context, keep them synchronized with that text's formatting,
+  and apply changes to the intended text. Using the selector must preserve the
+  editing context and text selection. Review existing font-family/size controls
+  and their visibility/focus handling before changing the UI.
+- **Acceptance:** enter text editing, use the visible font controls, and verify
+  the intended text changes with undo/redo and save/reopen support. Cover text
+  frames and other currently supported editable diagram text; do not introduce
+  new text-editing capabilities implicitly. This request does not establish
+  whether the selector should be hidden outside text editing.
+
+### ST-015 — Edit the element name in Properties; show type and source library
+
+- **Requested:** 2026-10-25. The element Properties dialog must clearly show
+  the element's type, its name in the diagram and the library it comes from,
+  and allow editing that name. Recorded for the next coding session; not
+  implemented yet.
+- **Expected behavior:** present separately labeled **Name**, **Type** and
+  **Library** fields, with Name editable and Type/Library clearly readable.
+  Resolve the source library from existing catalog/registration provenance;
+  distinguish built-in, plugin and schema-library origins and explicitly show
+  unavailable provenance rather than guessing from the type name.
+  The name shown in Properties must agree with the element's diagram label.
+  Inspect the existing
+  distinction between display title and internal element ID before implementing
+  the change; editing a display name must not accidentally change identity or
+  break wires, observer bindings or nested-schema references. If changing the
+  internal ID is required, update and validate all references atomically.
+- **Acceptance:** rename through Properties and verify the diagram label,
+  reopening Properties, undo/redo, cancellation and save/reopen. Keep type
+  and source library visible for built-in, plugin and schema-backed elements,
+  and verify that the library matches the element's actual origin. Define
+  validation according to whether the edited name is a display title or an identifier;
+  do not silently conflate them.
+
 ## Explicitly assigned to 0.2.0
 
 - **Networking and remote node administration:** ST-009 Trusted Networks,

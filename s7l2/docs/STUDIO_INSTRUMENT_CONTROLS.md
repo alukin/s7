@@ -98,6 +98,147 @@ All widgets are project-owned Qt Widgets compositions. Numerical analysis,
 runtime scheduling and the headless build remain independent. No Qt Quick
 Controls module or external UI code is added.
 
+## Next session: Rigol-inspired live oscilloscope UI
+
+Recorded on 2026-10-25 at the maintainer's request. This is a deferred design
+backlog, not implemented behavior or a release assignment. The maintainer asked
+to finish and commit the model-time scale and automatic-preview work before
+starting another live oscilloscope UI pass.
+
+**Engineering-tool priority (maintainer, 2026-10-25):** Live Oscilloscope is
+the primary engineering tool; Scope is the next priority. Both must receive
+thorough correctness and usability refinement. Treat reliable traces, accurate
+time/value presentation and predictable controls as essential acceptance
+criteria. Apply the interface-quality review to Scope as well as Live
+Oscilloscope; a polished live viewer alone does not complete this work.
+
+The maintainer's instrument is a **Rigol DS1054Z**. Its
+[DS1000Z user guide](https://www.rigol.com/dam/global/downloads/brochures/en/user-manual/oscillosopes/DS1000Z_UserGuide_EN.pdf)
+documents shared selected-channel controls, separate scale and position,
+coarse/fine adjustment, and delayed sweep. The hardware photo and downloaded
+manuals are in the local-only `pic/` directory; keep that directory out of Git.
+The accompanying UNI-T UTG932E inspires the separate
+[0.2.0 software signal-generator plan](RELEASE_0.2.0.md#software-signal-generator-element).
+
+### Proposed priorities
+
+1. **Compact Vertical, Horizontal and Trigger groups.** Keep common adjustments
+   visible and put acquisition details in expandable settings. Preserve the
+   dominant graph area and consistent layouts across Time, Spectrum, XY and
+   Correlation. These group names primarily describe the Time view.
+2. **One shared pair of channel knobs.** Build on the existing selected-channel
+   controls: select through the colored legend/channel control and adjust that
+   channel's scale and position. Keep visibility and selection distinguishable,
+   and preserve independent settings for every channel. Reuse channel colors in
+   the controls, trace, scale readout and zero marker.
+3. **Vertical scale in units/division.** Prefer a meaningful graticule readout
+   such as `200 mV/div` or `0.5 units/div` for a signal without declared units.
+   Define how independent channel scales map onto the shared plot and how the
+   selected channel's axis is presented, including channels with different units.
+   Display transformations must preserve original values for hover, cursors,
+   measurements, exports and trigger thresholds.
+4. **Familiar knob behavior.** Offer 1–2–5 scale steps with optional fine
+   adjustment and exact numeric entry. Clockwise should zoom in, reducing
+   seconds/division or signal units/division. Review the current time knob's
+   direction. Use larger scale knobs, smaller position knobs, and a clear
+   reset-to-zero action for position, proposed as double-click. Retain keyboard,
+   wheel and accessibility support and five-significant-digit inactive readouts.
+5. **Draggable graph markers.** Add colored channel zero-level arrows, a
+   trigger-level marker and a trigger-time marker. Make their relationship to
+   display position and raw trigger values explicit. Changing one channel's
+   position must leave the other channels fixed.
+6. **Stable instrument readouts.** Show time/division, channel scales, trigger
+   state and live/frozen state in compact fixed positions. Keep hover values to
+   five significant digits, status near the bottom, and detailed diagnostics
+   expandable. Pointer movement must not resize the plot or move other text.
+   Keep viewer freeze distinct from simulation pause/stop.
+7. **Optional overview and zoom region.** Consider an overview of retained
+   history with a movable highlighted interval for the main plot. Preserve
+   follow-latest and explicit manual navigation. Show only history actually
+   retained; a 600-second run does not imply 600 seconds remain available.
+
+Start with grouping, selected-channel controls and units/division. Treat the
+overview as a later increment. Review the current implementation before replacing
+controls: selected-channel gain/position, colored visibility checkboxes, a
+model-time seconds/division knob and collapsible sections already exist.
+
+### Reported bugs and required control addition — next coding session
+
+Maintainer report (2026-10-25): address these during oscilloscope interface
+optimization. These observations have not yet been reproduced or root-caused;
+the exact diagram, old/new `dt` values and scale settings were not supplied.
+
+1. **Visible time span changes unexpectedly after changing model `dt`.** On
+   initially running a diagram, the sine trace shows about three periods; after
+   changing `dt`, only about one period is visible. Reproduce the initial run
+   and the run after the change, and inspect time-axis mapping, initial scale,
+   retained history and acquisition/display sampling. For an unchanged signal
+   frequency and seconds/division, the same model-time span must show the same
+   number of periods once sufficient history is available. Make initial and
+   rerun behavior consistent and any genuinely unavailable history explicit.
+2. **Time-scale adjustment breaks the sine trace into line fragments.** Turning
+   the time-scaling knob produces broken lines instead of the expected sine
+   waveform. Reproduce while running and with frozen/finished data; investigate
+   rendering, display-envelope selection and continuity handling across scale
+   changes. A continuous source with sufficient samples must remain continuous
+   at supported scales. Preserve explicit gaps when source data is truly missing.
+3. **Add exact numeric entry beside the time-scaling knob.** Provide an editable
+   numeric field like the other knobs, with explicit time units and
+   seconds/division semantics. Keep knob, field and plot synchronized in both
+   directions; validate positive finite values within the supported range and
+   retain keyboard and wheel operation.
+
+4. **Preview mouse scaling changes both time and amplitude.** Additional
+   maintainer report (2026-10-25): mouse scaling in the full Live Oscilloscope
+   correctly changes the time scale, but the embedded preview changes both
+   time and amplitude scales. For the same mouse gesture, the preview must
+   match the full viewer's horizontal-only scaling and preserve channel
+   amplitude scales and vertical positions. Reproduce in both presentations
+   using the same signal and gesture; check that any existing explicit vertical
+   adjustment remains independent. The precise gesture/modifiers and underlying
+   handler are not yet confirmed. This is a distinct preview interaction defect,
+   not evidence that the full viewer's mouse time scaling is broken, and does
+   not close the separately reported broken-trace or `dt` issues.
+
+5. **Preview Signals button opens an empty table.** Additional maintainer
+   report (2026-10-25): clicking **Signals** in the preview panel opens a window
+   whose signals table is empty. Reproduce with a bound observer showing signal
+   data. The dock's documented **Signals…** action opens the recorded named-tap
+   list; inspect that data path and clarify its relationship to observer input
+   channels before changing behavior. Available recorded signals must appear;
+   when none exist, explain the empty state and how to record them. Verify
+   whether the report concerns this dock action or another preview control.
+   The affected observer type, run state and root cause have not yet been
+   confirmed. Check before/during/after a run and after reopening the preview;
+   keep this finding open until reproduced and resolved.
+
+Read the local `pic/Rigol_DS1000Z_UserGuide_EN.pdf` before implementing these
+controls, particularly its horizontal time-base scale/position and coarse/fine
+adjustment descriptions. Use it to guide the interaction contract. Verify with
+a known-frequency sine at several model `dt` values, the initial run and reruns,
+and repeated zoom-in/zoom-out through both knob and numeric entry. Record the
+reproduction settings and add focused regressions for confirmed causes. These
+are deferred UI fixes; model-time display controls must not alter simulation
+`dt` or runtime execution semantics.
+
+### Constraints and acceptance for the next pass
+
+- Keep scale and position changes local to observation presentation. Changing
+  time/division must not change model `dt`, causal execution, source sampling,
+  raw analysis retention or trigger-capture semantics. Preserve the distinction
+  between full-rate samples and selected display-envelope samples.
+- Keep Qt work inside Studio and project-owned controls; do not modify vendored
+  UI sources. Hardware-specific probe controls and hardware Run/Stop semantics
+  are not implied by this design.
+- Check multiple channels and units, independent scaling/position, coarse/fine
+  and exact entry, reset behavior, live/frozen/finished runs, raw-value readouts
+  and trigger markers. Use the symplectic oscillator example for visual tests;
+  integrator research remains separate.
+- Inspect narrow windows and multiple display scales for plot space, clipped
+  controls, stable hover/status geometry and readable five-digit values. Verify
+  several visible periods at different model `dt` values. Explain any additional
+  problems found to the maintainer before expanding the proposed fixes.
+
 ## Verification
 
 The integrated Release suite passed 82/82 with 56 GUI workflow cases. After

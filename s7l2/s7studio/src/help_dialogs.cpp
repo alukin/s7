@@ -189,7 +189,10 @@ void showAbout(QWidget* parent)
     credits->setHtml(QStringLiteral(
         "<h2>Author and maintainer</h2><p>Oleksiy Lukin</p>"
         "<h2>Contributors</h2><p>teren-ukr and S7 contributors.</p>"
-        "<h2>Acknowledgements</h2><p>Developed with help from Claude, GitHub Copilot and Codex.</p>"
+        "<h2>Acknowledgements</h2>"
+        "<p>In memory of Serhiy Kondratiuk, my friend and collaborator on the first S7 implementation "
+        "30 years ago, whose ideas continue to guide its development.</p>"
+        "<p>Developed with help from Claude, GitHub Copilot and Codex.</p>"
         "<p>Thanks to the Qt, QSchematic, GPDS and Tabler Icons projects and the other libraries used by S7.</p>"
         "<p><a href='https://github.com/alukin/s7'>Project and issue tracker</a></p>"));
     credits->setOpenExternalLinks(true);
