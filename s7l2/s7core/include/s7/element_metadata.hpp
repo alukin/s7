@@ -88,6 +88,7 @@ struct ElementMetadata {
     VisualHints visual;                     // For diagram rendering
     VariadicInputSpec variadic_inputs;      // If element supports variadic inputs
     std::optional<boost::json::value> schema_definition; // Schema-backed element payload, if any
+    std::string library;                    // Owning module or schema library; empty: unavailable
 };
 
 } // namespace s7

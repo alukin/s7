@@ -43,7 +43,11 @@ dropping outside the canvas changes nothing. Each insertion is one undo step.
 
 Select a canvas element and press **F4**
 or **Enter** to edit its properties. Typed fields check values; the advanced
-JSON editor is available for structured parameters.
+JSON editor is available for structured parameters. **Name** edits the diagram
+label while preserving the internal ID, wiring and observation connections.
+**Type**, **Library** and **Internal ID** are displayed separately. Library
+identifies the registered module, loaded plugin or schema library; unavailable
+provenance is stated explicitly.
 
 Right-click an element in the library and choose **Element Information…** for
 its full description, ports, timing notes and JSON parameter reference. Keyboard
@@ -64,10 +68,19 @@ memory. Check the Problems tool window for errors before running.
 or replacing it; the Save/Discard/Cancel prompt protects unsaved changes.
 **View → Fit Diagram to Window** fits the contents; **View → Fit Page** fits
 the sheet. **Diagram → Page** sets the active diagram's paper size and
-orientation. Drawing and text-frame commands are also under **Diagram**.
+orientation. **Diagram → Diagram Properties…** edits the root diagram name and
+multiline description. The editing tab shows the name, falling back to the file
+basename for an empty or `untitled` name, or **Untitled** for an unnamed document.
+Name and description edits support undo/redo and save/reopen.
+Drawing and text-frame commands are also under **Diagram**.
 Text frames default to **10 pt**; the toolbar and **Diagram → Text Frame →
-Font and Size…** allow **1–72 pt**, including sizes below 10. Bundled examples
-use at least 10 pt. Text scales normally with diagram zoom.
+Font and Size…** allow **1–72 pt**, including sizes below 10, and preserve larger
+imported sizes. Bundled examples
+use at least 10 pt. Selecting a text frame reveals the drawing toolbar and its
+font controls. Double-click a frame (or select it and press F4) to edit its text
+with font and size controls in the same dialog. Font changes preserve the text
+selection and apply to the whole frame. Text and formatting changes support
+undo/redo. Text scales normally with diagram zoom.
 With the root or nested diagram focused, **Ctrl++** or **Ctrl+=** zooms in
 and **Ctrl+-** zooms out. Shifted Plus and keypad Plus are supported.
 **Ctrl+mouse wheel** also zooms. These shortcuts leave focused text fields
@@ -97,7 +110,7 @@ continues. See [Live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) for
 examples, retention behavior and current limits. Run Configuration lists live and
 full-recording channel counts; live-only acquisition does not accumulate disk data.
 
-**View → Tool Windows → Observers** (**Alt+3**) opens compact previews for root
+**Tools → Observers** (**Alt+3**) opens compact previews for root
 observer instances. The first three observer IDs are selected automatically
 until you choose your own selection. Use **Observers…** to change it. An explicit
 empty selection is preserved when saving and reopening. Each card can collapse, freeze independently or **Open** its

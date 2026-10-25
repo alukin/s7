@@ -78,6 +78,8 @@ private slots:
     void onRunCompleted(bool success, const QString& error);
     void onTickProgress(long completed, long total);
     void onElementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
+    void showElementProperties(const QString& elementId);
+    void editDiagramProperties();
     void onScopeSamplesAvailable();
     void onProbesChanged();
     void onProbeOpenScopeRequested(const QString& probeName);
@@ -124,6 +126,7 @@ private:
     void buildUi();
     bool confirmDocumentReplacement();
     void markDocumentSaved();
+    void refreshDocumentTitle();
     [[nodiscard]] diagram::DiagramEditor* activeDiagramEditor() const;
     void buildActions();
     void refreshRecentDiagrams();
@@ -196,6 +199,8 @@ protected:
 
 private:
     boost::json::value runtimeSchema_;
+    QString diagramDescription_;
+    QString documentSourceLabel_;
     boost::json::value savedDocument_;
     bool hasSavedDocument_ = false;
     std::uint64_t runGeneration_ = 0;

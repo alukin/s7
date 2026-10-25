@@ -69,6 +69,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QUndoStack>
+#include <QUndoCommand>
 #include <QMessageBox>
 #include <QFontComboBox>
 #include <QFont>
@@ -212,20 +213,35 @@ auto schemaDisplayName(const boost::json::value& schemaJson, const QString& fall
     return fallback;
 }
 
-auto elementLibraryForType(const QString& type) -> QString
+auto elementLibraryForType(const QString& type, const s7::PluginLoader* loader) -> QString
 {
+    if (loader) for (const auto& plugin : loader->loaded_plugin_info()) {
+        if (std::ranges::find(plugin.elements, type.toStdString()) != plugin.elements.end())
+            return QStringLiteral("%1 (plugin)").arg(QString::fromStdString(plugin.name));
+    }
+    if (const auto* viewer = viewers::ViewerRegistry::instance().find(type)) {
+        if (viewer->documentation && !viewer->documentation->library.empty())
+            return QString::fromStdString(viewer->documentation->library);
+    }
     if (const auto* descriptor = s7::ElementRegistry::instance().find(type.toStdString())) {
         const auto& metadata = descriptor->metadata();
-        if (metadata.schema_definition.has_value()) {
-            return QStringLiteral("schema library: %1").arg(QString::fromStdString(metadata.category));
+        if (!metadata.library.empty()) {
+            const auto name = QString::fromStdString(metadata.library);
+            return metadata.schema_definition ? QStringLiteral("%1 (schema library)").arg(name) : name;
         }
-        if (!metadata.category.empty()) {
-            return QStringLiteral("registry category: %1").arg(QString::fromStdString(metadata.category));
-        }
-        return QStringLiteral("registry");
     }
-    return QStringLiteral("s7core (.so at runtime link: libs7core)");
+    return QStringLiteral("Unavailable (source library not registered)");
 }
+
+class DiagramMetadataCommand final : public QUndoCommand {
+public:
+    explicit DiagramMetadataCommand(std::function<void(bool)> apply)
+        : QUndoCommand(QStringLiteral("Edit diagram properties")), apply_(std::move(apply)) {}
+    void redo() override { apply_(false); }
+    void undo() override { apply_(true); }
+private:
+    std::function<void(bool)> apply_;
+};
 
 auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
 {
@@ -265,7 +281,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
 
     buildActions();
     buildUi();
-    setWindowTitle(QStringLiteral("s7studio - untitled[*]"));
+    refreshDocumentTitle();
 
     connectRunnerSignals();
     if (diagramEditor_) {
@@ -587,6 +603,8 @@ void MainWindow::buildUi()
     diagramDrawToolBar_->addAction(fillColorAction_);
     diagramDrawToolBar_->addSeparator();
     textFrameFontCombo_ = new QFontComboBox(diagramDrawToolBar_);
+    textFrameFontCombo_->setObjectName(QStringLiteral("frame.toolbarFontFamily"));
+    textFrameFontCombo_->setAccessibleName(QStringLiteral("Text frame font"));
     textFrameFontCombo_->setMinimumContentsLength(10);
     diagramDrawToolBar_->addWidget(textFrameFontCombo_);
     textFrameFontSizeSpin_ = new QSpinBox(diagramDrawToolBar_);
@@ -613,6 +631,10 @@ void MainWindow::buildUi()
     menus.run->addAction(overlayScopeTracesAction_);
 
     auto* diagramMenu = menus.diagram;
+    auto* diagramProperties = diagramMenu->addAction(QStringLiteral("Diagram Properties…"));
+    diagramProperties->setObjectName(QStringLiteral("action.diagramProperties"));
+    connect(diagramProperties, &QAction::triggered, this, &MainWindow::editDiagramProperties);
+    diagramMenu->addSeparator();
     diagramMenu->addAction(modeNormalAction_);
     diagramMenu->addAction(modeWireAction_);
     diagramMenu->addSeparator();
@@ -660,12 +682,15 @@ void MainWindow::buildUi()
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
     connect(diagramEditor_, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
+    connect(diagramEditor_, &diagram::DiagramEditor::elementPropertiesRequested, this, &MainWindow::showElementProperties);
     schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
     connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
     connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
         editor->addActions(editorShortcuts_);
         connect(editor, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
         connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
+        connect(editor,&diagram::DiagramEditor::elementPropertiesRequested,this,&MainWindow::showElementProperties);
+        connect(editor->scene(),&diagram::DiagramScene::diagramChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QGraphicsScene::selectionChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QSchematic::Scene::modeChanged,this,[this,editor](int mode) {
             if (activeDiagramEditor()==editor && modeWireAction_) {
@@ -745,7 +770,7 @@ void MainWindow::buildUi()
     menus.nodes->insertAction(deployAction_, headlessNodes);
     menus.nodes->insertSeparator(deployAction_);
     viewMenu->addSeparator();
-    viewMenu->addMenu(toolWindows_->menu());
+    menuBar()->insertMenu(menus.settings->menuAction(), toolWindows_->menu());
     viewMenu->addAction(toolWindows_->hideAllAction());
     auto* appearance = viewMenu->addMenu(QStringLiteral("&Appearance"));
     appearance->addAction(toolWindows_->stripesAction());
@@ -1013,19 +1038,52 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
             if (QString::fromStdString(frame->id()) != elementId) {
                 continue;
             }
+            scene->clearSelection();
+            frame->setSelected(true);
+            syncTextFrameStyleControls();
             auto params = frame->params();
-            bool accepted = false;
-            const QString editedText = QInputDialog::getMultiLineText(
-                this,
-                QStringLiteral("Edit Text Frame"),
-                QStringLiteral("Text"),
-                QString::fromStdString(json_utils::stringValue(params, "text", "")),
-                &accepted);
-            if (!accepted) {
-                return;
-            }
-            params["text"] = editedText.toStdString();
-            frame->setParams(params);
+            QDialog dialog(this);
+            dialog.setObjectName(QStringLiteral("dialog.textFrame"));
+            dialog.setWindowTitle(QStringLiteral("Edit Text Frame"));
+            dialog.resize(580, 360);
+            auto* layout = new QVBoxLayout(&dialog);
+            auto* formatting = new QFormLayout;
+            auto* family = new QFontComboBox(&dialog);
+            family->setObjectName(QStringLiteral("frame.editorFontFamily"));
+            family->setCurrentFont(QFont(QString::fromStdString(json_utils::stringValue(params, "font_family", "Sans Serif"))));
+            const auto initialFamily = family->currentFont().family();
+            auto* size = new QSpinBox(&dialog);
+            size->setObjectName(QStringLiteral("frame.editorFontSize"));
+            const auto initialSize = json_utils::intValue(params, "font_size", diagram::TextFrameNode::kDefaultFontPoints);
+            size->setRange(diagram::TextFrameNode::kMinimumFontPoints, std::max(72, initialSize));
+            size->setValue(initialSize);
+            size->setSuffix(QStringLiteral(" pt"));
+            formatting->addRow(QStringLiteral("Font"), family);
+            formatting->addRow(QStringLiteral("Size"), size);
+            layout->addLayout(formatting);
+            auto* text = new QPlainTextEdit(QString::fromStdString(json_utils::stringValue(params, "text", "")), &dialog);
+            text->setObjectName(QStringLiteral("frame.text"));
+            text->setAccessibleName(QStringLiteral("Text frame content"));
+            layout->addWidget(text, 1);
+            const auto previewFont = [text, family, size] {
+                const auto cursor = text->textCursor();
+                auto font = family->currentFont(); font.setPointSize(size->value());
+                text->setFont(font);
+                text->setTextCursor(cursor);
+            };
+            connect(family, &QFontComboBox::currentFontChanged, &dialog, previewFont);
+            connect(size, qOverload<int>(&QSpinBox::valueChanged), &dialog, previewFont);
+            previewFont();
+            auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+            connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+            connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+            layout->addWidget(buttons);
+            text->setFocus();
+            if (dialog.exec() != QDialog::Accepted) return;
+            params["text"] = text->toPlainText().toStdString();
+            if (family->currentFont().family() != initialFamily) params["font_family"] = family->currentFont().family().toStdString();
+            if (size->value() != initialSize) params["font_size"] = size->value();
+            scene->changeTextFrame(frame, std::move(params));
             appendLog(QStringLiteral("[studio] updated text frame: %1").arg(elementId));
             syncTextFrameStyleControls();
             return;
@@ -1057,21 +1115,47 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
         return;
     }
 
+    showElementProperties(elementId);
+}
+
+void MainWindow::showElementProperties(const QString& elementId)
+{
+    auto* scene = activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr;
+    const auto elementNode = scene ? scene->elementNode(elementId.toStdString()) : nullptr;
+    if (!elementNode) return;
+    const auto elementType = QString::fromStdString(elementNode->element().type);
+    const auto* descriptor = s7::ElementRegistry::instance().find(elementType.toStdString());
+    const auto* viewer = viewers::ViewerRegistry::instance().find(elementType);
+    const auto metadata = descriptor ? std::optional{s7::ElementMetadata(descriptor->metadata())}
+        : viewer ? viewer->documentation : std::nullopt;
+
     QDialog dialog(this);
     dialog.setObjectName(QStringLiteral("dialog.elementProperties"));
     dialog.setWindowTitle(QStringLiteral("Element Properties - %1").arg(elementId));
     dialog.resize(720, 680);
     auto* layout = new QVBoxLayout(&dialog);
+    auto* identityForm = new QFormLayout;
+    auto* nameEdit = new QLineEdit(elementNode->title(), &dialog);
+    nameEdit->setObjectName(QStringLiteral("element.name"));
+    nameEdit->setToolTip(QStringLiteral("Display name in this diagram. The internal element ID stays unchanged."));
+    identityForm->addRow(QStringLiteral("Name"), nameEdit);
+    const auto addIdentity = [&](const char* label, const QString& value, const char* objectName) {
+        auto* field = new QLabel(value, &dialog);
+        field->setObjectName(QString::fromLatin1(objectName));
+        field->setTextFormat(Qt::PlainText); field->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        field->setWordWrap(true); identityForm->addRow(QString::fromLatin1(label), field);
+    };
+    addIdentity("Type", elementType, "element.type");
+    addIdentity("Library", elementLibraryForType(elementType, pluginLoader_.get()), "element.library");
+    addIdentity("Internal ID", elementId, "element.id");
+    layout->addLayout(identityForm);
     auto* splitter = new QSplitter(Qt::Vertical, &dialog);
     splitter->setObjectName(QStringLiteral("element.propertiesSplitter"));
     auto* documentation = new QWidget(splitter);
     auto* documentationLayout = new QVBoxLayout(documentation);
     documentationLayout->setContentsMargins(0, 0, 0, 0);
-    auto* identity = new QLabel(QStringLiteral("%1 — %2").arg(elementId, elementType), documentation);
-    identity->setTextFormat(Qt::PlainText); identity->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    documentationLayout->addWidget(identity);
     documentationLayout->addWidget(ui::createElementDocumentation(
-        ui::elementDocumentation(s7::ElementRegistry::instance(), elementType), documentation), 1);
+        ui::elementDocumentation(s7::ElementRegistry::instance(), elementType, elementNode->element().schema), documentation), 1);
     splitter->addWidget(documentation);
     auto* settings = new QWidget(splitter);
     auto* settingsLayout = new QVBoxLayout(settings);
@@ -1084,8 +1168,6 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     detailsButton->setArrowType(Qt::RightArrow);
     auto* details = new QWidget(&dialog); auto* form = new QFormLayout(details);
     form->setRowWrapPolicy(QFormLayout::WrapLongRows);
-    auto* library = new QLabel(elementLibraryForType(elementType), details); library->setWordWrap(true);
-    form->addRow(QStringLiteral("Library"), library);
     const QString currentPlacement = QString::fromStdString(elementNode->element().placement);
     auto* nodeCombo = new QComboBox(details);
     nodeCombo->addItem(QStringLiteral("(not placed)"), QString());
@@ -1105,7 +1187,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     connect(detailsButton, &QToolButton::toggled, details, &QWidget::setVisible);
     connect(detailsButton, &QToolButton::toggled, &dialog, [detailsButton](bool checked) { detailsButton->setArrowType(checked ? Qt::DownArrow : Qt::RightArrow); });
     settingsLayout->addWidget(detailsButton); settingsLayout->addWidget(details);
-    auto* editor = new ui::ParameterEditor(descriptor ? std::optional{s7::ElementMetadata(descriptor->metadata())} : std::nullopt,
+    auto* editor = new ui::ParameterEditor(metadata,
                                            elementNode->element().params, &dialog);
     settingsLayout->addWidget(editor, 1);
     splitter->addWidget(settings);
@@ -1116,6 +1198,9 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     boost::json::object params;
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (nameEdit->text().trimmed().isEmpty()) {
+            editor->showError(QStringLiteral("Name must not be empty.")); nameEdit->setFocus(); return;
+        }
         QString error;
         if (!editor->readParameters(params, error)) { editor->showError(error); return; }
         dialog.accept();
@@ -1124,6 +1209,8 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
     layout->addWidget(buttons);
     if (dialog.exec() == QDialog::Accepted) {
         auto element = elementNode->element(); element.params = std::move(params);
+        const auto name = nameEdit->text().trimmed();
+        if (name != elementNode->title()) element.title = name;
         element.placement = nodeCombo->currentData().toString().toStdString();
         scene->changeElement(elementNode, std::move(element));
         refreshPlacementLabels();
@@ -1309,6 +1396,7 @@ void MainWindow::connectSceneSignals()
             Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::onProbesChanged, Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::diagramChanged, this, &MainWindow::refreshObserversPanel, Qt::UniqueConnection);
+    connect(scene, &diagram::DiagramScene::diagramChanged, this, &MainWindow::syncTextFrameStyleControls, Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::refreshObserversPanel, Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::observersPanelChanged, this, &MainWindow::refreshObserversPanel, Qt::UniqueConnection);
     // Undo/redo of a stored preset updates the open window.
@@ -1527,7 +1615,7 @@ void MainWindow::setSelectedTextFrameTextColor()
     }
 
     params["text_color"] = selected.name(QColor::HexRgb).toStdString();
-    frame->setParams(params);
+    activeDiagramEditor()->scene()->changeTextFrame(frame, std::move(params));
     syncTextFrameStyleControls();
 }
 
@@ -1545,7 +1633,8 @@ void MainWindow::chooseTextFrameFont()
     family->setCurrentFont(QFont(QString::fromStdString(json_utils::stringValue(frame->params(), "font_family", "Sans Serif"))));
     auto* size = new QSpinBox(&dialog);
     size->setObjectName(QStringLiteral("frame.fontSize"));
-    size->setRange(diagram::TextFrameNode::kMinimumFontPoints, 72); size->setValue(json_utils::intValue(frame->params(), "font_size", diagram::TextFrameNode::kDefaultFontPoints));
+    const auto currentSize = json_utils::intValue(frame->params(), "font_size", diagram::TextFrameNode::kDefaultFontPoints);
+    size->setRange(diagram::TextFrameNode::kMinimumFontPoints, std::max(72, currentSize)); size->setValue(currentSize);
     form->addRow(QStringLiteral("Font family"), family);
     form->addRow(QStringLiteral("Size (points)"), size);
     layout->addLayout(form);
@@ -1557,7 +1646,7 @@ void MainWindow::chooseTextFrameFont()
     auto params = frame->params();
     params["font_family"] = family->currentFont().family().toStdString();
     params["font_size"] = size->value();
-    frame->setParams(params);
+    activeDiagramEditor()->scene()->changeTextFrame(frame, std::move(params));
     syncTextFrameStyleControls();
 }
 
@@ -1576,7 +1665,7 @@ void MainWindow::setSelectedTextFrameLineColor()
     }
 
     params["line_color"] = selected.name(QColor::HexRgb).toStdString();
-    frame->setParams(params);
+    activeDiagramEditor()->scene()->changeTextFrame(frame, std::move(params));
     syncTextFrameStyleControls();
 }
 
@@ -1595,7 +1684,7 @@ void MainWindow::setSelectedTextFrameFillColor()
     }
 
     params["fill_color"] = selected.name(QColor::HexRgb).toStdString();
-    frame->setParams(params);
+    activeDiagramEditor()->scene()->changeTextFrame(frame, std::move(params));
     syncTextFrameStyleControls();
 }
 
@@ -1607,7 +1696,7 @@ void MainWindow::setSelectedTextFrameFont(const QFont& font)
     }
     auto params = frame->params();
     params["font_family"] = font.family().toStdString();
-    frame->setParams(params);
+    activeDiagramEditor()->scene()->changeTextFrame(frame, std::move(params));
 }
 
 void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
@@ -1618,13 +1707,14 @@ void MainWindow::setSelectedTextFrameFontSize(const int pointSize)
     }
     auto params = frame->params();
     params["font_size"] = std::max(diagram::TextFrameNode::kMinimumFontPoints, pointSize);
-    frame->setParams(params);
+    activeDiagramEditor()->scene()->changeTextFrame(frame, std::move(params));
 }
 
 void MainWindow::syncTextFrameStyleControls()
 {
     const auto frame = selectedTextFrame(activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr);
     const bool enabled = static_cast<bool>(frame);
+    if (enabled && diagramDrawToolBar_) diagramDrawToolBar_->show();
 
     if (textFrameFontAction_) textFrameFontAction_->setEnabled(enabled);
     if (textColorAction_) textColorAction_->setEnabled(enabled);
@@ -1644,7 +1734,9 @@ void MainWindow::syncTextFrameStyleControls()
     }
     if (textFrameFontSizeSpin_) {
         const QSignalBlocker blocker(textFrameFontSizeSpin_);
-        textFrameFontSizeSpin_->setValue(std::max(diagram::TextFrameNode::kMinimumFontPoints, json_utils::intValue(params, "font_size", diagram::TextFrameNode::kDefaultFontPoints)));
+        const auto points = std::max(diagram::TextFrameNode::kMinimumFontPoints, json_utils::intValue(params, "font_size", diagram::TextFrameNode::kDefaultFontPoints));
+        textFrameFontSizeSpin_->setMaximum(std::max(72, points));
+        textFrameFontSizeSpin_->setValue(points);
     }
 }
 
@@ -1745,6 +1837,68 @@ void MainWindow::clearViewerSamples()
 bool MainWindow::documentModified() const
 {
     return hasSavedDocument_ && currentDocument() != savedDocument_;
+}
+
+void MainWindow::refreshDocumentTitle()
+{
+    auto name = schemaDisplayName(runtimeSchema_, {}).trimmed();
+    if (name.isEmpty() || name.compare(QStringLiteral("untitled"), Qt::CaseInsensitive) == 0) {
+        name = QFileInfo(documentSourceLabel_).completeBaseName();
+        if (name.isEmpty()) name = QStringLiteral("Untitled");
+    }
+    setWindowTitle(QStringLiteral("s7studio - %1[*]").arg(name));
+    if (diagramEditor_) if (auto* tabs = findChild<QTabWidget*>(QStringLiteral("diagram.tabs"))) {
+        const int index = tabs->indexOf(diagramEditor_);
+        tabs->setTabText(index, name);
+        tabs->setTabToolTip(index, name);
+    }
+}
+
+void MainWindow::editDiagramProperties()
+{
+    QDialog dialog(this);
+    dialog.setObjectName(QStringLiteral("dialog.diagramProperties"));
+    dialog.setWindowTitle(QStringLiteral("Diagram Properties"));
+    dialog.resize(540, 340);
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* form = new QFormLayout;
+    const auto oldName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+    auto* name = new QLineEdit(oldName, &dialog);
+    name->setObjectName(QStringLiteral("diagram.name"));
+    form->addRow(QStringLiteral("Name"), name);
+    layout->addLayout(form);
+    auto* label = new QLabel(QStringLiteral("Description"), &dialog);
+    auto* description = new QPlainTextEdit(diagramDescription_, &dialog);
+    description->setObjectName(QStringLiteral("diagram.description"));
+    label->setBuddy(description);
+    layout->addWidget(label); layout->addWidget(description, 1);
+    auto* error = new QLabel(&dialog); error->setTextFormat(Qt::PlainText);
+    layout->addWidget(error);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (name->text().trimmed().isEmpty()) {
+            error->setText(QStringLiteral("Name must not be empty.")); name->setFocus(); return;
+        }
+        dialog.accept();
+    });
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() != QDialog::Accepted) return;
+    const auto newName = name->text().trimmed();
+    const auto oldDescription = diagramDescription_, newDescription = description->toPlainText();
+    if (newName == oldName && newDescription == oldDescription) return;
+    // Root-document metadata belongs to the root undo history, even when the
+    // command was invoked while inspecting a nested schema. Keep its tabs open.
+    if (auto* tabs = findChild<QTabWidget*>(QStringLiteral("diagram.tabs"))) tabs->setCurrentWidget(diagramEditor_);
+    diagramEditor_->scene()->undoStack()->push(new DiagramMetadataCommand(
+        [this, oldName, newName, oldDescription, newDescription](bool revert) {
+            if (!runtimeSchema_.is_object()) runtimeSchema_ = boost::json::object{};
+            runtimeSchema_.as_object()["name"] = (revert ? oldName : newName).toStdString();
+            diagramDescription_ = revert ? oldDescription : newDescription;
+            refreshDocumentTitle();
+            refreshObserversPanel();
+            setWindowModified(documentModified());
+        }));
 }
 
 void MainWindow::markDocumentSaved()
@@ -2020,6 +2174,8 @@ bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
     clearViewerSamples();
 
     runtimeSchema_ = schemaJson;
+    diagramDescription_.clear();
+    documentSourceLabel_ = sourceLabel;
     runtimeSeconds_ = 60;
     clearScopesBeforeRun_ = true;
     if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(false);
@@ -2038,7 +2194,7 @@ bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
     const auto name = schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded schema: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded schema: %1").arg(name), 5000);
-    setWindowTitle(QString("s7studio - %1[*]").arg(name));
+    refreshDocumentTitle();
     markDocumentSaved();
     return true;
 }
@@ -2071,6 +2227,8 @@ bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     updateProgress(0);
 
     runtimeSchema_ = document.runtimeSchema;
+    diagramDescription_ = document.description;
+    documentSourceLabel_ = sourceLabel;
     deploymentRuntimeNodes_ = document.runtimeNodes;
     deploymentStreams_ = document.streams;
 
@@ -2099,7 +2257,7 @@ bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
     appendLog(QString("[studio] loaded diagram: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded diagram: %1").arg(name), 5000);
-    setWindowTitle(QString("s7studio - %1[*]").arg(name));
+    refreshDocumentTitle();
     updateProgress(100);
     loading.close();
     markDocumentSaved();
@@ -2204,6 +2362,8 @@ void MainWindow::closeCurrentDiagram()
         {"connections", boost::json::array{}}
     };
     currentDiagramPath_.clear();
+    documentSourceLabel_.clear();
+    diagramDescription_.clear();
     runtimeSeconds_ = 60;
     clearScopesBeforeRun_ = true;
     if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(false);
@@ -2218,7 +2378,7 @@ void MainWindow::closeCurrentDiagram()
     }
 
     markDocumentSaved();
-    setWindowTitle(QStringLiteral("s7studio - untitled[*]"));
+    refreshDocumentTitle();
     appendLog(QStringLiteral("[studio] closed diagram"));
     statusBar()->showMessage(QStringLiteral("Diagram closed"), 4000);
     onStatusChanged(QStringLiteral("idle"));
@@ -2580,6 +2740,8 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
     runtimeSchema_ = document.runtimeSchema;
     markDocumentSaved();
     currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
+    documentSourceLabel_ = QFileInfo(filePath).fileName();
+    refreshDocumentTitle();
     rememberRecentDiagram(filePath);
     appendLog(QString("[studio] saved diagram: %1").arg(QFileInfo(filePath).fileName()));
     statusBar()->showMessage(QString("Saved diagram: %1").arg(QFileInfo(filePath).fileName()), 5000);
@@ -2603,6 +2765,7 @@ auto MainWindow::serializeScene() const -> diagram::DiagramDocument
     options.sheetWidthMm = pageLayout.widthMm;
     options.sheetHeightMm = pageLayout.heightMm;
     auto document = diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
+    document.description = diagramDescription_;
     document.runConfiguration = {{"runtime_seconds", runtimeSeconds_}, {"clear_scope_traces", clearScopesBeforeRun_}};
     // The plugins the elements come from, so a runtime (or Studio) can find them.
     auto& schema = document.runtimeSchema.as_object();

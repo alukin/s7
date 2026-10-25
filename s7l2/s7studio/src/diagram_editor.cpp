@@ -209,7 +209,11 @@ void DiagramEditor::pasteSelection() {
 void DiagramEditor::selectAll() { _scene->selectAll(); }
 void DiagramEditor::editSelectedElement() {
     for (const auto& node : _scene->elementNodes()) if (node->isSelected()) {
-        Q_EMIT elementNodeDoubleClicked(QString::fromStdString(node->id()), QString::fromStdString(node->element().type), static_cast<int>(node->inputs().size()));
+        Q_EMIT elementPropertiesRequested(QString::fromStdString(node->id()));
+        return;
+    }
+    for (const auto& frame : _scene->textFrames()) if (frame->isSelected()) {
+        Q_EMIT elementNodeDoubleClicked(QString::fromStdString(frame->id()), QStringLiteral("TextFrame"), 1);
         return;
     }
 }

@@ -193,11 +193,13 @@ ElementMetadataLibrary::ElementMetadataLibrary(std::string_view json)
 {
     const auto document = boost::json::parse(json);
     const auto& source = as_object(document, "document");
-    keys(source, {"document_kind", "format_version", "elements"}, "document");
+    keys(source, {"document_kind", "format_version", "library", "elements"}, "document");
     if (string(source, "document_kind", "document") != "s7.element_metadata" || count(source, "format_version", "document") != 1)
         invalid("document", "unsupported document kind or format version");
+    const auto library = source.contains("library") ? string(source, "library", "document") : std::string{};
     for (const auto& field : array(source, "elements", "document")) {
         auto metadata = decode(as_object(field, "element"));
+        metadata.library = library;
         const auto name = metadata.type_name;
         if (name.empty() || !elements_.emplace(name, std::move(metadata)).second) invalid("document", "empty or duplicate type '" + name + "'");
     }

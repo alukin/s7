@@ -1,6 +1,7 @@
 {
   "document_kind": "s7.element_metadata",
   "format_version": 1,
+  "library": "s7io",
   "elements": [
     {
       "type_name": "RecordedSource",

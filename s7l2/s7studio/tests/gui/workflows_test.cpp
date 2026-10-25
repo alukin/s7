@@ -1787,7 +1787,7 @@ private slots:
             QVERIFY(entry->menu()); names.append(entry->menu()->objectName());
         }
         QCOMPARE(names, QStringList({"menu.file", "menu.edit", "menu.view", "menu.diagram",
-                                    "menu.run", "menu.nodes", "menu.settings", "menu.help"}));
+                                    "menu.run", "menu.nodes", "menu.tools", "menu.settings", "menu.help"}));
         auto* view = window_->findChild<QMenu*>("menu.view");
         auto* diagram = window_->findChild<QMenu*>("menu.diagram");
         auto* run = window_->findChild<QMenu*>("menu.run");

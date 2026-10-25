@@ -709,6 +709,7 @@ int main() try
 
         const auto& metadata = descriptor->metadata();
         assert(metadata.schema_definition.has_value());
+        assert(metadata.library == library.name);
         assert(metadata.input_ports.size() == 1);
         assert(metadata.output_ports.size() == 1);
 

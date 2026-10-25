@@ -40,6 +40,11 @@ struct DiagramChange {
         ElementNode::Element before;
         ElementNode::Element after;
     };
+    struct TextFrameEdit {
+        std::shared_ptr<TextFrameNode> node;
+        boost::json::object before;
+        boost::json::object after;
+    };
 
     std::vector<std::shared_ptr<QSchematic::Items::Node>> addedNodes;
     std::vector<std::shared_ptr<QSchematic::Items::Node>> removedNodes;
@@ -48,6 +53,7 @@ struct DiagramChange {
     std::vector<Rehang> rehung;
     std::vector<Bends> bends;
     std::vector<ElementEdit> elements;
+    std::vector<TextFrameEdit> textFrames;
     std::optional<std::pair<std::vector<DiagramProbe>, std::vector<DiagramProbe>>> probes;
     std::optional<std::pair<boost::json::array, boost::json::array>> observersPanel;
 
@@ -105,6 +111,7 @@ public:
     auto addTextFrame(const std::string& id, const boost::json::object& params, QPointF position) -> std::shared_ptr<TextFrameNode>;
     // Replaces an element's identity and params; wires on ports it no longer has are removed.
     void changeElement(const std::shared_ptr<ElementNode>& node, ElementNode::Element element);
+    void changeTextFrame(const std::shared_ptr<TextFrameNode>& node, boost::json::object params);
     void deleteSelection();
     bool copySelection() const;
     bool pasteSelection(QPointF position);

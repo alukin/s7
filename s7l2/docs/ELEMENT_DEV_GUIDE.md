@@ -74,12 +74,19 @@ Built-ins use `s7core/resources/element_metadata.json`; I/O, networking, noise,
 spectral and Studio observers each own their resource. Schema-backed elements
 already carry their descriptions and definitions in `.s7library` JSON.
 
+The optional document-level `library` string identifies the owning module in
+Studio Properties; an omitted value means provenance is unavailable. Schema
+library registration supplies its library name automatically. Categories remain
+browsing groups and are not library identities. Loaded plugin information also
+identifies plugin ownership.
+
 A complete fixed-type entry looks like this (one entry inside a versioned document):
 
 ```json
 {
   "document_kind": "s7.element_metadata",
   "format_version": 1,
+  "library": "my_plugin",
   "elements": [{
     "type_name": "LinearTransform",
     "display_name": "Linear Transform",

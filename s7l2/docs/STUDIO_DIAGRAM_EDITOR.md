@@ -46,6 +46,7 @@ The layout follows the JetBrains IDEs (CLion, IntelliJ IDEA): the diagram fills 
 | Log | bottom | Alt+7 | Everything Studio logs; Clear |
 | Deploy | bottom | Alt+8 | Outcome of the last deployment per node; Deploy and Open Deployed Diagram |
 
+- Tools opens/toggles the existing tool windows with the same Alt+number shortcuts.
 - View > Hide All Tool Windows (Ctrl+Shift+F12) gives the diagram the whole window; again brings the same windows back. View > Appearance hides the tool window bars and each toolbar.
 - The status bar shows the problem count (a click opens Problems). Run and Deploy refuse a diagram with errors and open Problems; a failed run opens Run, a failed deployment opens Deploy. Message boxes are left for actions that need an answer.
 - View > Fit Diagram to Window (Ctrl+8) zooms so the whole diagram fills the window; Fit Page (Ctrl+9) shows the whole sheet.
@@ -271,6 +272,19 @@ Probe add/rename/remove share undo history. Deleting an element or a removed
 output removes its probes in the same command; undo restores them with wiring.
 Selection is not document data. Ctrl+0 resets zoom; Ctrl+9 fits the sheet;
 Ctrl+8 fits the diagram. Ctrl+W toggles wire drawing and Escape cancels it.
+
+Properties show editable display Name and read-only Type, Library and Internal
+ID. Display-name edits preserve IDs and all connections. Library provenance
+comes from owning-module metadata, the plugin loader or the schema-library
+registration, never a category/type-name guess. F4/Enter opens Properties for
+schema elements and observers too; double-click retains nested-editor/viewer
+navigation.
+
+Diagram > Diagram Properties edits `schema.name` and the optional top-level
+`description` string. Missing descriptions mean empty text; present non-string
+values are rejected. Multiline/Unicode notes survive edits, Save As and reopen,
+and remain outside runtime schema semantics. The root tab uses the name with a
+file-basename/Untitled fallback; nested tabs keep their existing navigation.
 
 Properties validate known parameters using registry metadata before applying.
 Numeric fields retain JSON text precision (including uint64 and complex arrays);

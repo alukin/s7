@@ -1,6 +1,7 @@
 {
   "document_kind": "s7.element_metadata",
   "format_version": 1,
+  "library": "s7studio",
   "elements": [
     {
       "type_name": "Scope",

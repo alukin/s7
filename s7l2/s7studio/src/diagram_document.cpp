@@ -68,6 +68,10 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
     
     const auto& root = json.as_object();
     DiagramDocument doc;
+    if (const auto* description = root.if_contains("description")) {
+        if (!description->is_string()) throw std::invalid_argument("description must be a string");
+        doc.description = QString::fromStdString(std::string(description->as_string()));
+    }
     
     if (auto it = root.find("id"); it != root.end() && it->value().is_string()) {
         doc.id = QString::fromStdString(it->value().as_string().c_str());
@@ -148,6 +152,7 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
 auto DiagramDocument::toJson() const -> boost::json::value {
     boost::json::object root;
     root["id"] = id.toStdString();
+    root["description"] = description.toStdString();
     root["dt"] = dt;
     root["document_kind"] = "s7.diagram";
     root["diagram_version"] = kDiagramVersion;

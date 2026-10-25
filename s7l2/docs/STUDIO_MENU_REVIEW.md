@@ -19,6 +19,12 @@ outside this scope.
 The initial report was general; subsequent specific menu requests are recorded
 below. Source findings come from inspection, not a fresh GUI run.
 
+The 2026-10-25 refinement promotes Tool Windows to a top-level **Tools** menu,
+after Nodes and before Settings, preserving its actions and shortcuts. View
+retains Hide All Tool Windows and Appearance. Diagram now also contains
+Diagram Properties for root-document name/description. The original proposal
+below predates these follow-up requirements.
+
 ## 0.1.0 structure before implementation
 
 Source: `s7studio/src/main_window_builder.cpp`, `MainWindow::buildActions()`

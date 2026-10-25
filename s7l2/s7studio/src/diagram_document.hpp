@@ -34,6 +34,7 @@ struct DiagramPageLayout {
 // Diagram document: extends runtime schema with visual layout metadata
 struct DiagramDocument {
     QString id = QStringLiteral("s7studio_diagram");
+    QString description;             // Human-readable diagram notes, outside the runtime schema
     double dt = 0.001;                // Time step from runtime schema
     int diagramVersion = 0;           // `diagram_version` of the file, 0 if absent
     DiagramPageLayout pageLayout;

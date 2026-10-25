@@ -34,6 +34,8 @@ int main()
         for (const auto& [type, metadata] : library.elements()) {
             const auto* descriptor = registry.find(type);
             require(descriptor && descriptor->type_name() == metadata.type_name, "Metadata has no matching factory");
+            require(metadata.library == "s7core" && descriptor->metadata().library == metadata.library,
+                    "Owning module provenance missing from registered metadata");
         }
         for (const auto& descriptor : registry.all_descriptors())
             if (!descriptor.metadata().schema_definition) static_cast<void>(library.at(descriptor.type_name()));
@@ -52,6 +54,7 @@ int main()
             rejects([&] { s7::ElementMetadataLibrary invalid(boost::json::serialize(document)); }, expected);
         };
         mutation([](auto& root) { root["format_version"] = 2; }, "unsupported");
+        mutation([](auto& root) { root["library"] = 42; }, "library");
         mutation([](auto& root) { root["elemnts"] = root["elements"]; }, "unknown field");
         mutation([](auto& root) { root["elements"].as_array().emplace_back(root["elements"].as_array().front()); }, "duplicate type");
         mutation([](auto& root) { root["elements"].as_array().front().as_object().erase("parameters"); }, "parameters");

@@ -12,6 +12,7 @@ namespace s7studio::diagram {
 //   "document_kind": "s7.diagram",
 //   "diagram_version": 2,
 //   "id": "feedback_loop_demo",
+//   "description": "Purpose and notes for this diagram",
 //   "dt": 0.001,
 //   "sheet": { "orientation": "landscape", "width_mm": 297.0, "height_mm": 210.0 },
 //   "schema": {

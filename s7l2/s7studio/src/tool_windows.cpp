@@ -39,10 +39,11 @@ ToolWindows::ToolWindows(QMainWindow* window)
     , window_(window)
     , leftStripe_(makeStripe(window, QStringLiteral("toolWindowBar.left")))
     , rightStripe_(makeStripe(window, QStringLiteral("toolWindowBar.right")))
-    , menu_(new QMenu(QStringLiteral("&Tool Windows"), window))
+    , menu_(new QMenu(QStringLiteral("&Tools"), window))
     , hideAll_(new QAction(icon(QStringLiteral("arrows-maximize")), QStringLiteral("&Hide All Tool Windows"), window))
     , stripes_(new QAction(QStringLiteral("Tool Window &Bars"), window))
 {
+    menu_->setObjectName(QStringLiteral("menu.tools"));
     window->addToolBar(Qt::LeftToolBarArea, leftStripe_);
     window->addToolBar(Qt::RightToolBarArea, rightStripe_);
     // Side windows run the full height; the bottom window sits between them.

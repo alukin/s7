@@ -1,7 +1,7 @@
 # Observers dock
 
 **Observers** replaces the Probes dock in the right tool-window area. Open it
-through **View → Tool Windows → Observers** or **Alt+3**. It always describes the
+through **Tools → Observers** or **Alt+3**. It always describes the
 root diagram and its local run, including when a nested schema tab is active.
 
 ## Choose previews

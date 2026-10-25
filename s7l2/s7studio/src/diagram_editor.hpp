@@ -68,6 +68,7 @@ public:
 
 signals:
     void elementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
+    void elementPropertiesRequested(const QString& elementId);
     void libraryElementAdded(const QString& elementId);
 
 private:

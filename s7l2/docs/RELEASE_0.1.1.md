@@ -320,6 +320,41 @@ The next implementation increment is **7 — release qualification**. Native
 Windows interaction, physical desktop/GPU review and relocated package checks
 remain separate from the local implementation evidence above.
 
+## Implemented refinement — ST-011/ST-013/ST-014/ST-015, 2026-10-25
+
+Element Properties now has an editable diagram display Name and separately
+labelled Type, Library and Internal ID. Renaming leaves internal IDs and their
+references intact. Module-owned metadata resources declare their library;
+schema registration supplies the schema library's name, and the plugin loader
+identifies loaded plugin ownership. Missing provenance is explicit. F4/Enter
+opens Properties for schema and observer elements as well as runtime elements;
+double-click still opens nested schemas and observer viewers.
+
+Diagram > Diagram Properties edits the root schema name and a multiline diagram
+description. The optional top-level `description` string is owned by
+DiagramDocument and preserved independently of runtime schema semantics. Missing
+means empty; a present non-string is an error. Metadata edits share root undo
+history and activate the root editor on commit, retaining nested tabs. The root
+tab/window title uses schema.name, with file-basename and Untitled fallbacks,
+and refreshes after loading, renaming, Save As and close.
+
+Tools is a top-level menu between Nodes and Settings. Its existing tool-window
+actions, shortcuts and visibility states are preserved; View retains layout
+commands. Selecting a text frame reveals the drawing toolbar. The frame text
+editor includes font and size controls with a selection-preserving preview.
+Text and style changes now share undo/redo, cancellation and file persistence.
+The user guide and embedded offline help describe the updated workflows.
+
+Verification: native Studio Release build, seven focused core/metadata/diagram/
+document/schema/lifecycle/demo CTest entries, and the out-of-tree spectral SDK
+smoke pass. The full GUI workflow suite passes **64 Qt Test cases**, without
+skips, including four local refinement workflows for metadata, identity,
+text/Tools and nested schemas. The final font-size preservation adjustment passes
+the affected workflows again (**9 Qt Test cases**, no skips). Local GUI helpers and captures stay
+outside Git under `build-release/ui-refinement-*` and `/tmp/s7-ui-*`; existing
+menu expectations and model/serialization regressions are updated in the
+repository. Native Windows/physical desktop qualification remains separate.
+
 ## Scope and decisions to review
 
 Improve the existing local 0.1.0 workflows: edit, configure, run and observe.

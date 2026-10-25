@@ -176,6 +176,33 @@ int main(int argc, char** argv)
     s7::register_builtin_elements(registry);
     s7::register_net_elements(registry);
 
+    // Diagram notes are presentation metadata and must round-trip without loss.
+    {
+        auto document = DiagramDocument::fromJson(boost::json::object{});
+        check(document.description.isEmpty(), "missing diagram description means empty text");
+        document.description = QString::fromUtf8("Oscillator notes\nОпис моделі — α");
+        const auto restored = DiagramDocument::fromJson(document.toJson());
+        check(restored.description == document.description, "multiline Unicode description survives serialization");
+        bool rejected = false;
+        try { static_cast<void>(DiagramDocument::fromJson(boost::json::object{{"description", 42}})); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        check(rejected, "non-string diagram description is rejected");
+    }
+    {
+        DiagramScene textScene;
+        auto frame = textScene.addTextFrame("notes", {{"text", "Original"}}, {40,40});
+        const auto before = frame->params();
+        auto after = before; after["font_size"] = 18; after["text"] = "Updated";
+        textScene.changeTextFrame(frame, after);
+        check(frame->params() == after, "text and formatting applied together");
+        textScene.undoStack()->undo();
+        check(frame->params() == before, "text and formatting undo together");
+        textScene.undoStack()->redo();
+        DiagramScene reopened;
+        reload(textScene, reopened);
+        check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
+    }
+
     DiagramScene scene;
     auto& undo = *scene.undoStack();
     const auto c1 = scene.addElement(element("c1", "Constant", {{"value", 1.0}}), {40, 40});

@@ -44,7 +44,7 @@ public:
     // QMainWindow::restoreState).
     void normalize();
 
-    [[nodiscard]] QMenu* menu() const { return menu_; }                  // View > Tool Windows
+    [[nodiscard]] QMenu* menu() const { return menu_; }                  // top-level Tools menu
     [[nodiscard]] QAction* hideAllAction() const { return hideAll_; }
     [[nodiscard]] QAction* stripesAction() const { return stripes_; }  // show the stripes
 

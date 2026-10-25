@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: ST-001/ST-002/ST-005/ST-007/ST-008/ST-010 implemented and locally verified; other interface work remains in planning.
+Status: the original ST-001–ST-008 maintenance increments and ST-010 are implemented; ST-011/ST-013/ST-014/ST-015 are implemented in the refinement increment. ST-009 is deferred to 0.2.0; ST-012 and the new oscilloscope findings remain open.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24
@@ -623,14 +623,17 @@ collection-stage discussion below is historical.
 
 ### ST-011 — Show the diagram name in the editing tab
 
+- **Resolution (2026-10-25):** Diagram Properties edits schema.name and a multiline top-
+  level description with undo/redo. Root tab/window titles refresh on load, rename, Save
+  As and close; placeholder names use the file basename or Untitled.
+
 - **Requested:** 2026-10-25. Display the current diagram's name instead of the
-  generic `Diagram` editing-tab title. Recorded for a future coding session;
-  not implemented or assigned to a release here.
-- **Evidence:** `MainWindowBuilder::buildCentralWidgets` creates the root tab
+  generic `Diagram` editing-tab title. Implemented in the 2026-10-25 refinement increment.
+- **Original evidence (before implementation):** `MainWindowBuilder::buildCentralWidgets` creates the root tab
   with the literal `Diagram`. Diagram JSON already contains `schema.name` and
   a top-level `id`; for example, `examples/2int_osc.s7diagram` currently has
   `untitled` for both, whereas the pendulum examples have meaningful names.
-- **Metadata finding:** `DiagramDocument` has no dedicated diagram-level
+- **Original metadata finding (before implementation):** `DiagramDocument` has no dedicated diagram-level
   name/description fields. The existing name is `schema.name`. There is no
   dedicated diagram-description field or editor in the current document model;
   element-library descriptions are separate. An extra field in JSON is not by
@@ -642,7 +645,7 @@ collection-stage discussion below is historical.
   text; reject a present non-string value explicitly. Preserve the description
   through load, scene edits, save, Save As and reopen, including multiline and
   Unicode text. Add focused serialization/persistence coverage when implementing
-  it. This is recorded for the next coding session, not implemented yet.
+  it. Implemented with the Diagram Properties editor in the refinement increment.
 - **Proposed acceptance:** use the meaningful `schema.name` for the root tab,
   with the file basename as a proposed fallback for an empty or `untitled`
   name, and `Untitled` for an unnamed unsaved document. Refresh on open,
@@ -674,9 +677,12 @@ collection-stage discussion below is historical.
 
 ### ST-013 — Promote Tool Windows to a top-level Tools menu
 
+- **Resolution (2026-10-25):** Tools is a top-level menu containing the existing
+  checkable tool-window actions. View retains Hide All and Appearance.
+
 - **Requested:** 2026-10-25. Replace the **View → Tool Windows** submenu with
   a top-level **Tools** menu containing the existing tool-window actions.
-  Recorded for the next coding session; not implemented yet.
+  Implemented in the refinement increment.
 - **Scope:** improve access to the existing engineering tools. Preserve each
   action's behavior, visibility/check state and shortcuts; keep view/layout
   commands in **View**. Update menu documentation and affected GUI checks when
@@ -687,9 +693,13 @@ collection-stage discussion below is historical.
 
 ### ST-014 — Keep font selection visible during text editing
 
+- **Resolution (2026-10-25):** Selecting a frame reveals the formatting toolbar. The
+  text editor itself now includes font/size controls with selection-preserving preview.
+  All frame text/style edits use the scene undo history.
+
 - **Requested:** 2026-10-25. The control panel's font selector must be visible
-  while editing a text frame or other editable diagram text. Recorded for the
-  next coding session; not implemented yet.
+  while editing a text frame or other editable diagram text. Implemented in the
+  refinement increment.
 - **Expected behavior:** expose the applicable font controls for the active
   text-editing context, keep them synchronized with that text's formatting,
   and apply changes to the intended text. Using the selector must preserve the
@@ -703,18 +713,21 @@ collection-stage discussion below is historical.
 
 ### ST-015 — Edit the element name in Properties; show type and source library
 
+- **Resolution (2026-10-25):** Properties exposes editable display Name and separate
+  Type, Library and Internal ID fields. F4 works for schema and observer elements;
+  double-click navigation is preserved. Module/schema metadata and loaded-plugin
+  information supply provenance.
+
 - **Requested:** 2026-10-25. The element Properties dialog must clearly show
   the element's type, its name in the diagram and the library it comes from,
-  and allow editing that name. Recorded for the next coding session; not
-  implemented yet.
+  and allow editing that name. Implemented in the refinement increment.
 - **Expected behavior:** present separately labeled **Name**, **Type** and
   **Library** fields, with Name editable and Type/Library clearly readable.
   Resolve the source library from existing catalog/registration provenance;
   distinguish built-in, plugin and schema-library origins and explicitly show
   unavailable provenance rather than guessing from the type name.
   The name shown in Properties must agree with the element's diagram label.
-  Inspect the existing
-  distinction between display title and internal element ID before implementing
+  Respect the existing distinction between display title and internal element ID before implementing
   the change; editing a display name must not accidentally change identity or
   break wires, observer bindings or nested-schema references. If changing the
   internal ID is required, update and validate all references atomically.

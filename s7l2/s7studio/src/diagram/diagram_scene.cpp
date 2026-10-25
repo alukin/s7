@@ -162,7 +162,7 @@ private:
 bool DiagramChange::empty() const
 {
     return addedNodes.empty() && removedNodes.empty() && addedWires.empty() && removedWires.empty() && rehung.empty() && bends.empty() &&
-           elements.empty() && !probes && !observersPanel;
+           elements.empty() && textFrames.empty() && !probes && !observersPanel;
 }
 
 struct DiagramScene::Gesture {
@@ -367,6 +367,7 @@ void DiagramScene::applyChange(const DiagramChange& change, const QString& text)
 void DiagramScene::apply(const DiagramChange& change, const bool revert)
 {
     applying_ = true;
+    for (const auto& edit : change.textFrames) edit.node->setParams(revert ? edit.before : edit.after);
     std::vector<SignalWire*> forced;
     auto setUpstream = [&](const std::shared_ptr<SignalWire>& wire, const WireEnd& end) {
         if (const auto trunk = wire->upstream.wire.lock()) {
@@ -506,6 +507,14 @@ void DiagramScene::changeElement(const std::shared_ptr<ElementNode>& node, Eleme
     }
     collectRemoval(change, lost);
     applyChange(change, QStringLiteral("Change %1").arg(QString::fromStdString(node->id())));
+}
+
+void DiagramScene::changeTextFrame(const std::shared_ptr<TextFrameNode>& node, boost::json::object params)
+{
+    if (!node || node->params() == params) return;
+    DiagramChange change;
+    change.textFrames.push_back({node, node->params(), std::move(params)});
+    applyChange(change, QStringLiteral("Edit text frame"));
 }
 
 void DiagramScene::collectRemoval(DiagramChange& change, std::vector<std::shared_ptr<SignalWire>> wires) const

@@ -255,6 +255,7 @@ auto library_element_metadata(const SchemaLibraryDefinition& library,
     metadata.input_ports = build_port_specs(inputs, false);
     metadata.output_ports = build_port_specs(outputs, true);
     metadata.tags = {"schema-library"};
+    metadata.library = library.name;
     return metadata;
 }
 
