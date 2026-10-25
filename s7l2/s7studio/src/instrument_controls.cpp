@@ -213,23 +213,23 @@ RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWi
 {
     setObjectName(name + ".control");
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(6, 2, 6, 2); layout->setSpacing(4);
-    auto* title = new QLabel(mapping == Mapping::LogGain ? "Gain ×" : "Position", this);
+    auto* title = new QLabel(mapping == Mapping::LogGain ? "Gain ×" : mapping == Mapping::LogTime ? "Time / div (s)" : "Position", this);
     title->setAlignment(Qt::AlignCenter); layout->addWidget(title);
     dial_ = new InstrumentDial(this); dial_->setObjectName(name + ".dial");
     dial_->setWrapping(mapping == Mapping::RelativeOffset);
-    dial_->setRange(0, mapping == Mapping::LogGain ? 1200 : 999); dial_->setFixedSize(80, 80);
+    dial_->setRange(0, mapping == Mapping::LogGain ? 1200 : mapping == Mapping::LogTime ? 1800 : 999); dial_->setFixedSize(80, 80);
     dial_->setSingleStep(1); dial_->setPageStep(10);
     dial_->setAccessibleName(title->text()); layout->addWidget(dial_, 0, Qt::AlignHCenter);
     number_ = new ExactNumber(this); number_->setObjectName(name); number_->setAccessibleName(title->text() + " exact value");
-    number_->setRange(mapping == Mapping::LogGain ? 1e-6 : -1e12, mapping == Mapping::LogGain ? 1e6 : 1e12);
-    number_->setValue(mapping == Mapping::LogGain ? 1 : 0); layout->addWidget(number_, 0, Qt::AlignHCenter);
+    number_->setRange(mapping == Mapping::LogTime ? 1e-12 : mapping == Mapping::LogGain ? 1e-6 : -1e12, mapping != Mapping::RelativeOffset ? 1e6 : 1e12);
+    number_->setValue(mapping == Mapping::LogGain ? 1 : mapping == Mapping::LogTime ? 2 : 0); layout->addWidget(number_, 0, Qt::AlignHCenter);
     if (mapping == Mapping::RelativeOffset) {
         dial_->setToolTip("Turn to move this channel vertically. One turn moves half the visible plot height. Numeric entry sets an exact offset.");
         const QSignalBlocker block(dial_); dial_->setValue(previousPosition_);
-    } else dial_->setToolTip("Display multiplier for this channel. Numeric entry sets an exact gain.");
+    } else dial_->setToolTip(mapping == Mapping::LogTime ? "Model seconds per division, ten divisions across the screen. Does not change simulation dt." : "Display multiplier for this channel. Numeric entry sets an exact gain.");
     connect(number_, &QDoubleSpinBox::valueChanged, this, [this] { updateDial(); });
     const auto applyPosition = [this](int position) {
-        if (mapping_ == Mapping::LogGain) number_->setValue(std::pow(10., -6. + position/100.));
+        if (mapping_ != Mapping::RelativeOffset) number_->setValue(std::pow(10., (mapping_ == Mapping::LogTime ? -12. : -6.) + position/100.));
         else {
             int delta = position-previousPosition_;
             if (delta > 500) delta -= 1000;
@@ -252,6 +252,6 @@ void RotaryValueControl::updateDial()
 {
     const QSignalBlocker block(dial_);
     number_->setToolTip(QString::number(number_->value(), 'g', QLocale::FloatingPointShortest));
-    if (mapping_ == Mapping::LogGain) dial_->setValue(qRound((std::log10(number_->value())+6.)*100.));
+    if (mapping_ != Mapping::RelativeOffset) dial_->setValue(qRound((std::log10(number_->value())+(mapping_ == Mapping::LogTime ? 12. : 6.))*100.));
 }
 }

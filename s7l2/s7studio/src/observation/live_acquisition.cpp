@@ -36,7 +36,7 @@ QList<QPointF> LiveFrame::envelope(std::size_t channel, std::size_t buckets, dou
     // Invalid/gapped intervals must be segmented by the renderer. Do not reduce
     // them into a misleading continuous line.
     for (std::size_t i = 0; i < times.size(); ++i)
-        if (!std::isfinite(values[i*stride+channel]) || (i && steps[i] != steps[i-1]+1)) return {};
+        if (!std::isfinite(values[i*stride+channel]) || (!timeEnvelope && i && steps[i] != steps[i-1]+1) || envelopeGaps || envelopeInvalid[channel]) return {};
     for (std::size_t begin = first; begin < last; begin += bucketSize) {
         const auto end = std::min(last, begin + bucketSize);
         auto lo = begin, hi = begin;
@@ -62,6 +62,8 @@ LiveAcquisition::LiveAcquisition(std::uint64_t id, double dt, QVector<LiveChanne
         throw std::invalid_argument("Live acquisition requires a positive dt and 1–8 channels.");
     steps_.resize(storagePositions); times_.resize(storagePositions);
     values_.resize(storagePositions * static_cast<std::size_t>(channels_.size()));
+    timeBuckets_.resize(timePositionBudget/(2*static_cast<std::size_t>(channels_.size())+2));
+    if (!setTimeSpan(timeSpan_)) throw std::invalid_argument("Model dt cannot represent the Time display span.");
     for (auto& bank : triggerBanks_) {
         bank.steps.resize(maxPositions); bank.times.resize(maxPositions);
         bank.values.resize(maxPositions*static_cast<std::size_t>(channels_.size()));
@@ -84,6 +86,7 @@ void LiveAcquisition::append(std::int64_t step, double time, std::span<const dou
     steps_[slot] = step; times_[slot] = time;
     std::copy(values.begin(), values.end(), values_.begin() + static_cast<std::ptrdiff_t>(slot*values.size()));
     ++received_; count_ = std::min(count_ + 1, capacity_);
+    appendTimeLocked(step, time, values, gap);
     appendTriggerLocked(step, time, values, gap);
 }
 bool LiveAcquisition::setCapacity(std::size_t capacity)
@@ -118,7 +121,7 @@ std::size_t LiveAcquisition::capacity() const { std::lock_guard lock(mutex_); re
 LiveStatus LiveAcquisition::status() const { std::lock_guard lock(mutex_); return {finished_, error_, received_}; }
 std::size_t LiveAcquisition::allocatedBytes() const
 {
-    auto bytes = steps_.capacity()*sizeof(std::int64_t) + (times_.capacity()+values_.capacity())*sizeof(double);
+    auto bytes = timeBuckets_.capacity()*sizeof(TimeBucket) + steps_.capacity()*sizeof(std::int64_t) + (times_.capacity()+values_.capacity())*sizeof(double);
     for (const auto& bank : triggerBanks_) bytes += bank.steps.capacity()*sizeof(std::int64_t)+(bank.times.capacity()+bank.values.capacity())*sizeof(double);
     return bytes;
 }
@@ -151,6 +154,94 @@ std::optional<LiveFrame> LiveAcquisition::snapshot() const
         }
     }
     return result;
+}
+bool LiveAcquisition::setTimeSpan(double seconds)
+{
+    if (!std::isfinite(seconds) || seconds <= 0) return false;
+    const long double stride = std::max(1.L, std::ceil(static_cast<long double>(seconds)/(static_cast<long double>(dt_)*(timeBuckets_.size()-1))));
+    if (stride > static_cast<long double>(std::numeric_limits<std::uint64_t>::max()/2)) return false;
+    std::lock_guard lock(mutex_);
+    // Smaller viewports reuse the wider retained history. When widening,
+    // merge existing extrema into larger buckets instead of losing the trace.
+    if (timeReceived_ && seconds <= timeSpan_) return true;
+    const auto next = static_cast<std::uint64_t>(stride);
+    if (next != timeStride_ && timeReceived_) {
+        struct Retained { TimeSample sample; bool gap; std::array<bool, maxChannels> invalid; };
+        std::vector<Retained> retained; retained.reserve(timePositionBudget);
+        for (const auto& bucket : timeBuckets_) if (bucket.index != std::numeric_limits<std::uint64_t>::max()) {
+            retained.push_back({bucket.first, bucket.gaps, bucket.invalid}); retained.push_back({bucket.last, bucket.gaps, bucket.invalid});
+            for (std::size_t c = 0; c < static_cast<std::size_t>(channels_.size()); ++c) {
+                retained.push_back({bucket.low[c], bucket.gaps, bucket.invalid}); retained.push_back({bucket.high[c], bucket.gaps, bucket.invalid});
+            }
+        }
+        std::sort(retained.begin(), retained.end(), [](const auto& a, const auto& z) { return a.sample.sequence < z.sample.sequence; });
+        for (auto& bucket : timeBuckets_) bucket.index = std::numeric_limits<std::uint64_t>::max();
+        timeStride_ = next;
+        std::optional<std::uint64_t> previous;
+        for (const auto& sample : retained) if (!previous || *previous != sample.sample.sequence) {
+            storeTimeSampleLocked(sample.sample, sample.gap, sample.invalid); previous = sample.sample.sequence;
+        }
+        ++timeGeneration_;
+    } else timeStride_ = next;
+    timeSpan_ = seconds; return true;
+}
+double LiveAcquisition::timeSpan() const { std::lock_guard lock(mutex_); return timeSpan_; }
+void LiveAcquisition::storeTimeSampleLocked(const TimeSample& sample, bool gap, const std::array<bool, maxChannels>& invalid)
+{
+    const auto bucketIndex = sample.sequence/timeStride_;
+    auto& bucket = timeBuckets_[static_cast<std::size_t>(bucketIndex%timeBuckets_.size())];
+    const auto width = static_cast<std::size_t>(channels_.size());
+    if (bucket.index != bucketIndex) {
+        bucket.index = bucketIndex; bucket.first = sample; bucket.gaps = false; bucket.invalid.fill(false);
+        for (std::size_t c = 0; c < width; ++c) bucket.low[c] = bucket.high[c] = sample;
+    }
+    bucket.last = sample; bucket.gaps |= gap;
+    for (std::size_t c = 0; c < width; ++c) {
+        if (invalid[c] || !std::isfinite(sample.values[c])) bucket.invalid[c] = true;
+        if (sample.values[c] < bucket.low[c].values[c]) bucket.low[c] = sample;
+        if (sample.values[c] > bucket.high[c].values[c]) bucket.high[c] = sample;
+    }
+}
+void LiveAcquisition::appendTimeLocked(std::int64_t step, double time, std::span<const double> values, bool gap)
+{
+    TimeSample sample; sample.sequence = received_-1; sample.step = step; sample.time = time;
+    std::copy(values.begin(), values.end(), sample.values.begin());
+    storeTimeSampleLocked(sample, gap, {}); timeReceived_ = received_;
+}
+LiveFrame LiveAcquisition::timeSnapshot() const
+{
+    std::lock_guard lock(mutex_);
+    LiveFrame frame; frame.runId = runId_; frame.generation = timeGeneration_; frame.received = received_;
+    frame.capacity = timePositionBudget; frame.finished = finished_; frame.error = error_; frame.gaps = gaps_;
+    frame.dt = dt_; frame.rateNumerator = rateNumerator_; frame.rateDenominator = rateDenominator_;
+    frame.channels = channels_; frame.provenance = provenance_; frame.timeEnvelope = true;
+    if (!timeReceived_) return frame;
+    const auto bucketCount = (timeReceived_-1)/timeStride_+1;
+    const auto first = bucketCount > timeBuckets_.size() ? bucketCount-timeBuckets_.size() : 0;
+    const auto& newest = timeBuckets_[static_cast<std::size_t>((bucketCount-1)%timeBuckets_.size())].last;
+    const double cutoff = newest.time-timeSpan_;
+    const auto width = static_cast<std::size_t>(channels_.size());
+    frame.steps.reserve(timePositionBudget); frame.times.reserve(timePositionBudget); frame.values.reserve(timePositionBudget*width);
+    for (auto b = first; b < bucketCount; ++b) {
+        const auto& bucket = timeBuckets_[static_cast<std::size_t>(b%timeBuckets_.size())];
+        if (bucket.index != b || bucket.last.time < cutoff) continue;
+        frame.envelopeGaps |= bucket.gaps;
+        std::array<const TimeSample*, 2*maxChannels+2> positions{};
+        std::size_t count = 0; positions[count++] = &bucket.first; positions[count++] = &bucket.last;
+        for (std::size_t c = 0; c < width; ++c) {
+            frame.envelopeInvalid[c] = frame.envelopeInvalid[c] || bucket.invalid[c];
+            positions[count++] = &bucket.low[c]; positions[count++] = &bucket.high[c];
+        }
+        std::sort(positions.begin(), positions.begin()+static_cast<std::ptrdiff_t>(count), [](const auto* a, const auto* z) { return a->step < z->step; });
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto& sample = *positions[i];
+            if (!frame.steps.empty() && sample.step == frame.steps.back()) continue;
+            if (frame.steps.empty()) frame.evicted = sample.sequence;
+            frame.steps.push_back(sample.step); frame.times.push_back(sample.time);
+            frame.values.insert(frame.values.end(), sample.values.begin(), sample.values.begin()+static_cast<std::ptrdiff_t>(width));
+        }
+    }
+    return frame;
 }
 void LiveAcquisition::finish(const QString& error)
 {

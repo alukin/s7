@@ -9,8 +9,9 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
 
 ## Try it
 
-1. Build Studio and open `examples/2int_osc_live.s7diagram` or the two-channel
-   `examples/2int_osc_live2.s7diagram`. For multichannel
+1. Build Studio and open `examples/symplectic_osc_live.s7diagram` for a stable
+   two-channel oscillator. The Euler examples `2int_osc_live.s7diagram` and
+   `2int_osc_live2.s7diagram` remain available. For multichannel
    work, use `examples/signal_measurement/am_coherent_detection_live.s7diagram`
    or `fm_frequency_detection_live.s7diagram` at 10 kHz. Both use seven live
    channels and zero full-recording channels.
@@ -18,9 +19,12 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
    oscilloscope (prototype)** to a diagram and wire signals to its `+` input.
 3. Start a run. Run Configuration offers **Run continuously until stopped** and
    reports the live and full-recording channel counts.
-4. Change **Samples / channel**, or enter a positive decimal duration in
-   seconds and press Enter. Scientific notation is accepted. Duration rounds up
-   to complete model-step intervals; the effective span is displayed.
+4. Set **Time / div (s)** to choose the visible rolling model-time interval:
+   ten divisions, initially 20 seconds total, independent of dt. Endpoint/min/max
+   selection bounds the Time display to at most 4096 original sample positions.
+   **Analysis retention** has a separate **Raw samples / channel** field and
+   duration for full-rate FFT/correlation input and sampled trigger capture.
+   Scientific notation is accepted; raw duration rounds up to complete intervals.
 5. Hover over the plot. The displayed frame is held while the pointer is over
    the plot, and a vertical cursor snaps to the nearest retained sample. Readout
    shows run, step, model time, raw value and supplied unit.
@@ -76,8 +80,10 @@ step and routed to the requested sinks. Closing a live viewer leaves its bounded
 acquisition running; reopening shows the current retained window. Reset detaches
 old sources and clears the display. A frozen frame survives ring wrapping/resizing.
 
-Hover uses retained raw binary64 values, including samples omitted from the reduced
-plot. Hover values and times are shown with five significant digits. Stored samples
+Hover uses original binary64 values retained in the Time envelope, including
+its channel extrema. Full-rate analysis uses a separate raw sample ring.
+Time-envelope exports identify the selection, and its point statistics do not
+claim full-rate signal mean or RMS. Hover values and times are shown with five significant digits. Stored samples
 and exports retain their full precision; presentation rounding does not alter them.
 Time reduction retains bucket endpoints and extrema in chronological order, so
 single-step spikes remain visible. The current renderer suppresses a channel's

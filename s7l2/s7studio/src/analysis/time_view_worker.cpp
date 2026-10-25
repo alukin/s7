@@ -23,32 +23,35 @@ void prepareTimeResult(TimeViewResult& result, const TimeViewSettings& settings)
         if (frame.trigger && frame.trigger->triggered) {
             const auto pre = static_cast<std::size_t>(frame.trigger->settings.pretriggerPercent)*(frame.capacity-1)/100;
             const double post = static_cast<double>(frame.capacity-1-pre);
-            result.xMin = frame.plottedTime(0);
-            result.xMax = frame.rateNumerator ? post*static_cast<double>(frame.rateDenominator)/static_cast<double>(frame.rateNumerator) : post*frame.dt;
+            const double span = settings.timeSpan > 0 ? settings.timeSpan : static_cast<double>(frame.capacity-1)*frame.dt;
+            result.xMin = -static_cast<double>(pre)/static_cast<double>(frame.capacity-1)*span;
+            result.xMax = post/static_cast<double>(frame.capacity-1)*span;
         } else {
             result.xMax = frame.times.back();
-            result.xMin = result.xMax-static_cast<double>(frame.capacity-1)*frame.dt;
+            result.xMin = result.xMax-(settings.timeSpan > 0 ? settings.timeSpan : static_cast<double>(frame.capacity-1)*frame.dt);
         }
     }
     if (!settings.prepareTime) return;
+    const double lower = result.hasXRange ? result.xMin : settings.lower;
+    const double upper = result.hasXRange ? result.xMax : settings.upper;
     const auto started = Clock::now();
     bool warned = false, overflow = false;
     for (std::size_t channel = 0; channel < static_cast<std::size_t>(frame.channels.size()); ++channel) {
         if (channel >= result.points.size() || !settings.visible[channel]) continue;
-        bool continuous = true;
+        bool continuous = !frame.envelopeGaps && !frame.envelopeInvalid[channel];
         for (std::size_t i = 0; i < frame.steps.size(); ++i) {
-            if ((i && frame.steps[i] != frame.steps[i-1]+1) ||
+            if ((!frame.timeEnvelope && i && frame.steps[i] != frame.steps[i-1]+1) ||
                 !std::isfinite(frame.values[i*static_cast<std::size_t>(frame.channels.size())+channel])) { continuous = false; break; }
         }
         if (!continuous) { warned = true; continue; }
-        auto points = frame.envelope(channel, settings.buckets, settings.lower, settings.upper);
+        auto points = frame.envelope(channel, settings.buckets, lower, upper);
         for (auto& point : points) {
             point.setY(point.y()*settings.gain[channel]+settings.offset[channel]);
             if (!std::isfinite(point.y())) { continuous = false; overflow = true; break; }
         }
         if (!continuous) { points.clear(); warned = true; continue; }
         for (const auto& point : points) {
-            if (!settings.autoY || point.x() < settings.lower || point.x() > settings.upper) continue;
+            if (!settings.autoY || point.x() < lower || point.x() > upper) continue;
             if (!result.hasYRange) { result.yMin = result.yMax = point.y(); result.hasYRange = true; }
             else { result.yMin = std::min(result.yMin, point.y()); result.yMax = std::max(result.yMax, point.y()); }
         }
@@ -104,6 +107,9 @@ struct TimeViewWorker::State : std::enable_shared_from_this<State> {
                 if (request->source) {
                     result.sourceSnapshot = true;
                     auto snapshot = request->triggered ? request->source->triggerSnapshot() : request->source->snapshot();
+                    if (snapshot) result.rawFrame = std::make_shared<observation::LiveFrame>(*snapshot);
+                    if (request->settings.prepareTime && !request->triggered && request->settings.timeSpan > 0)
+                        snapshot = request->source->timeSnapshot();
                     result.snapshotMs = std::chrono::duration<double, std::milli>(Clock::now()-snapshotStart).count();
                     if (snapshot) result.frame = std::make_shared<observation::LiveFrame>(std::move(*snapshot));
                 } else result.frame = request->frame;

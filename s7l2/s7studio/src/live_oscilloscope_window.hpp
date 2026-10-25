@@ -67,6 +67,9 @@ private:
     QSpinBox* capacity_;
     QLineEdit* seconds_;
     QCheckBox* autoY_;
+    QDoubleSpinBox* timeScale_;
+    bool timeScaleEdited_ = false;
+    std::shared_ptr<const observation::LiveFrame> rawFrame_, timeFrame_;
     QComboBox *triggerMode_, *triggerChannel_;
     ChoiceButtons* triggerEdge_;
     QLineEdit *triggerLevel_, *triggerHysteresis_;

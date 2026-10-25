@@ -31,6 +31,7 @@ PairResult PairAnalyzer::analyze(PairKind kind, const observation::LiveFrame& fr
     PairResult r; r.kind = kind; r.settings = s; r.runId = frame.runId; r.generation = frame.generation;
     auto stop = [&] { return cancelled && cancelled(); };
     auto fail = [&](PairResult::State state, const QString& message) { r.state = state; r.message = message; reset(); return r; };
+    if (frame.timeEnvelope) return fail(PairResult::State::Unavailable, "Time display envelopes are not full-rate paired-analysis input.");
     const auto width = static_cast<std::size_t>(frame.channels.size());
     const auto second = kind == PairKind::Correlation && s.autoCorrelation ? s.first : s.second;
     if (s.first >= width || second >= width || (kind == PairKind::Constellation && s.first == second))

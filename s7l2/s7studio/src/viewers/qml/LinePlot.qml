@@ -75,7 +75,8 @@ Rectangle {
             max: plot.xMax
             titleVisible: false
             labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.width-90)/70)) : 0
+            tickInterval: plot.timeDivisions ? (max-min)/10 : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.width-90)/70)) : 0
+            tickAnchor: plot.timeDivisions ? min : 0
             subTickCount: 1
         }
         axisY: ValueAxis {

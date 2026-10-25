@@ -1384,12 +1384,22 @@ QVector<viewers::ObserverDescriptor> MainWindow::observerDescriptors() const
             std::sort(descriptor.inputs.begin(), descriptor.inputs.end(), [](const auto& a, const auto& b) { return a.name < b.name; });
         result.push_back(std::move(descriptor));
     }
+    std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
     return result;
 }
 void MainWindow::refreshObserversPanel()
 {
     if (!observersPanel_ || !diagramEditor_ || !diagramEditor_->scene()) return;
-    observersPanel_->setDocument(schemaDisplayName(runtimeSchema_, "untitled"), observerDescriptors(), diagramEditor_->scene()->observersPanel());
+    auto* scene = diagramEditor_->scene();
+    const auto descriptors = observerDescriptors();
+    if (!scene->observersPanelManual()) {
+        boost::json::array defaults;
+        for (qsizetype i = 0; i < std::min<qsizetype>(3, descriptors.size()); ++i)
+            defaults.push_back(boost::json::object{{"element_id", descriptors[i].id.toStdString()}, {"type", descriptors[i].type.toStdString()}, {"collapsed", false}});
+        const QSignalBlocker block(scene);
+        scene->setObserversPanel(std::move(defaults), false, false);
+    }
+    observersPanel_->setDocument(schemaDisplayName(runtimeSchema_, "untitled"), descriptors, scene->observersPanel());
 }
 
 auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>

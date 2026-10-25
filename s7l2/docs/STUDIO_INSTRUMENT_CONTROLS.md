@@ -44,8 +44,8 @@ digits while inactive; focus and tooltips expose the complete round-tripping
 value. The compact face never changes the stored value. Gain and position sit
 side by side with their numeric fields below the knobs.
 
-Channels and Time window start expanded; Trigger and Window inspection start
-collapsed. All sections collapse independently. The control column scrolls
+Channels and Time base start expanded; Analysis retention, Trigger and Window
+inspection start collapsed. All sections collapse independently. The control column scrolls
 vertically and can be hidden. Hover readouts and status use fixed-height
 scrollable viewports. Hover values and times show five significant digits. The
 hover area has eight lines, with a compact two-line status area at the bottom;
@@ -57,10 +57,19 @@ time interval, distinguishing it from the full run duration.
 Spectrum, Constellation / XY and Correlation use the same right column as Time.
 Their settings scroll vertically in collapsible groups; no settings sit above
 the graph. All plots use the same dark graticule, brighter traces, five-digit
-hover readouts and compact bottom status. Time window and Window inspection
+hover readouts and compact bottom status. Analysis retention and Window inspection
 move with the active tab while retaining their settings. Hide controls and
 Resume / Fit apply to the active plot. Technical analysis status remains in
 its tooltip and pinned-window metadata.
+
+The Time-base knob uses model seconds/division and a ten-division grid. Rolling
+Time defaults to 2 s/div independently of model dt. A separate 4096-position
+history selects original endpoints and channel extrema in bounded causal buckets;
+changing this display span does not change full-rate analysis samples or the
+simulation. Existing retained history is merged when widening. Missing history
+fills forward. Sampled triggers keep their full-rate capture and can be zoomed
+with the same knob. Pinned Time-envelope statistics and exports explicitly
+identify the selection instead of claiming full-rate measurements.
 
 Pre-trigger slider and percentage field share the same integer value. Rising
 and Falling are exclusive labelled buttons. Trigger mode, raw input, level,

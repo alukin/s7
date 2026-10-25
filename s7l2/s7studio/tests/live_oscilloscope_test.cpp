@@ -245,7 +245,8 @@ private slots:
         viewer->inspect(0, false);
         viewer->findChild<QPushButton*>("live.follow")->click();
         QTRY_COMPARE(viewer->displayedFrame().steps.back(), std::int64_t(10000));
-        QCOMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
+        QCOMPARE(source->snapshot()->steps.size(), std::size_t(128));
+        QVERIFY(viewer->displayedFrame().steps.size() <= 4096);
         delete viewer;
         append(10001, 11000);
         viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager.openObserver("LiveOscilloscope", "live")); QVERIFY(viewer);
@@ -254,6 +255,54 @@ private slots:
         QCOMPARE(source->capacity(), std::size_t(128));
         source->finish(); QTRY_VERIFY(viewer->findChild<QLabel*>("live.status")->text().contains("Run finished"));
         manager.beginRun("old", true); QVERIFY(viewer->displayedFrame().steps.empty());
+    }
+    void timeBaseRetainsSeveralPeriodsAtDifferentModelRates() {
+        for (const int rate : {100, 1000, 10000}) {
+            auto source = std::make_shared<LiveAcquisition>(30+rate, 1./rate,
+                QVector<observation::LiveChannel>{{"position", "V", "f64"}, {"velocity", "V", "f64"}}, QJsonObject{}, rate, 1);
+            const int spike = 50*rate+rate/7;
+            for (int i = 1; i <= 60*rate; ++i) {
+                const double t = double(i)/rate, values[]{i == spike ? 3. : std::sin(t), std::cos(t)};
+                source->append(i, t, values);
+            }
+            source->finish();
+            const auto raw = source->snapshot(); QVERIFY(raw); QVERIFY(!raw->timeEnvelope);
+            QCOMPARE(raw->steps.size(), std::size_t(4096)); QCOMPARE(raw->dt, 1./rate);
+            const auto frame = source->timeSnapshot(); QVERIFY(frame.timeEnvelope);
+            QVERIFY(frame.steps.size() <= 4096); QVERIFY(frame.times.front() <= 40.1); QCOMPARE(frame.times.back(), 60.);
+            bool sawSpike = false; int rising = 0;
+            for (std::size_t i = 0; i < frame.steps.size(); ++i) {
+                sawSpike |= frame.steps[i] == spike && frame.values[2*i] == 3.;
+                QCOMPARE(frame.values[2*i+1], std::cos(frame.times[i]));
+                if (i && frame.values[2*(i-1)+1] < 0 && frame.values[2*i+1] >= 0) ++rising;
+            }
+            QVERIFY(sawSpike); QVERIFY(rising >= 3);
+            ui::LiveOscilloscopeWindow viewer("time base"); viewer.attachLiveSource(source); viewer.show();
+            QTRY_COMPARE(viewer.plotView()->xMax(), 60.); QCOMPARE(viewer.plotView()->xMin(), 40.);
+            auto* scale = viewer.findChild<QDoubleSpinBox*>("live.timeScale"); QVERIFY(scale); QCOMPARE(scale->value(), 2.);
+            viewer.findChild<QPushButton*>("live.freeze")->setChecked(true); scale->setValue(.5);
+            QTRY_COMPARE(viewer.plotView()->xMin(), 55.); QCOMPARE(viewer.plotView()->xMax(), 60.);
+            QCOMPARE(source->snapshot()->steps.size(), std::size_t(4096));
+            QVERIFY(source->setTimeSpan(40));
+            const auto wider = source->timeSnapshot(); QVERIFY(!wider.steps.empty()); QCOMPARE(wider.times.back(), 60.);
+            bool keptSpike = false; for (std::size_t i = 0; i < wider.steps.size(); ++i) keptSpike |= wider.steps[i] == spike && wider.values[2*i] == 3.;
+            QVERIFY(keptSpike); QVERIFY(wider.steps.size() <= 4096);
+            analysis::SpectrumAnalyzer fft; analysis::PairAnalyzer pair;
+            QCOMPARE(fft.analyze(frame, {}).state, analysis::SpectrumResult::State::Unavailable);
+            QCOMPARE(pair.analyze(analysis::PairKind::Correlation, frame, {}).state, analysis::PairResult::State::Unavailable);
+            const auto window = analysis::timeWindow(std::make_shared<observation::LiveFrame>(frame));
+            QVERIFY(analysis::measurementReadout(window, 0, window.axis.size()-1).contains("not full-rate signal measurements"));
+        }
+    }
+    void timeEnvelopeDoesNotBridgeGapsOrNonfiniteSamples() {
+        LiveAcquisition source(90, .001, {{"x", "V", "f64"}}, {}, 1000, 1);
+        const double finite[]{1}, invalid[]{std::numeric_limits<double>::quiet_NaN()};
+        source.append(1, .001, finite); source.append(3, .003, invalid); source.append(4, .004, finite);
+        const auto frame = source.timeSnapshot(); QVERIFY(frame.envelopeGaps); QVERIFY(frame.envelopeInvalid[0]);
+        QVERIFY(frame.envelope(0, 100).empty());
+        QVERIFY(!source.setTimeSpan(0)); QVERIFY(!source.setTimeSpan(std::numeric_limits<double>::infinity()));
+        QVERIFY(source.setTimeSpan(40)); const auto wider = source.timeSnapshot();
+        QVERIFY(wider.envelopeGaps); QVERIFY(wider.envelopeInvalid[0]); QVERIFY(wider.envelope(0, 100).empty());
     }
     void independentChannelControlsKeepAxesAndReadoutStable() {
         auto source = std::make_shared<LiveAcquisition>(20, .001,
@@ -264,12 +313,12 @@ private slots:
         source->finish();
         ui::LiveOscilloscopeWindow viewer("two channels"); viewer.attachLiveSource(source); viewer.show();
         QTRY_COMPARE(viewer.plotView()->series().size(), 2);
-        QTRY_VERIFY(viewer.plotView()->series()[1]->points().size() > 1000);
+        QTRY_VERIFY(viewer.plotView()->series()[1]->points().size() > 100);
         auto* plot = viewer.plotView();
-        QCOMPARE(plot->xMax(), 600.); QCOMPARE(plot->xMin(), 595.905);
-        QCOMPARE(plot->series()[0]->points().front().x(), 595.905);
+        QCOMPARE(plot->xMax(), 600.); QCOMPARE(plot->xMin(), 580.);
+        QVERIFY(std::abs(plot->series()[0]->points().front().x()-580.) < .1);
         QCOMPARE(plot->series()[0]->points().back().x(), 600.);
-        QVERIFY(viewer.findChild<QLabel*>("live.timeRange")->text().contains("595.905–600"));
+        QVERIFY(viewer.findChild<QLabel*>("live.timeRange")->text().contains("displayed span 20 s"));
         auto* freeze = viewer.findChild<QPushButton*>("live.freeze"); freeze->setChecked(true);
         const auto unchanged = plot->series()[1]->points(); const auto ymin = plot->yMin(), ymax = plot->yMax();
         viewer.findChild<QDoubleSpinBox*>("live.channel.0.offset")->setValue(.5);
@@ -339,6 +388,7 @@ private slots:
     void hoverTipFollowsDrawnTraces() {
         auto source = std::make_shared<LiveAcquisition>(14, .001,
             QVector<observation::LiveChannel>{{"live/up", "V", "f64"}, {"live/flat", "", "f64"}});
+        QVERIFY(source->setTimeSpan(.1));
         for (int i = 1; i <= 100; ++i) { const double v[]{i*.01, -.5}; source->append(i, i*.001, v); }
         ui::LiveOscilloscopeWindow viewer("live");
         viewer.attachLiveSource(source); viewer.resize(1100, 740); viewer.show();

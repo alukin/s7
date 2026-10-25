@@ -56,6 +56,7 @@ SpectrumResult SpectrumAnalyzer::analyze(const observation::LiveFrame& frame, co
         return result;
     };
     const auto n = settings.size;
+    if (frame.timeEnvelope) return fail(SpectrumResult::State::Unavailable, "Time display envelopes are not full-rate FFT input.");
     const auto width = static_cast<std::size_t>(frame.channels.size());
     if (n < 64 || n > 65536 || (n & (n-1)))
         return fail(SpectrumResult::State::Unavailable, "FFT size must be a power of two from 64 to 65536.");

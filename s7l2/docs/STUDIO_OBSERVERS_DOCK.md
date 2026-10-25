@@ -8,7 +8,9 @@ root diagram and its local run, including when a nested schema tab is active.
 
 Choose **Observers…**, filter the root observer list and check the desired
 instances. **Apply** changes the selection; **Cancel** leaves it untouched.
-Initially no observers are selected. Selection does not create an observer,
+The first three observer IDs are selected by default, or all observers when
+there are fewer than three. A manual choice, including an empty selection, is
+saved and preserved instead of being overwritten. Selection does not create an observer,
 alter its connections, start recording or open full viewer windows.
 
 Each selected card has one compact header: its name/collapse arrow, **Freeze**,
@@ -20,7 +22,8 @@ preview freezes it. Uncheck Freeze to follow the current data again.
 
 Scope cards show recent time traces, Phase Portrait cards show same-step XY,
 and Phase Trajectory 3D cards show a bounded 3D trajectory. Live Oscilloscope
-cards show the Time presentation and rolling/trigger status. Detailed analysis,
+cards show the Time presentation and rolling/trigger status. Rolling previews
+use the same model-time display history, independently of the raw sample rate. Detailed analysis,
 recording/comparisons, cursors, export and acquisition controls stay in the full
 viewers. Scope and Live cards offer **Plotted channels…** in their options menu
 for up to eight display channels. This never limits capture. Enable **Details /

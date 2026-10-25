@@ -14,6 +14,7 @@
 #include <span>
 #include <limits>
 #include <vector>
+#include <array>
 
 namespace s7studio::observation {
 enum class TriggerMode { Rolling, Auto, Normal, Single };
@@ -46,6 +47,10 @@ struct LiveFrame {
     std::uint64_t rateNumerator = 0, rateDenominator = 1;
     std::size_t capacity = 0;
     bool finished = false;
+    // Time-only selection of original samples (endpoints and channel extrema).
+    // These nonuniform positions must never be passed to FFT/correlation.
+    bool timeEnvelope = false, envelopeGaps = false;
+    std::array<bool, 8> envelopeInvalid{};
     QString error;
     QVector<LiveChannel> channels;
     QJsonObject provenance;
@@ -82,6 +87,9 @@ public:
     [[nodiscard]] std::size_t capacity() const;
     [[nodiscard]] LiveStatus status() const;
     [[nodiscard]] std::optional<LiveFrame> snapshot() const;
+    bool setTimeSpan(double seconds);
+    [[nodiscard]] double timeSpan() const;
+    [[nodiscard]] LiveFrame timeSnapshot() const;
     bool configureTrigger(const TriggerSettings& settings, QString* error = nullptr);
     void rearmTrigger();
     [[nodiscard]] TriggerStatus triggerStatus() const;
@@ -120,6 +128,25 @@ private:
     bool armed_ = false, collecting_ = false, held_ = false, haveCaptureEnd_ = false;
     std::optional<double> previousTriggerValue_;
     std::int64_t waitingSince_ = 0, lastCaptureEnd_ = 0;
+    struct TimeSample {
+        std::uint64_t sequence = 0;
+        std::int64_t step = 0;
+        double time = 0;
+        std::array<double, maxChannels> values{};
+    };
+    struct TimeBucket {
+        std::uint64_t index = std::numeric_limits<std::uint64_t>::max();
+        TimeSample first, last;
+        std::array<TimeSample, maxChannels> low, high;
+        std::array<bool, maxChannels> invalid{};
+        bool gaps = false;
+    };
+    static constexpr std::size_t timePositionBudget = 4096;
+    std::vector<TimeBucket> timeBuckets_;
+    std::uint64_t timeStride_ = 1, timeReceived_ = 0, timeGeneration_ = 1;
+    double timeSpan_ = 20;
+    void appendTimeLocked(std::int64_t step, double time, std::span<const double> values, bool gap);
+    void storeTimeSampleLocked(const TimeSample& sample, bool gap, const std::array<bool, maxChannels>& invalid);
     void resetTriggerLocked(bool discardCompleted);
     void appendTriggerLocked(std::int64_t step, double time, std::span<const double> values, bool gap);
     void publishTriggerLocked(bool partial);

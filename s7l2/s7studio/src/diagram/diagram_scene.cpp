@@ -254,7 +254,7 @@ auto DiagramScene::sharedWire(const SignalWire* wire) const -> std::shared_ptr<S
 
 void DiagramScene::clearDiagram()
 {
-    observersPanel_.clear();
+    observersPanel_.clear(); observersPanelManual_ = false;
     gesture_.reset();
     preview_ = nullptr; // deleted by clear()
     clear();
@@ -452,9 +452,11 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
     Q_EMIT diagramChanged();
 }
 
-void DiagramScene::setObserversPanel(boost::json::array selection, bool undoable)
+void DiagramScene::setObserversPanel(boost::json::array selection, bool undoable, bool manual)
 {
-    if (selection == observersPanel_) return;
+    const bool changedMode = manual && !observersPanelManual_;
+    if (manual) observersPanelManual_ = true;
+    if (selection == observersPanel_) { if (changedMode) { Q_EMIT observersPanelChanged(); Q_EMIT diagramChanged(); } return; }
     if (undoable) {
         DiagramChange change; change.observersPanel = std::pair{observersPanel_, std::move(selection)};
         applyChange(change, QStringLiteral("Choose observer previews"));

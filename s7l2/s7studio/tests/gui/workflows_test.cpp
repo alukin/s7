@@ -311,7 +311,7 @@ private slots:
         QVERIFY(browser->toPlainText().contains("First simulation"));
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"))));
-        QVERIFY(browser->toPlainText().contains("Samples / channel"));
+        QVERIFY(browser->toPlainText().contains("Raw samples / channel"));
         QVERIFY(browser->toPlainText().contains("fm_frequency_detection_live.s7diagram"));
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("STUDIO_SPECTRUM.md"))));
@@ -951,16 +951,19 @@ private slots:
         QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
         QVERIFY(configure("action.run", 2)); QTRY_COMPARE(completed.count(), 1);
         QVERIFY(completed.last()[0].toBool()); QVERIFY(!runner->recordedSource());
-        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(2000));
+        QTRY_VERIFY(!viewer->displayedFrame().steps.empty());
+        QTRY_COMPARE(viewer->displayedFrame().steps.back(), std::int64_t(2000));
         auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick); QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
         viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
         auto* count = viewer->findChild<QSpinBox*>("live.samples"); QVERIFY(count);
         // A pointer left over the plot by an earlier test holds the frame for inspection.
         QTest::mouseMove(count, count->rect().center());
-        count->setValue(1001); QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(1001));
+        count->setValue(1001); QCOMPARE(runner->liveSources()["live_1"]->capacity(), std::size_t(1001));
         auto* seconds = viewer->findChild<QLineEdit*>("live.seconds"); QVERIFY(seconds);
         seconds->setFocus(); seconds->selectAll(); QTest::keyClicks(seconds, "0.5"); QTest::keyClick(seconds, Qt::Key_Return);
-        QTRY_COMPARE(count->value(), 501); QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(501));
+        QTRY_COMPARE(count->value(), 501);
+        viewer->findChild<QDoubleSpinBox*>("live.timeScale")->setValue(.05);
+        QTRY_COMPARE(viewer->plotView()->xMin(), 1.5);
         auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
         const auto area = graph->property("plotArea").toRectF(); QVERIFY(area.width() > 0);
         const auto center = graph->mapToScene(area.center()).toPoint();
@@ -971,8 +974,8 @@ private slots:
         QVERIFY(readout->text().contains(QString::number(viewer->displayedFrame().values[*index], 'g', 5)));
         capture(viewer, "live-oscilloscope-hover");
         // Pointer on the trace: a translucent value box beside it and a ring on the sample.
-        const auto& shown = viewer->displayedFrame(); const auto sample = shown.times.size()/2;
-        auto* view = viewer->plotView();
+        const auto& shown = viewer->displayedFrame(); auto* view = viewer->plotView();
+        const auto sample = *shown.nearest((view->xMin()+view->xMax())/2);
         const QPointF onTrace(area.left()+(shown.plottedTime(sample)-view->xMin())/(view->xMax()-view->xMin())*area.width(),
             area.top()+(view->yMax()-shown.values[sample*static_cast<std::size_t>(shown.channels.size())])/(view->yMax()-view->yMin())*area.height());
         QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
@@ -983,7 +986,7 @@ private slots:
         {   // On the trace itself the translucent tooltip and an on-curve marker appear.
             auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
             const auto& frame = viewer->displayedFrame(); auto* plot = viewer->plotView();
-            const auto i = frame.times.size()/2;
+            const auto i = *frame.nearest((plot->xMin()+plot->xMax())/2);
             const QPointF onCurve(area.left()+(frame.plottedTime(i)-plot->xMin())/(plot->xMax()-plot->xMin())*area.width(),
                                   area.top()+(plot->yMax()-frame.values[i*frame.channels.size()])/(plot->yMax()-plot->yMin())*area.height());
             QTest::mouseMove(quick, graph->mapToScene(onCurve).toPoint());
@@ -1006,14 +1009,14 @@ private slots:
         capture(viewer, "live-oscilloscope-frozen");
         auto* follow = viewer->findChild<QPushButton*>("live.follow"); QVERIFY(follow);
         QTest::mouseMove(follow, follow->rect().center()); QTest::mouseClick(follow, Qt::LeftButton);
-        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
+        QTRY_COMPARE(runner->liveSources()["live_1"]->capacity(), std::size_t(128));
         viewer->close(); QVERIFY(!viewer->isVisible());
         manager->openObserver("LiveOscilloscope", "live_1"); QTRY_VERIFY(viewer->isVisible());
         action("action.reset")->trigger(); QVERIFY(viewer->displayedFrame().steps.empty());
     }
     void liveOscilloscopeTwoChannels600Seconds() {
         using namespace s7studio;
-        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live2.s7diagram"));
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/symplectic_osc_live.s7diagram"));
         auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(runner);
         auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(manager);
         auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "live_1")); QVERIFY(viewer);
@@ -1024,13 +1027,15 @@ private slots:
         QTRY_COMPARE(viewer->displayedFrame().steps.back(), std::int64_t(600000));
         QCOMPARE(viewer->displayedFrame().channels.size(), 2);
         auto* plot = viewer->plotView();
-        QTRY_COMPARE(plot->xMax(), 600.); QCOMPARE(plot->xMin(), 595.905);
+        QTRY_COMPARE(plot->xMax(), 600.); QCOMPARE(plot->xMin(), 580.);
         QTRY_VERIFY(!plot->series()[0]->points().isEmpty() && !plot->series()[1]->points().isEmpty());
-        const auto& frame = viewer->displayedFrame();
-        // Independent reference for the existing explicit Euler network.
-        const auto expected = std::pow(std::complex<double>(1., .001), 599999);
-        QVERIFY(std::abs(frame.values.back()-expected.real()) < 1e-9);
-        QVERIFY(std::abs(frame.values[frame.values.size()-2]-expected.imag()) < 1e-9);
+        const auto frame = viewer->displayedFrame();
+        // Independent closed form for the symplectic update, observed one causal step later.
+        const double theta = 2*std::asin(.001/2), n = 599999;
+        const double position = std::sin(n*theta)/std::cos(theta/2);
+        const double velocity = std::cos((n-.5)*theta)/std::cos(theta/2);
+        QVERIFY(std::abs(frame.values.back()-velocity) < 1e-9);
+        QVERIFY(std::abs(frame.values[frame.values.size()-2]-position) < 1e-9);
         capture(viewer, "live-two-channels-600s", true);
         viewer->findChild<QPushButton*>("live.freeze")->setChecked(true);
         viewer->findChild<QDoubleSpinBox*>("live.channel.0.offset")->setValue(.4);
@@ -1159,6 +1164,8 @@ private slots:
             const auto currentArea = graph->property("plotArea").toRectF();
             const auto position = graph->mapToScene(QPointF(currentArea.left()+(point.x-xy->plotView()->xMin())/(xy->plotView()->xMax()-xy->plotView()->xMin())*currentArea.width(),
                 currentArea.bottom()-(point.y-xy->plotView()->yMin())/(xy->plotView()->yMax()-xy->plotView()->yMin())*currentArea.height())).toPoint();
+            viewer->raise(); viewer->activateWindow();
+            QTest::mouseMove(tabs->tabBar(), tabs->tabBar()->tabRect(2).center());
             QTest::mouseMove(quick, position);
             return xy->controlPanel()->findChild<QLabel*>("pair.readout")->text().contains("Raw pair");
         })());
@@ -1207,18 +1214,34 @@ private slots:
         tabs->setCurrentIndex(2); QTRY_VERIFY(xy->result());
         action("action.reset")->trigger(); QVERIFY(!xy->result()); QVERIFY(!correlation->result());
     }
+    void observersDefaultToFirstThreeAndRememberManualChoice() {
+        using namespace s7studio;
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/symplectic_osc_live.s7diagram"));
+        auto* panel = window_->findChild<ui::ObserversPanel*>(); QVERIFY(panel);
+        QCOMPARE(panel->selection().size(), std::size_t(1));
+        for (int i = 1; i <= 5; ++i) scene()->addElement({"auto_"+std::to_string(i), "Scope", {}, {}}, {i*100., 0});
+        QCOMPARE(panel->selection().size(), std::size_t(3));
+        for (int i = 0; i < 3; ++i) QCOMPARE(std::string(panel->selection()[i].as_object().at("element_id").as_string()), "auto_"+std::to_string(i+1));
+        scene()->setObserversPanel({boost::json::object{{"element_id","auto_5"},{"type","Scope"},{"collapsed",false}}}, true);
+        scene()->addElement({"auto_0", "Scope", {}, {}}, {0,0});
+        QCOMPARE(panel->selection().size(), std::size_t(1));
+        QCOMPARE(std::string(panel->selection()[0].as_object().at("element_id").as_string()), std::string("auto_5"));
+        scene()->setObserversPanel({}, true); QVERIFY(panel->selection().empty());
+        const auto path = temporary_.filePath("manual-empty-previews.s7diagram"); QVERIFY(fileAction("action.saveAs", path));
+        QVERIFY(fileAction("action.open", path)); QVERIFY(panel->selection().empty()); QVERIFY(scene()->observersPanelManual());
+    }
     void observersDockSelectionLifecycleAndPersistence() {
         using namespace s7studio;
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/iq_correlation_live.s7diagram"));
         auto* panel = window_->findChild<ui::ObserversPanel*>("observers.panel"); QVERIFY(panel);
         auto* dock = window_->findChild<QDockWidget*>("toolWindow.observers"); QVERIFY(dock);
         auto* tools = window_->findChild<ui::ToolWindows*>(); QVERIFY(tools); tools->show(dock);
-        QVERIFY(panel->selection().empty()); QVERIFY(panel->findChild<QLabel*>("observers.empty")->isVisible());
+        QCOMPARE(panel->selection().size(), std::size_t(1)); QVERIFY(!panel->findChild<QLabel*>("observers.empty")->isVisible());
         QVERIFY(modalWorkflow([&] { panel->findChild<QPushButton*>("observers.choose")->click(); }, [&](QDialog* dialog) {
             auto* list = dialog->findChild<QListWidget*>("observers.choices"); if (!list || list->count()!=1) return false;
             list->item(0)->setCheckState(Qt::Checked); dialog->reject(); return true;
         }));
-        QVERIFY(scene()->observersPanel().empty());
+        QCOMPARE(scene()->observersPanel().size(), std::size_t(1));
         QVERIFY(modalWorkflow([&] { panel->findChild<QPushButton*>("observers.choose")->click(); }, [&](QDialog* dialog) {
             auto* list = dialog->findChild<QListWidget*>("observers.choices"); if (!list) return false;
             list->item(0)->setCheckState(Qt::Checked); dialog->accept(); return true;
@@ -1344,9 +1367,9 @@ private slots:
         QCOMPARE(pre->value(), viewer.findChild<QSpinBox*>("trigger.pre")->value());
         auto* falling = viewer.findChild<QToolButton*>("trigger.edge.1"); scroll->ensureWidgetVisible(falling); QTest::mouseClick(falling, Qt::LeftButton); QVERIFY(!viewer.triggerSettings().rising);
         auto* panel = viewer.findChild<viewers::WindowInspectionPanel*>(); QTRY_VERIFY(panel->pin());
-        auto* a = panel->findChild<QSlider*>("inspection.a.slider"); auto* b = panel->findChild<QSlider*>("inspection.b.slider"); a->setValue(1000); b->setValue(3);
+        auto* a = panel->findChild<QSlider*>("inspection.a.slider"); auto* b = panel->findChild<QSlider*>("inspection.b.slider"); const int targetA = std::min(1000, a->maximum()); a->setValue(targetA); b->setValue(3);
         panel->findChild<QToolButton*>("inspection.active.1")->click(); QCoreApplication::processEvents(); scroll->ensureWidgetVisible(b); b->setFocus(); QTest::keyClick(b, Qt::Key_Right, Qt::AltModifier);
-        QCOMPARE(b->value(), 4); QCOMPARE(a->value(), 1000);
+        QCOMPARE(b->value(), 4); QCOMPARE(a->value(), targetA);
         for (auto* field : viewer.findChildren<QAbstractSpinBox*>()) {
             if (!field->isVisible() || !scroll->widget()->isAncestorOf(field)) continue;
             const auto rect = QRect(field->mapTo(scroll->widget(), QPoint()), field->size());
@@ -1396,7 +1419,9 @@ private slots:
         auto* tabs = viewer->findChild<QTabWidget*>("live.views"); QVERIFY(tabs);
         auto* a = panel->findChild<QSpinBox*>("inspection.a"); auto* b = panel->findChild<QSpinBox*>("inspection.b"); QVERIFY(a && b);
         auto* active = panel->findChild<ui::ChoiceButtons*>("inspection.active"); QVERIFY(active);
-        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(4096));
+        QTRY_VERIFY(!viewer->displayedFrame().steps.empty() && viewer->displayedFrame().steps.size() <= 4096);
+        viewer->findChild<QDoubleSpinBox*>("live.timeScale")->setValue(.8);
+        const auto selectedCount = viewer->displayedFrame().steps.size();
         auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick);
         QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
         auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
@@ -1406,15 +1431,15 @@ private slots:
         QTRY_VERIFY(panel->snapshot()); QVERIFY(viewer->findChild<QPushButton*>("live.freeze")->isChecked());
         QVERIFY(a->value() > 0); QCOMPARE(viewer->plotView()->bridge()->selectionMarkers.size(), 2);
         const auto oldA = a->value(); a->setFocus(); QTest::keyClick(a, Qt::Key_Right, Qt::AltModifier); QCOMPARE(a->value(), oldA+1);
-        a->setValue(0); b->setValue(4095);
+        a->setValue(0); b->setValue(b->maximum());
         QTRY_VERIFY(visualItem(quick->rootObject(), "viewer.cursor.B"));
         const auto* rightCursor = visualItem(quick->rootObject(), "viewer.cursor.B");
         QVERIFY(rightCursor->property("px").toDouble() < rightCursor->width());
         viewer->findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(10);
         viewer->findChild<QDoubleSpinBox*>("live.channel.0.offset")->setValue(500);
         QTest::mouseClick(panel->findChild<QPushButton*>("inspection.measure"), Qt::LeftButton);
-        QVERIFY(panel->readout().contains("inclusive raw samples/pairs")); QVERIFY(panel->readout().contains("RMS 0.70710678118"));
-        QVERIFY(panel->readout().contains("step 4097")); QVERIFY(panel->readout().contains("step 8192"));
+        QVERIFY(panel->readout().contains("not full-rate signal measurements"));
+        QVERIFY(panel->readout().contains("step 1")); QVERIFY(panel->readout().contains("step 8192"));
         QTest::mouseClick(panel->findChild<QPushButton*>("inspection.copy"), Qt::LeftButton);
         QCOMPARE(QApplication::clipboard()->text(), panel->readout());
         capture(viewer, "live-time-cursors-measurements");
@@ -1430,11 +1455,13 @@ private slots:
         exportButton->menu()->actions()[2]->trigger(); QVERIFY(exportButton->text().contains("Displayed data CSV"));
         exportButton->menu()->actions()[0]->trigger(); QVERIFY(exportButton->text().contains("Window JSON"));
         QFile file(saved); QVERIFY(file.open(QIODevice::ReadOnly)); const auto document = QJsonDocument::fromJson(file.readAll());
-        QCOMPARE(document["raw_samples"].toArray().size(), 4096);
+        QCOMPARE(document["raw_samples"].toArray().size(), static_cast<qsizetype>(selectedCount));
+        QVERIFY(document["metadata"].toObject()["raw"].toObject()["time_envelope_selection"].toBool());
         QVERIFY(!document["metadata"].toObject()["complete_run"].toBool());
         QCOMPARE(document["metadata"].toObject()["raw"].toObject()["channels"].toArray()[0].toObject()["unit"].toString(), QString("V"));
         viewer->findChild<QPushButton*>("live.follow")->click(); QVERIFY(!panel->snapshot());
-        QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(128));
+        QTRY_VERIFY(viewer->displayedFrame().timeEnvelope);
+        QCOMPARE(runner->liveSources()["iq_scope"]->capacity(), std::size_t(128));
         tabs->setCurrentIndex(1);
         auto* spectrum = viewer->findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
         spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size")->setCurrentIndex(0);

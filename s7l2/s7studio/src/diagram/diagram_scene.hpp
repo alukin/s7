@@ -88,7 +88,8 @@ public:
     // Bulk-load (opening a document); replaces every existing probe.
     void setProbes(std::vector<DiagramProbe> probes);
     const boost::json::array& observersPanel() const { return observersPanel_; }
-    void setObserversPanel(boost::json::array selection, bool undoable = false);
+    void setObserversPanel(boost::json::array selection, bool undoable = false, bool manual = true);
+    bool observersPanelManual() const { return observersPanelManual_; }
 
     // Building without undo (loading). rerouteAll() routes every wire.
     void clearDiagram();
@@ -183,6 +184,7 @@ private:
     std::unordered_map<const QSchematic::Items::Item*, QPointF> knownPositions_;
     std::vector<DiagramProbe> probes_;
     boost::json::array observersPanel_;
+    bool observersPanelManual_ = false;
     bool applying_ = false;
     bool mouseDown_ = false;
     // Whether the diagram's types resolved before the edit being checked

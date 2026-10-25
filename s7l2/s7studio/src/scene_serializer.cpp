@@ -293,6 +293,7 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
         {"wires", std::move(wires)},
         {"text_frames", std::move(frames)},
         {"observers_panel", scene.observersPanel()},
+        {"observers_panel_manual", scene.observersPanelManual()},
     };
     return doc;
 }
@@ -573,7 +574,10 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
     });
     scene.setProbes(document.probes);
     if (const auto* panel = document.diagram.if_contains("observers_panel")) {
-        validateObserversPanel(*panel); scene.setObserversPanel(panel->as_array());
+        validateObserversPanel(*panel);
+        const auto* manual = document.diagram.if_contains("observers_panel_manual");
+        if (manual && !manual->is_bool()) throw std::invalid_argument("observers_panel_manual must be a boolean");
+        scene.setObserversPanel(panel->as_array(), false, manual ? manual->as_bool() : !panel->as_array().empty());
     }
     if (progress) {
         progress(100);

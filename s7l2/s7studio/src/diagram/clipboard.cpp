@@ -64,6 +64,7 @@ bool DiagramScene::copySelection() const
     auto* data = new QMimeData;
     auto document = SceneSerializer{}.serialize(staging, {});
     document.diagram.erase("observers_panel");
+    document.diagram.erase("observers_panel_manual");
     data->setData(mime, QByteArray::fromStdString(boost::json::serialize(document.toJson())));
     QApplication::clipboard()->setMimeData(data);
     return true;

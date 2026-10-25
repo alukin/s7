@@ -98,8 +98,9 @@ examples, retention behavior and current limits. Run Configuration lists live an
 full-recording channel counts; live-only acquisition does not accumulate disk data.
 
 **View → Tool Windows → Observers** (**Alt+3**) opens compact previews for root
-observer instances. Use **Observers…** to select them; no previews are
-selected initially. Each card can collapse, freeze independently or **Open** its
+observer instances. The first three observer IDs are selected automatically
+until you choose your own selection. Use **Observers…** to change it. An explicit
+empty selection is preserved when saving and reopening. Each card can collapse, freeze independently or **Open** its
 full viewer. Selection and collapse state are saved with the diagram. Starting
 a run activates this dock once; choosing another dock during execution is
 respected. **Signals…** retains named tap management and ad-hoc viewers.
@@ -117,11 +118,17 @@ height. There is no half-span setting. Changing gain or position turns off
 Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
 unchanged.
 
-**Time window** shows the retained sample count and duration. A 600 s run at
-1 kHz with the default 4096 samples displays model time **595.905–600 s**, rather
-than the whole run. The range above the plot and the dock preview status identify
-that recent interval. Increasing retention fills forward and cannot recover
-samples already evicted. **Channels**, **Time window**, **Trigger** and **Window
+**Time base** sets model seconds per division across ten horizontal divisions.
+The default **2 s/div** shows a **20 s** rolling window at every model dt. A
+bounded display history preserves endpoints and channel extrema using at most
+4096 original sample positions. Changing dt therefore changes detail rather than
+the visible model-time span. Enlarging the scale merges the retained history;
+older discarded data cannot be recovered, and new coverage fills forward.
+
+**Analysis retention** separately controls full-rate samples for FFT/correlation
+and sampled trigger captures. Its default remains 4096 samples. Triggered Time
+views initially fit the capture; the Time-base knob can zoom that capture.
+**Channels**, **Time base**, **Analysis retention**, **Trigger** and **Window
 inspection** collapse independently. The column scrolls vertically; **Hide
 controls** gives the plot the full width. Hover readouts and acquisition status
 have fixed-height scrollable areas so pointer motion does not move the layout.
@@ -140,12 +147,12 @@ The live oscilloscope has four tabs sharing the same acquisition:
 See [Live FFT spectrum](STUDIO_SPECTRUM.md) and
 [Live constellation and correlation](STUDIO_PAIR_ANALYSIS.md) for controls and
 worked examples. FFT and correlation need at least N retained consecutive samples;
-increase **Samples / channel** or reduce N if the view reports **Filling**.
+increase **Raw samples / channel** or reduce N if the view reports **Filling**.
 The model sample rate determines frequency and lag in seconds.
 All four tabs use the same layout: full-height graph on the left and grouped,
 scrollable settings on the right. Hover values use five significant digits in
 an eight-line readout, with compact status at the bottom. Hide controls expands
-the active graph. Time window and Window inspection remain available on every
+the active graph. Analysis retention and Window inspection remain available on every
 tab.
 
 Only the visible tab of a visible, non-minimized window analyzes data. Switching

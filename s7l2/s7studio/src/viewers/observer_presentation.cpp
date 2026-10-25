@@ -42,9 +42,12 @@ PreviewData preparePreview(const PreviewRequest& request)
     if (phase) { selected.clear(); for (int i = 0; i < request.descriptor.inputs.size() && i < 3; ++i) selected.push_back(i); }
     if (selected.size() > 8) selected.resize(8);
     double origin = 0;
+    bool timeEnvelope = false, envelopeGaps = false;
+    std::array<bool, 8> envelopeInvalid{};
     if (request.live) {
-        const auto frame = request.trigger.mode == observation::TriggerMode::Rolling ? request.live->snapshot() : request.live->triggerSnapshot();
+        const auto frame = request.trigger.mode == observation::TriggerMode::Rolling ? std::optional{request.live->timeSnapshot()} : request.live->triggerSnapshot();
         if (!frame) { result.status = "Waiting for a completed sampled trigger capture."; return result; }
+        timeEnvelope = frame->timeEnvelope; envelopeGaps = frame->envelopeGaps; envelopeInvalid = frame->envelopeInvalid;
         result.run = frame->runId;
         result.summary = frame->trigger ? (frame->trigger->triggered ? "Triggered" : "Auto timeout") : "Rolling";
         if (!frame->error.isEmpty()) result.summary.prepend("Error • ");
@@ -93,8 +96,8 @@ PreviewData preparePreview(const PreviewRequest& request)
             PreviewData::Trace trace; trace.name = label; trace.channel = index; QList<QPointF> segment;
             std::optional<std::int64_t> previous;
             for (const auto& value : data) {
-                const bool finite = std::isfinite(value.value) && std::isfinite(value.timeSeconds);
-                if (!finite || (previous && value.step != *previous+1)) {
+                const bool finite = std::isfinite(value.value) && std::isfinite(value.timeSeconds) && !envelopeGaps && !envelopeInvalid[static_cast<std::size_t>(index)];
+                if (!finite || (!timeEnvelope && previous && value.step != *previous+1)) {
                     if (!segment.empty()) { trace.segments.push_back(std::move(segment)); segment.clear(); }
                     if (!finite) ++invalid; else ++gaps;
                 }

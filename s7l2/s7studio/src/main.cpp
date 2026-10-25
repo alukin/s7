@@ -1105,7 +1105,7 @@ int runLiveSpectrumCheck(int argc, char** argv)
     s7studio::ui::LiveOscilloscopeWindow viewer("installed-spectrum");
     viewer.attachLiveSource(runner.liveSources().value("live")); viewer.resize(1280, 720); viewer.show();
     auto* tabs = viewer.findChild<QTabWidget*>("live.views");
-    wait([&] { return viewer.displayedFrame().steps.size() == 4096; });
+    wait([&] { return !viewer.displayedFrame().steps.empty() && viewer.displayedFrame().steps.back() == 8192; });
     wait([&] { return !viewer.plotView()->series().first()->points().isEmpty(); });
     wait([&] { return viewer.plotView()->quickWidget() && viewer.plotView()->quickWidget()->status() == QQuickWidget::Ready; });
     if (viewer.displayedFrame().steps.back() != 8192)

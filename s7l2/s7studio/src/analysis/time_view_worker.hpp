@@ -15,9 +15,10 @@ struct TimeViewSettings {
     bool prepareTime = false;
     bool autoY = false;
     bool fitX = false;
+    double timeSpan = 0;
 };
 struct TimeViewResult {
-    std::shared_ptr<const observation::LiveFrame> frame;
+    std::shared_ptr<const observation::LiveFrame> frame, rawFrame;
     std::array<QList<QPointF>, observation::LiveAcquisition::maxChannels> points;
     QString warning;
     std::uint64_t revision = 0;

@@ -82,7 +82,7 @@ QJsonObject rawMetadata(const observation::LiveFrame& f)
     QJsonArray channels;
     for (const auto& c : f.channels) channels.append(QJsonObject{{"name", c.name}, {"unit", c.unit}, {"source_type", c.sourceType}, {"stored_type", "f64"}});
     return {{"run_id", QString::number(f.runId)}, {"generation", QString::number(f.generation)}, {"received", QString::number(f.received)},
-        {"evicted", QString::number(f.evicted)}, {"gaps_seen", QString::number(f.gaps)}, {"capacity", static_cast<int>(f.capacity)},
+        {"evicted", QString::number(f.evicted)}, {"time_envelope_selection", f.timeEnvelope}, {"gaps_seen", QString::number(f.gaps)}, {"capacity", static_cast<int>(f.capacity)},
         {"rate_numerator", QString::number(f.rateNumerator)}, {"rate_denominator", QString::number(f.rateDenominator)},
         {"dt_s", exactNumber(f.dt)}, {"finished", f.finished}, {"error", f.error}, {"provenance", f.provenance}, {"trigger", observation::triggerMetadata(f)},
         {"first_step", QString::number(f.steps.front())}, {"last_step", QString::number(f.steps.back())}, {"channels", channels}};
@@ -95,6 +95,7 @@ WindowSnapshot timeWindow(std::shared_ptr<const observation::LiveFrame> frame)
     WindowSnapshot d; d.raw = std::move(frame); d.axisName = "model_time"; d.axisUnit = "s";
     if (!d.raw || d.raw->steps.empty()) return d;
     const auto& f = *d.raw; d.axis = d.times = f.times; d.displayX = d.axis; d.steps = f.steps;
+    if (f.timeEnvelope) d.settings.insert("time_envelope_selection", true);
     const auto width = static_cast<std::size_t>(f.channels.size());
     if (!width || f.values.size() != f.steps.size()*width) throw std::invalid_argument("Inconsistent acquisition columns.");
     for (std::size_t c = 0; c < width; ++c) {
@@ -209,7 +210,10 @@ QString measurementReadout(const WindowSnapshot& d, std::size_t a, std::size_t b
     if (b >= d.axis.size()) throw std::out_of_range("Measurement outside pinned window.");
     const bool raw = !d.steps.empty();
     QStringList lines{raw ? "A–B inclusive raw samples/pairs (display gain/offset ignored)" : "A–B inclusive derived bins/lags in linear units (not time-domain signal RMS)"};
-    if (raw) {
+    if (raw && d.raw->timeEnvelope) {
+        lines[0] = "Selected Time-envelope samples (display gain/offset ignored); statistics are not full-rate signal measurements";
+        lines << "Endpoints and channel extrema are retained; skipped model steps are display reduction, not interpolated samples.";
+    } else if (raw) {
         std::uint64_t missing = 0;
         for (auto i = a+1; i <= b; ++i) if (d.steps[i] > d.steps[i-1]+1) missing += static_cast<std::uint64_t>(d.steps[i]-d.steps[i-1]-1);
         lines << QStringLiteral("Steps %1–%2 • missing steps %3 • statistics cover observed positions only").arg(d.steps[a]).arg(d.steps[b]).arg(missing);

@@ -73,12 +73,13 @@ private slots:
             const double t = step*.001, values[]{std::sin(t), std::cos(t)}; live->append(step, t, values);
         }
         const auto data = preparePreview({descriptor, {0,1}, {}, live});
-        QVERIFY(data.status.contains("model time 595.905–600 s (4.095 s window)"));
+        QVERIFY(data.summary.contains("600 s"));
+        QVERIFY(data.rawPositions <= 8192);
         QCOMPARE(data.traces.size(), 2);
         ObserverPresentation presentation("LiveOscilloscope"); presentation.present(data);
-        QCOMPARE(presentation.linePlot()->xMin(), 595.905-4.095*.04); QCOMPARE(presentation.linePlot()->xMax(), 600.+4.095*.04);
+        QVERIFY(presentation.linePlot()->xMin() < 580.1); QVERIFY(presentation.linePlot()->xMax() > 600.);
         for (const auto* series : presentation.linePlot()->series()) {
-            QCOMPARE(series->points().front().x(), 595.905); QCOMPARE(series->points().back().x(), 600.);
+            QVERIFY(std::abs(series->points().front().x()-580.) < .1); QCOMPARE(series->points().back().x(), 600.);
         }
     }
     void coordinatesJoinOnlyEqualSteps() {

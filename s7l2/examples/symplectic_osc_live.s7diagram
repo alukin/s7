@@ -1,0 +1,176 @@
+{
+  "id": "symplectic_osc_live",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 297,
+    "height_mm": 210
+  },
+  "schema": {
+    "name": "Symplectic oscillator — two live channels",
+    "elements": [
+      {
+        "id": "state",
+        "type": "SymplecticIntegrator",
+        "params": {
+          "dt": 0.001,
+          "initial_position": 0,
+          "initial_velocity": 1
+        }
+      },
+      {
+        "id": "restoring",
+        "type": "Gain",
+        "params": {
+          "factor": -1
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "state",
+        "from_port": 0,
+        "to_element": "restoring",
+        "to_port": 0
+      },
+      {
+        "from_element": "restoring",
+        "from_port": 0,
+        "to_element": "state",
+        "to_port": 0
+      }
+    ]
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "restoring",
+        "position": [
+          6,
+          14
+        ]
+      },
+      {
+        "id": "state",
+        "position": [
+          20,
+          14
+        ]
+      },
+      {
+        "id": "live_1",
+        "position": [
+          40,
+          14
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "position",
+            "velocity"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "restoring",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "restoring",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            33,
+            16
+          ],
+          [
+            33,
+            24
+          ],
+          [
+            4,
+            24
+          ],
+          [
+            4,
+            16
+          ]
+        ]
+      },
+      {
+        "id": "obs1",
+        "from": {
+          "wire": "w2",
+          "at": [
+            33,
+            16
+          ]
+        },
+        "to": {
+          "port": [
+            "live_1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "obs2",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "live_1",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": []
+  }
+}
