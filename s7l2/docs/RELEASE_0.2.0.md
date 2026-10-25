@@ -1,4 +1,4 @@
-# S7 0.2.0 — parallel runtime, networking, printing and signal generator
+# S7 0.2.0 — runtime, networking, diagram visuals, printing and signal generator
 
 Runtime/node goals agreed with the maintainer on 2026-10-23; Studio diagram
 and observation-graph printing added at the maintainer's request on 2026-10-24.
@@ -167,7 +167,29 @@ Keep credential tooling independent of runtime graph execution and keep Qt out
 of headless provisioning paths. Full PKI lifecycle services (such as an online
 CA or revocation distribution) require separate scope decisions.
 
+## Studio element resizing and type pictograms
+
+Requested by the maintainer on 2026-10-25 for 0.2.0:
+
+- Make element shapes resizable in the diagram editor. Define resize handles,
+  grid behavior and minimum dimensions that keep ports and labels usable.
+  Preserve wire attachments/routing, selection, undo/redo and saved geometry
+  through reopening, including nested schemas.
+- Add pictograms inside element bodies to distinguish element types visually.
+  Use project-owned rendering and element/library metadata; retain readable
+  names/types and an explicit fallback when a pictogram is unavailable.
+  Cover built-in, schema-backed, plugin and observer elements.
+
+These are presentation changes: resizing or choosing a pictogram must not
+change element identity, port semantics or the executing causal graph. Plan
+narrow/large shapes, zoom/display scaling and color/grayscale readability.
+Carry the resized geometry and pictograms into diagram printing below.
+
 ## Studio diagram and observation-graph printing
+
+The maintainer reaffirmed diagram and plot printing on 2026-10-25 alongside
+resizable shapes and type pictograms. Printed diagrams must include their saved
+sizes and body pictograms with readable labels and complete wire connections.
 
 Provide printing for diagrams and observation graphs. This is missing
 functionality, not a tested feature of 0.1.0: the current Studio has page-layout
