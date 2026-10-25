@@ -11,6 +11,13 @@
 #include <QLayout>
 #include <QLocale>
 #include <QSignalBlocker>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QFocusEvent>
+#include <QResizeEvent>
+#include <QLineEdit>
+#include <QRadialGradient>
+#include <QLinearGradient>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -50,16 +57,67 @@ private:
     }
     QList<QLayoutItem*> items_;
 };
+// Keep QDial's mouse, wheel, keyboard and accessibility behavior; paint the
+// instrument face ourselves so it is consistent across desktop styles.
+class InstrumentDial : public QDial {
+public:
+    using QDial::QDial;
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        p.translate(width()/2., height()/2.);
+        const double radius = std::min(width(), height())/2.-10;
+        const QColor ink = palette().color(QPalette::WindowText);
+        for (int i = 0; i <= 10; ++i) {
+            p.save(); p.rotate(-150.+i*30.);
+            p.setPen(QPen(ink, i%5 == 0 ? 1.8 : 1.));
+            p.drawLine(QPointF(0, -radius-4), QPointF(0, -radius-(i%5 == 0 ? 9 : 7))); p.restore();
+        }
+        p.setPen(Qt::NoPen); p.setBrush(QColor(0, 0, 0, 60));
+        p.drawEllipse(QPointF(1, 2), radius+1, radius+1);
+        QLinearGradient rim(-radius, -radius, radius, radius);
+        rim.setColorAt(0, QColor("#e8ecf0")); rim.setColorAt(.5, QColor("#737c86")); rim.setColorAt(1, QColor("#b8c0c8"));
+        p.setBrush(rim); p.drawEllipse(QPointF(), radius, radius);
+        QRadialGradient face(-radius*.35, -radius*.45, radius*1.6);
+        face.setColorAt(0, QColor("#626d79")); face.setColorAt(.6, QColor("#303944")); face.setColorAt(1, QColor("#171d25"));
+        p.setBrush(face); p.drawEllipse(QPointF(), radius-3, radius-3);
+        const double position = double(value()-minimum())/double(maximum()-minimum());
+        p.rotate(wrapping() ? position*360.-180. : position*300.-150.);
+        p.setPen(QPen(isEnabled() ? palette().color(QPalette::Highlight) : ink, 3., Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(0, -radius*.35), QPointF(0, -radius+6));
+        if (hasFocus()) {
+            p.resetTransform(); p.setPen(QPen(palette().color(QPalette::Highlight), 1., Qt::DashLine));
+            p.setBrush(Qt::NoBrush); p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 5, 5);
+        }
+    }
+};
 class ExactNumber : public QDoubleSpinBox {
+    QLabel* summary_ = nullptr;
+    void updateSummary() {
+        summary_->setText(QString::number(value(), 'g', 5));
+        summary_->setGeometry(lineEdit()->rect());
+        summary_->setVisible(!hasFocus() && !lineEdit()->hasFocus());
+    }
 public:
     explicit ExactNumber(QWidget* parent) : QDoubleSpinBox(parent) {
         setLocale(QLocale::c()); setDecimals(323); setKeyboardTracking(false);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-        setMinimumWidth(100);
+        setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+        setFixedWidth(fontMetrics().horizontalAdvance("-0.0000e+00") + 28);
+        setAlignment(Qt::AlignRight);
+        // The compact face is presentation only. The editor and spinbox retain
+        // all digits, so merely focusing or leaving it never rounds the value.
+        summary_ = new QLabel(lineEdit()); summary_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        summary_->setAutoFillBackground(true); summary_->setBackgroundRole(QPalette::Base);
+        summary_->setForegroundRole(QPalette::Text); summary_->setAttribute(Qt::WA_TransparentForMouseEvents);
+        connect(this, &QDoubleSpinBox::valueChanged, this, [this] { updateSummary(); });
+        updateSummary();
     }
-    QSize sizeHint() const override { return {130, QDoubleSpinBox::sizeHint().height()}; }
-    QSize minimumSizeHint() const override { return {100, QDoubleSpinBox::minimumSizeHint().height()}; }
+    QSize sizeHint() const override { return {width(), QDoubleSpinBox::sizeHint().height()}; }
+    QSize minimumSizeHint() const override { return {width(), QDoubleSpinBox::minimumSizeHint().height()}; }
 protected:
+    void focusInEvent(QFocusEvent* event) override { QDoubleSpinBox::focusInEvent(event); summary_->hide(); }
+    void focusOutEvent(QFocusEvent* event) override { QDoubleSpinBox::focusOutEvent(event); updateSummary(); }
+    void resizeEvent(QResizeEvent* event) override { QDoubleSpinBox::resizeEvent(event); if (summary_) updateSummary(); }
     QString textFromValue(double value) const override { return QString::number(value, 'g', QLocale::FloatingPointShortest); }
     double valueFromText(const QString& text) const override { return text.toDouble(); }
     QValidator::State validate(QString& text, int& position) const override {
@@ -102,6 +160,7 @@ CollapsibleSection::CollapsibleSection(const QString& title, const QString& name
     setObjectName(name);
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0); layout->setSpacing(4);
     auto* toggle = new QToolButton(this); toggle->setObjectName(name + ".toggle"); toggle->setText(title);
+    toggle->setProperty("sectionHeader", true);
     toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); toggle->setCheckable(true); toggle->setChecked(expanded);
     toggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); toggle->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
     layout->addWidget(toggle); layout->addWidget(content); content->setVisible(expanded);
@@ -113,50 +172,46 @@ CollapsibleSection::CollapsibleSection(const QString& title, const QString& name
 RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWidget* parent) : QWidget(parent), mapping_(mapping)
 {
     setObjectName(name + ".control");
-    auto* layout = new QGridLayout(this); layout->setContentsMargins(0, 0, 0, 0); layout->setSpacing(3); layout->setColumnStretch(0, 1);
-    auto* title = new QLabel(mapping == Mapping::LogGain ? "Display gain" : "Display offset", this); layout->addWidget(title, 0, 0, 1, 2);
-    dial_ = new QDial(this); dial_->setObjectName(name + ".dial"); dial_->setWrapping(false); dial_->setNotchesVisible(true);
-    dial_->setRange(0, mapping == Mapping::LogGain ? 1200 : 1000); dial_->setFixedSize(64, 64);
-    dial_->setAccessibleName(title->text()); layout->addWidget(dial_, 1, 1);
+    auto* layout = new QVBoxLayout(this); layout->setContentsMargins(6, 2, 6, 2); layout->setSpacing(4);
+    auto* title = new QLabel(mapping == Mapping::LogGain ? "Gain ×" : "Position", this);
+    title->setAlignment(Qt::AlignCenter); layout->addWidget(title);
+    dial_ = new InstrumentDial(this); dial_->setObjectName(name + ".dial");
+    dial_->setWrapping(mapping == Mapping::RelativeOffset);
+    dial_->setRange(0, mapping == Mapping::LogGain ? 1200 : 999); dial_->setFixedSize(80, 80);
+    dial_->setSingleStep(1); dial_->setPageStep(10);
+    dial_->setAccessibleName(title->text()); layout->addWidget(dial_, 0, Qt::AlignHCenter);
     number_ = new ExactNumber(this); number_->setObjectName(name); number_->setAccessibleName(title->text() + " exact value");
     number_->setRange(mapping == Mapping::LogGain ? 1e-6 : -1e12, mapping == Mapping::LogGain ? 1e6 : 1e12);
-    number_->setValue(mapping == Mapping::LogGain ? 1 : 0); layout->addWidget(number_, 1, 0);
-    if (mapping == Mapping::LocalOffset) {
-        auto* spanLabel = new QLabel("Dial half-span (raw units)", this); spanLabel->setWordWrap(true); layout->addWidget(spanLabel, 2, 0, 1, 2);
-        span_ = new ExactNumber(this); span_->setObjectName(name + ".span"); span_->setRange(1e-12, 1e12); span_->setValue(1);
-        span_->setAccessibleName("Offset dial half-span in raw signal units"); layout->addWidget(span_, 3, 0, 1, 2);
-        interval_ = new QLabel(this); interval_->setObjectName(name + ".interval"); interval_->setWordWrap(true);
-        interval_->setTextFormat(Qt::PlainText); layout->addWidget(interval_, 4, 0, 1, 2);
-        connect(span_, &QDoubleSpinBox::valueChanged, this, [this] { recenter(); });
-        connect(number_, &QDoubleSpinBox::editingFinished, this, [this] { recenter(); });
-    }
+    number_->setValue(mapping == Mapping::LogGain ? 1 : 0); layout->addWidget(number_, 0, Qt::AlignHCenter);
+    if (mapping == Mapping::RelativeOffset) {
+        dial_->setToolTip("Turn to move this channel vertically. One turn moves half the visible plot height. Numeric entry sets an exact offset.");
+        const QSignalBlocker block(dial_); dial_->setValue(previousPosition_);
+    } else dial_->setToolTip("Display multiplier for this channel. Numeric entry sets an exact gain.");
     connect(number_, &QDoubleSpinBox::valueChanged, this, [this] { updateDial(); });
     const auto applyPosition = [this](int position) {
         if (mapping_ == Mapping::LogGain) number_->setValue(std::pow(10., -6. + position/100.));
         else {
-            const double lo = std::max(-1e12, center_ - span_->value()), hi = std::min(1e12, center_ + span_->value());
-            number_->setValue(lo + (hi-lo)*position/1000.);
+            int delta = position-previousPosition_;
+            if (delta > 500) delta -= 1000;
+            if (delta < -500) delta += 1000;
+            previousPosition_ = position;
+            number_->setValue(number_->value() + delta*offsetStep_);
         }
     };
     connect(dial_, &QDial::valueChanged, this, applyPosition);
-    // A precise value can round to the same dial position as an endpoint.
-    // Explicit key/wheel actions still apply that endpoint, even without a
-    // valueChanged signal; a final mouse release applies its last position.
+    // End/Home must still reach an endpoint when an exact gain rounds to it.
     connect(dial_, &QDial::actionTriggered, this, [this, applyPosition](int) { applyPosition(dial_->sliderPosition()); });
-    connect(dial_, &QDial::sliderReleased, this, [this, applyPosition] { applyPosition(dial_->value()); });
     updateDial();
 }
-void RotaryValueControl::recenter() { center_ = number_->value(); updateDial(); }
+void RotaryValueControl::setOffsetStep(double step)
+{
+    if (mapping_ != Mapping::RelativeOffset || !std::isfinite(step) || step <= 0) return;
+    offsetStep_ = step; number_->setSingleStep(step);
+}
 void RotaryValueControl::updateDial()
 {
     const QSignalBlocker block(dial_);
     number_->setToolTip(QString::number(number_->value(), 'g', QLocale::FloatingPointShortest));
     if (mapping_ == Mapping::LogGain) dial_->setValue(qRound((std::log10(number_->value())+6.)*100.));
-    else {
-        const double lo = std::max(-1e12, center_ - span_->value()), hi = std::min(1e12, center_ + span_->value());
-        dial_->setEnabled(hi > lo);
-        dial_->setValue(hi > lo ? qRound(std::clamp((number_->value()-lo)/(hi-lo), 0., 1.)*1000.) : 500);
-        interval_->setText(QStringLiteral("Dial: [%1, %2]").arg(lo, 0, 'g', QLocale::FloatingPointShortest).arg(hi, 0, 'g', QLocale::FloatingPointShortest));
-    }
 }
 }

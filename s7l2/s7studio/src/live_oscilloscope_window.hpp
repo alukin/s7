@@ -62,7 +62,7 @@ private:
     viewers::SpectrumView* spectrum_;
     viewers::PairAnalysisView *constellation_, *correlation_;
     viewers::WindowInspectionPanel* inspection_;
-    QLabel *status_, *readout_, *duration_;
+    QLabel *status_, *readout_, *duration_, *timeRange_;
     QPushButton* freeze_;
     QSpinBox* capacity_;
     QLineEdit* seconds_;

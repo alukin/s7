@@ -74,11 +74,13 @@ auto LinePlotBridge::legend() const -> QVariantList
 {
     QVariantList entries;
     for (auto* series : view_.allSeries()) {
-        if (!series->isVisible() || view_.hiddenLegend_.contains(series)) continue;
+        if ((!series->isVisible() && !checkableLegend) || view_.hiddenLegend_.contains(series)) continue;
         const auto* line = qobject_cast<const QLineSeries*>(series);
         entries.push_back(QVariantMap{{QStringLiteral("name"), series->name()},
                                       {QStringLiteral("color"), series->color()},
-                                      {QStringLiteral("overlay"), line && view_.isOverlay(line)}});
+                                      {QStringLiteral("overlay"), line && view_.isOverlay(line)},
+                                      {QStringLiteral("index"), view_.series_.indexOf(line)},
+                                      {QStringLiteral("checked"), series->isVisible()}});
     }
     return entries;
 }

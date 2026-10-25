@@ -23,7 +23,8 @@
 #include <QLocale>
 #include <QPushButton>
 #include <QProgressBar>
-#include <QPixmap>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSignalBlocker>
@@ -42,11 +43,55 @@
 #include <limits>
 
 namespace s7studio::ui {
+namespace {
+class ChannelVisibilityBox : public QCheckBox {
+public:
+    explicit ChannelVisibilityBox(QWidget* parent) : QCheckBox(parent) { setFixedSize(22, 24); }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
+        const auto color = palette().color(QPalette::Highlight);
+        p.setPen(QPen(color, 1.5)); p.setBrush(isChecked() ? color : Qt::transparent);
+        p.drawRoundedRect(QRectF(3, 4, 16, 16), 3, 3);
+        if (isChecked()) {
+            p.setPen(QPen(QColor("#111820"), 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPolyline(QPolygonF{QPointF(6, 12), QPointF(10, 16), QPointF(16, 9)});
+        }
+        if (hasFocus()) { p.setPen(QPen(color, 1, Qt::DashLine)); p.setBrush(Qt::NoBrush); p.drawRect(rect().adjusted(0, 0, -1, -1)); }
+    }
+    bool hitButton(const QPoint& position) const override { return rect().contains(position); }
+};
+}
 LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
 {
     setObjectName("liveOscilloscope");
     setWindowTitle(QStringLiteral("Live oscilloscope — %1 (prototype)").arg(id));
     resize(1100, 740);
+    QPalette instrument = palette();
+    instrument.setColor(QPalette::Window, QColor("#20262e"));
+    instrument.setColor(QPalette::WindowText, QColor("#dde4ed"));
+    instrument.setColor(QPalette::Base, QColor("#151b22"));
+    instrument.setColor(QPalette::Text, QColor("#e8eef7"));
+    instrument.setColor(QPalette::Button, QColor("#2b3440"));
+    instrument.setColor(QPalette::ButtonText, QColor("#dde4ed"));
+    instrument.setColor(QPalette::Highlight, QColor("#46b5f3"));
+    instrument.setColor(QPalette::HighlightedText, QColor("#101820"));
+    setPalette(instrument);
+    setStyleSheet(R"(
+        QScrollArea { border: none; background: transparent; }
+        QPushButton, QToolButton { border: 1px solid #414d5d; border-radius: 4px; padding: 6px 8px; background: #2b3440; color: #dde4ed; }
+        QPushButton:hover, QToolButton:hover { background: #354455; border-color: #6b829a; }
+        QToolButton:checked, QPushButton:checked { background: #23455b; border-color: #46b5f3; }
+        QToolButton[sectionHeader="true"] { text-align: left; border: none; border-top: 1px solid #3b4552; border-radius: 0; background: transparent; padding: 9px 2px; font-weight: 600; }
+        QLineEdit, QAbstractSpinBox, QComboBox { background: #151b22; color: #e8eef7; border: 1px solid #455366; border-radius: 3px; padding: 4px; }
+        QAbstractSpinBox QLineEdit { border: none; padding: 0; background: transparent; }
+        QTabWidget::pane { border: none; }
+        QTabBar::tab { padding: 9px 12px; background: #20262e; color: #a8b7c8; border-bottom: 2px solid transparent; }
+        QTabBar::tab:selected { color: #e8eef7; border-bottom-color: #46b5f3; }
+        QScrollBar:vertical { width: 8px; background: #20262e; }
+        QScrollBar::handle:vertical { background: #4a596b; border-radius: 4px; min-height: 24px; }
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+    )");
     // Plot on the left at full height; every control lives in a resizable,
     // hideable column on the right so settings never steal plot height.
     auto* root = new QHBoxLayout(this); root->setContentsMargins(4, 4, 4, 4);
@@ -62,26 +107,28 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     auto* side = new QWidget(splitter); side->setObjectName("live.controls");
     auto* sideLayout = new QVBoxLayout(side); sideLayout->setContentsMargins(0, 0, 0, 0);
     auto* buttons = new QGridLayout;
-    freeze_ = new QPushButton(QStringLiteral("Freeze display"), side); freeze_->setObjectName("live.freeze"); freeze_->setCheckable(true);
+    freeze_ = new QPushButton(QStringLiteral("Freeze"), side); freeze_->setObjectName("live.freeze"); freeze_->setCheckable(true);
     buttons->addWidget(freeze_, 0, 0);
-    auto* follow = new QPushButton(QStringLiteral("Resume live / Fit"), side); follow->setObjectName("live.follow"); buttons->addWidget(follow, 0, 1);
+    auto* follow = new QPushButton(QStringLiteral("Resume / Fit"), side); follow->setObjectName("live.follow"); buttons->addWidget(follow, 0, 1);
     autoY_ = new QCheckBox(QStringLiteral("Auto Y"), side); autoY_->setObjectName("live.autoY"); autoY_->setChecked(true); buttons->addWidget(autoY_, 1, 0, 1, 2);
     sideLayout->addLayout(buttons);
     auto* scroll = new QScrollArea(side); scroll->setObjectName("live.controlsScroll"); scroll->setWidgetResizable(true); scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    auto* panel = new QWidget(scroll); auto* panelLayout = new QVBoxLayout(panel); panelLayout->setContentsMargins(0, 0, 4, 0);
+    auto* panel = new QWidget(scroll); auto* panelLayout = new QVBoxLayout(panel); panelLayout->setContentsMargins(10, 4, 10, 4);
     scroll->setWidget(panel); sideLayout->addWidget(scroll, 1);
-    auto form = [](QWidget* box) { auto* f = new QFormLayout(box); f->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow); f->setRowWrapPolicy(QFormLayout::WrapLongRows); return f; };
+    auto form = [](QWidget* box) { auto* f = new QFormLayout(box); f->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint); f->setRowWrapPolicy(QFormLayout::WrapLongRows); f->setHorizontalSpacing(12); return f; };
     auto* settings = new QWidget(panel);
     settings->setToolTip(QStringLiteral("Bounded RAM, no full-run recording."));
     auto* acquisition = form(settings);
     capacity_ = new QSpinBox(settings); capacity_->setObjectName("live.samples");
     capacity_->setRange(2, static_cast<int>(observation::LiveAcquisition::maxPositions)); capacity_->setValue(4096);
+    capacity_->setFixedWidth(110);
     capacity_->setToolTip(QStringLiteral("Changes retention during this run. Growing fills forward; evicted history cannot return. Does not change model rate."));
-    acquisition->addRow(QStringLiteral("Retained samples / channel"), capacity_);
+    acquisition->addRow(QStringLiteral("Samples / channel"), capacity_);
     seconds_ = new QLineEdit(settings); seconds_->setObjectName("live.seconds");
+    seconds_->setFixedWidth(110);
     seconds_->setToolTip("Positive model seconds, including scientific notation. Rounded up to complete sample intervals.");
-    acquisition->addRow(QStringLiteral("or duration (s)"), seconds_);
+    acquisition->addRow(QStringLiteral("Duration (s)"), seconds_);
     duration_ = new QLabel(QStringLiteral("Start a run to see model duration"), settings); duration_->setObjectName("live.duration"); duration_->setWordWrap(true);
     acquisition->addRow(duration_);
     auto* triggerBox = new QWidget(panel);
@@ -94,9 +141,9 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     triggerMode_ = combo("trigger.mode", {"Rolling", "Auto", "Normal", "Single"}); tg->addRow("Mode", triggerMode_);
     triggerChannel_ = combo("trigger.channel", {"Channel 1"}); tg->addRow("Trigger input", triggerChannel_);
     triggerEdge_ = new ChoiceButtons({"Rising", "Falling"}, "trigger.edge", triggerBox); tg->addRow("Edge", triggerEdge_);
-    triggerLevel_ = new QLineEdit("0", triggerBox); triggerLevel_->setObjectName("trigger.level"); tg->addRow("Level", triggerLevel_);
-    triggerHysteresis_ = new QLineEdit("0", triggerBox); triggerHysteresis_->setObjectName("trigger.hysteresis"); tg->addRow("Hysteresis", triggerHysteresis_);
-    auto spin = [&](const char* name, int low, int high, int value) { auto* c = new QSpinBox(triggerBox); c->setObjectName(name); c->setRange(low, high); c->setValue(value); return c; };
+    triggerLevel_ = new QLineEdit("0", triggerBox); triggerLevel_->setObjectName("trigger.level"); triggerLevel_->setFixedWidth(110); tg->addRow("Level", triggerLevel_);
+    triggerHysteresis_ = new QLineEdit("0", triggerBox); triggerHysteresis_->setObjectName("trigger.hysteresis"); triggerHysteresis_->setFixedWidth(110); tg->addRow("Hysteresis", triggerHysteresis_);
+    auto spin = [&](const char* name, int low, int high, int value) { auto* c = new QSpinBox(triggerBox); c->setObjectName(name); c->setRange(low, high); c->setValue(value); c->setFixedWidth(110); return c; };
     triggerPre_ = spin("trigger.pre", 0, 100, 25); triggerPre_->setSuffix(" %");
     auto* preRow = new QWidget(triggerBox); auto* preLayout = new QHBoxLayout(preRow); preLayout->setContentsMargins(0, 0, 0, 0);
     auto* preSlider = triggerPreSlider_ = new QSlider(Qt::Horizontal, preRow); preSlider->setObjectName("trigger.pre.slider"); preSlider->setRange(0, 100); preSlider->setValue(25);
@@ -118,36 +165,54 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         const auto name = QStringLiteral("live.channel.%1").arg(i);
         auto* select = new QToolButton(channelBox); select->setObjectName(name + ".select"); select->setText(QStringLiteral("CH %1").arg(i+1));
         select->setCheckable(true); select->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-        select->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); selectors->addWidget(select, i/4, i%4); channelGroup->addButton(select, i); select->hide();
+        select->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); auto* selector = new QWidget(channelBox); auto* selectorLayout = new QHBoxLayout(selector);
+        selectorLayout->setContentsMargins(0, 0, 0, 0); selectorLayout->setSpacing(3);
+        auto* visible = new ChannelVisibilityBox(selector); visible->setChecked(true);
+        selectorLayout->addWidget(visible); selectorLayout->addWidget(select, 1);
+        selectors->addWidget(selector, i/2, i%2); channelGroup->addButton(select, i); selector->hide();
         auto* page = new QWidget(channelPages_); auto* pageLayout = new QVBoxLayout(page); pageLayout->setContentsMargins(0, 0, 0, 0);
-        auto* visible = new QCheckBox("Start a run to see channel names", page); visible->setChecked(true);
         auto* channelName = new QLabel(page); channelName->setObjectName(name + ".name"); channelName->setWordWrap(true); channelName->setTextFormat(Qt::PlainText);
         channelName->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); pageLayout->addWidget(channelName);
-        pageLayout->addWidget(visible);
         auto* gainControl = new RotaryValueControl(RotaryValueControl::Mapping::LogGain, name + ".gain", page);
-        auto* offsetControl = new RotaryValueControl(RotaryValueControl::Mapping::LocalOffset, name + ".offset", page);
-        pageLayout->addWidget(gainControl); pageLayout->addWidget(offsetControl);
+        auto* offsetControl = new RotaryValueControl(RotaryValueControl::Mapping::RelativeOffset, name + ".offset", page);
+        auto* knobs = new QHBoxLayout; knobs->setSpacing(8);
+        knobs->addWidget(gainControl); knobs->addWidget(offsetControl); pageLayout->addLayout(knobs);
         auto* gain = gainControl->number(); auto* offset = offsetControl->number();
         visible->setObjectName(QStringLiteral("live.channel.%1.visible").arg(i));
         gain->setObjectName(QStringLiteral("live.channel.%1.gain").arg(i));
         offset->setObjectName(QStringLiteral("live.channel.%1.offset").arg(i));
         controls_.push_back({visible, gain, offset, select}); channelPages_->addWidget(page); page->setEnabled(false);
         connect(visible, &QCheckBox::toggled, this, [this] { render(false); });
-        connect(gain, &QDoubleSpinBox::valueChanged, this, [this] { render(false); });
-        connect(offset, &QDoubleSpinBox::valueChanged, this, [this] { render(false); });
+        const auto adjustDisplay = [this] {
+            // Hold the shared scale while a channel moves; otherwise Auto Y
+            // cancels gain/position changes and moves the other channels too.
+            const QSignalBlocker block(autoY_); autoY_->setChecked(false); render(false);
+        };
+        connect(gain, &QDoubleSpinBox::valueChanged, this, adjustDisplay);
+        connect(offset, &QDoubleSpinBox::valueChanged, this, adjustDisplay);
     }
     controls_.front().select->setChecked(true);
     connect(channelGroup, &QButtonGroup::idToggled, this, [this](int index, bool checked) { if (checked) channelPages_->setCurrentIndex(index); });
-    panelLayout->addWidget(new CollapsibleSection("Channels — display only", "live.section.channels", channelBox, true, panel));
-    panelLayout->addWidget(new CollapsibleSection("Acquisition / retention", "live.section.acquisition", settings, false, panel));
-    panelLayout->addWidget(new CollapsibleSection("Trigger — sampled edge", "live.section.trigger", triggerBox, false, panel));
+    panelLayout->addWidget(new CollapsibleSection("Channels", "live.section.channels", channelBox, true, panel));
+    panelLayout->addWidget(new CollapsibleSection("Time window", "live.section.acquisition", settings, true, panel));
+    panelLayout->addWidget(new CollapsibleSection("Trigger", "live.section.trigger", triggerBox, false, panel));
     plot_ = new viewers::LinePlotView(timePage); plot_->setObjectName("live.plot");
     plot_->setAxisTitles("Model time (s)", "Value (supplied units; shared numeric axis)"); plot_->setLegendVisible(true);
+    plot_->bridge()->checkableLegend = true;
+    plot_->bridge()->instrumentTheme = true;
+    connect(plot_->bridge(), &viewers::LinePlotBridge::legendToggled, this, [this](int channel, bool checked) {
+        if (channel >= 0 && channel < controls_.size()) controls_[channel].visible->setChecked(checked);
+    });
+    for (int i = 0; i < controls_.size(); ++i) connect(controls_[i].visible, &QCheckBox::toggled, this, [this, i](bool checked) {
+        if (i < plot_->series().size()) plot_->setSeriesVisible(plot_->series()[i], checked);
+    });
     plot_->bridge()->inspectionEnabled = true;
+    timeRange_ = new QLabel("Waiting for model-time samples", timePage); timeRange_->setObjectName("live.timeRange");
+    timeRange_->setMargin(4); timeRange_->setWordWrap(true); timeLayout->addWidget(timeRange_);
     timeLayout->addWidget(plot_, 1);
     readout_ = new QLabel(QStringLiteral("Hover over the plot to inspect stored samples. Wheel zooms; drag pans and freezes this window."), side);
     readout_->setObjectName("live.readout"); readout_->setWordWrap(true); readout_->setTextFormat(Qt::PlainText);
-    readout_->setFrameShape(QFrame::StyledPanel); readout_->setMargin(4);
+    readout_->setFrameShape(QFrame::NoFrame); readout_->setMargin(4);
     readout_->setTextInteractionFlags(Qt::TextSelectableByMouse);
     inspection_ = new viewers::WindowInspectionPanel([this, tabs]() -> std::optional<analysis::WindowSnapshot> {
         if (tabs->currentIndex() == 1) return spectrum_->inspectionSnapshot();
@@ -180,10 +245,19 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     connect(spectrum_, &viewers::SpectrumView::inspectionInvalidated, this, [this] { if (spectrum_->isVisible()) inspection_->clear(); });
     for (auto* view : {constellation_, correlation_}) connect(view, &viewers::PairAnalysisView::inspectionInvalidated,
         this, [this, view] { if (view->isVisible()) inspection_->clear(); });
-    sideLayout->addWidget(readout_);
+    auto* readoutScroll = new QScrollArea(side); readoutScroll->setObjectName("live.readoutScroll");
+    readoutScroll->setWidgetResizable(true); readoutScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    readoutScroll->setFixedHeight(readout_->fontMetrics().lineSpacing()*5+16);
+    readout_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    readoutScroll->setWidget(readout_); sideLayout->addWidget(readoutScroll);
     timeBusy_ = new QProgressBar(side); timeBusy_->setObjectName("live.processing"); timeBusy_->setRange(0, 0);
-    timeBusy_->setTextVisible(false); timeBusy_->setMaximumHeight(12); timeBusy_->setAccessibleName("Preparing Time display"); timeBusy_->hide(); sideLayout->addWidget(timeBusy_);
-    status_ = new QLabel(side); status_->setObjectName("live.status"); status_->setMargin(4); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); sideLayout->addWidget(status_);
+    timeBusy_->setTextVisible(false); timeBusy_->setMaximumHeight(12); timeBusy_->setAccessibleName("Preparing Time display"); timeBusy_->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+    auto busyPolicy = timeBusy_->sizePolicy(); busyPolicy.setRetainSizeWhenHidden(true); timeBusy_->setSizePolicy(busyPolicy); timeBusy_->hide(); sideLayout->addWidget(timeBusy_);
+    status_ = new QLabel(side); status_->setObjectName("live.status"); status_->setMargin(4); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText);
+    auto* statusScroll = new QScrollArea(side); statusScroll->setObjectName("live.statusScroll");
+    statusScroll->setWidgetResizable(true); statusScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    statusScroll->setFrameShape(QFrame::NoFrame); statusScroll->setFixedHeight(status_->fontMetrics().lineSpacing()*5+16);
+    status_->setAlignment(Qt::AlignLeft | Qt::AlignTop); statusScroll->setWidget(status_); sideLayout->addWidget(statusScroll);
     splitter->setStretchFactor(0, 1); splitter->setStretchFactor(1, 0); splitter->setSizes({780, 320});
     auto* toggle = new QToolButton(tabs); toggle->setObjectName("live.controlsToggle"); toggle->setCheckable(true); toggle->setChecked(true);
     toggle->setText(QStringLiteral("Hide controls ▸")); toggle->setToolTip(QStringLiteral("Show or hide the control column to give the plot the whole window."));
@@ -219,7 +293,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         }
     });
     connect(freeze_, &QPushButton::toggled, this, [this](bool frozen) {
-        freeze_->setText(frozen ? QStringLiteral("Display frozen") : QStringLiteral("Freeze display"));
+        freeze_->setText(frozen ? QStringLiteral("Frozen") : QStringLiteral("Freeze"));
         const auto pinned = spectrum_->setFrozen(frozen);
         if (frozen && spectrum_->isVisible() && pinned) frame_ = pinned;
         for (auto* view : {constellation_, correlation_}) {
@@ -349,19 +423,29 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
     timeWorker_.cancel(); ++timeRequestRevision_; requestedCaptureId_ = 0;
     live_ = std::move(source); clearSamples();
     const int count = live_ ? static_cast<int>(live_->channels().size()) : 0;
-    static const QColor colors[]{QColor("#1565c0"), QColor("#c62828"), QColor("#00875a"), QColor("#8e24aa"), QColor("#c25e00"), QColor("#007b83"), QColor("#544d00"), QColor("#555555")};
+    static const QColor colors[]{QColor("#54b8ff"), QColor("#ff7080"), QColor("#56d6a0"), QColor("#c493ff"), QColor("#ffc36b"), QColor("#5cdddd"), QColor("#d9db72"), QColor("#ccd5e0")};
     for (int i = 0; i < 8; ++i) {
         const bool available = i < count;
-        controls_[i].select->setVisible(available); channelPages_->widget(i)->setEnabled(available);
-        if (!available) continue;
+        controls_[i].select->parentWidget()->setVisible(available); channelPages_->widget(i)->setEnabled(available);
+        if (!available) {
+            if (i < plot_->series().size()) { plot_->setLegendEntryVisible(plot_->series()[i], false); plot_->setSeriesVisible(plot_->series()[i], false); }
+            continue;
+        }
+        auto channelPalette = channelPages_->widget(i)->palette(); channelPalette.setColor(QPalette::Highlight, colors[i]);
+        channelPages_->widget(i)->setPalette(channelPalette);
         const auto& channel = live_->channels()[i];
         const auto title = channel.name + " [" + (channel.unit.isEmpty() ? "unit unspecified" : channel.unit) + "]";
-        controls_[i].visible->setText(QStringLiteral("Show CH %1").arg(i+1));
+        controls_[i].visible->setToolTip(QStringLiteral("Show channel %1: %2").arg(i+1).arg(title));
+        controls_[i].visible->setAccessibleName(QStringLiteral("Show channel %1: %2").arg(i+1).arg(title));
+        auto checkboxPalette = controls_[i].visible->palette(); checkboxPalette.setColor(QPalette::Highlight, colors[i]);
+        controls_[i].visible->setPalette(checkboxPalette);
+        controls_[i].select->setStyleSheet(QStringLiteral("QToolButton { color: %1; } QToolButton:checked { border-color: %1; }").arg(colors[i].name()));
         channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.name").arg(i))->setText(title);
         controls_[i].select->setToolTip(title); controls_[i].select->setAccessibleName(QStringLiteral("Select channel %1: %2").arg(i+1).arg(title));
-        QPixmap swatch(12, 12); swatch.fill(colors[i]); controls_[i].select->setIcon(QIcon(swatch));
         if (plot_->series().size() <= i) plot_->addSeries(channel.name, {colors[i]});
+        plot_->setLegendEntryVisible(plot_->series()[i], true);
         plot_->setSeriesName(plot_->series()[i], title);
+        plot_->setSeriesVisible(plot_->series()[i], controls_[i].visible->isChecked());
     }
     if (channelPages_->currentIndex() >= count) { controls_.front().select->setChecked(true); channelPages_->setCurrentIndex(0); }
     if (live_) {
@@ -489,6 +573,8 @@ void LiveOscilloscopeWindow::presentTimeResult(const analysis::TimeViewResult& r
         const double pad = result.yMax == result.yMin ? std::max(0.5, std::abs(result.yMin)*.05) : (result.yMax-result.yMin)*.04;
         plot_->setYRange(result.yMin-pad, result.yMax+pad);
     }
+    const double offsetStep = (plot_->yMax()-plot_->yMin())/2000.;
+    for (const auto& control : controls_) static_cast<RotaryValueControl*>(control.offset->parentWidget())->setOffsetStep(offsetStep);
     rendering_ = false;
     const double uiMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-started).count();
     if (uiMs > 50) qWarning().noquote() << "Live oscilloscope GUI series update took" << uiMs
@@ -504,13 +590,13 @@ QString LiveOscilloscopeWindow::inspect(double time, bool active)
     if (sample) {
         const auto i = *sample;
         plot_->bridge()->cursorX = frame.plottedTime(i);
-        QString text = QStringLiteral("Stored sample • run %1 • step %2 • model time %3 s")
+        QString text = QStringLiteral("Stored sample • run %1 • step %2\nModel time %3 s")
             .arg(frame.runId).arg(frame.steps[i]).arg(frame.times[i], 0, 'g', 17);
         for (qsizetype c = 0; c < frame.channels.size(); ++c) if (controls_[c].visible->isChecked()) {
             const auto& channel = frame.channels[c];
-            text += QStringLiteral("\n%1 = %2 %3 (source %4 → stored f64)").arg(channel.name)
+            text += QStringLiteral("\n%1 = %2 %3").arg(channel.name)
                 .arg(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(c)], 0, 'g', 17)
-                .arg(channel.unit.isEmpty() ? QStringLiteral("[unit unspecified]") : channel.unit, channel.sourceType);
+                .arg(channel.unit.isEmpty() ? QStringLiteral("[unit unspecified]") : channel.unit);
         }
         if (frame.trigger && frame.trigger->triggered) text += QStringLiteral("\nTrigger-relative time = %1 s; sampled trigger step %2").arg(frame.plottedTime(i), 0, 'g', 17).arg(frame.trigger->step);
         readout_->setText(text);
@@ -592,9 +678,9 @@ void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
         triggerStatus_->setText(triggerError_.isEmpty() ? "Trigger settings apply before acquisition starts on the next run." : triggerError_); return;
     }
     if (!seconds_->hasFocus() && !seconds_->isModified()) seconds_->setText(QString::number(static_cast<double>(live_->capacity()-1)*live_->dt(), 'g', 12));
-    duration_->setText(QStringLiteral("%1 s maximum span • %2 MiB reserved")
-        .arg(static_cast<double>(live_->capacity()-1)*live_->dt(), 0, 'g', 10)
-        .arg(static_cast<double>(live_->allocatedBytes())/(1024*1024), 0, 'f', 2));
+    duration_->setText(QStringLiteral("%1 s retained at %2 samples/s")
+        .arg(static_cast<double>(live_->capacity()-1)*live_->dt(), 0, 'g', 5)
+        .arg(1/live_->dt(), 0, 'g', 5));
     const auto trigger = live_->triggerStatus();
     const char* states[]{"Rolling", "Filling pre-trigger history", "Armed — waiting for edge", "Collecting post-trigger", "Holdoff", "Held single capture — Rearm to capture again"};
     QString triggerText = QString::fromLatin1(states[static_cast<int>(trigger.state)]);
@@ -605,12 +691,25 @@ void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
     triggerStatus_->setText(triggerError_.isEmpty() ? triggerText : triggerError_+" • "+triggerText);
     const auto acquisitionStatus = live_->status();
     const auto& frame = *frame_;
+    if (!frame.times.empty()) timeRange_->setText(QStringLiteral("Model time %1–%2 s  •  displayed span %3 s%4")
+        .arg(frame.times.front(), 0, 'g', 10).arg(frame.times.back(), 0, 'g', 10)
+        .arg(plot_->xMax()-plot_->xMin(), 0, 'g', 6)
+        .arg(frame.trigger && frame.trigger->triggered ? "  •  axis relative to sampled trigger" : "  •  rolling retained window"));
+    else timeRange_->setText("Waiting for model-time samples");
     const QString timeWork = plot_->isVisible() && timeWorker_.busy() ? " • Preparing latest Time frame" : QString();
-    status_->setText(QStringLiteral("Run %1 • %2 • %3 • %4/%5 samples/channel • received %6 • evicted %7 • gaps %8%9%10")
+    status_->setToolTip(QStringLiteral("Run %1 • %2 • %3 • %4/%5 samples/channel • received %6 • evicted %7 • gaps %8%9%10")
         .arg(frame.runId).arg(freeze_->isChecked() ? "Frozen snapshot" : inspecting_ ? "Inspecting displayed frame" : "Following latest")
         .arg(acquisitionStatus.finished ? "Run finished" : "Acquisition active").arg(frame.times.size()).arg(live_->capacity())
         .arg(frame.received).arg(frame.evicted).arg(frame.gaps)
         .arg(acquisitionStatus.error.isEmpty() ? QString() : " • ERROR: " + acquisitionStatus.error)
         .arg((traceWarning_ + settingsError_ + suffix + timeWork).isEmpty() ? QString() : " • " + traceWarning_ + settingsError_ + suffix + timeWork));
+    QStringList notes;
+    for (const auto& note : {traceWarning_, settingsError_, suffix, acquisitionStatus.error}) if (!note.isEmpty()) notes.push_back(note);
+    status_->setText(QStringLiteral("%1  •  %2\n%3 samples / channel  •  %4 model s%5")
+        .arg(acquisitionStatus.finished ? "Run finished" : "Acquiring",
+             freeze_->isChecked() ? "Frozen" : inspecting_ ? "Inspecting" : "Following live")
+        .arg(frame.times.size()).arg(frame.times.empty() ? 0 : frame.times.back(), 0, 'g', 10)
+        .arg(notes.isEmpty() ? QString() : "\n"+notes.join(" • ")));
+
 }
 } // namespace s7studio::ui

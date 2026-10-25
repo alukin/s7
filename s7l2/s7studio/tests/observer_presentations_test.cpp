@@ -18,6 +18,7 @@
 #include <QComboBox>
 #include <QUndoStack>
 #include <QtTest>
+#include <QtGraphs/QLineSeries>
 #include <cmath>
 using namespace s7studio;
 using namespace viewers;
@@ -62,6 +63,22 @@ private slots:
         for (const auto& segment : result.traces.front().segments) for (const auto& point : segment) peak |= point.y() == 1e6;
         QVERIFY(peak); QVERIFY(result.details.front().contains("step 6020"));
         const auto unavailable = preparePreview({scope(), {0,7}, source}); QVERIFY(unavailable.status.contains("Unavailable selected channel indices: 7"));
+    }
+    void livePreviewKeepsModelTimestampsAfter600Seconds() {
+        auto descriptor = scope(2); descriptor.id = "live"; descriptor.type = "LiveOscilloscope";
+        auto live = std::make_shared<observation::LiveAcquisition>(15, .001,
+            QVector<observation::LiveChannel>{{"scope/c0", "V", "f64"}, {"scope/c1", "", "f64"}});
+        for (int step = 1; step <= 600000; ++step) {
+            const double t = step*.001, values[]{std::sin(t), std::cos(t)}; live->append(step, t, values);
+        }
+        const auto data = preparePreview({descriptor, {0,1}, {}, live});
+        QVERIFY(data.status.contains("model time 595.905–600 s (4.095 s window)"));
+        QCOMPARE(data.traces.size(), 2);
+        ObserverPresentation presentation("LiveOscilloscope"); presentation.present(data);
+        QCOMPARE(presentation.linePlot()->xMin(), 595.905-4.095*.04); QCOMPARE(presentation.linePlot()->xMax(), 600.+4.095*.04);
+        for (const auto* series : presentation.linePlot()->series()) {
+            QCOMPARE(series->points().front().x(), 595.905); QCOMPARE(series->points().back().x(), 600.);
+        }
     }
     void coordinatesJoinOnlyEqualSteps() {
         auto source = std::make_shared<observation::ObservationSource>(11);

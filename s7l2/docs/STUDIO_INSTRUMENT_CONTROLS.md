@@ -25,28 +25,35 @@ implied for an S7 observer.
 
 ## Live controls
 
-The channel buttons select the visible control page. Selection does not toggle
-the channel: **Show CH n** controls trace visibility independently. Full names
-and supplied units appear above the selected controls and in button tooltips.
-Gain, offset and visibility remain independent for all eight channels.
+The channel buttons select a control page, with independent gain, position and
+visibility for all eight channels. Colored checkboxes beside the buttons and in
+the plot legend share the same visibility state. Full names and supplied units
+appear above the selected controls and in button tooltips.
 
-The non-wrapping gain dial maps positions 0–1200 to `10^(-6+p/100)`. Its exact
-field accepts finite decimal/scientific notation from 1e-6 to 1e6; updating the
-dial never quantizes a numeric edit. Offset retains ±1e12 numeric entry. Its
-dial controls a local interval with an editable half-span (1e-12…1e12, initially
-1). The interval recenters on committed numeric entry or an explicit span
-change. Dragging does not move the interval. Endpoints clamp at ±1e12; if a
-span is below representable precision at the current center, the dial disables
-and numeric entry stays available. Fields show shortest round-tripping text;
-tooltips expose the complete current value.
+The gain dial maps positions 0–1200 to `10^(-6+p/100)`, with exact numeric entry
+from 1e-6 to 1e6. Position has ±1e12 numeric entry and a wrapping relative dial.
+A full turn changes the offset by half the visible Y span; there is no half-span
+control or movable interval. Numeric edits never pass through the dial. Editing
+either gain or position disables Auto Y, preserving the shared scale and other
+channels' positions. Auto Y can be enabled again explicitly.
 
-Channels, Acquisition / retention, Trigger and Window inspection collapse
-independently. Channels starts expanded; the other sections start collapsed.
-The control column scrolls vertically and can be hidden as a whole. Each knob
-has a wide numeric field beside it; gain and offset controls stack vertically.
-Spectrum and paired-analysis settings wrap to the available width inside
-collapsible sections with bounded-height vertical scrolling, preserving plot
-height on small desktops.
+Project-owned painted QDial subclasses retain Qt keyboard, wheel, mouse and
+accessibility behavior. Channel accents, dark graticule and compact readouts
+form a consistent instrument surface. Numeric faces show five significant
+digits while inactive; focus and tooltips expose the complete round-tripping
+value. The compact face never changes the stored value. Gain and position sit
+side by side with their numeric fields below the knobs.
+
+Channels and Time window start expanded; Trigger and Window inspection start
+collapsed. All sections collapse independently. The control column scrolls
+vertically and can be hidden. Hover readouts and status use fixed-height
+scrollable viewports, and worker progress reserves its space while hidden.
+Pointer movement therefore cannot resize the plot or shift the settings panel.
+The plot header and dock preview status explicitly identify the retained model
+time interval, distinguishing it from the full run duration.
+
+Spectrum and paired-analysis settings retain their wrapping, bounded-height
+settings layouts.
 
 Pre-trigger slider and percentage field share the same integer value. Rising
 and Falling are exclusive labelled buttons. Trigger mode, raw input, level,

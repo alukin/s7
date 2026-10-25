@@ -38,16 +38,16 @@ public:
 // A coarse dial never owns the floating-point value. Numeric edits remain exact.
 class RotaryValueControl : public QWidget {
 public:
-    enum class Mapping { LogGain, LocalOffset };
+    enum class Mapping { LogGain, RelativeOffset };
     RotaryValueControl(Mapping mapping, const QString& name, QWidget* parent = nullptr);
     QDoubleSpinBox* number() const { return number_; }
+    void setOffsetStep(double step);
 private:
     void updateDial();
-    void recenter();
     Mapping mapping_;
-    QDoubleSpinBox *number_, *span_ = nullptr;
+    QDoubleSpinBox* number_;
     QDial* dial_;
-    QLabel* interval_ = nullptr;
-    double center_ = 0;
+    double offsetStep_ = .01;
+    int previousPosition_ = 500;
 };
 }

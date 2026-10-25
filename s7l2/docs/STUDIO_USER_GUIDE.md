@@ -106,14 +106,25 @@ respected. **Recorded Signals…** retains named tap management and ad-hoc viewe
 See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle and
 bounded-work behavior.
 
-Select a **CH n** button to adjust that channel's display gain and offset with
-knobs or exact numeric entry (including scientific notation). **Show CH n**
-controls visibility independently. Offset's editable dial half-span sets a local
-interval; committing an exact offset or changing the span recenters it. These
-adjustments leave raw values and trigger thresholds unchanged. Expand
-**Acquisition / retention**, **Trigger — sampled edge** or **Window inspection**
-as needed; each section collapses independently. The column scrolls vertically,
-and **Hide controls** gives the plot the full width.
+Select a **CH n** button to adjust that channel's **Gain ×** and **Position**.
+The colored checkboxes beside channel buttons and in the plot legend toggle
+visibility. Each channel keeps independent settings. Numeric faces show five
+significant digits; focusing an editor or hovering its tooltip exposes the full
+value, including scientific notation. Numeric entry retains full precision.
+Position is a continuous relative knob: one turn moves half the visible plot
+height. There is no half-span setting. Changing gain or position turns off
+**Auto Y**, holding the shared scale so other channels remain stationary; enable
+Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
+unchanged.
+
+**Time window** shows the retained sample count and duration. A 600 s run at
+1 kHz with the default 4096 samples displays model time **595.905–600 s**, rather
+than the whole run. The range above the plot and the dock preview status identify
+that recent interval. Increasing retention fills forward and cannot recover
+samples already evicted. **Channels**, **Time window**, **Trigger** and **Window
+inspection** collapse independently. The column scrolls vertically; **Hide
+controls** gives the plot the full width. Hover readouts and acquisition status
+have fixed-height scrollable areas so pointer motion does not move the layout.
 
 The live oscilloscope has four tabs sharing the same acquisition:
 

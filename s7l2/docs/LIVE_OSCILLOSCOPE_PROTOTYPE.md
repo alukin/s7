@@ -9,7 +9,8 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
 
 ## Try it
 
-1. Build Studio and open `examples/2int_osc_live.s7diagram`. For multichannel
+1. Build Studio and open `examples/2int_osc_live.s7diagram` or the two-channel
+   `examples/2int_osc_live2.s7diagram`. For multichannel
    work, use `examples/signal_measurement/am_coherent_detection_live.s7diagram`
    or `fm_frequency_detection_live.s7diagram` at 10 kHz. Both use seven live
    channels and zero full-recording channels.
@@ -17,15 +18,15 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
    oscilloscope (prototype)** to a diagram and wire signals to its `+` input.
 3. Start a run. Run Configuration offers **Run continuously until stopped** and
    reports the live and full-recording channel counts.
-4. Change **Retain samples / channel**, or enter a positive decimal duration in
+4. Change **Samples / channel**, or enter a positive decimal duration in
    seconds and press Enter. Scientific notation is accepted. Duration rounds up
    to complete model-step intervals; the effective span is displayed.
 5. Hover over the plot. The displayed frame is held while the pointer is over
    the plot, and a vertical cursor snaps to the nearest retained sample. Readout
-   shows run, step, model time, raw value, supplied unit and source/storage type.
+   shows run, step, model time, raw value and supplied unit.
    Select the readout text to copy it. Moving out resumes live updates.
-6. **Freeze display** holds that frame while acquisition continues. Wheel zoom
-   and drag pan also freeze it. **Resume live / Fit** returns to the latest window.
+6. **Freeze** holds that frame while acquisition continues. Wheel zoom
+   and drag pan also freeze it. **Resume / Fit** returns to the latest window.
    Display gain, offset and visibility do not modify captured values.
 
 For analysis, choose **Spectrum** for a real channel or I/Q pair, or

@@ -7,8 +7,9 @@
 import QtQuick
 import QtGraphs
 
-Item {
+Rectangle {
     id: root
+    color: plot.instrumentTheme ? "#141a21" : "white"
     objectName: "viewer.linePlot"
     required property QtObject plot
 
@@ -21,7 +22,7 @@ Item {
         x: -width / 2 + height / 2 + 2
         y: view.y + view.plotArea.y + view.plotArea.height / 2 - height / 2
         font.pixelSize: 12
-        color: "#303030"
+        color: plot.instrumentTheme ? "#a8b7c8" : "#303030"
     }
     Text {
         id: xTitle
@@ -31,7 +32,7 @@ Item {
         anchors.bottomMargin: 2
         x: view.x + view.plotArea.x + view.plotArea.width / 2 - width / 2
         font.pixelSize: 12
-        color: "#303030"
+        color: plot.instrumentTheme ? "#a8b7c8" : "#303030"
     }
 
     GraphsView {
@@ -46,14 +47,17 @@ Item {
         marginBottom: 8
 
         theme: GraphsTheme {
-            colorScheme: GraphsTheme.ColorScheme.Light
-            backgroundColor: "white"
-            plotAreaBackgroundColor: "white"
-            grid.mainColor: "#d8d8d8"
-            grid.subColor: "#efefef"
-            axisX.mainColor: "#606060"
-            axisY.mainColor: "#606060"
-            labelTextColor: "#303030"
+            theme: GraphsTheme.Theme.UserDefined
+            colorScheme: plot.instrumentTheme ? GraphsTheme.ColorScheme.Dark : GraphsTheme.ColorScheme.Light
+            backgroundColor: plot.instrumentTheme ? "#141a21" : "white"
+            plotAreaBackgroundColor: plot.instrumentTheme ? "#141a21" : "white"
+            grid.mainColor: plot.instrumentTheme ? "#35404d" : "#d8d8d8"
+            grid.mainWidth: 1
+            grid.subWidth: 0.5
+            grid.subColor: plot.instrumentTheme ? "#222c37" : "#efefef"
+            axisX.mainColor: plot.instrumentTheme ? "#758698" : "#606060"
+            axisY.mainColor: plot.instrumentTheme ? "#758698" : "#606060"
+            labelTextColor: plot.instrumentTheme ? "#a8b7c8" : "#303030"
         }
 
         axisX: ValueAxis {
@@ -256,8 +260,8 @@ Item {
         y: view.y + view.plotArea.y + 8
         width: legendColumn.implicitWidth + 16
         height: legendColumn.implicitHeight + 10
-        color: "#f2ffffff"
-        border.color: "#a0a0a0"
+        color: plot.instrumentTheme ? "#ee202a35" : "#f2ffffff"
+        border.color: plot.instrumentTheme ? "#455366" : "#a0a0a0"
         radius: 2
 
         Column {
@@ -271,10 +275,33 @@ Item {
                     id: entry
                     required property var modelData
                     spacing: 6
+                    objectName: "viewer.legend.channel." + modelData.index
+                    activeFocusOnTab: plot.checkableLegend
+                    Accessible.role: plot.checkableLegend ? Accessible.CheckBox : Accessible.StaticText
+                    Accessible.name: modelData.name
+                    Accessible.checkable: plot.checkableLegend
+                    Accessible.checked: modelData.checked
+                    Accessible.onPressAction: if (plot.checkableLegend) plot.toggleLegend(modelData.index, !modelData.checked)
+                    Keys.onSpacePressed: if (plot.checkableLegend) plot.toggleLegend(modelData.index, !modelData.checked)
                     Item {
-                        width: 26
+                        width: plot.checkableLegend ? 18 : 26
                         height: entryText.height
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: plot.checkableLegend
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: { entry.forceActiveFocus(); plot.toggleLegend(entry.modelData.index, !entry.modelData.checked) }
+                        }
+                        Rectangle {
+                            anchors.centerIn: parent
+                            visible: plot.checkableLegend
+                            width: 14; height: 14; radius: 2
+                            border.width: 2; border.color: entry.modelData.color
+                            color: entry.modelData.checked ? entry.modelData.color : "transparent"
+                            Text { anchors.centerIn: parent; text: "✓"; color: "white"; font.pixelSize: 12; visible: entry.modelData.checked }
+                        }
                         Row {
+                            visible: !plot.checkableLegend
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: 3
                             // Overlays (saved runs) show a dashed swatch.
@@ -293,7 +320,7 @@ Item {
                         id: entryText
                         text: entry.modelData.name
                         font.pixelSize: 12
-                        color: "#202020"
+                        color: plot.instrumentTheme ? "#dde4ed" : "#202020"
                     }
                 }
             }

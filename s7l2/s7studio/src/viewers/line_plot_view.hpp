@@ -54,6 +54,8 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(QString yTitle READ yTitle NOTIFY titlesChanged)
     Q_PROPERTY(bool legendVisible READ legendVisible NOTIFY legendChanged)
     Q_PROPERTY(QVariantList legend READ legend NOTIFY legendChanged)
+    Q_PROPERTY(bool instrumentTheme MEMBER instrumentTheme NOTIFY legendChanged)
+    Q_PROPERTY(bool checkableLegend MEMBER checkableLegend NOTIFY legendChanged)
 
 public:
     explicit LinePlotBridge(LinePlotView& view);
@@ -68,6 +70,8 @@ public:
     [[nodiscard]] auto legend() const -> QVariantList;
 
     bool inspectionEnabled = false;
+    bool checkableLegend = false;
+    bool instrumentTheme = false;
     bool triggerVisible = false;
     bool cursorVisible = false;
     double cursorX = 0;
@@ -86,8 +90,10 @@ public:
     Q_INVOKABLE void zoom(double fx, double fy, double factor);
     // Moves the view by a fraction of the visible span (positive: right/up).
     Q_INVOKABLE void pan(double dxFraction, double dyFraction);
+    Q_INVOKABLE void toggleLegend(int index, bool checked) { emit legendToggled(index, checked); }
 
 signals:
+    void legendToggled(int index, bool checked);
     void inspectionChanged();
     void densityChanged();
     void selectionChanged();

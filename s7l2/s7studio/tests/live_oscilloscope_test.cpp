@@ -32,7 +32,7 @@ class LiveOscilloscopeTest : public QObject {
     Q_OBJECT
 private slots:
     void initTestCase() { registerLifecycleElements(); }
-    void rotaryControlsPreserveExactValuesAndLocalScale() {
+    void rotaryControlsPreserveExactValuesAndRelativePosition() {
         ui::RotaryValueControl gain(ui::RotaryValueControl::Mapping::LogGain, "gain"); gain.show();
         auto* number = gain.number(); auto* dial = gain.findChild<QDial*>("gain.dial"); QVERIFY(dial);
         const double exact = std::nextafter(.123456789012345, 1.);
@@ -44,15 +44,20 @@ private slots:
         auto* edit = number->findChild<QLineEdit*>(); QVERIFY(edit); edit->setFocus(); edit->selectAll();
         QTest::keyClicks(edit, "1.2345678901234567e-5"); QTest::keyClick(edit, Qt::Key_Return);
         QCOMPARE(number->value(), QString("1.2345678901234567e-5").toDouble());
-        ui::RotaryValueControl offset(ui::RotaryValueControl::Mapping::LocalOffset, "offset"); offset.show();
-        auto* offsetDial = offset.findChild<QDial*>("offset.dial"); auto* span = offset.findChild<QDoubleSpinBox*>("offset.span"); QVERIFY(offsetDial && span);
-        offset.number()->setValue(100.125); QMetaObject::invokeMethod(offset.number(), "editingFinished");
-        QCOMPARE(offsetDial->value(), 500); offsetDial->setValue(1000); QCOMPARE(offset.number()->value(), 101.125);
-        offsetDial->setValue(0); QCOMPARE(offset.number()->value(), 99.125); // Same interval throughout the gesture.
-        span->setValue(2); QCOMPARE(offsetDial->value(), 500); offsetDial->setValue(1000); QCOMPARE(offset.number()->value(), 101.125);
-        offset.number()->setValue(1e12); QMetaObject::invokeMethod(offset.number(), "editingFinished");
-        offsetDial->setValue(0); QCOMPARE(offset.number()->value(), 1e12-2); offsetDial->setValue(1000); QCOMPARE(offset.number()->value(), 1e12);
-        span->setValue(1e-12); QVERIFY(!offsetDial->isEnabled()); QCOMPARE(offset.number()->value(), 1e12);
+        ui::RotaryValueControl offset(ui::RotaryValueControl::Mapping::RelativeOffset, "offset"); offset.show();
+        auto* offsetDial = offset.findChild<QDial*>("offset.dial"); QVERIFY(offsetDial);
+        QVERIFY(!offset.findChild<QDoubleSpinBox*>("offset.span"));
+        offset.setOffsetStep(.02);
+        offset.number()->setValue(100.125);
+        QCOMPARE(offsetDial->value(), 500);
+        offsetDial->setValue(510); QCOMPARE(offset.number()->value(), 100.325);
+        offsetDial->setValue(500); QCOMPARE(offset.number()->value(), 100.125);
+        // Crossing the circular dial's seam moves a single increment.
+        offsetDial->setValue(999); const double before = offset.number()->value();
+        offsetDial->setValue(0); QCOMPARE(offset.number()->value(), before+.02);
+        offsetDial->setValue(999); QCOMPARE(offset.number()->value(), before);
+        offset.number()->setValue(1e12); offsetDial->setValue(0); QCOMPARE(offset.number()->value(), 1e12);
+
     }
     void triggerControlsKeepPresetAndSingleChangeSemantics() {
         ui::LiveOscilloscopeWindow viewer("controls");
@@ -242,6 +247,44 @@ private slots:
         QCOMPARE(source->capacity(), std::size_t(128));
         source->finish(); QTRY_VERIFY(viewer->findChild<QLabel*>("live.status")->text().contains("Run finished"));
         manager.beginRun("old", true); QVERIFY(viewer->displayedFrame().steps.empty());
+    }
+    void independentChannelControlsKeepAxesAndReadoutStable() {
+        auto source = std::make_shared<LiveAcquisition>(20, .001,
+            QVector<observation::LiveChannel>{{"live/v", "V", "f64"}, {"live/u", "V", "f64"}});
+        for (int i = 1; i <= 600000; ++i) {
+            const double t = i*.001, values[]{std::sin(t), std::cos(t)}; source->append(i, t, values);
+        }
+        source->finish();
+        ui::LiveOscilloscopeWindow viewer("two channels"); viewer.attachLiveSource(source); viewer.show();
+        QTRY_COMPARE(viewer.plotView()->series().size(), 2);
+        QTRY_VERIFY(viewer.plotView()->series()[1]->points().size() > 1000);
+        auto* plot = viewer.plotView();
+        QCOMPARE(plot->xMax(), 600.); QCOMPARE(plot->xMin(), 595.905);
+        QCOMPARE(plot->series()[0]->points().front().x(), 595.905);
+        QCOMPARE(plot->series()[0]->points().back().x(), 600.);
+        QVERIFY(viewer.findChild<QLabel*>("live.timeRange")->text().contains("595.905–600"));
+        auto* freeze = viewer.findChild<QPushButton*>("live.freeze"); freeze->setChecked(true);
+        const auto unchanged = plot->series()[1]->points(); const auto ymin = plot->yMin(), ymax = plot->yMax();
+        viewer.findChild<QDoubleSpinBox*>("live.channel.0.offset")->setValue(.5);
+        QTRY_COMPARE(plot->series()[0]->points().back().y(), std::sin(600.)+.5);
+        QVERIFY(!viewer.findChild<QCheckBox*>("live.autoY")->isChecked());
+        QCOMPARE(plot->series()[1]->points(), unchanged); QCOMPARE(plot->yMin(), ymin); QCOMPARE(plot->yMax(), ymax);
+        viewer.findChild<QDoubleSpinBox*>("live.channel.1.gain")->setValue(2);
+        QTRY_COMPARE(plot->series()[1]->points().back().y(), 2*std::cos(600.));
+        QCOMPARE(plot->yMin(), ymin); QCOMPARE(plot->yMax(), ymax);
+        // The legend checkbox and the channel-panel checkbox share one state.
+        plot->bridge()->toggleLegend(1, false);
+        QTRY_VERIFY(plot->series()[1]->points().isEmpty());
+        QVERIFY(!viewer.findChild<QCheckBox*>("live.channel.1.visible")->isChecked());
+        QCOMPARE(plot->bridge()->legend().size(), 2);
+        QVERIFY(!plot->bridge()->legend()[1].toMap()["checked"].toBool());
+        const auto plotGeometry = plot->geometry();
+        auto* readout = viewer.findChild<QLabel*>("live.readout");
+        const auto areaGeometry = readout->parentWidget()->parentWidget()->geometry();
+        viewer.inspect(600.); QCoreApplication::processEvents();
+        viewer.inspect(0, false); QCoreApplication::processEvents();
+        QCOMPARE(plot->geometry(), plotGeometry);
+        QCOMPARE(readout->parentWidget()->parentWidget()->geometry(), areaGeometry);
     }
     void displayOverflowPreservesRawSample() {
         auto source = std::make_shared<LiveAcquisition>(13, .001,

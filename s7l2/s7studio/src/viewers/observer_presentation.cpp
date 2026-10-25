@@ -52,6 +52,9 @@ PreviewData preparePreview(const PreviewRequest& request)
         if (frame->trigger && frame->trigger->triggered) { origin = frame->trigger->time; result.timeAxis = "Time from sampled trigger (s)"; }
         result.status = QStringLiteral("Recent ≤4096 positions/channel • %1 • gaps %2%3%4").arg(frame->trigger ? (frame->trigger->triggered ? "Triggered" : "Auto timeout: UNTRIGGERED") : "Rolling")
             .arg(frame->gaps).arg(frame->trigger && frame->trigger->partial ? " • PARTIAL" : "").arg(frame->finished ? " • run finished" : "");
+        if (!frame->times.empty()) result.status += QStringLiteral(" • model time %1–%2 s (%3 s window)")
+            .arg(frame->times[begin], 0, 'g', 10).arg(frame->times.back(), 0, 'g', 10)
+            .arg(frame->times.back()-frame->times[begin], 0, 'g', 6);
         if (!frame->error.isEmpty()) result.status += " • ERROR: " + frame->error;
     } else if (request.source) {
         result.run = request.source->runId(); const auto channels = request.source->channels();
