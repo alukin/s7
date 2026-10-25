@@ -7,6 +7,8 @@ dependable multi-node execution on local and remote hosts. The
 [0.2.0 plan](RELEASE_0.2.0.md) records causal/threading invariants, the existing
 two-node MVP baseline, cross-language coverage and the acceptance work still
 to define. This records future goals; it does not expand the 0.1.0 gates below.
+The 0.2.0 scope also includes a software signal-generator element, added on
+2026-10-25 with the UNI-T UTG932E as its hardware interaction reference.
 
 ## Additional 0.1.0 requirement — separate control/data listeners (2026-10-23)
 

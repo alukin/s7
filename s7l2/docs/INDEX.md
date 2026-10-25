@@ -37,8 +37,8 @@ status and attribution rules for planned example adaptations.
 The [0.2.0 goals](RELEASE_0.2.0.md) are parallel execution within one runtime,
 qualified multi-node operation on local and remote hosts, remote node
 control/configuration/restart and Trusted Networks settings, certificate viewing
-and node certificate creation, and Studio printing of diagrams and observation
-graphs.
+and node certificate creation, Studio printing of diagrams and observation
+graphs, and a software signal-generator element inspired by the UNI-T UTG932E.
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the next release: dependable Studio simulation with the bundled runtime, acceptance criteria, and deferred backlog.

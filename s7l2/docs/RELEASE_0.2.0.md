@@ -1,4 +1,4 @@
-# S7 0.2.0 — parallel runtime, networking, certificate tools and printing
+# S7 0.2.0 — parallel runtime, networking, printing and signal generator
 
 Runtime/node goals agreed with the maintainer on 2026-10-23; Studio diagram
 and observation-graph printing added at the maintainer's request on 2026-10-24.
@@ -207,6 +207,35 @@ Acceptance must include:
 Exact layouts, tiling scope, supported printers and test platforms remain
 planning decisions. Keep printing in Studio; headless runtime modules must not
 gain GUI dependencies.
+
+## Software signal-generator element
+
+Added at the maintainer's request on 2026-10-25. Plan a reusable signal-generator
+schema element for 0.2.0, using the UNI-T UTG932E function/arbitrary waveform
+generator as the interaction reference. Its [manufacturer user manual](https://storage.googleapis.com/uni-tdocuments/Library/UTG900E_Series_User_Manual_REV2a_HQ.pdf)
+covers the UTG900E series. The maintainer's hardware photo and downloaded manuals
+remain local reference material.
+
+Proposed scope for design review:
+
+- Two independently configured outputs, waveform selection, frequency/period,
+  amplitude, DC offset, phase and output enable. Include duty cycle where relevant.
+- Begin with sine, square/pulse, triangle/ramp and DC. Decide the noise, arbitrary
+  waveform, sweep and modulation scope explicitly during 0.2.0 planning.
+- Pair numeric entry with familiar rotary controls, keep per-channel state
+  visible, and use the live oscilloscope as the accompanying software test bench.
+  Detailed UI optimization is deferred to that workstream.
+- Implement causal, deterministic generation in model time through schema
+  composition and existing source primitives where appropriate. Keep runtime
+  operation headless; put interactive controls in Studio. Define phase/reset
+  behavior, runtime parameter transitions, units/types and rate limitations.
+- Verify waveform shape, frequency, amplitude/offset, phase and duty cycle across
+  model rates, independent channels, enable/reset transitions, saved diagrams,
+  headless runs and scope observations. Report sampling/aliasing limits explicitly.
+
+This release item plans software emulation. Hardware control and complete UTG
+feature parity require separate scope decisions. Implementation remains future
+work and is independent of the integrator-research branch.
 
 ## Planning and release boundary
 
