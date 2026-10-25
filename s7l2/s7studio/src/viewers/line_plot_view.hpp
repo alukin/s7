@@ -57,6 +57,10 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(bool timeDivisions MEMBER timeDivisions NOTIFY legendChanged)
     Q_PROPERTY(int verticalDivisions MEMBER verticalDivisions NOTIFY legendChanged)
     Q_PROPERTY(int selectedLegend MEMBER selectedLegend NOTIFY legendChanged)
+    Q_PROPERTY(bool channelAxis MEMBER channelAxis NOTIFY channelAxisChanged)
+    Q_PROPERTY(double channelGain MEMBER channelGain NOTIFY channelAxisChanged)
+    Q_PROPERTY(double channelOffset MEMBER channelOffset NOTIFY channelAxisChanged)
+    Q_PROPERTY(QColor channelAxisColor MEMBER channelAxisColor NOTIFY channelAxisChanged)
     Q_PROPERTY(bool compactAxes MEMBER compactAxes NOTIFY legendChanged)
     Q_PROPERTY(bool instrumentTheme MEMBER instrumentTheme NOTIFY legendChanged)
     Q_PROPERTY(bool checkableLegend MEMBER checkableLegend NOTIFY legendChanged)
@@ -78,6 +82,9 @@ public:
     bool instrumentTheme = false;
     bool compactAxes = false, timeDivisions = false;
     int verticalDivisions = 0, selectedLegend = -1;
+    bool channelAxis = false;
+    double channelGain = 1, channelOffset = 0;
+    QColor channelAxisColor;
     // Time instruments navigate horizontally; XY/other plots retain both axes.
     bool horizontalNavigation = false;
     bool triggerVisible = false;
@@ -104,6 +111,7 @@ public:
 signals:
     void legendToggled(int index, bool checked);
     void legendSelected(int index);
+    void channelAxisChanged();
     void inspectionChanged();
     void densityChanged();
     void selectionChanged();

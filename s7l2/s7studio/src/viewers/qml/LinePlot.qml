@@ -31,6 +31,11 @@ Rectangle {
         return "%." + Math.max(0, 2 - Math.floor(Math.log10(step))) + "f"
     }
 
+    function channelTickText(value, division) {
+        if (!isFinite(value)) return "—"
+        return Math.abs(value) < Math.abs(division) * 1e-8 ? "0" : value.toPrecision(5)
+    }
+
     // Axis titles sit outside the GraphsView so they never cover tick labels.
     Text {
         id: yTitle
@@ -40,7 +45,7 @@ Rectangle {
         x: -width / 2 + height / 2 + 2
         y: view.y + view.plotArea.y + view.plotArea.height / 2 - height / 2
         font.pixelSize: 12
-        color: plot.instrumentTheme ? "#a8b7c8" : "#303030"
+        color: plot.channelAxis ? plot.channelAxisColor : plot.instrumentTheme ? "#a8b7c8" : "#303030"
     }
     Text {
         id: xTitle
@@ -59,7 +64,7 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: yTitle.visible ? yTitle.height + 4 : 0
         anchors.bottomMargin: xTitle.visible ? xTitle.height + 4 : 0
-        marginLeft: 8
+        marginLeft: plot.channelAxis ? 50 : 8
         marginRight: 16
         marginTop: 12
         marginBottom: 8
@@ -91,6 +96,7 @@ Rectangle {
             min: plot.yMin
             max: plot.yMax
             titleVisible: false
+            labelsVisible: !plot.channelAxis
             labelFormat: plot.verticalDivisions > 0 ? root.verticalTickFormat(max-min, plot.verticalDivisions) : plot.compactAxes ? "%.5g" : "%.6g"
             tickInterval: plot.verticalDivisions > 0 ? (max-min)/plot.verticalDivisions : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.height-60)/40)) : 0
             tickAnchor: 0
@@ -106,6 +112,34 @@ Rectangle {
             target: plot
             function onSeriesAdded(series) { view.addSeries(series) }
             function onSeriesRemoved(series) { view.removeSeries(series) }
+        }
+    }
+
+    Item {
+        id: channelScale
+        visible: plot.channelAxis
+        x: view.x + 6
+        y: view.y + view.plotArea.y
+        width: Math.max(0, view.plotArea.x - 20)
+        height: view.plotArea.height
+        readonly property real division: (plot.yMax-plot.yMin)/Math.max(1, plot.verticalDivisions)
+        readonly property real first: Math.ceil(plot.yMin/division - 1e-9)
+        Repeater {
+            model: plot.channelAxis ? Math.min(10, Math.max(0, Math.floor(plot.yMax/channelScale.division + 1e-9)-channelScale.first+1)) : 0
+            Text {
+                required property int index
+                objectName: "viewer.channelAxis.tick." + index
+                readonly property real displayValue: (channelScale.first+index)*channelScale.division
+                readonly property real rawValue: (displayValue-plot.channelOffset)/plot.channelGain
+                width: channelScale.width
+                y: (plot.yMax-displayValue)/(plot.yMax-plot.yMin)*channelScale.height-height/2
+                horizontalAlignment: Text.AlignRight
+                text: root.channelTickText(rawValue, channelScale.division/plot.channelGain)
+                font.pixelSize: 12
+                fontSizeMode: Text.HorizontalFit
+                minimumPixelSize: 10
+                color: plot.channelAxisColor
+            }
         }
     }
 

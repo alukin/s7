@@ -145,6 +145,10 @@ protected:
 };
 }
 QDoubleSpinBox* compactNumber(QWidget* parent) { return new ExactNumber(parent); }
+void setCompactNumberValueSilently(QDoubleSpinBox* number, double value) {
+    const QSignalBlocker block(number);
+    number->setValue(value); static_cast<ExactNumber*>(number)->refreshReadout();
+}
 InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : QWidget(parent)
 {
     setObjectName(name+".controls");

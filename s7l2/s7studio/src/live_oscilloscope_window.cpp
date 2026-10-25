@@ -180,10 +180,14 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         auto* page = new QWidget(channelPages_); auto* pageLayout = new QVBoxLayout(page); pageLayout->setContentsMargins(0, 0, 0, 0);
         auto* channelName = new QLabel(page); channelName->setObjectName(name + ".name"); channelName->setWordWrap(true); channelName->setTextFormat(Qt::PlainText);
         channelName->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); pageLayout->addWidget(channelName);
-        auto* scaleReadout = new QLabel(page); scaleReadout->setObjectName(name + ".unitsPerDivision");
-        scaleReadout->setTextFormat(Qt::PlainText); scaleReadout->setTextInteractionFlags(Qt::TextSelectableByMouse);
-        scaleReadout->setFixedHeight(scaleReadout->fontMetrics().lineSpacing()+4);
-        scaleReadout->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed); pageLayout->addWidget(scaleReadout);
+        auto* scale = compactNumber(page); scale->setObjectName(name + ".unitsPerDivision");
+        auto* scaleRow = new QWidget(page); auto* scaleLayout = new QHBoxLayout(scaleRow);
+        scaleLayout->setContentsMargins(0, 0, 0, 0);
+        auto* scaleLabel = new QLabel(QStringLiteral("Scale"), scaleRow); scaleLabel->setBuddy(scale);
+        auto* scaleUnit = new QLabel(scaleRow); scaleUnit->setObjectName(name + ".scaleUnit");
+        scaleUnit->setTextFormat(Qt::PlainText); scaleUnit->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        scaleLayout->addWidget(scaleLabel); scaleLayout->addWidget(scale); scaleLayout->addWidget(scaleUnit, 1);
+        pageLayout->addWidget(scaleRow);
         auto* gainControl = new RotaryValueControl(RotaryValueControl::Mapping::LogGain, name + ".gain", page);
         auto* offsetControl = new RotaryValueControl(RotaryValueControl::Mapping::RelativeOffset, name + ".offset", page);
         auto* knobs = new QHBoxLayout; knobs->setSpacing(8);
@@ -192,7 +196,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         visible->setObjectName(QStringLiteral("live.channel.%1.visible").arg(i));
         gain->setObjectName(QStringLiteral("live.channel.%1.gain").arg(i));
         offset->setObjectName(QStringLiteral("live.channel.%1.offset").arg(i));
-        controls_.push_back({visible, gain, offset, select}); channelPages_->addWidget(page); page->setEnabled(false);
+        controls_.push_back({visible, gain, offset, select, scale}); channelPages_->addWidget(page); page->setEnabled(false);
         connect(visible, &QCheckBox::toggled, this, [this] { render(false); });
         const auto adjustDisplay = [this] {
             // Hold the shared scale while a channel moves; otherwise Auto Y
@@ -201,6 +205,33 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         };
         connect(gain, &QDoubleSpinBox::valueChanged, this, adjustDisplay);
         connect(offset, &QDoubleSpinBox::valueChanged, this, adjustDisplay);
+        connect(scale, &QDoubleSpinBox::valueChanged, this, [this, i](double value) {
+            if (!plot_ || !live_ || i >= live_->channels().size()) return;
+            auto& control = controls_[i];
+            const double division = (plot_->yMax()-plot_->yMin())/8;
+            const double gain = division/value;
+            const double tolerance = 8*std::numeric_limits<double>::epsilon();
+            if (!std::isfinite(value) || value <= 0 || !std::isfinite(gain) ||
+                gain < control.gain->minimum()*(1-tolerance) || gain > control.gain->maximum()*(1+tolerance)) {
+                setCompactNumberValueSilently(control.scale, control.committedScale); return;
+            }
+            static_cast<RotaryValueControl*>(control.gain->parentWidget())->setValueSilently(std::clamp(gain, control.gain->minimum(), control.gain->maximum()));
+            // A live range change may have been deferred while this field had
+            // focus. Synchronize its bounds now that the edit is committed.
+            {
+                const QSignalBlocker block(control.scale);
+                control.scale->setRange(std::max(std::numeric_limits<double>::min(), division/control.gain->maximum()),
+                    std::min(std::numeric_limits<double>::max(), division/control.gain->minimum()));
+            }
+            // Preserve the exact entry across selection/position changes; only
+            // a new Y span or an independent gain edit invalidates this basis.
+            control.scaleDivision = division; control.scaleGain = control.gain->value(); control.committedScale = control.scale->value();
+            { const QSignalBlocker block(autoY_); autoY_->setChecked(false); }
+            updateVerticalReadouts(); render(false);
+        });
+        connect(scale, &QDoubleSpinBox::editingFinished, this, [this] {
+            QTimer::singleShot(0, this, &LiveOscilloscopeWindow::updateVerticalReadouts);
+        });
     }
     controls_.front().select->setChecked(true);
     connect(channelGroup, &QButtonGroup::idToggled, this, [this](int index, bool checked) {
@@ -494,8 +525,8 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
         controls_[i].visible->setPalette(checkboxPalette);
         controls_[i].select->setStyleSheet(QStringLiteral("QToolButton { color: %1; padding: 4px 3px; } QToolButton:checked { border-color: %1; }").arg(colors[i].name()));
         channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.name").arg(i))->setText(title);
-        auto* scaleLabel = channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.unitsPerDivision").arg(i));
-        auto scalePalette = scaleLabel->palette(); scalePalette.setColor(QPalette::WindowText, colors[i]); scaleLabel->setPalette(scalePalette);
+        auto* scaleUnit = channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.scaleUnit").arg(i));
+        auto scalePalette = scaleUnit->palette(); scalePalette.setColor(QPalette::WindowText, colors[i]); scaleUnit->setPalette(scalePalette);
         controls_[i].select->setToolTip(title); controls_[i].select->setAccessibleName(QStringLiteral("Select channel %1: %2").arg(i+1).arg(title));
         if (plot_->series().size() <= i) plot_->addSeries(channel.name, {colors[i]});
         plot_->setLegendEntryVisible(plot_->series()[i], true);
@@ -526,14 +557,38 @@ void LiveOscilloscopeWindow::updateVerticalReadouts()
     const double division = (plot_->yMax()-plot_->yMin())/8;
     for (int i = 0; i < count; ++i) {
         const auto& channel = live_->channels()[i];
+        auto& control = controls_[i];
         const auto unit = channel.unit.isEmpty() ? QStringLiteral("units") : channel.unit;
-        const double scale = division/controls_[i].gain->value();
-        const auto text = QStringLiteral("%1 %2/div").arg(scale, 0, 'g', 5).arg(unit);
-        auto* label = channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.unitsPerDivision").arg(i));
-        label->setText(text);
-        label->setToolTip(QStringLiteral("%1 %2/div. Original signal units per one of eight vertical divisions. Gain and position affect this channel's display only.")
-            .arg(QString::number(scale, 'g', QLocale::FloatingPointShortest), unit));
+        const double scale = division/control.gain->value();
+        auto* unitLabel = channelPages_->widget(i)->findChild<QLabel*>(QStringLiteral("live.channel.%1.scaleUnit").arg(i));
+        const bool available = std::isfinite(scale) && scale > 0;
+        control.scale->setEnabled(available);
+        unitLabel->setText(available ? unit+"/div" : QStringLiteral("not representable"));
+        unitLabel->setToolTip(unit+" per vertical division");
+        control.scale->setAccessibleName(QStringLiteral("Channel %1 scale in %2 per division").arg(i+1).arg(unit));
+        const bool editing = control.scale->hasFocus() || control.scale->findChild<QLineEdit*>()->hasFocus();
+        if (available && ((!editing && control.scaleDivision != division) || control.scaleGain != control.gain->value())) {
+            const QSignalBlocker block(control.scale);
+            control.scale->setRange(std::max(std::numeric_limits<double>::min(), division/control.gain->maximum()),
+                std::min(std::numeric_limits<double>::max(), division/control.gain->minimum()));
+            setCompactNumberValueSilently(control.scale, scale);
+            control.scaleDivision = division; control.scaleGain = control.gain->value(); control.committedScale = control.scale->value();
+        }
+        control.scale->setToolTip(available ? QStringLiteral("%1 %2/div. Changing this scale holds the plot range and other channels fixed; Auto Y turns off.")
+            .arg(QString::number(control.scale->value(), 'g', QLocale::FloatingPointShortest), unit)
+            : QStringLiteral("The scale cannot be represented at this display range. Adjust gain or enable Auto Y."));
     }
+    const double gain = selected >= 0 ? controls_[selected].gain->value() : 1;
+    const double offset = selected >= 0 ? controls_[selected].offset->value() : 0;
+    const bool channelAxis = selected >= 0 && std::isfinite((plot_->yMin()-offset)/gain) && std::isfinite((plot_->yMax()-offset)/gain);
+    const QColor color = selected >= 0 && selected < plot_->series().size() ? plot_->series()[selected]->color() : QColor();
+    if (bridge->channelAxis != channelAxis || bridge->channelGain != gain || bridge->channelOffset != offset || bridge->channelAxisColor != color) {
+        bridge->channelAxis = channelAxis; bridge->channelGain = gain; bridge->channelOffset = offset; bridge->channelAxisColor = color;
+        emit bridge->channelAxisChanged();
+    }
+    const auto title = channelAxis ? QStringLiteral("CH %1 [%2]").arg(selected+1).arg(live_->channels()[selected].unit.isEmpty() ? QStringLiteral("unit unspecified") : live_->channels()[selected].unit)
+        : QStringLiteral("Display level");
+    if (plot_->yTitle() != title) plot_->setAxisTitles(plot_->xTitle(), title);
 }
 void LiveOscilloscopeWindow::clearSamples()
 {
@@ -599,7 +654,7 @@ void LiveOscilloscopeWindow::render(bool fit)
     const bool triggered = frame.trigger && frame.trigger->triggered;
     if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
     const QString xTitle = triggered ? "Time from sampled trigger (model s)" : "Model time (s)";
-    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Display level (see channel units/div)");
+    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, plot_->yTitle());
     if (fit && !frame.times.empty()) {
         if (triggered) {
             const auto pre = static_cast<std::size_t>(frame.trigger->settings.pretriggerPercent)*(frame.capacity-1)/100;
@@ -644,7 +699,7 @@ void LiveOscilloscopeWindow::presentTimeResult(const analysis::TimeViewResult& r
     const bool triggered = result.frame->trigger && result.frame->trigger->triggered;
     if (plot_->bridge()->triggerVisible != triggered) { plot_->bridge()->triggerVisible = triggered; emit plot_->bridge()->inspectionChanged(); }
     const QString xTitle = triggered ? "Time from sampled trigger (model s)" : "Model time (s)";
-    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, "Display level (see channel units/div)");
+    if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, plot_->yTitle());
     if (result.hasXRange) {
         plot_->setXRange(result.xMin, result.xMax);
     }
@@ -741,7 +796,8 @@ QVariantList LiveOscilloscopeWindow::hoverTip(double x, double y, bool active)
             const double gain = controls_[hit.channel].gain->value(), offset = controls_[hit.channel].offset->value();
             QString text = QStringLiteral("%1 = %2%3").arg(channel.name).arg(raw, 0, 'g', 5)
                 .arg(channel.unit.isEmpty() ? QString() : " " + channel.unit);
-            if (gain != 1 || offset != 0) text += QStringLiteral(" (shown %1)").arg(raw*gain+offset, 0, 'g', 5);
+            if ((gain != 1 || offset != 0) && (!bridge->channelAxis || hit.channel != bridge->selectedLegend))
+                text += QStringLiteral(" (display level %1)").arg(raw*gain+offset, 0, 'g', 5);
             const auto color = plot_->series()[hit.channel]->color();
             rows.append(QVariantMap{{"text", text}, {"color", color}});
             markers.append(QVariantMap{{"x", frame.plottedTime(i)}, {"y", raw*gain+offset}, {"color", color}});

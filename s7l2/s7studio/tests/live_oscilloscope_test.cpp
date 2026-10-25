@@ -447,11 +447,12 @@ private slots:
         viewer.findChild<QCheckBox*>("live.channel.1.visible")->setChecked(false);
         QTRY_VERIFY(viewer.plotView()->series()[1]->points().isEmpty());
         QVERIFY(viewer.hoverTip(.02, -.5).isEmpty());
-        // Display gain moves the trace; raw stays primary, the shown value is labelled.
+        // Gain moves the trace; the selected axis and hover stay in raw units.
         constexpr double gain = 1.97530864202469;
         viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(gain);
         QTRY_COMPARE(viewer.plotView()->series().front()->points().at(49).y(), .5*gain);
-        QVERIFY(text(viewer.hoverTip(.05, .5*gain)).contains("live/up = 0.5 V (shown 0.98765)"));
+        QVERIFY(text(viewer.hoverTip(.05, .5*gain)).contains("live/up = 0.5 V"));
+        QVERIFY(!text(viewer.hoverTip(.05, .5*gain)).contains("shown"));
         QCOMPARE(bridge->hoverMarkers.front().toMap()["y"].toDouble(), .5*gain);
         QVERIFY(viewer.hoverTip(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
     }

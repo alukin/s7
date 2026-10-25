@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: the original ST-001–ST-008 maintenance increments and ST-010 are implemented; ST-011/ST-013/ST-014/ST-015 are implemented in the refinement increment. ST-009 is deferred to 0.2.0; ST-012 remains open. The five time/preview findings are implemented in the instrument refinement; broader Rigol/Scope optimization remains planned.
+Status: the original ST-001–ST-008 maintenance increments and ST-010 are implemented; ST-011/ST-013/ST-014/ST-015 are implemented in the refinement increment. ST-009 is deferred to 0.2.0; ST-012 remains open. The five time/preview findings are implemented in the instrument refinement. Rigol controls are in progress: grouping, channel selection, direct units/division entry and selected-channel axes are implemented; coarse/fine stepping, position reset and markers remain. Broader Scope optimization remains planned.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24

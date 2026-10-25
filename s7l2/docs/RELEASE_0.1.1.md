@@ -404,9 +404,9 @@ shows display levels. Readouts stay in the Widgets panel so streaming scale
 updates do not rebuild the QML legend model. Original samples and acquisition
 settings are unchanged.
 
-Item 6 remains in progress. Resume with 6b: direct units/division entry and
-selected-channel axis presentation; then coarse/fine 1–2–5 steps and position
-reset, followed by markers. The optional history overview is a later increment.
+This increment is extended by 6b below. Remaining work includes coarse/fine
+1–2–5 steps and position reset, followed by markers. The optional history
+overview is a later increment.
 The local DS1000Z manual's selected-channel Vertical controls (page 1-12) guide
 this work.
 
@@ -418,6 +418,35 @@ hover. Final grid-label formatting and compact legend layout pass five affected
 GUI cases again; the rendered capture was reviewed. Local helpers/captures are
 under `build-release/rigol-6a-*` and remain outside Git. Broad suites are not
 repeated for this small presentation increment.
+
+## Rigol controls, item 6 increment 6b — 2026-10-25
+
+The Vertical Scale field now accepts exact units/division entry. It adjusts
+only the selected channel's gain and disables Auto Y while holding the plot
+range fixed. Exact entries survive selection and position changes, synchronize
+with independent gain/range changes, and support scientific notation. Streaming
+range changes leave partially typed text intact; commit uses the current range.
+Invalid or unrepresentable values leave the applied gain unchanged.
+
+The selected channel supplies the Y-axis title, color and raw-unit tick labels,
+including its independent gain and position. Selecting a different channel
+changes labels without moving traces or changing their visibility. The shared
+graticule and plotted display transforms remain unchanged; raw acquisition,
+measurements, trigger thresholds and exports are unaffected. Generic line plots
+retain their existing axes. The user guide describes the controls.
+
+Item 6 remains in progress. Resume with 6c: coarse/fine 1–2–5 steps and position
+reset, followed by position/trigger markers. The optional history overview
+remains later work. Keep subsequent work in similarly bounded increments.
+
+Validation: Studio Release build and five focused GUI cases pass without skips.
+Coverage includes exact entry and invalid/range-limit input, active editing
+during range changes, independent gains, mixed/unspecified units, selected-axis
+gain/position mapping, unchanged raw samples, light/dark controls and a long run.
+The Live Oscilloscope module, generic Qt Quick line-plot and bundled-demo checks
+pass. Rendered labels and controls were reviewed at 1024×768. Local helpers and
+captures remain outside Git under `build-release/rigol-6b-*`; broad suites are
+not repeated for this bounded increment.
 
 ## Scope and decisions to review
 

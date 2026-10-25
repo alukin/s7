@@ -124,20 +124,23 @@ See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle an
 bounded-work behavior.
 
 In **Vertical**, select a **CH n** button or click its name in the plot legend
-to adjust that channel's **Gain ×** and **Position**. Selection leaves visibility
+to adjust that channel's **Scale**, **Gain ×** and **Position**. Selection leaves visibility
 unchanged; use the separate checkbox to show/hide a trace. For a focused legend
 row, Enter selects the channel and Space toggles visibility.
-The colored readout shows raw signal units per one of eight vertical divisions,
-such as `0.25 V/div`. Channels with different units keep independent readouts;
-an unspecified unit appears as `units/div`. The shared Y axis shows display
-levels; hover values and measurements retain original signal values. Changing
-Gain updates units/division while keeping the other channels fixed.
+**Scale** accepts raw signal units per one of eight vertical divisions,
+such as `0.25 V/div`. Changing Scale adjusts that channel's gain while holding
+the plot range and other traces fixed. Channels with different units keep
+independent settings; an unspecified unit appears as `units/div`. The colored
+Y axis shows the selected channel's original units, accounting for its gain
+and position. Selecting another channel changes the axis labels without moving
+traces. Hover values and measurements retain original signal values. Changing
+Gain also updates Scale.
 The colored checkboxes beside channel buttons and in the plot legend toggle
 visibility. Each channel keeps independent settings. Numeric faces show five
 significant digits; focusing an editor or hovering its tooltip exposes the full
 value, including scientific notation. Numeric entry retains full precision.
 Position is a continuous relative knob: one turn moves half the visible plot
-height. There is no half-span setting. Changing gain or position turns off
+height. There is no half-span setting. Changing scale, gain or position turns off
 **Auto Y**, holding the shared scale so other channels remain stationary; enable
 Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
 unchanged.

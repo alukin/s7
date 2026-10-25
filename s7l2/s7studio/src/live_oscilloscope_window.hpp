@@ -84,7 +84,13 @@ private:
     bool requestedCaptureFinished_ = false;
     QStackedWidget* channelPages_;
     QProgressBar* timeBusy_;
-    struct ChannelControls { QCheckBox* visible; QDoubleSpinBox *gain, *offset; QToolButton* select; };
+    struct ChannelControls {
+        QCheckBox* visible;
+        QDoubleSpinBox *gain, *offset;
+        QToolButton* select;
+        QDoubleSpinBox* scale;
+        double scaleDivision = 0, scaleGain = 0, committedScale = 0;
+    };
     QVector<ChannelControls> controls_;
     bool inspecting_ = false, rendering_ = false;
     std::optional<std::size_t> requestedCapacity_;

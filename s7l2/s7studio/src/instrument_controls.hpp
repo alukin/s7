@@ -25,6 +25,8 @@ private:
 };
 
 QDoubleSpinBox* compactNumber(QWidget* parent);
+// For editors created by compactNumber: synchronize the inactive readout too.
+void setCompactNumberValueSilently(QDoubleSpinBox* number, double value);
 
 // Labelled, keyboard-accessible alternatives to a short enum combo box.
 class ChoiceButtons : public QWidget {

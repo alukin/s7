@@ -189,16 +189,43 @@ The shared numeric axis is explicitly a display level, since independently
 scaled mixed-unit traces have no common physical unit. Hover values, trigger
 thresholds, measurements and exports continue using original samples.
 
-This increment retains the existing gain/position controls and adds a readout;
-the units/division value is not directly editable yet. Next: increment 6b should
-provide direct units/division entry and selected-channel axis presentation,
-followed by coarse/fine 1–2–5 adjustment and position reset. Markers and the
-optional overview remain later work. Overall item 6 remains in progress.
+This increment retained the existing gain/position controls and added a readout.
+Increment 6b below extends it with direct entry and selected-channel axes.
 
 Validation: Studio rebuild, Live module and Qt Quick line-plot checks pass.
 Seven focused GUI cases pass; five affected cases pass again after final tick
 label/legend layout review. Local helpers and captures remain outside Git under
 `build-release/rigol-6a-*`. Details are in the release plan.
+
+### Item 6, increment 6b — direct scale entry and selected-channel axes
+
+Implemented 2026-10-25. The Vertical **Scale** editor accepts units/division
+directly. It adjusts only that channel's gain, turns off Auto Y, and holds the
+plot range and other channels fixed. Positive finite values within the gain
+control's representable range are accepted, including scientific notation.
+The full entered value survives channel selection and position edits; an
+independent gain or Y-span change recalculates it. Live range changes preserve
+partially typed text, and committing applies it against the current range.
+
+The Y axis now identifies the selected channel and its declared units, using
+the trace color. Grid labels invert that channel's gain and position to show
+original signal values. Selecting a different channel, including one with
+different or unspecified units, changes labels without moving any trace.
+The graticule remains evenly spaced in display coordinates. Hover, trigger,
+measurement and export values still use original samples. Generic line plots
+retain their existing axes.
+
+Item 6 remains in progress. Resume with 6c: coarse/fine 1–2–5 stepping and
+position reset, followed by channel/trigger position markers. The optional
+history overview remains later work. Gain/position knobs remain available
+alongside the direct Scale editor during these increments.
+
+Validation: five focused GUI cases cover exact entry, invalid values and range
+endpoints, focused edits during range changes, mixed/unspecified units,
+selection, position, raw-data preservation, light/dark layouts and long runs.
+The Live Oscilloscope, generic Qt Quick line-plot and bundled-demo regressions
+pass. Local helper snapshots and reviewed captures remain outside Git under
+`build-release/rigol-6b-*`.
 
 ### Reported time/preview defects — implemented refinement, 2026-10-25
 
