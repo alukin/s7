@@ -125,6 +125,8 @@ samples already evicted. **Channels**, **Time window**, **Trigger** and **Window
 inspection** collapse independently. The column scrolls vertically; **Hide
 controls** gives the plot the full width. Hover readouts and acquisition status
 have fixed-height scrollable areas so pointer motion does not move the layout.
+Hover values and times use five significant digits. The compact status area
+sits at the bottom, leaving more room for channel readouts.
 
 The live oscilloscope has four tabs sharing the same acquisition:
 

@@ -247,7 +247,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         this, [this, view] { if (view->isVisible()) inspection_->clear(); });
     auto* readoutScroll = new QScrollArea(side); readoutScroll->setObjectName("live.readoutScroll");
     readoutScroll->setWidgetResizable(true); readoutScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    readoutScroll->setFixedHeight(readout_->fontMetrics().lineSpacing()*5+16);
+    readoutScroll->setFixedHeight(readout_->fontMetrics().lineSpacing()*8+16);
     readout_->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     readoutScroll->setWidget(readout_); sideLayout->addWidget(readoutScroll);
     timeBusy_ = new QProgressBar(side); timeBusy_->setObjectName("live.processing"); timeBusy_->setRange(0, 0);
@@ -256,8 +256,8 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     status_ = new QLabel(side); status_->setObjectName("live.status"); status_->setMargin(4); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText);
     auto* statusScroll = new QScrollArea(side); statusScroll->setObjectName("live.statusScroll");
     statusScroll->setWidgetResizable(true); statusScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    statusScroll->setFrameShape(QFrame::NoFrame); statusScroll->setFixedHeight(status_->fontMetrics().lineSpacing()*5+16);
-    status_->setAlignment(Qt::AlignLeft | Qt::AlignTop); statusScroll->setWidget(status_); sideLayout->addWidget(statusScroll);
+    statusScroll->setFrameShape(QFrame::NoFrame); statusScroll->setFixedHeight(status_->fontMetrics().lineSpacing()*2+12);
+    status_->setAlignment(Qt::AlignLeft | Qt::AlignBottom); statusScroll->setWidget(status_); sideLayout->addWidget(statusScroll);
     splitter->setStretchFactor(0, 1); splitter->setStretchFactor(1, 0); splitter->setSizes({780, 320});
     auto* toggle = new QToolButton(tabs); toggle->setObjectName("live.controlsToggle"); toggle->setCheckable(true); toggle->setChecked(true);
     toggle->setText(QStringLiteral("Hide controls ▸")); toggle->setToolTip(QStringLiteral("Show or hide the control column to give the plot the whole window."));
@@ -469,7 +469,7 @@ void LiveOscilloscopeWindow::clearSamples()
     for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});
     plot_->bridge()->cursorVisible = false; plot_->bridge()->triggerVisible = false; emit plot_->bridge()->inspectionChanged();
     hoverTip(0, 0, false);
-    readout_->setText("Hover over the plot for exact stored sample values."); updateStatus();
+    readout_->setText("Hover over the plot for stored sample values."); updateStatus();
 }
 bool LiveOscilloscopeWindow::refreshSource()
 {
@@ -591,16 +591,16 @@ QString LiveOscilloscopeWindow::inspect(double time, bool active)
         const auto i = *sample;
         plot_->bridge()->cursorX = frame.plottedTime(i);
         QString text = QStringLiteral("Stored sample • run %1 • step %2\nModel time %3 s")
-            .arg(frame.runId).arg(frame.steps[i]).arg(frame.times[i], 0, 'g', 17);
+            .arg(frame.runId).arg(frame.steps[i]).arg(frame.times[i], 0, 'g', 5);
         for (qsizetype c = 0; c < frame.channels.size(); ++c) if (controls_[c].visible->isChecked()) {
             const auto& channel = frame.channels[c];
             text += QStringLiteral("\n%1 = %2 %3").arg(channel.name)
-                .arg(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(c)], 0, 'g', 17)
+                .arg(frame.values[i*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(c)], 0, 'g', 5)
                 .arg(channel.unit.isEmpty() ? QStringLiteral("[unit unspecified]") : channel.unit);
         }
-        if (frame.trigger && frame.trigger->triggered) text += QStringLiteral("\nTrigger-relative time = %1 s; sampled trigger step %2").arg(frame.plottedTime(i), 0, 'g', 17).arg(frame.trigger->step);
+        if (frame.trigger && frame.trigger->triggered) text += QStringLiteral("\nTrigger-relative time = %1 s; sampled trigger step %2").arg(frame.plottedTime(i), 0, 'g', 5).arg(frame.trigger->step);
         readout_->setText(text);
-    } else readout_->setText(active ? "No retained sample at this model time." : "Hover over the plot for exact stored sample values.");
+    } else readout_->setText(active ? "No retained sample at this model time." : "Hover over the plot for stored sample values.");
     emit plot_->bridge()->inspectionChanged(); updateStatus(); return readout_->text();
 }
 QVariantList LiveOscilloscopeWindow::hoverTip(double x, double y, bool active)
@@ -652,14 +652,14 @@ QVariantList LiveOscilloscopeWindow::hoverTip(double x, double y, bool active)
         for (const auto& hit : hits) {
             const auto i = hit.index;
             if (rows.isEmpty() || i != hits.front().index)
-                rows.append(QVariantMap{{"text", QStringLiteral("%1 s%2 • step %3").arg(frame.plottedTime(i), 0, 'g', 10)
+                rows.append(QVariantMap{{"text", QStringLiteral("%1 s%2 • step %3").arg(frame.plottedTime(i), 0, 'g', 5)
                     .arg(triggered ? " from trigger" : "").arg(frame.steps[i])}});
             const auto& channel = frame.channels[hit.channel];
             const double raw = frame.values[i*stride+static_cast<std::size_t>(hit.channel)];
             const double gain = controls_[hit.channel].gain->value(), offset = controls_[hit.channel].offset->value();
-            QString text = QStringLiteral("%1 = %2%3").arg(channel.name).arg(raw, 0, 'g', 10)
+            QString text = QStringLiteral("%1 = %2%3").arg(channel.name).arg(raw, 0, 'g', 5)
                 .arg(channel.unit.isEmpty() ? QString() : " " + channel.unit);
-            if (gain != 1 || offset != 0) text += QStringLiteral(" (shown %1)").arg(raw*gain+offset, 0, 'g', 10);
+            if (gain != 1 || offset != 0) text += QStringLiteral(" (shown %1)").arg(raw*gain+offset, 0, 'g', 5);
             const auto color = plot_->series()[hit.channel]->color();
             rows.append(QVariantMap{{"text", text}, {"color", color}});
             markers.append(QVariantMap{{"x", frame.plottedTime(i)}, {"y", raw*gain+offset}, {"color", color}});

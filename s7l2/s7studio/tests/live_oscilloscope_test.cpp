@@ -14,6 +14,7 @@
 #include <QDoubleSpinBox>
 #include <QDial>
 #include <QSlider>
+#include <QScrollArea>
 #include <QToolButton>
 #include <QProgressBar>
 #include <QLabel>
@@ -222,7 +223,7 @@ private slots:
     }
     void viewerFreezeRawHoverResizeAndReopen() {
         auto source = std::make_shared<LiveAcquisition>(12, .001, QVector<observation::LiveChannel>{{"live/x", "V", "f64"}}, QJsonObject{}, 1000, 1);
-        const double exact = std::nextafter(1., 2.);
+        const double exact = std::nextafter(1.23456789012345, 2.);
         auto append = [&](int first, int last) { for (int i = first; i <= last; ++i) { const double v[]{exact}; source->append(i, i*.001, v); } };
         append(1, 5000);
         viewers::ViewerManager manager(viewers::ViewerRegistry::instance()); manager.presentLive({{"live", source}});
@@ -230,7 +231,8 @@ private slots:
         QTRY_VERIFY(!viewer->displayedFrame().times.empty());
         QVERIFY(viewer->plotView()->quickWidget()); QTRY_COMPARE(viewer->plotView()->quickWidget()->status(), QQuickWidget::Ready);
         const auto text = viewer->inspect(5);
-        QVERIFY(text.contains("1.0000000000000002 V")); QVERIFY(text.contains("step 5000"));
+        QVERIFY(text.contains("live/x = 1.2346 V")); QVERIFY(text.contains("step 5000"));
+        QVERIFY(!text.contains("1.234567890")); QCOMPARE(viewer->displayedFrame().values.back(), exact);
         auto* freeze = viewer->findChild<QPushButton*>("live.freeze"); QVERIFY(freeze); freeze->setChecked(true);
         append(5001, 10000); manager.refreshViews(); QCOMPARE(viewer->displayedFrame().steps.back(), std::int64_t(5000));
         auto* count = viewer->findChild<QSpinBox*>("live.samples"); count->setValue(128); QCOMPARE(source->capacity(), std::size_t(128));
@@ -281,6 +283,10 @@ private slots:
         const auto plotGeometry = plot->geometry();
         auto* readout = viewer.findChild<QLabel*>("live.readout");
         const auto areaGeometry = readout->parentWidget()->parentWidget()->geometry();
+        const auto* hoverArea = viewer.findChild<QScrollArea*>("live.readoutScroll");
+        const auto* statusArea = viewer.findChild<QScrollArea*>("live.statusScroll");
+        QVERIFY(hoverArea && statusArea); QVERIFY(hoverArea->height() > statusArea->height()*2);
+        QVERIFY(statusArea->parentWidget()->height()-statusArea->geometry().bottom() < 12);
         viewer.inspect(600.); QCoreApplication::processEvents();
         viewer.inspect(0, false); QCoreApplication::processEvents();
         QCOMPARE(plot->geometry(), plotGeometry);
@@ -302,7 +308,7 @@ private slots:
         QTRY_VERIFY(viewer.plotView()->series().front()->points().isEmpty());
         QTRY_VERIFY(viewer.findChild<QLabel*>("live.status")->text().contains("overflow"));
         QCOMPARE(viewer.displayedFrame().values.back(), values[0]);
-        QVERIFY(viewer.inspect(.002).contains(QString::number(values[0], 'g', 17)));
+        QVERIFY(viewer.inspect(.002).contains(QString::number(values[0], 'g', 5)));
         gain->setValue(1);
         QTRY_COMPARE(viewer.plotView()->series().front()->points().size(), 2);
     }
@@ -356,9 +362,11 @@ private slots:
         QTRY_VERIFY(viewer.plotView()->series()[1]->points().isEmpty());
         QVERIFY(viewer.hoverTip(.02, -.5).isEmpty());
         // Display gain moves the trace; raw stays primary, the shown value is labelled.
-        viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(2);
-        QTRY_COMPARE(viewer.plotView()->series().front()->points().at(49).y(), 1.);
-        QVERIFY(text(viewer.hoverTip(.05, 1)).contains("live/up = 0.5 V (shown 1)"));
+        constexpr double gain = 1.97530864202469;
+        viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(gain);
+        QTRY_COMPARE(viewer.plotView()->series().front()->points().at(49).y(), .5*gain);
+        QVERIFY(text(viewer.hoverTip(.05, .5*gain)).contains("live/up = 0.5 V (shown 0.98765)"));
+        QCOMPARE(bridge->hoverMarkers.front().toMap()["y"].toDouble(), .5*gain);
         QVERIFY(viewer.hoverTip(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
     }
 };

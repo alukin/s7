@@ -77,8 +77,8 @@ acquisition running; reopening shows the current retained window. Reset detaches
 old sources and clears the display. A frozen frame survives ring wrapping/resizing.
 
 Hover uses retained raw binary64 values, including samples omitted from the reduced
-plot. Values are shown with 17 significant digits. This preserves stored double
-precision; it does not recover precision lost when a wider source type was converted.
+plot. Hover values and times are shown with five significant digits. Stored samples
+and exports retain their full precision; presentation rounding does not alter them.
 Time reduction retains bucket endpoints and extrema in chronological order, so
 single-step spikes remain visible. The current renderer suppresses a channel's
 trace if the frame contains gaps or nonfinite values, reports why, and still allows

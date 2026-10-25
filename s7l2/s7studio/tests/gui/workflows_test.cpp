@@ -968,7 +968,7 @@ private slots:
         auto* readout = viewer->findChild<QLabel*>("live.readout"); QVERIFY(readout);
         QTRY_VERIFY(readout->text().contains("Stored sample")); QVERIFY(readout->text().contains("step"));
         const auto index = viewer->displayedFrame().nearest(viewer->plotView()->bridge()->cursorX); QVERIFY(index);
-        QVERIFY(readout->text().contains(QString::number(viewer->displayedFrame().values[*index], 'g', 17)));
+        QVERIFY(readout->text().contains(QString::number(viewer->displayedFrame().values[*index], 'g', 5)));
         capture(viewer, "live-oscilloscope-hover");
         // Pointer on the trace: a translucent value box beside it and a ring on the sample.
         const auto& shown = viewer->displayedFrame(); const auto sample = shown.times.size()/2;

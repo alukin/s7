@@ -47,7 +47,9 @@ side by side with their numeric fields below the knobs.
 Channels and Time window start expanded; Trigger and Window inspection start
 collapsed. All sections collapse independently. The control column scrolls
 vertically and can be hidden. Hover readouts and status use fixed-height
-scrollable viewports, and worker progress reserves its space while hidden.
+scrollable viewports. Hover values and times show five significant digits. The
+hover area has eight lines, with a compact two-line status area at the bottom;
+longer messages remain scrollable. Worker progress reserves its space while hidden.
 Pointer movement therefore cannot resize the plot or shift the settings panel.
 The plot header and dock preview status explicitly identify the retained model
 time interval, distinguishing it from the full run duration.
