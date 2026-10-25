@@ -292,6 +292,7 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
         {"nodes", std::move(nodes)},
         {"wires", std::move(wires)},
         {"text_frames", std::move(frames)},
+        {"observers_panel", scene.observersPanel()},
     };
     return doc;
 }
@@ -571,6 +572,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
         }
     });
     scene.setProbes(document.probes);
+    if (const auto* panel = document.diagram.if_contains("observers_panel")) {
+        validateObserversPanel(*panel); scene.setObserversPanel(panel->as_array());
+    }
     if (progress) {
         progress(100);
     }

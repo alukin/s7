@@ -1,0 +1,53 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+#pragma once
+#include <QWidget>
+#include <QStringList>
+class QDoubleSpinBox;
+class QDial;
+class QLabel;
+class QToolButton;
+namespace s7studio::ui {
+// Labelled, keyboard-accessible alternatives to a short enum combo box.
+class ChoiceButtons : public QWidget {
+    Q_OBJECT
+public:
+    ChoiceButtons(const QStringList& labels, const QString& name, QWidget* parent = nullptr);
+    int currentIndex() const;
+    void setCurrentIndex(int index);
+signals:
+    void currentIndexChanged(int index);
+private:
+    QList<QToolButton*> buttons_;
+};
+
+// The content keeps its state when collapsed; each section is independent.
+class CollapsibleSection : public QWidget {
+public:
+    CollapsibleSection(const QString& title, const QString& name, QWidget* content, bool expanded, QWidget* parent = nullptr);
+};
+
+// Settings cells wrap with the available plot width, including on hidden tabs.
+class WrappingSettings : public QWidget {
+public:
+    explicit WrappingSettings(QWidget* parent = nullptr);
+    void addField(const QString& label, QWidget* control);
+    void addControl(QWidget* control);
+};
+
+// A coarse dial never owns the floating-point value. Numeric edits remain exact.
+class RotaryValueControl : public QWidget {
+public:
+    enum class Mapping { LogGain, LocalOffset };
+    RotaryValueControl(Mapping mapping, const QString& name, QWidget* parent = nullptr);
+    QDoubleSpinBox* number() const { return number_; }
+private:
+    void updateDial();
+    void recenter();
+    Mapping mapping_;
+    QDoubleSpinBox *number_, *span_ = nullptr;
+    QDial* dial_;
+    QLabel* interval_ = nullptr;
+    double center_ = 0;
+};
+}

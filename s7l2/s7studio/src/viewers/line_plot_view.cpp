@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "viewers/line_plot_view.hpp"
+#include <QPointer>
 
 #include "viewers/quick_support.hpp"
 
@@ -159,18 +160,23 @@ LinePlotView::~LinePlotView()
 
 void LinePlotView::showEvent(QShowEvent* event)
 {
+    const QPointer<LinePlotView> alive(this);
     ensureQuickScene();
-    QWidget::showEvent(event);
+    if (alive) QWidget::showEvent(event);
 }
 
 void LinePlotView::ensureQuickScene()
 {
     if (quick_) return;
-    quick_ = createQuickWidget();
+    const QPointer<LinePlotView> alive(this);
+    auto* created = createQuickWidget();
+    if (!alive) { unloadQuickScene(created); return; }
+    quick_ = created;
     densityProvider_ = new DensityProvider;
     densityProvider_->setImage(densityImage_);
     quick_->engine()->addImageProvider("s7density", densityProvider_);
     layout()->addWidget(quick_);
+    if (!alive) return;
     loadQuickScene(*quick_, QStringLiteral("LinePlot.qml"), {{QStringLiteral("plot"), QVariant::fromValue<QObject*>(bridge_)}});
 }
 

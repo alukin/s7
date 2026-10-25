@@ -1,13 +1,14 @@
 # Live cursors, measurements and window export
 
-The controls beneath the Live Oscilloscope tabs inspect and export **one bounded
+The **Window inspection** section in the Live Oscilloscope control column
+inspects and exports **one bounded
 displayed window**. They use stored raw values or computed analysis arrays, never
 values read back from plot pixels. They do not start full-run recording.
 
 ## Place and move A/B cursors
 
 1. Choose Time, Spectrum, Constellation / XY or Correlation and wait for data.
-2. Click **Pin window / A–B**, or click inside the plot. This freezes the displayed
+2. Expand **Window inspection** and click **Pin window / A–B**, or click inside the plot. This freezes the displayed
    result and its raw input. A initially selects index zero; B selects the last
    position. Indices are zero-based.
 3. Choose **Click sets A** or **Click sets B**, then click a position. Time snaps
@@ -15,9 +16,10 @@ values read back from plot pixels. They do not start full-run recording.
    choose the earlier position. XY chooses a raw pair within 12 screen pixels,
    breaking exact distance ties toward the newest step—even in density mode.
    A density bin itself is an aggregate, not a cursor's raw point.
-4. Edit **A index** / **B index**, use their Up/Down keys, or press **Alt+Left** /
+4. Move the **A** / **B** sliders, edit their exact index fields, use their Up/Down keys, or press **Alt+Left** /
    **Alt+Right** to move the selected cursor one position. Indices also let you
-   inspect coincident XY points from different model steps.
+   inspect coincident XY points from different model steps. Crossing endpoints
+   preserves the identity of A and B.
 5. Read A, B and signed B−A differences, with supplied units. Time and XY also
    show model steps, times, Δstep, Δt and `1/Δt`. The reciprocal is a cursor
    interval calculation, not an automatic signal-frequency estimate. Zero Δt
@@ -62,7 +64,8 @@ frequency estimate or rise/fall-time estimate is applied.
 
 ## Export the frozen window
 
-Choose a format, then **Export frozen window…**. Export pins the displayed input
+Use the **Export: …** button's arrow to choose a format, then click the button.
+The selected format appears on the button. Export pins the displayed input
 before opening the destination dialog. A/B annotate the exported measurements;
 **the file contains the entire pinned window**, rather than cropping it to A–B.
 

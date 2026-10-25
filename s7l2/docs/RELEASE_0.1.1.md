@@ -1,7 +1,7 @@
 # S7 0.1.1 — interface design and implementation plan
 
-Date: 2026-10-24; updated 2026-10-25. Status: ST-001/ST-002/ST-005/ST-007 and font/palette fixes locally verified; remaining
-interface work is a proposed design for review.
+Date: 2026-10-24; updated 2026-10-25. Status: ST-001/ST-002/ST-003/scoped ST-004/ST-005/ST-006/ST-007/ST-008 and font/palette fixes implemented and locally verified;
+release qualification remains.
 
 The maintainer accepted the proposed order of work and requested step 1:
 settle the interface design and acceptance checks. This document makes the
@@ -130,7 +130,195 @@ ctest --test-dir build-win-release -R '^(s7core_metadata_json_smoke|s7studio_smo
 
 The scaled GUI command is documented in [STUDIO_GUI_TESTING.md](STUDIO_GUI_TESTING.md).
 Developer, plugin and offline Studio guides describe the JSON workflow and
-information access. ST-008 drag placement remains the next Studio increment.
+information access. ST-008 drag placement is recorded in the following increment.
+
+## Implemented increment — ST-008, library drag placement, 2026-10-25
+
+Library leaf entries now support native copy drags into the receiving root or
+open nested diagram. The view maps the pointer through its current zoom/pan;
+the existing scene path snaps the element's upper-left anchor to the grid and
+creates one undo command. The new instance is selected and the canvas receives
+keyboard focus. Categories cannot start drags; Escape, outside drops and
+unsupported data do not edit the document or undo history. Double-click remains
+available and uses the same creation function with its free-spot suggestion.
+
+The shared path allocates unique IDs (including avoiding text-frame ID
+collisions), copies registered schema definitions, preserves ordinary metadata
+defaults and initializes Scope/Live channel counts as before. It does not create
+runtime/plugin instances during placement. All changes stay within Studio and
+its documentation; no vendor, runtime or network behavior changes are involved.
+The short description label now wraps within the existing dock width, so
+selecting a long description does not move the canvas/library boundary under
+the pointer.
+
+The app-local drag payload is `application/x-s7studio-library-element`, a UTF-8
+JSON object with exactly `version: 1` and a `type` string, at most 4096 bytes.
+Type identifiers are registered runtime types or `StudioObserver:<viewer type>`.
+Drag-enter, movement and drop require copy support and a currently available
+entry. Drop rechecks availability and rejects out-of-viewport positions. No
+serialized node objects, parameter overrides or plugin-loading requests are
+accepted. Implementation lives in `library_element`, the project-owned library
+tree and DiagramView; both placement gestures call DiagramEditor::addLibraryElement.
+
+Verification: native Release `build-tests` and the complete CTest suite pass
+**82/82** (110.82 s), including all four GUI suites and **53 workflow cases**,
+with no skips. Nine native XTest/QDrag cases cover filtered/unfiltered entries,
+zoom/pan, root/nested targets, built-ins, schema elements, the loaded noise
+plugin and all four observers. Checks include snapped coordinates, stable dock
+width, selection/focus, unique IDs, exactly one undo step, redo, double-click
+defaults and save/reopen. Further cases cover Escape, outside/category drags,
+bad MIME/version/size/structure, move-only offers, missing types and entries
+removed after drag-enter. The native gesture cases require `xdotool` and
+explicitly skip without it; it was available for these runs.
+
+Representative filtered built-in and nested-schema drags also pass at 150% and
+200% using a 1440×900 logical Xvfb workspace. Coordinates for XTest are converted
+to physical pixels; application placement remains in logical/scene coordinates.
+Windows Studio Release cross-build and **1/1 Wine Studio smoke** pass. Native
+Windows drag/drop, physical desktop/GPU themes and relocated release-package
+qualification remain separate. Captures and test logs remain outside Git in
+`/tmp/s7-st008-*` and the usual GUI artifacts directory.
+
+Primary verification commands:
+
+```bash
+cmake --build build-release --target build-tests --parallel 2
+ctest --test-dir build-release --output-on-failure -j 2
+cmake --build build-win-release --target s7studio --parallel 2
+ctest --test-dir build-win-release -R '^s7studio_smoke$' --output-on-failure
+```
+
+The offline user guide describes drag placement and cancellation; the GUI
+testing guide documents native-event dependencies and scaled runs. The maintainer
+subsequently moved increment 6 (instrument controls) ahead of 5a/5b. That controls
+increment and the subsequent 5a/5b work are implemented below.
+
+## Implemented increment — ST-003 and scoped ST-004, 2026-10-25
+
+The Live Oscilloscope now has eight channel selectors with independent visibility
+and one selected channel's display controls. Non-wrapping gain/offset knobs sit
+beside wide, exact decimal/scientific fields. Offset uses an explicit local
+interval and editable half-span. Numeric edits are not quantized through the
+dial; endpoint key/wheel actions and mouse release apply the final position.
+Pre-trigger has a synchronized slider/percentage field; edge and A/B selection
+use labelled exclusive buttons. Independent sections collapse and scroll.
+Spectrum and paired-analysis settings wrap inside bounded-height, collapsible
+scroll areas, preserving plot height on small desktops. Busy indicators retain
+their layout space so pending analysis does not move the plot.
+
+Inspection has independent A/B sliders and exact indices, preserving cursor
+identity across crossings and existing raw measurement semantics. Export shows
+its selected format in a split-menu button and reports worker progress beside
+Cancel. Finite execution shows completed/total progress and model time;
+continuous execution shows steps/model time without a completion percentage.
+Existing trigger preset persistence and acquisition/analysis semantics remain.
+The [design notes](STUDIO_INSTRUMENT_CONTROLS.md) record reviewed hardware and
+software screenshots, including Rigol, Scopy, OpenHantek and ngscopeclient.
+
+Verification was batched. The integrated Release suite passed **82/82**
+(110.99 s), including **56 GUI workflow cases** without skips and the existing
+live UI responsiveness workload. Screenshot review then led to wider numeric
+fields, bounded analysis sections and stable processing-indicator geometry.
+Final affected observer/inspection/trigger workflows passed **9/9**, the exact
+value/cursor/trigger executable passed **15 cases**, and representative layout
+checks passed **5/5 at each of 150% and 200%**. The scaled Xvfb workspaces are
+1440×900 logical; the cases also resize to 1024×768 and explicitly set light/dark
+palettes. The XY hover test follows current plot geometry as Qt Quick settles
+after Fit. Checks include full gain-value visibility, plot height, field bounds,
+raw-value preservation, cursor crossing/keyboard movement, export format/success
+progress and an analysis indicator while work is queued.
+
+Final Linux Studio and Windows Release cross-builds pass, as does **1/1 Wine
+Studio smoke**. Native Windows interaction, physical display/GPU review and
+relocated release packaging remain release qualification work. No vendor code,
+runtime/core changes or Qt Quick Controls dependency were introduced. Offline
+help and triage are updated. Final captures/logs are outside Git in
+`/tmp/s7-controls-final-{100,150,200}`. The subsequent **5a — observer presentation
+boundary** and **5b — Observers dock** are recorded below.
+
+## Implemented increments 5a/5b — reusable presentations and Observers dock
+
+ST-006 now replaces the Probes dock with **Observers**, retaining Alt+3 and the
+right tool-window area. The root document owns the ordered preview selection,
+collapse state and optional plotted-channel subset. Choose Observers supports
+search, Apply and Cancel; no observers are selected automatically. Recorded
+Signals preserves named-tap management and ad-hoc Scope/Phase access in a
+separate dialog. Starting a run activates Observers once; subsequent sample
+updates respect manual dock changes. Cards preserve active bindings through
+document changes/deletion, label next-run differences, and retain stopped or
+completed data. Reset and document retirement invalidate pending work.
+
+Time/XY previews reuse LinePlotView; 3D full windows and cards now share the
+extracted TrajectoryPlotView. Cards never reparent a full viewer. Their zoom,
+freeze and camera state are independent. ViewerRegistry owns preview factories;
+ViewerManager owns live trigger settings and applies saved presets before the
+producer starts, including short runs without an open full viewer. Opening a
+presentation neither rearms nor reconfigures retention. Full-viewer trigger
+edits use the same owner and invalidate old preview preparation.
+
+ObservationSource now maintains bounded independent tails, including sparse
+channels. Worker preparation reads those tails without journal I/O or scanning
+from the start. Live cards use const acquisition snapshots. Same-step phase
+joins do not invent coherent frames from independent latest values. Time traces
+break at missing/nonfinite samples; isolated samples use dots. Phase plots show
+the latest continuous segment. The dock reports source outputs, names, supplied
+units, individual sample steps, loss/errors and trigger/partial-capture state.
+Compact 3D axes and Time legends keep narrow cards readable; full source names
+remain available in channel details.
+
+At most four visible expanded plots are active; initialization is staggered to
+one surface per panel tick. Refresh is capped at 10 Hz, eight plotted channels,
+4,096 recent positions and 1,024 vertices per channel, with one active/replaceable
+pending request per card. Hidden/offscreen/collapsed/minimized surfaces stop
+preparation and are retired safely. Requests carry immutable bindings and
+revision tags; late results are rejected. Quick scene creation is guarded against
+host destruction, and surfaces retire after their current GUI event unwinds.
+
+`diagram.observers_panel` round-trips through scene serialization and undo.
+Deletion/type changes prune selection in the same undo command; undo restores
+it. Clipboard/library export omit root panel selection, and deployment projection
+strips it. Graph/configuration projection equality is tested. Dock geometry stays
+in QSettings. The [offline guide](STUDIO_OBSERVERS_DOCK.md) documents the workflow.
+Live observer rebinding is explicitly deferred beyond 0.1.1, with no target
+release assigned; the maintainer's follow-up is in
+[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md#live-observer-rebinding--follow-up-to-011).
+
+Verification: the grouped native suite passed **83/83** entries after rerunning
+two recording regressions with disk-backed temporary storage (their initial
+failures were a `/tmp` quota exhaustion). Its main GUI workflow run passed
+**58 cases**, without skips. After final presentation refinements, the rebuilt
+source passed the observer contract test, both dock workflows at 100%, 150%
+and 200%, ASan/UBSan contracts and dock workflows, and the Windows cross-build
+plus Wine Studio smoke. Final captures and sanitizer reports are under
+`build-release/observer-artifacts/`; these are local, untracked artifacts.
+The final eight-channel 100 ksample/s GUI stress case with both a full viewer
+and dock preview passed its 35-second workload with a 124 ms maximum UI timer
+gap.
+
+A 30-minute live-only published-source soak selected 12 observers, held the
+four-active-plot limit, produced no recording samples or journal payload and
+achieved 1,000.001 source steps/s. Maximum measured UI timer gap was 195 ms.
+Process RSS was 595 MB after warm-up, peaked at 644 MB and finished at 513 MB;
+these figures include acquisition buffers and Qt. This soak preceded the final
+label/legend refinements. The mixed preview-only two-minute measurement achieved
+1,000.007 source steps/s, with a 158 ms maximum UI gap and 422→451 MB RSS;
+its recording payload grew separately by 175 MB. These synthetic published-source
+measurements do not measure NodeRuntime throughput or physical GPU behavior.
+
+The final two-minute mixed run with four full viewers open maintained four
+active previews and 1,000.007 published source steps/s, with no capture errors.
+However, its **458 ms maximum UI gap exceeds the 250 ms target** (hidden baseline:
+11 ms). RSS grew from 928 MB after warm-up to 3,026 MB, with a 3,053 MB peak;
+the existing recording captured 5,466,825 samples / 175 MB payload. Full-viewer
+data/geometry and Qt allocations are included in RSS; this run does not isolate
+preview overhead. The result is retained in
+`build-release/observer-artifacts/mixed-full.json`. Full-viewer mixed-load
+responsiveness and memory attribution remain **unresolved release qualification
+work**, rather than a passed performance gate. See OPEN_PROBLEMS.md.
+
+The next implementation increment is **7 — release qualification**. Native
+Windows interaction, physical desktop/GPU review and relocated package checks
+remain separate from the local implementation evidence above.
 
 ## Scope and decisions to review
 
@@ -329,6 +517,10 @@ full viewer as a side effect. Selection can change during a run using only its
 already prepared sources. New/rewired observers show Next run rather than
 silently attaching a different signal to the active run.
 
+The maintainer accepts this fixed-binding limit for 0.1.1 only. Live observer
+rebinding is a required follow-up, with no release assigned yet; it is tracked
+in [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md#live-observer-rebinding--follow-up-to-011).
+
 No initial selection: explain that no previews are selected and offer Choose
 Observers. No observers in the document: explain how to place one from the
 library and connect its inputs. An unconnected selected observer remains
@@ -435,6 +627,13 @@ one rendering surface for every chooser entry or selected offscreen card.
 
 ## 4. Instrument controls and visual rules — ST-003/ST-004
 
+The maintainer requested this increment before the observer presentation boundary
+and dock. Hardware and software references, selected-channel layout decisions
+and value semantics are recorded in
+[Studio instrument controls](STUDIO_INSTRUMENT_CONTROLS.md). The eight-channel
+viewer shows one channel's knobs at a time; selecting a channel and showing its
+trace are separate actions.
+
 Keep the plot-first layout: tabs and plots take the expanding area; a hideable
 right control column keeps Freeze Display, Resume Live/Fit and Auto Y visible
 above independently collapsible Acquisition, Trigger, Channels and Inspection
@@ -502,9 +701,9 @@ workflow. The order follows the maintainer's accepted release sequence:
 | 3 — Shell/examples | main_window_builder, main_window document loading, packaged example lookup | Actual menu activation, focused editing and installed example loading/replacement protection. |
 | 4a — Information | element metadata at its owning modules, element_picker_panel, shared information widget and Properties | Complete parameter inventory, representative semantic checks and long-text layout/accessibility. |
 | 4b — Drag placement | element_picker_panel, diagram_editor/project-owned scene adapters, shared element creation | Real drag/drop, zoom/pan, root/nested placement, undo/redo and save/reopen. |
+| 6 — Controls (moved forward by maintainer) | live_oscilloscope_window, spectrum/pair/inspection widgets, reusable control compositions | Exact numeric semantics, responsive dragging, export progress/cancel and unchanged raw measurements. |
 | 5a — Observer presentation boundary | viewers registry/manager, reusable plot presentations, observation tail preparation and shared settings owner | Two independent presentations of one source; no capture/trigger changes on preview creation. |
 | 5b — Observers dock | project-owned panel, tool_windows, main_window lifecycle, scene serializer/document metadata | Selection, run activation, state transitions, save/reopen, stale-work rejection and bounded-load evidence. |
-| 6 — Controls | live_oscilloscope_window, spectrum/pair/inspection widgets, reusable control compositions | Exact numeric semantics, responsive dragging, export progress/cancel and unchanged raw measurements. |
 | 7 — Release qualification | offline guide/example help, packaging scripts only where required, release evidence | Full regression and relocated packages, updated notices/checksums and recorded platform limits. |
 
 Keep runtime/core execution and the headless build independent of Studio.

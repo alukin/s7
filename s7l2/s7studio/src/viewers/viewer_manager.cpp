@@ -5,6 +5,7 @@
 
 #include "scope_sample_mailbox.hpp"
 #include "viewers/viewer_registry.hpp"
+#include "live_oscilloscope_window.hpp"
 
 #include <QTimer>
 
@@ -73,6 +74,10 @@ auto ViewerManager::ensure(const QString& typeId, const ViewerInstanceSpec& spec
     connect(window, &QObject::destroyed, this, [this, key] { forget(key); });
     viewer->setDroppedSampleCount(dropped_);
     instances_.insert(key, Instance{typeId, spec.instanceId, window, viewer, spec});
+    if (auto* live = dynamic_cast<ui::LiveOscilloscopeWindow*>(viewer)) {
+        live->setTriggerController([this, id = spec.instanceId](const observation::TriggerSettings& settings, QString* error) { return setObserverTrigger(id, settings, error, false); });
+        live->setTriggerSettings(triggers_.value(spec.instanceId));
+    }
     emit viewerCreated(typeId, spec.instanceId, viewer);
     if (typeId == QStringLiteral("LiveOscilloscope")) viewer->attachLiveSource(liveSources_.value(spec.instanceId));
     else viewer->attachSource(source(), bindingsFor(instances_[key], source()));
@@ -205,10 +210,27 @@ void ViewerManager::beginRun(const QString& previousRunLabel, bool preserveScope
 
 void ViewerManager::presentLive(observation::LiveSources sources)
 {
+    for (auto it = sources.cbegin(); it != sources.cend(); ++it)
+        if (liveSources_.value(it.key()) != it.value()) {
+            auto settings = triggers_.value(it.key());
+            if (settings.channel >= static_cast<std::size_t>(it.value()->channels().size())) settings.channel = 0;
+            it.value()->configureTrigger(settings); triggers_[it.key()] = settings;
+        }
     liveSources_ = std::move(sources);
     for (const auto& instance : std::as_const(instances_))
-        if (instance.window && instance.typeId == QStringLiteral("LiveOscilloscope"))
+        if (instance.window && instance.typeId == QStringLiteral("LiveOscilloscope")) {
+            if (auto* live = dynamic_cast<ui::LiveOscilloscopeWindow*>(instance.viewer)) live->setTriggerSettings(triggers_.value(instance.instanceId));
             instance.viewer->attachLiveSource(liveSources_.value(instance.instanceId));
+        }
+}
+bool ViewerManager::setObserverTrigger(const QString& id, const observation::TriggerSettings& settings, QString* error, bool updateViewer)
+{
+    if (const auto source = liveSources_.value(id); source && triggers_.value(id) != settings && !source->configureTrigger(settings, error)) return false;
+    const bool changed = triggers_.value(id) != settings;
+    triggers_[id] = settings;
+    if (changed) emit observerSettingsChanged(id);
+    if (auto* live = dynamic_cast<ui::LiveOscilloscopeWindow*>(find("LiveOscilloscope", id)); updateViewer && live) live->setTriggerSettings(settings);
+    return true;
 }
 
 void ViewerManager::clearSamples()
@@ -230,6 +252,7 @@ void ViewerManager::closeAll()
     externalSource_.reset();
     recordedTypes_.clear();
     liveSources_.clear();
+    triggers_.clear();
     dropped_ = 0;
     ++generation_;
     for (const auto& instance : instances) {

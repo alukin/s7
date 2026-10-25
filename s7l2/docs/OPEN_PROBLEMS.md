@@ -1,5 +1,32 @@
 # S7 Open Problems
 
+## Mixed observer/full-viewer load — 0.1.1 qualification
+
+The final synthetic published-source check with 12 selected observers, four
+active dock previews and four open full viewers sustained 1,000.007 source
+steps/s without capture errors, but its 458 ms maximum UI timer gap exceeded
+the 250 ms target. Process RSS grew from 928 MB after warm-up to 3,026 MB over
+the two-minute measurement, alongside 175 MB of explicit recording payload.
+The 30-minute journal-free live-preview soak stayed below the latency target
+and finished below its warm RSS. Isolate full-viewer data/geometry work from
+dock preparation, compare against a full-viewer-only baseline, and resolve or
+explicitly scope the mixed-load limitation before claiming release performance
+qualification. Evidence: `build-release/observer-artifacts/mixed-full.json` and
+the implementation section in RELEASE_0.1.1.md. These are published-source UI
+measurements, not NodeRuntime throughput measurements.
+
+## Live observer rebinding — follow-up to 0.1.1
+
+The maintainer accepts fixed observation bindings for 0.1.1 but explicitly wants
+observers to support source changes during execution later. No release is
+assigned yet. Define a non-invasive subscription update at an acknowledged causal
+step boundary, with binding generations, clear source/continuity markers, and
+stale-work rejection. Decide how new taps become available without restarting
+the graph, how missing sources and incompatible types are reported, and whether
+recording continues in a new segment. Full viewers and dock previews should
+share the binding/settings owner. This is observation reconfiguration; it does
+not imply arbitrary live edits to the executing functional graph.
+
 **Additional 0.1.0 requirement (2026-10-23):** separate control and data listeners
 with mTLS control and explicit encrypted/trusted-plaintext data modes for
 loopback and trusted LANs. This is required before the preview, with Python and

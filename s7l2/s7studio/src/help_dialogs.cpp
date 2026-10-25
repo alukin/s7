@@ -34,6 +34,7 @@ constexpr Topic topics[] = {
     {"Bundled examples", "qrc:/s7studio/help/docs/STUDIO_EXAMPLES.md"},
     {"Saving and comparing results", "qrc:/s7studio/help/docs/SCOPE_RESULTS.md"},
     {"Observation viewers", "qrc:/s7studio/help/docs/STUDIO_OBSERVATION_VIEWERS.md"},
+    {"Observers dock", "qrc:/s7studio/help/docs/STUDIO_OBSERVERS_DOCK.md"},
     {"Numerical validation", "qrc:/s7studio/help/docs/NUMERICAL_VALIDATION_MATRIX.md"},
     {"Preview limits", "qrc:/s7studio/help/docs/RELEASE_0.1.0.md"},
     licensing,

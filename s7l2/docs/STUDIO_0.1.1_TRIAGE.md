@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: ST-001/ST-002/ST-005/ST-007/ST-010 implemented and locally verified; other interface work remains in planning.
+Status: ST-001/ST-002/ST-005/ST-007/ST-008/ST-010 implemented and locally verified; other interface work remains in planning.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24
@@ -163,6 +163,11 @@ maintenance scope and subsequent networking correction above.
 
 ### ST-003 — Give the Live Oscilloscope richer instrument controls
 
+**2026-10-25 update:** implemented and locally verified for 0.1.1, before observer
+presentation extraction/dock work. The [controls design](STUDIO_INSTRUMENT_CONTROLS.md) records
+the reviewed hardware/software references and current implementation. The
+collection-stage assessment below is historical; it does not defer this work.
+
 - **Requested:** 2026-10-24. Use Qt controls such as knobs and sliders to make
   the Live Oscilloscope more attractive.
 - **Classification:** design/usability enhancement, not a reported functional
@@ -201,6 +206,11 @@ maintenance scope and subsequent networking correction above.
   acquisition settings must retain their existing bounded-storage semantics.
 
 ### ST-004 — Adopt richer Qt controls throughout Studio
+
+**2026-10-25 update:** the implemented 0.1.1 increment covers existing observer and inspection
+controls, wrapping analysis settings and honest export/run/analysis progress.
+See [the current controls design](STUDIO_INSTRUMENT_CONTROLS.md). The broader
+ideas below remain proposals; no QML Controls dependency is introduced.
 
 - **Requested:** 2026-10-24. Look beyond knobs/sliders and use other suitable
   Qt controls across the interface. This broadens ST-003 beyond the Live
@@ -295,6 +305,13 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
   lifecycle states, and update user/offline documentation.
 
 ### ST-006 — Replace the Probes panel with Observers and live run previews
+
+**2026-10-25 update:** reusable presentations and the Observers dock are
+implemented. Current behavior and bounded-work limits are in
+[STUDIO_OBSERVERS_DOCK.md](STUDIO_OBSERVERS_DOCK.md); local evidence is recorded
+in the 0.1.1 plan. The maintainer accepts fixed observation bindings for 0.1.1
+and requests live rebinding later, with no release assignment yet. Earlier
+collection-stage discussion below is historical.
 
 - **Scope after clarification:** embedded previews of existing observers are
   UX improvements, as explicitly clarified by the user. Include the Observers
@@ -506,9 +523,19 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
 
 - **Requested:** 2026-10-24. Drag an element from the Element Library panel
   directly onto the drawing area to place it.
-- **Classification/status:** element-placement UX improvement; source-reviewed,
-  not independently reproduced. No implementation changes made.
-- **Source evidence:** ElementPickerPanel currently emits elementRequested on
+- **Classification/status:** element-placement UX improvement; implemented and
+  locally verified on 2026-10-25.
+- **Resolution:** a copy-only, versioned type payload from library leaves is
+  accepted by the receiving root/nested DiagramView. Drop coordinates use its
+  current zoom/pan and existing grid snap. Drop and double-click share schema,
+  observer/default and unique-ID handling, with one undo command. The new
+  instance is selected; the source entry remains. Escape, outside/category
+  drags and invalid/unavailable payloads do not edit the document. The summary
+  label no longer widens the dock on long descriptions during selection.
+  Native XTest gestures, invalid-data events, save/reopen, 150%/200% examples,
+  Windows cross-build and Wine results are recorded with their limits in
+  [the release plan](RELEASE_0.1.1.md).
+- **Original source evidence (before implementation):** ElementPickerPanel emits elementRequested on
   double-click. MainWindow::onElementRequested() creates the chosen element in
   the active editor at suggestedNewItemPosition(). The library tree has no
   setDragEnabled/startDrag or custom outgoing MIME setup. Its panel-level
@@ -516,13 +543,13 @@ Proposed control-to-workflow mapping (recommendations, not implemented):
   handlers do not implement dragging library entries out to the canvas.
   QSchematic's view accepts drops, but its vendor scene expects its own node
   MIME representation. No Studio library-to-canvas drag route was found.
-- **Planning direction:** dragging a library leaf should create one instance
+- **Original planning direction:** dragging a library leaf should create one instance
   of that type in the active diagram at the drop position, using the existing
   creation/default/port logic and grid placement. Include schema-backed types,
   loaded plugin elements and Studio observers. Retain double-click placement.
   Group categories are not draggable elements; cancelling or dropping outside
   the canvas must not create anything or remove the library entry.
-- **Implementation constraints for later:** integrate through project-owned
+- **Implementation constraints:** integrate through project-owned
   picker/editor/scene adapters, without modifying vendor code. Use a defined
   type payload, validate it against the available registry/viewer types, map
   viewport to scene coordinates under zoom/pan, allocate a valid unique ID,

@@ -5,6 +5,7 @@
 
 #include <stdexcept>
 #include <cmath>
+#include <set>
 
 namespace s7studio::diagram {
 
@@ -41,6 +42,25 @@ auto DiagramPageLayout::toJson() const -> boost::json::object {
     return obj;
 }
 
+void validateObserversPanel(const boost::json::value& panel) {
+    if (!panel.is_array()) throw std::invalid_argument("diagram.observers_panel must be an array");
+    std::set<std::string> identities;
+    for (const auto& value : panel.as_array()) {
+        if (!value.is_object()) throw std::invalid_argument("Observer selection must be an object");
+        const auto& entry = value.as_object();
+        const auto* id = entry.if_contains("element_id"), *type = entry.if_contains("type"), *collapsed = entry.if_contains("collapsed");
+        if (!id || !id->is_string() || id->as_string().empty() || !type || !type->is_string() || type->as_string().empty() || !collapsed || !collapsed->is_bool())
+            throw std::invalid_argument("Observer selection needs element_id, type and collapsed");
+        if (!identities.insert(std::string(type->as_string()) + "\n" + std::string(id->as_string())).second)
+            throw std::invalid_argument("Duplicate observer selection");
+        if (const auto* channels = entry.if_contains("plotted_channels")) {
+            if (!channels->is_array() || channels->as_array().size() > 8) throw std::invalid_argument("Select at most eight preview channels");
+            std::set<std::int64_t> seen;
+            for (const auto& channel : channels->as_array()) if (!channel.is_int64() || channel.as_int64() < 0 || channel.as_int64() > 1000000 || !seen.insert(channel.as_int64()).second)
+                throw std::invalid_argument("Preview channel indices must be distinct nonnegative integers");
+        }
+    }
+}
 auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocument {
     if (!json.is_object()) {
         throw std::invalid_argument("Expected object for DiagramDocument");
@@ -69,6 +89,7 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
 
     if (auto it = root.find("diagram"); it != root.end() && it->value().is_object()) {
         doc.diagram = it->value().as_object();
+        if (const auto* panel = doc.diagram.if_contains("observers_panel")) validateObserversPanel(*panel);
     }
     if (auto it = root.find("runtime_nodes"); it != root.end() && it->value().is_array()) {
         doc.runtimeNodes = it->value().as_array();

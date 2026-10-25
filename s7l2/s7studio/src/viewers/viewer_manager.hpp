@@ -51,6 +51,9 @@ public:
     void present(std::shared_ptr<const observation::ObservationSource> source, std::uint64_t previewDropped,
                  const std::function<QString(const QString&)>& observerType);
     void presentLive(observation::LiveSources sources);
+    bool setObserverTrigger(const QString& id, const observation::TriggerSettings& settings, QString* error = nullptr, bool updateViewer = true);
+    [[nodiscard]] observation::TriggerSettings observerTrigger(const QString& id) const { return triggers_.value(id); }
+    [[nodiscard]] std::shared_ptr<const observation::LiveAcquisition> liveSource(const QString& id) const { return liveSources_.value(id); }
     void clearSamples();
     void beginRun(const QString& previousRunLabel, bool preserveScopes);
     void setDroppedSampleCount(std::uint64_t dropped);
@@ -62,6 +65,7 @@ public:
     [[nodiscard]] static auto observerIdOf(const QString& probeName) -> QString;
 
 signals:
+    void observerSettingsChanged(const QString& instanceId);
     // A new instance exists but has no source yet: owners of its diagram
     // settings can configure it before any data arrives.
     void viewerCreated(const QString& typeId, const QString& instanceId, s7studio::viewers::ObservationViewer* viewer);
@@ -86,6 +90,7 @@ private:
     std::shared_ptr<const observation::ObservationSource> externalSource_;
     QHash<QString, QString> recordedTypes_;
     observation::LiveSources liveSources_;
+    QHash<QString, observation::TriggerSettings> triggers_;
     const ViewerRegistry& registry_;
     QHash<QString, Instance> instances_;
     std::uint64_t dropped_ = 0;

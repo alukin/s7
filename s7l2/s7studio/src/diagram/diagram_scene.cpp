@@ -162,7 +162,7 @@ private:
 bool DiagramChange::empty() const
 {
     return addedNodes.empty() && removedNodes.empty() && addedWires.empty() && removedWires.empty() && rehung.empty() && bends.empty() &&
-           elements.empty() && !probes;
+           elements.empty() && !probes && !observersPanel;
 }
 
 struct DiagramScene::Gesture {
@@ -254,6 +254,7 @@ auto DiagramScene::sharedWire(const SignalWire* wire) const -> std::shared_ptr<S
 
 void DiagramScene::clearDiagram()
 {
+    observersPanel_.clear();
     gesture_.reset();
     preview_ = nullptr; // deleted by clear()
     clear();
@@ -335,6 +336,17 @@ void DiagramScene::applyChange(const DiagramChange& change, const QString& text)
 {
     if (!change.empty()) {
         auto complete = change;
+        if (!complete.observersPanel && (!change.removedNodes.empty() || !change.elements.empty())) {
+            auto remaining = observersPanel_;
+            remaining.erase(std::remove_if(remaining.begin(), remaining.end(), [&](const boost::json::value& value) {
+                const auto& entry = value.as_object(); const auto id = std::string(entry.at("element_id").as_string());
+                for (const auto& node : change.removedNodes)
+                    if (const auto element = std::dynamic_pointer_cast<ElementNode>(node); element && element->id() == id) return true;
+                for (const auto& edit : change.elements) if (edit.before.id == id && (edit.after.id != id || edit.after.type != std::string(entry.at("type").as_string()))) return true;
+                return false;
+            }), remaining.end());
+            if (remaining != observersPanel_) complete.observersPanel = std::pair{observersPanel_, std::move(remaining)};
+        }
         if (!complete.probes && (!change.removedNodes.empty() || !change.elements.empty())) {
             auto remaining = probes_;
             std::erase_if(remaining, [&](const DiagramProbe& probe) {
@@ -429,11 +441,24 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
     rememberPositions();
     typesResolve_.reset();
     applying_ = false;
+    if (change.observersPanel) {
+        observersPanel_ = revert ? change.observersPanel->first : change.observersPanel->second;
+        Q_EMIT observersPanelChanged();
+    }
     if (change.probes) {
         probes_ = revert ? change.probes->first : change.probes->second;
         Q_EMIT probesChanged();
     }
     Q_EMIT diagramChanged();
+}
+
+void DiagramScene::setObserversPanel(boost::json::array selection, bool undoable)
+{
+    if (selection == observersPanel_) return;
+    if (undoable) {
+        DiagramChange change; change.observersPanel = std::pair{observersPanel_, std::move(selection)};
+        applyChange(change, QStringLiteral("Choose observer previews"));
+    } else { observersPanel_ = std::move(selection); Q_EMIT observersPanelChanged(); }
 }
 
 auto DiagramScene::addElement(ElementNode::Element element, const QPointF position) -> std::shared_ptr<ElementNode>

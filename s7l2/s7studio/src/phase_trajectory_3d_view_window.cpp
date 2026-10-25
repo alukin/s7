@@ -26,56 +26,6 @@
 
 namespace s7studio::ui {
 
-namespace {
-
-constexpr float kExtent = viewers::kTrajectoryHalfExtent;
-
-auto label(const QVector3D& position, const QString& text, const bool title) -> QVariant
-{
-    return QVariantMap{{QStringLiteral("position"), position},
-                       {QStringLiteral("text"), text},
-                       {QStringLiteral("title"), title}};
-}
-
-// A tick value with about three significant digits of the axis span, so
-// midpoints read "0.00" rather than "-0.0007885".
-auto number(const double value, const double span) -> QString
-{
-    if (!(span > 0.0) || !std::isfinite(span)) return QString::number(value, 'g', 4);
-    const int decimals = std::clamp(2 - static_cast<int>(std::floor(std::log10(span))), 0, 12);
-    if (decimals == 0 && std::abs(value) >= 1e6) return QString::number(value, 'g', 4);
-    auto text = QString::number(value, 'f', decimals);
-    if (text.startsWith(QLatin1Char('-')) && text.toDouble() == 0.0) text.remove(0, 1);
-    return text;
-}
-
-} // namespace
-
-Trajectory3DBridge::Trajectory3DBridge(QObject* parent)
-    : QObject(parent)
-{
-}
-
-void Trajectory3DBridge::setLabels(QVariantList labels)
-{
-    labels_ = std::move(labels);
-    emit labelsChanged();
-}
-
-void Trajectory3DBridge::setHead(const bool hasHead, const QVector3D head)
-{
-    if (hasHead_ == hasHead && head_ == head) return;
-    hasHead_ = hasHead;
-    head_ = head;
-    emit headChanged();
-}
-
-void Trajectory3DBridge::setViewRotation(const QVector3D rotation)
-{
-    viewRotation_ = rotation;
-    emit viewRotationChanged();
-}
-
 auto PhaseTrajectory3DViewWindow::viewerType() -> viewers::ViewerType
 {
     return {QStringLiteral("PhaseTrajectory3D"), {}, QStringLiteral("3→plot"), {},
@@ -110,7 +60,8 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
                        .arg(xProbeName_, yProbeName_, zProbeName_));
     resize(900, 760);
 
-    bridge_ = new Trajectory3DBridge(this);
+    presentation_ = new TrajectoryPlotView(this);
+    bridge_ = presentation_->bridge();
 
     auto* root = new QVBoxLayout(this);
     auto* controls = new QHBoxLayout();
@@ -141,7 +92,7 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
 
     root->addLayout(controls);
     root->addWidget(statusLabel_);
-    // The Qt Quick 3D scene is created on first show (showEvent).
+    root->addWidget(presentation_, 1);
 
     setViewPreset(ViewPreset::Perspective);
     updateLabels();
@@ -155,24 +106,7 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     connect(autoScaleCheck_, &QCheckBox::toggled, this, [this] { dirty_ = true; });
 }
 
-PhaseTrajectory3DViewWindow::~PhaseTrajectory3DViewWindow()
-{
-    // The scene refers to the bridge's geometries; it goes first.
-    viewers::unloadQuickScene(quick_);
-    quick_ = nullptr;
-}
-
-void PhaseTrajectory3DViewWindow::showEvent(QShowEvent* event)
-{
-    if (!quick_) {
-        quick_ = viewers::createQuickWidget();
-        quick_->setToolTip(QStringLiteral("Drag to rotate, scroll to zoom."));
-        static_cast<QVBoxLayout*>(layout())->addWidget(quick_, 1);
-        viewers::loadQuickScene(*quick_, QStringLiteral("Trajectory3D.qml"),
-                                {{QStringLiteral("trajectoryView"), QVariant::fromValue<QObject*>(bridge_)}});
-    }
-    QWidget::showEvent(event);
-}
+PhaseTrajectory3DViewWindow::~PhaseTrajectory3DViewWindow() = default;
 
 void PhaseTrajectory3DViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
@@ -244,25 +178,8 @@ void PhaseTrajectory3DViewWindow::updateStatus()
 
 void PhaseTrajectory3DViewWindow::updateLabels()
 {
-    const float e = kExtent;
-    const float offset = e * 0.12f;
-    QVariantList labels;
-    // Tick values along the three labelled edges (the same edges and
-    // fractions TrajectoryFrameGeometry puts ticks on).
-    for (const double fraction : viewers::kTrajectoryTickFractions) {
-        const auto t = static_cast<float>(-e + 2.0 * fraction * e);
-        const auto at = [&](std::size_t axis) {
-            const double span = bounds_.max[axis] - bounds_.min[axis];
-            return number(bounds_.min[axis] + fraction * span, span);
-        };
-        labels << label({t, -e - offset, e + offset}, at(0), false);
-        labels << label({e + offset, -e - offset, -t}, at(1), false);
-        labels << label({-e - offset, t, e + offset}, at(2), false);
-    }
-    labels << label({0.0f, -e - 2.6f * offset, e + 2.6f * offset}, QStringLiteral("X: ") + xProbeName_ + (xUnit_.isEmpty() ? "" : " (" + xUnit_ + ")"), true);
-    labels << label({e + 2.6f * offset, -e - 2.6f * offset, 0.0f}, QStringLiteral("Y: ") + yProbeName_ + (yUnit_.isEmpty() ? "" : " (" + yUnit_ + ")"), true);
-    labels << label({-e - 2.6f * offset, e + offset, e + offset}, QStringLiteral("Z: ") + zProbeName_ + (zUnit_.isEmpty() ? "" : " (" + zUnit_ + ")"), true);
-    bridge_->setLabels(labels);
+    presentation_->setAxisLabels(bounds_, {xProbeName_ + (xUnit_.isEmpty() ? "" : " (" + xUnit_ + ")"),
+        yProbeName_ + (yUnit_.isEmpty() ? "" : " (" + yUnit_ + ")"), zProbeName_ + (zUnit_.isEmpty() ? "" : " (" + zUnit_ + ")")});
 }
 
 void PhaseTrajectory3DViewWindow::setViewPreset(const ViewPreset preset)

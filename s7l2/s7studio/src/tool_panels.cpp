@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QPlainTextEdit>
+#include <QProgressBar>
 #include <QToolBar>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -152,6 +153,7 @@ RunPanel::RunPanel(const std::vector<QAction*>& actions, QWidget* parent)
     , status_(new QLabel(QStringLiteral("idle"), this))
     , configuration_(new QLabel(this))
     , progress_(new QLabel(this))
+    , progressBar_(new QProgressBar(this))
     , output_(outputView(this))
 {
     auto* content = new QWidget(this);
@@ -165,6 +167,9 @@ RunPanel::RunPanel(const std::vector<QAction*>& actions, QWidget* parent)
     line->addWidget(progress_);
     line->addStretch(1);
     layout->addLayout(line);
+    progress_->setObjectName("run.steps"); progress_->setTextFormat(Qt::PlainText);
+    progressBar_->setObjectName("run.progress"); progressBar_->setRange(0, 1000); progressBar_->setValue(0);
+    progressBar_->setAccessibleName("Finite run completion"); progressBar_->hide(); layout->addWidget(progressBar_);
     configuration_->setObjectName(QStringLiteral("run.activeConfiguration"));
     status_->setObjectName(QStringLiteral("run.status"));
     configuration_->setWordWrap(true);
@@ -184,9 +189,12 @@ void RunPanel::setConfigurationSummary(const QString& summary)
     configuration_->setVisible(!summary.isEmpty());
 }
 
-void RunPanel::setProgress(const QString& progress)
+void RunPanel::setProgress(long completed, long total, double modelTime)
 {
-    progress_->setText(progress);
+    progress_->setText((total < 0 ? QStringLiteral("%1 / continuous").arg(completed) : QStringLiteral("%1 / %2").arg(completed).arg(total))
+        + QStringLiteral(" • model %1 s").arg(modelTime, 0, 'g', 10));
+    progressBar_->setVisible(total >= 0);
+    if (total >= 0) progressBar_->setValue(total == 0 ? 0 : static_cast<int>(std::clamp(static_cast<double>(completed)/static_cast<double>(total), 0., 1.)*1000.));
 }
 
 void RunPanel::append(const QString& line)
@@ -197,6 +205,7 @@ void RunPanel::append(const QString& line)
 void RunPanel::clearOutput()
 {
     output_->clear();
+    progress_->clear(); progressBar_->hide();
 }
 
 // DeployPanel

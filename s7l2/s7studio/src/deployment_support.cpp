@@ -15,6 +15,7 @@ namespace s7studio::diagram {
 auto deploymentDiagram(const DiagramDocument& document, const QMap<QString, NodeAddress>& known) -> boost::json::object
 {
     auto diagram = document.toJson().as_object();
+    if (auto* layout = diagram.if_contains("diagram"); layout && layout->is_object()) layout->as_object().erase("observers_panel");
     std::unordered_map<std::string, boost::json::object> previous;
     for (const auto& value : document.runtimeNodes) {
         if (value.is_object()) {

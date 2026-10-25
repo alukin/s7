@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "main_window.hpp"
+#include "observers_panel.hpp"
+#include <QApplication>
 #include "parameter_editor.hpp"
 #include "element_documentation.hpp"
 #include "help_dialogs.hpp"
@@ -225,17 +227,6 @@ auto elementLibraryForType(const QString& type) -> QString
     return QStringLiteral("s7core (.so at runtime link: libs7core)");
 }
 
-auto nextElementId(const diagram::DiagramScene& scene, const QString& elementType) -> QString
-{
-    const QString base = elementType.toLower() + QStringLiteral("_");
-    int suffix = 1;
-    QString candidate;
-    do {
-        candidate = base + QString::number(suffix++);
-    } while (scene.elementNode(candidate.toStdString()));
-    return candidate;
-}
-
 auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
 {
     if (ports.empty()) {
@@ -295,6 +286,7 @@ MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
     retireRunForShutdown();
+    delete std::exchange(observersPanel_, nullptr);
     // Nested pages can remain queued for deletion after SchemaTabs::reset().
     // Their scene teardown must not reach actions already destroyed by QWidget.
     for (auto* editor : findChildren<diagram::DiagramEditor*>()) {
@@ -330,6 +322,7 @@ void MainWindow::retireRunForShutdown()
 
 void MainWindow::resetLocalRun()
 {
+    if (observersPanel_) observersPanel_->clearRun();
     // Disconnect before joining: the retiring worker may emit its final
     // notifications during reset. Already queued lambdas retain their old ID.
     ++runGeneration_;
@@ -362,8 +355,12 @@ void MainWindow::connectRunnerSignals()
     connect(runner_, &LocalSchemaRunner::stateChanged, this, [this, generation](RunState state) {
         // Prepared is published synchronously before the producer starts, so
         // open live windows can apply retention/trigger settings to short runs.
-        if (!shuttingDown_ && generation == runGeneration_ && state == RunState::Prepared)
+        if (!shuttingDown_ && generation == runGeneration_ && state == RunState::Prepared) {
+            for (const auto& descriptor : preparedObservers_) if (descriptor.type == "LiveOscilloscope") applyTriggerPreset(descriptor.id, true);
             viewers_->presentLive(runner_->liveSources());
+            viewers_->present(runner_->recordedSource(), 0, [this](const QString& id) { return observerViewerType(id); });
+            if (const auto configuration = runner_->activeConfiguration()) observersPanel_->bindRun(configuration->id, preparedObservers_);
+        }
     });
     connect(runner_, &LocalSchemaRunner::scopeSamplesAvailable, this, [this, generation] {
         if (!shuttingDown_ && generation == runGeneration_) onScopeSamplesAvailable();
@@ -662,10 +659,12 @@ void MainWindow::buildUi()
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
+    connect(diagramEditor_, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
     schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
     connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
     connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
         editor->addActions(editorShortcuts_);
+        connect(editor, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
         connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
         connect(editor->scene(),&QGraphicsScene::selectionChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QSchematic::Scene::modeChanged,this,[this,editor](int mode) {
@@ -777,35 +776,13 @@ diagram::DiagramEditor* MainWindow::activeDiagramEditor() const
 
 void MainWindow::onElementRequested(const QString& elementType, const QString& /*displayName*/)
 {
-    auto* scene = activeDiagramEditor() ? activeDiagramEditor()->scene() : nullptr;
-    if (elementType.isEmpty() || !scene) {
-        return;
-    }
-    // Observers come from the viewer registry ("StudioObserver:<viewer type>").
-    const QString observerPrefix = QStringLiteral("StudioObserver:");
-    const bool observer = elementType.startsWith(observerPrefix)
-        && viewers::ViewerRegistry::instance().find(elementType.mid(observerPrefix.size()));
-    const QString actualType = observer ? elementType.mid(observerPrefix.size()) : elementType;
-    const bool scopeObserver = actualType == QStringLiteral("Scope") || actualType == QStringLiteral("LiveOscilloscope");
-    const auto* descriptor = observer ? nullptr : s7::ElementRegistry::instance().find(actualType.toStdString());
-    diagram::ElementNode::Element element;
-    element.id = nextElementId(*scene, actualType).toStdString();
-    element.type = actualType.toStdString();
-    if (scopeObserver) {
-        element.params["channel_count"] = 0;
-    }
-    if (descriptor && descriptor->metadata().schema_definition.has_value()) {
-        element.schema = *descriptor->metadata().schema_definition;
-    }
-    const auto ports = diagram::elementPorts(element.type, element.params, element.schema);
-    const int portRows = static_cast<int>(std::max(ports.inputs.size(), ports.outputs.size()));
-    const QSizeF size(diagram::kElementWidthSteps * diagram::kGridStep,
-                      std::max(5, 2 * portRows + 1) * diagram::kGridStep);
-    scene->addElement(element, activeDiagramEditor()->suggestedNewItemPosition(size));
-    setDiagramMode(QSchematic::Scene::NormalMode);
+    if (auto* editor = activeDiagramEditor()) editor->addLibraryElement(elementType);
+}
+
+void MainWindow::onLibraryElementAdded(const QString& elementId)
+{
     refreshPlacementLabels();
-    appendLog(QStringLiteral("[studio] added %1 %2").arg(observer ? QStringLiteral("observer") : QStringLiteral("element"),
-                                                               QString::fromStdString(element.id)));
+    appendLog(QStringLiteral("[studio] added element %1").arg(elementId));
 }
 
 void MainWindow::onHeadlessNodeActivated(const QString& endpoint,
@@ -838,12 +815,18 @@ void MainWindow::buildToolWindows()
     logDock_ = toolWindows_->add(QStringLiteral("log"), QStringLiteral("Log"), QStringLiteral("file-text"), logPanel_,
                                  Qt::BottomDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_7));
 
-    probesPanel_ = new ui::ProbesPanel(this);
+    recordedSignalsDialog_ = new QDialog(this); recordedSignalsDialog_->setWindowTitle("Recorded Signals"); recordedSignalsDialog_->setObjectName("observers.recordedSignalsDialog"); recordedSignalsDialog_->resize(650, 400);
+    probesPanel_ = new ui::ProbesPanel(recordedSignalsDialog_); (new QVBoxLayout(recordedSignalsDialog_))->addWidget(probesPanel_);
     connect(probesPanel_, &ui::ProbesPanel::openScopeRequested, this, &MainWindow::onProbeOpenScopeRequested);
     connect(probesPanel_, &ui::ProbesPanel::openPhasePortraitRequested, this, &MainWindow::onProbeOpenPhasePortraitRequested);
     connect(probesPanel_, &ui::ProbesPanel::renameRequested, this, &MainWindow::onProbeRenameRequested);
     connect(probesPanel_, &ui::ProbesPanel::deleteRequested, this, &MainWindow::onProbeDeleteRequested);
-    probesDock_ = toolWindows_->add(QStringLiteral("probes"), QStringLiteral("Probes"), QStringLiteral("pointer"), probesPanel_,
+    observersPanel_ = new ui::ObserversPanel(viewers_, this);
+    connect(observersPanel_, &ui::ObserversPanel::selectionChanged, this, [this](const boost::json::array& selection) {
+        if (diagramEditor_ && diagramEditor_->scene()) diagramEditor_->scene()->setObserversPanel(selection, true);
+    });
+    connect(observersPanel_, &ui::ObserversPanel::recordedSignalsRequested, recordedSignalsDialog_, [this] { refreshProbesPanel(); recordedSignalsDialog_->show(); recordedSignalsDialog_->raise(); });
+    observersDock_ = toolWindows_->add(QStringLiteral("observers"), QStringLiteral("Observers"), QStringLiteral("pointer"), observersPanel_,
                                     Qt::RightDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_3));
 
     // Problem count in the status bar; a click opens Problems.
@@ -973,6 +956,10 @@ void MainWindow::appendLog(const QString& message)
 
 void MainWindow::onStatusChanged(const QString& status)
 {
+    if (observersPanel_) {
+        const auto configuration = runner_->activeConfiguration();
+        observersPanel_->setRunState(runner_->state(), runner_->completedTicks(), configuration ? configuration->dt : 0.);
+    }
     if (shuttingDown_) return;
     if (runPanel_) {
         // A state notification may have been queued before another command.
@@ -991,6 +978,7 @@ void MainWindow::onRunCompleted(bool success, const QString& error)
 {
     if (shuttingDown_) return;
     onScopeSamplesAvailable(); // final flush/error status, even with no pending preview notification
+    if (const auto configuration = runner_->activeConfiguration()) observersPanel_->setRunState(runner_->state(), runner_->completedTicks(), configuration->dt, error);
     if (success) {
         appendLog("[studio] run completed");
         runPanel_->append(QStringLiteral("Run completed."));
@@ -1006,7 +994,9 @@ void MainWindow::onRunCompleted(bool success, const QString& error)
 void MainWindow::onTickProgress(const long completed, const long total)
 {
     if (runPanel_) {
-        runPanel_->setProgress(total < 0 ? QString("%1 / continuous").arg(completed) : QString("%1 / %2").arg(completed).arg(total));
+        const auto configuration = runner_->activeConfiguration();
+        runPanel_->setProgress(completed, total, configuration ? static_cast<double>(completed)*configuration->dt : 0.);
+        observersPanel_->setRunState(runner_->state(), completed, configuration ? configuration->dt : 0.);
     }
 }
 
@@ -1176,8 +1166,7 @@ auto MainWindow::observerViewerType(const QString& observerId) const -> QString
 
 void MainWindow::applyTriggerPreset(const QString& observerId, bool reportInvalid)
 {
-    auto* live = dynamic_cast<ui::LiveOscilloscopeWindow*>(viewers_->find(QStringLiteral("LiveOscilloscope"), observerId));
-    const auto node = live && diagramEditor_ && diagramEditor_->scene() ? diagramEditor_->scene()->elementNode(observerId.toStdString()) : nullptr;
+    const auto node = diagramEditor_ && diagramEditor_->scene() ? diagramEditor_->scene()->elementNode(observerId.toStdString()) : nullptr;
     if (!node || node->element().type != "LiveOscilloscope") return;
     // An observer saved without a preset uses the defaults, as it always did.
     observation::TriggerSettings settings;
@@ -1193,7 +1182,8 @@ void MainWindow::applyTriggerPreset(const QString& observerId, bool reportInvali
         }
         settings = *parsed;
     }
-    live->setTriggerSettings(settings);
+    QString error;
+    if (!viewers_->setObserverTrigger(observerId, settings, &error) && reportInvalid) appendLog(QStringLiteral("[studio] %1 trigger: %2").arg(observerId, error));
 }
 
 void MainWindow::storeTriggerPreset(const QString& observerId)
@@ -1318,6 +1308,9 @@ void MainWindow::connectSceneSignals()
     connect(scene, &diagram::DiagramScene::probesChanged, wireTypeTimer_, qOverload<>(&QTimer::start),
             Qt::UniqueConnection);
     connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::onProbesChanged, Qt::UniqueConnection);
+    connect(scene, &diagram::DiagramScene::diagramChanged, this, &MainWindow::refreshObserversPanel, Qt::UniqueConnection);
+    connect(scene, &diagram::DiagramScene::probesChanged, this, &MainWindow::refreshObserversPanel, Qt::UniqueConnection);
+    connect(scene, &diagram::DiagramScene::observersPanelChanged, this, &MainWindow::refreshObserversPanel, Qt::UniqueConnection);
     // Undo/redo of a stored preset updates the open window.
     connect(scene, &diagram::DiagramScene::diagramChanged, this, [this, scene] {
         if (storingTriggerPreset_) return;
@@ -1332,6 +1325,7 @@ void MainWindow::connectSceneSignals()
     connect(scene, &diagram::DiagramScene::probesChanged, this, reportNextRunEdit);
     wireTypeTimer_->start();
     onProbesChanged();
+    refreshObserversPanel();
     auto* modifiedTimer = new QTimer(this);
     modifiedTimer->setSingleShot(true);
     modifiedTimer->setInterval(150);
@@ -1373,6 +1367,29 @@ void MainWindow::refreshProbesPanel()
         }
     }
     probesPanel_->setProbes(std::move(rows));
+}
+
+QVector<viewers::ObserverDescriptor> MainWindow::observerDescriptors() const
+{
+    QVector<viewers::ObserverDescriptor> result;
+    if (!diagramEditor_ || !diagramEditor_->scene()) return result;
+    const auto probes = currentRunProbes();
+    for (const auto& node : diagramEditor_->scene()->elementNodes()) {
+        const auto id = QString::fromStdString(node->id()), type = QString::fromStdString(node->element().type);
+        if (!viewers::ViewerRegistry::instance().find(type)) continue;
+        viewers::ObserverDescriptor descriptor{id, type, {}};
+        for (const auto& probe : probes) if (QString::fromStdString(probe.name).startsWith(id+"/"))
+            descriptor.inputs.push_back({QString::fromStdString(probe.name), QString::fromStdString(probe.unit), QString::fromStdString(probe.element), probe.port});
+        if (diagram::isAxisObserverElementType(node->element().type))
+            std::sort(descriptor.inputs.begin(), descriptor.inputs.end(), [](const auto& a, const auto& b) { return a.name < b.name; });
+        result.push_back(std::move(descriptor));
+    }
+    return result;
+}
+void MainWindow::refreshObserversPanel()
+{
+    if (!observersPanel_ || !diagramEditor_ || !diagramEditor_->scene()) return;
+    observersPanel_->setDocument(schemaDisplayName(runtimeSchema_, "untitled"), observerDescriptors(), diagramEditor_->scene()->observersPanel());
 }
 
 auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
@@ -1706,6 +1723,7 @@ void MainWindow::syncPageActions()
 
 void MainWindow::closeViewers()
 {
+    if (observersPanel_) observersPanel_->clearRun();
     viewers_->closeAll();
 }
 
@@ -1721,6 +1739,7 @@ bool MainWindow::documentModified() const
 
 void MainWindow::markDocumentSaved()
 {
+    refreshObserversPanel();
     savedDocument_ = currentDocument();
     hasSavedDocument_ = true;
     setWindowModified(false);
@@ -1942,11 +1961,17 @@ void MainWindow::launchRunWithCurrentConfiguration()
     }
 
     const auto probes = currentRunProbes();
+    preparedObservers_ = observerDescriptors();
     for (const auto& probe : probes) {
         const auto observerId = viewers::ViewerManager::observerIdOf(QString::fromStdString(probe.name));
         runObserverTypes_.insert(observerId, observerViewerType(observerId));
     }
     observersFrozen_ = true;
+    auto* focus = QApplication::focusWidget();
+    const QPointer<QWidget> previousFocus(focus);
+    toolWindows_->show(observersDock_);
+    if (previousFocus) previousFocus->setFocus(Qt::OtherFocusReason);
+    observersPanel_->setRunState(RunState::Preparing, 0, dtSeconds);
     controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_}, probes);
     viewers_->presentLive(runner_->liveSources());
     refreshActions();

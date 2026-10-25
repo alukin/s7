@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <deque>
+#include <vector>
 
 class QIODevice;
 
@@ -45,6 +47,14 @@ struct Page {
     std::uint64_t next = 0;
     QString error;
 };
+struct ChannelTail {
+    ChannelId channel;
+    QVector<Sample> samples;
+};
+struct TailSnapshot {
+    SourceStatus status;
+    QVector<ChannelTail> channels;
+};
 
 // Window-independent delivered-sample journal. A source belongs to exactly one
 // run. Const handles permit bounded history queries, never capture mutations.
@@ -64,6 +74,10 @@ public:
     bool finish(bool stopped = false, const QString& runError = {});
     [[nodiscard]] SourceStatus status() const;
     [[nodiscard]] Page read(std::uint64_t cursor, qsizetype limit = 4096) const;
+    // Independent bounded per-channel tails, including sparsely sampled inputs.
+    // Never scans or reads the journal. Preparation belongs on an analysis worker.
+    static constexpr qsizetype tailPositions = 4096;
+    [[nodiscard]] TailSnapshot tail(const QVector<ChannelId>& selection, qsizetype limit = tailPositions) const;
     // Explicit full export, not a repaint operation. Includes run/step/time.
     bool writeCsv(QIODevice& output, const QVector<ChannelId>& selection = {}, QString* error = nullptr) const;
     bool writeAlignedCsv(QIODevice& output, const QVector<ChannelId>& inputs, QString* error = nullptr) const;
@@ -78,6 +92,7 @@ private:
     QVector<Channel> channels_;
     QHash<QString, ChannelId> ids_;
     QVector<Sample> memory_;
+    std::vector<std::deque<std::pair<std::uint64_t, Sample>>> tails_;
     mutable std::unique_ptr<QIODevice> file_;
     mutable SourceStatus status_;
     QJsonObject provenance_;

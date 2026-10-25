@@ -4,6 +4,17 @@ Studio shows observed signals in viewer windows: **Scope** (signals over model t
 
 Observation stays outside computation (ADR-011, ADR-012, ADR-013 in `../../doc/S7_Architectural_Decisions.md`): viewers read samples and never step, pause or alter the runtime. Nothing here touches `s7core`, `s7runtime` or `s7observe`, which remain free of Qt.
 
+The [Observers dock](STUDIO_OBSERVERS_DOCK.md) hosts independent compact
+presentations for all four built-in types. `LinePlotView` and the extracted
+`TrajectoryPlotView` are shared plot components, used by full windows and
+previews without reparenting full windows. `ViewerType::createPresentation`
+registers a preview factory. Bounded `preparePreview`/`PreviewWorker` data
+preparation is separate from these widgets. `ViewerManager` owns live trigger
+settings and applies them before production; preview creation is read-only.
+`ObservationSource::tail` projects per-channel caches rather than replaying
+the full journal when a preview opens late. The source owns at most 4,096 cached
+records per channel in addition to its authoritative recording storage.
+
 The separate [live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) uses a
 bounded acquisition source and does not journal live-only channels. The data-flow
 and full-run journal descriptions below apply to the existing recording viewers.

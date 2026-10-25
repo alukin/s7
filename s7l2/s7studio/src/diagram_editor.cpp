@@ -6,6 +6,7 @@
 #include "diagram_ruler.hpp"
 #include "diagram/diagram_scene.hpp"
 #include "scene_serializer.hpp"
+#include "library_element.hpp"
 
 #include <qschematic/view.hpp>
 
@@ -27,6 +28,10 @@
 #include <QTimer>
 #include <QShortcut>
 #include <QVBoxLayout>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDragLeaveEvent>
+#include <QDropEvent>
 
 #include <algorithm>
 #include <cmath>
@@ -48,6 +53,22 @@ public:
     }
 
 protected:
+    void dragEnterEvent(QDragEnterEvent* event) override { acceptLibraryDrag(event); }
+    void dragMoveEvent(QDragMoveEvent* event) override { acceptLibraryDrag(event); }
+    void dragLeaveEvent(QDragLeaveEvent* event) override { event->accept(); }
+    void dropEvent(QDropEvent* event) override
+    {
+        const auto type = ui::libraryElementFromMimeData(event->mimeData());
+        auto* editor = qobject_cast<DiagramEditor*>(parentWidget());
+        if (type.isEmpty() || !editor || !event->possibleActions().testFlag(Qt::CopyAction) ||
+            !viewport()->rect().contains(event->position().toPoint()) ||
+            !editor->addLibraryElement(type, mapToScene(event->position().toPoint()))) {
+            event->ignore(); return;
+        }
+        setFocus(Qt::MouseFocusReason);
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+    }
     // The diagram scene's keys first; QSchematic's own Wire mode (Ctrl+W)
     // becomes the scene's DrawMode.
     void keyPressEvent(QKeyEvent* event) override
@@ -73,6 +94,13 @@ protected:
     }
 
 private:
+    void acceptLibraryDrag(QDragMoveEvent* event)
+    {
+        if (event->possibleActions().testFlag(Qt::CopyAction) && viewport()->rect().contains(event->position().toPoint()) &&
+            !ui::libraryElementFromMimeData(event->mimeData()).isEmpty()) {
+            event->setDropAction(Qt::CopyAction); event->accept();
+        } else event->ignore();
+    }
     DiagramScene* diagramScene_ = nullptr;
 };
 
@@ -126,6 +154,8 @@ DiagramEditor::DiagramEditor(QWidget* parent)
     // Create editor view
     auto* diagramView = new DiagramView(this);
     _view = diagramView;
+    _view->setAcceptDrops(true);
+    _view->viewport()->setAcceptDrops(true);
     _view->setAccessibleName(QStringLiteral("Schematic diagram"));
     _view->setAccessibleDescription(QStringLiteral("Select elements, Ctrl+C/Ctrl+V to copy/paste, Delete to remove, F4 or Enter for properties. Ctrl+8 fits diagram, Ctrl+0 resets zoom."));
     // A complete sheet must fit even in a narrow editor or a short viewport.

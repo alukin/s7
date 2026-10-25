@@ -33,7 +33,15 @@ navigate. Help and About can stay open while you work.
 The [bundled examples catalogue](STUDIO_EXAMPLES.md) describes each family,
 what to observe and the supported numerical envelopes.
 
-Use the Element Library to add elements. Select an element and press **F4**
+Drag a leaf entry from the Element Library onto the canvas to place it at the
+nearest grid point. This works with a filtered library, at any zoom/pan, and in
+an open nested schema tab. A drop creates a new selected instance; the library
+entry stays available. Built-ins, schema elements, loaded plugins and observers
+use the same defaults as double-click placement. Double-click still chooses a
+free spot automatically. Categories cannot be dragged. Press **Esc** to cancel;
+dropping outside the canvas changes nothing. Each insertion is one undo step.
+
+Select a canvas element and press **F4**
 or **Enter** to edit its properties. Typed fields check values; the advanced
 JSON editor is available for structured parameters.
 
@@ -89,6 +97,24 @@ continues. See [Live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) for
 examples, retention behavior and current limits. Run Configuration lists live and
 full-recording channel counts; live-only acquisition does not accumulate disk data.
 
+**View → Tool Windows → Observers** (**Alt+3**) opens compact previews for root
+observer instances. Use **Choose Observers…** to select them; no previews are
+selected initially. Each card can collapse, freeze independently or **Open** its
+full viewer. Selection and collapse state are saved with the diagram. Starting
+a run activates this dock once; choosing another dock during execution is
+respected. **Recorded Signals…** retains named tap management and ad-hoc viewers.
+See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle and
+bounded-work behavior.
+
+Select a **CH n** button to adjust that channel's display gain and offset with
+knobs or exact numeric entry (including scientific notation). **Show CH n**
+controls visibility independently. Offset's editable dial half-span sets a local
+interval; committing an exact offset or changing the span recenters it. These
+adjustments leave raw values and trigger thresholds unchanged. Expand
+**Acquisition / retention**, **Trigger — sampled edge** or **Window inspection**
+as needed; each section collapses independently. The column scrolls vertically,
+and **Hide controls** gives the plot the full width.
+
 The live oscilloscope has four tabs sharing the same acquisition:
 
 | Tab | Use it for |
@@ -103,6 +129,8 @@ See [Live FFT spectrum](STUDIO_SPECTRUM.md) and
 worked examples. FFT and correlation need at least N retained consecutive samples;
 increase **Retain samples / channel** or reduce N if the view reports **Filling**.
 The model sample rate determines frequency and lag in seconds.
+Analysis settings wrap to the available width and scroll within a bounded-height
+section. Collapse that section's header to give the plot more height.
 
 Only the visible tab of a visible, non-minimized window analyzes data. Switching
 tabs, hiding/closing or minimizing suspends analysis while bounded acquisition
@@ -112,11 +140,13 @@ and XY persistence. Visible windows keep updating when desktop focus moves away.
 settings reanalyzes that input. **Resume live / Fit** returns to current data.
 Use **Pin window / A–B** or click the plot to place persistent cursors and freeze
 their input. **Measure A–B** computes inclusive region statistics from raw values
-or explicitly labeled derived bins/lags. **Export frozen window…** saves bounded
+or explicitly labeled derived bins/lags. A and B each have a slider and an exact
+index; their identities remain unchanged when crossing. **Export: …** saves bounded
 window JSON, raw CSV or displayed-data CSV with metadata; it does not start a
-recording. See [Live cursors, measurements and export](STUDIO_WINDOW_INSPECTION.md)
+recording. Use its arrow to select the format. The export progress bar reports
+worker completion; **Cancel export** cancels that export. See [Live cursors, measurements and export](STUDIO_WINDOW_INSPECTION.md)
 for keyboard movement, units, coverage and file formats. To stabilize periodic
-Time traces, configure **Time synchronization** before starting a run: select
+Time traces, expand **Trigger — sampled edge** before starting a run: select
 Auto/Normal/Single, source, edge, raw threshold, hysteresis, pre-trigger and holdoff.
 The sampled trigger stays at time zero; absolute timestamps remain intact. See
 [Live edge-trigger synchronization](STUDIO_TRIGGERING.md) for a worked example,

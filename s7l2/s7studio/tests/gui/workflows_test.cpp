@@ -6,6 +6,11 @@
 #include "diagram/diagram_scene.hpp"
 #include "element_picker_panel.hpp"
 #include "element_documentation.hpp"
+#include "library_element.hpp"
+#include "instrument_controls.hpp"
+#include "tool_panels.hpp"
+#include "observers_panel.hpp"
+#include "tool_windows.hpp"
 #include "viewers/viewer_registry.hpp"
 #include "scope_view_window.hpp"
 #include "live_oscilloscope_window.hpp"
@@ -27,6 +32,7 @@
 #include <QtTest>
 #include <QAction>
 #include <QDialogButtonBox>
+#include <QDockWidget>
 #include <QFileDialog>
 #include <QGraphicsView>
 #include <QLineEdit>
@@ -40,6 +46,10 @@
 #include <QSettings>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
+#include <QDial>
+#include <QSlider>
+#include <QProgressBar>
+#include <QScrollArea>
 #include <QTemporaryDir>
 #include <QTreeWidget>
 #include <QTabWidget>
@@ -65,12 +75,21 @@
 #include <QScrollBar>
 #include <QSplitter>
 #include <QContextMenuEvent>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDragLeaveEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QProcess>
+#include <QStandardPaths>
 #include <QUndoStack>
 #include <functional>
 #include <memory>
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <cmath>
+#include <limits>
 
 class TestWindow : public s7studio::MainWindow {
 public:
@@ -105,6 +124,38 @@ class Workflows : public QObject {
     QAction* action(const char* name) { return window_->findChild<QAction*>(QString::fromLatin1(name)); }
     s7studio::diagram::DiagramEditor* editor() { return window_->findChild<s7studio::diagram::DiagramEditor*>(); }
     s7studio::diagram::DiagramScene* scene() { return editor()->scene(); }
+    QTreeWidgetItem* libraryItem(QTreeWidget* tree, const QString& type) {
+        for (int i = 0; i < tree->topLevelItemCount(); ++i)
+            for (int j = 0; j < tree->topLevelItem(i)->childCount(); ++j) {
+                auto* item = tree->topLevelItem(i)->child(j);
+                if (item->data(0, Qt::UserRole).toString() == type) return item;
+            }
+        return nullptr;
+    }
+    // XTest events exercise Qt's native QDrag/XDND path, including its nested
+    // event loop. Coordinates come from current widgets, never the desktop.
+    bool nativeLibraryDrag(QTreeWidget* tree, QTreeWidgetItem* item, const QPoint destination, bool cancel = false) {
+        tree->setCurrentItem(item); tree->scrollToItem(item);
+        QCoreApplication::processEvents();
+        const auto logicalStart = tree->viewport()->mapToGlobal(tree->visualItemRect(item).center());
+        const auto logicalThreshold = logicalStart - QPoint(std::max(24, QApplication::startDragDistance()*2), 0);
+        // The wrapper's single Xvfb screen starts at (0,0). XTest positions
+        // are physical pixels; Qt widget/global coordinates are logical.
+        const auto pixels = [&](QPoint point) { return (QPointF(point)*window_->devicePixelRatioF()).toPoint(); };
+        const auto start = pixels(logicalStart), threshold = pixels(logicalThreshold), end = pixels(destination);
+        QStringList commands{"mousemove", QString::number(start.x()), QString::number(start.y()), "mousedown", "1", "sleep", "0.08",
+            "mousemove", QString::number(threshold.x()), QString::number(threshold.y()), "sleep", "0.12",
+            "mousemove", QString::number(end.x()), QString::number(end.y()), "sleep", "0.2"};
+        if (cancel) commands << "key" << "Escape";
+        commands << "mouseup" << "1";
+        QProcess driver;
+        QSignalSpy done(&driver, &QProcess::finished);
+        driver.start(QStandardPaths::findExecutable("xdotool"), commands);
+        if (!driver.waitForStarted(2000)) return false;
+        QElapsedTimer clock; clock.start();
+        while (done.empty() && clock.elapsed() < 5000) QTest::qWait(10);
+        return !done.empty() && driver.exitStatus() == QProcess::NormalExit && driver.exitCode() == 0;
+    }
 
     bool modalWorkflow(const std::function<void()>& trigger, const std::function<bool(QDialog*)>& handle) {
         bool handled = false;
@@ -341,6 +392,166 @@ private slots:
         QVERIFY(configure("action.run", .099)); // Warning remains non-blocking.
         QTRY_COMPARE(runner->state(), s7studio::RunState::Completed);
         QCOMPARE(runner->completedTicks(), 99L);
+    }
+    void libraryDragPlacement_data() {
+        QTest::addColumn<QString>("type"); QTest::addColumn<bool>("filtered");
+        QTest::addColumn<bool>("nested"); QTest::addColumn<int>("zoomSteps");
+        QTest::newRow("builtin-unfiltered") << QString("Gain") << false << false << 0;
+        QTest::newRow("builtin-filtered-zoom-pan") << QString("Gain") << true << false << 3;
+        QTest::newRow("schema-root") << QString("PIController") << true << false << -2;
+        QTest::newRow("plugin-nested") << QString("WhiteNoiseGenerator") << true << true << 2;
+        QTest::newRow("schema-nested") << QString("FirstOrderLag") << false << true << -1;
+        QTest::newRow("scope-root") << QString("StudioObserver:Scope") << true << false << 1;
+        QTest::newRow("live-nested") << QString("StudioObserver:LiveOscilloscope") << true << true << 0;
+        QTest::newRow("phase-root") << QString("StudioObserver:PhasePortrait") << true << false << -1;
+        QTest::newRow("trajectory-nested") << QString("StudioObserver:PhaseTrajectory3D") << true << true << 1;
+    }
+    void libraryDragPlacement() {
+        using namespace s7studio;
+        if (QStandardPaths::findExecutable("xdotool").isEmpty()) QSKIP("xdotool is required for native X11 drag/drop checks");
+        QFETCH(QString, type); QFETCH(bool, filtered); QFETCH(bool, nested); QFETCH(int, zoomSteps);
+        window_->raise(); window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* target = editor();
+        if (nested) {
+            QVERIFY(target->addLibraryElement("PIController", QPointF(80,80)));
+            auto* tabs = window_->findChild<SchemaTabs*>(); QVERIFY(tabs);
+            target = tabs->open(target, "picontroller_1"); QVERIFY(target);
+        }
+        auto* graph = target->scene();
+        if (type == "Gain") {
+            graph->addElement({"gain_1", "Gain", {}, {}, {}, {}}, {40,40});
+            graph->addTextFrame("gain_2", diagram::TextFrameNode::defaultParams(), {40,200});
+        }
+        auto* tree = window_->findChild<QTreeWidget*>("elements.tree"); QVERIFY(tree);
+        auto* search = window_->findChild<QLineEdit*>("elements.search"); QVERIFY(search);
+        search->setText(filtered ? type.section(':', -1) : QString());
+        auto* item = libraryItem(tree, type); QVERIFY(item && !item->isHidden());
+        QCoreApplication::processEvents();
+        auto* view = target->findChild<QGraphicsView*>(); QVERIFY(view);
+        const auto canvasWidth = view->viewport()->width();
+        tree->setCurrentItem(item); tree->scrollToItem(item);
+        QCoreApplication::processEvents();
+        QCOMPARE(view->viewport()->width(), canvasWidth);
+        target->resetZoom();
+        for (int i = 0; i < std::abs(zoomSteps); ++i) { if (zoomSteps > 0) target->zoomIn(); else target->zoomOut(); }
+        view->centerOn(QPointF(460,350));
+        QCoreApplication::processEvents();
+        const QPoint location = view->viewport()->rect().center() + QPoint(31,-23);
+        const auto desired = view->mapToScene(location);
+        const auto snapped = QPointF(std::round(desired.x()/diagram::kGridStep)*diagram::kGridStep,
+                                     std::round(desired.y()/diagram::kGridStep)*diagram::kGridStep);
+        const auto beforeCount = graph->elementNodes().size();
+        const auto rootCount = scene()->elementNodes().size();
+        const auto beforeIndex = graph->undoStack()->index();
+        QSignalSpy added(target, &diagram::DiagramEditor::libraryElementAdded);
+        QVERIFY(nativeLibraryDrag(tree, item, view->viewport()->mapToGlobal(location)));
+        QTRY_COMPARE_WITH_TIMEOUT(added.count(), 1, 5000);
+        QCOMPARE(graph->elementNodes().size(), beforeCount+1);
+        QCOMPARE(graph->undoStack()->index(), beforeIndex+1);
+        const auto id = added.first()[0].toString();
+        auto node = graph->elementNode(id.toStdString()); QVERIFY(node);
+        QCOMPARE(node->pos(), snapped); QVERIFY(node->isSelected());
+        QVERIFY(view->hasFocus() || view->viewport()->hasFocus());
+        const auto actualType = type.startsWith("StudioObserver:") ? type.mid(15) : type;
+        QCOMPARE(QString::fromStdString(node->element().type), actualType);
+        if (type == "Gain") QCOMPARE(id, QString("gain_3"));
+        if (actualType == "Scope" || actualType == "LiveOscilloscope") QCOMPARE(node->element().params.at("channel_count").to_number<int>(), 0);
+        if (const auto* descriptor = s7::ElementRegistry::instance().find(actualType.toStdString()); descriptor && descriptor->metadata().schema_definition)
+            QCOMPARE(node->element().schema, *descriptor->metadata().schema_definition);
+        if (nested) QCOMPARE(scene()->elementNodes().size(), rootCount);
+        QCOMPARE(item->data(0, Qt::UserRole).toString(), type); // copy, never remove the library row
+        const auto element = node->element();
+        graph->undoStack()->undo(); QVERIFY(!graph->elementNode(id.toStdString()));
+        QCOMPARE(graph->elementNodes().size(), beforeCount);
+        graph->undoStack()->redo(); QCOMPARE(graph->elementNode(id.toStdString())->element(), element);
+        // The existing double-click route uses the same defaults and definition.
+        tree->scrollToItem(item);
+        QTest::mouseClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier, tree->visualItemRect(item).center());
+        QTest::mouseDClick(tree->viewport(), Qt::LeftButton, Qt::NoModifier, tree->visualItemRect(item).center());
+        QTest::mouseRelease(tree->viewport(), Qt::LeftButton);
+        QTRY_COMPARE_WITH_TIMEOUT(added.count(), 2, 5000);
+        const auto otherId = added.last()[0].toString(); QVERIFY(otherId != id);
+        const auto other = graph->elementNode(otherId.toStdString()); QVERIFY(other);
+        QCOMPARE(other->element().params, element.params); QCOMPARE(other->element().schema, element.schema);
+        const auto path = temporary_.filePath(QString("drag-%1.s7diagram").arg(QString::fromLatin1(QTest::currentDataTag())));
+        QVERIFY(fileAction("action.saveAs", path));
+        const auto saved = window_->currentDocument();
+        action("action.closeDiagram")->trigger(); QVERIFY(fileAction("action.open", path));
+        QCOMPARE(window_->currentDocument(), saved);
+        capture(window_.get(), "library-drag-" + QString::fromLatin1(QTest::currentDataTag()), true);
+    }
+    void libraryDragCancellationAndSourceRules() {
+        using namespace s7studio;
+        if (QStandardPaths::findExecutable("xdotool").isEmpty()) QSKIP("xdotool is required for native X11 drag/drop checks");
+        window_->raise(); window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        auto* tree = window_->findChild<QTreeWidget*>("elements.tree"); QVERIFY(tree);
+        auto* search = window_->findChild<QLineEdit*>("elements.search"); QVERIFY(search);
+        auto* item = libraryItem(tree, "Gain"); QVERIFY(item);
+        auto* category = item->parent(); QVERIFY(category);
+        QVERIFY(!(category->flags() & Qt::ItemIsDragEnabled));
+        QVERIFY(item->flags() & Qt::ItemIsDragEnabled);
+        std::unique_ptr<QMimeData> categoryData(tree->model()->mimeData({tree->indexFromItem(category)}));
+        QVERIFY(!categoryData || !categoryData->hasFormat(ui::libraryElementMimeType));
+        std::unique_ptr<QMimeData> leafData(tree->model()->mimeData({tree->indexFromItem(item)})); QVERIFY(leafData);
+        QCOMPARE(leafData->formats(), QStringList{QString::fromLatin1(ui::libraryElementMimeType)});
+        QCOMPARE(ui::libraryElementFromMimeData(leafData.get()), QString("Gain"));
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        const auto original = window_->currentDocument(); const auto index = scene()->undoStack()->index();
+        QVERIFY(nativeLibraryDrag(tree, item, view->viewport()->mapToGlobal(view->viewport()->rect().center()), true));
+        QCOMPARE(window_->currentDocument(), original); QCOMPARE(scene()->undoStack()->index(), index);
+        QVERIFY(nativeLibraryDrag(tree, item, search->mapToGlobal(search->rect().center())));
+        QCOMPARE(window_->currentDocument(), original); QCOMPARE(scene()->undoStack()->index(), index);
+        QVERIFY(nativeLibraryDrag(tree, category, view->viewport()->mapToGlobal(view->viewport()->rect().center())));
+        QCOMPARE(window_->currentDocument(), original); QCOMPARE(scene()->undoStack()->index(), index);
+    }
+    void libraryDropRejectsInvalidPayloads() {
+        using namespace s7studio;
+        auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+        const auto original = window_->currentDocument(); const auto index = scene()->undoStack()->index();
+        const auto location = view->viewport()->rect().center();
+        const auto refused = [&](const QByteArray& format, const QByteArray& bytes, Qt::DropActions actions = Qt::CopyAction) {
+            QMimeData data; data.setData(QString::fromLatin1(format), bytes);
+            QDragEnterEvent enter(location, actions, &data, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(view->viewport(), &enter);
+            QDragMoveEvent move(location, actions, &data, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(view->viewport(), &move);
+            QDropEvent drop(location, actions, &data, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(view->viewport(), &drop);
+            QDragLeaveEvent leave; QApplication::sendEvent(view->viewport(), &leave);
+            return !enter.isAccepted() && !move.isAccepted() && !drop.isAccepted();
+        };
+        const QByteArray valid = R"({"version":1,"type":"Gain"})";
+        QVERIFY(refused("text/plain", "Gain"));
+        QVERIFY(refused("application/x-qschematic-item", valid));
+        for (const auto& bytes : {QByteArray{}, QByteArray("{"), QByteArray("[]"), QByteArray(R"({"version":2,"type":"Gain"})"),
+                                 QByteArray(R"({"version":1})"), QByteArray(R"({"version":1,"type":"UnavailablePlugin"})"),
+                                 QByteArray(R"({"version":1,"type":"Gain","node":{}})"), QByteArray(ui::maximumLibraryElementPayload+1,'x')})
+            QVERIFY(refused(ui::libraryElementMimeType, bytes));
+        QVERIFY(refused(ui::libraryElementMimeType, valid, Qt::MoveAction));
+        std::unique_ptr<QMimeData> data(ui::libraryElementMimeData("Gain")); QVERIFY(data);
+        QDragEnterEvent enter(location, Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &enter); QVERIFY(enter.isAccepted());
+        QDropEvent outside(QPointF(-20,-20), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &outside); QVERIFY(!outside.isAccepted());
+        QDragLeaveEvent leave; QApplication::sendEvent(view->viewport(), &leave);
+        // An entry can disappear after drag-enter (for example after a catalog
+        // refresh). Recheck availability at drop rather than accepting old data.
+        auto& registry = s7::ElementRegistry::instance();
+        auto metadata = registry.find("Gain")->metadata(); metadata.type_name = "TemporaryDragElement";
+        registry.register_element(s7::ElementDescriptor(metadata.type_name,
+            [](const s7::ElementCreationContext&) -> std::unique_ptr<s7::Element> { return {}; }, metadata));
+        const auto unregister = qScopeGuard([&] { registry.unregister({metadata.type_name}); });
+        std::unique_ptr<QMimeData> stale(ui::libraryElementMimeData("TemporaryDragElement")); QVERIFY(stale);
+        QDragEnterEvent available(location, Qt::CopyAction, stale.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &available); QVERIFY(available.isAccepted());
+        registry.unregister({metadata.type_name});
+        QDropEvent missing(location, Qt::CopyAction, stale.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &missing); QVERIFY(!missing.isAccepted());
+        QApplication::sendEvent(view->viewport(), &leave);
+        QCOMPARE(window_->currentDocument(), original); QCOMPARE(scene()->undoStack()->index(), index);
+        QVERIFY(!editor()->addLibraryElement("UnavailablePlugin"));
+        QVERIFY(!editor()->addLibraryElement("Gain", QPointF(std::numeric_limits<double>::infinity(),0)));
+        QCOMPARE(window_->currentDocument(), original);
     }
     void elementDocumentationCoverage() {
         using namespace s7studio;
@@ -898,10 +1109,15 @@ private slots:
         const double sy = (xy->plotView()->yMax()-xy->plotView()->yMin())/area.height();
         QVERIFY(std::abs(sx/sy-1) < .05);
         const auto point = xy->result()->points.back();
-        const auto position = graph->mapToScene(QPointF(area.left()+(point.x-xy->plotView()->xMin())/(xy->plotView()->xMax()-xy->plotView()->xMin())*area.width(),
-            area.bottom()-(point.y-xy->plotView()->yMin())/(xy->plotView()->yMax()-xy->plotView()->yMin())*area.height())).toPoint();
-        QTest::mouseMove(quick, position);
-        QTRY_VERIFY(xy->findChild<QLabel*>("pair.readout")->text().contains("Raw pair"));
+        // Fit and wrapped controls can change geometry on the next Quick frame.
+        // Derive the gesture again while the real layout settles.
+        QTRY_VERIFY(([&] {
+            const auto currentArea = graph->property("plotArea").toRectF();
+            const auto position = graph->mapToScene(QPointF(currentArea.left()+(point.x-xy->plotView()->xMin())/(xy->plotView()->xMax()-xy->plotView()->xMin())*currentArea.width(),
+                currentArea.bottom()-(point.y-xy->plotView()->yMin())/(xy->plotView()->yMax()-xy->plotView()->yMin())*currentArea.height())).toPoint();
+            QTest::mouseMove(quick, position);
+            return xy->findChild<QLabel*>("pair.readout")->text().contains("Raw pair");
+        })());
         capture(viewer, "live-constellation-circle");
         xy->inspect(0, 0, false);
         xy->findChild<QComboBox*>("pair.mode")->setCurrentIndex(1);
@@ -947,6 +1163,164 @@ private slots:
         tabs->setCurrentIndex(2); QTRY_VERIFY(xy->result());
         action("action.reset")->trigger(); QVERIFY(!xy->result()); QVERIFY(!correlation->result());
     }
+    void observersDockSelectionLifecycleAndPersistence() {
+        using namespace s7studio;
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/iq_correlation_live.s7diagram"));
+        auto* panel = window_->findChild<ui::ObserversPanel*>("observers.panel"); QVERIFY(panel);
+        auto* dock = window_->findChild<QDockWidget*>("toolWindow.observers"); QVERIFY(dock);
+        auto* tools = window_->findChild<ui::ToolWindows*>(); QVERIFY(tools); tools->show(dock);
+        QVERIFY(panel->selection().empty()); QVERIFY(panel->findChild<QLabel*>("observers.empty")->isVisible());
+        QVERIFY(modalWorkflow([&] { panel->findChild<QPushButton*>("observers.choose")->click(); }, [&](QDialog* dialog) {
+            auto* list = dialog->findChild<QListWidget*>("observers.choices"); if (!list || list->count()!=1) return false;
+            list->item(0)->setCheckState(Qt::Checked); dialog->reject(); return true;
+        }));
+        QVERIFY(scene()->observersPanel().empty());
+        QVERIFY(modalWorkflow([&] { panel->findChild<QPushButton*>("observers.choose")->click(); }, [&](QDialog* dialog) {
+            auto* list = dialog->findChild<QListWidget*>("observers.choices"); if (!list) return false;
+            list->item(0)->setCheckState(Qt::Checked); dialog->accept(); return true;
+        }));
+        QCOMPARE(scene()->observersPanel().size(), std::size_t(1)); QCOMPARE(panel->activePresentations(), 0);
+        auto* runner = window_->findChild<LocalSchemaRunner*>(); auto* manager = window_->findChild<viewers::ViewerManager*>(); QVERIFY(runner && manager);
+        QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
+            dialog->findChild<QDoubleSpinBox*>("run.duration")->setValue(-1); dialog->findChild<QDoubleSpinBox*>("run.frequency")->setValue(1024);
+            dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click(); return true;
+        }));
+        QTRY_COMPARE(runner->state(), RunState::Running); QTRY_VERIFY(panel->activePresentations() == 1);
+        QTRY_VERIFY(panel->findChild<QLabel*>("observer.status.iq_scope")->text().contains("Rolling"));
+        QVERIFY(!manager->find("LiveOscilloscope", "iq_scope")); // Rendering a card never opens a full window.
+        auto* preview = panel->findChild<viewers::ObserverPresentation*>(); QVERIFY(preview);
+        QTRY_VERIFY(!preview->linePlot()->series().empty() && !preview->linePlot()->series().front()->points().empty());
+        const auto capacity = runner->liveSources()["iq_scope"]->capacity();
+        panel->findChild<QPushButton*>("observer.open.iq_scope")->click();
+        auto* full = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->find("LiveOscilloscope", "iq_scope")); QVERIFY(full && full->isVisible());
+        QCOMPARE(runner->liveSources()["iq_scope"]->capacity(), capacity);
+        full->findChild<QPushButton*>("live.freeze")->setChecked(true); QVERIFY(!panel->findChild<QToolButton*>("observer.freeze.iq_scope")->isChecked());
+        full->close(); window_->raise(); window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
+        action("action.pause")->trigger(); QTRY_COMPARE(runner->state(), RunState::Paused);
+        QTRY_VERIFY(panel->findChild<QLabel*>("observers.state")->text().contains("paused"));
+        auto* libraryDock = window_->findChild<QDockWidget*>("toolWindow.elementLibrary");
+        QVERIFY(libraryDock); tools->show(libraryDock); QTRY_COMPARE(panel->activePresentations(), 0);
+        const auto submitted = panel->submittedRequests(); QTest::qWait(250); QCOMPARE(panel->submittedRequests(), submitted); QVERIFY(!dock->isVisible());
+        action("action.resume")->trigger(); QTRY_COMPARE(runner->state(), RunState::Running); QTest::qWait(150); QVERIFY(!dock->isVisible());
+        tools->show(dock); QTRY_VERIFY(panel->activePresentations() == 1);
+        // Editing the next run must not replace this card's running source.
+        auto node = scene()->elementNode("iq_scope"); QVERIFY(node); auto element = node->element(); element.params["channel_names"] = boost::json::array{"new_I", "Q", "I_delayed_6"}; scene()->changeElement(node, element);
+        const auto details = panel->findChild<QPlainTextEdit*>("observer.details.iq_scope");
+        for (auto* button : panel->findChildren<QToolButton*>()) if (button->text()=="Channels / latest sampled values") button->setChecked(true);
+        QTRY_VERIFY(details->toPlainText().contains("iq_scope/I")); QVERIFY(!details->toPlainText().contains("new_I"));
+        auto* collapse = panel->findChild<QToolButton*>("observer.collapse.iq_scope"); collapse->setChecked(false); QTRY_COMPARE(panel->activePresentations(), 0);
+        QVERIFY(scene()->observersPanel()[0].as_object().at("collapsed").as_bool());
+        action("action.stop")->trigger(); QTRY_COMPARE(runner->state(), RunState::Stopped); QVERIFY(dock->isVisible());
+        const auto saved = temporary_.filePath("observer-panel.s7diagram"); QVERIFY(fileAction("action.saveAs", saved));
+        action("action.reset")->trigger(); QCOMPARE(panel->activePresentations(), 0);
+        QVERIFY(fileAction("action.open", saved)); QVERIFY(scene()->observersPanel()[0].as_object().at("collapsed").as_bool());
+        capture(window_.get(), "observers-dock-selected-collapsed", true);
+        panel->findChild<QPushButton*>("observers.recordedSignals")->click(); auto* signalsDialog = window_->findChild<QDialog*>("observers.recordedSignalsDialog"); QVERIFY(signalsDialog && signalsDialog->isVisible()); signalsDialog->close();
+    }
+    void observersDockAllPresentationTypes() {
+        using namespace s7studio; using namespace diagram;
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/iq_correlation_live.s7diagram"));
+        const auto source = scene()->elementNode("i"), quadrature = scene()->elementNode("q"); QVERIFY(source && quadrature);
+        auto liveNode = scene()->elementNode("iq_scope"); auto configuredLive = liveNode->element();
+        configuredLive.params["trigger"] = boost::json::object{{"mode", "single"}, {"level", .2}, {"pretrigger_percent", 0}}; scene()->changeElement(liveNode, configuredLive);
+        boost::json::array selection;
+        for (const auto& type : {"Scope", "PhasePortrait", "PhaseTrajectory3D"}) {
+            const std::string id = std::string("preview_")+type;
+            auto observer = scene()->addElement({id, type, {}, {}}, {100,100});
+            const int count = std::string(type)=="Scope" ? 1 : std::string(type)=="PhasePortrait" ? 2 : 3;
+            for (int axis=0;axis<count;++axis) QVERIFY(scene()->connectEnds(WireEnd::onPort(axis==1 ? quadrature : source, PortDirection::Output,0), WireEnd::onPort(observer,PortDirection::Input,axis)).isEmpty());
+            selection.push_back(boost::json::object{{"element_id",id},{"type",type},{"collapsed",false}});
+        }
+        selection.push_back(boost::json::object{{"element_id","iq_scope"},{"type","LiveOscilloscope"},{"collapsed",false}}); scene()->setObserversPanel(selection,true);
+        auto* panel = window_->findChild<ui::ObserversPanel*>(); auto* runner = window_->findChild<LocalSchemaRunner*>(); QVERIFY(panel && runner);
+        QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
+            dialog->findChild<QDoubleSpinBox*>("run.duration")->setValue(1); dialog->findChild<QDoubleSpinBox*>("run.frequency")->setValue(1024); dialog->accept(); return true;
+        }));
+        QTRY_COMPARE(runner->state(), RunState::Completed);
+        const auto held = runner->liveSources()["iq_scope"]->triggerSnapshot(); QVERIFY(held && held->trigger && held->trigger->triggered);
+        QVERIFY(held->trigger->step < 100); QCOMPARE(held->trigger->settings.mode, observation::TriggerMode::Single);
+        auto* scroll = panel->findChild<QScrollArea*>("observers.scroll"); QVERIFY(scroll);
+        for (const auto* id : {"preview_Scope", "preview_PhasePortrait", "preview_PhaseTrajectory3D", "iq_scope"}) {
+            auto* card = panel->findChild<QWidget*>(QString("observer.card.%1").arg(id)); QVERIFY(card); scroll->ensureWidgetVisible(card);
+            QTRY_VERIFY(card->findChild<viewers::ObserverPresentation*>());
+            auto* status = card->findChild<QLabel*>(QString("observer.status.%1").arg(id)); QTRY_VERIFY(status->text().contains("Recent"));
+            QVERIFY(panel->activePresentations() <= 4); capture(card, QString("observers-preview-")+id,true);
+        }
+        // Deletion keeps the active binding/card; undo restores the selection.
+        auto live = scene()->elementNode("iq_scope"); scene()->clearSelection(); live->setSelected(true); scene()->deleteSelection();
+        QVERIFY(panel->findChild<QWidget*>("observer.card.iq_scope"));
+        action("action.undo")->trigger(); QVERIFY(scene()->elementNode("iq_scope"));
+        action("action.reset")->trigger(); QTRY_COMPARE(panel->activePresentations(), 0);
+    }
+    void instrumentControls_data() {
+        QTest::addColumn<bool>("dark"); QTest::newRow("light") << false; QTest::newRow("dark") << true;
+    }
+    void instrumentControls() {
+        using namespace s7studio;
+        QFETCH(bool, dark);
+        const auto previous = QApplication::palette(); const auto restore = qScopeGuard([previous] { QApplication::setPalette(previous); });
+        auto palette = previous;
+        for (auto role : {QPalette::Window, QPalette::Button}) palette.setColor(role, QColor(dark ? "#242424" : "#eeeeee"));
+        palette.setColor(QPalette::Base, QColor(dark ? "#202020" : "#ffffff"));
+        for (auto role : {QPalette::WindowText, QPalette::ButtonText, QPalette::Text}) {
+            palette.setColor(role, QColor(dark ? "#eeeeee" : "#101010"));
+            palette.setColor(QPalette::Disabled, role, QColor(dark ? "#888888" : "#777777"));
+        }
+        QApplication::setPalette(palette);
+        QVector<observation::LiveChannel> channels;
+        for (int i = 0; i < 8; ++i) channels.push_back({QStringLiteral("Signal %1 — a long descriptive channel name").arg(i+1), "V", "f64"});
+        auto source = std::make_shared<observation::LiveAcquisition>(1, .001, channels);
+        for (int step = 1; step <= 1024; ++step) {
+            double values[8]; for (int i = 0; i < 8; ++i) values[i] = std::sin(step*.02+i)*.1+i;
+            source->append(step, step*.001, values);
+        }
+        ui::LiveOscilloscopeWindow viewer("instrument controls"); viewer.attachLiveSource(source); viewer.resize(1024, 768); viewer.show(); viewer.raise(); viewer.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&viewer)); QTRY_VERIFY(!viewer.displayedFrame().steps.empty());
+        QCOMPARE(viewer.size(), QSize(1024, 768));
+        auto* scroll = viewer.findChild<QScrollArea*>("live.controlsScroll"); QVERIFY(scroll);
+        auto* selected = viewer.findChild<QToolButton*>("live.channel.7.select"); QVERIFY(selected && selected->isVisible());
+        QTest::mouseClick(selected, Qt::LeftButton); QVERIFY(selected->isChecked());
+        auto* gain = viewer.findChild<QDoubleSpinBox*>("live.channel.7.gain"); auto* dial = viewer.findChild<QDial*>("live.channel.7.gain.dial"); QVERIFY(gain && dial && dial->isVisible());
+        const auto before = dial->value(); dial->setFocus(); QTest::keyClick(dial, Qt::Key_Right); QVERIFY(dial->value() != before); QVERIFY(gain->value() != 1.);
+        auto* gainEdit = gain->findChild<QLineEdit*>(); QVERIFY(gainEdit);
+        QVERIFY(gainEdit->fontMetrics().horizontalAdvance(gainEdit->text()) <= gainEdit->contentsRect().width());
+        QCOMPARE(source->snapshot()->values.back(), std::sin(1024*.02+7)*.1+7); // Display adjustment is non-invasive.
+        capture(&viewer, dark ? "instrument-controls-dark-1024" : "instrument-controls-light-1024");
+        for (const auto* name : {"acquisition", "trigger", "inspection"}) {
+            auto* toggle = viewer.findChild<QToolButton*>(QString("live.section.%1.toggle").arg(name)); QVERIFY(toggle);
+            scroll->ensureWidgetVisible(toggle); QTest::mouseClick(toggle, Qt::LeftButton); QVERIFY(toggle->isChecked());
+        }
+        auto* pre = viewer.findChild<QSlider*>("trigger.pre.slider"); scroll->ensureWidgetVisible(pre); QTest::mouseClick(pre, Qt::LeftButton, Qt::NoModifier, QPoint(pre->width()*3/4, pre->height()/2));
+        QCOMPARE(pre->value(), viewer.findChild<QSpinBox*>("trigger.pre")->value());
+        auto* falling = viewer.findChild<QToolButton*>("trigger.edge.1"); scroll->ensureWidgetVisible(falling); QTest::mouseClick(falling, Qt::LeftButton); QVERIFY(!viewer.triggerSettings().rising);
+        auto* panel = viewer.findChild<viewers::WindowInspectionPanel*>(); QTRY_VERIFY(panel->pin());
+        auto* a = panel->findChild<QSlider*>("inspection.a.slider"); auto* b = panel->findChild<QSlider*>("inspection.b.slider"); a->setValue(1000); b->setValue(3);
+        panel->findChild<QToolButton*>("inspection.active.1")->click(); QCoreApplication::processEvents(); scroll->ensureWidgetVisible(b); b->setFocus(); QTest::keyClick(b, Qt::Key_Right, Qt::AltModifier);
+        QCOMPARE(b->value(), 4); QCOMPARE(a->value(), 1000);
+        for (auto* field : viewer.findChildren<QAbstractSpinBox*>()) {
+            if (!field->isVisible() || !scroll->widget()->isAncestorOf(field)) continue;
+            const auto rect = QRect(field->mapTo(scroll->widget(), QPoint()), field->size());
+            QVERIFY2(rect.left() >= 0 && rect.right() < scroll->widget()->width(), qPrintable(field->objectName()));
+        }
+        scroll->ensureWidgetVisible(panel->findChild<QToolButton*>("inspection.export"));
+        capture(&viewer, dark ? "instrument-inspection-dark-1024" : "instrument-inspection-light-1024");
+        viewer.resize(1440, 900); QCOMPARE(viewer.size(), QSize(1440, 900));
+        auto* tabs = viewer.findChild<QTabWidget*>("live.views");
+        for (int i = 1; i < tabs->count(); ++i) {
+            tabs->setCurrentIndex(i); QCoreApplication::processEvents(); QCOMPARE(viewer.width(), 1440);
+            viewer.resize(1024, 768); QCoreApplication::processEvents(); QCOMPARE(viewer.size(), QSize(1024, 768));
+            const auto* plot = tabs->currentWidget()->findChild<viewers::LinePlotView*>(); QVERIFY(plot); QVERIFY(plot->height() > viewer.height()/3);
+            capture(&viewer, QString("instrument-analysis-%1-%2").arg(i).arg(dark ? "dark" : "light")); viewer.resize(1440, 900);
+        }
+    }
+    void finiteAndContinuousProgress() {
+        s7studio::ui::RunPanel panel({});
+        auto* progress = panel.findChild<QProgressBar*>("run.progress"); QVERIFY(progress);
+        panel.setProgress(25, 100, .025); QVERIFY(!progress->isHidden()); QCOMPARE(progress->value(), 250);
+        panel.setProgress(100, 100, .1); QCOMPARE(progress->value(), 1000);
+        panel.setProgress(12345, -1, 12.345); QVERIFY(progress->isHidden());
+        const auto text = panel.findChild<QLabel*>("run.steps")->text(); QVERIFY(text.contains("continuous")); QVERIFY(text.contains("12.345 s")); QVERIFY(!text.contains('%'));
+    }
     void liveCursorsMeasurementsAndWindowExport() {
         using namespace s7studio;
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/signal_measurement/iq_correlation_live.s7diagram"));
@@ -964,9 +1338,10 @@ private slots:
         auto* viewer = dynamic_cast<ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "iq_scope")); QVERIFY(viewer);
         viewer->resize(1450, 1000); viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
         auto* panel = viewer->findChild<viewers::WindowInspectionPanel*>(); QVERIFY(panel);
+        viewer->findChild<QToolButton*>("live.section.inspection.toggle")->setChecked(true);
         auto* tabs = viewer->findChild<QTabWidget*>("live.views"); QVERIFY(tabs);
         auto* a = panel->findChild<QSpinBox*>("inspection.a"); auto* b = panel->findChild<QSpinBox*>("inspection.b"); QVERIFY(a && b);
-        auto* active = panel->findChild<QComboBox*>("inspection.active"); QVERIFY(active);
+        auto* active = panel->findChild<ui::ChoiceButtons*>("inspection.active"); QVERIFY(active);
         QTRY_COMPARE(viewer->displayedFrame().steps.size(), std::size_t(4096));
         auto* quick = viewer->plotView()->quickWidget(); QVERIFY(quick);
         QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
@@ -992,9 +1367,14 @@ private slots:
         const auto saved = temporary_.filePath("frozen-window.s7window");
         QSignalSpy exported(panel, &viewers::WindowInspectionPanel::exportFinished);
         viewer->findChild<QSpinBox*>("live.samples")->setValue(128);
-        QVERIFY(modalWorkflow([&] { panel->findChild<QPushButton*>("inspection.export")->click(); },
+        QVERIFY(modalWorkflow([&] { panel->findChild<QToolButton*>("inspection.export")->click(); },
             [&](QDialog* dialog) { return selectFile(dialog, saved); }));
         QTRY_COMPARE(exported.count(), 1); QVERIFY(exported.last()[0].toBool());
+        QCOMPARE(panel->findChild<QProgressBar*>("inspection.progress")->value(), 100);
+        QVERIFY(!panel->findChild<QPushButton*>("inspection.cancel")->isEnabled());
+        auto* exportButton = panel->findChild<QToolButton*>("inspection.export"); QVERIFY(exportButton->isEnabled());
+        exportButton->menu()->actions()[2]->trigger(); QVERIFY(exportButton->text().contains("Displayed data CSV"));
+        exportButton->menu()->actions()[0]->trigger(); QVERIFY(exportButton->text().contains("Window JSON"));
         QFile file(saved); QVERIFY(file.open(QIODevice::ReadOnly)); const auto document = QJsonDocument::fromJson(file.readAll());
         QCOMPARE(document["raw_samples"].toArray().size(), 4096);
         QVERIFY(!document["metadata"].toObject()["complete_run"].toBool());
@@ -1023,10 +1403,12 @@ private slots:
         for (int i = 0; i < 2; ++i) analysis::analysisPool().start([&] { entered.release(); release.acquire(); });
         entered.acquire(2);
         tabs->setCurrentIndex(1); // Queue reanalysis behind both held workers.
+        const bool processingVisible = !spectrum->findChild<QProgressBar*>("spectrum.processing")->isHidden();
         const bool repinned = panel->pin(); // Freeze is already checked.
         release.release(2);
-        QVERIFY(repinned); QVERIFY(analysis::analysisPool().waitForDone(5000));
+        QVERIFY(repinned); QVERIFY(processingVisible); QVERIFY(analysis::analysisPool().waitForDone(5000));
         QTest::qWait(50);
+        QTRY_VERIFY(spectrum->findChild<QProgressBar*>("spectrum.processing")->isHidden());
         QCOMPARE(spectrum->result()->values.data(), pinnedValues); // Queued result cannot replace the cursor owner.
         spectrum->findChild<QComboBox*>("spectrum.window")->setCurrentIndex(0); QVERIFY(!panel->snapshot());
         tabs->setCurrentIndex(2);
@@ -1157,6 +1539,17 @@ private slots:
         auto source = std::make_shared<observation::LiveAcquisition>(77, 1e-5, channels, QJsonObject{}, 100000, 1);
         ui::LiveOscilloscopeWindow viewer("worker-stress"); viewer.resize(1400, 900); viewer.attachLiveSource(source); viewer.show();
         auto* triggerMode = viewer.findChild<QComboBox*>("trigger.mode"); QVERIFY(triggerMode); triggerMode->setCurrentIndex(2);
+        std::unique_ptr<viewers::ViewerManager> previewManager;
+        std::unique_ptr<ui::ObserversPanel> previewPanel;
+        if (qEnvironmentVariableIsSet("S7_OBSERVER_STRESS_PREVIEW")) {
+            previewManager = std::make_unique<viewers::ViewerManager>(viewers::ViewerRegistry::instance());
+            QVERIFY(previewManager->setObserverTrigger("worker-stress", viewer.triggerSettings())); previewManager->presentLive({{"worker-stress", source}});
+            viewers::ObserverDescriptor descriptor{"worker-stress", "LiveOscilloscope", {}};
+            for (int i=0;i<8;++i) descriptor.inputs.push_back({channels[i].name, "V", "stress", i});
+            previewPanel = std::make_unique<ui::ObserversPanel>(previewManager.get()); previewPanel->resize(500,800);
+            previewPanel->setDocument("Eight-channel stress", {descriptor}, {boost::json::object{{"element_id","worker-stress"},{"type","LiveOscilloscope"},{"collapsed",false}}});
+            previewPanel->bindRun(77,{descriptor}); previewPanel->show(); QTRY_COMPARE(previewPanel->activePresentations(),1);
+        }
         QElapsedTimer pulseClock; pulseClock.start();
         qint64 previousPulse = 0, maximumGapMs = 0; int pulses = 0;
         QTimer pulse; pulse.setInterval(10); connect(&pulse, &QTimer::timeout, &viewer, [&] {
@@ -1185,7 +1578,7 @@ private slots:
         producer.join();
         QTRY_VERIFY_WITH_TIMEOUT(viewer.displayedFrame().trigger.has_value(), 2000);
         QTest::qWait(100); pulse.stop();
-        qInfo() << "Live Time stress: 8 channels, 100 ksample/s paced plus 5 s unthrottled; UI timer pulses" << pulses << "max gap" << maximumGapMs << "ms";
+        qInfo() << "Live Time stress: 8 channels, 100 ksample/s paced plus 5 s unthrottled; preview" << bool(previewPanel) << "UI timer pulses" << pulses << "max gap" << maximumGapMs << "ms";
         QVERIFY(pulses > 0); QVERIFY2(maximumGapMs < 250, "UI event loop stalled for at least 250 ms during live Time updates");
     }
     void liveMeasurementExamples() {

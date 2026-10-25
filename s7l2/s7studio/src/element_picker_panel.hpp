@@ -32,10 +32,6 @@ signals:
     // Emitted when user wants to add element to diagram
     void elementRequested(const QString& elementType, const QString& displayName);
 
-protected:
-    void dragEnterEvent(QDragEnterEvent* event) override;
-    void dropEvent(QDropEvent* event) override;
-
 private slots:
     void onSearchTextChanged(const QString& text);
     void onItemDoubleClicked(QTreeWidgetItem* item, int column);

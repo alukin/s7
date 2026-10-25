@@ -28,7 +28,7 @@ ChannelId ObservationSource::channel(const QString& name, const QString& sourceT
     std::lock_guard lock(mutex_);
     if (auto it = ids_.constFind(name); it != ids_.cend()) return *it;
     const auto id = static_cast<ChannelId>(channels_.size());
-    channels_.push_back({id, name, sourceType}); ids_.insert(name, id); return id;
+    channels_.push_back({id, name, sourceType}); tails_.emplace_back(); ids_.insert(name, id); return id;
 }
 void ObservationSource::setProvenance(QJsonObject provenance)
 {
@@ -85,6 +85,9 @@ bool ObservationSource::append(const Sample& sample)
             status_.storageError = QStringLiteral("Observation history write failed: ") + file_->errorString(); return false;
         }
     } else memory_.push_back(sample);
+    auto& tail = tails_[sample.channel];
+    if (tail.size() == static_cast<std::size_t>(tailPositions)) tail.pop_front();
+    tail.emplace_back(status_.samples, sample);
     ++status_.samples; return true;
 }
 bool ObservationSource::finish(bool stopped, const QString& runError)
@@ -111,6 +114,7 @@ bool ObservationSource::finish(bool stopped, const QString& runError)
             const auto retained = std::min(status_.samples, stored);
             status_.captureDropped += status_.samples - retained;
             status_.samples = retained;
+            for (auto& tail : tails_) while (!tail.empty() && tail.back().first >= retained) tail.pop_back();
         } else {
             status_.storageError += QStringLiteral("; cannot reopen retained observation history: ") + file_->errorString();
         }
@@ -138,6 +142,20 @@ Page ObservationSource::read(std::uint64_t cursor, qsizetype limit) const
         }
     } else page.samples = memory_.mid(static_cast<qsizetype>(page.next), count);
     page.next += static_cast<std::uint64_t>(count); return page;
+}
+TailSnapshot ObservationSource::tail(const QVector<ChannelId>& selection, qsizetype limit) const
+{
+    std::lock_guard lock(mutex_);
+    TailSnapshot result; result.status = status_;
+    const auto count = static_cast<std::size_t>(std::clamp(limit, qsizetype(0), tailPositions));
+    for (auto channel : selection) {
+        if (channel >= tails_.size()) throw std::invalid_argument("Unknown observation tail channel.");
+        const auto& data = tails_[channel]; ChannelTail tail{channel, {}};
+        const auto n = std::min(count, data.size()); tail.samples.reserve(static_cast<qsizetype>(n));
+        for (auto i = data.end()-static_cast<std::ptrdiff_t>(n); i != data.end(); ++i) tail.samples.push_back(i->second);
+        result.channels.push_back(std::move(tail));
+    }
+    return result;
 }
 namespace {
 void writeMetadata(QTextStream& stream, std::uint64_t runId, const SourceStatus& status, const QVector<Channel>& channels, const QJsonObject& provenance)

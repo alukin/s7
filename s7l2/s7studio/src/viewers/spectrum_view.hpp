@@ -11,6 +11,7 @@ class QSpinBox;
 class QLineEdit;
 class QLabel;
 class QTimer;
+class QProgressBar;
 namespace s7studio::viewers {
 class LinePlotView;
 class SpectrumView : public QWidget {
@@ -55,6 +56,7 @@ private:
     QCheckBox *removeMean_, *peakHold_;
     QLineEdit* declaredUnit_;
     QLabel *status_, *readout_, *markerText_;
+    QProgressBar* busy_;
     LinePlotView* plot_;
 };
 }

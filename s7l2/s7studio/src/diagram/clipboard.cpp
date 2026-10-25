@@ -62,7 +62,9 @@ bool DiagramScene::copySelection() const
     staging.setProbes(std::move(probes));
     staging.rerouteAll();
     auto* data = new QMimeData;
-    data->setData(mime, QByteArray::fromStdString(boost::json::serialize(SceneSerializer{}.serialize(staging, {}).toJson())));
+    auto document = SceneSerializer{}.serialize(staging, {});
+    document.diagram.erase("observers_panel");
+    data->setData(mime, QByteArray::fromStdString(boost::json::serialize(document.toJson())));
     QApplication::clipboard()->setMimeData(data);
     return true;
 }

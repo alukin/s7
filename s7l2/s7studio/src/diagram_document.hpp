@@ -14,6 +14,7 @@ namespace s7studio::diagram {
 
 // Version of the `diagram` layout this Studio reads and writes (diagram_format.hpp).
 constexpr int kDiagramVersion = 2;
+void validateObserversPanel(const boost::json::value& panel);
 
 // Page layout for diagram printing/display
 enum class PageOrientation {

@@ -7,6 +7,7 @@
 #include "phase_trajectory_3d_view_window.hpp"
 #include "scope_view_window.hpp"
 #include "live_oscilloscope_window.hpp"
+#include "viewers/observer_presentation.hpp"
 
 #include <utility>
 #include <s7/metadata_json.hpp>
@@ -50,6 +51,7 @@ void registerBuiltinViewers(ViewerRegistry& registry)
         type.documentation = metadata.at(type.typeId.toStdString());
         type.displayName = QString::fromStdString(type.documentation->display_name);
         type.description = QString::fromStdString(type.documentation->description);
+        type.createPresentation = [id = type.typeId](QWidget* parent) { return new ObserverPresentation(id, parent); };
         registry.add(std::move(type));
     };
     add(ui::ScopeViewWindow::viewerType());

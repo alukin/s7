@@ -3,12 +3,15 @@
 #pragma once
 #include "analysis/window_inspection.hpp"
 #include <QWidget>
-class QComboBox;
 class QLabel;
 class QPlainTextEdit;
 class QPushButton;
 class QSpinBox;
 class QTimer;
+class QSlider;
+class QToolButton;
+class QProgressBar;
+namespace s7studio::ui { class ChoiceButtons; }
 namespace s7studio::viewers {
 class LinePlotView;
 class WindowInspectionPanel : public QWidget {
@@ -34,10 +37,14 @@ private:
     std::shared_ptr<const analysis::WindowSnapshot> snapshot_;
     analysis::WindowExportWorker exporter_;
     QSpinBox *a_, *b_;
-    QComboBox *active_, *format_;
+    ui::ChoiceButtons* active_;
+    analysis::WindowExportFormat format_ = analysis::WindowExportFormat::WindowJson;
+    QSlider *aSlider_, *bSlider_;
+    QProgressBar* progress_;
     QPlainTextEdit* readout_;
     QLabel* status_;
-    QPushButton *export_, *cancel_;
+    QToolButton* export_;
+    QPushButton* cancel_;
     QTimer* timer_;
     bool measured_ = false;
 };

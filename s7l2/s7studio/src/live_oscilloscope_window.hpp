@@ -13,8 +13,13 @@ class QSpinBox;
 class QCheckBox;
 class QDoubleSpinBox;
 class QComboBox;
+class QStackedWidget;
+class QToolButton;
+class QProgressBar;
+class QSlider;
 namespace s7studio::viewers { class LinePlotView; class SpectrumView; class PairAnalysisView; class WindowInspectionPanel; }
 namespace s7studio::ui {
+class ChoiceButtons;
 class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
     Q_OBJECT
 public:
@@ -37,6 +42,7 @@ public:
     // reporting them back through triggerSettingsEdited().
     void setTriggerSettings(const observation::TriggerSettings& settings);
     const observation::TriggerSettings& triggerSettings() const { return requestedTrigger_; }
+    void setTriggerController(std::function<bool(const observation::TriggerSettings&, QString*)> controller) { triggerController_ = std::move(controller); }
 signals:
     // The user changed and applied trigger settings in this window.
     void triggerSettingsEdited();
@@ -61,15 +67,20 @@ private:
     QSpinBox* capacity_;
     QLineEdit* seconds_;
     QCheckBox* autoY_;
-    QComboBox *triggerMode_, *triggerChannel_, *triggerEdge_;
+    QComboBox *triggerMode_, *triggerChannel_;
+    ChoiceButtons* triggerEdge_;
     QLineEdit *triggerLevel_, *triggerHysteresis_;
     QSpinBox *triggerPre_, *triggerHoldoff_, *triggerTimeout_;
+    QSlider* triggerPreSlider_;
     QLabel* triggerStatus_;
     observation::TriggerSettings requestedTrigger_;
+    std::function<bool(const observation::TriggerSettings&, QString*)> triggerController_;
     analysis::TimeViewWorker timeWorker_;
     std::uint64_t timeRequestRevision_ = 0, requestedCaptureId_ = 0;
     bool requestedCaptureFinished_ = false;
-    struct ChannelControls { QCheckBox* visible; QDoubleSpinBox *gain, *offset; };
+    QStackedWidget* channelPages_;
+    QProgressBar* timeBusy_;
+    struct ChannelControls { QCheckBox* visible; QDoubleSpinBox *gain, *offset; QToolButton* select; };
     QVector<ChannelControls> controls_;
     bool inspecting_ = false, rendering_ = false;
     std::optional<std::size_t> requestedCapacity_;

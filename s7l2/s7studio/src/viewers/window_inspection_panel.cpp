@@ -1,13 +1,16 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "viewers/window_inspection_panel.hpp"
+#include "instrument_controls.hpp"
 #include "viewers/line_plot_view.hpp"
 #include <QApplication>
 #include <QClipboard>
-#include <QComboBox>
+#include <QActionGroup>
 #include <QFileDialog>
 #include <QGridLayout>
 #include <QLabel>
+#include <QMenu>
+#include <QProgressBar>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QQuickItem>
@@ -15,6 +18,8 @@
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QSlider>
+#include <QToolButton>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -28,21 +33,34 @@ WindowInspectionPanel::WindowInspectionPanel(Capture capture, QWidget* parent) :
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
     // Stacked rows so the panel fits a narrow side column next to the plot.
     auto* cursors = new QGridLayout;
-    auto* pinButton = new QPushButton("Pin window / A–B", this); pinButton->setObjectName("inspection.pin"); cursors->addWidget(pinButton, 0, 0, 1, 2);
-    active_ = new QComboBox(this); active_->setObjectName("inspection.active"); active_->addItems({"Click sets A", "Click sets B"}); cursors->addWidget(active_, 0, 2, 1, 2);
-    auto index = [&](const char* name, const QString& label, int column) {
-        cursors->addWidget(new QLabel(label, this), 1, column); auto* spin = new QSpinBox(this); spin->setObjectName(name);
-        spin->setRange(0, 0); spin->setMaximumWidth(110); spin->setEnabled(false); cursors->addWidget(spin, 1, column+1); return spin;
+    auto* pinButton = new QPushButton("Pin window / A–B", this); pinButton->setObjectName("inspection.pin"); cursors->addWidget(pinButton, 0, 0, 1, 4);
+    active_ = new ui::ChoiceButtons({"Click sets A", "Click sets B"}, "inspection.active", this); cursors->addWidget(active_, 1, 0, 1, 4);
+    auto index = [&](const char* name, const QString& label, int row, QSlider*& slider) {
+        cursors->addWidget(new QLabel(label, this), row, 0); auto* spin = new QSpinBox(this); spin->setObjectName(name);
+        spin->setRange(0, 0); spin->setMaximumWidth(100); spin->setEnabled(false); cursors->addWidget(spin, row, 3);
+        slider = new QSlider(Qt::Horizontal, this); slider->setObjectName(QString::fromLatin1(name)+".slider"); slider->setRange(0, 0); slider->setEnabled(false);
+        slider->setAccessibleName(label+" cursor index"); cursors->addWidget(slider, row, 1, 1, 2);
+        connect(slider, &QSlider::valueChanged, spin, &QSpinBox::setValue); connect(spin, &QSpinBox::valueChanged, slider, &QSlider::setValue); return spin;
     };
-    a_ = index("inspection.a", "A index", 0); b_ = index("inspection.b", "B index", 2);
-    auto* measure = new QPushButton("Measure A–B", this); measure->setObjectName("inspection.measure"); cursors->addWidget(measure, 2, 0, 1, 2);
-    auto* copy = new QPushButton("Copy readout", this); copy->setObjectName("inspection.copy"); cursors->addWidget(copy, 2, 2, 1, 2);
+    a_ = index("inspection.a", "A", 2, aSlider_); b_ = index("inspection.b", "B", 3, bSlider_);
+    auto* measure = new QPushButton("Measure A–B", this); measure->setObjectName("inspection.measure"); cursors->addWidget(measure, 4, 0, 1, 2);
+    auto* copy = new QPushButton("Copy readout", this); copy->setObjectName("inspection.copy"); cursors->addWidget(copy, 4, 2, 1, 2);
     layout->addLayout(cursors);
     readout_ = new QPlainTextEdit(this); readout_->setObjectName("inspection.readout"); readout_->setReadOnly(true);
     readout_->setMaximumHeight(125); readout_->hide(); layout->addWidget(readout_);
     auto* exports = new QGridLayout;
-    format_ = new QComboBox(this); format_->setObjectName("inspection.format"); format_->addItems({"Window JSON (.s7window)", "Raw acquisition CSV", "Displayed data CSV"}); exports->addWidget(format_, 0, 0, 1, 2);
-    export_ = new QPushButton("Export frozen window…", this); export_->setObjectName("inspection.export"); exports->addWidget(export_, 1, 0);
+    export_ = new QToolButton(this); export_->setText("Export: Window JSON…"); export_->setObjectName("inspection.export");
+    export_->setPopupMode(QToolButton::MenuButtonPopup); export_->setToolButtonStyle(Qt::ToolButtonTextOnly); export_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    exports->addWidget(export_, 0, 0, 1, 2);
+    auto* menu = new QMenu(export_); menu->setObjectName("inspection.format"); auto* formats = new QActionGroup(menu); formats->setExclusive(true);
+    const QStringList labels{"Window JSON", "Raw acquisition CSV", "Displayed data CSV"};
+    for (int i = 0; i < labels.size(); ++i) {
+        auto* action = menu->addAction(labels[i]); action->setCheckable(true); action->setChecked(i == 0); formats->addAction(action);
+        connect(action, &QAction::triggered, this, [this, i, label = labels[i]] { format_ = static_cast<WindowExportFormat>(i); export_->setText("Export: " + label + "…"); });
+    }
+    export_->setMenu(menu);
+    progress_ = new QProgressBar(this); progress_->setObjectName("inspection.progress"); progress_->setRange(0, 100); progress_->setValue(0); progress_->hide();
+    progress_->setAccessibleName("Frozen window export progress"); exports->addWidget(progress_, 1, 0);
     cancel_ = new QPushButton("Cancel export", this); cancel_->setObjectName("inspection.cancel"); cancel_->setEnabled(false); exports->addWidget(cancel_, 1, 1);
     status_ = new QLabel("Click a plot or pin a window for exact A/B cursors. Alt+Left/Right moves the selected cursor one position.", this);
     status_->setObjectName("inspection.status"); status_->setWordWrap(true); status_->setTextFormat(Qt::PlainText); exports->addWidget(status_, 2, 0, 1, 2); layout->addLayout(exports);
@@ -56,9 +74,9 @@ WindowInspectionPanel::WindowInspectionPanel(Capture capture, QWidget* parent) :
         shortcut->setContext(Qt::WidgetWithChildrenShortcut);
         connect(shortcut, &QShortcut::activated, this, [this, delta] { if (pin()) { auto* spin = active_->currentIndex() == 0 ? a_ : b_; spin->setValue(spin->value()+delta); } });
     }
-    connect(export_, &QPushButton::clicked, this, [this] {
+    connect(export_, &QToolButton::clicked, this, [this] {
         if (!pin()) return;
-        const auto format = static_cast<WindowExportFormat>(format_->currentIndex());
+        const auto format = format_;
         const bool native = format == WindowExportFormat::WindowJson;
         const auto path = QFileDialog::getSaveFileName(this, "Export bounded frozen window", native ? "window.s7window" : "window.csv",
             native ? "S7 window JSON (*.s7window);;All files (*)" : "CSV (*.csv);;All files (*)");
@@ -69,9 +87,10 @@ WindowInspectionPanel::WindowInspectionPanel(Capture capture, QWidget* parent) :
     connect(timer_, &QTimer::timeout, this, [this] {
         if (auto result = exporter_.takeResult()) {
             timer_->stop(); export_->setEnabled(true); cancel_->setEnabled(false);
+            if (result->success) progress_->setValue(100); else progress_->hide();
             status_->setText(result->success ? "Export complete: bounded frozen window saved." : result->error);
             emit exportFinished(result->success, result->cancelled, result->error);
-        } else status_->setText(QStringLiteral("Exporting pinned window… %1%").arg(exporter_.progress()));
+        } else { progress_->setValue(exporter_.progress()); status_->setText(QStringLiteral("Exporting pinned window… %1%").arg(exporter_.progress())); }
     });
 }
 void WindowInspectionPanel::setPlot(LinePlotView* plot)
@@ -82,6 +101,7 @@ void WindowInspectionPanel::clear(bool cancelExport)
 {
     if (cancelExport) exporter_.cancel();
     snapshot_.reset(); measured_ = false; a_->setEnabled(false); b_->setEnabled(false); readout_->clear(); readout_->hide();
+    aSlider_->setEnabled(false); bSlider_->setEnabled(false);
     if (plot_) { plot_->bridge()->selectionMarkers.clear(); emit plot_->bridge()->selectionChanged(); }
     if (!exporter_.busy()) status_->setText("Click a plot or pin a window for exact A/B cursors. Alt+Left/Right moves the selected cursor one position.");
 }
@@ -92,9 +112,11 @@ bool WindowInspectionPanel::pin()
         auto value = capture_();
         if (!value || value->axis.empty()) { status_->setText("No completed displayed data to pin. Wait for acquisition/analysis or reduce N."); return false; }
         snapshot_ = std::make_shared<const WindowSnapshot>(std::move(*value));
-        const QSignalBlocker blockA(a_), blockB(b_);
+        const QSignalBlocker blockA(a_), blockB(b_), blockASlider(aSlider_), blockBSlider(bSlider_);
         const auto maximum = static_cast<int>(snapshot_->axis.size()-1);
         a_->setRange(0, maximum); b_->setRange(0, maximum); a_->setValue(0); b_->setValue(maximum);
+        aSlider_->setRange(0, maximum); bSlider_->setRange(0, maximum); aSlider_->setValue(0); bSlider_->setValue(maximum);
+        aSlider_->setEnabled(true); bSlider_->setEnabled(true);
         a_->setEnabled(true); b_->setEnabled(true); emit pinned(); updateReadout();
         status_->setText("Pinned displayed input. Click to place A/B; edit indices or use Alt+Left/Right. Resume live releases selection.");
         return true;
@@ -144,7 +166,7 @@ QString WindowInspectionPanel::readout() const { return readout_->toPlainText();
 bool WindowInspectionPanel::exportTo(const QString& path, WindowExportFormat format)
 {
     if (!pin() || !exporter_.start(path, snapshot_, static_cast<std::size_t>(a_->value()), static_cast<std::size_t>(b_->value()), format)) return false;
-    export_->setEnabled(false); cancel_->setEnabled(true); timer_->start(); status_->setText("Exporting immutable bounded window…"); return true;
+    export_->setEnabled(false); cancel_->setEnabled(true); progress_->setValue(0); progress_->show(); timer_->start(); status_->setText("Exporting immutable bounded window…"); return true;
 }
 void WindowInspectionPanel::cancelExport() { exporter_.cancel(); }
 }

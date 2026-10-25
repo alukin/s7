@@ -23,7 +23,13 @@ assigned to 0.2.0; 0.1.1 focuses on local Studio workflows.
 The [main menu review](STUDIO_MENU_REVIEW.md) retains the original inventory.
 The [element-information coverage inventory](STUDIO_ELEMENT_INFORMATION.md)
 records the documentation sources, supported JSON keys and information access.
-Implemented menu, shortcut, toolbar, font, palette and element-information increments and their
+The [instrument controls design](STUDIO_INSTRUMENT_CONTROLS.md) records real
+hardware/software references, channel selection, precise value semantics,
+inspection sliders and progress presentation.
+The [Observers dock guide](STUDIO_OBSERVERS_DOCK.md) describes reusable
+presentations, selection, run bindings, saved metadata and bounded preview work.
+Implemented menu, shortcut, toolbar, font, palette, element-information, library
+drag-placement, instrument-control and Observers dock increments and their
 verification are recorded in the 0.1.1 plan. The simulation guide records
 Siebert's book as the maintainer's stated design inspiration, with reading
 status and attribution rules for planned example adaptations.

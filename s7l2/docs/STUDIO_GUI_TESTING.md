@@ -13,6 +13,11 @@ plugin. Fedora: `sudo dnf install xorg-x11-server-Xvfb mesa-dri-drivers
 qt6-qtbase-devel qt6-qtdeclarative-devel`. Ubuntu additionally needs
 `qml6-module-qttest`; install the normal Studio dependencies first.
 
+Native library drag/drop checks additionally use `xdotool` (Fedora/Ubuntu
+package `xdotool`) to send XTest mouse events to the wrapper's private Xvfb
+display. Those gesture cases explicitly skip when it is unavailable. The MIME
+rejection checks still run. No drag events are sent to the user's desktop.
+
 ```bash
 cmake -S . -B build -DS7_BUILD_STUDIO=ON -DS7_BUILD_GUI_REGRESSION_TESTS=ON
 cmake --build build --target build-tests --parallel 2
@@ -26,6 +31,53 @@ existing offscreen/Wine checks remain separate. `Qt Test` assertions stay active
 in Release builds. Tests do not write settings or recordings under `$HOME`.
 
 ## Coverage
+
+Observers dock workflows cover empty selection, chooser Cancel/Apply, all four
+presentation types, no implicit full windows, independent full-viewer freeze,
+pre-production saved triggers without a full window, acknowledged run states,
+manual dock switching, suspended hidden work, active versus next-run bindings,
+deletion/undo, reset, Save As/reopen and Recorded Signals. They retain card
+captures and run at scaled resolutions. Source/presentation contract tests in
+`s7studio_observer_presentations` cover sparse per-channel tails with zero
+journal reads, bounded reduction and gaps, same-step phase joins, shared trigger
+ownership, independent presentations, stale-worker rejection, undo/serialization
+and deployment projection equality.
+
+Optional observer load measurements use `s7studio_observer_panel_benchmark`
+(excluded from build-tests/CTest). It publishes synthetic source samples at a
+requested 1 kHz; it measures source delivery and GUI load, **not NodeRuntime
+throughput**. Twelve selected observers and a tall virtual workspace exercise
+the four-active-plot limit. `mixed` scrolls recording/phase/live cards, `full`
+also opens four full viewers, and `live` supports a 30-minute journal-free soak.
+Each run includes a 10-second hidden baseline and 10 seconds of warm-up. JSON
+records achieved source rate, UI gaps, RSS checkpoints, active plots and separate
+recording payload growth. Keep temporary recordings on a disk-backed filesystem
+when `/tmp` is a small tmpfs; the run fails on capture or result-write errors.
+
+```bash
+cmake --build build-release --target s7studio_observer_panel_benchmark --parallel 2
+python3 tools/run_gui_test.py --artifacts build-release/observer-artifacts/mixed \
+  --capture build-release/s7studio/s7studio_gui_capture --screen-size 2000x2600 \
+  --timeout 200 -- env TMPDIR=/var/tmp \
+  build-release/s7studio/s7studio_observer_panel_benchmark \
+  build-release/observer-artifacts/mixed.json 120 mixed full
+```
+
+Set `S7_OBSERVER_STRESS_PREVIEW=1` when invoking the existing
+`liveOscilloscopeWorkerKeepsUiResponsive` GUI case to measure its eight-channel,
+100 ksample/s, 35-second workload with an additional dock preview. The normal
+suite keeps the full-viewer-only baseline. Sanitizer checks cover source/worker
+contracts and both new dock workflows; Qt/global leak detection is disabled
+for those ASan/UBSan runs, with process memory measured separately by the soak.
+
+Instrument-control workflows cover selected-channel knobs, independent channel
+visibility, unchanged raw samples, pre-trigger synchronization, labelled edge
+buttons, crossing A/B sliders and Alt+Left/Right, independent section expansion,
+field bounds and wrapping analysis settings at 1024×768 and 1440×900. Captures
+include light/dark palettes. Separate exact-value checks cover logarithmic gain
+endpoints and scientific entry, unquantized edits, offset interval stability,
+clamping and precision limits. Finite/continuous run indicators are checked
+without starting a synthetic percentage for continuous execution.
 
 | CTest entry | Automated checks |
 |---|---|
@@ -66,6 +118,15 @@ information. Both dialogs support copying and keyboard document navigation;
 small-dialog checks keep parameter fields and dialog buttons visible. Qt Test
 mouse events do not synthesize the platform context-menu event, so its mouse
 case explicitly dispatches that event to the real library viewport.
+
+Library placement workflows use native Qt QDrag/XDND gestures for filtered and
+unfiltered entries, root/nested editors, zoom/pan, built-ins, schema definitions,
+the loaded noise plugin and all four observer types. They check grid positions,
+unique IDs, unchanged library rows, one undo/redo step, double-click defaults and
+save/reopen. Native Escape cancellation and outside drops leave the document and
+undo history unchanged. Separate drag-enter/move/drop event checks reject bad
+MIME types, malformed/oversized/versioned payloads, unavailable entries,
+move-only offers and out-of-viewport positions; availability is rechecked at drop.
 
 For scaled-display checks, enlarge the framebuffer with `--screen-size` so the
 logical workspace stays within the acceptance envelope. For example, this uses

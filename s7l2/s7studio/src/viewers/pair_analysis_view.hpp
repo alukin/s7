@@ -9,6 +9,7 @@ class QCheckBox;
 class QSpinBox;
 class QLabel;
 class QTimer;
+class QProgressBar;
 class QScatterSeries;
 namespace s7studio::viewers {
 class LinePlotView;
@@ -54,6 +55,7 @@ private:
     QSpinBox *persistence_, *maxLag_;
     QCheckBox *equalAspect_, *removeMean_, *absolutePeak_;
     QLabel *status_, *readout_, *marker_;
+    QProgressBar* busy_;
     LinePlotView* plot_;
     QScatterSeries *dots_, *newest_, *selected_;
 };

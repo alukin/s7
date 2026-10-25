@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "lifecycle_test_support.hpp"
 #include "live_oscilloscope_window.hpp"
+#include "instrument_controls.hpp"
+#include "viewers/window_inspection_panel.hpp"
 #include "viewers/line_plot_view.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
@@ -10,6 +12,10 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QDoubleSpinBox>
+#include <QDial>
+#include <QSlider>
+#include <QToolButton>
+#include <QProgressBar>
 #include <QLabel>
 #include <QComboBox>
 #include <QLineEdit>
@@ -26,6 +32,53 @@ class LiveOscilloscopeTest : public QObject {
     Q_OBJECT
 private slots:
     void initTestCase() { registerLifecycleElements(); }
+    void rotaryControlsPreserveExactValuesAndLocalScale() {
+        ui::RotaryValueControl gain(ui::RotaryValueControl::Mapping::LogGain, "gain"); gain.show();
+        auto* number = gain.number(); auto* dial = gain.findChild<QDial*>("gain.dial"); QVERIFY(dial);
+        const double exact = std::nextafter(.123456789012345, 1.);
+        QSignalSpy changed(number, &QDoubleSpinBox::valueChanged);
+        number->setValue(exact); QCOMPARE(number->value(), exact); QCOMPARE(changed.count(), 1);
+        number->setValue(999999.123456); QCOMPARE(dial->value(), 1200);
+        dial->setFocus(); QTest::keyClick(dial, Qt::Key_End); QCOMPARE(number->value(), 1e6);
+        QTest::keyClick(dial, Qt::Key_Home); QCOMPARE(number->value(), 1e-6);
+        auto* edit = number->findChild<QLineEdit*>(); QVERIFY(edit); edit->setFocus(); edit->selectAll();
+        QTest::keyClicks(edit, "1.2345678901234567e-5"); QTest::keyClick(edit, Qt::Key_Return);
+        QCOMPARE(number->value(), QString("1.2345678901234567e-5").toDouble());
+        ui::RotaryValueControl offset(ui::RotaryValueControl::Mapping::LocalOffset, "offset"); offset.show();
+        auto* offsetDial = offset.findChild<QDial*>("offset.dial"); auto* span = offset.findChild<QDoubleSpinBox*>("offset.span"); QVERIFY(offsetDial && span);
+        offset.number()->setValue(100.125); QMetaObject::invokeMethod(offset.number(), "editingFinished");
+        QCOMPARE(offsetDial->value(), 500); offsetDial->setValue(1000); QCOMPARE(offset.number()->value(), 101.125);
+        offsetDial->setValue(0); QCOMPARE(offset.number()->value(), 99.125); // Same interval throughout the gesture.
+        span->setValue(2); QCOMPARE(offsetDial->value(), 500); offsetDial->setValue(1000); QCOMPARE(offset.number()->value(), 101.125);
+        offset.number()->setValue(1e12); QMetaObject::invokeMethod(offset.number(), "editingFinished");
+        offsetDial->setValue(0); QCOMPARE(offset.number()->value(), 1e12-2); offsetDial->setValue(1000); QCOMPARE(offset.number()->value(), 1e12);
+        span->setValue(1e-12); QVERIFY(!offsetDial->isEnabled()); QCOMPARE(offset.number()->value(), 1e12);
+    }
+    void triggerControlsKeepPresetAndSingleChangeSemantics() {
+        ui::LiveOscilloscopeWindow viewer("controls");
+        observation::TriggerSettings settings; settings.mode = observation::TriggerMode::Single; settings.rising = false; settings.pretriggerPercent = 37;
+        QSignalSpy changes(&viewer, &ui::LiveOscilloscopeWindow::triggerSettingsEdited);
+        viewer.setTriggerSettings(settings); QCOMPARE(changes.count(), 0);
+        auto* slider = viewer.findChild<QSlider*>("trigger.pre.slider"); auto* spin = viewer.findChild<QSpinBox*>("trigger.pre"); QVERIFY(slider && spin);
+        QCOMPARE(slider->value(), 37); QCOMPARE(spin->value(), 37);
+        slider->setValue(61); QCOMPARE(spin->value(), 61); QCOMPARE(changes.count(), 1); QCOMPARE(viewer.triggerSettings().pretriggerPercent, 61);
+        viewer.findChild<QToolButton*>("trigger.edge.0")->click(); QCOMPARE(changes.count(), 2); QVERIFY(viewer.triggerSettings().rising);
+        const auto before = viewer.triggerSettings(); auto* level = viewer.findChild<QLineEdit*>("trigger.level");
+        level->setText("nan"); QMetaObject::invokeMethod(level, "editingFinished"); QCOMPARE(viewer.triggerSettings(), before); QCOMPARE(changes.count(), 2);
+    }
+    void cursorSlidersKeepIdentityWhenCrossing() {
+        auto frame = std::make_shared<observation::LiveFrame>(); frame->dt = .001; frame->channels = {{"x", "V", "f64"}};
+        for (int i = 0; i < 20; ++i) { frame->times.push_back(i*.001); frame->steps.push_back(i); frame->values.push_back(i); }
+        QWidget owner;
+        viewers::WindowInspectionPanel panel([frame] { return std::optional{analysis::timeWindow(frame)}; }, &owner);
+        QVERIFY(panel.pin());
+        auto* a = panel.findChild<QSpinBox*>("inspection.a"); auto* b = panel.findChild<QSpinBox*>("inspection.b");
+        auto* as = panel.findChild<QSlider*>("inspection.a.slider"); auto* bs = panel.findChild<QSlider*>("inspection.b.slider"); QVERIFY(a && b && as && bs);
+        as->setValue(17); bs->setValue(3); QCOMPARE(a->value(), 17); QCOMPARE(b->value(), 3);
+        a->setValue(19); QCOMPARE(as->value(), 19); QCOMPARE(bs->value(), 3);
+        QVERIFY(panel.readout().contains("A")); QVERIFY(panel.readout().contains("B"));
+        panel.clear(); QVERIFY(!as->isEnabled()); QVERIFY(!bs->isEnabled());
+    }
     void wrapsResizeAndExactSamples() {
         LiveAcquisition source(7, .001, {{"x", "V", "f64"}, {"y", "A", "f64"}}, {}, 1000, 1);
         const auto allocated = source.allocatedBytes();

@@ -3,6 +3,7 @@
 
 #include "element_picker_panel.hpp"
 #include "element_documentation.hpp"
+#include "library_element.hpp"
 
 #include "viewers/viewer_registry.hpp"
 
@@ -16,8 +17,6 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QHeaderView>
-#include <QDragEnterEvent>
-#include <QDropEvent>
 #include <QMimeData>
 #include <QApplication>
 #include <QDrag>
@@ -26,16 +25,34 @@
 #include <QContextMenuEvent>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QPointer>
+#include <QSizePolicy>
 #include <algorithm>
 #include <map>
 
 namespace s7studio::ui {
 namespace {
-class InformationTree final : public QTreeWidget {
+class LibraryTree final : public QTreeWidget {
 public:
-    InformationTree(const s7::ElementRegistry& registry, QWidget* parent)
+    LibraryTree(const s7::ElementRegistry& registry, QWidget* parent)
         : QTreeWidget(parent), registry_(registry) {}
 protected:
+    QStringList mimeTypes() const override { return {QString::fromLatin1(libraryElementMimeType)}; }
+    QMimeData* mimeData(const QList<QTreeWidgetItem*>& items) const override
+    {
+        if (items.size() != 1 || items.front()->isHidden() || items.front()->childCount() != 0) return nullptr;
+        return libraryElementMimeData(items.front()->data(0, Qt::UserRole).toString());
+    }
+    Qt::DropActions supportedDropActions() const override { return Qt::CopyAction; }
+    void startDrag(Qt::DropActions) override
+    {
+        auto* data = mimeData(selectedItems());
+        if (!data) return;
+        QPointer<QDrag> drag = new QDrag(this);
+        drag->setMimeData(data);
+        drag->exec(Qt::CopyAction, Qt::CopyAction);
+        if (drag) drag->deleteLater();
+    }
     void keyPressEvent(QKeyEvent* event) override
     {
         if (event->key() == Qt::Key_Menu || (event->key() == Qt::Key_F10 && event->modifiers() == Qt::ShiftModifier)) {
@@ -88,7 +105,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     layout->addLayout(searchLayout);
 
     // Element tree
-    elementTree_ = new InformationTree(registry_, this);
+    elementTree_ = new LibraryTree(registry_, this);
     elementTree_->setObjectName(QStringLiteral("elements.tree"));
     elementTree_->setAccessibleName(QStringLiteral("Element library"));
     elementTree_->setColumnCount(2);
@@ -98,12 +115,18 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     elementTree_->setUniformRowHeights(true);
     elementTree_->setSelectionMode(QAbstractItemView::SingleSelection);
     elementTree_->setSelectionBehavior(QAbstractItemView::SelectRows);
+    elementTree_->setDragEnabled(true);
+    elementTree_->setDragDropMode(QAbstractItemView::DragOnly);
+    elementTree_->setDefaultDropAction(Qt::CopyAction);
     layout->addWidget(elementTree_);
 
     // Element info
     descriptionLabel_ = new QLabel(this);
     descriptionLabel_->setWordWrap(true);
     descriptionLabel_->setMaximumHeight(80);
+    // A long description must wrap in the existing dock width rather than
+    // move the library/canvas boundary underneath the pointer during a drag.
+    descriptionLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     descriptionLabel_->setFrameStyle(QFrame::StyledPanel);
     descriptionLabel_->setMargin(4);
     descriptionLabel_->setTextFormat(Qt::PlainText);
@@ -156,6 +179,7 @@ void ElementPickerPanel::buildCategoryTree() {
 
         // Create category item
         auto* categoryItem = new QTreeWidgetItem();
+        categoryItem->setFlags(categoryItem->flags() & ~Qt::ItemIsDragEnabled);
         categoryItem->setText(0, QString::fromStdString(category));
         categoryItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
 
@@ -167,6 +191,7 @@ void ElementPickerPanel::buildCategoryTree() {
         // Add elements
         for (const auto& element : elements) {
             auto* elementItem = new QTreeWidgetItem(categoryItem);
+            elementItem->setFlags(elementItem->flags() | Qt::ItemIsDragEnabled);
             elementItem->setText(0, QString::fromStdString(element.display_name));
             elementItem->setText(1, QString("%1→%2")
                 .arg(element.input_count)
@@ -189,6 +214,7 @@ void ElementPickerPanel::buildCategoryTree() {
 
     // Observers are Studio diagram items, not runtime element registry entries.
     auto* observerCategory = new QTreeWidgetItem();
+    observerCategory->setFlags(observerCategory->flags() & ~Qt::ItemIsDragEnabled);
     observerCategory->setText(0, QStringLiteral("Observers"));
     observerCategory->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
     QFont observerFont = observerCategory->font(0);
@@ -197,6 +223,7 @@ void ElementPickerPanel::buildCategoryTree() {
     const auto& viewerTypes = viewers::ViewerRegistry::instance().types();
     for (const auto& type : viewerTypes) {
         auto* item = new QTreeWidgetItem(observerCategory);
+        item->setFlags(item->flags() | Qt::ItemIsDragEnabled);
         item->setText(0, type.displayName);
         item->setText(1, type.portSummary);
         item->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:") + type.typeId);
@@ -266,16 +293,6 @@ void ElementPickerPanel::onItemSelectionChanged() {
     } else {
         descriptionLabel_->setText("(No description available)");
     }
-}
-
-void ElementPickerPanel::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData()->hasFormat("text/plain")) {
-        event->acceptProposedAction();
-    }
-}
-
-void ElementPickerPanel::dropEvent(QDropEvent* event) {
-    (void)event;  // unused for now
 }
 
 } // namespace s7studio::ui

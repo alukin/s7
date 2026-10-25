@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "viewers/pair_analysis_view.hpp"
 #include "viewers/line_plot_view.hpp"
+#include "instrument_controls.hpp"
 #include <QtGraphs/QLineSeries>
 #include <QtGraphs/QScatterSeries>
 #include <QCheckBox>
 #include <QComboBox>
-#include <QGridLayout>
-#include <QGroupBox>
+#include <QScrollArea>
 #include <QLabel>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QSpinBox>
 #include <QSignalBlocker>
 #include <QTimer>
@@ -50,19 +51,18 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent) : QWidget(par
     const bool xy = kind == PairKind::Constellation;
     setObjectName(xy ? "live.constellation" : "live.correlation");
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0);
-    auto* box = new QGroupBox(xy ? "Constellation / XY settings" : "Correlation settings", this);
-    auto* grid = new QGridLayout(box);
+    auto* box = new QWidget(this);
+    auto* boxLayout = new QVBoxLayout(box);
+    auto* fields = new ui::WrappingSettings(box); boxLayout->addWidget(fields);
     auto combo = [&](const char* name, const QStringList& items) {
         auto* c = new QComboBox(box); c->setObjectName(name); c->addItems(items);
         c->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon); c->setMinimumContentsLength(8); return c;
     };
-    auto field = [&](int row, int column, const QString& label, QWidget* widget) {
-        grid->addWidget(new QLabel(label, box), row, column*2); grid->addWidget(widget, row, column*2+1);
-    };
+    auto field = [&](const QString& label, QWidget* widget) { fields->addField(label, widget); };
     first_ = combo("pair.first", {}); second_ = combo("pair.second", {});
-    field(0, 0, xy ? "X / I" : "A", first_); field(0, 1, xy ? "Y / Q" : "B", second_);
+    field(xy ? "X / I" : "A", first_); field(xy ? "Y / Q" : "B", second_);
     mode_ = combo("pair.mode", xy ? QStringList{"Dots", "Lines + dots", "Density"} : QStringList{"Cross-correlation", "Auto-correlation"});
-    field(0, 2, "Mode", mode_);
+    field("Mode", mode_);
     size_ = combo("pair.size", {}); for (int n = 64; n <= 65536; n *= 2) size_->addItem(QString::number(n), n); size_->setCurrentIndex(size_->findData(4096));
     normalization_ = combo("pair.normalization", {"Raw sum", "Biased (/N)", "Unbiased (/overlap)", "Coefficient"}); normalization_->setCurrentIndex(3);
     density_ = combo("pair.densitySize", {"64", "128", "256"}); density_->setCurrentIndex(1);
@@ -76,18 +76,26 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent) : QWidget(par
     absolutePeak_ = new QCheckBox("Absolute peak", box); absolutePeak_->setObjectName("pair.absolutePeak");
     auto* fit = new QPushButton("Fit", box); fit->setObjectName("pair.fit");
     if (xy) {
-        grid->addWidget(equalAspect_, 0, 6, 1, 2); field(1, 0, "Persistence (steps)", persistence_); field(1, 1, "Density grid", density_);
-        grid->addWidget(new QLabel("Cap: 65,536 raw pairs", box), 1, 4, 1, 2); grid->addWidget(fit, 1, 6, 1, 2);
+        fields->addControl(equalAspect_); field("Persistence (steps)", persistence_); field("Density grid", density_);
+        fields->addControl(new QLabel("Cap: 65,536 raw pairs", box)); fields->addControl(fit);
     } else {
-        field(0, 3, "Samples N", size_); field(1, 0, "Normalization", normalization_); field(1, 1, "Maximum |lag|", maxLag_);
-        grid->addWidget(removeMean_, 1, 4); grid->addWidget(absolutePeak_, 1, 5); grid->addWidget(fit, 1, 6, 1, 2);
-        field(2, 0, "Lag axis", lagUnits_);
+        field("Samples N", size_); field("Normalization", normalization_); field("Maximum |lag|", maxLag_);
+        fields->addControl(removeMean_); fields->addControl(absolutePeak_); fields->addControl(fit);
+        field("Lag axis", lagUnits_);
     }
     for (auto* widget : QList<QWidget*>{size_, normalization_, lagUnits_, maxLag_, removeMean_, absolutePeak_}) if (xy) widget->hide();
     for (auto* widget : QList<QWidget*>{density_, persistence_, equalAspect_}) if (!xy) widget->hide();
     auto* convention = new QLabel(xy ? "Same-step raw X/Y or I/Q. No symbol timing, carrier recovery or equalization." :
         "rAB[l] = Σ A[n] B[n+l]; positive lag means B occurs later than A. Edge lags have less overlap.", box);
-    convention->setWordWrap(true); grid->addWidget(convention, xy ? 2 : 3, 0, 1, 8); layout->addWidget(box);
+    convention->setWordWrap(true); boxLayout->addWidget(convention);
+    auto* settingsScroll = new QScrollArea(this); settingsScroll->setObjectName("pair.settingsScroll"); settingsScroll->setWidgetResizable(true);
+    settingsScroll->setFrameShape(QFrame::NoFrame); settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    settingsScroll->setMaximumHeight(220); settingsScroll->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum); settingsScroll->setWidget(box);
+    auto* section = new ui::CollapsibleSection(xy ? "Constellation / XY settings" : "Correlation settings", "pair.settings", settingsScroll, true, this);
+    section->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum); layout->addWidget(section);
+    busy_ = new QProgressBar(this); busy_->setObjectName("pair.processing"); busy_->setRange(0, 0); busy_->setTextVisible(false);
+    busy_->setMaximumHeight(12); busy_->setAccessibleName("Processing paired analysis"); busy_->hide(); layout->addWidget(busy_);
+    auto busyPolicy = busy_->sizePolicy(); busyPolicy.setRetainSizeWhenHidden(true); busy_->setSizePolicy(busyPolicy);
     plot_ = new LinePlotView(this); plot_->setObjectName("pair.plot"); plot_->setLegendVisible(true); plot_->bridge()->inspectionEnabled = true;
     plot_->addSeries(xy ? "Trajectory" : "Correlation", {QColor("#1565c0")});
     dots_ = plot_->addScatterSeries("Raw pairs", QColor("#1565c0"));
@@ -305,6 +313,7 @@ std::optional<analysis::WindowSnapshot> PairAnalysisView::inspectionSnapshot() c
 }
 void PairAnalysisView::updateStatus()
 {
+    busy_->setVisible(worker_.busy());
     QString text;
     if (!frame_) text = "Waiting for live acquisition.";
     else if (!result_) text = worker_.busy() ? "Computing paired analysis…" : "Analysis inactive.";

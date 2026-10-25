@@ -16,6 +16,7 @@ class QLabel;
 class QPlainTextEdit;
 class QTreeWidget;
 class QTreeWidgetItem;
+class QProgressBar;
 
 namespace s7studio::ui {
 
@@ -71,7 +72,7 @@ public:
     RunPanel(const std::vector<QAction*>& actions, QWidget* parent = nullptr);
     void setStatus(const QString& status);
     void setConfigurationSummary(const QString& summary);
-    void setProgress(const QString& progress);
+    void setProgress(long completed, long total, double modelTime);
     void append(const QString& line);
     void clearOutput();
 
@@ -79,6 +80,7 @@ private:
     QLabel* status_;
     QLabel* configuration_;
     QLabel* progress_;
+    QProgressBar* progressBar_;
     QPlainTextEdit* output_;
 };
 

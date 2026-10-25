@@ -5,7 +5,7 @@
 
 #include "viewers/observation_viewer.hpp"
 #include "observation/step_aligner.hpp"
-#include "viewers/trajectory_geometry.hpp"
+#include "viewers/trajectory_plot.hpp"
 
 #include <QList>
 #include <QObject>
@@ -24,48 +24,6 @@ class QTimer;
 namespace s7studio::ui {
 
 class PhaseTrajectory3DViewWindow;
-
-// What Trajectory3D.qml binds to: the geometries, axis labels and the camera
-// preset. The trajectory and its frame are C++-owned Qt Quick 3D geometries.
-class Trajectory3DBridge : public QObject
-{
-    Q_OBJECT
-    Q_PROPERTY(QObject* trajectory READ trajectory CONSTANT)
-    Q_PROPERTY(QObject* frame READ frame CONSTANT)
-    Q_PROPERTY(QVariantList labels READ labels NOTIFY labelsChanged)
-    Q_PROPERTY(QVector3D head READ head NOTIFY headChanged)
-    Q_PROPERTY(bool hasHead READ hasHead NOTIFY headChanged)
-    Q_PROPERTY(QVector3D viewRotation READ viewRotation NOTIFY viewRotationChanged)
-
-public:
-    explicit Trajectory3DBridge(QObject* parent);
-
-    [[nodiscard]] auto trajectory() -> QObject* { return &trajectory_; }
-    [[nodiscard]] auto frame() -> QObject* { return &frame_; }
-    [[nodiscard]] auto trajectoryGeometry() -> viewers::TrajectoryGeometry& { return trajectory_; }
-    [[nodiscard]] auto labels() const -> QVariantList { return labels_; }
-    [[nodiscard]] auto head() const -> QVector3D { return head_; }
-    [[nodiscard]] auto hasHead() const -> bool { return hasHead_; }
-    [[nodiscard]] auto viewRotation() const -> QVector3D { return viewRotation_; }
-
-    void setLabels(QVariantList labels);
-    void setHead(bool hasHead, QVector3D head);
-    // Camera orbit as Euler angles (degrees); see viewPreset in the window.
-    void setViewRotation(QVector3D rotation);
-
-signals:
-    void labelsChanged();
-    void headChanged();
-    void viewRotationChanged();
-
-private:
-    viewers::TrajectoryGeometry trajectory_;
-    viewers::TrajectoryFrameGeometry frame_;
-    QVariantList labels_;
-    QVector3D head_;
-    bool hasHead_ = false;
-    QVector3D viewRotation_;
-};
 
 // A 3D phase trajectory: three probes (X, Y, Z) of the same runtime step form
 // one point, and consecutive points are joined into a continuous line drawn
@@ -116,7 +74,6 @@ public:
     static constexpr int kMaxDrawnPoints = 500'000;
 
 protected:
-    void showEvent(QShowEvent* event) override;
 
 private slots:
     void clearBuffers();
@@ -139,7 +96,7 @@ private:
     bool dirty_ = false;
 
     Trajectory3DBridge* bridge_ = nullptr;
-    QQuickWidget* quick_ = nullptr;
+    TrajectoryPlotView* presentation_ = nullptr;
     QCheckBox* autoScaleCheck_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;

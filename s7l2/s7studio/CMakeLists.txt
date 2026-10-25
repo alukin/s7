@@ -109,6 +109,9 @@ target_link_libraries(s7studio_analysis PUBLIC s7studio_observation PRIVATE ${S7
 s7_enable_project_warnings(s7studio_analysis)
 
 add_library(s7studio_viewers STATIC
+    src/viewers/observer_presentation.cpp src/viewers/observer_presentation.hpp
+    src/viewers/trajectory_plot.cpp src/viewers/trajectory_plot.hpp
+    src/instrument_controls.cpp src/instrument_controls.hpp
     src/viewers/observation_viewer.hpp
     src/viewers/observation_viewer.cpp
     src/viewers/viewer_registry.cpp
@@ -163,6 +166,7 @@ add_library(s7studio_app OBJECT
     src/help_dialogs.cpp src/help_dialogs.hpp
     src/parameter_editor.cpp src/parameter_editor.hpp
     src/element_documentation.cpp src/element_documentation.hpp
+    src/library_element.cpp src/library_element.hpp
     src/schema_tabs.cpp src/schema_tabs.hpp
     src/main_window.cpp
     src/main_window.hpp
@@ -191,6 +195,7 @@ add_library(s7studio_app OBJECT
     src/tool_windows.cpp
     src/tool_panels.hpp
     src/tool_panels.cpp
+    src/observers_panel.cpp src/observers_panel.hpp
     src/ui_icons.hpp
     src/ui_icons.cpp
 )
@@ -212,6 +217,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
         ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVATION_VIEWERS.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVERS_DOCK.md
         ${PROJECT_SOURCE_DIR}/docs/NUMERICAL_VALIDATION_MATRIX.md
         ${PROJECT_SOURCE_DIR}/docs/RELEASE_0.1.0.md
         ${S7STUDIO_EXAMPLE_HELP}
@@ -541,9 +547,22 @@ add_test(NAME s7studio_live_spectrum COMMAND s7studio --live-spectrum-check)
 set_tests_properties(s7studio_live_spectrum PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
 
 # Opt-in backend timing; deliberately excluded from build-tests and CTest.
+s7_add_test_executable(s7studio_observer_presentations_test tests/observer_presentations_test.cpp)
+target_link_libraries(s7studio_observer_presentations_test PRIVATE s7studio_app Qt6::Test)
+set_target_properties(s7studio_observer_presentations_test PROPERTIES AUTOMOC ON)
+s7_enable_project_warnings(s7studio_observer_presentations_test)
+add_test(NAME s7studio_observer_presentations COMMAND s7studio_observer_presentations_test)
+set_tests_properties(s7studio_observer_presentations PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software" TIMEOUT 90)
+
+# Opt-in backend timing; deliberately excluded from build-tests and CTest.
 add_executable(s7studio_spectrum_benchmark EXCLUDE_FROM_ALL tests/spectrum_benchmark.cpp)
 target_link_libraries(s7studio_spectrum_benchmark PRIVATE s7studio_analysis)
 s7_enable_project_warnings(s7studio_spectrum_benchmark)
+
+# Opt-in acquisition/trigger performance and bounded-memory workload.
+add_executable(s7studio_observer_panel_benchmark EXCLUDE_FROM_ALL tests/observer_panel_benchmark.cpp)
+target_link_libraries(s7studio_observer_panel_benchmark PRIVATE s7studio_app)
+s7_enable_project_warnings(s7studio_observer_panel_benchmark)
 
 # Opt-in acquisition/trigger performance and bounded-memory workload.
 add_executable(s7studio_live_trigger_benchmark EXCLUDE_FROM_ALL tests/live_trigger_benchmark.cpp)

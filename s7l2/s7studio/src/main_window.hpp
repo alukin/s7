@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #pragma once
+#include "viewers/observer_presentation.hpp"
 
 #include "local_schema_runner.hpp"
 #include "diagram_document.hpp"
@@ -34,6 +35,7 @@ class QDockWidget;
 class QFontComboBox;
 class QToolBar;
 class QFont;
+class QDialog;
 
 namespace s7 {
 class PluginLoader;
@@ -54,6 +56,7 @@ class ToolWindows;
 class ElementPickerPanel;
 class HeadlessNodesPanel;
 class ProbesPanel;
+class ObserversPanel;
 }
 
 class SchemaTabs;
@@ -105,6 +108,7 @@ private slots:
     void setPageLandscape();
     void chooseScopeTemporaryDirectory();
     void onElementRequested(const QString& elementType, const QString& displayName);
+    void onLibraryElementAdded(const QString& elementId);
     void onHeadlessNodeActivated(const QString& endpoint, const QString& nodeUuid, const QString& nodeName);
     void addTextFrame();
     void setSelectedTextFrameTextColor();
@@ -140,6 +144,8 @@ private:
     void closeViewers();
     void clearViewerSamples();
     void refreshProbesPanel();
+    void refreshObserversPanel();
+    QVector<viewers::ObserverDescriptor> observerDescriptors() const;
     // The RunProbe list the runner should sample for the current scene.
     [[nodiscard]] auto currentRunProbes() const -> std::vector<RunProbe>;
     void applyPaperSize(double widthMm, double heightMm);
@@ -251,11 +257,14 @@ private:
     ui::RunPanel* runPanel_ = nullptr;
     ui::DeployPanel* deployPanel_ = nullptr;
     ui::ProbesPanel* probesPanel_ = nullptr;
+    ui::ObserversPanel* observersPanel_ = nullptr;
+    QDialog* recordedSignalsDialog_ = nullptr;
+    QVector<viewers::ObserverDescriptor> preparedObservers_;
     QDockWidget* problemsDock_ = nullptr;
     QDockWidget* logDock_ = nullptr;
     QDockWidget* runDock_ = nullptr;
     QDockWidget* deployDock_ = nullptr;
-    QDockWidget* probesDock_ = nullptr;
+    QDockWidget* observersDock_ = nullptr;
     QToolButton* problemsStatus_ = nullptr;
     // Warnings from loading the diagram (e.g. another plugin version), shown under Problems.
     std::vector<QString> loadWarnings_;

@@ -16,6 +16,7 @@
 class QWidget;
 
 namespace s7studio::viewers {
+class ObserverPresentation;
 
 // One observed value as delivered to viewers: the probe that produced it, the
 // runtime step it belongs to and its model time. Viewers only read samples;
@@ -105,6 +106,7 @@ struct ViewerType {
     // Creates a hidden, unparented viewer window; the caller owns it.
     std::function<ObservationViewer*(const ViewerInstanceSpec&)> create;
     std::optional<s7::ElementMetadata> documentation{};
+    std::function<ObserverPresentation*(QWidget*)> createPresentation{};
 };
 
 } // namespace s7studio::viewers

@@ -1,6 +1,6 @@
 # Stabilize periodic Time traces with an edge trigger
 
-The Live Oscilloscope's **Time synchronization** controls align successive captures
+The Live Oscilloscope's collapsible **Trigger — sampled edge** controls align successive captures
 to a selected signal event. They operate on complete model-step samples on the
 acquisition producer; GUI refresh timing cannot miss an edge. Triggering observes
 the model and never changes its causal execution or sample rate.

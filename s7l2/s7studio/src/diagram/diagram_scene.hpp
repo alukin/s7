@@ -49,6 +49,7 @@ struct DiagramChange {
     std::vector<Bends> bends;
     std::vector<ElementEdit> elements;
     std::optional<std::pair<std::vector<DiagramProbe>, std::vector<DiagramProbe>>> probes;
+    std::optional<std::pair<boost::json::array, boost::json::array>> observersPanel;
 
     [[nodiscard]] bool empty() const;
 };
@@ -86,6 +87,8 @@ public:
     bool renameProbe(const PortRef& point, QString name);
     // Bulk-load (opening a document); replaces every existing probe.
     void setProbes(std::vector<DiagramProbe> probes);
+    const boost::json::array& observersPanel() const { return observersPanel_; }
+    void setObserversPanel(boost::json::array selection, bool undoable = false);
 
     // Building without undo (loading). rerouteAll() routes every wire.
     void clearDiagram();
@@ -129,6 +132,7 @@ Q_SIGNALS:
     void statusMessage(const QString& message);
     // A probe was added, removed or renamed.
     void probesChanged();
+    void observersPanelChanged();
 
 protected:
     void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
@@ -178,6 +182,7 @@ private:
     QGraphicsPathItem* preview_ = nullptr;
     std::unordered_map<const QSchematic::Items::Item*, QPointF> knownPositions_;
     std::vector<DiagramProbe> probes_;
+    boost::json::array observersPanel_;
     bool applying_ = false;
     bool mouseDown_ = false;
     // Whether the diagram's types resolved before the edit being checked

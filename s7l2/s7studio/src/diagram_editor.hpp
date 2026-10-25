@@ -9,6 +9,7 @@
 #include <boost/json.hpp>
 #include <functional>
 #include <memory>
+#include <optional>
 
 class QGraphicsItem;
 class QGraphicsRectItem;
@@ -52,6 +53,9 @@ public:
     void selectAll();
     void deleteSelection();
     void editSelectedElement();
+    // Shared placement for library double-click and canvas drops. A missing
+    // position uses the normal free-spot suggestion; supplied positions snap.
+    bool addLibraryElement(const QString& identifier, std::optional<QPointF> scenePosition = std::nullopt);
     void setPageLayout(const DiagramPageLayout& pageLayout);
     [[nodiscard]] auto pageLayout() const -> DiagramPageLayout;
 
@@ -64,6 +68,7 @@ public:
 
 signals:
     void elementNodeDoubleClicked(const QString& elementId, const QString& elementType, int channelCount);
+    void libraryElementAdded(const QString& elementId);
 
 private:
     void scheduleInitialPageFit();
