@@ -24,7 +24,9 @@
 #include <QCheckBox>
 #include <QTemporaryDir>
 #include <QDir>
+#include <QWheelEvent>
 #include <cmath>
+#include <limits>
 #include <thread>
 
 using namespace s7studio;
@@ -34,14 +36,14 @@ class LiveOscilloscopeTest : public QObject {
 private slots:
     void initTestCase() { registerLifecycleElements(); }
     void rotaryControlsPreserveExactValuesAndRelativePosition() {
-        ui::RotaryValueControl gain(ui::RotaryValueControl::Mapping::LogGain, "gain"); gain.show();
+        ui::RotaryValueControl gain(ui::RotaryValueControl::Mapping::LogScale, "gain"); gain.show();
         auto* number = gain.number(); auto* dial = gain.findChild<QDial*>("gain.dial"); QVERIFY(dial);
         const double exact = std::nextafter(.123456789012345, 1.);
         QSignalSpy changed(number, &QDoubleSpinBox::valueChanged);
         number->setValue(exact); QCOMPARE(number->value(), exact); QCOMPARE(changed.count(), 1);
-        number->setValue(999999.123456); QCOMPARE(dial->value(), 1200);
-        dial->setFocus(); QTest::keyClick(dial, Qt::Key_End); QCOMPARE(number->value(), 1e6);
-        QTest::keyClick(dial, Qt::Key_Home); QCOMPARE(number->value(), 1e-6);
+        number->setValue(999999.123456); QCOMPARE(dial->value(), 0);
+        dial->setFocus(); QTest::keyClick(dial, Qt::Key_Home); QCOMPARE(number->value(), 1e6);
+        QTest::keyClick(dial, Qt::Key_End); QCOMPARE(number->value(), 1e-6);
         auto* edit = number->findChild<QLineEdit*>(); QVERIFY(edit); edit->setFocus(); edit->selectAll();
         QTest::keyClicks(edit, "1.2345678901234567e-5"); QTest::keyClick(edit, Qt::Key_Return);
         QCOMPARE(number->value(), QString("1.2345678901234567e-5").toDouble());
@@ -65,6 +67,96 @@ private slots:
         offset.number()->setValue(1e12); offsetDial->setValue(0); QCOMPARE(offset.number()->value(), 1e12);
 
     }
+    void scaleControlsStepFromExactValuesWithoutDuplicateEdits() {
+        for (const auto mapping : {ui::RotaryValueControl::Mapping::LogScale, ui::RotaryValueControl::Mapping::LogTime}) {
+            ui::RotaryValueControl control(mapping, "scale"); control.show();
+            auto* number = control.number(); auto* dial = control.findChild<QDial*>("scale.dial");
+            auto* fine = control.findChild<QToolButton*>("scale.fine"); QVERIFY(dial && fine);
+            QVERIFY(!fine->isChecked());
+            number->setValue(.123456789012345);
+            QSignalSpy edits(number, &QDoubleSpinBox::valueChanged);
+            dial->setFocus(); QTest::keyClick(dial, Qt::Key_Right);
+            QCOMPARE(number->value(), .1); QCOMPARE(edits.count(), 1);
+            QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(number->value(), .05); QCOMPARE(edits.count(), 2);
+            QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(number->value(), .1); QCOMPARE(edits.count(), 3);
+            QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(number->value(), .2); QCOMPARE(edits.count(), 4);
+            number->setValue(.48); QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(number->value(), .5);
+            number->setValue(.52); QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(number->value(), .5);
+            QTest::keyClick(dial, Qt::Key_PageDown); QCOMPARE(number->value(), 5.);
+            QTest::keyClick(dial, Qt::Key_PageUp); QCOMPARE(number->value(), .5);
+            const auto before = number->value(); const int editCount = edits.count();
+            fine->click(); QCOMPARE(number->value(), before); QCOMPARE(edits.count(), editCount);
+            QTest::keyClick(dial, Qt::Key_Right);
+            QVERIFY(std::abs(number->value()-before*std::pow(10., -.01)) < 1e-15);
+            QCOMPARE(edits.count(), editCount+1);
+            fine->click(); const double fineValue = number->value();
+            QCOMPARE(edits.count(), editCount+1); QCOMPARE(number->value(), fineValue);
+            QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(number->value(), .2);
+            // Numeric arrows follow increasing/decreasing numeric values,
+            // while positive dial rotation/wheel zooms in.
+            number->stepUp(); QCOMPARE(number->value(), .5);
+            number->stepDown(); QCOMPARE(number->value(), .2);
+            QWheelEvent wheel(QPointF(dial->rect().center()), QPointF(dial->mapToGlobal(dial->rect().center())),
+                              QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(dial, &wheel); QCOMPARE(number->value(), .1);
+            const int beforePartial = edits.count();
+            for (int part = 0; part < 2; ++part) {
+                QWheelEvent partial(QPointF(dial->rect().center()), QPointF(dial->mapToGlobal(dial->rect().center())),
+                                    QPoint(), QPoint(0, 60), Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false);
+                QApplication::sendEvent(dial, &partial);
+                QCOMPARE(edits.count(), beforePartial+part);
+            }
+            QCOMPARE(number->value(), .05);
+            QTest::mousePress(dial, Qt::LeftButton, Qt::NoModifier, QPoint(dial->width()/2, 12));
+            const double pressedScale = number->value();
+            const QPoint clockwise(dial->width()-12, dial->height()/2);
+            QTest::mouseMove(dial, clockwise); QTest::mouseRelease(dial, Qt::LeftButton, Qt::NoModifier, clockwise);
+            QVERIFY(number->value() < pressedScale);
+            // Dynamic vertical bounds need not be members of the 1–2–5 ladder.
+            number->setRange(.013, .77); control.setValueSilently(.017);
+            QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(number->value(), .013);
+            const int atMinimum = edits.count(); QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(edits.count(), atMinimum);
+            QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(number->value(), .02);
+            control.setValueSilently(.71); QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(number->value(), .77);
+            QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(number->value(), .5);
+            control.setValueSilently(.769999); QTest::keyClick(dial, Qt::Key_Home); QCOMPARE(number->value(), .77);
+            control.setValueSilently(.01300001); QTest::keyClick(dial, Qt::Key_End); QCOMPARE(number->value(), .013);
+        }
+    }
+    void positionResetKeepsOtherChannelAndRawSamples() {
+        auto source = std::make_shared<LiveAcquisition>(300, .001, QVector<observation::LiveChannel>{{"x", "V", "f64"}, {"y", "A", "f64"}});
+        for (int i = 1; i <= 100; ++i) { const double values[]{std::sin(i*.02), std::cos(i*.02)}; source->append(i, i*.001, values); }
+        const auto raw = source->snapshot()->values;
+        ui::LiveOscilloscopeWindow viewer("scale controls"); viewer.attachLiveSource(source); viewer.show();
+        QTRY_VERIFY(!viewer.displayedFrame().steps.empty());
+        auto* gain = viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain");
+        auto* scale = viewer.findChild<QDoubleSpinBox*>("live.channel.0.unitsPerDivision");
+        auto* dial = viewer.findChild<QDial*>("live.channel.0.scale.dial"); QVERIFY(gain && scale && dial);
+        const double otherGain = viewer.findChild<QDoubleSpinBox*>("live.channel.1.gain")->value();
+        auto* offset = viewer.findChild<QDoubleSpinBox*>("live.channel.0.offset");
+        auto* otherOffset = viewer.findChild<QDoubleSpinBox*>("live.channel.1.offset");
+        auto* position = viewer.findChild<QDial*>("live.channel.0.offset.dial");
+        auto* zero = viewer.findChild<QToolButton*>("live.channel.0.offset.zero"); QVERIFY(offset && otherOffset && position && zero);
+        QCOMPARE(dial->size(), position->size());
+        QCOMPARE(dial->size(), viewer.findChild<QDial*>("live.timeScale.dial")->size());
+        otherOffset->setValue(.75); offset->setValue(.25); scale->setValue(.123456789012345);
+        const double lo = viewer.plotView()->yMin(), hi = viewer.plotView()->yMax();
+        dial->setFocus(); QTest::keyClick(dial, Qt::Key_Right); QCOMPARE(scale->value(), .1);
+        QVERIFY(std::abs(gain->value()-(hi-lo)/8/.1) < 1e-12);
+        QCOMPARE(viewer.findChild<QDoubleSpinBox*>("live.channel.1.gain")->value(), otherGain);
+        QSignalSpy resets(offset, &QDoubleSpinBox::valueChanged);
+        zero->click(); QCOMPARE(offset->value(), 0.); QCOMPARE(resets.count(), 1);
+        offset->setValue(-.75); QTest::mouseDClick(position, Qt::LeftButton);
+        QCOMPARE(offset->value(), 0.); QCOMPARE(otherOffset->value(), .75); QCOMPARE(scale->value(), .1);
+        QCOMPARE(viewer.plotView()->yMin(), lo); QCOMPARE(viewer.plotView()->yMax(), hi);
+        QVERIFY(!viewer.findChild<QCheckBox*>("live.autoY")->isChecked());
+        QCOMPARE(source->snapshot()->values, raw);
+        // Controls retain the same semantics with a frozen or finished source.
+        viewer.findChild<QPushButton*>("live.freeze")->setChecked(true);
+        QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(scale->value(), .2);
+        source->finish(); QTest::keyClick(dial, Qt::Key_Left); QCOMPARE(scale->value(), .5);
+        QCOMPARE(source->snapshot()->values, raw);
+    }
     void triggerControlsKeepPresetAndSingleChangeSemantics() {
         ui::LiveOscilloscopeWindow viewer("controls");
         observation::TriggerSettings settings; settings.mode = observation::TriggerMode::Single; settings.rising = false; settings.pretriggerPercent = 37;
@@ -76,6 +168,67 @@ private slots:
         viewer.findChild<QToolButton*>("trigger.edge.0")->click(); QCOMPARE(changes.count(), 2); QVERIFY(viewer.triggerSettings().rising);
         const auto before = viewer.triggerSettings(); auto* level = viewer.findChild<QLineEdit*>("trigger.level");
         level->setText("nan"); QMetaObject::invokeMethod(level, "editingFinished"); QCOMPARE(viewer.triggerSettings(), before); QCOMPARE(changes.count(), 2);
+    }
+    void plotMarkersKeepRawValuesAndUseTheTriggerChannel() {
+        auto source = std::make_shared<LiveAcquisition>(512, .001, QVector<observation::LiveChannel>{{"voltage", "V", "f64"}, {"current", "A", "f64"}});
+        for (int i = 1; i <= 100; ++i) { const double values[]{std::sin(i*.02), std::cos(i*.02)}; source->append(i, i*.001, values); }
+        const auto raw = source->snapshot()->values;
+        ui::LiveOscilloscopeWindow viewer("markers"); viewer.attachLiveSource(source);
+        auto* bridge = viewer.plotView()->bridge();
+        auto* gain0 = viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain");
+        auto* offset0 = viewer.findChild<QDoubleSpinBox*>("live.channel.0.offset");
+        auto* gain1 = viewer.findChild<QDoubleSpinBox*>("live.channel.1.gain");
+        auto* offset1 = viewer.findChild<QDoubleSpinBox*>("live.channel.1.offset");
+        gain0->setValue(2); offset0->setValue(.5); gain1->setValue(.25); offset1->setValue(-1);
+        viewer.plotView()->setYRange(-4, 4);
+        QCOMPARE(bridge->channelZeroMarkers.size(), 2);
+        QCOMPARE(bridge->channelZeroMarkers[1].toMap()["value"].toDouble(), -1.);
+        QVERIFY(!bridge->instrumentTrigger["enabled"].toBool());
+        bridge->moveChannelZero(1, 1.25);
+        QCOMPARE(offset1->value(), 1.25); QCOMPARE(offset0->value(), .5);
+        QCOMPARE(gain0->value(), 2.); QCOMPARE(gain1->value(), .25);
+        QVERIFY(viewer.findChild<QToolButton*>("live.channel.1.select")->isChecked());
+        bridge->moveChannelZero(1, 0); QCOMPARE(offset1->value(), 0.);
+        auto* visible = viewer.findChild<QCheckBox*>("live.channel.1.visible"); visible->setChecked(false);
+        bridge->moveChannelZero(1, .75); QCOMPARE(offset1->value(), 0.);
+        QVERIFY(!bridge->channelZeroMarkers[1].toMap()["visible"].toBool()); visible->setChecked(true);
+        for (const auto value : {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) bridge->moveChannelZero(0, value);
+        bridge->moveChannelZero(-1, .75); bridge->moveChannelZero(8, .75); QCOMPARE(offset0->value(), .5);
+
+        observation::TriggerSettings settings; settings.mode = observation::TriggerMode::Normal; settings.channel = 1; settings.level = 8;
+        offset1->setValue(-1); viewer.setTriggerSettings(settings);
+        QCOMPARE(bridge->instrumentTrigger["level"].toDouble(), 1.);
+        // Selecting the other channel must not change the trigger transform.
+        viewer.findChild<QToolButton*>("live.channel.0.select")->setChecked(true);
+        QSignalSpy edited(&viewer, &ui::LiveOscilloscopeWindow::triggerSettingsEdited);
+        int commits = 0; bool reject = false;
+        viewer.setTriggerController([&](const observation::TriggerSettings& candidate, QString* error) {
+            ++commits;
+            if (reject) { *error = "Owner rejected the edit"; return false; }
+            return source->configureTrigger(candidate, error);
+        });
+        bridge->moveTriggerLevel(2);
+        QCOMPARE(viewer.triggerSettings().level, 12.); QCOMPARE(commits, 1); QCOMPARE(edited.count(), 1);
+        QCOMPARE(viewer.findChild<QLineEdit*>("trigger.level")->text(), QString("12"));
+        QCOMPARE(bridge->instrumentTrigger["level"].toDouble(), 2.);
+        auto* draft = viewer.findChild<QLineEdit*>("trigger.hysteresis"); draft->setText("1e");
+        bridge->moveTriggerPosition(63.4);
+        QCOMPARE(viewer.triggerSettings().pretriggerPercent, 63); QCOMPARE(commits, 2); QCOMPARE(edited.count(), 2);
+        QCOMPARE(viewer.findChild<QSpinBox*>("trigger.pre")->value(), 63);
+        QCOMPARE(viewer.findChild<QSlider*>("trigger.pre.slider")->value(), 63);
+        QCOMPARE(draft->text(), QString("1e")); QCOMPARE(viewer.triggerSettings().hysteresis, 0.);
+        reject = true; const auto accepted = viewer.triggerSettings();
+        bridge->moveTriggerLevel(3); QCOMPARE(viewer.triggerSettings(), accepted); QCOMPARE(edited.count(), 2);
+        QVERIFY(viewer.findChild<QLabel*>("live.status")->text().contains("Owner rejected the edit"));
+        QCOMPARE(viewer.findChild<QLineEdit*>("trigger.level")->text(), QString("12"));
+        bridge->moveTriggerPosition(80); QCOMPARE(viewer.triggerSettings(), accepted);
+        QCOMPARE(viewer.findChild<QSpinBox*>("trigger.pre")->value(), 63);
+        const int beforeInvalid = commits;
+        bridge->moveTriggerLevel(std::numeric_limits<double>::infinity());
+        bridge->moveTriggerPosition(std::numeric_limits<double>::quiet_NaN()); QCOMPARE(commits, beforeInvalid);
+        QCOMPARE(source->snapshot()->values, raw);
+        viewer.attachLiveSource({}); QVERIFY(bridge->channelZeroMarkers.empty()); QVERIFY(!bridge->instrumentTrigger["enabled"].toBool());
+        bridge->moveChannelZero(0, .75); bridge->moveTriggerPosition(10); QCOMPARE(commits, beforeInvalid);
     }
     void cursorSlidersKeepIdentityWhenCrossing() {
         auto frame = std::make_shared<observation::LiveFrame>(); frame->dt = .001; frame->channels = {{"x", "V", "f64"}};
@@ -370,7 +523,9 @@ private slots:
         const auto areaGeometry = readout->parentWidget()->parentWidget()->geometry();
         const auto* hoverArea = viewer.findChild<QScrollArea*>("live.readoutScroll");
         const auto* statusArea = viewer.findChild<QScrollArea*>("live.statusScroll");
-        QVERIFY(hoverArea && statusArea); QVERIFY(hoverArea->height() > statusArea->height()*2);
+        QVERIFY(hoverArea && statusArea);
+        QVERIFY(hoverArea->height() > 0);
+        QVERIFY(hoverArea->height() < readout->fontMetrics().lineSpacing()*5+16);
         QVERIFY(statusArea->parentWidget()->height()-statusArea->geometry().bottom() < 12);
         viewer.inspect(600.); QCoreApplication::processEvents();
         viewer.inspect(0, false); QCoreApplication::processEvents();

@@ -19,12 +19,16 @@
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QLineEdit>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QRadialGradient>
 #include <QLinearGradient>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <limits>
 
 namespace s7studio::ui {
 namespace {
@@ -65,7 +69,21 @@ private:
 class InstrumentDial : public QDial {
 public:
     using QDial::QDial;
+    std::function<void()> resetPosition;
+    std::function<void(int)> rotateScale;
 protected:
+    void wheelEvent(QWheelEvent* event) override {
+        if (!rotateScale) { QDial::wheelEvent(event); return; }
+        const auto delta = event->angleDelta();
+        wheelRemainder_ += delta.y() ? delta.y() : delta.x();
+        const int steps = wheelRemainder_/120; wheelRemainder_ %= 120;
+        if (steps) rotateScale(steps);
+        event->accept();
+    }
+    void mouseDoubleClickEvent(QMouseEvent* event) override {
+        if (resetPosition && event->button() == Qt::LeftButton) { resetPosition(); event->accept(); }
+        else QDial::mouseDoubleClickEvent(event);
+    }
     void paintEvent(QPaintEvent*) override {
         QPainter p(this); p.setRenderHint(QPainter::Antialiasing);
         p.translate(width()/2., height()/2.);
@@ -84,7 +102,7 @@ protected:
         QRadialGradient face(-radius*.35, -radius*.45, radius*1.6);
         face.setColorAt(0, QColor("#626d79")); face.setColorAt(.6, QColor("#303944")); face.setColorAt(1, QColor("#171d25"));
         p.setBrush(face); p.drawEllipse(QPointF(), radius-3, radius-3);
-        const double position = double(value()-minimum())/double(maximum()-minimum());
+        const double position = maximum() == minimum() ? 0 : double(value()-minimum())/double(maximum()-minimum());
         p.rotate(wrapping() ? position*360.-180. : position*300.-150.);
         p.setPen(QPen(isEnabled() ? palette().color(QPalette::Highlight) : ink, 3., Qt::SolidLine, Qt::RoundCap));
         p.drawLine(QPointF(0, -radius*.35), QPointF(0, -radius+6));
@@ -93,6 +111,8 @@ protected:
             p.setBrush(Qt::NoBrush); p.drawRoundedRect(rect().adjusted(1, 1, -2, -2), 5, 5);
         }
     }
+private:
+    int wheelRemainder_ = 0;
 };
 class ExactNumber : public QDoubleSpinBox {
     QLabel* summary_ = nullptr;
@@ -107,6 +127,7 @@ class ExactNumber : public QDoubleSpinBox {
         summary_->setVisible(!hasFocus() && !lineEdit()->hasFocus());
     }
 public:
+    std::function<void(int)> step;
     void refreshReadout() { updateSummary(); }
     explicit ExactNumber(QWidget* parent) : QDoubleSpinBox(parent) {
         setLocale(QLocale::c()); setDecimals(323); setKeyboardTracking(false);
@@ -124,6 +145,7 @@ public:
     QSize sizeHint() const override { return {width(), QDoubleSpinBox::sizeHint().height()}; }
     QSize minimumSizeHint() const override { return {width(), QDoubleSpinBox::minimumSizeHint().height()}; }
 protected:
+    void stepBy(int steps) override { if (step) step(steps); else QDoubleSpinBox::stepBy(steps); }
     void showEvent(QShowEvent* event) override { QDoubleSpinBox::showEvent(event); updateSummary(); }
     void focusInEvent(QFocusEvent* event) override { QDoubleSpinBox::focusInEvent(event); summary_->hide(); }
     void focusOutEvent(QFocusEvent* event) override { QDoubleSpinBox::focusOutEvent(event); updateSummary(); }
@@ -149,7 +171,8 @@ void setCompactNumberValueSilently(QDoubleSpinBox* number, double value) {
     const QSignalBlocker block(number);
     number->setValue(value); static_cast<ExactNumber*>(number)->refreshReadout();
 }
-InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : QWidget(parent)
+void InstrumentPanel::wheelEvent(QWheelEvent* event) { event->accept(); }
+InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : InstrumentPanel(parent)
 {
     setObjectName(name+".controls");
     auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
@@ -223,40 +246,117 @@ RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWi
 {
     setObjectName(name + ".control");
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(6, 2, 6, 2); layout->setSpacing(4);
-    auto* title = new QLabel(mapping == Mapping::LogGain ? "Gain ×" : mapping == Mapping::LogTime ? "Time / div (s)" : "Position", this);
-    title->setAlignment(Qt::AlignCenter); layout->addWidget(title);
-    dial_ = new InstrumentDial(this); dial_->setObjectName(name + ".dial");
+    auto* title = new QLabel(mapping == Mapping::LogScale ? "Scale / div" : mapping == Mapping::LogTime ? "Time / div (s)" : "Position", this);
+    title->setObjectName(name + ".title"); title->setAlignment(Qt::AlignCenter);
+    auto* dial = new InstrumentDial(this); dial_ = dial; dial_->setObjectName(name + ".dial");
     dial_->setWrapping(mapping == Mapping::RelativeOffset);
-    dial_->setRange(0, mapping == Mapping::LogGain ? 1200 : mapping == Mapping::LogTime ? 1800 : 999); dial_->setFixedSize(80, 80);
-    dial_->setSingleStep(1); dial_->setPageStep(10);
+    dial_->setFixedSize(72, 72);
+    dial_->setRange(0, 999); dial_->setSingleStep(1); dial_->setPageStep(3);
     dial_->setAccessibleName(title->text());
-    number_ = new ExactNumber(this); number_->setObjectName(name); number_->setAccessibleName(title->text() + " exact value");
-    number_->setRange(mapping == Mapping::LogTime ? 1e-12 : mapping == Mapping::LogGain ? 1e-6 : -1e12, mapping != Mapping::RelativeOffset ? 1e6 : 1e12);
-    number_->setValue(mapping == Mapping::LogGain ? 1 : mapping == Mapping::LogTime ? 2 : 0);
+    auto* exact = new ExactNumber(this); number_ = exact;
+    number_->setObjectName(name); number_->setAccessibleName(title->text() + " exact value");
+    number_->setRange(mapping == Mapping::LogTime ? 1e-12 : mapping == Mapping::LogScale ? 1e-6 : -1e12,
+                      mapping != Mapping::RelativeOffset ? 1e6 : 1e12);
+    number_->setValue(mapping == Mapping::LogScale ? 1 : mapping == Mapping::LogTime ? 2 : 0);
+    auto* action = new QToolButton(this);
+    action->setFixedHeight(action->fontMetrics().height()+8);
+    if (mapping == Mapping::RelativeOffset) {
+        dial_->setToolTip("Turn to move this channel vertically. One turn moves half the visible plot height. Double-click to reset to zero.");
+        action->setObjectName(name + ".zero"); action->setText("Zero");
+        action->setToolTip("Reset this channel's display position to zero"); action->setAccessibleName("Reset channel position to zero");
+        dial->resetPosition = [this] { number_->setValue(0); };
+        connect(action, &QToolButton::clicked, this, dial->resetPosition);
+        const QSignalBlocker block(dial_); dial_->setValue(previousPosition_);
+    } else {
+        fine_ = action; fine_->setObjectName(name + ".fine"); fine_->setText("Fine"); fine_->setCheckable(true);
+        fine_->setAccessibleName(title->text() + " fine adjustment");
+        fine_->setToolTip("Unchecked: 1–2–5 steps. Checked: 100 logarithmic steps per decade. Exact entry is always available.");
+        dial_->setToolTip("Clockwise zooms in. Coarse: 1–2–5 scale steps; Fine: smaller logarithmic steps. Does not change samples or simulation dt.");
+        connect(fine_, &QToolButton::toggled, this, [this] { updateDial(); });
+        // Spin arrows increase/decrease the numeric scale, while clockwise on
+        // the dial decreases it (zoom in). Both start from the exact value.
+        exact->step = [this](int steps) { stepScale(steps); };
+        // One wheel detent is one scale step, independent of the desktop's
+        // text-scroll-lines setting. Accumulate partial touchpad deltas.
+        dial->rotateScale = [this](int steps) { stepScale(-steps); };
+    }
+    auto* heading = new QHBoxLayout; heading->setSpacing(4); heading->addWidget(title, 1); heading->addWidget(action);
+    layout->addLayout(heading);
     if (mapping == Mapping::LogTime) {
         number_->setSuffix(QStringLiteral(" s/div"));
         number_->setFixedWidth(number_->width()+number_->fontMetrics().horizontalAdvance(number_->suffix()));
         auto* row = new QHBoxLayout; row->addWidget(dial_); row->addWidget(number_); row->addStretch(); layout->addLayout(row);
-    } else { layout->addWidget(dial_, 0, Qt::AlignHCenter); layout->addWidget(number_, 0, Qt::AlignHCenter); }
-    if (mapping == Mapping::RelativeOffset) {
-        dial_->setToolTip("Turn to move this channel vertically. One turn moves half the visible plot height. Numeric entry sets an exact offset.");
-        const QSignalBlocker block(dial_); dial_->setValue(previousPosition_);
-    } else dial_->setToolTip(mapping == Mapping::LogTime ? "Model seconds per division, ten divisions across the screen. Does not change simulation dt." : "Display multiplier for this channel. Numeric entry sets an exact gain.");
+    } else {
+        layout->addWidget(dial_, 0, Qt::AlignHCenter); layout->addWidget(number_, 0, Qt::AlignHCenter);
+    }
     connect(number_, &QDoubleSpinBox::valueChanged, this, [this] { updateDial(); });
-    const auto applyPosition = [this](int position) {
-        if (mapping_ != Mapping::RelativeOffset) number_->setValue(std::pow(10., mapping_ == Mapping::LogTime ? 6.-position/100. : -6.+position/100.));
-        else {
+    connect(dial_, &QDial::valueChanged, this, [this](int position) {
+        if (mapping_ == Mapping::RelativeOffset) {
             int delta = position-previousPosition_;
             if (delta > 500) delta -= 1000;
             if (delta < -500) delta += 1000;
             previousPosition_ = position;
             number_->setValue(number_->value() + delta*offsetStep_);
+        } else if (fine_->isChecked()) {
+            const double logHigh = std::log10(number_->maximum()), logLow = std::log10(number_->minimum());
+            const double exponent = logHigh-(logHigh-logLow)*position/dial_->maximum();
+            number_->setValue(position == 0 ? number_->maximum() : position == dial_->maximum() ? number_->minimum() : std::pow(10., exponent));
+        } else {
+            const auto stops = scaleStops(); number_->setValue(stops[stops.size()-1-position]);
         }
-    };
-    connect(dial_, &QDial::valueChanged, this, applyPosition);
-    // End/Home must still reach an endpoint when an exact gain rounds to it.
-    connect(dial_, &QDial::actionTriggered, this, [this, applyPosition](int) { applyPosition(dial_->sliderPosition()); });
+    });
+    connect(dial_, &QDial::actionTriggered, this, [this](int actionType) {
+        if (mapping_ == Mapping::RelativeOffset) return;
+        switch (actionType) {
+        case QAbstractSlider::SliderSingleStepAdd: stepScale(-1); break;
+        case QAbstractSlider::SliderSingleStepSub: stepScale(1); break;
+        case QAbstractSlider::SliderPageStepAdd: stepScale(-3); break;
+        case QAbstractSlider::SliderPageStepSub: stepScale(3); break;
+        case QAbstractSlider::SliderToMinimum: number_->setValue(number_->maximum()); break;
+        case QAbstractSlider::SliderToMaximum: number_->setValue(number_->minimum()); break;
+        default: return; // Mouse drags use the absolute slider position above.
+        }
+        // actionTriggered precedes Qt's valueChanged. Synchronize even if an
+        // exact value is already at a bound, so one gesture applies one edit.
+        updateDial();
+    });
     updateDial();
+}
+QList<double> RotaryValueControl::scaleStops() const
+{
+    QList<double> stops{number_->minimum()};
+    const int first = static_cast<int>(std::floor(std::log10(number_->minimum())));
+    const int last = static_cast<int>(std::ceil(std::log10(number_->maximum())));
+    for (int exponent = first; exponent <= last; ++exponent) {
+        for (const int mantissa : {1, 2, 5}) {
+            const double value = static_cast<double>(mantissa*std::pow(10.L, exponent));
+            if (value > stops.back() && value < number_->maximum()) stops.push_back(value);
+        }
+    }
+    if (stops.back() != number_->maximum()) stops.push_back(number_->maximum());
+    return stops;
+}
+void RotaryValueControl::stepScale(int steps)
+{
+    if (!steps) return;
+    if (fine_->isChecked()) {
+        const double exponent = std::log10(number_->value())+steps/100.;
+        number_->setValue(std::pow(10., std::clamp(exponent, std::log10(number_->minimum()), std::log10(number_->maximum()))));
+        return;
+    }
+    const auto stops = scaleStops();
+    const double value = number_->value();
+    const auto equal = [value](double stop) { return std::abs(stop-value) <= std::abs(value)*8*std::numeric_limits<double>::epsilon(); };
+    qsizetype index = 0;
+    if (steps > 0) {
+        while (index < stops.size()-1 && (stops[index] < value || equal(stops[index]))) ++index;
+        index = std::min(stops.size()-1, index+steps-1);
+    } else {
+        index = stops.size()-1;
+        while (index > 0 && (stops[index] > value || equal(stops[index]))) --index;
+        index = std::max(qsizetype(0), index+steps+1);
+    }
+    number_->setValue(stops[index]);
 }
 void RotaryValueControl::setValueSilently(double value)
 {
@@ -273,6 +373,18 @@ void RotaryValueControl::updateDial()
 {
     const QSignalBlocker block(dial_);
     number_->setToolTip(QString::number(number_->value(), 'g', QLocale::FloatingPointShortest));
-    if (mapping_ != Mapping::RelativeOffset) dial_->setValue(qRound((mapping_ == Mapping::LogTime ? 6.-std::log10(number_->value()) : std::log10(number_->value())+6.)*100.));
+    if (mapping_ == Mapping::RelativeOffset) return;
+    if (fine_->isChecked()) {
+        const double logHigh = std::log10(number_->maximum()), logLow = std::log10(number_->minimum());
+        if (logHigh == logLow) { dial_->setRange(0, 1); dial_->setValue(0); return; }
+        dial_->setRange(0, std::max(1, qRound((logHigh-logLow)*100)));
+        dial_->setValue(qRound((logHigh-std::log10(number_->value()))/(logHigh-logLow)*dial_->maximum()));
+    } else {
+        const auto stops = scaleStops(); dial_->setRange(0, static_cast<int>(stops.size()-1));
+        qsizetype nearest = 0;
+        for (qsizetype i = 1; i < stops.size(); ++i)
+            if (std::abs(std::log10(stops[i])-std::log10(number_->value())) < std::abs(std::log10(stops[nearest])-std::log10(number_->value()))) nearest = i;
+        dial_->setValue(static_cast<int>(stops.size()-1-nearest));
+    }
 }
 }

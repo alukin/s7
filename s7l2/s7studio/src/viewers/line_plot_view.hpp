@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QWidget>
 #include <QImage>
 #include <QRectF>
@@ -64,6 +65,10 @@ class LinePlotBridge : public QObject
     Q_PROPERTY(bool compactAxes MEMBER compactAxes NOTIFY legendChanged)
     Q_PROPERTY(bool instrumentTheme MEMBER instrumentTheme NOTIFY legendChanged)
     Q_PROPERTY(bool checkableLegend MEMBER checkableLegend NOTIFY legendChanged)
+    // Empty on ordinary plots. Live Time owns these presentation/edit handles.
+    Q_PROPERTY(QVariantList channelZeroMarkers MEMBER channelZeroMarkers NOTIFY instrumentMarkersChanged)
+    Q_PROPERTY(QVariantMap instrumentTrigger MEMBER instrumentTrigger NOTIFY instrumentMarkersChanged)
+    Q_PROPERTY(bool markerFocus MEMBER markerFocus NOTIFY markerFocusChanged)
 
 public:
     explicit LinePlotBridge(LinePlotView& view);
@@ -96,6 +101,12 @@ public:
     QVariantList selectionMarkers;
     QSizeF plotAreaSize;
     QVariantList hoverTip, hoverMarkers;
+    QVariantList channelZeroMarkers;
+    QVariantMap instrumentTrigger;
+    bool markerFocus = false;
+    Q_INVOKABLE void moveChannelZero(int channel, double displayValue) { emit channelZeroMoved(channel, displayValue); }
+    Q_INVOKABLE void moveTriggerLevel(double displayValue) { emit triggerLevelMoved(displayValue); }
+    Q_INVOKABLE void moveTriggerPosition(double percent) { emit triggerPositionMoved(percent); }
     Q_INVOKABLE void pick(double xFraction, double yFraction);
     Q_INVOKABLE void hover(double fraction, bool inside);
     Q_INVOKABLE void hoverPoint(double xFraction, double yFraction, bool inside);
@@ -109,6 +120,11 @@ public:
     Q_INVOKABLE void selectLegend(int index) { emit legendSelected(index); }
 
 signals:
+    void channelZeroMoved(int channel, double displayValue);
+    void triggerLevelMoved(double displayValue);
+    void triggerPositionMoved(double percent);
+    void instrumentMarkersChanged();
+    void markerFocusChanged();
     void legendToggled(int index, bool checked);
     void legendSelected(int index);
     void channelAxisChanged();

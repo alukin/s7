@@ -123,6 +123,10 @@ observer channel bindings remain available in each preview's details.
 See [Observers dock](STUDIO_OBSERVERS_DOCK.md) for source bindings, lifecycle and
 bounded-work behavior.
 
+The controls column scrolls under the pointer, including its blank areas and
+right edge. Reaching a scroll limit keeps the wheel within the controls.
+Knobs and numeric editors retain their wheel adjustments.
+
 In **Vertical**, select a **CH n** button or click its name in the plot legend
 to adjust that channel's **Scale**, **Gain ×** and **Position**. Selection leaves visibility
 unchanged; use the separate checkbox to show/hide a trace. For a focused legend
@@ -134,19 +138,56 @@ independent settings; an unspecified unit appears as `units/div`. The colored
 Y axis shows the selected channel's original units, accounting for its gain
 and position. Selecting another channel changes the axis labels without moving
 traces. Hover values and measurements retain original signal values. Changing
-Gain also updates Scale.
+Gain also updates Scale. The larger **Scale** knob now operates directly in
+units/division. Coarse adjustment follows **1–2–5** values; its **Fine** button
+selects 100 logarithmic steps per decade without changing the current value.
+Clockwise rotation, Right/Up and a forward wheel notch reduce units/division
+(zoom in); Left/Down zoom out. Each wheel notch applies one step. Page Up/Down
+apply three steps. Numeric spin arrows increase/decrease the displayed number,
+and exact entry remains available in either mode. An exact value between coarse
+steps moves to the next value in the chosen direction. Range endpoints remain
+reachable even when they fall between 1–2–5 values.
 The colored checkboxes beside channel buttons and in the plot legend toggle
 visibility. Each channel keeps independent settings. Numeric faces show five
 significant digits; focusing an editor or hovering its tooltip exposes the full
 value, including scientific notation. Numeric entry retains full precision.
 Position is a continuous relative knob: one turn moves half the visible plot
-height. There is no half-span setting. Changing scale, gain or position turns off
+height. Its knob has a **Zero** button; double-clicking the knob also
+resets only that channel's display position to zero. There is no half-span
+setting. Changing scale, gain or position turns off
 **Auto Y**, holding the shared scale so other channels remain stationary; enable
 Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
 unchanged.
 
+Colored numbered badges at the left of the Time plot mark each visible channel's
+raw zero. Drag a badge up/down to select and move only that trace. Coincident
+badges spread out in the margin; their leaders and arrow tips still indicate the
+true zero levels. Double-click a badge or press Home while it has focus to reset
+that channel's position to zero. Up/Down adjusts position; Shift uses smaller
+steps. Off-screen levels have an arrow at the plot edge and can be dragged back
+into view. Hiding a trace hides its zero badge.
+
+In Auto, Normal or Single trigger mode, orange **L** controls the trigger level
+and **P…%** controls the pre-trigger percentage. Hover L to see the threshold in
+the trigger input's original units, including while dragging. The trigger input
+can differ from the channel selected for the Y axis. Trigger drags preview first;
+release applies the setting and starts fresh trigger history, just like the
+fields. Escape cancels a pending trigger drag. Rejection preserves the accepted
+settings and appears in status. These handles disappear in Rolling mode.
+
+The **P** handle sets coverage for the next acquisition; it does not reposition
+the recorded event. The existing **T** line stays at the captured sampled event,
+including when you pan or zoom a frozen capture. P and T can therefore appear at
+different positions. Left/Right adjusts P by one percent; Home/End selects
+0/100%. L uses Up/Down (Shift for smaller steps). Marker gestures do not pan,
+zoom or place inspection cursors. Narrow Time plots number fewer ticks while
+retaining the ten-division grid and the full tick-value precision. A changed run/source or trigger preset cancels
+pending edits from the previous binding.
+
 **Horizontal → Time / div** sets model seconds per division across ten horizontal divisions.
 Turn clockwise to zoom in, or edit the adjacent **s/div** field for an exact
+value. The timebase has the same coarse **1–2–5** steps and independent **Fine**
+button as the vertical scale. Switching adjustment modes preserves the exact
 value. The knob, numeric readout and mouse-selected time range stay synchronized;
 the selected scale survives reruns and changes of model `dt`. Live preview wheel
 zoom and drag pan move only the time axis, preserving amplitude and position.
@@ -170,9 +211,12 @@ has expired, the viewer says so; zooming does not reconstruct missing detail.
 On the Time tab, **Vertical**, **Horizontal**, **Analysis retention**, **Trigger** and **Window
 inspection** collapse independently. The column scrolls vertically; **Hide
 controls** gives the plot the full width. Hover readouts and acquisition status
-have fixed-height scrollable areas so pointer motion does not move the layout.
-Hover values and times use five significant digits. The compact status area
-sits at the bottom, leaving more room for channel readouts.
+remain stable while the pointer moves. Scale, position and timebase knobs are
+the same size, and input fields use less vertical space. The Time sample readout
+starts at about three lines. Drag the divider above it to resize the readout, or
+drag down to hide it and give the controls more room. Expanded settings remain
+scrollable. Hover values and times use five significant digits. Compact status
+stays at the bottom.
 
 The live oscilloscope has four tabs sharing the same acquisition:
 
@@ -190,7 +234,8 @@ increase **Raw samples / channel** or reduce N if the view reports **Filling**.
 The model sample rate determines frequency and lag in seconds.
 All four tabs use the same layout: full-height graph on the left and grouped,
 scrollable settings on the right. Hover values use five significant digits in
-an eight-line readout, with compact status at the bottom. Hide controls expands
+a scrollable readout (resizable on Time, eight lines on analysis tabs), with
+compact status at the bottom. Hide controls expands
 the active graph. Analysis retention and Window inspection remain available on every
 tab.
 

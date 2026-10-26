@@ -56,7 +56,9 @@ private:
     void presentTimeResult(const analysis::TimeViewResult& result);
     void updateStatus(const QString& suffix = {});
     void applyTriggerSettings();
+    bool commitTriggerSettings(const observation::TriggerSettings& settings);
     void updateVerticalReadouts();
+    void updateInstrumentMarkers();
     std::shared_ptr<observation::LiveAcquisition> live_;
     std::shared_ptr<const observation::LiveFrame> frame_ = std::make_shared<observation::LiveFrame>();
     viewers::LinePlotView* plot_ = nullptr;
@@ -78,6 +80,7 @@ private:
     QSlider* triggerPreSlider_;
     QLabel* triggerStatus_;
     observation::TriggerSettings requestedTrigger_;
+    std::uint64_t markerSourceRevision_ = 0, markerTriggerRevision_ = 0;
     std::function<bool(const observation::TriggerSettings&, QString*)> triggerController_;
     analysis::TimeViewWorker timeWorker_;
     std::uint64_t timeRequestRevision_ = 0, requestedCaptureId_ = 0;

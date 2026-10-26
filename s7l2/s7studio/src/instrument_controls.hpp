@@ -9,9 +9,18 @@ class QLabel;
 class QToolButton;
 class QProgressBar;
 class QVBoxLayout;
+class QWheelEvent;
 namespace s7studio::ui {
+// Keep unhandled/at-limit wheel events inside the instrument controls instead
+// of allowing the focused plot to take them as navigation.
+class InstrumentPanel : public QWidget {
+public:
+    using QWidget::QWidget;
+protected:
+    void wheelEvent(QWheelEvent* event) override;
+};
 // A shared right column: scrollable settings, stable hover area, bottom status.
-class InstrumentSidebar : public QWidget {
+class InstrumentSidebar : public InstrumentPanel {
 public:
     explicit InstrumentSidebar(const QString& name, QWidget* parent = nullptr);
     void addSection(QWidget* section);
@@ -55,10 +64,10 @@ public:
     void addControl(QWidget* control);
 };
 
-// A coarse dial never owns the floating-point value. Numeric edits remain exact.
+// Scale dials step in engineering values; numeric edits remain exact.
 class RotaryValueControl : public QWidget {
 public:
-    enum class Mapping { LogGain, RelativeOffset, LogTime };
+    enum class Mapping { LogScale, RelativeOffset, LogTime };
     RotaryValueControl(Mapping mapping, const QString& name, QWidget* parent = nullptr);
     QDoubleSpinBox* number() const { return number_; }
     // Model/view updates must synchronize the dial without emitting an edit.
@@ -66,9 +75,12 @@ public:
     void setOffsetStep(double step);
 private:
     void updateDial();
+    void stepScale(int steps);
+    QList<double> scaleStops() const;
     Mapping mapping_;
     QDoubleSpinBox* number_;
     QDial* dial_;
+    QToolButton* fine_ = nullptr;
     double offsetStep_ = .01;
     int previousPosition_ = 500;
 };

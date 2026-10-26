@@ -137,6 +137,7 @@ LinePlotView::LinePlotView(QWidget* parent)
         auto* action = new QShortcut(QKeySequence(key), this);
         action->setContext(Qt::WidgetWithChildrenShortcut);
         connect(action, &QShortcut::activated, this, operation);
+        connect(bridge_, &LinePlotBridge::markerFocusChanged, action, [this, action] { action->setEnabled(!bridge_->markerFocus); });
     };
     shortcut(Qt::Key_Plus, [this] { bridge_->zoom(.5, .5, .85); });
     shortcut(Qt::Key_Equal, [this] { bridge_->zoom(.5, .5, .85); });

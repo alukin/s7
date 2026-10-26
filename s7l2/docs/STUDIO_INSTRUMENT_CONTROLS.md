@@ -30,26 +30,48 @@ visibility for all eight channels. Colored checkboxes beside the buttons and in
 the plot legend share the same visibility state. Full names and supplied units
 appear above the selected controls and in button tooltips.
 
-The gain dial maps positions 0–1200 to `10^(-6+p/100)`, with exact numeric entry
-from 1e-6 to 1e6. Position has ±1e12 numeric entry and a wrapping relative dial.
-A full turn changes the offset by half the visible Y span; there is no half-span
-control or movable interval. Numeric edits never pass through the dial. Editing
-either gain or position disables Auto Y, preserving the shared scale and other
-channels' positions. Auto Y can be enabled again explicitly.
+The larger vertical dial now controls units/division directly. Both scale and
+timebase dials default to a 1–2–5 ladder, with reachable numeric bounds even
+when those bounds are not ladder values. Fine buttons independently select 100
+logarithmic steps per decade. Changing mode never changes the exact value.
+Clockwise, Right/Up and a positive wheel notch reduce scale (zoom in); Left/Down
+zoom out. One wheel detent applies one step regardless of desktop scroll-line
+settings; partial angle deltas accumulate. Page Up/Down apply three steps.
+Numeric spin arrows increase/decrease the number using the same adjustment
+mode. Exact off-ladder values move to the next stop in the chosen direction.
+Mouse dragging selects the dial's coarse or fine position.
+
+The exact Gain × field retains the 1e-6 to 1e6 display multiplier range. Scale
+bounds follow the current Y span and that range. Position has ±1e12 exact entry
+and a wrapping relative dial. Scale, position and timebase knobs all use the
+same 72×72 logical-pixel size. A full turn changes the offset by half
+the visible Y span. Zero and double-click reset only that channel's position;
+there is no half-span control or movable interval. Numeric edits never pass
+through the dial. Editing scale, gain or position disables Auto Y, preserving
+the shared scale and other channels' positions. Auto Y can be enabled again
+explicitly. Fine/Zero sit beside the vertical knob headings to preserve room
+for the horizontal controls.
 
 Project-owned painted QDial subclasses retain Qt keyboard, wheel, mouse and
 accessibility behavior. Channel accents, dark graticule and compact readouts
 form a consistent instrument surface. Numeric faces show five significant
 digits while inactive; focus and tooltips expose the complete round-tripping
-value. The compact face never changes the stored value. Gain and position sit
-side by side with their numeric fields below the knobs.
+value. The compact face never changes the stored value. Scale and position sit
+side by side with their numeric fields below the knobs; exact gain is below them.
 
 Vertical and Horizontal start expanded; Analysis retention, Trigger and Window
 inspection start collapsed. All sections collapse independently. The control column scrolls
-vertically and can be hidden. Hover readouts and status use fixed-height
-scrollable viewports. Hover values and times show five significant digits. The
-hover area has eight lines, with a compact two-line status area at the bottom;
-longer messages remain scrollable. Worker progress reserves its space while hidden.
+vertically and can be hidden. Time input fields use slimmer vertical padding.
+The Time hover readout defaults to approximately three lines below an adjustable
+vertical divider; drag the divider to enlarge it or down to hide it and give the
+controls more room. The settings remain scrollable when sections expand.
+Wheel events follow the pointer across the full column width, including blank
+areas and disabled controls; events at a scroll limit stay inside the controls.
+Enabled knobs and editors retain their own wheel adjustments.
+Status keeps a compact two-line scrollable area at the bottom. Analysis tabs
+retain their eight-line hover areas. Hover values and times show five significant
+digits; longer messages remain scrollable. Worker progress reserves its space
+while hidden.
 Pointer movement therefore cannot resize the plot or shift the settings panel.
 The plot header and dock preview status explicitly identify the retained model
 time interval, distinguishing it from the full run duration.
@@ -226,6 +248,65 @@ selection, position, raw-data preservation, light/dark layouts and long runs.
 The Live Oscilloscope, generic Qt Quick line-plot and bundled-demo regressions
 pass. Local helper snapshots and reviewed captures remain outside Git under
 `build-release/rigol-6b-*`.
+
+### Item 6, increment 6c — coarse/fine scale and position reset
+
+Implemented 2026-10-26. The scale knob operates on the existing units/division
+editor, keeping its exact-entry and selected-channel axis contracts. Separate
+Fine buttons for each channel and the timebase change only the adjustment mode.
+Coarse 1–2–5 steps, fine logarithmic adjustments, keyboard, wheel and mouse
+behavior are described above. The gain field remains available for exact edits.
+The position knob is smaller; its adjacent Zero button and double-click reset
+operate on that channel alone. These controls remain session-local.
+
+Next: channel-zero and trigger-level/time markers. The optional history overview
+and broader Scope refinement remain later work.
+
+Validation: Release `build-tests` and 83/83 CTest entries pass (80.09 s) with
+recording scratch files on the project disk. After the final compact-heading
+adjustment, the Live module and seven focused rendered cases pass; four cases
+pass at each of 150% and 200%. Raw samples, independent channels and exact
+values are preserved. Captures/helpers are outside Git under
+`build-release/rigol-6c-*`; ST-016 records the light-palette label contrast found
+during review. See the release plan for the environment retry and limits.
+
+### Item 6, increment 6d — channel zero and trigger plot handles
+
+Implemented 2026-10-26. Visible channels have colored zero badges in a reserved
+left margin. Dragging selects and moves only that channel; double-click/Home
+resets its position. Coincident badges fan out without changing their true zero:
+leaders and arrow tips stay at the transformed raw zero. Hidden traces have no
+badge. Off-screen positions are indicated at an edge and can be brought back
+by dragging. Channel moves are immediate and do not freeze acquisition.
+
+The right-hand orange L handle edits the raw threshold through the trigger
+input's own gain/position, even when another channel is selected. The upper P
+handle edits pre-trigger percentage. Trigger handles preview during drag and
+commit once on release through the existing settings owner, with its existing
+validation, saved-setting feedback, clear/freeze and rearm behavior. Escape
+cancels pending trigger edits; changed source/preset revisions reject stale
+gestures. Owner rejection is visible in compact status. A marker edit does not
+commit drafts in other fields. Numeric controls remain available.
+
+P is a next-acquisition coverage guide; the captured T reference remains tied
+to the actual sampled event. P does not move the captured timeline when zooming
+or panning. Keyboard and accessibility actions edit markers; graph-navigation
+shortcuts yield while a marker has focus. Hover help shows channel identity and
+raw trigger units. Marker gestures do not pan/zoom or place inspection cursors.
+Ordinary plots and dock previews keep their existing marker-free layout.
+Narrow Time plots number every second/fifth division as needed; subticks keep
+the ten-division graticule and numeric precision is unchanged.
+
+The planned channel/trigger markers are implemented. Broader Scope refinement
+and the optional retained-history overview remain later work.
+
+Validation: final native Release suite passes 83/83 at two jobs (117.60 s).
+Three rendered marker cases pass at 100%, 150% and 200%, including direct tip
+hits, owner/capture lifecycle and grid division checks, without QML warnings.
+The full workflow covers XY hover shutdown after disconnecting all observation
+views before Time-plot deletion. Final live-load UI gap is 87 ms; the release
+plan also records an eight-job 370 ms outlier and an isolated 133 ms pass.
+Reviewed captures and local-only helpers are under `build-release/rigol-6d-*`.
 
 ### Reported time/preview defects — implemented refinement, 2026-10-25
 

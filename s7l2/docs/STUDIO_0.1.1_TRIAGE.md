@@ -1,7 +1,7 @@
 # Studio manual testing — 0.1.1 candidates
 
 Started: 2026-10-24.
-Status: the original ST-001–ST-008 maintenance increments and ST-010 are implemented; ST-011/ST-013/ST-014/ST-015 are implemented in the refinement increment. ST-009 is deferred to 0.2.0; ST-012 remains open. The five time/preview findings are implemented in the instrument refinement. Rigol controls are in progress: grouping, channel selection, direct units/division entry and selected-channel axes are implemented; coarse/fine stepping, position reset and markers remain. Broader Scope optimization remains planned.
+Status: the original ST-001–ST-008 maintenance increments and ST-010 are implemented; ST-011/ST-013/ST-014/ST-015 are implemented in the refinement increment. ST-009 is deferred to 0.2.0; ST-012 and ST-016 remain open. The five time/preview findings are implemented in the instrument refinement. Rigol controls are in progress: grouping, channel selection, direct units/division entry and selected-channel axes are implemented; coarse/fine 1–2–5 stepping and position reset are implemented in 6c; channel-zero and trigger level/pre-trigger markers are implemented in 6d. Broader Scope optimization remains planned.
 Release 0.1.1 is tentative; this log does not commit its scope or date.
 
 ## Planning started — 2026-10-24
@@ -737,6 +737,24 @@ collection-stage discussion below is historical.
   and verify that the library matches the element's actual origin. Define
   validation according to whether the edited name is a display title or an identifier;
   do not silently conflate them.
+
+### ST-016 — Low-contrast labels with a light application palette
+
+- **Found:** 2026-10-26 during 6c screenshot review, using the existing local
+  `instrumentControls(light)` GUI workflow. Several ordinary labels (Position,
+  Gain ×, timebase title, channel name and hover text) appear dark against the
+  Live Oscilloscope's dark background. Button text and channel-colored scale
+  labels remain readable; numeric summary faces use the light palette.
+- **Status:** recorded for investigation; no theme fix is included in 6c.
+  This is a rendered finding, not a failed coarse/fine/reset behavior check.
+- **Evidence:** `build-release/rigol-6c-finished-100/instrument-controls-light-1024.png`,
+  with corresponding 150%/200% captures outside Git. The viewer sets an explicit
+  instrument palette and stylesheet; the exact source of the inconsistent
+  child-label/summary palette still needs tracing. No native desktop theme
+  failure or regression from 6b is established by this synthetic-palette check.
+- **Acceptance:** readable label and numeric-face contrast in both synthetic
+  palettes and the supported desktop theme, preserving channel accents,
+  disabled-state distinction, exact values and plot/control geometry.
 
 ## Explicitly assigned to 0.2.0
 

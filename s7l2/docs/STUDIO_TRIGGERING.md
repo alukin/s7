@@ -25,6 +25,31 @@ Changing trigger settings on a running model starts fresh trigger history.
 Enabling triggering after a run has finished does not retrospectively search its
 retained data. Use Rolling to inspect that data, or configure triggering and rerun.
 
+## Plot handles
+
+In Auto, Normal and Single modes the Time plot shows an orange **L** level
+handle at the right and a **P…%** pre-trigger handle above the graticule. They
+are also available while waiting for the first capture. L follows the trigger
+input's gain/position, independently of the selected Y-axis channel; hovering or
+dragging it shows the original-unit threshold. Moving display gain/position does
+not change the raw threshold. A level outside the plot is indicated at the edge;
+a display value that cannot be represented has no level handle.
+
+Drag to preview, then release to apply through the same trigger settings owner
+as the form. Release starts fresh trigger history and leaves Freeze, exactly as
+editing the existing settings does. A pending drag leaves the capture and its
+inspection/export input untouched. Escape cancels a pending trigger edit;
+rejected edits preserve the accepted settings and show the reason in status.
+Changing the source or trigger preset invalidates a pending old edit. Other
+fields' partially typed text is not committed by a plot handle.
+
+P sets an integer 0–100% pre-trigger percentage for the next acquisition. The
+separate **T** line still marks the actual sampled event at relative time zero
+in the displayed capture. Pan/zoom can move T relative to P; P does not retime
+the captured samples. Retained-position rounding remains the rule below.
+Left/Right adjusts P by one percent; Home/End sets 0/100%. L uses Up/Down and
+smaller Shift steps. The handles are hidden in Rolling mode.
+
 ## Saved trigger settings
 
 Trigger settings are saved with the diagram as the LiveOscilloscope observer's

@@ -1353,7 +1353,7 @@ private slots:
         auto* scroll = viewer.findChild<QScrollArea*>("live.controlsScroll"); QVERIFY(scroll);
         auto* selected = viewer.findChild<QToolButton*>("live.channel.7.select"); QVERIFY(selected && selected->isVisible());
         QTest::mouseClick(selected, Qt::LeftButton); QVERIFY(selected->isChecked());
-        auto* gain = viewer.findChild<QDoubleSpinBox*>("live.channel.7.gain"); auto* dial = viewer.findChild<QDial*>("live.channel.7.gain.dial"); QVERIFY(gain && dial && dial->isVisible());
+        auto* gain = viewer.findChild<QDoubleSpinBox*>("live.channel.7.gain"); auto* dial = viewer.findChild<QDial*>("live.channel.7.scale.dial"); QVERIFY(gain && dial && dial->isVisible());
         const auto before = dial->value(); dial->setFocus(); QTest::keyClick(dial, Qt::Key_Right); QVERIFY(dial->value() != before); QVERIFY(gain->value() != 1.);
         auto* gainEdit = gain->findChild<QLineEdit*>(); QVERIFY(gainEdit);
         QVERIFY(gain->width() < 150); // Compact editor scrolls for full precision; tooltip retains the value.

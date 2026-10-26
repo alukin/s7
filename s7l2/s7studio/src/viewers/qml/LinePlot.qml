@@ -12,6 +12,150 @@ Rectangle {
     color: plot.instrumentTheme ? "#141a21" : "white"
     objectName: "viewer.linePlot"
     required property QtObject plot
+    property bool markerDragging: false
+    onMarkerDraggingChanged: if (markerDragging) { plot.hover(0, false); plot.hoverPoint(0, 0, false) }
+    readonly property bool triggerHandles: !!plot.instrumentTrigger.enabled
+    readonly property real areaLeft: view.x + view.plotArea.x
+    readonly property real areaTop: view.y + view.plotArea.y
+    function bounded(value, low, high) { return Math.max(low, Math.min(high, value)) }
+    function markerY(value) { return bounded((plot.yMax-value)/(plot.yMax-plot.yMin)*view.plotArea.height, 0, view.plotArea.height) }
+    readonly property int instrumentTickStride: {
+        if (!plot.channelZeroMarkers.length) return 1
+        const divisionPixels = Math.max(1, view.width-view.marginLeft-view.marginRight-30)/10
+        for (const stride of [1, 2, 5]) if (divisionPixels*stride >= 88) return stride
+        return 10
+    }
+    // Fan coincident badges in the margin. Leaders and arrow tips still point
+    // to the true zero, so no display offset is invented to separate handles.
+    function zeroBadgeCenter(channel) {
+        const entries = []
+        const height = view.plotArea.height
+        for (let i = 0; i < plot.channelZeroMarkers.length; ++i)
+            if (plot.channelZeroMarkers[i].visible)
+                entries.push({channel: i, y: bounded(markerY(plot.channelZeroMarkers[i].value), 11, Math.max(11, height-11))})
+        entries.sort((a, b) => a.y-b.y || a.channel-b.channel)
+        const gap = Math.min(24, Math.max(1, (height-22)/Math.max(1, entries.length-1)))
+        for (let i = 1; i < entries.length; ++i) entries[i].y = Math.max(entries[i].y, entries[i-1].y+gap)
+        if (entries.length && entries[entries.length-1].y > height-11) {
+            entries[entries.length-1].y = height-11
+            for (let i = entries.length-2; i >= 0; --i) entries[i].y = Math.min(entries[i].y, entries[i+1].y-gap)
+        }
+        for (const entry of entries) if (entry.channel === channel) return entry.y
+        return 11
+    }
+
+    component InstrumentHandle: Rectangle {
+        id: handle
+        property real value: 0
+        property real minimum: 0
+        property real maximum: 1
+        property real keyboardStep: (maximum-minimum)/100
+        property bool horizontal: false
+        property bool resettable: false
+        property bool highlighted: false
+        property string label: ""
+        property string accessibleLabel: ""
+        property string help: accessibleLabel
+        property color accent: "#ffaf58"
+        property real candidate: value
+        property bool externalPressed: false
+        readonly property bool dragging: (markerMouse.pressed || externalPressed) && markerMouse.moved
+        function beginExternal(point) { externalPressed = true; markerMouse.begin(point) }
+        function moveExternal(point) { if (externalPressed && !markerMouse.reset) markerMouse.updatePoint(point) }
+        function finishExternal() { markerMouse.finish(); externalPressed = false }
+        function cancelExternal() { markerMouse.cancel(); externalPressed = false }
+        function resetPosition() { markerMouse.resetEdit() }
+        readonly property real displayedValue: dragging ? candidate : value
+        signal edited(real value)
+        signal previewed(real value)
+        signal selected()
+        width: 26; height: 22; radius: 3
+        color: markerMouse.containsMouse || activeFocus || markerMouse.pressed || externalPressed ? "#34475a" : "#202a35"
+        border.color: accent
+        border.width: activeFocus || highlighted ? 2 : 1
+        activeFocusOnTab: visible
+        onActiveFocusChanged: plot.markerFocus = activeFocus
+        onVisibleChanged: if (!visible && activeFocus) root.forceActiveFocus()
+        Accessible.role: Accessible.Slider
+        Accessible.name: accessibleLabel
+        Accessible.description: "Drag or use arrow keys. Shift uses smaller vertical steps." + (resettable ? " Home or double-click resets position to zero." : "")
+        Accessible.focusable: true
+        Accessible.onIncreaseAction: edited(root.bounded(value+keyboardStep, minimum, maximum))
+        Accessible.onDecreaseAction: edited(root.bounded(value-keyboardStep, minimum, maximum))
+        Keys.onPressed: event => {
+            if (event.key === Qt.Key_Escape && (markerMouse.pressed || externalPressed)) {
+                markerMouse.reset = true; markerMouse.moved = false; root.markerDragging = false
+                event.accepted = true; return
+            }
+            let direction = 0
+            if (horizontal && event.key === Qt.Key_Right || !horizontal && event.key === Qt.Key_Up) direction = 1
+            if (horizontal && event.key === Qt.Key_Left || !horizontal && event.key === Qt.Key_Down) direction = -1
+            if (direction) {
+                selected()
+                edited(root.bounded(value+direction*keyboardStep*(!horizontal && event.modifiers & Qt.ShiftModifier ? 0.1 : 1), minimum, maximum))
+                event.accepted = true
+            } else if (event.key === Qt.Key_Home && (resettable || horizontal)) {
+                selected(); edited(resettable ? 0 : minimum); event.accepted = true
+            } else if (event.key === Qt.Key_End && horizontal) {
+                edited(maximum); event.accepted = true
+            }
+        }
+        Text { anchors.centerIn: parent; text: handle.label; color: handle.accent; font.pixelSize: 11; font.bold: true }
+        Rectangle {
+            visible: markerMouse.containsMouse || handle.dragging
+            z: 20
+            width: Math.min(240, Math.max(140, root.width-12)); height: helpText.height+12
+            x: handle.mapToItem(root, handle.width+6, 0).x+width > root.width ? -width-6 : handle.width+6
+            y: Math.max(-handle.mapToItem(root, 0, 0).y, Math.min(0, root.height-handle.mapToItem(root, 0, 0).y-height))
+            color: "#f0202a35"; border.color: handle.accent; radius: 3
+            Text { id: helpText; x: 6; y: 6; width: parent.width-12; text: handle.help; textFormat: Text.PlainText; wrapMode: Text.WordWrap; color: "#e8eef7"; font.pixelSize: 12 }
+        }
+        MouseArea {
+            id: markerMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            preventStealing: true
+            cursorShape: handle.horizontal ? Qt.SizeHorCursor : Qt.SizeVerCursor
+            property point start: Qt.point(0, 0)
+            property real startValue: 0
+            property real span: 0
+            property real pixels: 1
+            property bool moved: false
+            property bool reset: false
+            property string revision: ""
+            function updatePoint(point) {
+                if (revision !== String(plot.instrumentTrigger.revision)) {
+                    reset = true; moved = false; root.markerDragging = false; return
+                }
+                const delta = handle.horizontal ? point.x-start.x : start.y-point.y
+                if (!moved && Math.abs(delta) < 2) return
+                moved = true
+                handle.candidate = root.bounded(startValue+delta/pixels*span, handle.minimum, handle.maximum)
+                handle.previewed(handle.candidate)
+            }
+            function begin(point) {
+                root.markerDragging = true; handle.forceActiveFocus(Qt.MouseFocusReason); handle.selected()
+                revision = String(plot.instrumentTrigger.revision)
+                start = point
+                startValue = root.bounded(handle.value, handle.minimum, handle.maximum)
+                span = handle.maximum-handle.minimum
+                pixels = Math.max(1, handle.horizontal ? view.plotArea.width : view.plotArea.height)
+                handle.candidate = handle.value; moved = false; reset = false
+            }
+            function finish() {
+                if (!reset && moved && revision === String(plot.instrumentTrigger.revision)) handle.edited(handle.candidate)
+                root.markerDragging = false
+            }
+            function cancel() { root.markerDragging = false; moved = false }
+            function resetEdit() { if (handle.resettable) { reset = true; handle.selected(); handle.edited(0) } }
+            onPressed: mouse => begin(mapToItem(root, mouse.x, mouse.y))
+            onPositionChanged: mouse => { if (pressed && !reset) updatePoint(mapToItem(root, mouse.x, mouse.y)) }
+            onReleased: finish()
+            onCanceled: cancel()
+            onDoubleClicked: resetEdit()
+            onWheel: wheel => { wheel.accepted = true }
+        }
+    }
 
     // Small dock previews need fewer labels than the full viewer.
     function compactTickStep(span, divisions) {
@@ -64,9 +208,9 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: yTitle.visible ? yTitle.height + 4 : 0
         anchors.bottomMargin: xTitle.visible ? xTitle.height + 4 : 0
-        marginLeft: plot.channelAxis ? 50 : 8
-        marginRight: 16
-        marginTop: 12
+        marginLeft: (plot.channelAxis ? 50 : 8) + (plot.channelZeroMarkers.length ? 38 : 0)
+        marginRight: root.triggerHandles ? 40 : 16
+        marginTop: root.triggerHandles ? 28 : 12
         marginBottom: 8
 
         theme: GraphsTheme {
@@ -88,9 +232,9 @@ Rectangle {
             max: plot.xMax
             titleVisible: false
             labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.timeDivisions ? (max-min)/10 : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.width-90)/70)) : 0
+            tickInterval: plot.timeDivisions ? (max-min)/10*root.instrumentTickStride : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.width-90)/70)) : 0
             tickAnchor: plot.timeDivisions ? min : 0
-            subTickCount: 1
+            subTickCount: plot.timeDivisions && root.instrumentTickStride > 1 ? root.instrumentTickStride-1 : 1
         }
         axisY: ValueAxis {
             min: plot.yMin
@@ -120,7 +264,7 @@ Rectangle {
         visible: plot.channelAxis
         x: view.x + 6
         y: view.y + view.plotArea.y
-        width: Math.max(0, view.plotArea.x - 20)
+        width: Math.max(0, view.plotArea.x - 20 - (plot.channelZeroMarkers.length ? 38 : 0))
         height: view.plotArea.height
         readonly property real division: (plot.yMax-plot.yMin)/Math.max(1, plot.verticalDivisions)
         readonly property real first: Math.ceil(plot.yMin/division - 1e-9)
@@ -223,6 +367,7 @@ Rectangle {
         }
     }
     Item {
+        objectName: "viewer.capturedTrigger"
         visible: plot.triggerVisible && plot.xMin <= 0 && plot.xMax >= 0
         x: Math.min(view.x + view.plotArea.x - plot.xMin / (plot.xMax - plot.xMin) * view.plotArea.width,
                     view.x + view.plotArea.x + view.plotArea.width - 2)
@@ -231,10 +376,99 @@ Rectangle {
         Rectangle { width: 1; height: parent.height; color: "#ed6c02" }
         Text { text: "T"; x: -10; color: "#b34a00"; font.bold: true }
     }
+    // The integer model keeps delegates (and pointer grabs) alive while the
+    // owner publishes new marker values during a drag.
+    Repeater {
+        model: plot.channelZeroMarkers.length
+        Item {
+            id: zero
+            required property int index
+            width: root.width; height: root.height
+            readonly property var info: plot.channelZeroMarkers[index] || {visible: false, value: 0, color: "transparent"}
+            visible: !!info.visible
+            z: info.selected ? 12 : 11
+            readonly property real actualY: root.areaTop + root.markerY(info.value)
+            InstrumentHandle {
+                id: zeroHandle
+                objectName: "viewer.channelZero." + zero.index
+                x: root.areaLeft-36
+                y: root.areaTop+root.zeroBadgeCenter(zero.index)-height/2
+                value: zero.info.value; minimum: plot.yMin; maximum: plot.yMax
+                accent: zero.info.color
+                label: (zero.index+1) + (value > maximum ? "↑" : value < minimum ? "↓" : "")
+                accessibleLabel: "Channel " + (zero.index+1) + " zero level: " + zero.info.name
+                help: "CH " + (zero.index+1) + ": raw zero. Drag to move this trace; double-click to reset position."
+                resettable: true; highlighted: !!zero.info.selected
+                onSelected: plot.selectLegend(zero.index)
+                onPreviewed: value => plot.moveChannelZero(zero.index, value)
+                onEdited: value => plot.moveChannelZero(zero.index, value)
+            }
+            Rectangle {
+                x: zeroHandle.x+zeroHandle.width; y: zeroHandle.y+zeroHandle.height/2
+                readonly property real dx: root.areaLeft-8-x
+                readonly property real dy: zero.actualY-y
+                width: Math.sqrt(dx*dx+dy*dy); height: 1
+                rotation: Math.atan2(dy, dx)*180/Math.PI; transformOrigin: Item.TopLeft
+                color: zero.info.color; opacity: 0.7
+            }
+            Text {
+                objectName: "viewer.channelZero.tip." + zero.index
+                x: root.areaLeft-10; y: zero.actualY-height/2; text: "▶"; color: zero.info.color; font.pixelSize: 12
+                MouseArea {
+                    anchors.fill: parent; anchors.margins: -2
+                    preventStealing: true; cursorShape: Qt.SizeVerCursor
+                    onPressed: mouse => zeroHandle.beginExternal(mapToItem(root, mouse.x, mouse.y))
+                    onPositionChanged: mouse => { if (pressed) zeroHandle.moveExternal(mapToItem(root, mouse.x, mouse.y)) }
+                    onReleased: zeroHandle.finishExternal()
+                    onCanceled: zeroHandle.cancelExternal()
+                    onDoubleClicked: zeroHandle.resetPosition()
+                    onWheel: wheel => { wheel.accepted = true }
+                }
+            }
+        }
+    }
+    InstrumentHandle {
+        id: levelHandle
+        objectName: "viewer.triggerLevel"
+        visible: root.triggerHandles && !!plot.instrumentTrigger.levelVisible
+        z: 12; width: 34
+        x: root.areaLeft+view.plotArea.width+3
+        y: root.areaTop+root.markerY(displayedValue)-height/2
+        value: plot.instrumentTrigger.level || 0; minimum: plot.yMin; maximum: plot.yMax
+        label: "L" + (displayedValue > maximum ? "↑" : displayedValue < minimum ? "↓" : "")
+        accessibleLabel: "Trigger level, channel " + (plot.instrumentTrigger.channel+1) + ", raw value " + plot.instrumentTrigger.rawLevel
+        help: "CH " + (plot.instrumentTrigger.channel+1) + " trigger: " + ((displayedValue-(plot.instrumentTrigger.offset || 0))/(plot.instrumentTrigger.gain || 1)).toPrecision(5) + " " + (plot.instrumentTrigger.unit || "units") + ". Release to apply and rearm."
+        onEdited: value => plot.moveTriggerLevel(value)
+    }
+    Rectangle {
+        visible: levelHandle.dragging
+        x: root.areaLeft; y: levelHandle.y+levelHandle.height/2
+        width: view.plotArea.width; height: 1; color: levelHandle.accent; opacity: 0.5
+    }
+    InstrumentHandle {
+        id: positionHandle
+        objectName: "viewer.triggerPosition"
+        visible: root.triggerHandles
+        z: 12; width: 46
+        x: root.bounded(root.areaLeft+displayedValue/100*view.plotArea.width-width/2, root.areaLeft, root.areaLeft+view.plotArea.width-width)
+        y: root.areaTop-height-3
+        horizontal: true; minimum: 0; maximum: 100; keyboardStep: 1
+        value: plot.instrumentTrigger.pretriggerPercent || 0
+        label: "P" + Math.round(displayedValue) + "%"
+        accessibleLabel: "Pre-trigger position, " + value + " percent. Applies to the next acquisition."
+        help: "Pre-trigger: " + Math.round(displayedValue) + "%. Release to apply to a fresh acquisition. The T line marks the captured event."
+        onEdited: value => plot.moveTriggerPosition(value)
+    }
+    Rectangle {
+        visible: positionHandle.dragging
+        x: root.areaLeft+positionHandle.displayedValue/100*view.plotArea.width; y: root.areaTop
+        width: 1; height: view.plotArea.height; color: positionHandle.accent; opacity: 0.5
+    }
     TapHandler {
-        enabled: plot.inspectionEnabled
+        enabled: plot.inspectionEnabled && !root.markerDragging
         acceptedButtons: Qt.LeftButton
         onTapped: (eventPoint, button) => {
+            root.forceActiveFocus()
             const area = view.plotArea
             if (area.width > 0 && area.height > 0)
                 plot.pick((eventPoint.position.x - view.x - area.x) / area.width,
@@ -245,6 +479,7 @@ Rectangle {
         id: inspectionHover
         enabled: plot.inspectionEnabled
         function updateReadout() {
+            if (root.markerDragging) return
             const area = view.plotArea
             const x = point.position.x - view.x - area.x
             const y = point.position.y - view.y - area.y
@@ -278,6 +513,7 @@ Rectangle {
 
     // Owners choose horizontal-only or two-axis navigation in the bridge.
     WheelHandler {
+        enabled: !root.markerDragging
         target: null
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: (event) => {
@@ -294,6 +530,7 @@ Rectangle {
 
     DragHandler {
         id: drag
+        enabled: !root.markerDragging
         target: null
         property point last: Qt.point(0, 0)
         onActiveChanged: last = Qt.point(0, 0)
@@ -402,7 +639,7 @@ Rectangle {
         id: hoverTip
         objectName: "viewer.hoverTip"
         readonly property point pointer: inspectionHover.point.position
-        visible: plot.inspectionEnabled && inspectionHover.hovered && plot.hoverTip.length > 0
+        visible: plot.inspectionEnabled && !root.markerDragging && inspectionHover.hovered && plot.hoverTip.length > 0
         width: tipColumn.implicitWidth + 14
         height: tipColumn.implicitHeight + 10
         x: pointer.x + 18 + width <= root.width ? pointer.x + 18 : Math.max(0, pointer.x - 18 - width)

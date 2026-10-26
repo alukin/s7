@@ -448,6 +448,138 @@ pass. Rendered labels and controls were reviewed at 1024×768. Local helpers and
 captures remain outside Git under `build-release/rigol-6b-*`; broad suites are
 not repeated for this bounded increment.
 
+## Rigol controls, item 6 increment 6c — 2026-10-26
+
+The larger vertical Scale knob now adjusts the existing units/division value
+instead of a continuous gain multiplier. Vertical scale and horizontal timebase
+default to coarse 1–2–5 stepping, with independent Fine buttons selecting 100
+logarithmic steps per decade. Clockwise reduces units/division or seconds/division.
+Exact numeric entry is preserved; changing adjustment mode leaves values intact.
+An off-ladder exact value steps to the next stop in the requested direction,
+and non-ladder range bounds remain reachable. Keyboard, numeric spin arrows and
+mouse drags use the selected mode. One wheel detent applies one scale step,
+independent of desktop text-scroll settings; partial wheel deltas accumulate.
+
+The smaller position knob has a Zero button and double-click reset. Both reset
+only the selected channel's display offset. Exact gain remains a separate field;
+its range, scale conversion and selected-channel axes remain unchanged. Fine/Zero
+sit beside the vertical headings to keep the controls compact. Controls use
+existing presentation settings, with no changes to sampling or causal execution.
+
+Item 6 continues with channel-zero and trigger-level/time markers. The optional
+history overview remains later work.
+
+Verification: native Release `build-tests` and **83/83 CTest entries pass**
+(80.09 s, eight jobs), including all four GUI suites and the live responsiveness
+workload. An initial run exhausted the temporary-storage quota and encountered
+an empty executable left by an interrupted sandboxed build; after rebuilding
+that generated executable, the complete run passed with `TMPDIR` on the project
+disk. No production code was changed for those environment failures.
+
+After the final heading/spacing adjustment, Studio rebuilds, the Live
+Oscilloscope module passes again, and seven focused rendered cases pass at
+100%. Four cases pass at each of 150% and 200%, without skips. Checks cover
+coarse/fine and exact values, one edit per key action, single and partial wheel
+detents, clockwise dragging, non-ladder bounds, reset, channel isolation,
+selected-axis units, raw-sample preservation, frozen/finished sources and the
+600-second saved symplectic oscillator workflow. Screenshots were reviewed at
+1024×768; the larger-scale runs use a 1440×900 logical workspace. Light/dark
+behavior checks pass, but screenshot review exposed low-contrast labels with
+the synthetic light application palette; this is tracked as ST-016 rather than
+claimed resolved. Local helpers/captures remain outside Git under
+`build-release/rigol-6c-*`. Windows and relocated package qualification are not
+repeated for this increment.
+
+## Compact Live Oscilloscope controls — 2026-10-26
+
+Maintainer-requested follow-up to 6c: scale, position and timebase knobs now all
+use 72×72 logical pixels. Input fields use compact, font-based heights and less
+vertical padding. Reduced section/page spacing leaves room for the default
+Time controls and collapsed settings headings above the sample readout.
+
+The former fixed eight-line Time readout now starts at approximately three
+lines, below an adjustable vertical divider. Drag to enlarge it or down to hide
+it and give the settings more room. Settings scroll when sections expand; the
+readout and controls occupy separate splitter panes. Hover text does not resize
+the panes or plot. Analysis readouts retain their existing sizing. These are
+presentation changes; coarse/fine behavior, exact entry and sample data remain.
+
+Verification: native Studio Release rebuild and the Live Oscilloscope module
+pass. Existing light/dark instrument, 600-second symplectic oscillator and
+prototype workflows pass. Local rendered geometry checks pass at 100% and 200%,
+including eight channels at 1024×768, equal knob sizes, compact field heights,
+all default Time controls/headings above the readout, divider hide/restore,
+expanded Trigger scrolling and stable hover geometry. Captures/helpers remain
+outside Git under `build-release/compact-live-*`; broader suite, Windows and
+packaging checks are not repeated for this layout-only follow-up.
+
+## Rigol controls, item 6 increment 6d — 2026-10-26
+
+Time now has colored channel-zero badges, an orange L trigger-level handle and
+an upper P pre-trigger percentage handle. Coincident channel badges fan out in
+a reserved margin while leaders/arrow tips indicate their true raw-zero levels.
+Dragging selects and moves one channel; double-click/Home resets its position.
+Off-screen handles indicate direction and can be dragged into range. Channel
+visibility, independent gains, raw data and the selected-channel axes are kept.
+
+Trigger handles preview during drag and apply once on release through the
+existing owner/validation path. L uses the trigger channel's gain and offset,
+independently of selected-channel axes, with original-unit hover help. P edits
+the next acquisition's pre-trigger percentage. The captured T reference remains
+at the sampled event, including after pan/zoom. Release has the existing fields'
+clear/rearm/leave-Freeze behavior; canceled or rejected pending edits preserve
+the accepted settings. Source/preset revisions invalidate stale gestures.
+Unrelated draft fields are not committed. Rejection appears in compact status.
+
+Mouse, keyboard and accessibility actions are supported without graph pan/zoom
+or cursor-placement conflicts. Generic plots and previews have no new handles.
+Runtime stepping, source sampling, analysis retention and raw measurement/export
+semantics are unchanged. No vendor code or Qt Quick Controls dependency is added.
+
+Narrow Time plots now number fewer X ticks without rounding away precision;
+subticks preserve ten model-time divisions. This keeps fractional trigger-fit
+labels readable after reserving the marker margins. All observation-view
+callbacks are disconnected before any plot is destroyed: XY hover teardown
+previously reached the already deleted Time instrument bridge, as caught by
+the full GUI workflow during this increment.
+
+Verification: native Release `build-tests` and Studio build pass. The final
+**83/83 CTest entries pass in 117.60 s with two jobs**, including all four GUI
+suites and 58 GUI workflow cases without skips. The 35-second eight-channel
+100 ksample/s plus unthrottled workload records **87 ms maximum UI gap** in that
+run, against the unchanged 250 ms test limit. One eight-job run recorded a
+370 ms gap and failed this check; an isolated rerun passed at 133 ms. Keep that
+parallel-load outlier explicit; these checks do not qualify arbitrary host load.
+
+Three local marker-gesture cases pass at each of 100%, 150% and 200% with no
+QML warnings. They cover coincident badges, direct arrow-tip and badge drag,
+selection/reset/keyboard behavior, hidden/off-screen channels, raw-value and
+other-channel preservation, trigger-channel calibration, preview versus commit,
+owner rejection, Escape, stale source/preset edits and captured-T identity under
+pan/zoom. Tick stride/subticks retain ten divisions. Final screenshots were
+reviewed at 1024×768 logical pixels. Helpers/captures remain outside Git under
+`build-release/rigol-6d-*`. The user guide and trigger help describe the handles;
+Windows, sanitizer and relocated package qualification are not repeated here.
+
+## Live controls wheel routing follow-up — 2026-10-26
+
+Wheel events delivered to a focused observation plot now use the pointer's
+global position to find the receiving widget within that viewer window. Events
+over controls propagate through labels and blank content to the scroll viewport,
+skipping disabled editors. The instrument panel contains unhandled events,
+including those at scroll limits. Normal plot zoom and enabled controls' wheel
+adjustments remain available.
+
+The initial native X11 left/middle/right scrolling checks passed; a synthetic
+focused-plot fallback event over the sidebar reproduced the lost scrolling
+before this fix. Final local checks pass at 100%, 150% and 200% display scale:
+normal/wide sidebars, correct/stale plot-local coordinates, disabled editors,
+native wheel dispatch, scroll limits, all four tabs and intentional plot zoom.
+The Live Oscilloscope CTest and focused instrument/live-analysis GUI workflows
+also pass. Studio builds successfully. Helpers and diagnostics remain outside
+Git under `build-release/wheel-routing-*`; the full suite and Windows/Wayland
+qualification were not repeated for this follow-up.
+
 ## Scope and decisions to review
 
 Improve the existing local 0.1.0 workflows: edit, configure, run and observe.
