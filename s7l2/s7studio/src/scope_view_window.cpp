@@ -25,11 +25,13 @@
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QTimer>
+#include <QVariantMap>
 #include <QVBoxLayout>
 #include <QtGraphs/QLineSeries>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 namespace s7studio::ui {
@@ -118,7 +120,9 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     plot_ = new viewers::LinePlotView(this);
     plot_->setLegendVisible(true);
     plot_->setAxisTitles(QStringLiteral("model time (s)"), QStringLiteral("value (unit unspecified)"));
-    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
+    plot_->bridge()->inspectionEnabled = true;
+    emit plot_->bridge()->inspectionChanged();
+    plot_->setToolTip(QStringLiteral("Hover over a trace for stored sample values. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     rootLayout->addWidget(plot_, 1);
     timeScrollBar_ = new QScrollBar(Qt::Horizontal, this);
     timeScrollBar_->setRange(0, 10000);
@@ -147,6 +151,7 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
         setVisibleData();
     });
     connect(plot_, &viewers::LinePlotView::xRangeChanged, this, &ScopeViewWindow::onXRangeChanged);
+    connect(plot_, &viewers::LinePlotView::hoveredPoint, this, &ScopeViewWindow::updateHover);
 }
 
 ScopeViewWindow::~ScopeViewWindow()
@@ -188,6 +193,7 @@ void ScopeViewWindow::appendSample(const QString& channel, const double timeSeco
 
 void ScopeViewWindow::syncSeries(const bool restyle)
 {
+    if (restyle) updateHover(0, 0, false);
     const auto& series = recording_.series();
     for (auto it = lines_.begin(); it != lines_.end();) {
         if (restyle || !series.contains(it.key())) {
@@ -275,6 +281,72 @@ void ScopeViewWindow::clearComparisons()
     recording_.clearComparisons();
     syncSeries(true);
     refreshPlot();
+}
+
+void ScopeViewWindow::updateHover(const double timeSeconds, const double value, const bool active)
+{
+    constexpr double tolerance = 10.0; // physical pointer pixels
+    auto* bridge = plot_->bridge();
+    const auto area = bridge->plotAreaSize;
+    const double sx = area.width() / (plot_->xMax() - plot_->xMin());
+    const double sy = area.height() / (plot_->yMax() - plot_->yMin());
+    QVariantList rows, markers;
+    double bestDistance = std::numeric_limits<double>::infinity();
+    double bestTime = 0.0;
+    if (active && area.width() > 0 && area.height() > 0 && std::isfinite(sx) && std::isfinite(sy)) {
+        for (auto it = recording_.series().cbegin(); it != recording_.series().cend(); ++it) {
+            auto* line = lines_.value(it.key());
+            if (!line || line->count() == 0) continue;
+            const auto nearby = recording_.surroundingSamples(it.key(), timeSeconds);
+            const auto pixel = [&](const QPointF& sample) {
+                return QPointF((sample.x() - timeSeconds) * sx, (sample.y() - value) * sy);
+            };
+            double distance = std::numeric_limits<double>::infinity();
+            std::optional<QPointF> sample;
+            for (const auto& point : {nearby.before, nearby.after}) {
+                if (!point || !std::isfinite(point->y())) continue;
+                const auto p = pixel(*point);
+                if (const double d = std::hypot(p.x(), p.y()); d < distance) {
+                    distance = d;
+                    sample = *point;
+                }
+            }
+            if (nearby.before && nearby.after && std::isfinite(nearby.before->y())
+                && std::isfinite(nearby.after->y())) {
+                const auto p = pixel(*nearby.before), q = pixel(*nearby.after);
+                const auto delta = q - p;
+                const double length = QPointF::dotProduct(delta, delta);
+                const double fraction = length > 0
+                    ? std::clamp(-QPointF::dotProduct(p, delta) / length, 0.0, 1.0) : 0.0;
+                const double segmentDistance = std::hypot(p.x() + fraction * delta.x(),
+                                                           p.y() + fraction * delta.y());
+                if (segmentDistance < distance) {
+                    distance = segmentDistance;
+                    sample = fraction < .5 ? nearby.before : nearby.after;
+                }
+            }
+            if (!sample || distance > tolerance) continue;
+            const QString unit = it->channelUnit.isEmpty() ? QString() : QStringLiteral(" %1").arg(it->channelUnit);
+            const QString label = it->comparisonLabel.isEmpty() ? it->channelName
+                : it->comparisonLabel + QStringLiteral(" / ") + it->channelName;
+            rows.append(QVariantMap{{"text", QStringLiteral("%1 = %2%3 • %4 s")
+                .arg(label).arg(sample->y(), 0, 'g', 8).arg(unit).arg(sample->x(), 0, 'g', 8)},
+                {"color", line->color()}});
+            markers.append(QVariantMap{{"x", sample->x()}, {"y", sample->y()}, {"color", line->color()}});
+            if (distance < bestDistance) { bestDistance = distance; bestTime = sample->x(); }
+        }
+    }
+    if (rows != bridge->hoverTip || markers != bridge->hoverMarkers) {
+        bridge->hoverTip = rows;
+        bridge->hoverMarkers = markers;
+        emit bridge->hoverTipChanged();
+    }
+    const bool cursorVisible = !rows.isEmpty();
+    if (bridge->cursorVisible != cursorVisible || (cursorVisible && bridge->cursorX != bestTime)) {
+        bridge->cursorVisible = cursorVisible;
+        if (cursorVisible) bridge->cursorX = bestTime;
+        emit bridge->inspectionChanged();
+    }
 }
 
 void ScopeViewWindow::showRunDetails()

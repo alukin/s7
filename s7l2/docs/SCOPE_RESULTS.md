@@ -7,6 +7,12 @@ The current run remains a solid trace. All traces use their original model
 timestamps; loading does not interpolate, shift time or run the model again.
 Use names such as `pendulum_trapezoid_10kHz.s7scope` to identify configurations.
 
+Hover near a Scope trace to see its stored model time and channel value. A ring
+marks the sample and a vertical cursor marks its time. The readout uses the
+retained full-resolution recording when it is available, including samples
+omitted from the bounded plot preview; imported comparison traces show their
+run label. Move outside the trace to clear the readout.
+
 **Clear display** clears only this presentation. Recorded source data remains available for export and for replay after viewer recreation.
 Starting a run clears current samples; with **Clear scope traces before run**
 unchecked, it first moves the preceding recording into a labelled `Run <ID>`
