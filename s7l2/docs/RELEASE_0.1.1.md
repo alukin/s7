@@ -1,6 +1,7 @@
 # S7 0.1.1 — interface design and implementation plan
 
-Date: 2026-10-24; updated 2026-10-25. Status: ST-001/ST-002/ST-003/scoped ST-004/ST-005/ST-006/ST-007/ST-008 and font/palette fixes implemented and locally verified;
+Date: 2026-10-24; updated 2026-10-27. Status: ST-001/ST-002/ST-003/scoped ST-004/ST-005/ST-006/ST-007/ST-008 and font/palette fixes implemented and locally verified;
+recorded Scope analysis is a 0.1.1 candidate pending maintainer visual review;
 release qualification remains.
 
 The maintainer accepted the proposed order of work and requested step 1:
@@ -362,9 +363,10 @@ at 2000×2600 and do not qualify a physical GPU, native Windows, or NodeRuntime
 throughput. JSON evidence is in `build-release/observer-artifacts/qual-*-*.json`
 outside Git; commands are in STUDIO_GUI_TESTING.md.
 
-The next implementation increment is **7 — release qualification**. Native
-Windows interaction, physical desktop/GPU review and relocated package checks
-remain separate from the local implementation evidence above.
+The remaining gate is **7 — release qualification**, alongside visual review
+of the recorded Scope analysis candidate below. Native Windows interaction,
+physical desktop/GPU review and relocated package checks remain separate from
+the local implementation evidence above.
 
 ## Implemented refinement — ST-011/ST-013/ST-014/ST-015, 2026-10-25
 
@@ -626,6 +628,35 @@ also pass. Studio builds successfully. Helpers and diagnostics remain outside
 Git under `build-release/wheel-routing-*`; the full suite and Windows/Wayland
 qualification were not repeated for this follow-up.
 
+## Recorded Scope analysis candidate — 2026-10-27
+
+This 0.1.1 branch adds a shared run and model-time interval to the Scope Time,
+Spectrum, Correlation (cross or auto) and XY Trajectory tabs. Current runs read
+the authoritative observation journal on a cancellable worker; saved and
+archived comparisons read exact retained samples through the disk spill index.
+The drawing preview is never analysis input. Missing steps and nonfinite
+values are handled by the existing analysis contracts without filling or
+resampling. FFTW, spectrum and correlation now accept arbitrary interval
+lengths from 64 to 65,536, so a completed run can use all selected positions
+when it fits. Spectrum exposes resolution as FFT N and reports bin spacing.
+
+**Settings → Scope Analysis Limit…** bounds each request to the newest exact
+positions in the selected interval. The default is 16,384 positions and the
+largest menu choice is 65,536. The Scope status states the actual time span,
+`dt`, whether the cap shortened the interval, and recording incompleteness.
+The snapshots remain read-only and do not change simulation scheduling or
+capture. The user guide and Scope results guide describe the controls.
+
+Local verification: native Release Studio build; seven focused Scope, viewer,
+lifecycle, observation, provenance, spectrum and paired-analysis CTest entries
+pass, including saved-comparison analysis. The complete native Xvfb GUI
+workflow passes, including Time, Spectrum, cross-correlation,
+auto-correlation and XY; it also exercises the Settings dialog and a capped
+snapshot. Screenshots are in `build-release/s7studio/gui-artifacts/scope-analysis-preview/`
+outside Git. Maintainer visual review, full 0.1.1 regression/packaging and
+physical-display qualification remain open. No PR has been published for this
+candidate yet.
+
 ## Scope and decisions to review
 
 Improve the existing local 0.1.0 workflows: edit, configure, run and observe.
@@ -663,7 +694,7 @@ with toolbars/context menus. Use an ellipsis for commands that open a dialog.
 | Diagram | Select/Move, Draw Wire; Insert Text Frame; Text Frame → existing text/font/size/color/fill/line formatting controls; Page → A5, A4, A3, Letter, then Portrait/Landscape |
 | Run | Run Configuration…; Run, Pause, Resume, Stop; Reset; Keep Previous Scope Traces (checkable) |
 | Nodes | Headless Nodes; Deploy to Nodes…, Open Deployed Diagram… |
-| Settings | Scope Temporary Data Directory… |
+| Settings | Scope Temporary Data Directory…; Scope Analysis Limit… |
 | Help | S7 Studio Help; About S7 Studio…, About Qt… |
 
 Save Diagram as Library Element describes the existing operation that packages
@@ -1033,6 +1064,7 @@ Every test process uses temporary state/settings directories rather than HOME.
 | Lifecycle | Idle, Preparing, short run, Running, acknowledged Pause/Resume, Stop, completion, failure, Reset, rerun, observer edit/delete/undo, document replacement and running/paused shutdown; stale data never labelled current. |
 | Layout | Start from Element Library, Headless Nodes and hidden docks; activate once; respect manual tab changes; keep stopped results; errors visible; restore selection and dock preferences without cross-document leakage. |
 | Controls | Gain endpoints and non-grid exact values; offset center/span/clamping; keyboard/wheel/mouse; no feedback loops; retention/trigger/raw-data semantics; A/B crossing and single-step; export format/progress/cancel. |
+| Recorded Scope analysis | Current and imported runs; full and visible time intervals; arbitrary N, sample cap and exact drawing-independent data; cross/auto lag convention, XY same-step pairing; gaps, nonfinite samples, missing rate and incomplete capture; continuous-run responsiveness. |
 | Visual/accessibility | Light/dark palettes at 100%, 150% and 200% scaling; 1440×900 and 1024×768 logical work areas; text/focus/disabled contrast; tooltip while disabled; keyboard traversal; no clipped values, buttons or long documentation. |
 
 For performance acceptance, compare the same workloads with the panel hidden
