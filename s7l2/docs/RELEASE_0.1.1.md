@@ -342,10 +342,13 @@ seven gaps over the 250 ms target. A prior candidate run reached 279 ms with
 seven gaps; an unguarded title-update run reached 1,528 ms with four gaps,
 including two over one second. The latter illustrates run-to-run sensitivity,
 so the result cannot be reported as passing. Timestamped
-60-second traces placed the longer gaps shortly after scrolls that replace dock
-Qt Quick scenes. A 5 Hz dock refresh and a shared preview QML engine were tried
-locally, then removed: their full two-minute measurements still exceeded the
-target. The gate remains open pending a scene-lifecycle improvement or an
+60-second traces placed the longer gaps shortly after dock scrolls. A 5 Hz
+dock refresh, a shared preview QML engine, and retained hidden dock surfaces
+were tried locally, then removed: their full two-minute measurements still
+exceeded the target. The retained-surface run reached 293 ms with six gaps
+over 250 ms and 1.04 GB peak RSS (`qual-cache-120.json`); this weakens the
+initial scene-construction hypothesis. The gate remains open pending isolation
+of the remaining UI work or an
 explicit release-scope decision. These measurements used Xvfb/software OpenGL
 at 2000×2600 and do not qualify a physical GPU, native Windows, or NodeRuntime
 throughput. JSON evidence is in `build-release/observer-artifacts/qual-*-*.json`
