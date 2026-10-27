@@ -20,12 +20,56 @@
 #include <QVBoxLayout>
 #include <QtGraphs/QLineSeries>
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace s7studio::ui {
 
 namespace {
 const QColor kTrajectoryColor("#2ca02c");
+
+auto drawBudget(viewers::LinePlotView* plot) -> qsizetype
+{
+    const auto area = plot->bridge()->plotAreaSize;
+    const auto extent = std::max(area.width(), area.height()) * plot->devicePixelRatioF();
+    return std::isfinite(extent) && extent > 0
+        ? std::clamp(static_cast<qsizetype>(std::ceil(extent * 4)), qsizetype(1024),
+            qsizetype(PhasePortraitViewWindow::kMaxDrawnPoints))
+        : qsizetype(2560);
+}
+
+auto pointsForPlot(const QList<QPointF>& points, const qsizetype budget) -> QList<QPointF>
+{
+    if (points.size() <= budget) return points;
+    const auto buckets = std::max(qsizetype(1), (budget - 2) / 7);
+    const auto stride = (points.size() - 2 + buckets - 1) / buckets;
+    QList<QPointF> reduced;
+    reduced.reserve(budget);
+    reduced.push_back(points.front());
+    for (qsizetype begin = 1; begin < points.size() - 1; begin += stride) {
+        const auto end = std::min(begin + stride, points.size() - 1);
+        qsizetype minX = -1, maxX = -1, minY = -1, maxY = -1, gap = -1;
+        for (qsizetype i = begin; i < end; ++i) {
+            const auto& point = points[i];
+            if (!std::isfinite(point.x()) || !std::isfinite(point.y())) {
+                if (gap < 0) gap = i;
+                continue;
+            }
+            if (minX < 0 || point.x() < points[minX].x()) minX = i;
+            if (maxX < 0 || point.x() > points[maxX].x()) maxX = i;
+            if (minY < 0 || point.y() < points[minY].y()) minY = i;
+            if (maxY < 0 || point.y() > points[maxY].y()) maxY = i;
+        }
+        qsizetype indices[]{begin, minX, maxX, minY, maxY, gap, end - 1};
+        std::sort(std::begin(indices), std::end(indices));
+        qsizetype previous = -1;
+        for (const auto index : indices)
+            if (index >= 0 && index != previous) { reduced.push_back(points[index]); previous = index; }
+    }
+    reduced.push_back(points.back());
+    return reduced;
+}
 } // namespace
 
 auto PhasePortraitViewWindow::viewerType() -> viewers::ViewerType
@@ -89,6 +133,9 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     repaintTimer_->setInterval(33);
     connect(repaintTimer_, &QTimer::timeout, this, &PhasePortraitViewWindow::refreshPlot);
     repaintTimer_->start();
+    connect(plot_->bridge(), &viewers::LinePlotBridge::plotAreaChanged, this, [this] {
+        if (drawBudget(plot_) != lastDrawBudget_) { dirty_ = true; refreshPlot(); }
+    });
 
     connect(clearButton_, &QPushButton::clicked, this, &PhasePortraitViewWindow::clearBuffers);
     connect(exportButton_, &QPushButton::clicked, this, &PhasePortraitViewWindow::exportRecordedCsv);
@@ -96,10 +143,12 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
 
 void PhasePortraitViewWindow::appendObservedSample(const viewers::ObservedSample& sample)
 {
-    if (sample.role == "x") xUnit_ = sample.unit;
-    if (sample.role == "y") yUnit_ = sample.unit;
-    plot_->setAxisTitles(xProbeName_ + (xUnit_.isEmpty() ? " (unit unspecified)" : " (" + xUnit_ + ")"),
-                         yProbeName_ + (yUnit_.isEmpty() ? " (unit unspecified)" : " (" + yUnit_ + ")"));
+    bool unitChanged = false;
+    if (sample.role == "x" && xUnit_ != sample.unit) { xUnit_ = sample.unit; unitChanged = true; }
+    if (sample.role == "y" && yUnit_ != sample.unit) { yUnit_ = sample.unit; unitChanged = true; }
+    if (unitChanged)
+        plot_->setAxisTitles(xProbeName_ + (xUnit_.isEmpty() ? " (unit unspecified)" : " (" + xUnit_ + ")"),
+                             yProbeName_ + (yUnit_.isEmpty() ? " (unit unspecified)" : " (" + yUnit_ + ")"));
     if (sample.role == QStringLiteral("x")) appendXSample(sample.step, sample.value);
     if (sample.role == QStringLiteral("y")) appendYSample(sample.step, sample.value);
 }
@@ -144,8 +193,8 @@ void PhasePortraitViewWindow::updateStatus()
     if (points_.size() >= kMaxPoints) {
         parts << QStringLiteral("trajectory trimmed to %1 points").arg(kMaxPoints);
     }
-    if (points_.size() > kMaxDrawnPoints) {
-        parts << QStringLiteral("drawing every %1th point").arg((points_.size() + kMaxDrawnPoints - 1) / kMaxDrawnPoints);
+    if (points_.size() > drawBudget(plot_)) {
+        parts << QStringLiteral("display reduced to plot resolution; export retains full data");
     }
     if (const auto totalDropped = droppedSamples_ + aligner_.discardedSteps(); totalDropped > 0) {
         parts << QStringLiteral("display dropped %1 samples").arg(totalDropped);
@@ -213,16 +262,8 @@ void PhasePortraitViewWindow::refreshPlot()
     }
 
     dirty_ = false;
-    if (points_.size() <= kMaxDrawnPoints) {
-        viewers::LinePlotView::setPoints(curve_, points_);
-    } else {
-        const qsizetype stride = (points_.size() + kMaxDrawnPoints - 1) / kMaxDrawnPoints;
-        QList<QPointF> drawn;
-        drawn.reserve(points_.size() / stride + 2);
-        for (qsizetype index = 0; index < points_.size(); index += stride) drawn.push_back(points_[index]);
-        if ((points_.size() - 1) % stride != 0) drawn.push_back(points_.back());
-        viewers::LinePlotView::setPoints(curve_, drawn);
-    }
+    lastDrawBudget_ = drawBudget(plot_);
+    viewers::LinePlotView::setPoints(curve_, pointsForPlot(points_, lastDrawBudget_));
 
     if (autoScaleCheck_->isChecked()) {
         static_cast<void>(plot_->fitAll());

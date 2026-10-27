@@ -316,6 +316,41 @@ preview overhead. The result is retained in
 responsiveness and memory attribution remain **unresolved release qualification
 work**, rather than a passed performance gate. See OPEN_PROBLEMS.md.
 
+### Mixed-load qualification follow-up — 2026-10-27
+
+A full-viewer-only mode was added to the opt-in observer benchmark, preserving
+the same synthetic 1 kHz sources and four open full viewers while keeping the
+dock hidden. The 60-second measurement reached a 187 ms maximum UI gap and
+823 MB peak RSS. Isolated 30-second runs identified Scope as the main geometry
+load (258 ms, 1,815 MB peak RSS) and Phase Portrait as the next contributor
+(175 ms, 586 MB final RSS); 3D and Live viewers were below 100 ms individually.
+
+Scope Time now reduces each displayed series by physical plot columns, keeping
+the first/last sample, per-column minimum and maximum, and a gap marker.
+Phase Portrait reduces its drawn trajectory to a plot-size budget while
+retaining ordered local X/Y extrema and endpoints. Zoom and resize recalculate
+the display from the retained recording; capture, source history and export
+remain at full resolution. The isolated Scope run fell to 107 ms and 452 MB
+peak RSS; Phase Portrait fell to 41 ms and 339 MB final RSS. Focused tests
+cover peaks, gaps, endpoints, export, trajectory order and extrema.
+
+The two-minute mixed workload with four full viewers and four active previews
+then sustained 1,000.007 published source steps/s with no capture error,
+5,461,911 recorded samples / 174.8 MB payload and 948 MB peak RSS on the final
+guarded run (`qual-guarded-120.json`). Its maximum UI gap was **310 ms**, with
+seven gaps over the 250 ms target. A prior candidate run reached 279 ms with
+seven gaps; an unguarded title-update run reached 1,528 ms with four gaps,
+including two over one second. The latter illustrates run-to-run sensitivity,
+so the result cannot be reported as passing. Timestamped
+60-second traces placed the longer gaps shortly after scrolls that replace dock
+Qt Quick scenes. A 5 Hz dock refresh and a shared preview QML engine were tried
+locally, then removed: their full two-minute measurements still exceeded the
+target. The gate remains open pending a scene-lifecycle improvement or an
+explicit release-scope decision. These measurements used Xvfb/software OpenGL
+at 2000×2600 and do not qualify a physical GPU, native Windows, or NodeRuntime
+throughput. JSON evidence is in `build-release/observer-artifacts/qual-*-*.json`
+outside Git; commands are in STUDIO_GUI_TESTING.md.
+
 The next implementation increment is **7 — release qualification**. Native
 Windows interaction, physical desktop/GPU review and relocated package checks
 remain separate from the local implementation evidence above.

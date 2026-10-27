@@ -279,6 +279,7 @@ void LinePlotView::setPoints(QLineSeries* series, const QList<QPointF>& points)
 
 void LinePlotView::setAxisTitles(const QString& xTitle, const QString& yTitle)
 {
+    if (xTitle_ == xTitle && yTitle_ == yTitle) return;
     xTitle_ = xTitle;
     yTitle_ = yTitle;
     emit bridge_->titlesChanged();

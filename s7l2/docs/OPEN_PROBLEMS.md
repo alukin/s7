@@ -2,18 +2,27 @@
 
 ## Mixed observer/full-viewer load — 0.1.1 qualification
 
-The final synthetic published-source check with 12 selected observers, four
+The original synthetic published-source check with 12 selected observers, four
 active dock previews and four open full viewers sustained 1,000.007 source
 steps/s without capture errors, but its 458 ms maximum UI timer gap exceeded
-the 250 ms target. Process RSS grew from 928 MB after warm-up to 3,026 MB over
-the two-minute measurement, alongside 175 MB of explicit recording payload.
-The 30-minute journal-free live-preview soak stayed below the latency target
-and finished below its warm RSS. Isolate full-viewer data/geometry work from
-dock preparation, compare against a full-viewer-only baseline, and resolve or
-explicitly scope the mixed-load limitation before claiming release performance
-qualification. Evidence: `build-release/observer-artifacts/mixed-full.json` and
-the implementation section in RELEASE_0.1.1.md. These are published-source UI
-measurements, not NodeRuntime throughput measurements.
+the 250 ms target. Process RSS reached 3,026 MB alongside 175 MB of recording
+payload. The 30-minute journal-free live-preview soak stayed below the latency
+target and finished below its warm RSS.
+
+Scope and Phase Portrait now limit drawn geometry to the physical plot size
+without reducing the captured samples. A matched two-minute mixed workload
+reached 310 ms maximum gap, with seven gaps over 250 ms, and 948 MB peak RSS
+on the final guarded run. Earlier candidate runs ranged from 279 ms to 1,528 ms
+maximum gaps, so the latency result remains variable.
+The final full-viewer-only baseline reached 187 ms and 823 MB peak RSS over
+60 seconds. The remaining long mixed-load gaps correlate with scrolling and
+the creation of new dock Qt Quick scenes. Reducing dock refresh to 5 Hz and
+sharing a QML engine were measured and discarded because neither passed the
+full two-minute latency gate. The mixed-load gate remains open: optimize scene
+lifecycle or obtain an explicit release-scope decision before claiming it
+passed. Evidence and commands are in RELEASE_0.1.1.md and
+STUDIO_GUI_TESTING.md. These are software-rendered published-source UI
+measurements, not NodeRuntime throughput or physical-GPU measurements.
 
 ## Live observer rebinding — follow-up to 0.1.1
 

@@ -102,6 +102,7 @@ private:
     bool dirty_ = false;
     bool updatingTimeScrollBar_ = false;
     bool hasTimeRange_ = false;
+    qsizetype lastPlotPixelColumns_ = 0;
     double dataMinTime_ = 0.0;
     double dataMaxTime_ = 0.0;
 
