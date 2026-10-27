@@ -15,11 +15,12 @@ reached 310 ms maximum gap, with seven gaps over 250 ms, and 948 MB peak RSS
 on the final guarded run. Earlier candidate runs ranged from 279 ms to 1,528 ms
 maximum gaps, so the latency result remains variable.
 The final full-viewer-only baseline reached 187 ms and 823 MB peak RSS over
-60 seconds. The remaining long mixed-load gaps correlate with scrolling and
-the creation of new dock Qt Quick scenes. Reducing dock refresh to 5 Hz and
-sharing a QML engine were measured and discarded because neither passed the
-full two-minute latency gate. The mixed-load gate remains open: optimize scene
-lifecycle or obtain an explicit release-scope decision before claiming it
+60 seconds. The remaining long mixed-load gaps correlate with scrolling, but
+retaining hidden dock scenes did not eliminate them (293 ms maximum, six gaps
+over 250 ms, 1.04 GB peak RSS). Reducing dock refresh to 5 Hz and sharing a
+QML engine also failed the full two-minute latency gate. Those experiments
+were removed. The mixed-load gate remains open: isolate the remaining UI work
+or obtain an explicit release-scope decision before claiming it
 passed. Evidence and commands are in RELEASE_0.1.1.md and
 STUDIO_GUI_TESTING.md. These are software-rendered published-source UI
 measurements, not NodeRuntime throughput or physical-GPU measurements.
