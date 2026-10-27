@@ -3,6 +3,7 @@
 #include "analysis/spectrum_worker.hpp"
 #include "analysis/worker_pool.hpp"
 #include <QThreadPool>
+#include <QStringList>
 #include <atomic>
 #include <mutex>
 
@@ -12,6 +13,7 @@ struct SpectrumWorker::State {
         std::shared_ptr<const observation::LiveFrame> frame;
         SpectrumSettings settings;
         std::uint64_t revision, epoch;
+        bool allChannels;
     };
     mutable std::mutex mutex;
     std::atomic<std::uint64_t> epoch{1};
@@ -20,7 +22,7 @@ struct SpectrumWorker::State {
     std::optional<SpectrumResult> ready;
     std::uint64_t replaced = 0;
     std::uint64_t analyzedEpoch = 0; // Accessed only by the sole active runnable.
-    SpectrumAnalyzer analyzer;
+    std::vector<std::unique_ptr<SpectrumAnalyzer>> analyzers;
     std::shared_ptr<const observation::LiveFrame> analyzedFrame;
 };
 SpectrumWorker::SpectrumWorker() : state_(std::make_shared<State>()) { (void)analysisPool(); }
@@ -30,13 +32,14 @@ void SpectrumWorker::cancel()
     std::lock_guard lock(state_->mutex);
     ++state_->epoch; state_->pending.reset(); state_->ready.reset(); state_->replaced = 0;
 }
-void SpectrumWorker::submit(std::shared_ptr<const observation::LiveFrame> frame, SpectrumSettings settings, std::uint64_t revision)
+void SpectrumWorker::submit(std::shared_ptr<const observation::LiveFrame> frame, SpectrumSettings settings,
+                            std::uint64_t revision, bool allChannels)
 {
     if (!frame) return;
     {
         std::lock_guard lock(state_->mutex);
         if (state_->pending) ++state_->replaced;
-        state_->pending = State::Request{std::move(frame), std::move(settings), revision, state_->epoch.load()};
+        state_->pending = State::Request{std::move(frame), std::move(settings), revision, state_->epoch.load(), allChannels};
         if (state_->running) return;
         state_->running = true;
     }
@@ -49,18 +52,54 @@ void SpectrumWorker::submit(std::shared_ptr<const observation::LiveFrame> frame,
                 request = std::move(state->pending); state->pending.reset();
             }
             if (state->analyzedEpoch != request->epoch) {
-                state->analyzer.reset(); state->analyzedFrame.reset(); state->analyzedEpoch = request->epoch;
+                state->analyzers.clear(); state->analyzedFrame.reset(); state->analyzedEpoch = request->epoch;
             }
             SpectrumResult result;
             try {
-                result = state->analyzer.analyze(*request->frame, request->settings,
-                    [&] { return state->epoch.load() != request->epoch; });
+                const bool all = request->allChannels && !request->settings.iq;
+                const auto count = all ? static_cast<std::size_t>(request->frame->channels.size()) : std::size_t(1);
+                if (state->analyzers.size() != count) {
+                    state->analyzers.clear();
+                    for (std::size_t i = 0; i < count; ++i) state->analyzers.push_back(std::make_unique<SpectrumAnalyzer>());
+                }
+                if (!all) {
+                    result = state->analyzers.front()->analyze(*request->frame, request->settings,
+                        [&] { return state->epoch.load() != request->epoch; });
+                } else if (count == 0) {
+                    result.message = QStringLiteral("No input channels are available for Spectrum.");
+                } else {
+                    QStringList failures;
+                    bool ready = false, allReused = true;
+                    for (std::size_t i = 0; i < count; ++i) {
+                        auto settings = request->settings;
+                        settings.channel = i;
+                        auto channel = state->analyzers[i]->analyze(*request->frame, settings,
+                            [&] { return state->epoch.load() != request->epoch; });
+                        if (channel.state == SpectrumResult::State::Cancelled) {
+                            result.state = SpectrumResult::State::Cancelled;
+                            break;
+                        }
+                        if (channel.state != SpectrumResult::State::Ready) {
+                            if (!ready && failures.isEmpty()) result = channel;
+                            failures.push_back(request->frame->channels[static_cast<qsizetype>(i)].name
+                                + QStringLiteral(": ") + channel.message);
+                            continue;
+                        }
+                        if (!ready) { result = channel; ready = true; }
+                        allReused &= channel.reused;
+                        result.traces.push_back({i, channel.unit, std::move(channel.values), std::move(channel.peakHold)});
+                    }
+                    if (result.state != SpectrumResult::State::Cancelled) {
+                        result.reused = ready && allReused;
+                        result.message = failures.join(QStringLiteral("; "));
+                    }
+                }
             } catch (const std::exception& ex) {
-                state->analyzer.reset();
+                state->analyzers.clear();
                 result.state = SpectrumResult::State::Unavailable;
                 result.message = QStringLiteral("Spectrum error: %1").arg(QString::fromUtf8(ex.what()));
             } catch (...) {
-                state->analyzer.reset(); result.message = QStringLiteral("Unknown spectrum error.");
+                state->analyzers.clear(); result.message = QStringLiteral("Unknown spectrum error.");
             }
             result.runId = request->frame->runId; result.generation = request->frame->generation;
             if (!result.reused) state->analyzedFrame = request->frame;

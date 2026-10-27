@@ -419,18 +419,13 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     connect(saveButton, &QPushButton::clicked, this, &ScopeViewWindow::saveRunResults);
     connect(openButton, &QPushButton::clicked, this, &ScopeViewWindow::openRunResultsFile);
     connect(removeButton, &QPushButton::clicked, this, &ScopeViewWindow::clearComparisons);
-    controls->addStretch(1);
-    statusLabel_ = new QLabel(this);
-    statusLabel_->setObjectName(QStringLiteral("viewer.status"));
-    statusLabel_->setTextFormat(Qt::PlainText);
-    statusLabel_->setWordWrap(true);
-
     rootLayout->addLayout(controls);
 
     plot_ = new viewers::LinePlotView(this);
     plot_->setLegendVisible(true);
     plot_->setAxisTitles(QStringLiteral("model time (s)"), QStringLiteral("value (unit unspecified)"));
     plot_->bridge()->inspectionEnabled = true;
+    plot_->bridge()->hoverTipEnabled = false;
     emit plot_->bridge()->inspectionChanged();
     plot_->setToolTip(QStringLiteral("Hover over a trace for stored sample values. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     tabs_ = new QTabWidget(this);
@@ -478,11 +473,10 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
         [showAnalysisControls](const int index) { showAnalysisControls->setVisible(index != 0); });
     showAnalysisControls->hide();
 
-    auto* analysisControls = new QHBoxLayout();
-    analysisControls->setSpacing(4);
+    controls->addSpacing(8);
     analysisRun_ = new QComboBox(this);
     analysisRun_->setObjectName(QStringLiteral("scope.analysisRun"));
-    analysisRun_->setFixedWidth(170);
+    analysisRun_->setFixedWidth(140);
     analysisRun_->setToolTip(QStringLiteral("Select the current run or a saved comparison for analysis."));
     analysisStart_ = ui::compactNumber(this);
     analysisEnd_ = ui::compactNumber(this);
@@ -502,31 +496,41 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
         QStringLiteral("Copy the current Time plot range into the analysis interval."));
     ui::compactActionButton(fullButton, QStyle::SP_TitleBarMaxButton, QStringLiteral("Use full run"),
         QStringLiteral("Set the analysis interval to the selected run's full time range."));
-    analyzeButton_ = new QPushButton(QStringLiteral("Analyze"), this);
+    analyzeButton_ = new QPushButton(this);
     analyzeButton_->setObjectName(QStringLiteral("scope.analyze"));
-    analyzeButton_->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
-    analyzeButton_->setToolTip(QStringLiteral("Analyze exact recorded samples in the selected run and time interval."));
-    analyzeButton_->setFixedHeight(28);
-    analysisControls->addWidget(new QLabel(QStringLiteral("Run"), this));
-    analysisControls->addWidget(analysisRun_);
-    analysisControls->addWidget(new QLabel(QStringLiteral("From"), this));
-    analysisControls->addWidget(analysisStart_);
-    analysisControls->addWidget(new QLabel(QStringLiteral("To"), this));
-    analysisControls->addWidget(analysisEnd_);
-    analysisControls->addWidget(visibleButton);
-    analysisControls->addWidget(fullButton);
-    analysisControls->addWidget(analyzeButton_);
-    analysisControls->addStretch(1);
+    ui::compactActionButton(analyzeButton_, QStyle::SP_MediaPlay, QStringLiteral("Analyze"),
+        QStringLiteral("Analyze exact recorded samples in the selected run and time interval."));
+    controls->addWidget(new QLabel(QStringLiteral("Run"), this));
+    controls->addWidget(analysisRun_);
+    controls->addWidget(new QLabel(QStringLiteral("From"), this));
+    controls->addWidget(analysisStart_);
+    controls->addWidget(new QLabel(QStringLiteral("To"), this));
+    controls->addWidget(analysisEnd_);
+    controls->addWidget(visibleButton);
+    controls->addWidget(fullButton);
+    controls->addWidget(analyzeButton_);
+    warningButton_ = new QToolButton(this);
+    warningButton_->setObjectName(QStringLiteral("scope.statusWarning"));
+    warningButton_->setIcon(style()->standardIcon(QStyle::SP_MessageBoxWarning));
+    warningButton_->setFixedSize(30, 28);
+    warningButton_->setAccessibleName(QStringLiteral("Scope recording warning"));
+    warningButton_->hide();
+    controls->addWidget(warningButton_);
+    controls->addStretch(1);
     analysisStatus_ = new QLabel(QStringLiteral("Select a run and interval, then Analyze."), this);
     analysisStatus_->setObjectName(QStringLiteral("scope.analysisStatus"));
     analysisStatus_->setWordWrap(true);
-    rootLayout->addLayout(analysisControls);
-    auto* statusRow = new QHBoxLayout();
-    statusRow->setSpacing(8);
-    statusRow->addWidget(statusLabel_, 1);
-    statusRow->addWidget(analysisStatus_, 2);
-    rootLayout->addLayout(statusRow);
     rootLayout->addWidget(tabs_, 1);
+    auto* readoutRow = new QHBoxLayout();
+    readoutRow->setSpacing(8);
+    readoutRow->addWidget(analysisStatus_, 1);
+    hoverReadout_ = new QLabel(this);
+    hoverReadout_->setObjectName(QStringLiteral("scope.hoverReadout"));
+    hoverReadout_->setTextFormat(Qt::PlainText);
+    hoverReadout_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    hoverReadout_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    readoutRow->addWidget(hoverReadout_, 1);
+    rootLayout->addLayout(readoutRow);
     connect(analyzeButton_, &QPushButton::clicked, this, &ScopeViewWindow::analyzeInterval);
     connect(visibleButton, &QPushButton::clicked, this, [this] {
         analysisStart_->setValue(plot_->xMin()); analysisEnd_->setValue(plot_->xMax());
@@ -591,6 +595,13 @@ ScopeViewWindow::~ScopeViewWindow()
     if (analysisJob_) { analysisJob_->worker.request_stop(); analysisJob_.reset(); }
     // The handler refers to this window's widgets.
     recording_.setStatusChangedHandler({});
+}
+
+bool ScopeViewWindow::refreshSource()
+{
+    const bool more = viewers::ObservationViewer::refreshSource();
+    updateStatus();
+    return more;
 }
 
 void ScopeViewWindow::showEvent(QShowEvent* event)
@@ -695,10 +706,11 @@ void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 void ScopeViewWindow::updateStatus()
 {
     const auto cacheStatus = recording_.statusText();
-    QStringList parts;
-    if (!sourceStatusText().isEmpty()) parts << sourceStatusText();
-    if (!cacheStatus.isEmpty()) parts << (source() ? QStringLiteral("display cache: ") : QString()) + cacheStatus;
-    statusLabel_->setText(parts.join(QStringLiteral(" | ")));
+    const bool incomplete = recording_.exportMayBeIncomplete() ||
+        (source() && source()->status().incomplete()) || previewDroppedCount() > 0;
+    warningButton_->setVisible(incomplete);
+    warningButton_->setToolTip(sourceStatusText() + (cacheStatus.isEmpty() ? QString()
+        : QStringLiteral("\nDisplay cache: ") + cacheStatus));
 }
 
 void ScopeViewWindow::clearBuffers()
@@ -777,6 +789,11 @@ void ScopeViewWindow::updateHover(const double timeSeconds, const double value, 
         bridge->hoverMarkers = markers;
         emit bridge->hoverTipChanged();
     }
+    QStringList values;
+    for (const auto& row : rows) values.push_back(row.toMap().value(QStringLiteral("text")).toString());
+    const auto readout = values.join(QStringLiteral("  |  "));
+    hoverReadout_->setText(readout);
+    hoverReadout_->setToolTip(readout);
     const bool cursorVisible = !rows.isEmpty();
     if (bridge->cursorVisible != cursorVisible || (cursorVisible && bridge->cursorX != bestTime)) {
         bridge->cursorVisible = cursorVisible;

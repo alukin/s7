@@ -3,6 +3,7 @@
 #pragma once
 #include "analysis/spectrum_worker.hpp"
 #include "analysis/window_inspection.hpp"
+#include <QList>
 #include <QWidget>
 class QComboBox;
 class QCheckBox;
@@ -12,6 +13,7 @@ class QLineEdit;
 class QLabel;
 class QTimer;
 class QProgressBar;
+class QLineSeries;
 namespace s7studio::ui { class InstrumentSidebar; }
 namespace s7studio::viewers {
 class LinePlotView;
@@ -22,7 +24,7 @@ public:
     ~SpectrumView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
     void setAnalysisSize(int samples);
-    void setSnapshotMode(bool snapshot) { snapshotMode_ = snapshot; updateStatus(); }
+    void setSnapshotMode(bool snapshot);
     void clear();
     void setSuspended(bool suspended);
     std::uint64_t analysisRequestCount() const { return submitted_; }
@@ -59,11 +61,12 @@ private:
     QComboBox *mode_, *channel_, *quadrature_, *size_, *window_, *quantity_, *scale_, *average_, *marker_;
     QSpinBox *count_, *fixedBin_;
     QDoubleSpinBox *alpha_, *reference_, *dbOffset_, *floor_, *frequencyOffset_;
-    QCheckBox *removeMean_, *peakHold_;
+    QCheckBox *removeMean_, *peakHold_, *allChannels_;
     QLineEdit* declaredUnit_;
     QLabel *status_, *readout_, *markerText_;
     QProgressBar* busy_;
     LinePlotView* plot_;
     ui::InstrumentSidebar* controls_;
+    QList<QLineSeries*> additionalLines_, additionalHolds_;
 };
 }

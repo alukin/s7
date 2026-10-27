@@ -648,6 +648,11 @@ The snapshots remain read-only and do not change simulation scheduling or
 capture. The user guide and Scope results guide describe the controls.
 The Scope header uses compact, labelled icon actions; analysis settings occupy
 a narrow column that can be hidden from the tab bar to expand the plot.
+The header now fits its run and interval controls on the same bar, and the
+redundant run status line is gone. Time hover values appear below the plot,
+so the cursor and values never cover each other. Spectrum overlays every real
+input by default and can switch to one input or I/Q; all recorded analysis
+plots use Time's light background.
 
 Local verification: native Release Studio build; seven focused Scope, viewer,
 lifecycle, observation, provenance, spectrum and paired-analysis CTest entries

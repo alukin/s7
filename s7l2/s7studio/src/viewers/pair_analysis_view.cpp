@@ -125,6 +125,17 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* cont
     pollTimer_ = new QTimer(this); pollTimer_->setInterval(16); connect(pollTimer_, &QTimer::timeout, this, &PairAnalysisView::poll);
     render(true);
 }
+void PairAnalysisView::setSnapshotMode(bool snapshot)
+{
+    snapshotMode_ = snapshot;
+    plot_->bridge()->instrumentTheme = !snapshot;
+    plot_->series()[0]->setColor(QColor(snapshot ? "#1f77b4" : "#54b8ff"));
+    dots_->setColor(QColor(snapshot ? "#1f77b4" : "#54b8ff"));
+    newest_->setColor(QColor(snapshot ? "#d62728" : "#ff7080"));
+    selected_->setColor(QColor(snapshot ? "#996000" : "#ffc36b"));
+    emit plot_->bridge()->legendChanged();
+    updateStatus();
+}
 PairAnalysisView::~PairAnalysisView() { worker_.cancel(); disconnect(plot_, nullptr, this, nullptr); delete plot_; }
 void PairAnalysisView::setAnalysisSize(int samples)
 {
@@ -245,7 +256,7 @@ void PairAnalysisView::render(bool fit)
                 LinePlotView::setScatterPoints(dots_, all);
                 if (mode_->currentIndex() == 1) {
                     const auto count = std::min<qsizetype>(64, segments.size());
-                    while (plot_->series().size() < count) { auto* series = plot_->addSeries("Segment", {QColor("#54b8ff")}); plot_->setLegendEntryVisible(series, false); }
+                    while (plot_->series().size() < count) { auto* series = plot_->addSeries("Segment", {QColor(snapshotMode_ ? "#1f77b4" : "#54b8ff")}); plot_->setLegendEntryVisible(series, false); }
                     for (qsizetype i = 0; i < count; ++i) LinePlotView::setPoints(plot_->series()[i], segments[i]);
                     if (segments.size() > count) displayWarning_ = "Line segment cap reached; remaining raw pairs are shown as dots.";
                 }
