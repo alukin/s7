@@ -11,9 +11,9 @@ target and finished below its warm RSS.
 
 Scope and Phase Portrait now limit drawn geometry to the physical plot size
 without reducing the captured samples. A matched two-minute mixed workload
-reached 310 ms maximum gap, with seven gaps over 250 ms, and 948 MB peak RSS
-on the final guarded run. Earlier candidate runs ranged from 279 ms to 1,528 ms
-maximum gaps, so the latency result remains variable.
+reached 271 ms maximum gap, with eight gaps over 250 ms, and 968 MB peak RSS
+after rebasing on the merged Scope hover change. Earlier runs ranged from
+279 ms to 1,528 ms maximum gaps, so the latency result remains variable.
 The final full-viewer-only baseline reached 187 ms and 823 MB peak RSS over
 60 seconds. The remaining long mixed-load gaps correlate with scrolling, but
 retaining hidden dock scenes did not eliminate them (293 ms maximum, six gaps
