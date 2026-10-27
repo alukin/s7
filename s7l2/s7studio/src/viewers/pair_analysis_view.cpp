@@ -93,6 +93,7 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* cont
     convention->setWordWrap(true); controls_->addSection(convention);
     busy_ = controls_->busy(); readout_ = controls_->readout(); status_ = controls_->status();
     plot_ = new LinePlotView(this); plot_->setObjectName("pair.plot"); plot_->setLegendVisible(true); plot_->bridge()->inspectionEnabled = true; plot_->bridge()->instrumentTheme = true;
+    plot_->bridge()->compactAxes = !xy;
     plot_->addSeries(xy ? "Trajectory" : "Correlation", {QColor("#54b8ff")});
     dots_ = plot_->addScatterSeries("Raw pairs", QColor("#54b8ff"));
     newest_ = plot_->addScatterSeries(xy ? "Newest pair" : "Peak lag", QColor("#ff7080"));
