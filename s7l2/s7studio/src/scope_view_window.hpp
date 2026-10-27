@@ -93,6 +93,7 @@ private:
     void updateTimeScrollBar();
     void scrollToTimePosition(int position);
     void onXRangeChanged();
+    void updateHover(double timeSeconds, double value, bool active);
 
     QString probeName_;
     ScopeRecording recording_;

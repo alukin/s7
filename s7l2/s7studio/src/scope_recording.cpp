@@ -530,6 +530,47 @@ auto ScopeRecording::visiblePoints(const QString& key, const double lowerTime, c
     return points;
 }
 
+auto ScopeRecording::surroundingSamples(const QString& key, const double timeSeconds) const -> SurroundingSamples
+{
+    const auto it = series_.constFind(key);
+    if (it == series_.cend() || !std::isfinite(timeSeconds)) return {};
+    const auto& series = it.value();
+    SurroundingSamples result;
+    const auto consider = [&](const double time, const double value) {
+        if (!std::isfinite(time)) return;
+        if (time <= timeSeconds && (!result.before || time > result.before->x()))
+            result.before = QPointF(time, value);
+        if (time >= timeSeconds && (!result.after || time < result.after->x()))
+            result.after = QPointF(time, value);
+    };
+    if (!series.spillFile || series.spillFailed) {
+        const auto sample = std::lower_bound(series.time.cbegin(), series.time.cend(), timeSeconds);
+        if (sample != series.time.cend()) consider(*sample, series.value[sample - series.time.cbegin()]);
+        if (sample != series.time.cbegin()) {
+            const auto previous = sample - 1;
+            consider(*previous, series.value[previous - series.time.cbegin()]);
+        }
+        if (series.hasSamples) consider(series.lastTime, series.lastValue);
+    }
+    if (!series.spillFile || series.spillIndex.isEmpty()) return result;
+
+    auto index = std::upper_bound(series.spillIndex.cbegin(), series.spillIndex.cend(), timeSeconds,
+        [](const double time, const Series::SpillIndexEntry& entry) { return time < entry.timeSeconds; });
+    if (index != series.spillIndex.cbegin()) --index;
+    if (!series.spillFile->seek(index->byteOffset)) return result;
+    QDataStream in(series.spillFile.data());
+    in.setByteOrder(QDataStream::LittleEndian);
+    for (qint64 sample = 0; sample <= kSpillIndexStride && !in.atEnd(); ++sample) {
+        double time = 0.0, value = 0.0;
+        in >> time >> value;
+        if (in.status() != QDataStream::Ok) break;
+        consider(time, value);
+        if (time >= timeSeconds) break;
+    }
+    series.spillFile->seek(series.spillFile->size());
+    return result;
+}
+
 void ScopeRecording::decimatePlotBuffer(Series& series)
 {
     series.plotStride *= 2;

@@ -941,6 +941,31 @@ private slots:
         QCOMPARE(graph.signalWires().size(), std::size_t(2));
         graph.undoStack()->redo(); QVERIFY(graph.elementNode("nested_copy1"));
     }
+    void scopeHoverShowsStoredSample() {
+        s7studio::ui::ScopeViewWindow viewer(QStringLiteral("hover-check"));
+        for (int i = 0; i <= 100; ++i) viewer.appendSample(i * .01, .5);
+        viewer.show(); viewer.raise(); viewer.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&viewer));
+        auto* plot = viewer.plotView();
+        auto* quick = plot->quickWidget(); QVERIFY(quick);
+        QTRY_COMPARE(quick->status(), QQuickWidget::Ready);
+        QMetaObject::invokeMethod(&viewer, "refreshPlot", Qt::DirectConnection);
+        auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
+        QTRY_VERIFY(graph->property("plotArea").toRectF().width() > 0);
+        const auto area = graph->property("plotArea").toRectF();
+        const QPointF onTrace(area.left() + (.5 - plot->xMin()) / (plot->xMax() - plot->xMin()) * area.width(),
+            area.top() + (plot->yMax() - .5) / (plot->yMax() - plot->yMin()) * area.height());
+        QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
+        auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
+        QTRY_VERIFY(tip->isVisible());
+        QVERIFY(plot->bridge()->hoverTip.front().toMap().value("text").toString().contains("hover-check = 0.5"));
+        QCOMPARE(plot->bridge()->hoverMarkers.size(), 1);
+        QVERIFY(plot->bridge()->cursorVisible);
+        QTest::mouseMove(quick, QPoint(2, 2));
+        QTRY_VERIFY(!tip->isVisible());
+        QVERIFY(plot->bridge()->hoverTip.isEmpty());
+    }
+
     void liveOscilloscopePrototype() {
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live.s7diagram"));
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);

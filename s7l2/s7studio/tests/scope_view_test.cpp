@@ -96,4 +96,56 @@ int main(int argc, char** argv)
             throw std::runtime_error("Refreshing reset a user zoom with Fit full run off");
         }
     }
+    // Hover must read the exact disk-backed recording, including a sample
+    // omitted from the bounded preview, and clear the readout on exit.
+    {
+        s7studio::ui::ScopeViewWindow scope(QStringLiteral("hover"));
+        for (int i = 0; i < 30'000; ++i)
+            scope.appendSample(i * .001, i == 20'001 ? 7.0 : 0.0);
+        QMetaObject::invokeMethod(&scope, "refreshPlot", Qt::DirectConnection);
+        auto* plot = scope.plotView();
+        const auto preview = plot->series().front()->points();
+        if (std::any_of(preview.cbegin(), preview.cend(),
+                [](const auto& point) { return point.y() == 7.0; }))
+            throw std::runtime_error("Hover fixture peak was not omitted from the preview");
+        plot->setXRange(19.99, 20.01);
+        plot->setYRange(-1.0, 8.0);
+        plot->bridge()->plotAreaSize = QSizeF(400, 200);
+        emit plot->hoveredPoint(20.001, 7.0, true);
+        const auto rows = plot->bridge()->hoverTip;
+        const auto markers = plot->bridge()->hoverMarkers;
+        if (rows.size() != 1 || !rows.front().toMap().value("text").toString().contains(QStringLiteral("= 7"))
+            || markers.size() != 1 || markers.front().toMap().value("y").toDouble() != 7.0
+            || !plot->bridge()->cursorVisible || std::abs(plot->bridge()->cursorX - 20.001) > 1e-12)
+            throw std::runtime_error("Scope hover did not show the exact stored sample");
+        emit plot->hoveredPoint(20.001, 7.0, false);
+        if (!plot->bridge()->hoverTip.isEmpty() || !plot->bridge()->hoverMarkers.isEmpty()
+            || plot->bridge()->cursorVisible)
+            throw std::runtime_error("Scope hover did not clear on pointer exit");
+    }
+    // Sparse line segments can be hovered between stored points; a NaN
+    // sample breaks that segment and must not create a false readout.
+    {
+        s7studio::ui::ScopeViewWindow scope(QStringLiteral("sparse"));
+        scope.appendSample(0.0, 0.0);
+        scope.appendSample(1.0, 1.0);
+        QMetaObject::invokeMethod(&scope, "refreshPlot", Qt::DirectConnection);
+        auto* plot = scope.plotView();
+        plot->setXRange(0.0, 1.0);
+        plot->setYRange(0.0, 1.0);
+        plot->bridge()->plotAreaSize = QSizeF(400, 200);
+        emit plot->hoveredPoint(.5, .5, true);
+        if (plot->bridge()->hoverTip.size() != 1 || plot->bridge()->hoverMarkers.size() != 1)
+            throw std::runtime_error("Scope hover missed a sparse line segment");
+        scope.clearSamples();
+        scope.appendSample(0.0, 0.0);
+        scope.appendSample(.5, std::numeric_limits<double>::quiet_NaN());
+        scope.appendSample(1.0, 1.0);
+        QMetaObject::invokeMethod(&scope, "refreshPlot", Qt::DirectConnection);
+        plot->setXRange(0.0, 1.0);
+        plot->setYRange(0.0, 1.0);
+        emit plot->hoveredPoint(.25, .25, true);
+        if (!plot->bridge()->hoverTip.isEmpty())
+            throw std::runtime_error("Scope hover crossed an explicit trace gap");
+    }
 }

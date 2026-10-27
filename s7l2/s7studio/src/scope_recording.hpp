@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 
 class QIODevice;
 class QTemporaryFile;
@@ -91,6 +92,13 @@ public:
     // the spill file for a zoomed view of a disk-backed series.
     [[nodiscard]] auto visiblePoints(const QString& key, double lower, double upper, bool fitFullRun) const
         -> QList<QPointF>;
+    struct SurroundingSamples {
+        std::optional<QPointF> before;
+        std::optional<QPointF> after;
+    };
+    // Retained samples on either side of model time. Disk-backed series use
+    // the spill index; a failed spill can only search its retained preview.
+    [[nodiscard]] auto surroundingSamples(const QString& key, double timeSeconds) const -> SurroundingSamples;
 
     // Same full-resolution CSV writer used by the export action. The caller
     // supplies a writable device; finite doubles retain round-trip precision.
