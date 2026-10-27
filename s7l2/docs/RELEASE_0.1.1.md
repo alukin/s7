@@ -329,8 +329,9 @@ Scope Time now reduces each displayed series by physical plot columns, keeping
 the first/last sample, per-column minimum and maximum, and a gap marker.
 Phase Portrait reduces its drawn trajectory to a plot-size budget while
 retaining ordered local X/Y extrema and endpoints. Zoom and resize recalculate
-the display from the retained recording; capture, source history and export
-remain at full resolution. The isolated Scope run fell to 107 ms and 452 MB
+the display from Scope's bounded preview or zoomed spill-file readback and
+Phase Portrait's retained points; capture, source history and export remain
+at full resolution. The isolated Scope run fell to 107 ms and 452 MB
 peak RSS; Phase Portrait fell to 41 ms and 339 MB final RSS. Focused tests
 cover peaks, gaps, endpoints, export, trajectory order and extrema.
 
@@ -347,7 +348,9 @@ dock refresh, a shared preview QML engine, and retained hidden dock surfaces
 were tried locally, then removed: their full two-minute measurements still
 exceeded the target. The retained-surface run reached 293 ms with six gaps
 over 250 ms and 1.04 GB peak RSS (`qual-cache-120.json`); this weakens the
-initial scene-construction hypothesis. The gate remains open pending isolation
+initial scene-construction hypothesis. In one diagnostic 60-second run the
+panel refresh itself stayed below 50 ms while the maximum UI gap was 237 ms;
+the 120-second failures remain unexplained. The gate remains open pending isolation
 of the remaining UI work or an
 explicit release-scope decision. These measurements used Xvfb/software OpenGL
 at 2000×2600 and do not qualify a physical GPU, native Windows, or NodeRuntime
