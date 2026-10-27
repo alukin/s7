@@ -3,11 +3,13 @@
 #pragma once
 #include <QWidget>
 #include <QStringList>
+#include <QStyle>
 class QDoubleSpinBox;
 class QDial;
 class QLabel;
 class QToolButton;
 class QProgressBar;
+class QPushButton;
 class QScrollArea;
 class QVBoxLayout;
 class QWheelEvent;
@@ -37,6 +39,8 @@ private:
 };
 
 QDoubleSpinBox* compactNumber(QWidget* parent);
+void compactActionButton(QPushButton* button, QStyle::StandardPixmap icon,
+                         const QString& name, const QString& help);
 // For editors created by compactNumber: synchronize the inactive readout too.
 void setCompactNumberValueSilently(QDoubleSpinBox* number, double value);
 

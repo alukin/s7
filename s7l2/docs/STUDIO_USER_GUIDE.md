@@ -268,7 +268,10 @@ Choose the temporary directory under Settings and keep free disk space.
 Use Scope **Save Run…** to persist `.s7scope` recordings, **Open Run…** to add
 saved comparisons and **Export Full CSV** for interchange. CSV does not carry
 all recording metadata. **Run details…** shows the frozen model and provenance.
+These Scope actions use compact icon buttons with tooltips and accessible names.
 Scope also has **Time**, **Spectrum**, **Correlation**, and **XY Trajectory** tabs.
+Use the arrow at the right of the analysis tabs to hide or show their settings
+column and expand the plot.
 Choose a current or comparison run, enter a model-time interval, then press
 **Analyze**. **Visible time** copies the Time plot's zoom range; **Full run**
 selects the chosen recording's span. Analysis reads exact retained samples,

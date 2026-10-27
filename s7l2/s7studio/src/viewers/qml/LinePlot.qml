@@ -232,7 +232,7 @@ Rectangle {
             max: plot.xMax
             titleVisible: false
             labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.timeDivisions ? (max-min)/10*root.instrumentTickStride : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.width-90)/70)) : 0
+            tickInterval: plot.timeDivisions ? (max-min)/10*root.instrumentTickStride : plot.compactAxes ? root.compactTickStep(max-min, Math.min(6, Math.floor((view.width-90)/70))) : 0
             tickAnchor: plot.timeDivisions ? min : 0
             subTickCount: plot.timeDivisions && root.instrumentTickStride > 1 ? root.instrumentTickStride-1 : 1
         }
@@ -242,7 +242,7 @@ Rectangle {
             titleVisible: false
             labelsVisible: !plot.channelAxis
             labelFormat: plot.verticalDivisions > 0 ? root.verticalTickFormat(max-min, plot.verticalDivisions) : plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.verticalDivisions > 0 ? (max-min)/plot.verticalDivisions : plot.compactAxes ? root.compactTickStep(max-min, Math.floor((view.height-60)/40)) : 0
+            tickInterval: plot.verticalDivisions > 0 ? (max-min)/plot.verticalDivisions : plot.compactAxes ? root.compactTickStep(max-min, Math.min(6, Math.floor((view.height-60)/40))) : 0
             tickAnchor: 0
             subTickCount: 1
         }

@@ -16,6 +16,9 @@ run label. Move outside the trace to clear the readout.
 The **Spectrum**, **Correlation**, and **XY Trajectory** tabs analyze a selected
 run and model-time interval. **Visible time** copies the current Time zoom;
 **Full run** selects the run span. Press **Analyze** to take a fresh snapshot.
+Scope uses compact icon buttons for display, file, and interval actions; hover
+or focus them for their names and descriptions. The arrow at the right of the
+analysis tabs hides or shows the settings column, giving the plot the full width.
 Current runs are read from the authoritative observation source; saved and
 archived runs are read from their full-resolution temporary recordings. The
 plot preview is never analysis input. The status states whether the configured

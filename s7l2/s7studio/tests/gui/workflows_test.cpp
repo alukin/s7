@@ -987,8 +987,12 @@ private slots:
         viewer.show(); viewer.raise(); viewer.activateWindow();
         QVERIFY(QTest::qWaitForWindowActive(&viewer));
         auto* tabs = viewer.findChild<QTabWidget*>(QStringLiteral("scope.analysisTabs")); QVERIFY(tabs);
+        auto* save = viewer.findChild<QPushButton*>(QStringLiteral("scope.saveRun")); QVERIFY(save);
+        QVERIFY(save->width() <= 30 && !save->icon().isNull() && !save->toolTip().isEmpty());
+        QVERIFY(tabs->y() < viewer.height()/4);
         auto* full = viewer.findChild<QPushButton*>(QStringLiteral("scope.fullAnalysisRange")); QVERIFY(full);
         auto* analyze = viewer.findChild<QPushButton*>(QStringLiteral("scope.analyze")); QVERIFY(analyze);
+        QVERIFY(!full->icon().isNull() && !full->toolTip().isEmpty());
         full->click(); analyze->click();
         auto* status = viewer.findChild<QLabel*>(QStringLiteral("scope.analysisStatus")); QVERIFY(status);
         QTRY_VERIFY(status->text().contains(QStringLiteral("1024 exact positions")));
@@ -996,13 +1000,26 @@ private slots:
         auto* spectrum = viewer.findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
         QTRY_VERIFY(spectrum->result().has_value());
         QCOMPARE(spectrum->result()->state, analysis::SpectrumResult::State::Ready);
+        QVERIFY(spectrum->controlPanel()->width() <= 275);
+        QVERIFY(spectrum->plotView()->width() >= tabs->width()*2/3);
         capture(&viewer, "scope-analysis-spectrum", true);
+        auto* toggleControls = viewer.findChild<QToolButton*>(QStringLiteral("scope.toggleAnalysisControls"));
+        QVERIFY(toggleControls && toggleControls->isVisible() && !toggleControls->toolTip().isEmpty());
+        const int plotWidth = spectrum->plotView()->width();
+        toggleControls->click();
+        QTRY_VERIFY(!spectrum->controlPanel()->isVisible());
+        QTRY_VERIFY(spectrum->plotView()->width() > plotWidth + 200);
+        capture(&viewer, "scope-analysis-spectrum-full-width", true);
+        toggleControls->click();
+        QTRY_VERIFY(spectrum->controlPanel()->isVisible());
         tabs->setCurrentIndex(2);
         auto* correlation = tabs->widget(2)->findChild<viewers::PairAnalysisView*>();
         if (!correlation) correlation = qobject_cast<viewers::PairAnalysisView*>(tabs->widget(2));
         QVERIFY(correlation);
         QTRY_VERIFY(correlation->result().has_value());
         QCOMPARE(correlation->result()->state, analysis::PairResult::State::Ready);
+        QVERIFY(correlation->controlPanel()->width() <= 275);
+        QVERIFY(correlation->plotView()->width() >= tabs->width()*2/3);
         capture(&viewer, "scope-analysis-correlation", true);
         auto* correlationMode = correlation->findChild<QComboBox*>(QStringLiteral("pair.mode")); QVERIFY(correlationMode);
         correlationMode->setCurrentIndex(1);
@@ -1014,6 +1031,8 @@ private slots:
         auto* trajectory = qobject_cast<viewers::PairAnalysisView*>(tabs->widget(3)); QVERIFY(trajectory);
         QTRY_VERIFY(trajectory->result().has_value());
         QCOMPARE(trajectory->result()->state, analysis::PairResult::State::Ready);
+        QVERIFY(trajectory->controlPanel()->width() <= 275);
+        QVERIFY(trajectory->plotView()->width() >= tabs->width()*2/3);
         capture(&viewer, "scope-analysis-trajectory", true);
         tabs->setCurrentIndex(0);
         capture(&viewer, "scope-analysis-time", true);
@@ -1034,6 +1053,9 @@ private slots:
         tabs->setCurrentIndex(1);
         QTRY_VERIFY(spectrum->result().has_value());
         QCOMPARE(spectrum->result()->firstStep, std::int64_t(960));
+        viewer.resize(900, 520);
+        QTRY_VERIFY(spectrum->plotView()->width() >= 550);
+        capture(&viewer, "scope-analysis-compact-900", true);
     }
 
     void liveOscilloscopePrototype() {

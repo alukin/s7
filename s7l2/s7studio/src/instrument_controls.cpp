@@ -13,6 +13,7 @@
 #include <QSignalBlocker>
 #include <QScrollArea>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QPainter>
 #include <QPaintEvent>
 #include <QFocusEvent>
@@ -167,6 +168,17 @@ protected:
 };
 }
 QDoubleSpinBox* compactNumber(QWidget* parent) { return new ExactNumber(parent); }
+void compactActionButton(QPushButton* button, const QStyle::StandardPixmap icon,
+                         const QString& name, const QString& help)
+{
+    button->setText({});
+    button->setIcon(button->style()->standardIcon(icon));
+    button->setIconSize({18, 18});
+    button->setFixedSize(30, 28);
+    button->setToolTip(name + QStringLiteral(" — ") + help);
+    button->setAccessibleName(name);
+    button->setAccessibleDescription(help);
+}
 void setCompactNumberValueSilently(QDoubleSpinBox* number, double value) {
     const QSignalBlocker block(number);
     number->setValue(value); static_cast<ExactNumber*>(number)->refreshReadout();
@@ -238,6 +250,7 @@ CollapsibleSection::CollapsibleSection(const QString& title, const QString& name
     setObjectName(name);
     auto* layout = new QVBoxLayout(this); layout->setContentsMargins(0, 0, 0, 0); layout->setSpacing(4);
     auto* toggle = new QToolButton(this); toggle->setObjectName(name + ".toggle"); toggle->setText(title);
+    toggle->setToolTip(QStringLiteral("Show or hide %1 settings.").arg(title));
     toggle->setProperty("sectionHeader", true);
     toggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon); toggle->setCheckable(true); toggle->setChecked(expanded);
     toggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed); toggle->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
