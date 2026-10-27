@@ -231,6 +231,31 @@ private slots:
         QCOMPARE(latest->runId, std::uint64_t(9)); QCOMPARE(latest->revision, std::uint64_t(3)); QCOMPARE(latest->values[0], 81.);
         QVERIFY(latest->frame); QCOMPARE(latest->frame->runId, std::uint64_t(9));
     }
+    void workerOverlaysAllRealInputsAndReportsInvalidChannels() {
+        SpectrumWorker worker;
+        SpectrumSettings settings; settings.size = 256; settings.window = SpectrumWindow::Rectangular;
+        auto input = std::make_shared<observation::LiveFrame>(frame(256, [](auto step) {
+            const double phase = 2*std::numbers::pi*static_cast<double>(step)/256;
+            return std::complex<double>(std::sin(11*phase), .5*std::sin(29*phase));
+        }));
+        worker.submit(input, settings, 1, true);
+        std::optional<SpectrumResult> result;
+        QTRY_VERIFY(result.has_value() || (result = worker.takeResult()).has_value());
+        QCOMPARE(result->state, SpectrumResult::State::Ready);
+        QCOMPARE(result->traces.size(), std::size_t(2));
+        QCOMPARE(result->traces[0].channel, std::size_t(0));
+        QCOMPARE(result->traces[1].channel, std::size_t(1));
+        QVERIFY(std::abs(result->traces[0].values[11]-1.) < 2e-13);
+        QVERIFY(std::abs(result->traces[1].values[29]-.5) < 2e-13);
+        input = std::make_shared<observation::LiveFrame>(*input);
+        input->values[2*7+1] = std::numeric_limits<double>::quiet_NaN();
+        worker.cancel(); worker.submit(input, settings, 2, true);
+        result.reset();
+        QTRY_VERIFY(result.has_value() || (result = worker.takeResult()).has_value());
+        QCOMPARE(result->state, SpectrumResult::State::Ready);
+        QCOMPARE(result->traces.size(), std::size_t(1));
+        QVERIFY(result->message.contains(QStringLiteral("Q:")));
+    }
 };
 QTEST_GUILESS_MAIN(SpectrumTest)
 #include "spectrum_test.moc"

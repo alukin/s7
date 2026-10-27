@@ -18,6 +18,7 @@
 #include <QComboBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QToolButton>
 #include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -275,9 +276,9 @@ void testWindowIndependentResults()
     require(source->status().samples == 150000 && source->status().captureDropped == 0,
         "Presentation duplicated authoritative samples or changed completeness");
     require(phase->points().size() == 25000, "Authoritative source did not drive phase replay");
-    bool previewWarning = false;
-    for (auto* label : scope->findChildren<QLabel*>()) previewWarning |= label->text().contains("preview skipped 100");
-    require(previewWarning, "Preview loss is not distinguished from capture loss");
+    auto* previewWarning = scope->findChild<QToolButton*>("scope.statusWarning");
+    require(previewWarning && previewWarning->isVisible() && previewWarning->toolTip().contains("preview skipped 100"),
+        "Preview loss is not distinguished from capture loss");
     QBuffer full; full.open(QIODevice::WriteOnly);
     require(scope->writeRunResults(full, &error), "Preview loss prevented complete source-backed save");
     require(!source->status().incomplete(), "Preview loss marked authoritative capture incomplete");
@@ -301,7 +302,8 @@ void testRunDetails()
     require(live.recording().series().value("live:v").displayName() == "v (V)", "Live legend dropped voltage units");
     require(live.recording().series().value("live:i").displayName() == "i (A)", "Live legend dropped current units");
     require(live.plotView()->yTitle().contains("mixed units"), "Mixed-unit axis is misleading");
-    require(live.findChild<QLabel*>("viewer.status")->text().contains("Run #42 — completed"), "Run identity/state missing");
+    require(live.source()->runId() == 42 && live.source()->status().finished && !live.source()->status().stopped,
+        "Run identity/state missing");
     ui::PhasePortraitViewWindow phase("v", "i"); phase.attachSource(source, {{"x", 0}, {"y", 1}}); phase.refreshSource();
     require(phase.findChild<viewers::LinePlotView*>()->xTitle() == "v (V)"
         && phase.findChild<viewers::LinePlotView*>()->yTitle() == "i (A)", "Phase axes lost units");
@@ -340,12 +342,16 @@ void testRunDetails()
     auto incomplete = std::make_shared<observation::ObservationSource>(43);
     incomplete->channel("v"); incomplete->append({0, 1, .001, 1}); incomplete->addCaptureLoss(3); incomplete->finish(false, "test failure");
     live.attachSource(incomplete, {{"v", 0}}); live.refreshSource();
-    const auto status = live.findChild<QLabel*>("viewer.status")->text();
-    require(status.contains("INCOMPLETE") && status.contains("capture lost 3") && status.contains("test failure"), "Capture failure lacks actionable warning");
+    const auto status = live.source()->status();
+    require(status.incomplete() && status.captureDropped == 3 && status.runError == "test failure",
+        "Capture failure lacks actionable warning");
+    auto* warning = live.findChild<QToolButton*>("scope.statusWarning");
+    require(warning && !warning->isHidden() && warning->toolTip().contains("capture lost 3")
+        && warning->toolTip().contains("test failure"), "Scope warning icon lacks capture details");
     auto stopped = std::make_shared<observation::ObservationSource>(44);
     stopped->channel("v"); stopped->append({0, 1, .001, 1}); stopped->finish(true);
     live.attachSource(stopped, {{"v", 0}}); live.refreshSource();
-    require(live.findChild<QLabel*>("viewer.status")->text().contains("stopped"), "Stopped run mislabelled completed");
+    require(live.source()->status().stopped, "Stopped run mislabelled completed");
     require(live.plotView()->yTitle().contains("unit unspecified"), "Unknown units were invented");
     ui::ScopeViewWindow empty("empty"); empty.findChild<QPushButton*>("scope.runDetails")->click();
     require(empty.findChild<QPlainTextEdit*>("scope.detailsSummary")->toPlainText().contains("unavailable"),

@@ -24,6 +24,7 @@ class QScrollBar;
 class QComboBox;
 class QDoubleSpinBox;
 class QTabWidget;
+class QToolButton;
 
 namespace s7studio::viewers {
 class LinePlotView;
@@ -45,6 +46,7 @@ public:
                              QWidget* parent = nullptr,
                              Qt::WindowFlags flags = Qt::WindowFlags());
     ~ScopeViewWindow() override;
+    bool refreshSource() override;
 
     // Registry entry: "Scope", one channel per "<id>/<channel>" probe.
     static auto viewerType() -> viewers::ViewerType;
@@ -122,7 +124,8 @@ private:
     QScrollBar* timeScrollBar_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
-    QLabel* statusLabel_ = nullptr;
+    QLabel* hoverReadout_ = nullptr;
+    QToolButton* warningButton_ = nullptr;
     QTimer* repaintTimer_ = nullptr;
     QTabWidget* tabs_ = nullptr;
     QComboBox* analysisRun_ = nullptr;

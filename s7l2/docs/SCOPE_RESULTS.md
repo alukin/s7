@@ -7,21 +7,26 @@ The current run remains a solid trace. All traces use their original model
 timestamps; loading does not interpolate, shift time or run the model again.
 Use names such as `pendulum_trapezoid_10kHz.s7scope` to identify configurations.
 
-Hover near a Scope trace to see its stored model time and channel value. A ring
-marks the sample and a vertical cursor marks its time. The readout uses the
+Hover near a Scope trace to see its stored model time and channel value below
+the plot. A ring marks the sample and a vertical cursor marks its time without
+covering the plotted values. The readout uses the
 retained full-resolution recording when it is available, including samples
 omitted from the bounded plot preview; imported comparison traces show their
 run label. Move outside the trace to clear the readout.
 
-The **Spectrum**, **Correlation**, and **XY Trajectory** tabs analyze a selected
-run and model-time interval. **Visible time** copies the current Time zoom;
+The **Spectrum**, **Correlation**, and **XY Trajectory** tabs use the same light
+plot background as Time and analyze a selected run and model-time interval.
+The Spectrum tab overlays separate real spectra for all inputs by default;
+clear **All inputs** to select one input, or choose I/Q mode for a two-sided
+spectrum. **Visible time** copies the current Time zoom;
 **Full run** selects the run span. Press **Analyze** to take a fresh snapshot.
-Scope uses compact icon buttons for display, file, and interval actions; hover
+The Scope header puts display, file, and interval controls on one bar, using
+compact icon buttons; hover
 or focus them for their names and descriptions. The arrow at the right of the
 analysis tabs hides or shows the settings column, giving the plot the full width.
 Current runs are read from the authoritative observation source; saved and
 archived runs are read from their full-resolution temporary recordings. The
-plot preview is never analysis input. The status states whether the configured
+plot preview is never analysis input. The analysis readout below the tabs states whether the configured
 analysis sample limit shortened the selected interval. The limit is set under
 **Settings → Scope Analysis Limit…**; it defaults to 16,384 positions and is
 bounded at 65,536. The analysis panels offer the full selected count as an FFT

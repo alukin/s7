@@ -10,6 +10,7 @@
 #include <QBuffer>
 #include <QLocale>
 #include <QCheckBox>
+#include <QLabel>
 #include <QMetaObject>
 
 #include <algorithm>
@@ -116,12 +117,14 @@ int main(int argc, char** argv)
         emit plot->hoveredPoint(20.001, 7.0, true);
         const auto rows = plot->bridge()->hoverTip;
         const auto markers = plot->bridge()->hoverMarkers;
+        auto* readout = scope.findChild<QLabel*>(QStringLiteral("scope.hoverReadout"));
         if (rows.size() != 1 || !rows.front().toMap().value("text").toString().contains(QStringLiteral("= 7"))
             || markers.size() != 1 || markers.front().toMap().value("y").toDouble() != 7.0
+            || !readout || !readout->text().contains(QStringLiteral("= 7")) || plot->bridge()->hoverTipEnabled
             || !plot->bridge()->cursorVisible || std::abs(plot->bridge()->cursorX - 20.001) > 1e-12)
             throw std::runtime_error("Scope hover did not show the exact stored sample");
         emit plot->hoveredPoint(20.001, 7.0, false);
-        if (!plot->bridge()->hoverTip.isEmpty() || !plot->bridge()->hoverMarkers.isEmpty()
+        if (!plot->bridge()->hoverTip.isEmpty() || !plot->bridge()->hoverMarkers.isEmpty() || !readout->text().isEmpty()
             || plot->bridge()->cursorVisible)
             throw std::runtime_error("Scope hover did not clear on pointer exit");
     }

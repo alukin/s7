@@ -47,6 +47,7 @@ class LinePlotBridge : public QObject
     // in data coordinates. Empty rows hide the tooltip.
     Q_PROPERTY(QVariantList hoverTip MEMBER hoverTip NOTIFY hoverTipChanged)
     Q_PROPERTY(QVariantList hoverMarkers MEMBER hoverMarkers NOTIFY hoverTipChanged)
+    Q_PROPERTY(bool hoverTipEnabled MEMBER hoverTipEnabled NOTIFY hoverTipChanged)
     Q_PROPERTY(double xMin READ xMin NOTIFY xRangeChanged)
     Q_PROPERTY(double xMax READ xMax NOTIFY xRangeChanged)
     Q_PROPERTY(double yMin READ yMin NOTIFY yRangeChanged)
@@ -101,6 +102,7 @@ public:
     QVariantList selectionMarkers;
     QSizeF plotAreaSize;
     QVariantList hoverTip, hoverMarkers;
+    bool hoverTipEnabled = true;
     QVariantList channelZeroMarkers;
     QVariantMap instrumentTrigger;
     bool markerFocus = false;

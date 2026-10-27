@@ -32,6 +32,12 @@ struct SpectrumResult {
     SpectrumSettings settings;
     std::shared_ptr<const observation::LiveFrame> frame; // Worker result owns its exact bounded input.
     std::vector<double> frequencies, values, peakHold;
+    struct Trace {
+        std::size_t channel = 0;
+        QString unit;
+        std::vector<double> values, peakHold;
+    };
+    std::vector<Trace> traces; // Populated when the worker analyzes every real input.
 };
 std::vector<double> spectrumWindow(SpectrumWindow window, std::size_t size);
 // Ref is in the chosen linear quantity's units. Zero maps to -infinity;

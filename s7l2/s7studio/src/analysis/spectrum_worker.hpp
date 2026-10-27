@@ -13,7 +13,8 @@ public:
     ~SpectrumWorker();
     SpectrumWorker(const SpectrumWorker&) = delete;
     SpectrumWorker& operator=(const SpectrumWorker&) = delete;
-    void submit(std::shared_ptr<const observation::LiveFrame> frame, SpectrumSettings settings, std::uint64_t revision);
+    void submit(std::shared_ptr<const observation::LiveFrame> frame, SpectrumSettings settings,
+                std::uint64_t revision, bool allChannels = false);
     std::optional<SpectrumResult> takeResult();
     void cancel();
     bool busy() const;

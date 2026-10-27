@@ -639,7 +639,7 @@ Rectangle {
         id: hoverTip
         objectName: "viewer.hoverTip"
         readonly property point pointer: inspectionHover.point.position
-        visible: plot.inspectionEnabled && !root.markerDragging && inspectionHover.hovered && plot.hoverTip.length > 0
+        visible: plot.inspectionEnabled && plot.hoverTipEnabled && !root.markerDragging && inspectionHover.hovered && plot.hoverTip.length > 0
         width: tipColumn.implicitWidth + 14
         height: tipColumn.implicitHeight + 10
         x: pointer.x + 18 + width <= root.width ? pointer.x + 18 : Math.max(0, pointer.x - 18 - width)

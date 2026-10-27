@@ -21,7 +21,7 @@ public:
     ~PairAnalysisView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
     void setAnalysisSize(int samples);
-    void setSnapshotMode(bool snapshot) { snapshotMode_ = snapshot; updateStatus(); }
+    void setSnapshotMode(bool snapshot);
     void clear();
     void setSuspended(bool suspended);
     std::uint64_t analysisRequestCount() const { return submitted_; }

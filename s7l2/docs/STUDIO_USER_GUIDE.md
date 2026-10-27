@@ -270,6 +270,10 @@ saved comparisons and **Export Full CSV** for interchange. CSV does not carry
 all recording metadata. **Run details…** shows the frozen model and provenance.
 These Scope actions use compact icon buttons with tooltips and accessible names.
 Scope also has **Time**, **Spectrum**, **Correlation**, and **XY Trajectory** tabs.
+The header keeps its controls on one bar. Hovering over a Time trace places the
+exact sample value below the plot, leaving the trace visible. All four tabs use
+a light plot background. Spectrum overlays real spectra for all inputs by default;
+clear **All inputs** to select one source, or choose I/Q mode for a two-sided FFT.
 Use the arrow at the right of the analysis tabs to hide or show their settings
 column and expand the plot.
 Choose a current or comparison run, enter a model-time interval, then press
@@ -280,7 +284,7 @@ an exact full-interval sample count when it fits, including counts that are not
 powers of two. Spectral bin spacing is the model sample rate divided by FFT N.
 Correlation offers cross and auto modes; XY pairs channels at the same logical
 step. Missing steps and nonfinite samples remain visible as analysis errors,
-without interpolation. The status line reports the sample count, `dt`, an
+without interpolation. The analysis readout below the tabs reports the sample count, `dt`, an
 incomplete recording, and any sample-cap truncation. For very long intervals,
 **Settings → Scope Analysis Limit…** chooses the maximum retained positions
 per analysis request (16,384 by default; up to 65,536). The newest positions

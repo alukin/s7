@@ -16,6 +16,7 @@
 #include <QSpinBox>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QSet>
 #include <algorithm>
 #include <cmath>
 
@@ -48,6 +49,11 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     declaredUnit_->setPlaceholderText("Optional explicit I/Q unit"); declaredUnit_->setMaximumWidth(210);
     declaredUnit_->setToolTip("Declares a shared unit for the two raw channels. Does not convert or calibrate their values.");
     field("Input", mode_); field("Source / I", channel_); field("Q", quadrature_); field("I/Q unit", declaredUnit_);
+    allChannels_ = new QCheckBox(QStringLiteral("All inputs"), box);
+    allChannels_->setObjectName(QStringLiteral("spectrum.allInputs"));
+    allChannels_->setToolTip(QStringLiteral("Overlay a separate real spectrum for every input in the selected Scope run."));
+    fields->addControl(allChannels_);
+    allChannels_->hide();
     fields = group("Transform", "spectrum.transform", true);
     size_ = combo("spectrum.size", {});
     for (int n = 64; n <= 65536; n *= 2) size_->addItem(QString::number(n), n);
@@ -95,6 +101,7 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     for (auto* control : {mode_, channel_, quadrature_, size_, window_, quantity_, average_})
         connect(control, &QComboBox::currentIndexChanged, this, [this] { reconfigure(); });
     connect(removeMean_, &QCheckBox::toggled, this, [this] { reconfigure(); });
+    connect(allChannels_, &QCheckBox::toggled, this, [this] { reconfigure(); });
     connect(peakHold_, &QCheckBox::toggled, this, [this] { reconfigure(); });
     connect(count_, &QSpinBox::valueChanged, this, [this] { reconfigure(); });
     connect(alpha_, &QDoubleSpinBox::valueChanged, this, [this] { reconfigure(); });
@@ -111,6 +118,18 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
         connect(display, &QDoubleSpinBox::valueChanged, this, &SpectrumView::inspectionInvalidated);
     pollTimer_ = new QTimer(this); pollTimer_->setInterval(16); connect(pollTimer_, &QTimer::timeout, this, &SpectrumView::poll);
     reconfigure();
+}
+void SpectrumView::setSnapshotMode(bool snapshot)
+{
+    snapshotMode_ = snapshot;
+    plot_->bridge()->instrumentTheme = !snapshot;
+    plot_->series()[0]->setColor(QColor(snapshot ? "#1f77b4" : "#54b8ff"));
+    plot_->series()[1]->setColor(QColor(snapshot ? "#b36b00" : "#ffc36b"));
+    emit plot_->bridge()->legendChanged();
+    allChannels_->setVisible(snapshot);
+    if (snapshot) allChannels_->setChecked(true);
+    else allChannels_->setChecked(false);
+    updateStatus();
 }
 void SpectrumView::setAnalysisSize(int samples)
 {
@@ -139,6 +158,9 @@ SpectrumSettings SpectrumView::settings() const
 void SpectrumView::reconfigure()
 {
     const bool iq = mode_->currentIndex() == 1, power = quantity_->currentIndex() != 0;
+    const bool all = snapshotMode_ && !iq && allChannels_->isChecked();
+    allChannels_->setEnabled(snapshotMode_ && !iq);
+    channel_->parentWidget()->setVisible(!all);
     quadrature_->setEnabled(iq); declaredUnit_->setEnabled(iq); average_->setEnabled(power);
     quadrature_->parentWidget()->setVisible(iq); declaredUnit_->parentWidget()->setVisible(iq);
     if (!power) { const QSignalBlocker blocker(average_); average_->setCurrentIndex(0); }
@@ -171,7 +193,8 @@ void SpectrumView::setFrame(std::shared_ptr<const observation::LiveFrame> frame)
 void SpectrumView::submit()
 {
     if (suspended_ || !isVisible() || !frame_) { updateStatus(); return; }
-    ++submitted_; worker_.submit(frame_, settings(), revision_); updateStatus();
+    ++submitted_; worker_.submit(frame_, settings(), revision_, snapshotMode_ &&
+        mode_->currentIndex() == 0 && allChannels_->isChecked()); updateStatus();
 }
 void SpectrumView::poll()
 {
@@ -211,6 +234,11 @@ void SpectrumView::setSuspended(bool suspended)
 }
 QString SpectrumView::quantityUnit() const
 {
+    if (result_ && !result_->traces.empty()) {
+        QSet<QString> units;
+        for (const auto& trace : result_->traces) units.insert(trace.unit);
+        if (units.size() > 1) return QStringLiteral("[mixed units]");
+    }
     const auto unit = !result_ || result_->unit.isEmpty() ? QStringLiteral("[unit unspecified]") : result_->unit;
     switch (settings().quantity) {
     case SpectrumQuantity::Amplitude: return unit;
@@ -224,6 +252,21 @@ QString SpectrumView::binText(std::size_t i) const
     if (!result_ || i >= result_->values.size()) return {};
     QString text = QStringLiteral("Bin %1 • %2 Hz baseband").arg(i).arg(result_->frequencies[i], 0, 'g', 5);
     if (frequencyOffset_->value() != 0) text += QStringLiteral(" • axis %1 Hz").arg(result_->frequencies[i]+frequencyOffset_->value(), 0, 'g', 5);
+    if (!result_->traces.empty()) {
+        for (const auto& trace : result_->traces) {
+            const auto name = frame_->channels[static_cast<qsizetype>(trace.channel)].name;
+            auto unit = trace.unit.isEmpty() ? QStringLiteral("[unit unspecified]") : trace.unit;
+            if (result_->settings.quantity == SpectrumQuantity::Power) unit += QStringLiteral("²");
+            else if (result_->settings.quantity == SpectrumQuantity::Psd) unit += QStringLiteral("²/Hz");
+            text += QStringLiteral("\n%1 = %2 %3").arg(name).arg(trace.values[i], 0, 'g', 5).arg(unit);
+            if (scale_->currentIndex() == 1) {
+                const double db = spectrumDecibels(trace.values[i], result_->settings.quantity, reference_->value());
+                text += QStringLiteral(" • %1 dB re %2 %3 • display offset %4 dB")
+                    .arg(db, 0, 'g', 5).arg(reference_->value(), 0, 'g', 5).arg(unit).arg(dbOffset_->value());
+            }
+        }
+        return text;
+    }
     text += QStringLiteral(" • %1 %2").arg(result_->values[i], 0, 'g', 5).arg(quantityUnit());
     if (scale_->currentIndex() == 1) {
         const double db = spectrumDecibels(result_->values[i], result_->settings.quantity, reference_->value());
@@ -243,6 +286,8 @@ void SpectrumView::render(bool fit)
         .arg(reference_->value()).arg(quantityUnit()) : quantity_->currentText() + " (" + quantityUnit() + ")");
     plot_->setSeriesVisible(plot_->series()[1], result_ && !result_->peakHold.empty());
     for (auto* series : plot_->series()) LinePlotView::setPoints(series, {});
+    for (auto* line : additionalLines_) plot_->setSeriesVisible(line, false);
+    for (auto* line : additionalHolds_) plot_->setSeriesVisible(line, false);
     if (result_ && result_->state == SpectrumResult::State::Ready) {
         const auto& result = *result_;
         if (fit) plot_->setXRange(result.frequencies.front()+frequencyOffset_->value(), result.frequencies.back()+frequencyOffset_->value());
@@ -264,13 +309,47 @@ void SpectrumView::render(bool fit)
             }
             return reduced;
         };
-        LinePlotView::setPoints(plot_->series()[0], points(result.values));
-        LinePlotView::setPoints(plot_->series()[1], points(result.peakHold));
-        plot_->setSeriesName(plot_->series()[0], channel_->currentText() + (result.settings.iq ? " + iQ" : ""));
+        if (result.traces.empty()) {
+            LinePlotView::setPoints(plot_->series()[0], points(result.values));
+            LinePlotView::setPoints(plot_->series()[1], points(result.peakHold));
+            plot_->setSeriesName(plot_->series()[0], channel_->currentText() + (result.settings.iq ? " + iQ" : ""));
+            plot_->series()[1]->setOpacity(1);
+        } else {
+            const QList<QColor> colors{QColor("#1f77b4"), QColor("#d62728"), QColor("#2ca02c"),
+                                       QColor("#9467bd"), QColor("#ff7f0e"), QColor("#17becf")};
+            for (std::size_t j = 0; j < result.traces.size(); ++j) {
+                const auto& trace = result.traces[j];
+                const auto color = colors[static_cast<qsizetype>(j % static_cast<std::size_t>(colors.size()))];
+                const auto name = frame_->channels[static_cast<qsizetype>(trace.channel)].name
+                    + QStringLiteral(" [") + (trace.unit.isEmpty() ? QStringLiteral("unit unspecified") : trace.unit) + QLatin1Char(']');
+                if (j > 0 && additionalLines_.size() < static_cast<qsizetype>(j)) {
+                    additionalLines_.push_back(plot_->addSeries(name, {color, 1.6, false}));
+                    additionalHolds_.push_back(plot_->addSeries(name + QStringLiteral(" hold"), {color, 1.2, true}));
+                }
+                auto* line = j == 0 ? plot_->series()[0] : additionalLines_[static_cast<qsizetype>(j-1)];
+                auto* hold = j == 0 ? plot_->series()[1] : additionalHolds_[static_cast<qsizetype>(j-1)];
+                line->setColor(color); hold->setColor(color); hold->setOpacity(.55);
+                plot_->setSeriesName(line, name);
+                plot_->setSeriesName(hold, name + QStringLiteral(" hold"));
+                plot_->setSeriesVisible(line, true);
+                plot_->setSeriesVisible(hold, !trace.peakHold.empty());
+                LinePlotView::setPoints(line, points(trace.values));
+                LinePlotView::setPoints(hold, points(trace.peakHold));
+            }
+        }
         if (fit) plot_->fitYToVisibleData();
         const auto index = marker_->currentIndex() == 1 ? static_cast<std::size_t>(fixedBin_->value()) :
             static_cast<std::size_t>(std::max_element(result.values.begin(), result.values.end())-result.values.begin());
-        markerText_->setText((marker_->currentIndex() == 1 ? "Fixed marker • " : "Peak marker • ") + binText(index));
+        if (!result.traces.empty() && marker_->currentIndex() == 0) {
+            QStringList peaks;
+            for (const auto& trace : result.traces) {
+                const auto peak = static_cast<std::size_t>(std::max_element(trace.values.begin(), trace.values.end())-trace.values.begin());
+                peaks << QStringLiteral("%1 peak • %2 Hz • %3")
+                    .arg(frame_->channels[static_cast<qsizetype>(trace.channel)].name)
+                    .arg(result.frequencies[peak], 0, 'g', 5).arg(trace.values[peak], 0, 'g', 5);
+            }
+            markerText_->setText(peaks.join(QLatin1Char('\n')));
+        } else markerText_->setText((marker_->currentIndex() == 1 ? "Fixed marker • " : "Peak marker • ") + binText(index));
     } else markerText_->clear();
     if (!inspecting_) { readout_->setText("Hover over a spectrum bin to inspect its computed value."); plot_->bridge()->cursorVisible = false; emit plot_->bridge()->inspectionChanged(); }
     rendering_ = false; updateStatus();
@@ -314,6 +393,7 @@ void SpectrumView::updateStatus()
         .arg(result_->sampleRate, 0, 'g', 12).arg(result_->binSpacing, 0, 'g', 12).arg(result_->coherentGain, 0, 'g', 10).arg(result_->enbw, 0, 'g', 10)
         .arg(result_->averaged).arg(result_->skippedHops).arg(inspecting_ ? " • Inspecting displayed spectrum" : frozen_ ? " • Frozen spectrum" : "")
         .arg(result_->message.isEmpty() ? QString() : " • " + result_->message);
+    if (result_ && !result_->traces.empty()) text += QStringLiteral(" • %1 input spectra").arg(result_->traces.size());
     if (worker_.busy() && result_) text += " • Updating (showing preceding result)";
     if (result_ && result_->state == SpectrumResult::State::Ready && result_->settings.average != SpectrumAverage::None)
         text += QStringLiteral(" • average coverage steps %1–%2").arg(result_->averageFirstStep).arg(result_->lastStep);
@@ -321,9 +401,12 @@ void SpectrumView::updateStatus()
     if (worker_.replacedRequests()) text += QStringLiteral(" • replaced pending requests %1").arg(worker_.replacedRequests());
     status_->setToolTip(text);
     if (result_ && result_->state == SpectrumResult::State::Ready) {
-        status_->setText(QStringLiteral("%1 • %2\nN=%3 • Δf=%4 Hz%5")
-            .arg(frame_ && frame_->finished ? "Run finished" : snapshotMode_ ? "Run active" : "Acquiring",
-                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : snapshotMode_ ? "Selected snapshot" : "Following live")
+        if (snapshotMode_) status_->setText(QStringLiteral("N=%1 • Δf=%2 Hz%3")
+            .arg(result_->size).arg(result_->binSpacing, 0, 'g', 5)
+            .arg(result_->message.isEmpty() ? QString() : "\n"+result_->message));
+        else status_->setText(QStringLiteral("%1 • %2\nN=%3 • Δf=%4 Hz%5")
+            .arg(frame_ && frame_->finished ? "Run finished" : "Acquiring",
+                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : "Following live")
             .arg(result_->size).arg(result_->binSpacing, 0, 'g', 5)
             .arg(result_->message.isEmpty() ? QString() : "\n"+result_->message));
     } else status_->setText(text);

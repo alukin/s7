@@ -957,13 +957,15 @@ private slots:
             area.top() + (plot->yMax() - .5) / (plot->yMax() - plot->yMin()) * area.height());
         QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
         auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
-        QTRY_VERIFY(tip->isVisible());
-        QVERIFY(plot->bridge()->hoverTip.front().toMap().value("text").toString().contains("hover-check = 0.5"));
+        auto* readout = viewer.findChild<QLabel*>(QStringLiteral("scope.hoverReadout")); QVERIFY(readout);
+        QTRY_VERIFY(readout->text().contains(QStringLiteral("hover-check = 0.5")));
+        QVERIFY(!tip->isVisible());
         QCOMPARE(plot->bridge()->hoverMarkers.size(), 1);
         QVERIFY(plot->bridge()->cursorVisible);
         QTest::mouseMove(quick, QPoint(2, 2));
         QTRY_VERIFY(!tip->isVisible());
         QVERIFY(plot->bridge()->hoverTip.isEmpty());
+        QVERIFY(readout->text().isEmpty());
     }
 
     void scopeAnalysisWorkspace() {
@@ -973,15 +975,17 @@ private slots:
             {"rate", QJsonObject{{"numerator", "1024"}, {"denominator", "1"}}}});
         const auto a = source->channel(QStringLiteral("analysis/a"));
         const auto b = source->channel(QStringLiteral("analysis/b"));
+        const auto c = source->channel(QStringLiteral("analysis/c"));
         for (int step = 0; step < 1024; ++step) {
             const double time = static_cast<double>(step)/1024;
             const double phase = 2*std::numbers::pi*25*time;
             QVERIFY(source->append({a, step, time, std::sin(phase)}));
             QVERIFY(source->append({b, step, time, std::cos(phase)}));
+            QVERIFY(source->append({c, step, time, .5*std::sin(3*phase)}));
         }
         QVERIFY(source->finish());
         ui::ScopeViewWindow viewer(QStringLiteral("analysis"));
-        viewer.attachSource(source, {{QStringLiteral("a"), a}, {QStringLiteral("b"), b}});
+        viewer.attachSource(source, {{QStringLiteral("a"), a}, {QStringLiteral("b"), b}, {QStringLiteral("c"), c}});
         while (viewer.refreshSource()) {}
         viewer.resize(1250, 720);
         viewer.show(); viewer.raise(); viewer.activateWindow();
@@ -1000,6 +1004,23 @@ private slots:
         auto* spectrum = viewer.findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
         QTRY_VERIFY(spectrum->result().has_value());
         QCOMPARE(spectrum->result()->state, analysis::SpectrumResult::State::Ready);
+        QTRY_COMPARE(spectrum->result()->traces.size(), std::size_t(3));
+        auto* allInputs = spectrum->findChild<QCheckBox*>(QStringLiteral("spectrum.allInputs"));
+        QVERIFY(allInputs && allInputs->isChecked());
+        QVERIFY(!spectrum->plotView()->bridge()->instrumentTheme);
+        QVERIFY(std::abs(spectrum->result()->traces[0].values[25]-1.) < 1e-10);
+        QVERIFY(std::abs(spectrum->result()->traces[2].values[75]-.5) < 1e-10);
+        QVERIFY(spectrum->plotView()->series().size() >= 6);
+        for (int i = 0; i < 3; ++i) {
+            auto* line = spectrum->plotView()->series()[i == 0 ? 0 : i*2];
+            QVERIFY(line->isVisible() && !line->points().isEmpty());
+            QVERIFY(line->name().startsWith(QString(QChar('a' + i))));
+        }
+        allInputs->setChecked(false);
+        QTRY_VERIFY(spectrum->result().has_value() && spectrum->result()->state == analysis::SpectrumResult::State::Ready
+            && spectrum->result()->traces.empty());
+        allInputs->setChecked(true);
+        QTRY_VERIFY(spectrum->result().has_value() && spectrum->result()->traces.size() == 3);
         QVERIFY(spectrum->controlPanel()->width() <= 275);
         QVERIFY(spectrum->plotView()->width() >= tabs->width()*2/3);
         capture(&viewer, "scope-analysis-spectrum", true);
@@ -1018,6 +1039,7 @@ private slots:
         QVERIFY(correlation);
         QTRY_VERIFY(correlation->result().has_value());
         QCOMPARE(correlation->result()->state, analysis::PairResult::State::Ready);
+        QVERIFY(!correlation->plotView()->bridge()->instrumentTheme);
         QVERIFY(correlation->controlPanel()->width() <= 275);
         QVERIFY(correlation->plotView()->width() >= tabs->width()*2/3);
         capture(&viewer, "scope-analysis-correlation", true);
@@ -1031,6 +1053,7 @@ private slots:
         auto* trajectory = qobject_cast<viewers::PairAnalysisView*>(tabs->widget(3)); QVERIFY(trajectory);
         QTRY_VERIFY(trajectory->result().has_value());
         QCOMPARE(trajectory->result()->state, analysis::PairResult::State::Ready);
+        QVERIFY(!trajectory->plotView()->bridge()->instrumentTheme);
         QVERIFY(trajectory->controlPanel()->width() <= 275);
         QVERIFY(trajectory->plotView()->width() >= tabs->width()*2/3);
         capture(&viewer, "scope-analysis-trajectory", true);
@@ -1866,10 +1889,14 @@ private slots:
         QVERIFY(configure("action.run", diagram.startsWith("linear/") ? 10 : 1));
         QTRY_VERIFY_WITH_TIMEOUT(completed.count() > 0, 10000);
         QVERIFY(completed.last().at(0).toBool());
-        auto* viewerStatus = viewer->widget()->findChild<QLabel*>("viewer.status");
-        QVERIFY(viewerStatus);
-        QTRY_VERIFY(viewerStatus->text().contains("completed"));
-        QTRY_VERIFY(!viewerStatus->text().contains("loading history"));
+        if (auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)) {
+            QTRY_VERIFY(scope->source() && scope->source()->status().finished && !scope->source()->status().stopped);
+        } else {
+            auto* viewerStatus = viewer->widget()->findChild<QLabel*>("viewer.status");
+            QVERIFY(viewerStatus);
+            QTRY_VERIFY(viewerStatus->text().contains("completed"));
+            QTRY_VERIFY(!viewerStatus->text().contains("loading history"));
+        }
         auto* plot = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)
             ? static_cast<s7studio::ui::ScopeViewWindow*>(viewer)->plotView()
             : viewer->widget()->findChild<s7studio::viewers::LinePlotView*>();
