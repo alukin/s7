@@ -65,9 +65,8 @@ public:
 
     // The trajectory keeps at most this many points, then drops the oldest.
     static constexpr int kMaxPoints = 2'000'000;
-    // At most this many points are drawn; longer trajectories are thinned
-    // with a uniform stride for display only (export keeps every point).
-    static constexpr int kMaxDrawnPoints = 200'000;
+    // Upper bound for resolution-dependent drawing. Export keeps every point.
+    static constexpr int kMaxDrawnPoints = 16'384;
 
 private slots:
     void clearBuffers();
@@ -83,6 +82,7 @@ private:
     QString yProbeName_;
     std::uint64_t droppedSamples_ = 0;
     bool dirty_ = false;
+    qsizetype lastDrawBudget_ = 0;
 
     observation::StepAligner<2> aligner_;
     QList<QPointF> points_;

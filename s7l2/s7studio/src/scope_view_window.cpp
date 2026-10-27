@@ -46,6 +46,62 @@ auto styleFor(const ScopeRecording::Series& series, const qsizetype index) -> vi
     return {kSeriesColors[index % kSeriesColors.size()], series.isComparison() ? 1.2 : 1.6, series.isComparison()};
 }
 
+// Qt Graphs retains its own copy of every plotted point. Keep the presentation
+// proportional to the physical plot width, while preserving peaks and gaps.
+auto pointsForPlot(const QList<QPointF>& points, const double lower, const double upper,
+                   const qsizetype pixelColumns) -> QList<QPointF>
+{
+    if (points.size() <= pixelColumns * 3 + 2) return points;
+    bool timeOrdered = std::isfinite(lower) && std::isfinite(upper) && upper > lower;
+    double previousTime = -std::numeric_limits<double>::infinity();
+    for (const auto& point : points) {
+        if (!std::isfinite(point.x())) continue;
+        if (point.x() < previousTime) { timeOrdered = false; break; }
+        previousTime = point.x();
+    }
+    struct Bucket { qsizetype low = -1, high = -1, gap = -1; };
+    QVector<Bucket> buckets(pixelColumns);
+    const qsizetype stride = (points.size() - 2 + pixelColumns - 1) / pixelColumns;
+    qsizetype previousColumn = 0;
+    for (qsizetype i = 1; i < points.size() - 1; ++i) {
+        const auto& point = points[i];
+        qsizetype column = (i - 1) / stride;
+        if (timeOrdered && std::isfinite(point.x())) {
+            const double fraction = (point.x() - lower) / (upper - lower);
+            column = fraction <= 0.0 ? 0 : fraction >= 1.0 ? pixelColumns - 1
+                : static_cast<qsizetype>(fraction * pixelColumns);
+            previousColumn = column;
+        } else if (timeOrdered) column = previousColumn;
+        auto& bucket = buckets[column];
+        if (!std::isfinite(point.x()) || !std::isfinite(point.y())) {
+            if (bucket.gap < 0) bucket.gap = i;
+        } else {
+            if (bucket.low < 0 || point.y() < points[bucket.low].y()) bucket.low = i;
+            if (bucket.high < 0 || point.y() > points[bucket.high].y()) bucket.high = i;
+        }
+    }
+    QList<QPointF> reduced;
+    reduced.reserve(pixelColumns * 3 + 2);
+    reduced.push_back(points.front());
+    for (const auto& bucket : buckets) {
+        qsizetype indices[]{bucket.low, bucket.high, bucket.gap};
+        std::sort(std::begin(indices), std::end(indices));
+        for (const auto index : indices)
+            if (index >= 0 && (reduced.isEmpty() || reduced.back() != points[index]))
+                reduced.push_back(points[index]);
+    }
+    reduced.push_back(points.back());
+    return reduced;
+}
+
+auto plotPixelColumns(viewers::LinePlotView* plot) -> qsizetype
+{
+    const auto areaWidth = plot->bridge()->plotAreaSize.width() * plot->devicePixelRatioF();
+    return std::isfinite(areaWidth) && areaWidth > 0
+        ? std::clamp(static_cast<qsizetype>(std::ceil(areaWidth)), qsizetype(1), qsizetype(8192))
+        : qsizetype(1364); // Before the QML plot area has been laid out.
+}
+
 } // namespace
 
 auto ScopeViewWindow::viewerType() -> viewers::ViewerType
@@ -152,6 +208,9 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     });
     connect(plot_, &viewers::LinePlotView::xRangeChanged, this, &ScopeViewWindow::onXRangeChanged);
     connect(plot_, &viewers::LinePlotView::hoveredPoint, this, &ScopeViewWindow::updateHover);
+    connect(plot_->bridge(), &viewers::LinePlotBridge::plotAreaChanged, this, [this] {
+        if (hasTimeRange_ && plotPixelColumns(plot_) != lastPlotPixelColumns_) setVisibleData();
+    });
 }
 
 ScopeViewWindow::~ScopeViewWindow()
@@ -488,9 +547,12 @@ void ScopeViewWindow::openRunResultsFile()
 void ScopeViewWindow::setVisibleData()
 {
     const bool fitAll = fitAllTimeCheck_->isChecked();
+    const auto pixelColumns = plotPixelColumns(plot_);
+    lastPlotPixelColumns_ = pixelColumns;
     for (auto it = lines_.cbegin(); it != lines_.cend(); ++it) {
         viewers::LinePlotView::setPoints(it.value(),
-            recording_.visiblePoints(it.key(), plot_->xMin(), plot_->xMax(), fitAll));
+            pointsForPlot(recording_.visiblePoints(it.key(), plot_->xMin(), plot_->xMax(), fitAll),
+                plot_->xMin(), plot_->xMax(), pixelColumns));
     }
 }
 

@@ -12,7 +12,9 @@
 #include <QCheckBox>
 #include <QMetaObject>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 int main(int argc, char** argv)
@@ -147,5 +149,36 @@ int main(int argc, char** argv)
         emit plot->hoveredPoint(.25, .25, true);
         if (!plot->bridge()->hoverTip.isEmpty())
             throw std::runtime_error("Scope hover crossed an explicit trace gap");
+    }
+    // Display reduction must retain an isolated peak and a broken trace;
+    // the independent recording/export still has every source sample.
+    {
+        s7studio::ui::ScopeViewWindow scope(QStringLiteral("dense"));
+        constexpr int count = 30'000;
+        for (int i = 0; i < count; ++i) {
+            const double value = i == 12'000 ? 17.0
+                : i == 18'000 ? std::numeric_limits<double>::quiet_NaN() : std::sin(i * .01);
+            scope.appendSample(i * .001, value);
+        }
+        QMetaObject::invokeMethod(&scope, "refreshPlot", Qt::DirectConnection);
+        const auto points = scope.plotView()->series().front()->points();
+        if (points.size() > 4096 || points.front().x() != 0.0
+            || std::abs(points.back().x() - 29.999) > 1e-12
+            || !std::any_of(points.cbegin(), points.cend(), [](const auto& point) { return point.y() == 17.0; })
+            || !std::any_of(points.cbegin(), points.cend(), [](const auto& point) { return std::isnan(point.y()); }))
+            throw std::runtime_error("Dense Scope display lost its bound, endpoint, peak or gap");
+        auto* bridge = scope.plotView()->bridge();
+        bridge->plotAreaSize = QSizeF(320, 220);
+        emit bridge->plotAreaChanged();
+        const auto narrow = scope.plotView()->series().front()->points();
+        if (narrow.size() > 320 * 3 + 2 || narrow.front() != points.front() || narrow.back() != points.back()
+            || !std::any_of(narrow.cbegin(), narrow.cend(), [](const auto& point) { return point.y() == 17.0; })
+            || !std::any_of(narrow.cbegin(), narrow.cend(), [](const auto& point) { return std::isnan(point.y()); }))
+            throw std::runtime_error("Scope resize did not adapt the display to plot pixels");
+        QBuffer buffer;
+        buffer.open(QIODevice::ReadWrite);
+        QString error;
+        if (!scope.writeRecordedCsv(buffer, &error) || buffer.data().count('\n') != count + 1)
+            throw std::runtime_error("Scope display reduction changed full-resolution export");
     }
 }

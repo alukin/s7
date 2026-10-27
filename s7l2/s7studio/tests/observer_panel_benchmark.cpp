@@ -32,8 +32,13 @@ int main(int argc, char** argv) {
     QApplication app(argc, argv); QTemporaryDir temporary;
     if (argc < 4 || !temporary.isValid()) return 2;
     const QString output = QString::fromLocal8Bit(argv[1]); const int seconds = QString::fromLocal8Bit(argv[2]).toInt();
-    const bool liveOnly = QString::fromLocal8Bit(argv[3]) == "live";
-    const bool full = argc > 4 && QString::fromLocal8Bit(argv[4]) == "full";
+    const auto mode = QString::fromLocal8Bit(argv[3]);
+    const bool liveOnly = mode == "live";
+    const bool fullOnly = mode == "full-only";
+    const bool full = fullOnly || (argc > 4 && QString::fromLocal8Bit(argv[4]) == "full");
+    bool validViewerIndex = false;
+    const int fullViewerIndex = fullOnly && argc > 4 ? QString::fromLocal8Bit(argv[4]).toInt(&validViewerIndex) : -1;
+    if (validViewerIndex && (fullViewerIndex < 0 || fullViewerIndex > 3)) return 2;
     if (seconds < 5 || seconds > 3600) return 2;
     viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
     auto recording = std::make_shared<observation::ObservationSource>(1, observation::StorageOptions{20000, temporary.path(), {}, {}});
@@ -68,20 +73,32 @@ int main(int argc, char** argv) {
         recording->finish(true); for (const auto& source : live) source->finish();
     });
     QElapsedTimer clock; clock.start(); qint64 last = 0, baselineGap = 0, visibleGap = 0, initialRss = 0, maximumRss = 0;
-    QJsonArray checkpoints; int nextCheckpoint = 30, scrollPeriod = 4; bool shown = false, opened = false; int maximumActive = 0;
+    qint64 visibleTicks = 0, gapsOver100Ms = 0, gapsOver250Ms = 0;
+    QJsonArray checkpoints, longUiGaps, scrollEvents;
+    int nextCheckpoint = 30, scrollPeriod = 4; bool shown = false, opened = false; int maximumActive = 0;
     QTimer timer; timer.setInterval(10);
     QObject::connect(&timer,&QTimer::timeout,&app,[&] {
         const auto elapsed = clock.elapsed(), gap = elapsed-last; last = elapsed;
-        if (elapsed < 10000) baselineGap = std::max(baselineGap,gap); else if (elapsed > 20000) visibleGap = std::max(visibleGap,gap);
-        if (elapsed >= 10000 && !shown) { panel.show(); shown = true; }
-        if (shown && full && !opened && elapsed >= 15000) {
+        if (elapsed < 10000) baselineGap = std::max(baselineGap,gap);
+        else if (elapsed > 20000) {
+            visibleGap = std::max(visibleGap,gap); ++visibleTicks;
+            gapsOver100Ms += gap > 100; gapsOver250Ms += gap > 250;
+            if (gap > 250) longUiGaps.append(QJsonObject{{"wall_ms", elapsed}, {"gap_ms", gap}});
+        }
+        if (elapsed >= 10000 && !shown && !fullOnly) { panel.show(); shown = true; }
+        if (full && !opened && elapsed >= 15000) {
             // Four full viewers share the same data, each with independent state.
-            for (int i=0;i<4;++i) { auto* viewer = manager.openObserver(descriptors[i].type,descriptors[i].id); if (viewer) viewer->widget()->move(650, i*560); }
+            for (int i=0;i<4;++i) {
+                if (validViewerIndex && i != fullViewerIndex) continue;
+                auto* viewer = manager.openObserver(descriptors[i].type,descriptors[i].id);
+                if (viewer) viewer->widget()->move(650, i*560);
+            }
             opened = true;
         }
         if (elapsed >= 20000 && !initialRss) initialRss = rss();
-        if (!liveOnly && elapsed/5000 > scrollPeriod) {
+        if (shown && !liveOnly && elapsed/5000 > scrollPeriod) {
             scrollPeriod = static_cast<int>(elapsed/5000); auto* scroll = panel.findChild<QScrollArea*>("observers.scroll"); auto* bar = scroll->verticalScrollBar();
+            scrollEvents.append(QJsonObject{{"wall_ms", elapsed}, {"before", bar->value()}});
             bar->setValue(bar->value()+700 > bar->maximum() ? 0 : bar->value()+700);
         }
         maximumActive = std::max(maximumActive,panel.activePresentations()); maximumRss = std::max(maximumRss,rss());
@@ -92,8 +109,12 @@ int main(int argc, char** argv) {
         }
         if (elapsed >= static_cast<qint64>(seconds+20)*1000) {
             producer.request_stop(); producer.join();
-            QJsonObject result{{"workload",liveOnly?"live-only published sources":"mixed published sources"},{"full_viewers",full},{"measurement_seconds",seconds},
-                {"baseline_ui_max_gap_ms",baselineGap},{"visible_ui_max_gap_ms",visibleGap},{"warm_rss_bytes",initialRss},{"final_rss_bytes",rss()},{"peak_rss_bytes",maximumRss},
+            QJsonObject result{{"workload",liveOnly?"live-only published sources":"mixed published sources"},{"full_viewers",full},
+                {"panel_visible",!fullOnly},{"full_viewer_index",validViewerIndex ? fullViewerIndex : -1},{"measurement_seconds",seconds},
+                {"baseline_ui_max_gap_ms",baselineGap},{"visible_ui_max_gap_ms",visibleGap},
+                {"visible_ui_ticks",visibleTicks},{"ui_gaps_over_100_ms",gapsOver100Ms},{"ui_gaps_over_250_ms",gapsOver250Ms},
+                {"long_ui_gaps",longUiGaps},{"scroll_events",scrollEvents},
+                {"warm_rss_bytes",initialRss},{"final_rss_bytes",rss()},{"peak_rss_bytes",maximumRss},
                 {"maximum_active_plots",maximumActive},{"steps",QString::number(steps.load())},{"achieved_source_steps_per_wall_second",steps.load()/(static_cast<double>(elapsed)/1000.)},
                 {"capture_error", recording->status().storageError},
                 {"recorded_samples",QString::number(recording->status().samples)},{"journal_payload_bytes",QString::number(recording->status().samples*sizeof(observation::Sample))},{"checkpoints",checkpoints}};

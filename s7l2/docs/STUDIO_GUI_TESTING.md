@@ -49,8 +49,11 @@ requested 1 kHz; it measures source delivery and GUI load, **not NodeRuntime
 throughput**. Twelve selected observers and a tall virtual workspace exercise
 the four-active-plot limit. `mixed` scrolls recording/phase/live cards, `full`
 also opens four full viewers, and `live` supports a 30-minute journal-free soak.
+`full-only` opens those same four viewers with the dock hidden; an optional
+index from 0 to 3 isolates Scope, Phase Portrait, 3D or Live respectively.
 Each run includes a 10-second hidden baseline and 10 seconds of warm-up. JSON
-records achieved source rate, UI gaps, RSS checkpoints, active plots and separate
+records achieved source rate, maximum and over-250-ms UI gaps with timestamps,
+scroll events, RSS checkpoints, active plots and separate
 recording payload growth. Keep temporary recordings on a disk-backed filesystem
 when `/tmp` is a small tmpfs; the run fails on capture or result-write errors.
 
@@ -61,6 +64,13 @@ python3 tools/run_gui_test.py --artifacts build-release/observer-artifacts/mixed
   --timeout 200 -- env TMPDIR=/var/tmp \
   build-release/s7studio/s7studio_observer_panel_benchmark \
   build-release/observer-artifacts/mixed.json 120 mixed full
+
+# Matched full-viewer baseline; optional final argument 0–3 selects one viewer.
+python3 tools/run_gui_test.py --artifacts build-release/observer-artifacts/full-only \
+  --capture build-release/s7studio/s7studio_gui_capture --screen-size 2000x2600 \
+  --timeout 200 -- env TMPDIR=/var/tmp \
+  build-release/s7studio/s7studio_observer_panel_benchmark \
+  build-release/observer-artifacts/full-only.json 120 full-only
 ```
 
 Set `S7_OBSERVER_STRESS_PREVIEW=1` when invoking the existing

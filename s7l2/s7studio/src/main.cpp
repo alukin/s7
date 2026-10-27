@@ -838,22 +838,36 @@ int runPhasePortraitCheck(int argc, char** argv)
             auto* plot = phase->plotView();
             require(plot->series().size() == 1 && plot->series().front() == phase->trajectorySeries(),
                 "Phase Portrait must draw exactly one trajectory series");
-            // Every pair is recorded; up to kMaxDrawnPoints are drawn, beyond
-            // that a uniform subsample that keeps both ends.
+            // Every pair is recorded; display reduction keeps an ordered
+            // subset, endpoints and extrema at the current plot resolution.
             const auto& points = phase->points();
             if (points.size() != steps) {
                 throw std::runtime_error("Phase Portrait state pairs: received "
                     + std::to_string(points.size()) + ", expected " + std::to_string(steps));
             }
             const auto drawnPoints = phase->trajectorySeries()->points();
-            const qsizetype stride = (steps + s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints - 1)
-                / s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints;
-            require(drawnPoints.size() <= s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints + 1
+            require(drawnPoints.size() <= s7studio::ui::PhasePortraitViewWindow::kMaxDrawnPoints
                 && drawnPoints.front() == points.front() && drawnPoints.back() == points.back(),
                 "Drawn phase trajectory is unbounded or lost its ends");
-            for (qsizetype i = 0; i + 1 < drawnPoints.size(); ++i)
-                require(drawnPoints[i] == points[i * stride], "Drawn phase trajectory is not a uniform subsample");
-            if (stride == 1) require(drawnPoints == points, "Phase Portrait thinned a trajectory below its display limit");
+            auto original = points.cbegin();
+            for (const auto& drawn : drawnPoints) {
+                while (original != points.cend() && *original != drawn) ++original;
+                require(original != points.cend(), "Drawn phase trajectory changed a recorded point or its order");
+                ++original;
+            }
+            const auto xMinimum = std::min_element(points.cbegin(), points.cend(),
+                [](const auto& a, const auto& b) { return a.x() < b.x(); })->x();
+            const auto xMaximum = std::max_element(points.cbegin(), points.cend(),
+                [](const auto& a, const auto& b) { return a.x() < b.x(); })->x();
+            const auto yMinimum = std::min_element(points.cbegin(), points.cend(),
+                [](const auto& a, const auto& b) { return a.y() < b.y(); })->y();
+            const auto yMaximum = std::max_element(points.cbegin(), points.cend(),
+                [](const auto& a, const auto& b) { return a.y() < b.y(); })->y();
+            require(std::any_of(drawnPoints.cbegin(), drawnPoints.cend(), [&](const auto& point) { return point.x() == xMinimum; })
+                && std::any_of(drawnPoints.cbegin(), drawnPoints.cend(), [&](const auto& point) { return point.x() == xMaximum; })
+                && std::any_of(drawnPoints.cbegin(), drawnPoints.cend(), [&](const auto& point) { return point.y() == yMinimum; })
+                && std::any_of(drawnPoints.cbegin(), drawnPoints.cend(), [&](const auto& point) { return point.y() == yMaximum; }),
+                "Drawn phase trajectory lost an axis extreme");
             require(plot->xTitle() == QStringLiteral("phase_portrait_1/x (unit unspecified)")
                 && plot->yTitle() == QStringLiteral("phase_portrait_1/y (unit unspecified)"), "Phase axes are mislabeled");
             long index = 0;
