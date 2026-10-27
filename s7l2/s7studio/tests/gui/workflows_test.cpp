@@ -1848,7 +1848,10 @@ private slots:
         QVERIFY(viewerStatus);
         QTRY_VERIFY(viewerStatus->text().contains("completed"));
         QTRY_VERIFY(!viewerStatus->text().contains("loading history"));
-        if (auto* plot = viewer->widget()->findChild<s7studio::viewers::LinePlotView*>()) {
+        auto* plot = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)
+            ? static_cast<s7studio::ui::ScopeViewWindow*>(viewer)->plotView()
+            : viewer->widget()->findChild<s7studio::viewers::LinePlotView*>();
+        if (plot) {
             const auto width = plot->xMax() - plot->xMin();
             viewer->widget()->raise(); viewer->widget()->activateWindow();
             QVERIFY(QTest::qWaitForWindowActive(viewer->widget()));

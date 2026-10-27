@@ -300,7 +300,7 @@ void testRunDetails()
     ui::ScopeViewWindow live("scope"); live.attachSource(source, {{"v", 0}, {"i", 1}}); live.refreshSource();
     require(live.recording().series().value("live:v").displayName() == "v (V)", "Live legend dropped voltage units");
     require(live.recording().series().value("live:i").displayName() == "i (A)", "Live legend dropped current units");
-    require(live.findChild<viewers::LinePlotView*>()->yTitle().contains("mixed units"), "Mixed-unit axis is misleading");
+    require(live.plotView()->yTitle().contains("mixed units"), "Mixed-unit axis is misleading");
     require(live.findChild<QLabel*>("viewer.status")->text().contains("Run #42 — completed"), "Run identity/state missing");
     ui::PhasePortraitViewWindow phase("v", "i"); phase.attachSource(source, {{"x", 0}, {"y", 1}}); phase.refreshSource();
     require(phase.findChild<viewers::LinePlotView*>()->xTitle() == "v (V)"
@@ -321,6 +321,15 @@ void testRunDetails()
     for (const auto& series : imported.recording().series())
         importedUnits |= series.channelName == "v" && series.channelUnit == "V" && series.displayName().contains("(V)");
     require(importedUnits, "Saved comparison lost channel units");
+    auto* analysisRun = imported.findChild<QComboBox*>("scope.analysisRun");
+    auto* fullInterval = imported.findChild<QPushButton*>("scope.fullAnalysisRange");
+    auto* analyze = imported.findChild<QPushButton*>("scope.analyze");
+    auto* analysisStatus = imported.findChild<QLabel*>("scope.analysisStatus");
+    require(analysisRun && analysisRun->count() == 1 && fullInterval && analyze && analysisStatus,
+        "Imported Scope run is not available for analysis");
+    fullInterval->click(); analyze->click();
+    require(analysisStatus->text().contains("1 exact positions") &&
+        !analysisStatus->text().contains("rate"), "Imported Scope analysis could not read its retained samples");
     imported.findChild<QPushButton*>("scope.runDetails")->click();
     auto* importedDialog = imported.findChild<QDialog*>("scope.runDetailsDialog");
     auto* choices = importedDialog->findChild<QComboBox*>("scope.detailsRuns");
@@ -337,7 +346,7 @@ void testRunDetails()
     stopped->channel("v"); stopped->append({0, 1, .001, 1}); stopped->finish(true);
     live.attachSource(stopped, {{"v", 0}}); live.refreshSource();
     require(live.findChild<QLabel*>("viewer.status")->text().contains("stopped"), "Stopped run mislabelled completed");
-    require(live.findChild<viewers::LinePlotView*>()->yTitle().contains("unit unspecified"), "Unknown units were invented");
+    require(live.plotView()->yTitle().contains("unit unspecified"), "Unknown units were invented");
     ui::ScopeViewWindow empty("empty"); empty.findChild<QPushButton*>("scope.runDetails")->click();
     require(empty.findChild<QPlainTextEdit*>("scope.detailsSummary")->toPlainText().contains("unavailable"),
         "Missing provenance was not explicit");
