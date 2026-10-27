@@ -74,6 +74,8 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     field("Scale", scale_); field("Reference", reference_); field("Display offset", dbOffset_); field("Display floor", floor_);
     peakHold_ = new QCheckBox("Peak hold", box); peakHold_->setObjectName("spectrum.peakHold"); fields->addControl(peakHold_);
     auto* reset = new QPushButton("Reset averages / hold", box); reset->setObjectName("spectrum.reset"); fields->addControl(reset);
+    ui::compactActionButton(reset, QStyle::SP_BrowserReload, QStringLiteral("Reset averages and peak hold"),
+        QStringLiteral("Discard accumulated averaging and peak-hold values."));
     fields = group("Marker", "spectrum.markers", false);
     marker_ = combo("spectrum.marker", {"Peak bin", "Fixed bin"});
     fixedBin_ = new QSpinBox(box); fixedBin_->setObjectName("spectrum.fixedBin"); fixedBin_->setRange(0, 65535); fixedBin_->setFixedWidth(110);
@@ -86,7 +88,10 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     markerText_ = new QLabel(box); markerText_->setObjectName("spectrum.markerText");
     markerText_->setTextFormat(Qt::PlainText); markerText_->setWordWrap(true); controls_->addSection(markerText_);
     readout_->setText("Hover over a spectrum bin to inspect its computed value.");
-    if (!controlsParent) { controls_->setMinimumWidth(300); layout->addWidget(controls_); }
+    if (!controlsParent) {
+        controls_->setFixedWidth(275);
+        layout->addWidget(controls_);
+    }
     for (auto* control : {mode_, channel_, quadrature_, size_, window_, quantity_, average_})
         connect(control, &QComboBox::currentIndexChanged, this, [this] { reconfigure(); });
     connect(removeMean_, &QCheckBox::toggled, this, [this] { reconfigure(); });

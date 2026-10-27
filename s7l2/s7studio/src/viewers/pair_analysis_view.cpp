@@ -76,6 +76,8 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* cont
     removeMean_ = new QCheckBox("Remove means", box); removeMean_->setObjectName("pair.removeMean");
     absolutePeak_ = new QCheckBox("Absolute peak", box); absolutePeak_->setObjectName("pair.absolutePeak");
     auto* fit = new QPushButton("Fit", box); fit->setObjectName("pair.fit");
+    ui::compactActionButton(fit, QStyle::SP_TitleBarMaxButton, QStringLiteral("Fit plot"),
+        QStringLiteral("Fit the plot axes to the current analysis result."));
     fields = new ui::WrappingSettings(box);
     controls_->addSection(new ui::CollapsibleSection(xy ? "Display" : "Correlation", "pair.settings", fields, true, box));
     if (xy) {
@@ -103,7 +105,10 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* cont
     layout->addWidget(plot_, 1);
     marker_ = new QLabel(box); marker_->setObjectName("pair.marker"); marker_->setTextFormat(Qt::PlainText);
     marker_->setWordWrap(true); controls_->addSection(marker_);
-    if (!controlsParent) { controls_->setMinimumWidth(300); layout->addWidget(controls_); }
+    if (!controlsParent) {
+        controls_->setFixedWidth(275);
+        layout->addWidget(controls_);
+    }
     for (auto* c : {first_, second_, size_, normalization_, density_}) connect(c, &QComboBox::currentIndexChanged, this, [this] { reconfigure(); });
     connect(mode_, &QComboBox::currentIndexChanged, this, [this, xy] { if (xy) render(true); else reconfigure(); });
     connect(persistence_, &QSpinBox::valueChanged, this, [this] { reconfigure(); });

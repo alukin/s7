@@ -29,7 +29,9 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QTimer>
+#include <QToolButton>
 #include <QVariantMap>
 #include <QVBoxLayout>
 #include <QtGraphs/QLineSeries>
@@ -373,34 +375,46 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     resize(900, 520);
 
     auto* rootLayout = new QVBoxLayout(this);
+    rootLayout->setContentsMargins(6, 4, 6, 4);
+    rootLayout->setSpacing(3);
     auto* controls = new QHBoxLayout();
-    auto* resultsControls = new QHBoxLayout();
+    controls->setSpacing(4);
 
     autoScaleYCheck_ = new QCheckBox(QStringLiteral("Auto Y"), this);
     autoScaleYCheck_->setChecked(true);
+    autoScaleYCheck_->setToolTip(QStringLiteral("Keep the Time plot's Y axis fitted to displayed samples."));
     controls->addWidget(autoScaleYCheck_);
     fitAllTimeCheck_ = new QCheckBox(QStringLiteral("Fit full run"), this);
     fitAllTimeCheck_->setChecked(true);
+    fitAllTimeCheck_->setToolTip(QStringLiteral("Keep the full recorded time span visible as samples arrive."));
     controls->addWidget(fitAllTimeCheck_);
-    clearButton_ = new QPushButton(QStringLiteral("Clear display"), this);
-    clearButton_->setToolTip(QStringLiteral("Clear this display. Captured data remains available for saving, export and reopening."));
-    exportButton_ = new QPushButton(QStringLiteral("Export Full CSV"), this);
+    controls->addSpacing(8);
+    clearButton_ = new QPushButton(this);
+    ui::compactActionButton(clearButton_, QStyle::SP_DialogResetButton, QStringLiteral("Clear display"),
+        QStringLiteral("Captured data remains available for saving, export and reopening."));
+    exportButton_ = new QPushButton(this);
+    ui::compactActionButton(exportButton_, QStyle::SP_ArrowDown, QStringLiteral("Export full CSV"),
+        QStringLiteral("Export all recorded samples as CSV."));
     controls->addWidget(clearButton_);
     controls->addWidget(exportButton_);
-    auto* saveButton = new QPushButton(QStringLiteral("Save Run…"), this);
-    auto* openButton = new QPushButton(QStringLiteral("Open Run…"), this);
-    auto* removeButton = new QPushButton(QStringLiteral("Remove comparisons"), this);
-    auto* detailsButton = new QPushButton(QStringLiteral("Run details…"), this);
+    controls->addSpacing(8);
+    auto* saveButton = new QPushButton(this);
+    auto* openButton = new QPushButton(this);
+    auto* removeButton = new QPushButton(this);
+    auto* detailsButton = new QPushButton(this);
     detailsButton->setObjectName(QStringLiteral("scope.runDetails"));
     saveButton->setObjectName(QStringLiteral("scope.saveRun"));
     openButton->setObjectName(QStringLiteral("scope.openRun"));
     removeButton->setObjectName(QStringLiteral("scope.removeComparisons"));
-    saveButton->setToolTip(QStringLiteral("Save a snapshot of the current recording, including capture-loss warnings. Comparisons are saved separately."));
-    openButton->setToolTip(QStringLiteral("Overlay saved results at their original model timestamps."));
-    resultsControls->addWidget(saveButton);
-    resultsControls->addWidget(openButton);
-    resultsControls->addWidget(removeButton);
-    resultsControls->addWidget(detailsButton);
+    ui::compactActionButton(saveButton, QStyle::SP_DialogSaveButton, QStringLiteral("Save run"),
+        QStringLiteral("Save the current recording with capture warnings. Comparisons are saved separately."));
+    ui::compactActionButton(openButton, QStyle::SP_DialogOpenButton, QStringLiteral("Open run"),
+        QStringLiteral("Overlay saved results at their original model timestamps."));
+    ui::compactActionButton(removeButton, QStyle::SP_TrashIcon, QStringLiteral("Remove comparisons"),
+        QStringLiteral("Remove saved and archived comparison traces from this Scope."));
+    ui::compactActionButton(detailsButton, QStyle::SP_MessageBoxInformation, QStringLiteral("Run details"),
+        QStringLiteral("Show model and provenance details for recorded runs."));
+    for (auto* button : {saveButton, openButton, removeButton, detailsButton}) controls->addWidget(button);
     connect(detailsButton, &QPushButton::clicked, this, &ScopeViewWindow::showRunDetails);
     connect(saveButton, &QPushButton::clicked, this, &ScopeViewWindow::saveRunResults);
     connect(openButton, &QPushButton::clicked, this, &ScopeViewWindow::openRunResultsFile);
@@ -412,8 +426,6 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     statusLabel_->setWordWrap(true);
 
     rootLayout->addLayout(controls);
-    rootLayout->addLayout(resultsControls);
-    rootLayout->addWidget(statusLabel_);
 
     plot_ = new viewers::LinePlotView(this);
     plot_->setLegendVisible(true);
@@ -445,11 +457,33 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     tabs_->addTab(spectrum_, QStringLiteral("Spectrum"));
     tabs_->addTab(correlation_, QStringLiteral("Correlation"));
     tabs_->addTab(trajectory_, QStringLiteral("XY Trajectory"));
+    auto* showAnalysisControls = new QToolButton(tabs_);
+    showAnalysisControls->setObjectName(QStringLiteral("scope.toggleAnalysisControls"));
+    showAnalysisControls->setText(QStringLiteral("Controls"));
+    showAnalysisControls->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    showAnalysisControls->setCheckable(true);
+    showAnalysisControls->setChecked(true);
+    showAnalysisControls->setIcon(style()->standardIcon(QStyle::SP_ArrowDown));
+    showAnalysisControls->setIconSize({16, 16});
+    showAnalysisControls->setToolTip(QStringLiteral("Show or hide analysis settings to expand the plot."));
+    showAnalysisControls->setAccessibleName(QStringLiteral("Hide analysis controls"));
+    tabs_->setCornerWidget(showAnalysisControls, Qt::TopRightCorner);
+    connect(showAnalysisControls, &QToolButton::toggled, this, [this, showAnalysisControls](const bool shown) {
+        for (auto* sidebar : {spectrum_->controlPanel(), correlation_->controlPanel(), trajectory_->controlPanel()})
+            sidebar->setVisible(shown);
+        showAnalysisControls->setIcon(style()->standardIcon(shown ? QStyle::SP_ArrowDown : QStyle::SP_ArrowRight));
+        showAnalysisControls->setAccessibleName(shown ? QStringLiteral("Hide analysis controls") : QStringLiteral("Show analysis controls"));
+    });
+    connect(tabs_, &QTabWidget::currentChanged, showAnalysisControls,
+        [showAnalysisControls](const int index) { showAnalysisControls->setVisible(index != 0); });
+    showAnalysisControls->hide();
 
     auto* analysisControls = new QHBoxLayout();
+    analysisControls->setSpacing(4);
     analysisRun_ = new QComboBox(this);
     analysisRun_->setObjectName(QStringLiteral("scope.analysisRun"));
     analysisRun_->setFixedWidth(170);
+    analysisRun_->setToolTip(QStringLiteral("Select the current run or a saved comparison for analysis."));
     analysisStart_ = ui::compactNumber(this);
     analysisEnd_ = ui::compactNumber(this);
     for (auto* spin : {analysisStart_, analysisEnd_}) {
@@ -458,12 +492,21 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     }
     analysisStart_->setObjectName(QStringLiteral("scope.analysisStart"));
     analysisEnd_->setObjectName(QStringLiteral("scope.analysisEnd"));
-    auto* visibleButton = new QPushButton(QStringLiteral("Visible time"), this);
-    auto* fullButton = new QPushButton(QStringLiteral("Full run"), this);
+    analysisStart_->setToolTip(QStringLiteral("First model time included in the analysis interval."));
+    analysisEnd_->setToolTip(QStringLiteral("Last model time included in the analysis interval."));
+    auto* visibleButton = new QPushButton(this);
+    auto* fullButton = new QPushButton(this);
     visibleButton->setObjectName(QStringLiteral("scope.visibleAnalysisRange"));
     fullButton->setObjectName(QStringLiteral("scope.fullAnalysisRange"));
+    ui::compactActionButton(visibleButton, QStyle::SP_TitleBarNormalButton, QStringLiteral("Use visible time"),
+        QStringLiteral("Copy the current Time plot range into the analysis interval."));
+    ui::compactActionButton(fullButton, QStyle::SP_TitleBarMaxButton, QStringLiteral("Use full run"),
+        QStringLiteral("Set the analysis interval to the selected run's full time range."));
     analyzeButton_ = new QPushButton(QStringLiteral("Analyze"), this);
     analyzeButton_->setObjectName(QStringLiteral("scope.analyze"));
+    analyzeButton_->setIcon(style()->standardIcon(QStyle::SP_MediaPlay));
+    analyzeButton_->setToolTip(QStringLiteral("Analyze exact recorded samples in the selected run and time interval."));
+    analyzeButton_->setFixedHeight(28);
     analysisControls->addWidget(new QLabel(QStringLiteral("Run"), this));
     analysisControls->addWidget(analysisRun_);
     analysisControls->addWidget(new QLabel(QStringLiteral("From"), this));
@@ -478,7 +521,11 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     analysisStatus_->setObjectName(QStringLiteral("scope.analysisStatus"));
     analysisStatus_->setWordWrap(true);
     rootLayout->addLayout(analysisControls);
-    rootLayout->addWidget(analysisStatus_);
+    auto* statusRow = new QHBoxLayout();
+    statusRow->setSpacing(8);
+    statusRow->addWidget(statusLabel_, 1);
+    statusRow->addWidget(analysisStatus_, 2);
+    rootLayout->addLayout(statusRow);
     rootLayout->addWidget(tabs_, 1);
     connect(analyzeButton_, &QPushButton::clicked, this, &ScopeViewWindow::analyzeInterval);
     connect(visibleButton, &QPushButton::clicked, this, [this] {
