@@ -966,6 +966,76 @@ private slots:
         QVERIFY(plot->bridge()->hoverTip.isEmpty());
     }
 
+    void scopeAnalysisWorkspace() {
+        using namespace s7studio;
+        auto source = std::make_shared<observation::ObservationSource>(42);
+        source->setProvenance({{"dt_seconds", 1./1024},
+            {"rate", QJsonObject{{"numerator", "1024"}, {"denominator", "1"}}}});
+        const auto a = source->channel(QStringLiteral("analysis/a"));
+        const auto b = source->channel(QStringLiteral("analysis/b"));
+        for (int step = 0; step < 1024; ++step) {
+            const double time = static_cast<double>(step)/1024;
+            const double phase = 2*std::numbers::pi*25*time;
+            QVERIFY(source->append({a, step, time, std::sin(phase)}));
+            QVERIFY(source->append({b, step, time, std::cos(phase)}));
+        }
+        QVERIFY(source->finish());
+        ui::ScopeViewWindow viewer(QStringLiteral("analysis"));
+        viewer.attachSource(source, {{QStringLiteral("a"), a}, {QStringLiteral("b"), b}});
+        while (viewer.refreshSource()) {}
+        viewer.resize(1250, 720);
+        viewer.show(); viewer.raise(); viewer.activateWindow();
+        QVERIFY(QTest::qWaitForWindowActive(&viewer));
+        auto* tabs = viewer.findChild<QTabWidget*>(QStringLiteral("scope.analysisTabs")); QVERIFY(tabs);
+        auto* full = viewer.findChild<QPushButton*>(QStringLiteral("scope.fullAnalysisRange")); QVERIFY(full);
+        auto* analyze = viewer.findChild<QPushButton*>(QStringLiteral("scope.analyze")); QVERIFY(analyze);
+        full->click(); analyze->click();
+        auto* status = viewer.findChild<QLabel*>(QStringLiteral("scope.analysisStatus")); QVERIFY(status);
+        QTRY_VERIFY(status->text().contains(QStringLiteral("1024 exact positions")));
+        tabs->setCurrentIndex(1);
+        auto* spectrum = viewer.findChild<viewers::SpectrumView*>(); QVERIFY(spectrum);
+        QTRY_VERIFY(spectrum->result().has_value());
+        QCOMPARE(spectrum->result()->state, analysis::SpectrumResult::State::Ready);
+        capture(&viewer, "scope-analysis-spectrum", true);
+        tabs->setCurrentIndex(2);
+        auto* correlation = tabs->widget(2)->findChild<viewers::PairAnalysisView*>();
+        if (!correlation) correlation = qobject_cast<viewers::PairAnalysisView*>(tabs->widget(2));
+        QVERIFY(correlation);
+        QTRY_VERIFY(correlation->result().has_value());
+        QCOMPARE(correlation->result()->state, analysis::PairResult::State::Ready);
+        capture(&viewer, "scope-analysis-correlation", true);
+        auto* correlationMode = correlation->findChild<QComboBox*>(QStringLiteral("pair.mode")); QVERIFY(correlationMode);
+        correlationMode->setCurrentIndex(1);
+        QTRY_VERIFY(correlation->result().has_value());
+        QCOMPARE(correlation->result()->state, analysis::PairResult::State::Ready);
+        QCOMPARE(correlation->result()->lags[correlation->result()->peakIndex], 0);
+        capture(&viewer, "scope-analysis-autocorrelation", true);
+        tabs->setCurrentIndex(3);
+        auto* trajectory = qobject_cast<viewers::PairAnalysisView*>(tabs->widget(3)); QVERIFY(trajectory);
+        QTRY_VERIFY(trajectory->result().has_value());
+        QCOMPARE(trajectory->result()->state, analysis::PairResult::State::Ready);
+        capture(&viewer, "scope-analysis-trajectory", true);
+        tabs->setCurrentIndex(0);
+        capture(&viewer, "scope-analysis-time", true);
+        auto* setting = window_->findChild<QAction*>(QStringLiteral("settings.scopeAnalysisLimit")); QVERIFY(setting);
+        QVERIFY(modalWorkflow([&] { setting->trigger(); }, [](QDialog* dialog) {
+            auto* limit = dialog->findChild<QComboBox*>(QStringLiteral("scope.analysisSampleLimit"));
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!limit || !buttons) return false;
+            limit->setCurrentIndex(limit->findData(4096));
+            QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
+            return true;
+        }));
+        QCOMPARE(QSettings{}.value(QStringLiteral("scope/analysisSampleLimit")).toInt(), 4096);
+        QSettings{}.setValue(QStringLiteral("scope/analysisSampleLimit"), 64);
+        analyze->click();
+        QTRY_VERIFY(status->text().contains(QStringLiteral("64 exact positions"))
+            && status->text().contains(QStringLiteral("newest samples")));
+        tabs->setCurrentIndex(1);
+        QTRY_VERIFY(spectrum->result().has_value());
+        QCOMPARE(spectrum->result()->firstStep, std::int64_t(960));
+    }
+
     void liveOscilloscopePrototype() {
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/2int_osc_live.s7diagram"));
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);

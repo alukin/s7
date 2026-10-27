@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
 #include <limits>
 #include <utility>
 
@@ -528,6 +529,71 @@ auto ScopeRecording::visiblePoints(const QString& key, const double lowerTime, c
         points = std::move(reduced);
     }
     return points;
+}
+
+auto ScopeRecording::analysisSamples(const QString& key, const double lower, const double upper,
+                                     const qsizetype limit, bool* truncated, QString* error) const -> QVector<QPointF>
+{
+    if (truncated) *truncated = false;
+    if (error) error->clear();
+    std::deque<QPointF> samples;
+    const auto it = series_.constFind(key);
+    if (it == series_.cend() || limit < 1 || !std::isfinite(lower) || !std::isfinite(upper) || lower > upper)
+        return {};
+    const auto& series = it.value();
+    const auto finish = [&] {
+        QVector<QPointF> result;
+        result.reserve(static_cast<qsizetype>(samples.size()));
+        for (const auto& point : samples) result.push_back(point);
+        return result;
+    };
+    const auto add = [&](double time, double value) {
+        if (time < lower || time > upper) return;
+        if (samples.size() == static_cast<std::size_t>(limit)) {
+            if (truncated) *truncated = true;
+            samples.pop_front();
+        }
+        samples.push_back({time, value});
+    };
+    if (!series.spillFile) {
+        for (qsizetype i = 0; i < series.time.size(); ++i) add(series.time[i], series.value[i]);
+        return finish();
+    }
+    const auto position = series.spillFile->pos();
+    if (!series.spillFile->flush()) {
+        if (error) *error = QStringLiteral("Cannot flush temporary recording for analysis");
+        return {};
+    }
+    // Start near the end of the requested interval when it exceeds the cap.
+    auto end = std::upper_bound(series.spillIndex.cbegin(), series.spillIndex.cend(), upper,
+        [](double time, const Series::SpillIndexEntry& entry) { return time < entry.timeSeconds; });
+    auto start = end;
+    const auto blocks = static_cast<qsizetype>(limit / kSpillIndexStride + 2);
+    for (qsizetype i = 0; i < blocks && start != series.spillIndex.cbegin(); ++i) --start;
+    if (start == series.spillIndex.cend() || !series.spillFile->seek(start->byteOffset)) {
+        if (error) *error = QStringLiteral("Cannot seek temporary recording for analysis");
+        series.spillFile->seek(position);
+        return {};
+    }
+    if (start != series.spillIndex.cbegin() && start->timeSeconds > lower && truncated) *truncated = true;
+    QDataStream in(series.spillFile.data());
+    in.setByteOrder(QDataStream::LittleEndian);
+    while (!in.atEnd()) {
+        double time = 0, value = 0;
+        in >> time >> value;
+        if (in.status() != QDataStream::Ok) {
+            if (error) *error = QStringLiteral("Temporary recording read failed");
+            series.spillFile->seek(position);
+            return {};
+        }
+        if (time > upper) break;
+        add(time, value);
+    }
+    if (!series.spillFile->seek(position)) {
+        if (error) *error = QStringLiteral("Cannot restore temporary recording position");
+        return {};
+    }
+    return finish();
 }
 
 auto ScopeRecording::surroundingSamples(const QString& key, const double timeSeconds) const -> SurroundingSamples

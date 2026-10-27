@@ -13,6 +13,19 @@ retained full-resolution recording when it is available, including samples
 omitted from the bounded plot preview; imported comparison traces show their
 run label. Move outside the trace to clear the readout.
 
+The **Spectrum**, **Correlation**, and **XY Trajectory** tabs analyze a selected
+run and model-time interval. **Visible time** copies the current Time zoom;
+**Full run** selects the run span. Press **Analyze** to take a fresh snapshot.
+Current runs are read from the authoritative observation source; saved and
+archived runs are read from their full-resolution temporary recordings. The
+plot preview is never analysis input. The status states whether the configured
+analysis sample limit shortened the selected interval. The limit is set under
+**Settings → Scope Analysis Limit…**; it defaults to 16,384 positions and is
+bounded at 65,536. The analysis panels offer the full selected count as an FFT
+or correlation size when at least 64 positions are present. Spectrum uses the
+run's rational model rate and displays bin spacing; correlation and trajectory
+use same-step channel pairs. Gaps are not filled or interpolated.
+
 **Clear display** clears only this presentation. Recorded source data remains available for export and for replay after viewer recreation.
 Starting a run clears current samples; with **Clear scope traces before run**
 unchecked, it first moves the preceding recording into a labelled `Run <ID>`

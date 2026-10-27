@@ -8,6 +8,7 @@ class QDial;
 class QLabel;
 class QToolButton;
 class QProgressBar;
+class QScrollArea;
 class QVBoxLayout;
 class QWheelEvent;
 namespace s7studio::ui {
@@ -27,8 +28,10 @@ public:
     QLabel* readout() const { return readout_; }
     QLabel* status() const { return status_; }
     QProgressBar* busy() const { return busy_; }
+    void setReadoutLines(int lines);
 private:
     QVBoxLayout* settings_;
+    QScrollArea* readoutArea_;
     QLabel *readout_, *status_;
     QProgressBar* busy_;
 };

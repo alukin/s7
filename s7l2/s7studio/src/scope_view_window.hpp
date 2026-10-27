@@ -11,6 +11,7 @@
 #include <QWidget>
 
 #include <cstdint>
+#include <memory>
 #include <Qt>
 
 class QIODevice;
@@ -20,9 +21,14 @@ class QLineSeries;
 class QPushButton;
 class QTimer;
 class QScrollBar;
+class QComboBox;
+class QDoubleSpinBox;
+class QTabWidget;
 
 namespace s7studio::viewers {
 class LinePlotView;
+class SpectrumView;
+class PairAnalysisView;
 }
 
 namespace s7studio::ui {
@@ -94,6 +100,10 @@ private:
     void scrollToTimePosition(int position);
     void onXRangeChanged();
     void updateHover(double timeSeconds, double value, bool active);
+    void refreshAnalysisRuns();
+    void invalidateAnalysis();
+    void analyzeInterval();
+    void pollAnalysis();
 
     QString probeName_;
     ScopeRecording recording_;
@@ -114,6 +124,16 @@ private:
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
     QTimer* repaintTimer_ = nullptr;
+    QTabWidget* tabs_ = nullptr;
+    QComboBox* analysisRun_ = nullptr;
+    QDoubleSpinBox *analysisStart_ = nullptr, *analysisEnd_ = nullptr;
+    QLabel* analysisStatus_ = nullptr;
+    QPushButton* analyzeButton_ = nullptr;
+    viewers::SpectrumView* spectrum_ = nullptr;
+    viewers::PairAnalysisView *correlation_ = nullptr, *trajectory_ = nullptr;
+    struct AnalysisJob;
+    std::unique_ptr<AnalysisJob> analysisJob_;
+    std::uint64_t analysisSequence_ = 0;
 };
 
 } // namespace s7studio::ui

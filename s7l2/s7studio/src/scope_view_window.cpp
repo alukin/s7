@@ -11,8 +11,12 @@
 #include "observation/scope_results.hpp"
 
 #include "viewers/line_plot_view.hpp"
+#include "viewers/spectrum_view.hpp"
+#include "viewers/pair_analysis_view.hpp"
+#include "instrument_controls.hpp"
 
 #include <QCheckBox>
+#include <QDoubleSpinBox>
 #include <QColor>
 #include <QFile>
 #include <QFileDialog>
@@ -23,6 +27,7 @@
 #include <QPushButton>
 #include <QSaveFile>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVariantMap>
@@ -32,6 +37,9 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <map>
+#include <mutex>
+#include <thread>
 #include <utility>
 
 namespace s7studio::ui {
@@ -103,6 +111,240 @@ auto plotPixelColumns(viewers::LinePlotView* plot) -> qsizetype
 }
 
 } // namespace
+
+struct ScopeViewWindow::AnalysisJob {
+    std::jthread worker;
+    std::mutex mutex;
+    std::shared_ptr<observation::LiveFrame> frame;
+    QString error;
+    bool truncated = false;
+    bool done = false;
+    ~AnalysisJob() { worker.request_stop(); if (worker.joinable()) worker.join(); }
+};
+
+namespace {
+struct AnalysisRow {
+    double time = 0.0;
+    std::vector<double> values;
+};
+
+auto analysisFrame(std::map<std::int64_t, AnalysisRow>& rows, const QVector<observation::LiveChannel>& channels,
+                   const QJsonObject& provenance, const std::uint64_t runId,
+                   const std::uint64_t generation, const std::uint64_t received, const bool finished)
+    -> std::shared_ptr<observation::LiveFrame>
+{
+    auto frame = std::make_shared<observation::LiveFrame>();
+    frame->runId = runId;
+    frame->generation = generation;
+    frame->received = received;
+    frame->finished = finished;
+    frame->channels = channels;
+    frame->provenance = provenance;
+    frame->dt = provenance.value(QStringLiteral("dt_seconds")).toDouble();
+    const auto rate = provenance.value(QStringLiteral("rate")).toObject();
+    frame->rateNumerator = rate.value(QStringLiteral("numerator")).toString().toULongLong();
+    frame->rateDenominator = rate.value(QStringLiteral("denominator")).toString().toULongLong();
+    frame->steps.reserve(rows.size());
+    frame->times.reserve(rows.size());
+    frame->values.reserve(rows.size()*static_cast<std::size_t>(channels.size()));
+    for (auto& [step, row] : rows) {
+        frame->steps.push_back(step);
+        frame->times.push_back(row.time);
+        frame->values.insert(frame->values.end(), row.values.begin(), row.values.end());
+    }
+    return frame;
+}
+} // namespace
+
+void ScopeViewWindow::refreshAnalysisRuns()
+{
+    if (!analysisRun_) return;
+    const auto previous = analysisRun_->currentData().toString();
+    QStringList runs;
+    bool live = static_cast<bool>(source());
+    for (const auto& series : recording_.series()) {
+        if (series.isComparison()) {
+            if (!runs.contains(series.comparisonLabel)) runs.push_back(series.comparisonLabel);
+        } else if (series.hasSamples) live = true;
+    }
+    const QSignalBlocker blocker(analysisRun_);
+    analysisRun_->clear();
+    if (live) analysisRun_->addItem(QStringLiteral("Current run"), QStringLiteral("current"));
+    for (const auto& run : runs) analysisRun_->addItem(run, run);
+    const auto index = analysisRun_->findData(previous);
+    if (index >= 0) analysisRun_->setCurrentIndex(index);
+    analysisRun_->setEnabled(analysisRun_->count() > 0);
+    analyzeButton_->setEnabled(analysisRun_->count() > 0);
+    if (previous != analysisRun_->currentData().toString() && analysisRun_->count() > 0) {
+        const auto selected = analysisRun_->currentData().toString();
+        double low = std::numeric_limits<double>::infinity(), high = -low;
+        for (const auto& series : recording_.series()) if (series.hasSamples &&
+            ((selected == QStringLiteral("current") && !series.isComparison()) || series.comparisonLabel == selected)) {
+            low = std::min(low, series.firstTime); high = std::max(high, series.lastTime);
+        }
+        if (low <= high) { analysisStart_->setValue(low); analysisEnd_->setValue(high); }
+    }
+}
+
+void ScopeViewWindow::invalidateAnalysis()
+{
+    if (analysisJob_) { analysisJob_->worker.request_stop(); analysisJob_.reset(); }
+    spectrum_->clear(); correlation_->clear(); trajectory_->clear();
+    analysisStatus_->setText(QStringLiteral("Selection changed — press Analyze for a new snapshot."));
+}
+
+void ScopeViewWindow::analyzeInterval()
+{
+    if (!analysisRun_ || analysisRun_->currentIndex() < 0) return;
+    const double lower = analysisStart_->value(), upper = analysisEnd_->value();
+    if (lower > upper) { analysisStatus_->setText(QStringLiteral("From must be no later than To.")); return; }
+    invalidateAnalysis();
+    const auto limit = std::clamp(QSettings{}.value(QStringLiteral("scope/analysisSampleLimit"), 16384).toInt(), 64, 65536);
+    const auto selected = analysisRun_->currentData().toString();
+    const auto generation = ++analysisSequence_;
+    if (selected == QStringLiteral("current") && source()) {
+        const auto journal = source();
+        const auto selectedIds = selectedChannels();
+        const auto allChannels = journal->channels();
+        const auto provenance = journal->provenance();
+        QVector<observation::LiveChannel> channels;
+        QHash<observation::ChannelId, std::size_t> indices;
+        for (const auto id : selectedIds) if (id < static_cast<observation::ChannelId>(allChannels.size()) && !indices.contains(id)) {
+            const auto& channel = allChannels[static_cast<qsizetype>(id)];
+            const auto separator = channel.name.indexOf(QLatin1Char('/'));
+            channels.push_back({separator < 0 ? channel.name : channel.name.mid(separator+1),
+                observation::probeUnit(provenance, channel.name), channel.sourceType});
+            indices.insert(id, static_cast<std::size_t>(channels.size()-1));
+        }
+        if (channels.isEmpty()) { analysisStatus_->setText(QStringLiteral("No channels are bound to this Scope.")); return; }
+        analysisJob_ = std::make_unique<AnalysisJob>();
+        auto* job = analysisJob_.get();
+        analysisStatus_->setText(QStringLiteral("Reading exact samples from the run…"));
+        job->worker = std::jthread([job, journal, channels, indices, provenance, lower, upper, limit, generation](std::stop_token stop) {
+            const auto status = journal->status();
+            std::map<std::int64_t, AnalysisRow> rows;
+            bool truncated = false;
+            QString error;
+            std::uint64_t cursor = 0;
+            while (cursor < status.samples && !stop.stop_requested()) {
+                const auto page = journal->read(cursor, static_cast<qsizetype>(std::min<std::uint64_t>(4096, status.samples-cursor)));
+                if (!page.error.isEmpty() || page.next <= cursor) { error = page.error.isEmpty() ? QStringLiteral("Run read stalled") : page.error; break; }
+                for (const auto& sample : page.samples) {
+                    const auto index = indices.constFind(sample.channel);
+                    if (index == indices.cend() || sample.timeSeconds < lower || sample.timeSeconds > upper) continue;
+                    auto [it, inserted] = rows.try_emplace(sample.step);
+                    if (inserted) { it->second.time = sample.timeSeconds;
+                        it->second.values.assign(static_cast<std::size_t>(channels.size()), std::numeric_limits<double>::quiet_NaN()); }
+                    else {
+                        const double dt = provenance.value(QStringLiteral("dt_seconds")).toDouble();
+                        const double tolerance = std::max(std::abs(dt)*1e-8,
+                            32*std::numeric_limits<double>::epsilon()*std::abs(sample.timeSeconds));
+                        if (!std::isfinite(sample.timeSeconds) || std::abs(it->second.time-sample.timeSeconds) > tolerance) {
+                            error = QStringLiteral("Channels report different model times for the same logical step.");
+                            break;
+                        }
+                    }
+                    it->second.values[*index] = sample.value;
+                    while (rows.size() > static_cast<std::size_t>(limit)) { rows.erase(rows.begin()); truncated = true; }
+                }
+                if (!error.isEmpty()) break;
+                cursor = page.next;
+            }
+            if (stop.stop_requested()) return;
+            auto frame = analysisFrame(rows, channels, provenance, journal->runId(), generation, status.samples, status.finished);
+            std::lock_guard lock(job->mutex);
+            job->frame = std::move(frame);
+            job->error = std::move(error);
+            job->truncated = truncated;
+            job->done = true;
+        });
+        return;
+    }
+    QJsonObject metadata;
+    QVector<observation::LiveChannel> channels;
+    QVector<QString> keys;
+    bool incompleteRecording = false;
+    for (auto it = recording_.series().cbegin(); it != recording_.series().cend(); ++it) {
+        if (!it->hasSamples || (selected == QStringLiteral("current") ? it->isComparison() : it->comparisonLabel != selected)) continue;
+        if (keys.isEmpty()) metadata = it->isComparison() ? it->sourceMetadata : recording_.runMetadata();
+        incompleteRecording |= it->spillFailed || !it->recordingWarning.isEmpty();
+        channels.push_back({it->channelName, it->channelUnit, QStringLiteral("f64")});
+        keys.push_back(it.key());
+    }
+    if (keys.isEmpty()) { analysisStatus_->setText(QStringLiteral("The selected run has no samples.")); return; }
+    const auto provenance = metadata.value(QStringLiteral("provenance")).toObject();
+    incompleteRecording |= metadata.value(QStringLiteral("incomplete")).toBool();
+    if (selected == QStringLiteral("current")) incompleteRecording |= recording_.droppedSampleCount() > 0;
+    const double dt = provenance.value(QStringLiteral("dt_seconds")).toDouble();
+    if (!(dt > 0) || !std::isfinite(dt)) {
+        analysisStatus_->setText(QStringLiteral("Analysis needs the run's recorded dt and rational sample rate.")); return;
+    }
+    std::map<std::int64_t, AnalysisRow> rows;
+    bool truncated = false;
+    QString error;
+    for (qsizetype column = 0; column < keys.size(); ++column) {
+        bool columnTruncated = false;
+        const auto samples = recording_.analysisSamples(keys[column], lower, upper, limit, &columnTruncated, &error);
+        if (!error.isEmpty()) { analysisStatus_->setText(error); return; }
+        truncated |= columnTruncated;
+        for (const auto& sample : samples) {
+            const long double rawStep = static_cast<long double>(sample.x())/dt;
+            if (!std::isfinite(static_cast<double>(rawStep)) || std::abs(rawStep) > static_cast<long double>(std::numeric_limits<std::int64_t>::max())) {
+                analysisStatus_->setText(QStringLiteral("Model time is outside the supported step range.")); return;
+            }
+            const auto step = static_cast<std::int64_t>(std::llround(rawStep));
+            const auto reconstructed = static_cast<long double>(step)*dt;
+            const auto tolerance = std::max(1e-8L*static_cast<long double>(dt),
+                32*static_cast<long double>(std::numeric_limits<double>::epsilon())*std::abs(static_cast<long double>(sample.x())));
+            if (std::abs(reconstructed-static_cast<long double>(sample.x())) > tolerance) {
+                analysisStatus_->setText(QStringLiteral("Sample times do not align with the run's dt; analysis will not resample them.")); return;
+            }
+            auto [it, inserted] = rows.try_emplace(step);
+            if (inserted) { it->second.time = sample.x();
+                it->second.values.assign(static_cast<std::size_t>(channels.size()), std::numeric_limits<double>::quiet_NaN()); }
+            it->second.values[static_cast<std::size_t>(column)] = sample.y();
+            while (rows.size() > static_cast<std::size_t>(limit)) { rows.erase(rows.begin()); truncated = true; }
+        }
+    }
+    const auto runId = metadata.value(QStringLiteral("run_id")).toString().toULongLong();
+    const auto frame = analysisFrame(rows, channels, provenance, runId,
+        generation, static_cast<std::uint64_t>(rows.size()), metadata.value(QStringLiteral("finished")).toBool());
+    if (frame->steps.empty()) { analysisStatus_->setText(QStringLiteral("No samples in the selected interval.")); return; }
+    spectrum_->setFrame(frame); correlation_->setFrame(frame); trajectory_->setFrame(frame);
+    if (frame->steps.size() >= 64) { spectrum_->setAnalysisSize(static_cast<int>(frame->steps.size()));
+        correlation_->setAnalysisSize(static_cast<int>(frame->steps.size())); }
+    analysisStatus_->setText(QStringLiteral("%1 exact positions • t=%2…%3 s • dt %4 s • %5%6")
+        .arg(frame->steps.size()).arg(frame->times.front(), 0, 'g', 8)
+        .arg(frame->times.back(), 0, 'g', 8).arg(dt, 0, 'g', 8)
+        .arg(truncated ? QStringLiteral("newest samples within configured cap") : QStringLiteral("full selected interval"))
+        .arg(incompleteRecording ? QStringLiteral(" • recording incomplete") : QString()));
+}
+
+void ScopeViewWindow::pollAnalysis()
+{
+    if (!analysisJob_) return;
+    std::shared_ptr<observation::LiveFrame> frame;
+    QString error;
+    bool truncated = false;
+    {
+        std::lock_guard lock(analysisJob_->mutex);
+        if (!analysisJob_->done) return;
+        frame = std::move(analysisJob_->frame);
+        error = std::move(analysisJob_->error);
+        truncated = analysisJob_->truncated;
+    }
+    analysisJob_.reset();
+    if (!error.isEmpty()) { analysisStatus_->setText(error); return; }
+    if (!frame || frame->steps.empty()) { analysisStatus_->setText(QStringLiteral("No samples in the selected interval.")); return; }
+    spectrum_->setFrame(frame); correlation_->setFrame(frame); trajectory_->setFrame(frame);
+    if (frame->steps.size() >= 64) { spectrum_->setAnalysisSize(static_cast<int>(frame->steps.size()));
+        correlation_->setAnalysisSize(static_cast<int>(frame->steps.size())); }
+    analysisStatus_->setText(QStringLiteral("%1 exact positions • t=%2…%3 s • dt %4 s • %5%6")
+        .arg(frame->steps.size()).arg(frame->times.front(), 0, 'g', 8)
+        .arg(frame->times.back(), 0, 'g', 8).arg(frame->dt, 0, 'g', 8)
+        .arg(truncated ? QStringLiteral("newest samples within configured cap") : QStringLiteral("full selected interval"))
+        .arg(source() && source()->status().incomplete() ? QStringLiteral(" • recording incomplete") : QString()));
+}
 
 auto ScopeViewWindow::viewerType() -> viewers::ViewerType
 {
@@ -179,12 +421,96 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     plot_->bridge()->inspectionEnabled = true;
     emit plot_->bridge()->inspectionChanged();
     plot_->setToolTip(QStringLiteral("Hover over a trace for stored sample values. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
-    rootLayout->addWidget(plot_, 1);
+    tabs_ = new QTabWidget(this);
+    tabs_->setObjectName(QStringLiteral("scope.analysisTabs"));
+    auto* timePage = new QWidget(tabs_);
+    auto* timeLayout = new QVBoxLayout(timePage);
+    timeLayout->setContentsMargins(0, 0, 0, 0);
+    timeLayout->addWidget(plot_, 1);
     timeScrollBar_ = new QScrollBar(Qt::Horizontal, this);
     timeScrollBar_->setRange(0, 10000);
     timeScrollBar_->setEnabled(false);
     timeScrollBar_->setToolTip(QStringLiteral("Scroll the visible time range. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
-    rootLayout->addWidget(timeScrollBar_);
+    timeLayout->addWidget(timeScrollBar_);
+    tabs_->addTab(timePage, QStringLiteral("Time"));
+    spectrum_ = new viewers::SpectrumView(tabs_);
+    correlation_ = new viewers::PairAnalysisView(analysis::PairKind::Correlation, tabs_);
+    trajectory_ = new viewers::PairAnalysisView(analysis::PairKind::Constellation, tabs_);
+    spectrum_->setSnapshotMode(true);
+    correlation_->setSnapshotMode(true);
+    trajectory_->setSnapshotMode(true);
+    spectrum_->controlPanel()->setReadoutLines(4);
+    correlation_->controlPanel()->setReadoutLines(4);
+    trajectory_->controlPanel()->setReadoutLines(4);
+    tabs_->addTab(spectrum_, QStringLiteral("Spectrum"));
+    tabs_->addTab(correlation_, QStringLiteral("Correlation"));
+    tabs_->addTab(trajectory_, QStringLiteral("XY Trajectory"));
+
+    auto* analysisControls = new QHBoxLayout();
+    analysisRun_ = new QComboBox(this);
+    analysisRun_->setObjectName(QStringLiteral("scope.analysisRun"));
+    analysisRun_->setFixedWidth(170);
+    analysisStart_ = ui::compactNumber(this);
+    analysisEnd_ = ui::compactNumber(this);
+    for (auto* spin : {analysisStart_, analysisEnd_}) {
+        spin->setRange(-1e12, 1e12);
+        spin->setSuffix(QStringLiteral(" s"));
+    }
+    analysisStart_->setObjectName(QStringLiteral("scope.analysisStart"));
+    analysisEnd_->setObjectName(QStringLiteral("scope.analysisEnd"));
+    auto* visibleButton = new QPushButton(QStringLiteral("Visible time"), this);
+    auto* fullButton = new QPushButton(QStringLiteral("Full run"), this);
+    visibleButton->setObjectName(QStringLiteral("scope.visibleAnalysisRange"));
+    fullButton->setObjectName(QStringLiteral("scope.fullAnalysisRange"));
+    analyzeButton_ = new QPushButton(QStringLiteral("Analyze"), this);
+    analyzeButton_->setObjectName(QStringLiteral("scope.analyze"));
+    analysisControls->addWidget(new QLabel(QStringLiteral("Run"), this));
+    analysisControls->addWidget(analysisRun_);
+    analysisControls->addWidget(new QLabel(QStringLiteral("From"), this));
+    analysisControls->addWidget(analysisStart_);
+    analysisControls->addWidget(new QLabel(QStringLiteral("To"), this));
+    analysisControls->addWidget(analysisEnd_);
+    analysisControls->addWidget(visibleButton);
+    analysisControls->addWidget(fullButton);
+    analysisControls->addWidget(analyzeButton_);
+    analysisControls->addStretch(1);
+    analysisStatus_ = new QLabel(QStringLiteral("Select a run and interval, then Analyze."), this);
+    analysisStatus_->setObjectName(QStringLiteral("scope.analysisStatus"));
+    analysisStatus_->setWordWrap(true);
+    rootLayout->addLayout(analysisControls);
+    rootLayout->addWidget(analysisStatus_);
+    rootLayout->addWidget(tabs_, 1);
+    connect(analyzeButton_, &QPushButton::clicked, this, &ScopeViewWindow::analyzeInterval);
+    connect(visibleButton, &QPushButton::clicked, this, [this] {
+        analysisStart_->setValue(plot_->xMin()); analysisEnd_->setValue(plot_->xMax());
+    });
+    connect(fullButton, &QPushButton::clicked, this, [this] { refreshAnalysisRuns();
+        const auto selected = analysisRun_->currentData().toString();
+        double low = std::numeric_limits<double>::infinity(), high = -low;
+        for (const auto& series : recording_.series()) if (series.hasSamples &&
+            ((selected == QStringLiteral("current") && !series.isComparison()) || series.comparisonLabel == selected)) {
+            low = std::min(low, series.firstTime); high = std::max(high, series.lastTime);
+        }
+        if (selected == QStringLiteral("current") && source()) {
+            const auto selectedIds = selectedChannels();
+            const auto first = source()->read(0, 4096);
+            for (const auto& sample : first.samples) if (selectedIds.contains(sample.channel))
+                low = std::min(low, sample.timeSeconds);
+            const auto last = source()->tail(selectedIds, 1);
+            for (const auto& channel : last.channels) for (const auto& sample : channel.samples)
+                high = std::max(high, sample.timeSeconds);
+        }
+        if (low <= high) { analysisStart_->setValue(low); analysisEnd_->setValue(high); }
+    });
+    connect(analysisRun_, &QComboBox::currentIndexChanged, fullButton, &QPushButton::click);
+    connect(analysisRun_, &QComboBox::currentIndexChanged, this, &ScopeViewWindow::invalidateAnalysis);
+    connect(analysisStart_, &QDoubleSpinBox::valueChanged, this, &ScopeViewWindow::invalidateAnalysis);
+    connect(analysisEnd_, &QDoubleSpinBox::valueChanged, this, &ScopeViewWindow::invalidateAnalysis);
+    auto* analysisPoll = new QTimer(this);
+    analysisPoll->setInterval(40);
+    connect(analysisPoll, &QTimer::timeout, this, &ScopeViewWindow::pollAnalysis);
+    analysisPoll->start();
+    refreshAnalysisRuns();
 
     recording_.setStatusChangedHandler([this] { updateStatus(); });
 
@@ -215,6 +541,7 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
 
 ScopeViewWindow::~ScopeViewWindow()
 {
+    if (analysisJob_) { analysisJob_->worker.request_stop(); analysisJob_.reset(); }
     // The handler refers to this window's widgets.
     recording_.setStatusChangedHandler({});
 }
@@ -275,6 +602,7 @@ void ScopeViewWindow::syncSeries(const bool restyle)
     plot_->setAxisTitles(QStringLiteral("model time (s)"), yTitle);
     hasTimeRange_ = false;
     dirty_ = true;
+    refreshAnalysisRuns();
 }
 
 auto ScopeViewWindow::plottedSeries(const QString& key) const -> QLineSeries*
@@ -328,6 +656,7 @@ void ScopeViewWindow::updateStatus()
 
 void ScopeViewWindow::clearBuffers()
 {
+    invalidateAnalysis();
     discardPresentationHistory();
     recording_.clearLive();
     syncSeries(true);
@@ -337,6 +666,7 @@ void ScopeViewWindow::clearBuffers()
 
 void ScopeViewWindow::clearComparisons()
 {
+    invalidateAnalysis();
     recording_.clearComparisons();
     syncSeries(true);
     refreshPlot();

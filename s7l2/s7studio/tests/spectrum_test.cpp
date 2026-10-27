@@ -49,7 +49,36 @@ private slots:
         }
         const auto restored = fft.transform(actual, true);
         for (std::size_t i = 0; i < input.size(); ++i) QVERIFY(std::abs(restored[i]-input[i]) < 2e-14);
-        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, fft.transform(std::vector<std::complex<double>>(63)));
+        input.resize(63);
+        const auto irregular = fft.transform(input);
+        const auto irregularReference = direct(input);
+        for (std::size_t i = 0; i < input.size(); ++i)
+            QVERIFY(std::abs(irregular[i]-std::complex<double>(irregularReference[i])) < 2e-12);
+        QVERIFY_THROWS_EXCEPTION(std::invalid_argument, fft.transform(std::vector<std::complex<double>>{}));
+    }
+    void fullIntervalWithNonPowerOfTwoLength() {
+        constexpr std::size_t n = 125;
+        SpectrumSettings settings; settings.size = n; settings.window = SpectrumWindow::Rectangular;
+        SpectrumAnalyzer analyzer;
+        const auto result = analyzer.analyze(frame(n, [](auto step) {
+            return 2.5*std::sin(2*std::numbers::pi*17*static_cast<double>(step)/n);
+        }), settings);
+        QCOMPARE(result.state, SpectrumResult::State::Ready);
+        QCOMPARE(result.values.size(), std::size_t(63));
+        QVERIFY(std::abs(result.values[17]-2.5) < 2e-13);
+        QVERIFY(std::abs(result.binSpacing-1024./n) < 1e-14);
+        settings.iq = true;
+        for (const int signedBin : {-17, 17}) {
+            analyzer.reset();
+            const auto complexResult = analyzer.analyze(frame(n, [signedBin](auto step) {
+                const double phase = 2*std::numbers::pi*signedBin*static_cast<double>(step)/n;
+                return std::complex<double>(std::cos(phase), std::sin(phase));
+            }), settings);
+            QCOMPARE(complexResult.state, SpectrumResult::State::Ready);
+            const auto index = static_cast<std::size_t>(static_cast<int>(n/2)+signedBin);
+            QVERIFY(std::abs(complexResult.values[index]-1.0) < 2e-13);
+            QVERIFY(std::abs(complexResult.frequencies[index]-signedBin*1024./n) < 2e-14);
+        }
     }
     void dcNyquistAndToneAmplitude() {
         SpectrumSettings settings; settings.size = 256; settings.window = SpectrumWindow::Rectangular;

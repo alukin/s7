@@ -56,7 +56,8 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     removeMean_ = new QCheckBox("Remove mean", box); removeMean_->setObjectName("spectrum.removeMean");
     frequencyOffset_ = number("spectrum.frequencyOffset", -1e12, 1e12, 0); frequencyOffset_->setSuffix(" Hz");
     frequencyOffset_->setToolTip("Frequency-axis offset only; does not change the model rate or FFT.");
-    field("FFT N", size_); field("Window", window_); fields->addControl(removeMean_); field("Axis offset", frequencyOffset_);
+    size_->setToolTip("Spectral bin spacing Δf = model sample rate / FFT N. A full Scope interval is offered when it fits the analysis limit.");
+    field("Resolution (FFT N)", size_); field("Window", window_); fields->addControl(removeMean_); field("Axis offset", frequencyOffset_);
     fields = group("Quantity / averaging", "spectrum.averaging", false);
     quantity_ = combo("spectrum.quantity", {"Peak amplitude", "Power / bin", "PSD"});
     quantity_->setToolTip("Power / bin is window-normalized mean-square power; PSD is power per Hz. Tone amplitude has a separate coherent-gain normalization.");
@@ -105,6 +106,16 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
         connect(display, &QDoubleSpinBox::valueChanged, this, &SpectrumView::inspectionInvalidated);
     pollTimer_ = new QTimer(this); pollTimer_->setInterval(16); connect(pollTimer_, &QTimer::timeout, this, &SpectrumView::poll);
     reconfigure();
+}
+void SpectrumView::setAnalysisSize(int samples)
+{
+    if (samples < 64 || samples > 65536) return;
+    auto index = size_->findData(samples);
+    if (index < 0) {
+        size_->addItem(QStringLiteral("Full interval (%1)").arg(samples), samples);
+        index = size_->count()-1;
+    }
+    size_->setCurrentIndex(index);
 }
 SpectrumView::~SpectrumView()
 {
@@ -290,7 +301,7 @@ void SpectrumView::updateStatus()
 {
     busy_->setVisible(worker_.busy());
     QString text;
-    if (!frame_) text = "Waiting for live acquisition.";
+    if (!frame_) text = snapshotMode_ ? "Select an interval and press Analyze." : "Waiting for live acquisition.";
     else if (!result_) text = worker_.busy() ? "Computing spectrum…" : "Spectrum inactive.";
     else if (result_->state != SpectrumResult::State::Ready) text = result_->message;
     else text = QStringLiteral("Run %1 • steps %2–%3 • N=%4 • Fs=%5 Hz • Δf=%6 Hz • coherent gain=%7 • ENBW=%8 Hz • averaged %9 • skipped hops %10%11%12")
@@ -306,8 +317,8 @@ void SpectrumView::updateStatus()
     status_->setToolTip(text);
     if (result_ && result_->state == SpectrumResult::State::Ready) {
         status_->setText(QStringLiteral("%1 • %2\nN=%3 • Δf=%4 Hz%5")
-            .arg(frame_ && frame_->finished ? "Run finished" : "Acquiring",
-                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : "Following live")
+            .arg(frame_ && frame_->finished ? "Run finished" : snapshotMode_ ? "Run active" : "Acquiring",
+                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : snapshotMode_ ? "Selected snapshot" : "Following live")
             .arg(result_->size).arg(result_->binSpacing, 0, 'g', 5)
             .arg(result_->message.isEmpty() ? QString() : "\n"+result_->message));
     } else status_->setText(text);

@@ -662,6 +662,33 @@ void MainWindow::buildUi()
     auto* scopeTempDirectoryAction = settingsMenu->addAction(QStringLiteral("Scope Temporary Data Directory…"));
     connect(scopeTempDirectoryAction, &QAction::triggered,
             this, &MainWindow::chooseScopeTemporaryDirectory);
+    auto* scopeAnalysisAction = settingsMenu->addAction(QStringLiteral("Scope Analysis Limit…"));
+    scopeAnalysisAction->setObjectName(QStringLiteral("settings.scopeAnalysisLimit"));
+    connect(scopeAnalysisAction, &QAction::triggered, this, [this] {
+        QDialog dialog(this);
+        dialog.setWindowTitle(QStringLiteral("Scope analysis limit"));
+        auto* layout = new QVBoxLayout(&dialog);
+        auto* explanation = new QLabel(QStringLiteral(
+            "Maximum exact sample positions per analysis interval. Longer runs use the newest positions in the selected time range. "
+            "Spectrum and correlation use the selected positions without decimation or resampling."), &dialog);
+        explanation->setWordWrap(true);
+        layout->addWidget(explanation);
+        auto* form = new QFormLayout;
+        auto* limit = new QComboBox(&dialog);
+        limit->setObjectName(QStringLiteral("scope.analysisSampleLimit"));
+        for (const auto count : {4096, 8192, 16384, 32768, 65536})
+            limit->addItem(QStringLiteral("%1 samples / channel").arg(count), count);
+        const auto current = QSettings{}.value(QStringLiteral("scope/analysisSampleLimit"), 16384).toInt();
+        limit->setCurrentIndex(std::max(0, limit->findData(current)));
+        form->addRow(QStringLiteral("Analysis sample limit"), limit);
+        layout->addLayout(form);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        layout->addWidget(buttons);
+        if (dialog.exec() == QDialog::Accepted)
+            QSettings{}.setValue(QStringLiteral("scope/analysisSampleLimit"), limit->currentData());
+    });
 
     auto* helpMenu = menus.help;
     helpMenu->setObjectName(QStringLiteral("menu.help"));

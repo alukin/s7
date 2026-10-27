@@ -21,6 +21,8 @@ public:
     explicit SpectrumView(QWidget* parent = nullptr, QWidget* controlsParent = nullptr);
     ~SpectrumView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
+    void setAnalysisSize(int samples);
+    void setSnapshotMode(bool snapshot) { snapshotMode_ = snapshot; updateStatus(); }
     void clear();
     void setSuspended(bool suspended);
     std::uint64_t analysisRequestCount() const { return submitted_; }
@@ -52,6 +54,7 @@ private:
     std::uint64_t revision_ = 1, submitted_ = 0;
     QTimer* pollTimer_;
     bool suspended_ = false;
+    bool snapshotMode_ = false;
     bool inspecting_ = false, frozen_ = false, rendering_ = false;
     QComboBox *mode_, *channel_, *quadrature_, *size_, *window_, *quantity_, *scale_, *average_, *marker_;
     QSpinBox *count_, *fixedBin_;

@@ -16,7 +16,7 @@ struct Sum {
 }
 std::vector<double> spectrumWindow(SpectrumWindow window, std::size_t size)
 {
-    if (size < 64 || size > 65536 || (size & (size-1))) throw std::invalid_argument("FFT size must be a power of two from 64 to 65536.");
+    if (size < 64 || size > 65536) throw std::invalid_argument("FFT size must be from 64 to 65536.");
     std::vector<double> weights(size);
     for (std::size_t i = 0; i < size; ++i) {
         const double phase = 2*std::numbers::pi*static_cast<double>(i)/static_cast<double>(size);
@@ -58,8 +58,8 @@ SpectrumResult SpectrumAnalyzer::analyze(const observation::LiveFrame& frame, co
     const auto n = settings.size;
     if (frame.timeEnvelope) return fail(SpectrumResult::State::Unavailable, "Time display envelopes are not full-rate FFT input.");
     const auto width = static_cast<std::size_t>(frame.channels.size());
-    if (n < 64 || n > 65536 || (n & (n-1)))
-        return fail(SpectrumResult::State::Unavailable, "FFT size must be a power of two from 64 to 65536.");
+    if (n < 64 || n > 65536)
+        return fail(SpectrumResult::State::Unavailable, "FFT size must be from 64 to 65536.");
     if (settings.channel >= width || (settings.iq && (settings.quadrature >= width || settings.channel == settings.quadrature)))
         return fail(SpectrumResult::State::Unavailable, "Select a source channel, or two different I/Q channels.");
     if (!frame.rateNumerator || !frame.rateDenominator)
@@ -136,8 +136,8 @@ SpectrumResult SpectrumAnalyzer::analyze(const observation::LiveFrame& frame, co
     const auto bins = settings.iq ? n : n/2+1;
     result.frequencies.resize(bins); result.values.resize(bins);
     for (std::size_t i = 0; i < bins; ++i) {
-        const auto bin = settings.iq ? (i+n/2)%n : i;
-        const double factor = !settings.iq && bin != 0 && bin != n/2 ? 2 : 1;
+        const auto bin = settings.iq ? (i+(n+1)/2)%n : i;
+        const double factor = !settings.iq && bin != 0 && !(n % 2 == 0 && bin == n/2) ? 2 : 1;
         const double magnitude = std::abs(transformed[bin]);
         double value;
         if (settings.quantity == SpectrumQuantity::Amplitude) value = (magnitude/s1.value)*factor;

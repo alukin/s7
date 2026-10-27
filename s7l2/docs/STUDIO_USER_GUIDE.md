@@ -268,6 +268,21 @@ Choose the temporary directory under Settings and keep free disk space.
 Use Scope **Save Run…** to persist `.s7scope` recordings, **Open Run…** to add
 saved comparisons and **Export Full CSV** for interchange. CSV does not carry
 all recording metadata. **Run details…** shows the frozen model and provenance.
+Scope also has **Time**, **Spectrum**, **Correlation**, and **XY Trajectory** tabs.
+Choose a current or comparison run, enter a model-time interval, then press
+**Analyze**. **Visible time** copies the Time plot's zoom range; **Full run**
+selects the chosen recording's span. Analysis reads exact retained samples,
+never the reduced drawing points. The Spectrum and Correlation controls include
+an exact full-interval sample count when it fits, including counts that are not
+powers of two. Spectral bin spacing is the model sample rate divided by FFT N.
+Correlation offers cross and auto modes; XY pairs channels at the same logical
+step. Missing steps and nonfinite samples remain visible as analysis errors,
+without interpolation. The status line reports the sample count, `dt`, an
+incomplete recording, and any sample-cap truncation. For very long intervals,
+**Settings → Scope Analysis Limit…** chooses the maximum retained positions
+per analysis request (16,384 by default; up to 65,536). The newest positions
+in the selected interval are used at the cap. Re-run **Analyze** after changing
+the interval or while a continuous run advances.
 Closing a viewer and reopening it retains its source while the diagram stays
 open; explicitly save results before closing the diagram or application.
 

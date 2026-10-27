@@ -99,6 +99,10 @@ public:
     // Retained samples on either side of model time. Disk-backed series use
     // the spill index; a failed spill can only search its retained preview.
     [[nodiscard]] auto surroundingSamples(const QString& key, double timeSeconds) const -> SurroundingSamples;
+    // Exact retained samples in a time interval, bounded to the newest limit.
+    // This never reads the decimated plot preview when a disk copy exists.
+    [[nodiscard]] auto analysisSamples(const QString& key, double lower, double upper,
+        qsizetype limit, bool* truncated = nullptr, QString* error = nullptr) const -> QVector<QPointF>;
 
     // Same full-resolution CSV writer used by the export action. The caller
     // supplies a writable device; finite doubles retain round-trip precision.
