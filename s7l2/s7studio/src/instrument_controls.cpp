@@ -191,7 +191,8 @@ InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : Ins
         area->setFixedHeight(label->fontMetrics().lineSpacing()*lines+(lines == 2 ? 12 : 16));
         area->setWidget(label); return area;
     };
-    root->addWidget(textArea(".readout", 8, Qt::AlignLeft | Qt::AlignTop, readout_));
+    readoutArea_ = textArea(".readout", 8, Qt::AlignLeft | Qt::AlignTop, readout_);
+    root->addWidget(readoutArea_);
     busy_ = new QProgressBar(this); busy_->setObjectName(name+".processing"); busy_->setRange(0, 0);
     busy_->setTextVisible(false); busy_->setMaximumHeight(12); busy_->setAccessibleName("Processing analysis");
     auto policy = busy_->sizePolicy(); policy.setRetainSizeWhenHidden(true); busy_->setSizePolicy(policy);
@@ -199,6 +200,10 @@ InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : Ins
     root->addWidget(textArea(".status", 2, Qt::AlignLeft | Qt::AlignBottom, status_));
 }
 void InstrumentSidebar::addSection(QWidget* section) { settings_->insertWidget(settings_->count()-1, section); }
+void InstrumentSidebar::setReadoutLines(int lines)
+{
+    readoutArea_->setFixedHeight(readout_->fontMetrics().lineSpacing()*std::max(1, lines)+12);
+}
 
 ChoiceButtons::ChoiceButtons(const QStringList& labels, const QString& name, QWidget* parent) : QWidget(parent)
 {

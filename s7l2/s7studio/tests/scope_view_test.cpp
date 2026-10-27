@@ -180,5 +180,16 @@ int main(int argc, char** argv)
         QString error;
         if (!scope.writeRecordedCsv(buffer, &error) || buffer.data().count('\n') != count + 1)
             throw std::runtime_error("Scope display reduction changed full-resolution export");
+        bool truncated = false;
+        const auto exact = scope.recording().analysisSamples(QStringLiteral("live:dense"), 11.995, 12.005,
+            64, &truncated, &error);
+        if (!error.isEmpty() || truncated || exact.size() != 11
+            || exact[5].x() != 12.0 || exact[5].y() != 17.0)
+            throw std::runtime_error("Scope analysis did not read the exact disk-backed interval");
+        const auto capped = scope.recording().analysisSamples(QStringLiteral("live:dense"), 0.0, 30.0,
+            64, &truncated, &error);
+        if (!error.isEmpty() || !truncated || capped.size() != 64
+            || std::abs(capped.front().x()-29.936) > 1e-12)
+            throw std::runtime_error("Scope analysis cap did not select the newest exact samples");
     }
 }

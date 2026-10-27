@@ -20,6 +20,8 @@ public:
     explicit PairAnalysisView(analysis::PairKind kind, QWidget* parent = nullptr, QWidget* controlsParent = nullptr);
     ~PairAnalysisView() override;
     void setFrame(std::shared_ptr<const observation::LiveFrame> frame);
+    void setAnalysisSize(int samples);
+    void setSnapshotMode(bool snapshot) { snapshotMode_ = snapshot; updateStatus(); }
     void clear();
     void setSuspended(bool suspended);
     std::uint64_t analysisRequestCount() const { return submitted_; }
@@ -52,6 +54,7 @@ private:
     std::uint64_t revision_ = 1, submitted_ = 0;
     QTimer* pollTimer_;
     bool suspended_ = false;
+    bool snapshotMode_ = false;
     bool inspecting_ = false, frozen_ = false, rendering_ = false, resizePending_ = false;
     QString displayWarning_;
     QComboBox *first_, *second_, *mode_, *size_, *normalization_, *density_, *lagUnits_;

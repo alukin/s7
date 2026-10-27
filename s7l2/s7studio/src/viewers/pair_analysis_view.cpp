@@ -120,6 +120,16 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* cont
     render(true);
 }
 PairAnalysisView::~PairAnalysisView() { worker_.cancel(); disconnect(plot_, nullptr, this, nullptr); delete plot_; }
+void PairAnalysisView::setAnalysisSize(int samples)
+{
+    if (samples < 64 || samples > 65536 || kind_ != PairKind::Correlation) return;
+    auto index = size_->findData(samples);
+    if (index < 0) {
+        size_->addItem(QStringLiteral("Full interval (%1)").arg(samples), samples);
+        index = size_->count()-1;
+    }
+    size_->setCurrentIndex(index);
+}
 PairSettings PairAnalysisView::settings() const
 {
     PairSettings s;
@@ -310,7 +320,7 @@ void PairAnalysisView::updateStatus()
 {
     busy_->setVisible(worker_.busy());
     QString text;
-    if (!frame_) text = "Waiting for live acquisition.";
+    if (!frame_) text = snapshotMode_ ? "Select an interval and press Analyze." : "Waiting for live acquisition.";
     else if (!result_) text = worker_.busy() ? "Computing paired analysis…" : "Analysis inactive.";
     else if (result_->state != PairResult::State::Ready) text = result_->message;
     else {
@@ -329,8 +339,8 @@ void PairAnalysisView::updateStatus()
         const auto summary = kind_ == PairKind::Constellation ? QStringLiteral("%1 pairs • %2 Hz").arg(r.points.size()).arg(r.sampleRate, 0, 'g', 5) :
             QStringLiteral("N=%1 • peak lag %2 samples").arg(r.settings.size).arg(r.lags[r.peakIndex]);
         status_->setText(QStringLiteral("%1 • %2\n%3%4")
-            .arg(frame_ && frame_->finished ? "Run finished" : "Acquiring",
-                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : "Following live", summary,
+            .arg(frame_ && frame_->finished ? "Run finished" : snapshotMode_ ? "Run active" : "Acquiring",
+                 inspecting_ ? "Inspecting" : frozen_ ? "Frozen" : snapshotMode_ ? "Selected snapshot" : "Following live", summary,
                  displayWarning_.isEmpty() ? QString() : "\n"+displayWarning_));
     } else status_->setText(text);
 }

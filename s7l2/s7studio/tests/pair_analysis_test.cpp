@@ -74,6 +74,20 @@ private slots:
             QVERIFY(std::abs(r.correlations[r.peakIndex]+6) < 2e-14); s.absolutePeak = false;
         }
     }
+    void fullIntervalWithNonPowerOfTwoLength() {
+        constexpr std::size_t n = 125;
+        PairSettings settings; settings.size = n; settings.maxLag = 12;
+        settings.normalization = CorrelationNormalization::Raw;
+        auto input = frame(n);
+        std::fill(input.values.begin(), input.values.end(), 0);
+        input.values[2*40] = 2;
+        input.values[2*45+1] = 3;
+        PairAnalyzer analyzer;
+        const auto result = analyzer.analyze(PairKind::Correlation, input, settings);
+        QCOMPARE(result.state, PairResult::State::Ready);
+        QCOMPARE(result.lags[result.peakIndex], 5);
+        QVERIFY(std::abs(result.correlations[result.peakIndex]-6) < 1e-13);
+    }
     void autocorrelationZeroEnergyAndExtremeScales() {
         PairSettings s; s.size = 64; s.maxLag = 8; s.autoCorrelation = true;
         PairAnalyzer analyzer; auto input = frame(64);

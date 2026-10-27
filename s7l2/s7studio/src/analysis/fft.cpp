@@ -25,8 +25,8 @@ Fft::~Fft() = default;
 void Fft::initialize() { (void)plannerMutex(); }
 std::vector<std::complex<double>> Fft::transform(std::span<const std::complex<double>> input, bool inverse)
 {
-    if (input.empty() || input.size() > 131072 || (input.size() & (input.size()-1)))
-        throw std::invalid_argument("FFT requires a power-of-two size no larger than 131072.");
+    if (input.empty() || input.size() > 131072)
+        throw std::invalid_argument("FFT size must be no larger than 131072.");
     if (!impl_ || impl_->size != input.size()) {
         auto next = std::make_unique<Impl>();
         next->size = input.size();
