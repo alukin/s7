@@ -342,7 +342,12 @@ guarded run (`qual-guarded-120.json`). Its maximum UI gap was **310 ms**, with
 seven gaps over the 250 ms target. A prior candidate run reached 279 ms with
 seven gaps; an unguarded title-update run reached 1,528 ms with four gaps,
 including two over one second. The latter illustrates run-to-run sensitivity,
-so the result cannot be reported as passing. Timestamped
+so the result cannot be reported as passing. After Scope hover merged into
+main, the rebased branch passed a fresh two-minute mixed run
+(`qual-rebased-120.json`): 1,000.007 source steps/s, no capture error,
+5,465,187 recorded samples, 968 MB peak RSS, 271 ms maximum UI gap and eight
+gaps over 250 ms. The performance change is reviewable, while the latency gate
+remains open. Timestamped
 60-second traces placed the longer gaps shortly after dock scrolls. A 5 Hz
 dock refresh, a shared preview QML engine, and retained hidden dock surfaces
 were tried locally, then removed: their full two-minute measurements still
