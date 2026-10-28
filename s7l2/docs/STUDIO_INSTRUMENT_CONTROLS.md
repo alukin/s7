@@ -32,7 +32,7 @@ appear above the selected controls and in button tooltips.
 
 The larger vertical dial now controls units/division directly. Both scale and
 timebase dials default to a 1–2–5 ladder, with reachable numeric bounds even
-when those bounds are not ladder values. Fine buttons independently select 100
+when those bounds are not ladder values. The Fine icon buttons independently select 100
 logarithmic steps per decade. Changing mode never changes the exact value.
 Clockwise, Right/Up and a positive wheel notch reduce scale (zoom in); Left/Down
 zoom out. One wheel detent applies one step regardless of desktop scroll-line
@@ -45,12 +45,15 @@ The exact Gain × field retains the 1e-6 to 1e6 display multiplier range. Scale
 bounds follow the current Y span and that range. Position has ±1e12 exact entry
 and a wrapping relative dial. Scale, position and timebase knobs all use the
 same 72×72 logical-pixel size. A full turn changes the offset by half
-the visible Y span. Zero and double-click reset only that channel's position;
+the visible Y span. The Zero icon and double-click reset only that channel's position;
 there is no half-span control or movable interval. Numeric edits never pass
 through the dial. Editing scale, gain or position disables Auto Y, preserving
 the shared scale and other channels' positions. Auto Y can be enabled again
-explicitly. Fine/Zero sit beside the vertical knob headings to preserve room
+explicitly. Fine/Zero icons sit beside the vertical knob headings to preserve room
 for the horizontal controls.
+The top Freeze, Resume / Fit and controls-column actions use compact icons with
+tooltips and accessible names. The control column is bounded at 285 pixels;
+its settings and sample readout remain scrollable.
 
 Project-owned painted QDial subclasses retain Qt keyboard, wheel, mouse and
 accessibility behavior. Channel accents, dark graticule and compact readouts

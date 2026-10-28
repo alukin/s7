@@ -263,7 +263,7 @@ CollapsibleSection::CollapsibleSection(const QString& title, const QString& name
 RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWidget* parent) : QWidget(parent), mapping_(mapping)
 {
     setObjectName(name + ".control");
-    auto* layout = new QVBoxLayout(this); layout->setContentsMargins(6, 2, 6, 2); layout->setSpacing(4);
+    auto* layout = new QVBoxLayout(this); layout->setContentsMargins(2, 2, 2, 2); layout->setSpacing(4);
     auto* title = new QLabel(mapping == Mapping::LogScale ? "Scale / div" : mapping == Mapping::LogTime ? "Time / div (s)" : "Position", this);
     title->setObjectName(name + ".title"); title->setAlignment(Qt::AlignCenter);
     auto* dial = new InstrumentDial(this); dial_ = dial; dial_->setObjectName(name + ".dial");
@@ -277,16 +277,19 @@ RotaryValueControl::RotaryValueControl(Mapping mapping, const QString& name, QWi
                       mapping != Mapping::RelativeOffset ? 1e6 : 1e12);
     number_->setValue(mapping == Mapping::LogScale ? 1 : mapping == Mapping::LogTime ? 2 : 0);
     auto* action = new QToolButton(this);
-    action->setFixedHeight(action->fontMetrics().height()+8);
+    action->setFixedSize(24, 24);
+    action->setIconSize({16, 16});
+    action->setProperty("compactAction", true);
     if (mapping == Mapping::RelativeOffset) {
         dial_->setToolTip("Turn to move this channel vertically. One turn moves half the visible plot height. Double-click to reset to zero.");
-        action->setObjectName(name + ".zero"); action->setText("Zero");
+        action->setObjectName(name + ".zero"); action->setIcon(style()->standardIcon(QStyle::SP_DialogResetButton));
         action->setToolTip("Reset this channel's display position to zero"); action->setAccessibleName("Reset channel position to zero");
         dial->resetPosition = [this] { number_->setValue(0); };
         connect(action, &QToolButton::clicked, this, dial->resetPosition);
         const QSignalBlocker block(dial_); dial_->setValue(previousPosition_);
     } else {
-        fine_ = action; fine_->setObjectName(name + ".fine"); fine_->setText("Fine"); fine_->setCheckable(true);
+        fine_ = action; fine_->setObjectName(name + ".fine");
+        fine_->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView)); fine_->setCheckable(true);
         fine_->setAccessibleName(title->text() + " fine adjustment");
         fine_->setToolTip("Unchecked: 1–2–5 steps. Checked: 100 logarithmic steps per decade. Exact entry is always available.");
         dial_->setToolTip("Clockwise zooms in. Coarse: 1–2–5 scale steps; Fine: smaller logarithmic steps. Does not change samples or simulation dt.");

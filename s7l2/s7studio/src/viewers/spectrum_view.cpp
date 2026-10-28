@@ -72,12 +72,16 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     alpha_ = number("spectrum.alpha", .000001, 1, .2);
     field("Quantity", quantity_); field("Averaging", average_); field("K", count_); field("Alpha", alpha_);
     fields = group("Display", "spectrum.display", false);
+    frequencyRange_ = combo("spectrum.frequencyRange", {"Fit significant peaks", "Full frequency band"});
+    frequencyRange_->setCurrentIndex(1);
+    frequencyRange_->setToolTip("Fit shows the frequencies containing at least 1% of peak amplitude (or -40 dB of peak power), with margin. Full shows DC through Nyquist.");
     scale_ = combo("spectrum.scale", {"Linear", "dB re explicit reference"});
     reference_ = number("spectrum.reference", 1e-12, 1e12, 1, 12);
     reference_->setToolTip("Positive reference in the chosen linear quantity's units. No implicit dBFS or dBm calibration.");
     dbOffset_ = number("spectrum.dbOffset", -300, 300, 0, 2); dbOffset_->setSuffix(" dB");
     floor_ = number("spectrum.floor", -600, 0, -180, 1); floor_->setSuffix(" dB");
-    field("Scale", scale_); field("Reference", reference_); field("Display offset", dbOffset_); field("Display floor", floor_);
+    field("Frequency range", frequencyRange_); field("Scale", scale_); field("Reference", reference_);
+    field("Display offset", dbOffset_); field("Display floor", floor_);
     peakHold_ = new QCheckBox("Peak hold", box); peakHold_->setObjectName("spectrum.peakHold"); fields->addControl(peakHold_);
     auto* reset = new QPushButton("Reset averages / hold", box); reset->setObjectName("spectrum.reset"); fields->addControl(reset);
     ui::compactActionButton(reset, QStyle::SP_BrowserReload, QStringLiteral("Reset averages and peak hold"),
@@ -108,6 +112,7 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     connect(declaredUnit_, &QLineEdit::editingFinished, this, [this] { reconfigure(); });
     connect(reset, &QPushButton::clicked, this, [this] { reconfigure(); });
     for (auto* control : {scale_, marker_}) connect(control, &QComboBox::currentIndexChanged, this, [this] { render(true); });
+    connect(frequencyRange_, &QComboBox::currentIndexChanged, this, [this] { render(true); });
     for (auto* control : {reference_, dbOffset_, floor_, frequencyOffset_})
         connect(control, &QDoubleSpinBox::valueChanged, this, [this] { render(true); });
     connect(fixedBin_, &QSpinBox::valueChanged, this, [this] { render(false); });
@@ -122,6 +127,7 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
 void SpectrumView::setSnapshotMode(bool snapshot)
 {
     snapshotMode_ = snapshot;
+    frequencyRange_->setCurrentIndex(snapshot ? 0 : 1);
     plot_->bridge()->instrumentTheme = !snapshot;
     plot_->series()[0]->setColor(QColor(snapshot ? "#1f77b4" : "#54b8ff"));
     plot_->series()[1]->setColor(QColor(snapshot ? "#b36b00" : "#ffc36b"));
@@ -160,6 +166,7 @@ void SpectrumView::reconfigure()
     const bool iq = mode_->currentIndex() == 1, power = quantity_->currentIndex() != 0;
     const bool all = snapshotMode_ && !iq && allChannels_->isChecked();
     allChannels_->setEnabled(snapshotMode_ && !iq);
+    frequencyRange_->setEnabled(!iq);
     channel_->parentWidget()->setVisible(!all);
     quadrature_->setEnabled(iq); declaredUnit_->setEnabled(iq); average_->setEnabled(power);
     quadrature_->parentWidget()->setVisible(iq); declaredUnit_->parentWidget()->setVisible(iq);
@@ -290,7 +297,30 @@ void SpectrumView::render(bool fit)
     for (auto* line : additionalHolds_) plot_->setSeriesVisible(line, false);
     if (result_ && result_->state == SpectrumResult::State::Ready) {
         const auto& result = *result_;
-        if (fit) plot_->setXRange(result.frequencies.front()+frequencyOffset_->value(), result.frequencies.back()+frequencyOffset_->value());
+        if (fit) {
+            double high = result.frequencies.back();
+            if (!result.settings.iq && frequencyRange_->currentIndex() == 0) {
+                double peak = 0;
+                const auto updatePeak = [&](const std::vector<double>& values) {
+                    for (const double value : values) peak = std::max(peak, value);
+                };
+                if (result.traces.empty()) updatePeak(result.values);
+                else for (const auto& trace : result.traces) updatePeak(trace.values);
+                if (peak > 0) {
+                    const double threshold = peak * (result.settings.quantity == SpectrumQuantity::Amplitude ? .01 : .0001);
+                    std::size_t highest = 0;
+                    const auto findHighest = [&](const std::vector<double>& values) {
+                        for (std::size_t i = 0; i < values.size(); ++i) if (values[i] >= threshold) highest = std::max(highest, i);
+                    };
+                    if (result.traces.empty()) findHighest(result.values);
+                    else for (const auto& trace : result.traces) findHighest(trace.values);
+                    const auto padded = std::min(result.frequencies.size()-1,
+                        std::max<std::size_t>(8, highest + std::max<std::size_t>(3, highest/5)));
+                    high = result.frequencies[padded];
+                }
+            }
+            plot_->setXRange(result.frequencies.front()+frequencyOffset_->value(), high+frequencyOffset_->value());
+        }
         fixedBin_->setMaximum(static_cast<int>(result.values.size()-1));
         auto points = [&](const std::vector<double>& values) {
             QList<QPointF> reduced;
@@ -401,7 +431,8 @@ void SpectrumView::updateStatus()
     if (worker_.replacedRequests()) text += QStringLiteral(" • replaced pending requests %1").arg(worker_.replacedRequests());
     status_->setToolTip(text);
     if (result_ && result_->state == SpectrumResult::State::Ready) {
-        if (snapshotMode_) status_->setText(QStringLiteral("N=%1 • Δf=%2 Hz%3")
+        if (snapshotMode_) status_->setText(QStringLiteral("%1 • N=%2 • Δf=%3 Hz%4")
+            .arg(!result_->settings.iq && frequencyRange_->currentIndex() == 0 ? "Fit peaks" : "Full band")
             .arg(result_->size).arg(result_->binSpacing, 0, 'g', 5)
             .arg(result_->message.isEmpty() ? QString() : "\n"+result_->message));
         else status_->setText(QStringLiteral("%1 • %2\nN=%3 • Δf=%4 Hz%5")
