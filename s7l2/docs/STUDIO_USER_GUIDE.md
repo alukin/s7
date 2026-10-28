@@ -278,7 +278,10 @@ Use the arrow at the right of the analysis tabs to hide or show their settings
 column and expand the plot.
 Choose a current or comparison run, enter a model-time interval, then press
 **Analyze**. **Visible time** copies the Time plot's zoom range; **Full run**
-selects the chosen recording's span. Analysis reads exact retained samples,
+selects the chosen recording's span. The initial interval covers the first
+quarter of the run; changing it or analyzing holds that choice. Spectrum starts
+with a fitted frequency range, and **Display → Frequency range** offers the
+full band through Nyquist. Analysis reads exact retained samples,
 never the reduced drawing points. The Spectrum and Correlation controls include
 an exact full-interval sample count when it fits, including counts that are not
 powers of two. Spectral bin spacing is the model sample rate divided by FFT N.

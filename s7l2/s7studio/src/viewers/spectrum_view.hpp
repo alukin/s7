@@ -58,7 +58,7 @@ private:
     bool suspended_ = false;
     bool snapshotMode_ = false;
     bool inspecting_ = false, frozen_ = false, rendering_ = false;
-    QComboBox *mode_, *channel_, *quadrature_, *size_, *window_, *quantity_, *scale_, *average_, *marker_;
+    QComboBox *mode_, *channel_, *quadrature_, *size_, *window_, *quantity_, *scale_, *average_, *marker_, *frequencyRange_;
     QSpinBox *count_, *fixedBin_;
     QDoubleSpinBox *alpha_, *reference_, *dbOffset_, *floor_, *frequencyOffset_;
     QCheckBox *removeMean_, *peakHold_, *allChannels_;

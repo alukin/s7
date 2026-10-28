@@ -10,6 +10,12 @@ and frequency-axis offsets remain explicit presentation settings.
 
 ## Try it
 
+For direct amplitude and frequency references in both recorded Spectrum and
+Live Oscilloscope Time, use the [spectrum example diagrams](../examples/spectrum/README.md).
+Run them at 1024 Hz as described there. Recorded Spectrum starts with a fitted
+frequency range; **Display → Frequency range → Full frequency band** shows DC
+through Nyquist. The Live Oscilloscope Spectrum retains its full-band default.
+
 Open `examples/signal_measurement/am_coherent_detection_live.s7diagram`, run
 two model seconds at **12800 Hz**, and double-click `carrier_scope`. Choose
 **Spectrum**, then select `carrier_scope/carrier [1]` as Source. With N=4096

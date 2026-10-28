@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <Qt>
 
 class QIODevice;
@@ -103,6 +104,7 @@ private:
     void onXRangeChanged();
     void updateHover(double timeSeconds, double value, bool active);
     void refreshAnalysisRuns();
+    void updateAutoAnalysisInterval();
     void invalidateAnalysis();
     void analyzeInterval();
     void pollAnalysis();
@@ -130,6 +132,9 @@ private:
     QTabWidget* tabs_ = nullptr;
     QComboBox* analysisRun_ = nullptr;
     QDoubleSpinBox *analysisStart_ = nullptr, *analysisEnd_ = nullptr;
+    QString analysisIntervalRun_;
+    bool analysisIntervalAuto_ = true;
+    std::optional<std::uint64_t> analysisSourceRunId_;
     QLabel* analysisStatus_ = nullptr;
     QPushButton* analyzeButton_ = nullptr;
     viewers::SpectrumView* spectrum_ = nullptr;

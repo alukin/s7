@@ -29,8 +29,9 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
    the plot, and a vertical cursor snaps to the nearest retained sample. Readout
    shows run, step, model time, raw value and supplied unit.
    Select the readout text to copy it. Moving out resumes live updates.
-6. **Freeze** holds that frame while acquisition continues. Wheel zoom
+6. The **Freeze** icon holds that frame while acquisition continues. Wheel zoom
    and drag pan also freeze it. **Resume / Fit** returns to the latest window.
+   Hover or focus the compact action icons to see their names and descriptions.
    Display gain, offset and visibility do not modify captured values.
 
 For analysis, choose **Spectrum** for a real channel or I/Q pair, or

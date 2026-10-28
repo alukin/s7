@@ -1,0 +1,232 @@
+{
+  "id": "three_bin_tones",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 600,
+    "height_mm": 350
+  },
+  "schema": {
+    "name": "three_bin_tones",
+    "elements": [
+      {
+        "id": "tone_32",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 32,
+          "sample_rate_hz": 1024,
+          "phase": 0
+        }
+      },
+      {
+        "id": "tone_96",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 0.5,
+          "frequency_hz": 96,
+          "sample_rate_hz": 1024,
+          "phase": 0
+        }
+      },
+      {
+        "id": "tone_160",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 0.25,
+          "frequency_hz": 160,
+          "sample_rate_hz": 1024,
+          "phase": 0
+        }
+      }
+    ],
+    "connections": []
+  },
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "tone_32",
+        "position": [
+          5,
+          12
+        ]
+      },
+      {
+        "id": "tone_96",
+        "position": [
+          5,
+          36
+        ]
+      },
+      {
+        "id": "tone_160",
+        "position": [
+          5,
+          60
+        ]
+      },
+      {
+        "id": "scope",
+        "position": [
+          90,
+          18
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "32 Hz, 1 Vpk",
+            "96 Hz, 0.5 Vpk",
+            "160 Hz, 0.25 Vpk"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "live",
+        "position": [
+          90,
+          56
+        ],
+        "observer": true,
+        "type": "LiveOscilloscope",
+        "params": {
+          "channel_count": 3,
+          "channel_names": [
+            "32 Hz, 1 Vpk",
+            "96 Hz, 0.5 Vpk",
+            "160 Hz, 0.25 Vpk"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "scope_0",
+        "from": {
+          "port": [
+            "tone_32",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "scope_1",
+        "from": {
+          "port": [
+            "tone_96",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "scope_2",
+        "from": {
+          "port": [
+            "tone_160",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "live_0",
+        "from": {
+          "port": [
+            "tone_32",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "live",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "live_1",
+        "from": {
+          "port": [
+            "tone_96",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "live",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "live_2",
+        "from": {
+          "port": [
+            "tone_160",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "live",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": []
+  },
+  "probes": []
+}

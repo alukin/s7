@@ -654,6 +654,13 @@ so the cursor and values never cover each other. Spectrum overlays every real
 input by default and can switch to one input or I/Q; all recorded analysis
 plots use Time's light background.
 
+Spectrum follow-up (2026-10-28): a newly selected run starts with the first
+quarter of its model-time span, with the current run beginning at zero. Recorded
+Spectrum initially fits significant peaks and offers a full-band option. Three
+reference diagrams under `examples/spectrum/` exercise exact FFT bins, DC,
+off-bin leakage and the Live Oscilloscope's Time and Spectrum scaling. Live
+controls use compact icon actions and a narrower scrollable column.
+
 Local verification: native Release Studio build; seven focused Scope, viewer,
 lifecycle, observation, provenance, spectrum and paired-analysis CTest entries
 pass, including saved-comparison analysis. The complete native Xvfb GUI

@@ -177,14 +177,27 @@ void ScopeViewWindow::refreshAnalysisRuns()
     if (index >= 0) analysisRun_->setCurrentIndex(index);
     analysisRun_->setEnabled(analysisRun_->count() > 0);
     analyzeButton_->setEnabled(analysisRun_->count() > 0);
-    if (previous != analysisRun_->currentData().toString() && analysisRun_->count() > 0) {
-        const auto selected = analysisRun_->currentData().toString();
-        double low = std::numeric_limits<double>::infinity(), high = -low;
-        for (const auto& series : recording_.series()) if (series.hasSamples &&
-            ((selected == QStringLiteral("current") && !series.isComparison()) || series.comparisonLabel == selected)) {
-            low = std::min(low, series.firstTime); high = std::max(high, series.lastTime);
-        }
-        if (low <= high) { analysisStart_->setValue(low); analysisEnd_->setValue(high); }
+    const auto selected = analysisRun_->currentData().toString();
+    if (selected != analysisIntervalRun_) {
+        analysisIntervalRun_ = selected;
+        analysisIntervalAuto_ = true;
+    }
+    updateAutoAnalysisInterval();
+}
+
+void ScopeViewWindow::updateAutoAnalysisInterval()
+{
+    if (!analysisIntervalAuto_ || analysisRun_->count() == 0) return;
+    const auto selected = analysisRun_->currentData().toString();
+    double low = std::numeric_limits<double>::infinity(), high = -low;
+    for (const auto& series : recording_.series()) if (series.hasSamples &&
+        ((selected == QStringLiteral("current") && !series.isComparison()) || series.comparisonLabel == selected)) {
+        low = std::min(low, series.firstTime); high = std::max(high, series.lastTime);
+    }
+    if (low <= high) {
+        const double start = selected == QStringLiteral("current") && low >= 0 ? 0.0 : low;
+        ui::setCompactNumberValueSilently(analysisStart_, start);
+        ui::setCompactNumberValueSilently(analysisEnd_, start + (high - start) / 4.0);
     }
 }
 
@@ -198,6 +211,7 @@ void ScopeViewWindow::invalidateAnalysis()
 void ScopeViewWindow::analyzeInterval()
 {
     if (!analysisRun_ || analysisRun_->currentIndex() < 0) return;
+    analysisIntervalAuto_ = false;
     const double lower = analysisStart_->value(), upper = analysisEnd_->value();
     if (lower > upper) { analysisStatus_->setText(QStringLiteral("From must be no later than To.")); return; }
     invalidateAnalysis();
@@ -533,9 +547,11 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     rootLayout->addLayout(readoutRow);
     connect(analyzeButton_, &QPushButton::clicked, this, &ScopeViewWindow::analyzeInterval);
     connect(visibleButton, &QPushButton::clicked, this, [this] {
+        analysisIntervalAuto_ = false;
         analysisStart_->setValue(plot_->xMin()); analysisEnd_->setValue(plot_->xMax());
     });
-    connect(fullButton, &QPushButton::clicked, this, [this] { refreshAnalysisRuns();
+    connect(fullButton, &QPushButton::clicked, this, [this] {
+        analysisIntervalAuto_ = false;
         const auto selected = analysisRun_->currentData().toString();
         double low = std::numeric_limits<double>::infinity(), high = -low;
         for (const auto& series : recording_.series()) if (series.hasSamples &&
@@ -553,10 +569,9 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
         }
         if (low <= high) { analysisStart_->setValue(low); analysisEnd_->setValue(high); }
     });
-    connect(analysisRun_, &QComboBox::currentIndexChanged, fullButton, &QPushButton::click);
-    connect(analysisRun_, &QComboBox::currentIndexChanged, this, &ScopeViewWindow::invalidateAnalysis);
-    connect(analysisStart_, &QDoubleSpinBox::valueChanged, this, &ScopeViewWindow::invalidateAnalysis);
-    connect(analysisEnd_, &QDoubleSpinBox::valueChanged, this, &ScopeViewWindow::invalidateAnalysis);
+    connect(analysisRun_, &QComboBox::currentIndexChanged, this, [this] { refreshAnalysisRuns(); invalidateAnalysis(); });
+    connect(analysisStart_, &QDoubleSpinBox::valueChanged, this, [this] { analysisIntervalAuto_ = false; invalidateAnalysis(); });
+    connect(analysisEnd_, &QDoubleSpinBox::valueChanged, this, [this] { analysisIntervalAuto_ = false; invalidateAnalysis(); });
     auto* analysisPoll = new QTimer(this);
     analysisPoll->setInterval(40);
     connect(analysisPoll, &QTimer::timeout, this, &ScopeViewWindow::pollAnalysis);
@@ -599,13 +614,19 @@ ScopeViewWindow::~ScopeViewWindow()
 
 bool ScopeViewWindow::refreshSource()
 {
+    if (source() && analysisSourceRunId_ != source()->runId()) {
+        analysisSourceRunId_ = source()->runId();
+        if (analysisRun_->currentData().toString() == QStringLiteral("current")) analysisIntervalAuto_ = true;
+    }
     const bool more = viewers::ObservationViewer::refreshSource();
+    updateAutoAnalysisInterval();
     updateStatus();
     return more;
 }
 
 void ScopeViewWindow::showEvent(QShowEvent* event)
 {
+    updateAutoAnalysisInterval();
     refreshPlot();
     QWidget::showEvent(event);
 }

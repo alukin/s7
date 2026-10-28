@@ -17,6 +17,7 @@
 #include <QFormLayout>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QGroupBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -82,6 +83,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         QSplitter[objectName="live.readoutSplitter"]::handle { background: #3b4552; }
         QSplitter[objectName="live.readoutSplitter"]::handle:hover { background: #46b5f3; }
         QPushButton, QToolButton { border: 1px solid #414d5d; border-radius: 4px; padding: 6px 8px; background: #2b3440; color: #dde4ed; }
+        QPushButton[compactAction="true"], QToolButton[compactAction="true"] { padding: 2px; }
         QPushButton:hover, QToolButton:hover { background: #354455; border-color: #6b829a; }
         QToolButton:checked, QPushButton:checked { background: #23455b; border-color: #46b5f3; }
         QToolButton[sectionHeader="true"] { text-align: left; border: none; border-top: 1px solid #3b4552; border-radius: 0; background: transparent; padding: 3px 2px; font-weight: 600; }
@@ -109,11 +111,20 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     tabs->addTab(constellation_, "Constellation / XY"); tabs->addTab(correlation_, "Correlation");
     auto* side = new InstrumentPanel(splitter); side->setObjectName("live.controls");
     auto* sideLayout = new QVBoxLayout(side); sideLayout->setContentsMargins(0, 0, 0, 0);
-    auto* buttons = new QGridLayout;
-    freeze_ = new QPushButton(QStringLiteral("Freeze"), side); freeze_->setObjectName("live.freeze"); freeze_->setCheckable(true);
-    buttons->addWidget(freeze_, 0, 0);
-    auto* follow = new QPushButton(QStringLiteral("Resume / Fit"), side); follow->setObjectName("live.follow"); buttons->addWidget(follow, 0, 1);
-    autoY_ = new QCheckBox(QStringLiteral("Auto Y"), side); autoY_->setObjectName("live.autoY"); autoY_->setChecked(true); buttons->addWidget(autoY_, 1, 0, 1, 2);
+    auto* buttons = new QHBoxLayout;
+    buttons->setContentsMargins(8, 0, 8, 0);
+    freeze_ = new QPushButton(side); freeze_->setObjectName("live.freeze"); freeze_->setCheckable(true);
+    compactActionButton(freeze_, QStyle::SP_MediaPause, QStringLiteral("Freeze display"),
+        QStringLiteral("Hold the current viewer frame for inspection."));
+    freeze_->setProperty("compactAction", true);
+    buttons->addWidget(freeze_);
+    auto* follow = new QPushButton(side); follow->setObjectName("live.follow");
+    compactActionButton(follow, QStyle::SP_BrowserReload, QStringLiteral("Resume and fit"),
+        QStringLiteral("Follow live data and fit the current plot."));
+    follow->setProperty("compactAction", true);
+    buttons->addWidget(follow);
+    buttons->addStretch(1);
+    autoY_ = new QCheckBox(QStringLiteral("Auto Y"), side); autoY_->setObjectName("live.autoY"); autoY_->setChecked(true); buttons->addWidget(autoY_);
     sideLayout->addLayout(buttons);
     auto autoYPolicy = autoY_->sizePolicy(); autoYPolicy.setRetainSizeWhenHidden(true); autoY_->setSizePolicy(autoYPolicy);
     auto* timeControls = new QWidget(controlPages); timeControls->setObjectName("live.timeControls");
@@ -180,7 +191,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         selectorLayout->setContentsMargins(0, 0, 0, 0); selectorLayout->setSpacing(3);
         auto* visible = new ChannelVisibilityBox(selector); visible->setChecked(true);
         selectorLayout->addWidget(visible); selectorLayout->addWidget(select, 1);
-        selectors->addWidget(selector, i/4, i%4); channelGroup->addButton(select, i); selector->hide();
+        selectors->addWidget(selector, i/3, i%3); channelGroup->addButton(select, i); selector->hide();
         auto* page = new QWidget(channelPages_); auto* pageLayout = new QVBoxLayout(page); pageLayout->setContentsMargins(0, 0, 0, 0); pageLayout->setSpacing(3);
         auto* channelName = new QLabel(page); channelName->setObjectName(name + ".name"); channelName->setWordWrap(true); channelName->setTextFormat(Qt::PlainText);
         channelName->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred); pageLayout->addWidget(channelName);
@@ -317,7 +328,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         if (!qobject_cast<QAbstractSpinBox*>(field->parentWidget()) && !qobject_cast<QComboBox*>(field->parentWidget()))
             field->setFixedHeight(field->fontMetrics().height()+12);
     // Long names and floating-point limits must not push the plot off screen.
-    side->setMinimumWidth(320); side->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    side->setMinimumWidth(270); side->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     inspection_->setPlot(plot_);
     connect(inspection_, &viewers::WindowInspectionPanel::pinned, this, [this] {
         freeze_->setChecked(true);
@@ -359,12 +370,19 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
     statusScroll->setWidgetResizable(true); statusScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     statusScroll->setFrameShape(QFrame::NoFrame); statusScroll->setFixedHeight(status_->fontMetrics().lineSpacing()*2+12);
     status_->setAlignment(Qt::AlignLeft | Qt::AlignBottom); statusScroll->setWidget(status_); timeSideLayout->addWidget(statusScroll);
-    splitter->setStretchFactor(0, 1); splitter->setStretchFactor(1, 0); splitter->setSizes({780, 320});
+    side->setMaximumWidth(285);
+    splitter->setStretchFactor(0, 1); splitter->setStretchFactor(1, 0); splitter->setSizes({780, 285});
     auto* toggle = new QToolButton(tabs); toggle->setObjectName("live.controlsToggle"); toggle->setCheckable(true); toggle->setChecked(true);
-    toggle->setText(QStringLiteral("Hide controls ▸")); toggle->setToolTip(QStringLiteral("Show or hide the control column to give the plot the whole window."));
+    toggle->setIcon(style()->standardIcon(QStyle::SP_ArrowDown)); toggle->setIconSize({16, 16});
+    toggle->setFixedSize(30, 28);
+    toggle->setProperty("compactAction", true);
+    toggle->setAccessibleName(QStringLiteral("Hide controls"));
+    toggle->setToolTip(QStringLiteral("Show or hide the control column to give the plot the whole window."));
     tabs->setCornerWidget(toggle, Qt::TopRightCorner);
-    connect(toggle, &QToolButton::toggled, side, [toggle, side](bool shown) {
-        side->setVisible(shown); toggle->setText(shown ? QStringLiteral("Hide controls ▸") : QStringLiteral("◂ Show controls"));
+    connect(toggle, &QToolButton::toggled, side, [this, toggle, side](bool shown) {
+        side->setVisible(shown);
+        toggle->setIcon(style()->standardIcon(shown ? QStyle::SP_ArrowDown : QStyle::SP_ArrowRight));
+        toggle->setAccessibleName(shown ? QStringLiteral("Hide controls") : QStringLiteral("Show controls"));
     });
     for (auto* c : {triggerMode_, triggerChannel_}) connect(c, &QComboBox::currentIndexChanged, this, [this] { applyTriggerSettings(); });
     connect(triggerEdge_, &ChoiceButtons::currentIndexChanged, this, [this] { applyTriggerSettings(); });
@@ -394,7 +412,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         }
     });
     connect(freeze_, &QPushButton::toggled, this, [this](bool frozen) {
-        freeze_->setText(frozen ? QStringLiteral("Frozen") : QStringLiteral("Freeze"));
+        freeze_->setAccessibleName(frozen ? QStringLiteral("Unfreeze display") : QStringLiteral("Freeze display"));
         const auto pinned = spectrum_->setFrozen(frozen);
         if (frozen && spectrum_->isVisible() && pinned) frame_ = pinned;
         for (auto* view : {constellation_, correlation_}) {

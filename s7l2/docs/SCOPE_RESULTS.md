@@ -18,7 +18,11 @@ The **Spectrum**, **Correlation**, and **XY Trajectory** tabs use the same light
 plot background as Time and analyze a selected run and model-time interval.
 The Spectrum tab overlays separate real spectra for all inputs by default;
 clear **All inputs** to select one input, or choose I/Q mode for a two-sided
-spectrum. **Visible time** copies the current Time zoom;
+spectrum. Its initial frequency range fits significant peaks; the full
+DC-to-Nyquist range is available in **Display → Frequency range**. The initial
+analysis interval covers the first quarter of the selected run and follows an
+active run until you edit the interval or press **Analyze**.
+**Visible time** copies the current Time zoom;
 **Full run** selects the run span. Press **Analyze** to take a fresh snapshot.
 The Scope header puts display, file, and interval controls on one bar, using
 compact icon buttons; hover

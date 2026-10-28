@@ -197,14 +197,14 @@ class Workflows : public QObject {
     bool fileAction(const char* name, const QString& path) {
         return dialogAction(name, [path](QDialog* dialog) { return selectFile(dialog, path); });
     }
-    bool configure(const char* name, double seconds) {
-        return dialogAction(name, [seconds](QDialog* dialog) {
+    bool configure(const char* name, double seconds, double frequencyHz = 1000) {
+        return dialogAction(name, [seconds, frequencyHz](QDialog* dialog) {
             auto* duration = dialog->findChild<QDoubleSpinBox*>("run.duration");
             auto* frequency = dialog->findChild<QDoubleSpinBox*>("run.frequency");
             auto* buttons = dialog->findChild<QDialogButtonBox*>();
             if (!duration || !frequency || !buttons) return false;
             duration->setValue(seconds);
-            frequency->setValue(1000);
+            frequency->setValue(frequencyHz);
             capture(dialog, "run-configuration");
             QTest::mouseClick(buttons->button(QDialogButtonBox::Ok), Qt::LeftButton);
             return true;
@@ -997,6 +997,15 @@ private slots:
         auto* full = viewer.findChild<QPushButton*>(QStringLiteral("scope.fullAnalysisRange")); QVERIFY(full);
         auto* analyze = viewer.findChild<QPushButton*>(QStringLiteral("scope.analyze")); QVERIFY(analyze);
         QVERIFY(!full->icon().isNull() && !full->toolTip().isEmpty());
+        auto* intervalStart = viewer.findChild<QDoubleSpinBox*>(QStringLiteral("scope.analysisStart")); QVERIFY(intervalStart);
+        auto* intervalEnd = viewer.findChild<QDoubleSpinBox*>(QStringLiteral("scope.analysisEnd")); QVERIFY(intervalEnd);
+        QCOMPARE(intervalStart->value(), 0.);
+        QVERIFY(std::abs(intervalEnd->value() - (1023./1024)/4) < 1e-12);
+        QCOMPARE(intervalEnd->findChild<QLabel*>("control.numberReadout")->text(),
+            QString::number(intervalEnd->value(), 'g', 5) + QStringLiteral(" s"));
+        intervalEnd->setValue(.5);
+        viewer.refreshSource();
+        QCOMPARE(intervalEnd->value(), .5);
         full->click(); analyze->click();
         auto* status = viewer.findChild<QLabel*>(QStringLiteral("scope.analysisStatus")); QVERIFY(status);
         QTRY_VERIFY(status->text().contains(QStringLiteral("1024 exact positions")));
@@ -1010,6 +1019,12 @@ private slots:
         QVERIFY(!spectrum->plotView()->bridge()->instrumentTheme);
         QVERIFY(std::abs(spectrum->result()->traces[0].values[25]-1.) < 1e-10);
         QVERIFY(std::abs(spectrum->result()->traces[2].values[75]-.5) < 1e-10);
+        auto* frequencyRange = spectrum->findChild<QComboBox*>(QStringLiteral("spectrum.frequencyRange")); QVERIFY(frequencyRange);
+        QCOMPARE(frequencyRange->currentIndex(), 0);
+        QVERIFY(spectrum->plotView()->xMax() > 75 && spectrum->plotView()->xMax() < 150);
+        frequencyRange->setCurrentIndex(1);
+        QCOMPARE(spectrum->plotView()->xMax(), 512.);
+        frequencyRange->setCurrentIndex(0);
         QVERIFY(spectrum->plotView()->series().size() >= 6);
         for (int i = 0; i < 3; ++i) {
             auto* line = spectrum->plotView()->series()[i == 0 ? 0 : i*2];
@@ -1079,6 +1094,148 @@ private slots:
         viewer.resize(900, 520);
         QTRY_VERIFY(spectrum->plotView()->width() >= 550);
         capture(&viewer, "scope-analysis-compact-900", true);
+        auto nextRun = std::make_shared<observation::ObservationSource>(43);
+        const auto nextChannel = nextRun->channel(QStringLiteral("analysis/a"));
+        for (int step = 0; step <= 1024; ++step)
+            QVERIFY(nextRun->append({nextChannel, step, step/1024., std::sin(2*std::numbers::pi*32*step/1024.)}));
+        QVERIFY(nextRun->finish());
+        viewer.attachSource(nextRun, {{QStringLiteral("a"), nextChannel}});
+        while (viewer.refreshSource()) {}
+        QCOMPARE(intervalStart->value(), 0.);
+        QCOMPARE(intervalEnd->value(), .25);
+    }
+
+    void spectrumReferenceExamples_data() {
+        QTest::addColumn<QString>("example");
+        QTest::newRow("three-bin-tones") << QStringLiteral("three_bin_tones");
+        QTest::newRow("two-tone-sum") << QStringLiteral("two_tone_sum");
+        QTest::newRow("off-bin-tone") << QStringLiteral("off_bin_tone");
+    }
+    void spectrumReferenceExamples() {
+        QFETCH(QString, example);
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/spectrum/" + example + ".s7diagram"));
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(manager->openObserver("Scope", "scope")); QVERIFY(scope);
+        auto* live = dynamic_cast<s7studio::ui::LiveOscilloscopeWindow*>(manager->openObserver("LiveOscilloscope", "live")); QVERIFY(live);
+        scope->resize(1250, 720); live->resize(1250, 720);
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(configure("action.run", 4, 1024));
+        QTRY_COMPARE_WITH_TIMEOUT(completed.count(), 1, 15000);
+        QVERIFY(completed.last()[0].toBool());
+        QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+        while (scope->refreshSource()) {}
+        auto* start = scope->findChild<QDoubleSpinBox*>("scope.analysisStart"); QVERIFY(start);
+        auto* end = scope->findChild<QDoubleSpinBox*>("scope.analysisEnd"); QVERIFY(end);
+        QCOMPARE(start->value(), 0.);
+        QCOMPARE(end->value(), 1.);
+        QCOMPARE(end->findChild<QLabel*>("control.numberReadout")->text(),
+            QString::number(end->value(), 'g', 5) + QStringLiteral(" s"));
+        auto* analyze = scope->findChild<QPushButton*>("scope.analyze"); QVERIFY(analyze);
+        analyze->click();
+        auto* tabs = scope->findChild<QTabWidget*>("scope.analysisTabs"); QVERIFY(tabs);
+        tabs->setCurrentIndex(1);
+        auto* spectrum = scope->findChild<s7studio::viewers::SpectrumView*>(); QVERIFY(spectrum);
+        QTRY_VERIFY(spectrum->result() && spectrum->result()->state == s7studio::analysis::SpectrumResult::State::Ready);
+        const auto& result = *spectrum->result();
+        QCOMPARE(result.size, std::size_t(1024));
+        QVERIFY(std::abs(result.binSpacing-1.) < 1e-12);
+        const auto near = [&](std::size_t channel, std::size_t bin, double expected, double tolerance) {
+            QVERIFY(channel < result.traces.size());
+            QVERIFY(std::abs(result.traces[channel].values[bin]-expected) < tolerance);
+        };
+        if (example == "three_bin_tones") {
+            QCOMPARE(result.traces.size(), std::size_t(3));
+            near(0, 32, 1., 1e-9); near(1, 96, .5, 1e-9); near(2, 160, .25, 1e-9);
+            QVERIFY(spectrum->plotView()->xMax() > 160 && spectrum->plotView()->xMax() < 220);
+        } else if (example == "two_tone_sum") {
+            QCOMPARE(result.traces.size(), std::size_t(1));
+            near(0, 0, .1, 1e-9); near(0, 32, 1., 1e-9); near(0, 96, .25, 1e-9);
+            QVERIFY(spectrum->plotView()->xMax() > 96 && spectrum->plotView()->xMax() < 140);
+        } else {
+            QCOMPARE(result.traces.size(), std::size_t(1));
+            near(0, 32, .8488, .001); near(0, 33, .8488, .001);
+            QVERIFY(spectrum->plotView()->xMax() > 33 && spectrum->plotView()->xMax() < 70);
+        }
+        auto* range = spectrum->findChild<QComboBox*>("spectrum.frequencyRange"); QVERIFY(range);
+        range->setCurrentIndex(1);
+        QCOMPARE(spectrum->plotView()->xMax(), 512.);
+        range->setCurrentIndex(0);
+        scope->raise(); scope->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(scope));
+        capture(scope, "spectrum-example-" + example, true);
+        QTRY_VERIFY(!live->displayedFrame().steps.empty());
+        const auto& frame = live->displayedFrame();
+        QCOMPARE(frame.channels.size(), result.traces.size());
+        QCOMPARE(frame.rateNumerator, std::uint64_t(1024));
+        for (qsizetype channel = 0; channel < frame.channels.size(); ++channel) {
+            double minimum = std::numeric_limits<double>::infinity();
+            double maximum = -minimum;
+            double sum = 0;
+            for (std::size_t step = 0; step < frame.steps.size(); ++step) {
+                const auto value = frame.values[step*static_cast<std::size_t>(frame.channels.size())+static_cast<std::size_t>(channel)];
+                minimum = std::min(minimum, value); maximum = std::max(maximum, value); sum += value;
+            }
+            if (example == "three_bin_tones") {
+                const double amplitude = channel == 0 ? 1. : channel == 1 ? .5 : .25;
+                QVERIFY(std::abs(maximum-amplitude) < 1e-9 && std::abs(minimum+amplitude) < 1e-9);
+            } else if (example == "two_tone_sum") {
+                QVERIFY(std::abs(sum/frame.steps.size()-.1) < 1e-9);
+            } else {
+                QVERIFY(maximum > .999 && minimum < -.999);
+            }
+        }
+        auto* timeScale = live->findChild<QDoubleSpinBox*>("live.timeScale"); QVERIFY(timeScale);
+        timeScale->setValue(.02);
+        QTRY_VERIFY(std::abs((live->plotView()->xMax()-live->plotView()->xMin())-.2) < .002);
+        if (example == "three_bin_tones") QVERIFY(live->plotView()->yMin() < -1. && live->plotView()->yMax() > 1.);
+        live->raise(); live->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(live));
+        auto* liveControls = live->findChild<QWidget*>("live.controls"); QVERIFY(liveControls);
+        auto* freeze = live->findChild<QPushButton*>("live.freeze"); QVERIFY(freeze);
+        auto* follow = live->findChild<QPushButton*>("live.follow"); QVERIFY(follow);
+        auto* toggle = live->findChild<QToolButton*>("live.controlsToggle"); QVERIFY(toggle);
+        QVERIFY2(liveControls->width() <= 285 && live->plotView()->width() >= 900,
+            qPrintable(QStringLiteral("controls=%1 plot=%2 window=%3")
+                .arg(liveControls->width()).arg(live->plotView()->width()).arg(live->width())));
+        QVERIFY(freeze->width() <= 30 && follow->width() <= 30 && toggle->width() <= 30);
+        QVERIFY(!freeze->toolTip().isEmpty() && !follow->toolTip().isEmpty() && !toggle->toolTip().isEmpty());
+        QTest::mouseMove(freeze, freeze->rect().center()); QCoreApplication::processEvents();
+        capture(live, "live-spectrum-example-" + example, true);
+        if (example == "three_bin_tones") {
+            live->resize(900, 520);
+            QTRY_VERIFY(live->plotView()->width() >= 580 && liveControls->width() <= 285);
+            capture(live, "live-spectrum-example-compact-900", true);
+        }
+        auto* liveTabs = live->findChild<QTabWidget*>("live.views"); QVERIFY(liveTabs);
+        liveTabs->setCurrentIndex(1);
+        auto* liveSpectrum = live->findChild<s7studio::viewers::SpectrumView*>(); QVERIFY(liveSpectrum);
+        QTRY_VERIFY(liveSpectrum->result() && liveSpectrum->result()->state == s7studio::analysis::SpectrumResult::State::Ready);
+        QCOMPARE(liveSpectrum->result()->size, std::size_t(4096));
+        QVERIFY(std::abs(liveSpectrum->result()->binSpacing-.25) < 1e-12);
+        QCOMPARE(liveSpectrum->plotView()->xMax(), 512.);
+        auto* liveRange = liveSpectrum->controlPanel()->findChild<QComboBox*>("spectrum.frequencyRange"); QVERIFY(liveRange);
+        liveRange->setCurrentIndex(0);
+        if (example == "off_bin_tone") {
+            QVERIFY(std::abs(liveSpectrum->result()->values[130]-1.) < 1e-9);
+            QVERIFY(liveSpectrum->plotView()->xMax() > 32.5 && liveSpectrum->plotView()->xMax() < 70);
+        } else {
+            QVERIFY(std::abs(liveSpectrum->result()->values[128]-1.) < 1e-9);
+            if (example == "three_bin_tones") {
+                auto* channel = liveSpectrum->controlPanel()->findChild<QComboBox*>("spectrum.channel"); QVERIFY(channel);
+                channel->setCurrentIndex(1);
+                QTRY_VERIFY(liveSpectrum->result() && liveSpectrum->result()->state == s7studio::analysis::SpectrumResult::State::Ready);
+                QVERIFY(std::abs(liveSpectrum->result()->values[384]-.5) < 1e-9);
+                channel->setCurrentIndex(2);
+                QTRY_VERIFY(liveSpectrum->result() && liveSpectrum->result()->state == s7studio::analysis::SpectrumResult::State::Ready);
+                QVERIFY(std::abs(liveSpectrum->result()->values[640]-.25) < 1e-9);
+                channel->setCurrentIndex(0);
+                QTRY_VERIFY(liveSpectrum->result() && liveSpectrum->result()->state == s7studio::analysis::SpectrumResult::State::Ready);
+            } else {
+                QVERIFY(std::abs(liveSpectrum->result()->values[384]-.25) < 1e-9);
+                QVERIFY(std::abs(liveSpectrum->result()->values[0]-.1) < 1e-9);
+            }
+        }
+        QTest::mouseMove(freeze, freeze->rect().center()); QCoreApplication::processEvents();
+        capture(live, "live-fft-example-" + example, true);
     }
 
     void liveOscilloscopePrototype() {
@@ -1492,6 +1649,13 @@ private slots:
         QCOMPARE(viewer.size(), QSize(1024, 768));
         auto* scroll = viewer.findChild<QScrollArea*>("live.controlsScroll"); QVERIFY(scroll);
         auto* selected = viewer.findChild<QToolButton*>("live.channel.7.select"); QVERIFY(selected && selected->isVisible());
+        for (int i = 0; i < 8; ++i) {
+            auto* selector = viewer.findChild<QToolButton*>(QStringLiteral("live.channel.%1.select").arg(i)); QVERIFY(selector);
+            const auto right = selector->mapTo(scroll->widget(), QPoint(selector->width()-1, 0)).x();
+            QVERIFY2(right < scroll->widget()->width(), qPrintable(selector->objectName()));
+        }
+        auto* timeFine = viewer.findChild<QToolButton*>("live.timeScale.fine"); QVERIFY(timeFine);
+        QVERIFY(timeFine->mapTo(scroll->widget(), QPoint(timeFine->width()-1, 0)).x() < scroll->widget()->width());
         QTest::mouseClick(selected, Qt::LeftButton); QVERIFY(selected->isChecked());
         auto* gain = viewer.findChild<QDoubleSpinBox*>("live.channel.7.gain"); auto* dial = viewer.findChild<QDial*>("live.channel.7.scale.dial"); QVERIFY(gain && dial && dial->isVisible());
         const auto before = dial->value(); dial->setFocus(); QTest::keyClick(dial, Qt::Key_Right); QVERIFY(dial->value() != before); QVERIFY(gain->value() != 1.);
