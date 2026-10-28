@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QToolButton>
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -65,8 +66,8 @@ void verifySameValues(const QByteArray& first, const QByteArray& second) {
     }
 }
 bool warningContains(s7studio::ui::ScopeViewWindow& scope, const QString& text) {
-    for (auto* label : scope.findChildren<QLabel*>()) if (label->text().contains(text)) return true;
-    return false;
+    auto* warning = scope.findChild<QToolButton*>(QStringLiteral("scope.statusWarning"));
+    return warning && !warning->isHidden() && warning->toolTip().contains(text);
 }
 }
 

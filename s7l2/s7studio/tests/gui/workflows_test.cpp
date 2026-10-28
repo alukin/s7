@@ -1128,7 +1128,7 @@ private slots:
         auto* start = scope->findChild<QDoubleSpinBox*>("scope.analysisStart"); QVERIFY(start);
         auto* end = scope->findChild<QDoubleSpinBox*>("scope.analysisEnd"); QVERIFY(end);
         QCOMPARE(start->value(), 0.);
-        QCOMPARE(end->value(), 1.);
+        QTRY_COMPARE(end->value(), 1.);
         QCOMPARE(end->findChild<QLabel*>("control.numberReadout")->text(),
             QString::number(end->value(), 'g', 5) + QStringLiteral(" s"));
         auto* analyze = scope->findChild<QPushButton*>("scope.analyze"); QVERIFY(analyze);
