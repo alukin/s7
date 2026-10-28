@@ -1,15 +1,15 @@
 # S7 (s7l2)
 
-**[0.1.0 preview downloads](https://github.com/alukin/s7/releases/tag/v0.1.0)**
+**[0.1.1 preview downloads](https://github.com/alukin/s7/releases/tag/v0.1.1)**
 include a Fedora 44 Linux x86-64 build and an experimental Windows x86-64 build.
-See the [release checklist and known limits](docs/RELEASE_0.1.0.md) for platform
+See the [release notes and known limits](docs/RELEASE_0.1.1_NOTES.md) for platform
 qualification, examples and deferred work.
 
 S7 is a platform for constructing, executing, and observing distributed causal systems: a schema of elements and connections is validated, compiled into an executable graph, and stepped by a headless runtime. Studio is an optional GUI client.
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
 
-The next release focuses on **dependable local simulation in `s7studio` with its bundled runtime**: correct numerical results and model time, reliable plots and recording, and predictable run controls. Local runs use Studio's in-process runtime and require no separately running service. Acceptance criteria and deferred work are in the [development plan](docs/DEVELOPMENT_PLAN.md); the existing distributed capabilities remain part of S7's longer-term direction.
+This release focuses on **dependable local simulation in `s7studio` with its bundled runtime**: correct numerical results and model time, reliable plots and recording, and predictable run controls. Local runs use Studio's in-process runtime and require no separately running service. Acceptance criteria and deferred work are in the [development plan](docs/DEVELOPMENT_PLAN.md); the existing distributed capabilities remain part of S7's longer-term direction.
 
 Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, architecture, protocols) is in `../doc/README.md`. Unsolved problems and open design decisions: `docs/OPEN_PROBLEMS.md`.
 

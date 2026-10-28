@@ -36,7 +36,7 @@ constexpr Topic topics[] = {
     {"Observation viewers", "qrc:/s7studio/help/docs/STUDIO_OBSERVATION_VIEWERS.md"},
     {"Observers dock", "qrc:/s7studio/help/docs/STUDIO_OBSERVERS_DOCK.md"},
     {"Numerical validation", "qrc:/s7studio/help/docs/NUMERICAL_VALIDATION_MATRIX.md"},
-    {"Preview limits", "qrc:/s7studio/help/docs/RELEASE_0.1.0.md"},
+    {"Preview limits", "qrc:/s7studio/help/docs/RELEASE_0.1.1_NOTES.md"},
     licensing,
     thirdPartyNotices,
     {"Linear response laboratory", "qrc:/s7studio/help/examples/linear/README.md"},

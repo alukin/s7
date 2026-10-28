@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.20)
-project(s7l2 VERSION 0.1.0 LANGUAGES CXX)
+project(s7l2 VERSION 0.1.1 LANGUAGES CXX)
 
 if (POLICY CMP0167)
 	cmake_policy(SET CMP0167 NEW)

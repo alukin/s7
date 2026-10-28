@@ -311,6 +311,13 @@ A 3D full-viewer frame on the emulated slow host fell from 71 ms to 43 ms.
 Dock previews render at about 4 fps unconstrained and 1.1–1.4 fps on the slow
 host, below their 10 fps cap, because they share the paced budget.
 
+On the original Fedora 44 qualification host, a fresh 120-second `mixed full`
+run of this change (`release-011.json`) reached a 236 ms maximum gap, 27 gaps
+over 100 ms, none over 250 ms, 1,000.014 published source steps/s, no capture
+error, four active dock plots and 923 MB peak RSS. The earlier run on this
+host reached 271 ms with eight gaps over 250 ms. Both used Xvfb and software
+OpenGL; these are separate runs, not a paired frame-by-frame comparison.
+
 Trade-off: responsiveness improves sharply, but full viewers show fewer frames
 per second. In particular, on the emulated slow host the four full viewers drop
 to 1.3 fps with the dock active. The remaining GUI time is dominated by

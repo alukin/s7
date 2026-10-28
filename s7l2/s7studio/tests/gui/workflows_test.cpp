@@ -333,7 +333,7 @@ private slots:
         QVERIFY(credits && build);
         QVERIFY(credits->toPlainText().contains("Oleksiy Lukin"));
         QVERIFY(credits->toPlainText().contains("teren-ukr"));
-        QVERIFY(build->toPlainText().contains("S7 Studio 0.1.0"));
+        QVERIFY(build->toPlainText().contains("S7 Studio 0.1.1"));
         for (auto* text : about->findChildren<QTextBrowser*>()) QVERIFY(text->toPlainText().size() > 100);
         auto* tabs = about->findChild<QTabWidget*>(); QVERIFY(tabs);
         int legalTabs = 0;

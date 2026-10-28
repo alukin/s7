@@ -219,7 +219,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVATION_VIEWERS.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVERS_DOCK.md
         ${PROJECT_SOURCE_DIR}/docs/NUMERICAL_VALIDATION_MATRIX.md
-        ${PROJECT_SOURCE_DIR}/docs/RELEASE_0.1.0.md
+        ${PROJECT_SOURCE_DIR}/docs/RELEASE_0.1.1_NOTES.md
         ${S7STUDIO_EXAMPLE_HELP}
 )
 qt_add_resources(s7studio_app s7studio_legal

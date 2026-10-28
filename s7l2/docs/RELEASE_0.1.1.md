@@ -1,8 +1,10 @@
 # S7 0.1.1 — interface design and implementation plan
 
-Date: 2026-10-24; updated 2026-10-27. Status: ST-001/ST-002/ST-003/scoped ST-004/ST-005/ST-006/ST-007/ST-008 and font/palette fixes implemented and locally verified;
-recorded Scope analysis is a 0.1.1 candidate pending maintainer visual review;
-release qualification remains.
+Date: 2026-10-24; updated 2026-10-28. Status: the maintainer selected the
+implemented local Studio scope for 0.1.1. Native Release tests pass 83/83 and
+the original Fedora host's mixed observer run meets the proposed 250 ms GUI
+timer-gap target. Windows remains experimental; final package qualification
+is recorded separately in the release notes.
 
 The maintainer accepted the proposed order of work and requested step 1:
 settle the interface design and acceptance checks. This document makes the
@@ -370,13 +372,17 @@ Studio now paces plot renders across event-loop passes, caps dock previews at
 (preview) 3D multisampling. Loss, trigger-state and user-action status still
 update immediately. On a second host's emulated slow configuration, `mixed
 full` reached a 201 ms maximum with no gaps over 250 ms (previously 394 ms
-and 261), at lower full-viewer frame rates. Requalification on the original
-host remains to be done.
+and 261), at lower full-viewer frame rates. A fresh 120-second `mixed full`
+run on the original Fedora 44 host reached a 236 ms maximum, 27 gaps over
+100 ms, none over 250 ms, 1,000.014 published source steps/s, no capture
+error, four active dock plots and 923 MB peak RSS
+(`build-release/observer-artifacts/release-011.json`). This closes the
+proposed software-GL responsiveness target on that host; it does not qualify
+a physical GPU or a slower machine.
 
-The remaining gate is **7 — release qualification**, alongside visual review
-of the recorded Scope analysis candidate below. Native Windows interaction,
-physical desktop/GPU review and relocated package checks remain separate from
-the local implementation evidence above.
+Release qualification continues with relocated package checks. Native Windows
+interaction and physical desktop/GPU review remain outside this release's
+tested envelope; the [release notes](RELEASE_0.1.1_NOTES.md) state those limits.
 
 ## Implemented refinement — ST-011/ST-013/ST-014/ST-015, 2026-10-25
 

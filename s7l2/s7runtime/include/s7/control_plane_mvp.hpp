@@ -37,7 +37,7 @@ struct ControlNodeDescriptor {
     std::string node_uuid;
     std::string node_name;
     std::string display_name;
-    std::string runtime_version{"0.1.0"};
+    std::string runtime_version{"0.1.1"};
     std::uint64_t protocol_version{1};
     std::string instance_id;
     std::string started_at;

@@ -738,7 +738,7 @@ void write_node_uuid_file(const std::filesystem::path& path, const std::string& 
     ControlLibraryInfo registry_library;
     registry_library.library_id = "runtime-registry";
     registry_library.kind = "builtin";
-    registry_library.version = "0.1.0";
+    registry_library.version = "0.1.1";
     registry_library.target_triple = descriptor.target_triple;
     registry_library.origin = "registry";
     registry_library.elements = descriptor.element_types;
