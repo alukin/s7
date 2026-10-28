@@ -150,6 +150,25 @@ class GraphTest(unittest.TestCase):
         values = [v for v, in run(g, 3, "o")]
         self.assertTrue(all(math.isclose(a, b, abs_tol=1e-12) for a, b in zip(values, [0, 2, 0])))
 
+    def test_hysteresis_relay(self):
+        # A ramp up and down through thresholds -1 and 0.5: on at 0.5 and above, off at -1 and below.
+        values = [-1.5, -1.0, 0.0, 0.5, 0.0, -0.5, -1.0, 0.0]
+        relay = ELEMENT_TYPES["HysteresisRelay"]("r", {"lower_threshold": -1, "upper_threshold": 0.5, "low_value": -3,
+                                                       "high_value": 5, "initial_on": True})
+        self.assertEqual(relay.outputs[0], 5.0)  # the initial state is visible before the first step
+        seen = []
+        for x in values:
+            relay.step([x])
+            seen.append(relay.outputs[0])
+        self.assertEqual(seen, [-3.0, -3.0, -3.0, 5.0, 5.0, 5.0, -3.0, -3.0])
+        for params, message in (({"lower_threshold": 1, "upper_threshold": 1}, "must be less than"),
+                                ({"initial_on": 1}, "'initial_on' must be true or false"),
+                                ({"high_value": math.inf}, "requires finite values")):
+            with self.subTest(params), self.assertRaisesRegex(SchemaError, message):
+                evaluate("HysteresisRelay", params, 0.0)
+        with self.assertRaisesRegex(RuntimeError, "requires finite values"):
+            evaluate("HysteresisRelay", {}, math.nan)
+
     def test_invalid_schemas(self):
         cases = {
             "cycle without causal memory": schema(
@@ -224,6 +243,134 @@ class GraphTest(unittest.TestCase):
         self.assertEqual((g.steps, tuple(g.sample(e) for e in ids)), (1, (1.0, 0.0, 1.0, 10.0)))
         self.assertEqual(run(g, 2, *ids), [(2.0, 1.0, 2.0, 20.0), (3.0, 2.0, 3.0, 30.0)])
         self.assertEqual(g.steps, 3)
+
+
+def evaluate(type_name, params, *inputs):
+    """The output of type_name after one step, its inputs fed by Constants."""
+    sources = [{"id": f"in{i}", "type": "Constant", "params": {"value": v}} for i, v in enumerate(inputs)]
+    g = graph(sources + [{"id": "e", "type": type_name, "params": params}],
+              [(f"in{i}", "e", i) for i in range(len(inputs))])
+    g.step()
+    return g.sample("e")
+
+
+def same(a, b):
+    """Equal to the bit, except that any NaN equals any NaN (its sign is platform-specific)."""
+    return (math.isnan(a) and math.isnan(b)) or (a == b and math.copysign(1, a) == math.copysign(1, b))
+
+
+class MathElementTest(unittest.TestCase):
+    """Stateless math and control elements: results where libm returns NaN or an infinity and Python's
+    math raises (C11 Annex F), and the execution errors of elements.hpp / control_elements.hpp."""
+
+    def assertResults(self, type_name, params, cases):
+        for inputs, expected in cases:
+            with self.subTest(type_name=type_name, params=params, inputs=inputs):
+                result = evaluate(type_name, params, *inputs)
+                self.assertTrue(same(result, expected), f"{result} != {expected}")
+
+    def test_trig(self):
+        inf, nan = math.inf, math.nan
+        self.assertResults("Trig", {}, [((0.5,), math.sin(0.5)), ((inf,), nan), ((-0.0,), -0.0)])
+        for function, cases in {
+            "cos": [((inf,), nan), ((0.0,), 1.0)], "tan": [((-inf,), nan)],
+            "asin": [((2.0,), nan), ((-1.0,), -math.pi / 2)], "acos": [((1.5,), nan), ((1.0,), 0.0)],
+            "atan": [((inf,), math.pi / 2)], "sinh": [((1000.0,), inf), ((-1000.0,), -inf)],
+            "cosh": [((-1000.0,), inf)], "tanh": [((-inf,), -1.0)],
+        }.items():
+            self.assertResults("Trig", {"function": function}, cases)
+
+    def test_math_function(self):
+        inf, nan = math.inf, math.nan
+        self.assertResults("MathFunction", {}, [((2.0,), math.sqrt(2.0)), ((-0.0,), -0.0), ((nan,), nan)])
+        self.assertResults("MathFunction", {"function": "exp"}, [((1000.0,), inf), ((-inf,), 0.0)])
+        self.assertResults("MathFunction", {"function": "log"}, [((inf,), inf), ((math.e,), 1.0)])
+        self.assertResults("MathFunction", {"function": "abs"}, [((-inf,), inf), ((-0.0,), 0.0)])
+        self.assertResults("MathFunction", {"function": "reciprocal"}, [((-inf,), -0.0), ((4.0,), 0.25)])
+        self.assertResults("MathFunction", {"function": "pow", "exponent": -3},
+                           [((-0.0,), -inf), ((0.0,), inf), ((-1e200,), -0.0), ((2.0,), 0.125)])
+        self.assertResults("MathFunction", {"function": "pow", "exponent": 0.5}, [((-4.0,), nan), ((-0.0,), 0.0)])
+        for function, value, message in (("sqrt", -1e-310, "sqrt input is negative"), ("log", 0.0, "log input must be positive"),
+                                         ("reciprocal", -0.0, "reciprocal input is zero")):
+            with self.subTest(function), self.assertRaisesRegex(RuntimeError, message):
+                evaluate("MathFunction", {"function": function}, value)
+
+    def test_power(self):
+        inf, nan = math.inf, math.nan
+        self.assertResults("Power", {}, [
+            ((2.0, 10.0), 1024.0), ((-8.0, 1 / 3), nan), ((0.0, -1.0), inf), ((-0.0, -1.0), -inf), ((-0.0, -2.0), inf),
+            ((-0.0, -0.5), inf), ((10.0, 400.0), inf), ((-10.0, 401.0), -inf), ((-10.0, 400.0), inf),
+            ((nan, 0.0), 1.0), ((1.0, nan), 1.0), ((-1.0, inf), 1.0), ((2.0, -2000.0), 0.0), ((-2.0, -2001.0), -0.0)])
+
+    def test_divider(self):
+        self.assertResults("Divider", {}, [((1.0, 4.0), 0.25), ((1e308, 1e-308), math.inf), ((math.inf, math.inf), math.nan)])
+        for denominator in (0.0, -0.0):
+            with self.assertRaisesRegex(RuntimeError, "Divider denominator is zero"):
+                evaluate("Divider", {}, 1.0, denominator)
+
+    def test_comparisons(self):
+        nan = math.nan
+        self.assertResults("Saturation", {"lower_limit": -1, "upper_limit": 2},
+                           [((-5.0,), -1.0), ((5.0,), 2.0), ((0.5,), 0.5), ((nan,), nan), ((-math.inf,), -1.0)])
+        self.assertResults("Saturation", {}, [((-0.0,), -0.0), ((7.0,), 1.0)])
+        # NaN is ignored while another input is a number; of equal values the first is kept.
+        self.assertResults("MinMax", {}, [((nan, 3.0), 3.0), ((3.0, nan), 3.0), ((nan, nan), nan), ((-0.0, 0.0), -0.0)])
+        self.assertResults("MinMax", {"operation": "max", "input_count": 3.0},
+                           [((1.0, nan, 5.0), 5.0), ((0.0, -0.0, -1.0), 0.0), ((-math.inf, nan, -2.0), -2.0)])
+        self.assertResults("Sign", {}, [((-3.0,), -1.0), ((5e-324,), 1.0), ((-0.0,), 0.0), ((nan,), nan)])
+        for operation, expected in {"lt": 1.0, "le": 1.0, "gt": 0.0, "ge": 0.0, "eq": 0.0, "ne": 1.0}.items():
+            self.assertResults("Comparator", {"operation": operation}, [((1.0, 2.0), expected)])
+            self.assertResults("Comparator", {"operation": operation}, [((nan, nan), 1.0 if operation == "ne" else 0.0)])
+        self.assertResults("Comparator", {"operation": "eq"}, [((-0.0, 0.0), 1.0)])
+
+    def test_switch(self):
+        self.assertResults("Switch", {}, [((1.0, 2.0, 0.0), 1.0), ((1.0, 2.0, -0.0), 1.0), ((1.0, 2.0, -1e-300), 2.0),
+                                          ((math.nan, 2.0, 0.0), math.nan)])
+        for control in (math.nan, math.inf):
+            with self.subTest(control), self.assertRaisesRegex(RuntimeError, "requires finite values"):
+                evaluate("Switch", {}, 1.0, 2.0, control)
+
+    def test_phase_wrap(self):
+        # The output lies in [lower, lower + period): an input at the upper bound wraps to lower.
+        self.assertResults("PhaseWrap", {"period": 1, "lower": 0}, [((2.5,), 0.5), ((-0.25,), 0.75), ((1.0,), 0.0)])
+        self.assertResults("PhaseWrap", {"period": 360, "lower": -180}, [((190.0,), -170.0), ((180.0,), -180.0)])
+        self.assertResults("PhaseWrap", {}, [((math.pi,), -math.pi), ((1.0,), 1.0)])
+        for value in (math.inf, math.nan):
+            with self.subTest(value), self.assertRaisesRegex(RuntimeError, "requires finite values"):
+                evaluate("PhaseWrap", {}, value)
+
+    def test_parameters(self):
+        cases = {
+            "upper_limit must be at least lower_limit": ("Saturation", {"lower_limit": 1, "upper_limit": 0}, 1),
+            "'input_count' must be at least 2": ("MinMax", {"input_count": 1}, 1),
+            "'input_count' must be at most 64": ("MinMax", {"input_count": 65}, 1),
+            "'input_count' must be an integer": ("MinMax", {"input_count": 2.5}, 2),
+            "'function' must be one of sin": ("Trig", {"function": "sec"}, 1),
+            "'operation' must be one of lt": ("Comparator", {"operation": "<"}, 2),
+            "unknown parameter 'denominator'": ("Divider", {"denominator": 2}, 2),
+            "positive representable period": ("PhaseWrap", {"period": 1, "lower": 1e20}, 1),
+            "must be finite": ("PhaseWrap", {"period": 1e308, "lower": 1e308}, 1),
+        }
+        for message, (type_name, params, inputs) in cases.items():
+            with self.subTest(message), self.assertRaisesRegex(SchemaError, message):
+                evaluate(type_name, params, *[0.5] * inputs)
+        for flag in (True, "2"):
+            with self.assertRaisesRegex(SchemaError, "'input_count' must be an integer"):
+                evaluate("MinMax", {"input_count": flag}, 0.5, 0.5)
+
+    def test_stateless_elements_join_an_implicit_derivative(self):
+        # Pendulum x'' = -sin(x): the trapezoid solver reevaluates Trig; energy v^2/2 - cos(x) oscillates
+        # within the method's O(dt^2) error instead of drifting (at most 1.8e-6 over 50 000 steps).
+        dt = 0.01
+        g = Graph(schema([{"id": "x", "type": "TrapezoidIntegrator", "params": {"dt": dt, "initial_value": 1}},
+                          {"id": "v", "type": "TrapezoidIntegrator", "params": {"dt": dt}},
+                          {"id": "sin", "type": "Trig", "params": {}},
+                          {"id": "minus", "type": "Gain", "params": {"factor": -1}}],
+                         [("v", "x", 0), ("x", "sin", 0), ("sin", "minus", 0), ("minus", "v", 0)]))
+        energy = -math.cos(1.0)
+        for _ in range(5000):
+            g.step()
+            self.assertLess(abs(g.sample("v") ** 2 / 2 - math.cos(g.sample("x")) - energy), 1e-5)
 
 
 class RateTest(unittest.TestCase):
