@@ -35,6 +35,8 @@ class PairAnalysisView;
 
 namespace s7studio::ui {
 
+class Throttle;
+
 // A time-series view for one Studio Scope observer. Each connected observer
 // input is a separate plotted channel; observation is outside the runtime graph.
 // The recording (ScopeRecording) is drawn with Qt Graphs over model time.
@@ -134,6 +136,8 @@ private:
     QDoubleSpinBox *analysisStart_ = nullptr, *analysisEnd_ = nullptr;
     QString analysisIntervalRun_;
     bool analysisIntervalAuto_ = true;
+    // The auto interval follows every data refresh; its editors repaint at 10 Hz.
+    Throttle* autoInterval_ = nullptr;
     std::optional<std::uint64_t> analysisSourceRunId_;
     QLabel* analysisStatus_ = nullptr;
     QPushButton* analyzeButton_ = nullptr;

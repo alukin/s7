@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "phase_trajectory_3d_view_window.hpp"
+#include "instrument_controls.hpp"
 
 #include "viewers/quick_support.hpp"
 
@@ -50,6 +51,7 @@ PhaseTrajectory3DViewWindow::PhaseTrajectory3DViewWindow(QString xProbeName,
     , yProbeName_(std::move(yProbeName))
     , zProbeName_(std::move(zProbeName))
 {
+    statusRefresh_ = new Throttle([this] { updateStatus(); }, this);
     setWindowFlag(Qt::Window, true);
     setWindowFlag(Qt::WindowMinimizeButtonHint, true);
     setWindowFlag(Qt::WindowMaximizeButtonHint, true);
@@ -151,8 +153,9 @@ void PhaseTrajectory3DViewWindow::clearSamples()
 
 void PhaseTrajectory3DViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 {
-    droppedSamples_ = dropped;
-    updateStatus();
+    // Called on every data refresh: loss shows at once, other status at 10 Hz.
+    if (dropped != droppedSamples_) { droppedSamples_ = dropped; updateStatus(); }
+    else statusRefresh_->request();
 }
 
 void PhaseTrajectory3DViewWindow::updateStatus()

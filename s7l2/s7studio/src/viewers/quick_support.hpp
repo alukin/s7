@@ -18,6 +18,13 @@ namespace s7studio::viewers {
 // caller stores the pointer first and then adds it to its layout.
 auto createQuickWidget() -> QQuickWidget*;
 
+// Scene renders of these widgets are paced on the GUI thread so plots do not
+// all render in the same event-loop pass (see RenderPacer). This sets the
+// shortest interval between one widget's renders, e.g. for small previews;
+// 0, the default, leaves only the shared pacing. User input on the widget
+// overrides the interval for a moment.
+void setMinimumFrameInterval(QQuickWidget& widget, int milliseconds);
+
 // Loads a scene (a file under qrc:/s7studio/viewers/) whose root declares the
 // given required properties, e.g. the viewer's C++ bridge object. Separate
 // from creation: loading may process events, so the caller stores the widget

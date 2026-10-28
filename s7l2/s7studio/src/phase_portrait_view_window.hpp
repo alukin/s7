@@ -24,6 +24,7 @@ class LinePlotView;
 }
 
 namespace s7studio::ui {
+class Throttle;
 
 // Two probes plotted against each other (VISUAL_NUMERICAL_TESTS_PLAN.md
 // section 3.2: position vs. velocity, an I/Q constellation, ...), the X-Y
@@ -93,6 +94,7 @@ private:
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
+    Throttle* statusRefresh_ = nullptr;  // data-driven status updates at 10 Hz
     QTimer* repaintTimer_ = nullptr;
 };
 

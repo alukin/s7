@@ -363,6 +363,16 @@ at 2000×2600 and do not qualify a physical GPU, native Windows, or NodeRuntime
 throughput. JSON evidence is in `build-release/observer-artifacts/qual-*-*.json`
 outside Git; commands are in STUDIO_GUI_TESTING.md.
 
+Follow-up profiling (OBSERVER_UI_LATENCY_PROFILING.md) attributed the gaps to
+synchronous `QQuickWidget` rendering and window composition on the GUI thread.
+Studio now paces plot renders across event-loop passes, caps dock previews at
+10 fps, updates data-driven viewer status at 10 Hz, and uses 2x (full) or no
+(preview) 3D multisampling. Loss, trigger-state and user-action status still
+update immediately. On a second host's emulated slow configuration, `mixed
+full` reached a 201 ms maximum with no gaps over 250 ms (previously 394 ms
+and 261), at lower full-viewer frame rates. Requalification on the original
+host remains to be done.
+
 The remaining gate is **7 — release qualification**, alongside visual review
 of the recorded Scope analysis candidate below. Native Windows interaction,
 physical desktop/GPU review and relocated package checks remain separate from

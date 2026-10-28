@@ -201,6 +201,8 @@ public:
 
     [[nodiscard]] auto bridge() -> LinePlotBridge* { return bridge_; }
     [[nodiscard]] auto quickWidget() const -> QQuickWidget* { return quick_; }
+    // Shortest interval between scene renders (see setMinimumFrameInterval in quick_support.hpp).
+    void setMinimumFrameInterval(int milliseconds);
 
 signals:
     // Emitted for every change of the X range, by the program or the user.
@@ -233,6 +235,7 @@ private:
     // Removed series, emptied: GraphsView cleans removed series up on its
     // next polish, so they must outlive the scene (deleted after it).
     QList<QXYSeries*> retired_;
+    int frameIntervalMs_ = 0;
     QString xTitle_;
     QString yTitle_;
     bool legendVisible_ = false;

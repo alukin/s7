@@ -185,8 +185,11 @@ bool PreviewWorker::busy() const { std::lock_guard lock(state_->mutex); return s
 
 ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent) : QWidget(parent), type_(type) {
     setObjectName("observer.presentation"); auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
-    if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); root->addWidget(trajectory_); }
-    else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true;
+    // Dock previews need no more than 10 frames per second; full viewers keep their rate.
+    constexpr int previewFrameIntervalMs = 100;
+    if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); trajectory_->bridge()->setAntialiased(false);
+        trajectory_->setMinimumFrameInterval(previewFrameIntervalMs); root->addWidget(trajectory_); }
+    else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true; line_->setMinimumFrameInterval(previewFrameIntervalMs);
         line_->bridge()->horizontalNavigation = type == "LiveOscilloscope"; root->addWidget(line_);
         connect(line_, &LinePlotView::navigated, this, &ObserverPresentation::navigated); }
 }

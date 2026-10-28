@@ -183,6 +183,17 @@ void setCompactNumberValueSilently(QDoubleSpinBox* number, double value) {
     const QSignalBlocker block(number);
     number->setValue(value); static_cast<ExactNumber*>(number)->refreshReadout();
 }
+Throttle::Throttle(std::function<void()> update, QObject* parent, int intervalMs)
+    : QObject(parent), update_(std::move(update)), intervalMs_(intervalMs) {
+    trailing_.setSingleShot(true); connect(&trailing_, &QTimer::timeout, this, &Throttle::run);
+}
+void Throttle::request() {
+    if (trailing_.isActive()) return;
+    const auto elapsed = last_.isValid() ? last_.elapsed() : intervalMs_;
+    if (elapsed >= intervalMs_) run(); else trailing_.start(static_cast<int>(intervalMs_ - elapsed));
+}
+void Throttle::flush() { if (trailing_.isActive()) run(); }
+void Throttle::run() { trailing_.stop(); last_.start(); update_(); }
 void InstrumentPanel::wheelEvent(QWheelEvent* event) { event->accept(); }
 InstrumentSidebar::InstrumentSidebar(const QString& name, QWidget* parent) : InstrumentPanel(parent)
 {

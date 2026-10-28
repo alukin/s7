@@ -22,6 +22,7 @@ class QQuickWidget;
 class QTimer;
 
 namespace s7studio::ui {
+class Throttle;
 
 class PhaseTrajectory3DViewWindow;
 
@@ -101,6 +102,7 @@ private:
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
     QLabel* statusLabel_ = nullptr;
+    Throttle* statusRefresh_ = nullptr;  // data-driven status updates at 10 Hz
     QTimer* repaintTimer_ = nullptr;
 };
 

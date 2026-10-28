@@ -65,6 +65,7 @@ protected:
 }
 LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
 {
+    statusRefresh_ = new Throttle([this] { updateStatus(); }, this);
     setObjectName("liveOscilloscope");
     setWindowTitle(QStringLiteral("Live oscilloscope — %1 (prototype)").arg(id));
     resize(1100, 740);
@@ -731,12 +732,16 @@ bool LiveOscilloscopeWindow::refreshSource()
             if (result->snapshotMs > 25 || result->prepareMs > 25)
                 qWarning().noquote() << "Live oscilloscope worker slow stage: snapshot" << result->snapshotMs
                                      << "ms, reduction" << result->prepareMs << "ms";
-            updateStatus();
+            // What the displayed frame is (run, trigger capture and its state) shows at once; counters follow at 10 Hz.
+            const auto& trigger = frame_->trigger;
+            const auto shown = std::tuple(frame_->runId, frame_->finished, trigger ? trigger->id : 0,
+                                          trigger && trigger->triggered, trigger && trigger->partial);
+            if (shown != statusShown_) { statusShown_ = shown; updateStatus(); } else statusRefresh_->request();
         }
     }
     if (cadence_.isValid() && cadence_.elapsed() < 33) return false;
     cadence_.restart();
-    if (freeze_->isChecked() || inspecting_) { updateStatus(); return false; }
+    if (freeze_->isChecked() || inspecting_) { statusRefresh_->request(); return false; }
     const bool triggeredTime = plot_->isVisible() && requestedTrigger_.mode != observation::TriggerMode::Rolling;
     std::uint64_t captureId = 0;
     bool finished = false;
@@ -744,7 +749,7 @@ bool LiveOscilloscopeWindow::refreshSource()
         const auto state = live_->triggerStatus();
         captureId = state.captureId; finished = state.finished;
         if (!captureId || (frame_->trigger && frame_->trigger->id == captureId && frame_->finished == finished) ||
-            (requestedCaptureId_ == captureId && requestedCaptureFinished_ == finished)) { updateStatus(); return false; }
+            (requestedCaptureId_ == captureId && requestedCaptureFinished_ == finished)) { statusRefresh_->request(); return false; }
     }
     const bool prepareTime = plot_->isVisible();
     auto settings = timeViewSettings(prepareTime, prepareTime);

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "phase_portrait_view_window.hpp"
+#include "instrument_controls.hpp"
 
 #include "viewers/line_plot_view.hpp"
 
@@ -92,6 +93,7 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     , xProbeName_(std::move(xProbeName))
     , yProbeName_(std::move(yProbeName))
 {
+    statusRefresh_ = new Throttle([this] { updateStatus(); }, this);
     setWindowFlag(Qt::Window, true);
     setWindowFlag(Qt::WindowMinimizeButtonHint, true);
     setWindowFlag(Qt::WindowMaximizeButtonHint, true);
@@ -183,8 +185,9 @@ void PhasePortraitViewWindow::clearSamples()
 
 void PhasePortraitViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
 {
-    droppedSamples_ = dropped;
-    updateStatus();
+    // Called on every data refresh: loss shows at once, other status at 10 Hz.
+    if (dropped != droppedSamples_) { droppedSamples_ = dropped; updateStatus(); }
+    else statusRefresh_->request();
 }
 
 void PhasePortraitViewWindow::updateStatus()

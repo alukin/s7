@@ -18,6 +18,7 @@ class Trajectory3DBridge : public QObject
     Q_PROPERTY(QVector3D head READ head NOTIFY headChanged)
     Q_PROPERTY(bool hasHead READ hasHead NOTIFY headChanged)
     Q_PROPERTY(QVector3D viewRotation READ viewRotation NOTIFY viewRotationChanged)
+    Q_PROPERTY(bool antialiased READ antialiased NOTIFY antialiasedChanged)
 
 public:
     explicit Trajectory3DBridge(QObject* parent);
@@ -29,16 +30,20 @@ public:
     [[nodiscard]] auto head() const -> QVector3D { return head_; }
     [[nodiscard]] auto hasHead() const -> bool { return hasHead_; }
     [[nodiscard]] auto viewRotation() const -> QVector3D { return viewRotation_; }
+    [[nodiscard]] auto antialiased() const -> bool { return antialiased_; }
 
     void setLabels(QVariantList labels);
     void setHead(bool hasHead, QVector3D head);
     // Camera orbit as Euler angles (degrees); see viewPreset in the window.
     void setViewRotation(QVector3D rotation);
+    // Multisampling is costly with software rasterization; small previews go without.
+    void setAntialiased(bool antialiased);
 
 signals:
     void labelsChanged();
     void headChanged();
     void viewRotationChanged();
+    void antialiasedChanged();
 
 private:
     viewers::TrajectoryGeometry trajectory_;
@@ -47,6 +52,7 @@ private:
     QVector3D head_;
     bool hasHead_ = false;
     QVector3D viewRotation_;
+    bool antialiased_ = true;
 };
 
 // Reusable plot surface; source, capture, toolbars and window state belong to its host.
@@ -56,10 +62,13 @@ public:
     ~TrajectoryPlotView() override;
     Trajectory3DBridge* bridge() const { return bridge_; }
     void setAxisLabels(const viewers::TrajectoryBounds& bounds, const QStringList& labels, bool compact = false);
+    // Shortest interval between scene renders (see setMinimumFrameInterval in quick_support.hpp).
+    void setMinimumFrameInterval(int milliseconds);
 protected:
     void showEvent(QShowEvent*) override;
 private:
     Trajectory3DBridge* bridge_;
     QQuickWidget* quick_ = nullptr;
+    int frameIntervalMs_ = 0;
 };
 }

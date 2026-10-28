@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QVariantList>
 #include <QWidget>
+#include <tuple>
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -20,6 +21,7 @@ class QSlider;
 namespace s7studio::viewers { class LinePlotView; class SpectrumView; class PairAnalysisView; class WindowInspectionPanel; }
 namespace s7studio::ui {
 class ChoiceButtons;
+class Throttle;
 class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
     Q_OBJECT
 public:
@@ -99,5 +101,7 @@ private:
     std::optional<std::size_t> requestedCapacity_;
     QString traceWarning_, settingsError_, triggerError_;
     QElapsedTimer cadence_;
+    Throttle* statusRefresh_ = nullptr;  // status after data refreshes at 10 Hz; actions update at once
+    std::tuple<std::uint64_t, bool, std::uint64_t, bool, bool> statusShown_{};  // displayed frame identity last put in the status
 };
 }

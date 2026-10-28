@@ -59,6 +59,19 @@ void Trajectory3DBridge::setViewRotation(const QVector3D rotation)
     emit viewRotationChanged();
 }
 
+void Trajectory3DBridge::setAntialiased(const bool antialiased)
+{
+    if (antialiased_ == antialiased) return;
+    antialiased_ = antialiased;
+    emit antialiasedChanged();
+}
+
+void TrajectoryPlotView::setMinimumFrameInterval(const int milliseconds)
+{
+    frameIntervalMs_ = milliseconds;
+    if (quick_) viewers::setMinimumFrameInterval(*quick_, milliseconds);
+}
+
 void TrajectoryPlotView::setAxisLabels(const viewers::TrajectoryBounds& bounds, const QStringList& axes, bool compact)
 {
     const float e = kExtent;
@@ -95,7 +108,7 @@ void TrajectoryPlotView::showEvent(QShowEvent* event) {
     if (!quick_) {
         auto* created = viewers::createQuickWidget();
         if (!alive) { viewers::unloadQuickScene(created); return; }
-        quick_ = created; layout()->addWidget(quick_);
+        quick_ = created; viewers::setMinimumFrameInterval(*quick_, frameIntervalMs_); layout()->addWidget(quick_);
         if (!alive) return;
         viewers::loadQuickScene(*quick_, "Trajectory3D.qml", {{"trajectoryView", QVariant::fromValue<QObject*>(bridge_)}});
     }

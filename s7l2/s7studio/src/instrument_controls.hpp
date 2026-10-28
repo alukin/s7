@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #pragma once
 #include <QWidget>
+#include <QElapsedTimer>
 #include <QStringList>
 #include <QStyle>
+#include <QTimer>
+#include <functional>
 class QDoubleSpinBox;
 class QDial;
 class QLabel;
@@ -43,6 +46,25 @@ void compactActionButton(QPushButton* button, QStyle::StandardPixmap icon,
                          const QString& name, const QString& help);
 // For editors created by compactNumber: synchronize the inactive readout too.
 void setCompactNumberValueSilently(QDoubleSpinBox* number, double value);
+
+// Runs an update at most once per interval. The first request runs at once;
+// later ones within the interval coalesce into one trailing run, so the latest
+// state always shows. In a window with Qt Quick plots every widget repaint
+// re-composites the whole window, so viewers update status text that follows
+// the 60 Hz data refresh through this at 10 Hz; user actions update it at once.
+class Throttle : public QObject {
+public:
+    Throttle(std::function<void()> update, QObject* parent, int intervalMs = 100);
+    void request();
+    // Runs a pending update now, e.g. before its result is read.
+    void flush();
+private:
+    void run();
+    std::function<void()> update_;
+    QElapsedTimer last_;
+    QTimer trailing_;
+    int intervalMs_;
+};
 
 // Labelled, keyboard-accessible alternatives to a short enum combo box.
 class ChoiceButtons : public QWidget {

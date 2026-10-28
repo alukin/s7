@@ -25,6 +25,16 @@ passed. Evidence and commands are in RELEASE_0.1.1.md and
 STUDIO_GUI_TESTING.md. These are software-rendered published-source UI
 measurements, not NodeRuntime throughput or physical-GPU measurements.
 
+2026-10-28: profiling on a second, faster host showed the GUI thread saturated
+by synchronous Qt Quick rendering and window composition, not by S7 data work
+(OBSERVER_UI_LATENCY_PROFILING.md). Plot renders are now paced across
+event-loop passes. Dock previews are capped at 10 fps, data-driven status text
+updates at 10 Hz, and 3D uses cheaper multisampling. On that host `mixed full`
+fell from a 156 ms to an 82 ms maximum gap. On an emulated slow host (4 CPUs,
+2 GHz) it fell from 394 ms with 261 gaps over 250 ms to 201 ms with none.
+Full-viewer frame rates dropped (11 to 6 fps; 3.8 to 1.3 fps slow). The gate
+has not been re-run on the original qualification host.
+
 ## Live observer rebinding — follow-up to 0.1.1
 
 The maintainer accepts fixed observation bindings for 0.1.1 but explicitly wants

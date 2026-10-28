@@ -22,8 +22,9 @@ Item {
         environment: SceneEnvironment {
             backgroundMode: SceneEnvironment.Color
             clearColor: "white"
-            antialiasingMode: SceneEnvironment.MSAA
-            antialiasingQuality: SceneEnvironment.High
+            // 2x multisampling; previews turn it off (software rasterizers pay per sample).
+            antialiasingMode: trajectoryView.antialiased ? SceneEnvironment.MSAA : SceneEnvironment.NoAA
+            antialiasingQuality: SceneEnvironment.Medium
         }
 
         // OrbitCameraController rotates this node and moves the camera;

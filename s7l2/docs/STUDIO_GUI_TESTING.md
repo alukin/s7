@@ -53,7 +53,9 @@ also opens four full viewers, and `live` supports a 30-minute journal-free soak.
 index from 0 to 3 isolates Scope, Phase Portrait, 3D or Live respectively.
 Each run includes a 10-second hidden baseline and 10 seconds of warm-up. JSON
 records achieved source rate, maximum and over-250-ms UI gaps with timestamps,
-scroll events, RSS checkpoints, active plots and separate
+over-100-ms gaps (`slow_ui_gaps`), the monotonic start time and GUI thread id
+for aligning `perf -k monotonic` samples (with `S7_BENCHMARK_EVENT_PROFILE=1`,
+also per-receiver GUI event costs and per-plot render counts), scroll events, RSS checkpoints, active plots and separate
 recording payload growth. Keep temporary recordings on a disk-backed filesystem
 when `/tmp` is a small tmpfs; the run fails on capture or result-write errors.
 

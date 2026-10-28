@@ -211,6 +211,7 @@ void ScopeViewWindow::invalidateAnalysis()
 void ScopeViewWindow::analyzeInterval()
 {
     if (!analysisRun_ || analysisRun_->currentIndex() < 0) return;
+    autoInterval_->flush();  // analyze the interval the latest data implies
     analysisIntervalAuto_ = false;
     const double lower = analysisStart_->value(), upper = analysisEnd_->value();
     if (lower > upper) { analysisStatus_->setText(QStringLiteral("From must be no later than To.")); return; }
@@ -379,6 +380,7 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     , probeName_(std::move(probeName))
     , recording_(probeName_)
 {
+    autoInterval_ = new Throttle([this] { updateAutoAnalysisInterval(); }, this);
     setWindowFlag(Qt::Window, true);
     setWindowFlag(Qt::WindowMinimizeButtonHint, true);
     setWindowFlag(Qt::WindowMaximizeButtonHint, true);
@@ -619,7 +621,7 @@ bool ScopeViewWindow::refreshSource()
         if (analysisRun_->currentData().toString() == QStringLiteral("current")) analysisIntervalAuto_ = true;
     }
     const bool more = viewers::ObservationViewer::refreshSource();
-    updateAutoAnalysisInterval();
+    autoInterval_->request();
     updateStatus();
     return more;
 }

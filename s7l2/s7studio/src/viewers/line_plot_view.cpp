@@ -168,6 +168,12 @@ void LinePlotView::showEvent(QShowEvent* event)
     if (alive) QWidget::showEvent(event);
 }
 
+void LinePlotView::setMinimumFrameInterval(int milliseconds)
+{
+    frameIntervalMs_ = milliseconds;
+    if (quick_) viewers::setMinimumFrameInterval(*quick_, milliseconds);
+}
+
 void LinePlotView::ensureQuickScene()
 {
     if (quick_) return;
@@ -175,6 +181,7 @@ void LinePlotView::ensureQuickScene()
     auto* created = createQuickWidget();
     if (!alive) { unloadQuickScene(created); return; }
     quick_ = created;
+    viewers::setMinimumFrameInterval(*quick_, frameIntervalMs_);
     densityProvider_ = new DensityProvider;
     densityProvider_->setImage(densityImage_);
     quick_->engine()->addImageProvider("s7density", densityProvider_);
