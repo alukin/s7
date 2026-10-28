@@ -150,6 +150,21 @@ class GraphTest(unittest.TestCase):
         values = [v for v, in run(g, 3, "o")]
         self.assertTrue(all(math.isclose(a, b, abs_tol=1e-12) for a, b in zip(values, [0, 2, 0])))
 
+    def test_step_generator(self):
+        g = Graph(schema([{"id": "s", "type": "StepGenerator",
+                           "params": {"start_sample": 2, "initial_value": -1, "final_value": 4, "sample_rate_hz": 10}},
+                          {"id": "x", "type": "EulerIntegrator", "params": {"dt": 0.1}}], [("s", "x", 0)]))
+        self.assertEqual([v for v, in run(g, 4, "s")], [-1.0, -1.0, 4.0, 4.0])
+        self.assertEqual(Graph(schema([{"id": "s", "type": "StepGenerator"}])).elements["s"].rate(), 1000)
+        for params, message in (({"sample_rate_hz": 0}, "finite and positive"), ({"start_sample": -1}, "at least 0"),
+                                ({"final_value": math.inf}, "must be finite"),
+                                ({"sample_rate_hz": 1e-12}, "between 1 ns and 9e9 s")):
+            with self.subTest(params), self.assertRaisesRegex(SchemaError, message):
+                Graph(schema([{"id": "s", "type": "StepGenerator", "params": params}]))
+        with self.assertRaisesRegex(SchemaError, "rate conflict"):
+            Graph(schema([{"id": "s", "type": "StepGenerator"}, {"id": "x", "type": "EulerIntegrator", "params": {"dt": 0.01}}],
+                         [("s", "x", 0)]))
+
     def test_hysteresis_relay(self):
         # A ramp up and down through thresholds -1 and 0.5: on at 0.5 and above, off at -1 and below.
         values = [-1.5, -1.0, 0.0, 0.5, 0.0, -0.5, -1.0, 0.0]
@@ -168,6 +183,22 @@ class GraphTest(unittest.TestCase):
                 evaluate("HysteresisRelay", params, 0.0)
         with self.assertRaisesRegex(RuntimeError, "requires finite values"):
             evaluate("HysteresisRelay", {}, math.nan)
+
+    def test_pwm(self):
+        # period 4: duty is read at steps 0, 4, 8, clamped to [0, 1]; gate is 1 while sample/4 < duty.
+        pwm = ELEMENT_TYPES["PWM"]("p", {"period_samples": 4, "sample_rate_hz": 1})
+        gates = []
+        for duty in [0.5, 0.0, 1.0, 1.0, 0.3, 0.9, 0.9, 0.9, 7.0, 0.0, 0.0, 0.0, -1.0]:
+            pwm.step([duty])
+            gates.append(pwm.outputs[0])
+        self.assertEqual(gates, [1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0])
+        self.assertEqual(pwm.rate(), 1)
+        for params, message in (({"period_samples": 1}, "at least 2"), ({"period_samples": 65505}, "at most 65504"),
+                                ({"sample_rate_hz": 0}, "finite positive sample_rate_hz")):
+            with self.subTest(params), self.assertRaisesRegex(SchemaError, message):
+                ELEMENT_TYPES["PWM"]("p", params)
+        with self.assertRaisesRegex(RuntimeError, "PWM duty must be finite"):
+            ELEMENT_TYPES["PWM"]("p", {}).step([math.inf])
 
     def test_invalid_schemas(self):
         cases = {
