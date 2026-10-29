@@ -218,7 +218,7 @@ class GraphTest(unittest.TestCase):
             "more than one driver": schema(
                 [{"id": "c", "type": "Constant"}, {"id": "g", "type": "Gain"}], [("c", "g", 0), ("c", "g", 0)]),
             "unknown element type": schema([{"id": "s", "type": "Scope"}]),
-            "data streams": schema([{"id": "s", "type": "NetSink"}]),
+            "needs a 'stream_id'": schema([{"id": "s", "type": "NetSource"}]),
             "F64 only": schema([{"id": "c", "type": "Constant", "params": {"type": "I32", "value": 1}}]),
             "input port 2": schema([{"id": "c", "type": "Constant"}, {"id": "a", "type": "Adder"}],
                                    [("c", "a", 0), ("c", "a", 1), ("c", "a", 2)]),
@@ -586,12 +586,39 @@ class DiagramTest(unittest.TestCase):
         with self.assertRaisesRegex(SchemaError, "leaves this node without a stream"):
             diagrams.extract_node_schema(self.diagram([("a", "b", 0), ("b", "c", 0)]), NODE)
 
-    def test_stream_ends_are_refused(self):
+    def test_stream_ends(self):
+        # A stream replaces the connection between nodes with a NetSink and a NetSource
+        # (diagram_deployment.cpp extract_node_schema).
         stream = {"stream_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", "data_type": "F64",
                   "producer": {"node_uuid": NODE, "element": "b", "port": 0},
-                  "consumers": [{"node_uuid": OTHER, "element": "c", "port": 0}]}
-        with self.assertRaisesRegex(SchemaError, "no data plane"):
-            diagrams.extract_node_schema(self.diagram([("a", "b", 0), ("b", "c", 0)], [stream]), NODE)
+                  "consumers": [{"node_uuid": OTHER, "element": "c", "port": 0}],
+                  "sample_rate": {"numerator": 1000, "denominator": 1},
+                  "timestamps": [{"role": "MODEL_TIME", "clock_domain": "model"}], "max_latency_ms": 20}
+        diagram = self.diagram([("a", "b", 0), ("b", "c", 0)], [stream])
+        sink_id = "__stream_5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a_out"
+        source_id = "__stream_5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a_in"
+        producer = diagrams.extract_node_schema(diagram, NODE)
+        sink = producer["elements"][-1]
+        self.assertEqual((sink["id"], sink["type"]), (sink_id, "NetSink"))
+        self.assertEqual(sink["params"], {"stream_id": stream["stream_id"], "type": "F64", "max_elements_per_packet": 1024,
+                                          "max_batch_latency_ms": 10, "send_log_max_packets": 4096, "max_block_ms": 2000,
+                                          "consumer_nodes": [OTHER], "timestamps": ["MODEL_TIME"], "sample_rate": [1000, 1]})
+        self.assertIn({"from_element": "b", "from_port": 0, "to_element": sink_id, "to_port": 0}, producer["connections"])
+        consumer = diagrams.extract_node_schema(diagram, OTHER)
+        source = consumer["elements"][-1]
+        self.assertEqual(source["params"], {"stream_id": stream["stream_id"], "type": "F64", "max_wait_ms": 2000,
+                                            "producer_node": NODE, "timestamps": ["MODEL_TIME"], "sample_rate": [1000, 1],
+                                            "max_latency_ms": 20})
+        self.assertEqual(consumer["connections"], [{"from_element": source_id, "from_port": 0, "to_element": "c", "to_port": 0}])
+        diagram["runtime_nodes"] = [{"node_uuid": NODE, "endpoint": "wss://127.0.0.1:9101/control"},
+                                    {"node_uuid": OTHER, "endpoint": "wss://127.0.0.1:9102/control",
+                                     "data_endpoint": "ws://127.0.0.1:9202/data", "data_security": "trusted_plaintext"}]
+        self.assertEqual([(p.url, p.node_uuid) for p in diagrams.producer_endpoints(diagram, OTHER)],
+                         [("wss://127.0.0.1:9101/control", NODE)])
+        self.assertEqual(diagrams.producer_endpoints(diagram, NODE), [])
+        diagram["runtime_nodes"][1]["data_security"] = "mtls"
+        with self.assertRaisesRegex(SchemaError, "conflicts with data_security"):
+            diagrams.parse_runtime_nodes(diagram)
 
     def test_model_time_step(self):
         self.assertEqual(diagrams.model_time_step_ns({"dt": 0.001}), 1_000_000)
@@ -681,6 +708,7 @@ class PlainWebSocketTest(unittest.TestCase):
             responses = []
             for request in ({"type": "HELLO", "request_id": "h", "protocol_version": 1},
                             {"type": "LIST_DEPLOYMENTS", "request_id": "l", "protocol_version": 1},
+                            {"type": "GET_NODE_INFO", "request_id": "i", "protocol_version": 1},
                             {"type": "PREPARE_DEPLOYMENT", "request_id": "p", "protocol_version": 1, "deployment": {}}):
                 await ws.send(json.dumps(request))
                 responses.append(json.loads(await ws.recv()))
@@ -692,7 +720,7 @@ class PlainWebSocketTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             node = NodeProcess({**startup, "execution": {"step_rate_hz": 50}}, Path(tmp) / "node")
             try:
-                hello, deployments, prepare = asyncio.run(talk(node.port))
+                hello, deployments, info, prepare = asyncio.run(talk(node.port))
             finally:
                 node.stop()
         self.assertEqual(hello["type"], "HELLO_OK")
@@ -700,6 +728,10 @@ class PlainWebSocketTest(unittest.TestCase):
         self.assertEqual(deployments["execution"], "stepping")
         self.assertEqual(deployments["timing"]["pacing"], "rate")
         self.assertEqual((prepare["type"], prepare["code"]), ("ERROR", "UNAUTHORIZED"))
+        # Every type the node transports (ADR-023): the original catalog, 0x0001-0x0206, and CI12.
+        self.assertEqual(sorted(info["data_protocol"]["signal_types"]), sorted(
+            ["I8", "U8", "I12", "U12", "I16", "U16", "I32", "U32", "I64", "U64", "I128", "U128", "F16", "F32", "F64",
+             "F128", "C16", "C32", "C64", "C128", "CI8", "CU8", "CI16", "CI32", "CI64", "CI128", "CI12"]))
 
 
 if __name__ == "__main__":
