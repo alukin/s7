@@ -5,6 +5,7 @@
 // undo, routing around elements, user bends and the file round trip.
 
 #include "diagram/diagram_scene.hpp"
+#include "diagram/connection_planner.hpp"
 #include "diagram/net_model.hpp"
 #include "element_requirements.hpp"
 #include "scene_serializer.hpp"
@@ -23,6 +24,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -201,6 +203,34 @@ int main(int argc, char** argv)
         DiagramScene reopened;
         reload(textScene, reopened);
         check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
+    }
+    {
+        DiagramScene planningScene;
+        const auto source = planningScene.addElement(element("source", "Constant"), {40, 40});
+        const auto scope = planningScene.addElement(element("scope", "Scope"), {400, 40});
+        std::optional<bool> typesResolve;
+        ConnectionPlanner planner(planningScene.signalWires(),
+                                  [&] { return NetModel(planningScene).schemaJson("connection_check"); }, typesResolve);
+        const int before = planningScene.undoStack()->count();
+        auto planned = planner.plan(in(scope), out(source));
+        check(planned.problem.isEmpty() && planned.change.addedWires.size() == 1 && planned.change.elements.size() == 1,
+              "connection planner groups wire and dynamic port growth");
+        check(planningScene.signalWires().empty() && scope->inputs().size() == 1 && planningScene.undoStack()->count() == before,
+              "planning a connection does not mutate the scene");
+        planningScene.applyChange(planned.change, QStringLiteral("Connect"));
+        check(planningScene.signalWires().size() == 1 && scope->inputs().size() == 2 && planningScene.undoStack()->count() == before + 1,
+              "the planned wire and port growth apply as one undo step");
+        ConnectionPlanner after(planningScene.signalWires(),
+                                [&] { return NetModel(planningScene).schemaJson("connection_check"); }, std::nullopt);
+        const auto refused = after.plan(out(source), in(scope, 0));
+        check(!refused.problem.isEmpty() && refused.change.empty(), "refused planning leaves no change to apply");
+        const auto branch = after.plan(out(source), in(scope, 1));
+        check(branch.problem.isEmpty() && branch.change.addedWires.size() == 1 &&
+                  branch.change.addedWires.front()->upstream.isJunction() && planningScene.signalWires().size() == 1,
+              "fan-out planning branches from the first wire without changing the scene");
+        planningScene.undoStack()->undo();
+        check(planningScene.signalWires().empty() && scope->inputs().size() == 1,
+              "undo reverts the complete planned connection");
     }
     for (const auto& observerType : {"Scope", "LiveOscilloscope"}) {
         DiagramScene observerScene;
