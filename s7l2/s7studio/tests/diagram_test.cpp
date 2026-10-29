@@ -4,8 +4,9 @@
 // Diagram editing (offscreen): connection rules, wire trees, deletion,
 // undo, routing around elements, user bends and the file round trip.
 
-#include "diagram/diagram_scene.hpp"
 #include "diagram/connection_planner.hpp"
+#include "diagram/diagram_routing.hpp"
+#include "diagram/diagram_scene.hpp"
 #include "diagram/net_model.hpp"
 #include "diagram/wire_removal_planner.hpp"
 #include "element_requirements.hpp"
@@ -20,6 +21,7 @@
 
 #include <QApplication>
 #include <QGraphicsSceneMouseEvent>
+#include <QSizeF>
 #include <QUndoStack>
 #include <QVector2D>
 
@@ -309,6 +311,13 @@ int main(int argc, char** argv)
     check(!scene.connectEnds(out(c2), in(gain)).isEmpty(), "an input fed twice is refused");
     const auto trunk = wireInto(scene, gain, 0);
     check(trunk && trunk->upstream.isOutput(), "the first wire of an output starts at the output");
+    if (trunk && trunk->pointsAbsolute().size() >= 2) {
+        const auto route = trunk->pointsAbsolute();
+        const QPointF halfway = (route[0] + route[1]) / 2.0;
+        const DiagramRouting routing(scene.signalWires(), {QRectF(halfway - QPointF(5, 5), QSizeF(10, 10))});
+        check(routing.routeIsValid(*trunk, false), "saved route is structurally valid despite a new obstacle");
+        check(!routing.routeIsValid(*trunk), "normal route validation detects a new obstacle");
+    }
     check(!scene.connectEnds(out(c2), WireEnd::onWire(trunk, trunk->pointsAbsolute()[1])).isEmpty(),
           "an output onto a wire carrying another signal is refused");
     check(scene.connectEnds(in(mix, 0), out(i16)).isEmpty(), "input to output connects (drawn backwards)");

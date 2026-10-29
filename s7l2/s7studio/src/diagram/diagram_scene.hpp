@@ -115,11 +115,8 @@ private:
     struct MoveGesture;
 
     // Routing.
-    void route(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {});
     void repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {});
-    [[nodiscard]] bool routeIsValid(const SignalWire& wire, bool checkObstacles = true) const;
     [[nodiscard]] auto anchorOf(const WireEnd& end) const -> std::optional<QPointF>;
-    [[nodiscard]] auto placeJunction(const SignalWire& branch) const -> std::optional<QPointF>;
     [[nodiscard]] auto previewRoute(const WireEnd& start, const QVector<QPointF>& bends, QPointF end, const WireEnd* target) const
         -> QVector<QPointF>;
     [[nodiscard]] auto nodeRects() const -> std::vector<QRectF>;

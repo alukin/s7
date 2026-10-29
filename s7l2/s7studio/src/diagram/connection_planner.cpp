@@ -3,6 +3,7 @@
 
 #include "diagram/connection_planner.hpp"
 
+#include "diagram/diagram_geometry.hpp"
 #include "diagram/element_ports.hpp"
 #include "local_runtime_v2.hpp"
 
@@ -169,9 +170,7 @@ auto ConnectionPlanner::plan(const WireEnd& a, const WireEnd& b, QVector<QPointF
         if (const auto trunk = trunkOf(upstream)) {
             const auto port = upstream.port();
             const QPointF at = port ? port->scenePos() : QPointF();
-            upstream = WireEnd::onWire(trunk, {
-                std::round(at.x() / kGridStep) * kGridStep,
-                std::round(at.y() / kGridStep) * kGridStep});
+            upstream = WireEnd::onWire(trunk, snap(at));
         }
     }
     auto wire = std::make_shared<SignalWire>();
