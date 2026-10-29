@@ -5,6 +5,7 @@
 
 #include <QMap>
 #include "network_task_runner.hpp"
+#include "node_discovery.hpp"
 #include <QSet>
 #include <QString>
 #include <QVector>
@@ -66,32 +67,12 @@ private slots:
     void onAutoRefreshToggled(bool enabled);
 
 private:
-    struct NodeSnapshot {
-        QString endpoint;
-        QString nodeUuid;
-        QString nodeName;
-        QString certificateCommonName;
-        QString certificateFingerprintSha256;
-        QString trustState;
-        QString dataEndpoint;
-        QString dataSecurity;
-        QString reachability;
-        QString osFamily;
-        QString architecture;
-        QString activeDeployment;
-        QString detailText;
-        QSet<QString> discoveredBy;
-        bool directlyChecked = false; // trustState from contacting the node itself
-    };
-
     void setupUi();
     void updateNodeLists();
     void updateNetworkOverview();
     void openOrUpdateNodeTab(const NodeSnapshot& node);
     void addOrUpdateNode(const NodeSnapshot& node);
-    auto requestJson(const QString& endpoint, const QString& requestJson, QString* error) -> QString;
     static auto normalizeEndpoint(const QString& raw) -> QString;
-    static auto nodeKeyForSnapshot(const NodeSnapshot& node) -> QString;
 
     QLineEdit* seedInput_ = nullptr;
     QPushButton* addSeedButton_ = nullptr;
