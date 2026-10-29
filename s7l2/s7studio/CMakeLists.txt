@@ -18,6 +18,9 @@ add_library(s7studio_diagram STATIC
     src/diagram/wire_router.cpp
     src/diagram/wire_router.hpp
     src/diagram/clipboard.cpp
+    src/diagram/connection_planner.cpp
+    src/diagram/connection_planner.hpp
+    src/diagram/diagram_change.hpp
     src/diagram/diagram_scene.cpp
     src/diagram/diagram_scene.hpp
     src/diagram_document.cpp

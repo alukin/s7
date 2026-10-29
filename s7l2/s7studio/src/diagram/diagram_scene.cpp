@@ -3,14 +3,13 @@
 
 #include "diagram/diagram_scene.hpp"
 
+#include "diagram/connection_planner.hpp"
 #include "diagram/element_ports.hpp"
 #include "diagram/net_model.hpp"
 #include "diagram/wire_router.hpp"
 #include "local_runtime_v2.hpp"
 
 #include <qschematic/wire_system/manager.hpp>
-
-#include <s7/type_inference.hpp>
 
 #include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
@@ -625,16 +624,6 @@ void DiagramScene::setUserBends(const std::shared_ptr<SignalWire>& wire, QVector
 
 // Connections
 
-auto DiagramScene::trunkOf(const WireEnd& output) const -> std::shared_ptr<SignalWire>
-{
-    for (const auto& wire : signalWires()) {
-        if (wire->upstream.sameAs(output)) {
-            return wire;
-        }
-    }
-    return nullptr;
-}
-
 auto DiagramScene::branchesOf(const SignalWire& wire) const -> std::vector<std::shared_ptr<SignalWire>>
 {
     std::vector<std::shared_ptr<SignalWire>> branches;
@@ -658,140 +647,24 @@ auto DiagramScene::wiresOf(const ElementNode& node) const -> std::vector<std::sh
     return wires;
 }
 
-auto DiagramScene::driverEnd(const WireEnd& end) const -> std::optional<WireEnd>
-{
-    if (end.isOutput()) {
-        return end;
-    }
-    if (end.isJunction()) {
-        if (const auto wire = end.wire.lock()) {
-            if (const auto* root = NetModel::rootOf(*wire); root && root->upstream.isOutput()) {
-                return root->upstream;
-            }
-        }
-    }
-    return std::nullopt;
-}
-
-auto DiagramScene::typeProblem(const WireEnd& driver, const WireEnd& input) const -> QString
-{
-    const auto from = driver.node.lock();
-    const auto to = input.node.lock();
-    if (!from || !to) {
-        return {};
-    }
-    if (isObserverElementType(to->element().type)) {
-        return {}; // observation inputs accept any signal type
-    }
-    // The resolver's first error, empty if the schema resolves; unknown
-    // element types (plugins not loaded) count as not resolving.
-    auto resolveError = [](const boost::json::object& schema) -> std::optional<QString> {
-        try {
-            const auto built = runtime::buildSchema(schema);
-            const auto resolved = s7::TypeResolver::resolve(built);
-            if (resolved.ok()) {
-                return std::nullopt;
-            }
-            return QString::fromStdString(resolved.errors.front());
-        } catch (const std::exception& ex) {
-            return QString::fromUtf8(ex.what());
-        }
-    };
-    auto schema = NetModel(*this).schemaJson("connection_check");
-    if (!typesResolve_) {
-        typesResolve_ = !resolveError(schema).has_value();
-    }
-    if (!*typesResolve_) {
-        return {};
-    }
-    schema["connections"].as_array().push_back(boost::json::object{
-        {"from_element", from->id()}, {"from_port", driver.index}, {"to_element", to->id()}, {"to_port", input.index}});
-    if (const auto error = resolveError(schema)) {
-        return QStringLiteral("Types do not match: %1").arg(*error);
-    }
-    return {};
-}
-
 auto DiagramScene::checkConnection(const WireEnd& a, const WireEnd& b) const -> QString
 {
-    auto kind = [](const WireEnd& end) { return end.isOutput() ? 0 : (end.isInput() ? 1 : (end.isJunction() ? 2 : 3)); };
-    const int ka = kind(a);
-    const int kb = kind(b);
-    if (ka == 3 || kb == 3) {
-        return QStringLiteral("A wire connects ports and wires.");
-    }
-    if (a.sameAs(b)) {
-        return QStringLiteral("Pick another port.");
-    }
-    if (ka == 0 && kb == 0) {
-        return QStringLiteral("Two outputs cannot be connected.");
-    }
-    if (ka == 1 && kb == 1) {
-        return QStringLiteral("An input connects to an output or to a wire carrying a signal.");
-    }
-    if (ka == 2 && kb == 2) {
-        return QStringLiteral("A wire joins another wire only to feed an input.");
-    }
-    const WireEnd& input = ka == 1 ? a : b;
-    const WireEnd& upstream = ka == 1 ? b : a;
-    if (ka + kb == 2) {
-        const WireEnd& output = ka == 0 ? a : b;
-        const WireEnd& onWire = ka == 0 ? b : a;
-        const auto driver = driverEnd(onWire);
-        const auto node = driver ? driver->node.lock() : nullptr;
-        if (driver && driver->sameAs(output)) {
-            return QStringLiteral("The wire already carries this output.");
-        }
-        return QStringLiteral("The wire already carries a signal (%1); a net has one output.")
-            .arg(node ? QStringLiteral("%1.%2").arg(node->title(), driver->port() ? driver->port()->name() : QString()) : QStringLiteral("?"));
-    }
-    const auto inputPort = input.port();
-    if (!inputPort) {
-        return QStringLiteral("The input is gone.");
-    }
-    for (const auto& wire : signalWires()) {
-        if (wire->downstream.sameAs(input)) {
-            return QStringLiteral("Input %1.%2 is already connected.").arg(input.node.lock()->title(), inputPort->name());
-        }
-    }
-    const auto driver = driverEnd(upstream);
-    if (!driver || !driver->port()) {
-        return QStringLiteral("The wire is not connected to an output.");
-    }
-    return typeProblem(*driver, input);
+    ConnectionPlanner planner(signalWires(), [this] { return NetModel(*this).schemaJson("connection_check"); }, typesResolve_);
+    const auto problem = planner.check(a, b);
+    typesResolve_ = planner.typesResolve();
+    return problem;
 }
 
 auto DiagramScene::connectEnds(const WireEnd& a, const WireEnd& b, QVector<QPointF> bends) -> QString
 {
-    if (auto problem = checkConnection(a, b); !problem.isEmpty()) {
-        Q_EMIT statusMessage(problem);
-        return problem;
+    ConnectionPlanner planner(signalWires(), [this] { return NetModel(*this).schemaJson("connection_check"); }, typesResolve_);
+    auto result = planner.plan(a, b, std::move(bends));
+    typesResolve_ = planner.typesResolve();
+    if (!result.problem.isEmpty()) {
+        Q_EMIT statusMessage(result.problem);
+        return result.problem;
     }
-    WireEnd upstream = a;
-    WireEnd downstream = b;
-    if (a.isInput()) {
-        std::swap(upstream, downstream);
-        std::reverse(bends.begin(), bends.end());
-    }
-    if (upstream.isOutput()) {
-        // An output has one first wire; further wires branch off it.
-        if (const auto trunk = trunkOf(upstream)) {
-            upstream = WireEnd::onWire(trunk, anchorOf(upstream).value_or(QPointF()));
-        }
-    }
-    auto wire = std::make_shared<SignalWire>();
-    wire->upstream = upstream;
-    wire->downstream = downstream;
-    wire->userBends = withoutRepeats(bends);
-    DiagramChange change;
-    change.addedWires.push_back(wire);
-    if (const auto target = downstream.node.lock(); target && (target->element().type == "Scope" || target->element().type == "LiveOscilloscope") &&
-        downstream.index == static_cast<int>(target->inputs().size()) - 1) {
-        auto element = target->element();
-        element.params["channel_count"] = static_cast<int>(target->inputs().size());
-        change.elements.push_back({target, target->element(), std::move(element)});
-    }
-    applyChange(change, QStringLiteral("Connect"));
+    applyChange(result.change, QStringLiteral("Connect"));
     return {};
 }
 

@@ -3,8 +3,7 @@
 
 #pragma once
 
-#include "diagram/items.hpp"
-#include "diagram/net_model.hpp"
+#include "diagram/diagram_change.hpp"
 
 #include <qschematic/scene.hpp>
 
@@ -22,43 +21,6 @@
 class QGraphicsPathItem;
 
 namespace s7studio::diagram {
-
-// A set of edits applied (and reverted) as one undo step.
-struct DiagramChange {
-    struct Rehang {
-        std::shared_ptr<SignalWire> wire;
-        WireEnd before;
-        WireEnd after;
-    };
-    struct Bends {
-        std::shared_ptr<SignalWire> wire;
-        QVector<QPointF> before;
-        QVector<QPointF> after;
-    };
-    struct ElementEdit {
-        std::shared_ptr<ElementNode> node;
-        ElementNode::Element before;
-        ElementNode::Element after;
-    };
-    struct TextFrameEdit {
-        std::shared_ptr<TextFrameNode> node;
-        boost::json::object before;
-        boost::json::object after;
-    };
-
-    std::vector<std::shared_ptr<QSchematic::Items::Node>> addedNodes;
-    std::vector<std::shared_ptr<QSchematic::Items::Node>> removedNodes;
-    std::vector<std::shared_ptr<SignalWire>> addedWires;
-    std::vector<std::shared_ptr<SignalWire>> removedWires;
-    std::vector<Rehang> rehung;
-    std::vector<Bends> bends;
-    std::vector<ElementEdit> elements;
-    std::vector<TextFrameEdit> textFrames;
-    std::optional<std::pair<std::vector<DiagramProbe>, std::vector<DiagramProbe>>> probes;
-    std::optional<std::pair<boost::json::array, boost::json::array>> observersPanel;
-
-    [[nodiscard]] bool empty() const;
-};
 
 // The Studio diagram scene (STUDIO_DIAGRAM_WIRING_DESIGN.md). Wires form one
 // tree per net, rooted at the driving output; connections are drawn by
@@ -166,11 +128,8 @@ private:
     void rememberPositions();
 
     // Topology helpers.
-    [[nodiscard]] auto trunkOf(const WireEnd& output) const -> std::shared_ptr<SignalWire>;
     [[nodiscard]] auto branchesOf(const SignalWire& wire) const -> std::vector<std::shared_ptr<SignalWire>>;
     [[nodiscard]] auto wiresOf(const ElementNode& node) const -> std::vector<std::shared_ptr<SignalWire>>;
-    [[nodiscard]] auto driverEnd(const WireEnd& end) const -> std::optional<WireEnd>;
-    [[nodiscard]] auto typeProblem(const WireEnd& driver, const WireEnd& input) const -> QString;
     void collectRemoval(DiagramChange& change, std::vector<std::shared_ptr<SignalWire>> wires) const;
 
     // Gestures.
