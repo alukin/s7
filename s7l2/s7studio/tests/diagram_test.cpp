@@ -208,11 +208,36 @@ int main(int argc, char** argv)
         check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
     }
     {
+        DiagramScene annotations;
+        const auto source = annotations.addElement(element("source", "Constant"), {40, 40});
+        const auto observer = annotations.addElement(element("observer", "Scope"), {400, 40});
+        const DiagramProbe probe{PortRef{"source", 0}, QStringLiteral("signal"), QStringLiteral("V")};
+        const boost::json::array panel{boost::json::object{{"element_id", "observer"}, {"type", "Scope"}, {"collapsed", false}}};
+        annotations.setProbes({probe});
+        annotations.setObserversPanel(panel, false, false);
+        const int beforeDelete = annotations.undoStack()->count();
+        source->setSelected(true);
+        observer->setSelected(true);
+        annotations.deleteSelection();
+        check(annotations.probes().empty() && annotations.observersPanel().empty() &&
+                  annotations.undoStack()->count() == beforeDelete + 1,
+              "deleting elements removes their probes and observer previews in one edit");
+        annotations.undoStack()->undo();
+        check(annotations.probes() == std::vector<DiagramProbe>{probe} && annotations.observersPanel() == panel,
+              "undo restores probes and observer previews with their elements");
+        auto changed = source->element();
+        changed.type = "Scope";
+        annotations.changeElement(source, changed);
+        check(annotations.probes().empty(), "changing an element to one without outputs removes its probe");
+        annotations.undoStack()->undo();
+        check(annotations.probes() == std::vector<DiagramProbe>{probe}, "undo restores a probe removed by a port change");
+    }
+    {
         DiagramScene planningScene;
         const auto source = planningScene.addElement(element("source", "Constant"), {40, 40});
         const auto scope = planningScene.addElement(element("scope", "Scope"), {400, 40});
         std::optional<bool> typesResolve;
-        ConnectionPlanner planner(planningScene.signalWires(),
+        ConnectionPlanner planner(planningScene.elementNodes(), planningScene.signalWires(),
                                   [&] { return NetModel(planningScene).schemaJson("connection_check"); }, typesResolve);
         const int before = planningScene.undoStack()->count();
         auto planned = planner.plan(in(scope), out(source));
@@ -223,7 +248,7 @@ int main(int argc, char** argv)
         planningScene.applyChange(planned.change, QStringLiteral("Connect"));
         check(planningScene.signalWires().size() == 1 && scope->inputs().size() == 2 && planningScene.undoStack()->count() == before + 1,
               "the planned wire and port growth apply as one undo step");
-        ConnectionPlanner after(planningScene.signalWires(),
+        ConnectionPlanner after(planningScene.elementNodes(), planningScene.signalWires(),
                                 [&] { return NetModel(planningScene).schemaJson("connection_check"); }, std::nullopt);
         const auto refused = after.plan(out(source), in(scope, 0));
         check(!refused.problem.isEmpty() && refused.change.empty(), "refused planning leaves no change to apply");
@@ -254,6 +279,25 @@ int main(int argc, char** argv)
         reload(observerScene, restored);
         check(restored.signalWires().size() == 1 && restored.elementNode("observer")->inputs().size() == 2,
               "observer connection survives save and reopen");
+    }
+    {
+        DiagramScene staleScene;
+        const auto source = staleScene.addElement(element("source", "Constant"), {40, 40});
+        const auto first = staleScene.addElement(element("first", "Gain"), {400, 40});
+        const auto second = staleScene.addElement(element("second", "Gain"), {400, 240});
+        check(staleScene.connectEnds(out(source), in(first)).isEmpty(), "stale-end fixture connects");
+        const auto oldWire = wireInto(staleScene, first, 0);
+        const auto oldEnd = WireEnd::onWire(oldWire, oldWire->pointsAbsolute().front());
+        staleScene.deleteWire(oldWire);
+        check(!staleScene.connectEnds(oldEnd, in(second)).isEmpty() && staleScene.signalWires().empty(),
+              "a removed wire cannot become a new connection's junction");
+        check(DiagramRouting(staleScene.signalWires(), {}).previewRoute(oldEnd, {}, {300, 300}, nullptr).isEmpty(),
+              "route preview rejects a removed junction");
+        const auto removedScope = staleScene.addElement(element("removed", "Scope"), {400, 440});
+        removedScope->setSelected(true);
+        staleScene.deleteSelection();
+        check(!staleScene.connectEnds(out(source), in(removedScope)).isEmpty(),
+              "a removed element cannot be a new connection's input");
     }
 
     // Deleting an intermediate branch reattaches its child to the surviving trunk.
@@ -491,7 +535,7 @@ int main(int argc, char** argv)
         mouse(resetGesture, QEvent::GraphicsSceneMouseMove, {300, 200});
         check(resetGesture.mode() == DiagramScene::DrawMode, "drawing is active before clearing");
         resetGesture.clearDiagram();
-        resetGesture.setMode(DiagramScene::NormalMode);
+        check(resetGesture.mode() == DiagramScene::NormalMode, "clearing a diagram leaves drawing mode");
         const auto source = resetGesture.addElement(element("source", "Constant"), {40, 40});
         const auto target = resetGesture.addElement(element("target", "Gain"), {400, 40});
         drag(resetGesture, source->port(PortDirection::Output, 0)->scenePos(), target->port(PortDirection::Input, 0)->scenePos());

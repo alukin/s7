@@ -6,25 +6,22 @@
 #include "diagram/diagram_geometry.hpp"
 #include "diagram/diagram_routing.hpp"
 #include "diagram/diagram_scene.hpp"
-#include "diagram/net_model.hpp"
+#include "diagram/wire_context_menu.hpp"
 
 #include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
-#include <QMenu>
 #include <QPainterPath>
 #include <QPen>
 #include <QTransform>
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <unordered_set>
 
 namespace s7studio::diagram {
 
 namespace {
 
-constexpr double kHandleHit = 6.0;  // a press this close to a bend grabs it
 constexpr double kSegmentHit = 4.0; // a press this close to a segment grabs it
 
 auto distanceToSegment(const QPointF point, const QPointF a, const QPointF b) -> double
@@ -33,43 +30,6 @@ auto distanceToSegment(const QPointF point, const QPointF a, const QPointF b) ->
     const double length2 = QPointF::dotProduct(d, d);
     const double t = length2 > 0.0 ? std::clamp(QPointF::dotProduct(point - a, d) / length2, 0.0, 1.0) : 0.0;
     return QLineF(point, a + t * d).length();
-}
-
-// The grid point of the route nearest to `point`.
-auto nearestOnRoute(const QPointF point, const QVector<QPointF>& route) -> QPointF
-{
-    QPointF best = route.isEmpty() ? snap(point) : route.front();
-    double bestDistance = std::numeric_limits<double>::max();
-    for (int index = 0; index + 1 < route.size(); ++index) {
-        const QPointF a = route[index];
-        const QPointF b = route[index + 1];
-        const QPointF d = b - a;
-        const double length2 = QPointF::dotProduct(d, d);
-        const double t = length2 > 0.0 ? std::clamp(QPointF::dotProduct(point - a, d) / length2, 0.0, 1.0) : 0.0;
-        const QPointF candidate = snap(a + t * d);
-        if (!onSegment(candidate, a, b)) {
-            continue;
-        }
-        if (const double distance = QLineF(point, candidate).length(); distance < bestDistance) {
-            bestDistance = distance;
-            best = candidate;
-        }
-    }
-    return best;
-}
-
-// How many of the (ordered) user bends the route passes before reaching its
-// point `routeIndex`.
-auto bendsBefore(const QVector<QPointF>& route, const QVector<QPointF>& bends, const int routeIndex) -> int
-{
-    int count = 0;
-    for (int segment = 0; segment < routeIndex && segment + 1 < route.size(); ++segment) {
-        while (count < bends.size() && onSegment(bends[count], route[segment], route[segment + 1]) &&
-               !(segment + 1 == routeIndex && same(bends[count], route[segment + 1]))) {
-            ++count;
-        }
-    }
-    return count;
 }
 
 } // namespace
@@ -296,68 +256,10 @@ bool DiagramInteraction::handleKey(const int key, const Qt::KeyboardModifiers)
 
 void DiagramInteraction::showWireMenu(SignalWire& wire, const QPointF scenePos, const QPoint screenPos)
 {
-    const auto shared = scene_.sharedWire(&wire);
-    if (!shared || scene_.mode() == DiagramScene::DrawMode || gesture_) {
+    if (scene_.mode() == DiagramScene::DrawMode || gesture_) {
         return;
     }
-    const auto route = wire.pointsAbsolute();
-    QMenu menu;
-    auto* add = menu.addAction(QStringLiteral("Add Bend Here"));
-    QAction* remove = nullptr;
-    int nearBend = -1;
-    for (int index = 0; index < wire.userBends.size(); ++index) {
-        if (QLineF(wire.userBends[index], scenePos).length() <= kHandleHit + 2.0) {
-            nearBend = index;
-        }
-    }
-    if (nearBend >= 0) {
-        remove = menu.addAction(QStringLiteral("Remove Bend"));
-    }
-    QAction* reroute = nullptr;
-    if (!wire.userBends.isEmpty()) {
-        reroute = menu.addAction(QStringLiteral("Re-route (Remove Hand-Placed Bends)"));
-    }
-    menu.addSeparator();
-    // A probe taps the net's driving output (the same output every wire of
-    // this net shares), not this particular wire segment (doc/
-    // S7_Numerical_Modeling_Test_Plan.md section 1.1: a probe reads an
-    // element's output port, never a graph element of its own).
-    const auto driver = NetModel::driverOf(wire);
-    QAction* addProbeAction = nullptr;
-    QAction* removeProbeAction = nullptr;
-    if (driver) {
-        const bool hasProbe = std::ranges::any_of(scene_.probes_, [&](const auto& probe) { return probe.point == *driver; });
-        addProbeAction = hasProbe ? nullptr : menu.addAction(QStringLiteral("Add Probe Here"));
-        removeProbeAction = hasProbe ? menu.addAction(QStringLiteral("Remove Probe")) : nullptr;
-    }
-    menu.addSeparator();
-    auto* erase = menu.addAction(QStringLiteral("Delete Wire"));
-    const auto* chosen = menu.exec(screenPos);
-    if (chosen == add) {
-        const QPointF point = nearestOnRoute(scenePos, route);
-        int segment = 0;
-        for (int index = 0; index + 1 < route.size(); ++index) {
-            if (onSegment(point, route[index], route[index + 1])) {
-                segment = index;
-                break;
-            }
-        }
-        auto bends = wire.userBends;
-        bends.insert(bendsBefore(route, bends, segment + 1), point);
-        scene_.setUserBends(shared, bends);
-    } else if (remove && chosen == remove) {
-        auto bends = wire.userBends;
-        bends.removeAt(nearBend);
-        scene_.setUserBends(shared, bends);
-    } else if (reroute && chosen == reroute) {
-        scene_.setUserBends(shared, {});
-    } else if (addProbeAction && chosen == addProbeAction) {
-        scene_.addProbe(*driver, QStringLiteral("%1_%2").arg(QString::fromStdString(driver->element)).arg(driver->port));
-    } else if (removeProbeAction && chosen == removeProbeAction) {
-        scene_.removeProbe(*driver);
-    } else if (chosen == erase) {
-        scene_.deleteWire(shared);
-    }
+    showWireContextMenu(scene_, wire, scenePos, screenPos);
 }
 
 void DiagramInteraction::mousePressEvent(QGraphicsSceneMouseEvent* event, const std::function<void()>& base)
@@ -422,7 +324,7 @@ void DiagramInteraction::mousePressEvent(QGraphicsSceneMouseEvent* event, const 
             int routeIndex = -1;
             bool segment = false;
             for (int index = 1; index + 1 < route.size(); ++index) {
-                if (QLineF(route[index], pos).length() <= kHandleHit) {
+                if (QLineF(route[index], pos).length() <= kWireHandleHit) {
                     routeIndex = index;
                 }
             }

@@ -11,7 +11,8 @@ runtime authorities. See [the release scope](RELEASE_0.2.0.md) and
 
 | State or behavior | Owner | Boundary for 0.2.0 work |
 | --- | --- | --- |
-| Diagram topology and undo history | `diagram::DiagramScene` and its model helpers | One user operation produces one undo command. Serialized topology comes from the scene. |
+| Diagram topology and undo history | `diagram::DiagramScene`, connection/removal planners and edit policy | One user operation produces one undo command. Serialized topology comes from the scene. |
+| Diagram interaction and routes | `diagram::DiagramInteraction`, wire context menu, `diagram::DiagramRouting` | Gestures and route decisions stay outside the scene; the scene owns Qt attachments and undo. |
 | Open document metadata, run settings, deployed node and stream references, saved baseline | `DocumentSession` | A deployment result updates this state; opening a document prepares a candidate before retiring the current run. |
 | Studio administration requests | `ui::StudioNetworkService` and `ui::StudioControlClient` | Typed deployment and deployed-diagram results keep protocol JSON and socket work outside `MainWindow`. The requester is injectable for tests; each real request verifies the node certificate. |
 | Blocking Studio control tasks | `ui::NetworkTaskRunner` | Workers receive value snapshots and a cancellation flag. UI completions run on the owner thread; destruction requests cancellation and joins the worker. Prepared deployments may still need bounded abort requests, and a started commit sequence finishes. |
@@ -52,14 +53,16 @@ runtime authorities. See [the release scope](RELEASE_0.2.0.md) and
    configuration, revision conflicts, apply timing, and restart ownership.
    Test with fake requesters before wiring dialogs. Do not interpret
    `GET_NETWORK_CONFIGURATION` as startup/listener configuration.
-3. Continue scene extraction around connection rules, routing, and gesture
-   state before adding resize handles. Keep geometry undo and wire attachment
-   in one model transaction. Current Scope/LiveOscilloscope port growth has a
-   regression for one-command undo/redo.
-4. Extend the bounded retained-run comparison projection to result export and
+3. Extend the bounded retained-run comparison projection to result export and
    graph printing where responsiveness requires it. Viewer binding now yields
    between 4096-sample pages for large comparisons. Define a coherent viewer
    snapshot for printing without pausing acquisition.
+
+The scene extraction is complete for this branch: connection and removal
+planning, annotation cleanup, routing and gesture handling have separate
+owners. Scope/LiveOscilloscope port growth, branch reattachment, cached routes
+and gesture cancellation have focused undo and interaction regressions. Resize
+handles and printing are separate features and should use these boundaries.
 
 Release evidence still needs real multi-node/restart/configuration cycles,
 authorization failures, and UI responsiveness under slow network operations.

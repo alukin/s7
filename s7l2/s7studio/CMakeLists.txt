@@ -21,6 +21,8 @@ add_library(s7studio_diagram STATIC
     src/diagram/connection_planner.cpp
     src/diagram/connection_planner.hpp
     src/diagram/diagram_change.hpp
+    src/diagram/diagram_edit_policy.cpp
+    src/diagram/diagram_edit_policy.hpp
     src/diagram/diagram_geometry.cpp
     src/diagram/diagram_geometry.hpp
     src/diagram/diagram_interaction.cpp
@@ -29,6 +31,8 @@ add_library(s7studio_diagram STATIC
     src/diagram/diagram_routing.hpp
     src/diagram/wire_removal_planner.cpp
     src/diagram/wire_removal_planner.hpp
+    src/diagram/wire_context_menu.cpp
+    src/diagram/wire_context_menu.hpp
     src/diagram/diagram_scene.cpp
     src/diagram/diagram_scene.hpp
     src/diagram_document.cpp

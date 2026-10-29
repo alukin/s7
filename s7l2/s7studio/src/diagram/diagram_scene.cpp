@@ -4,6 +4,7 @@
 #include "diagram/diagram_scene.hpp"
 
 #include "diagram/connection_planner.hpp"
+#include "diagram/diagram_edit_policy.hpp"
 #include "diagram/diagram_geometry.hpp"
 #include "diagram/diagram_interaction.hpp"
 #include "diagram/diagram_routing.hpp"
@@ -124,6 +125,7 @@ void DiagramScene::clearDiagram()
     observersPanel_.clear(); observersPanelManual_ = false;
     interaction_->clearForSceneReset();
     clear();
+    setMode(NormalMode);
     knownPositions_.clear();
     typesResolve_.reset();
     if (!probes_.empty()) {
@@ -202,32 +204,7 @@ void DiagramScene::restoreRoutes(const std::function<void(int)>& progress)
 void DiagramScene::applyChange(const DiagramChange& change, const QString& text)
 {
     if (!change.empty()) {
-        auto complete = change;
-        if (!complete.observersPanel && (!change.removedNodes.empty() || !change.elements.empty())) {
-            auto remaining = observersPanel_;
-            remaining.erase(std::remove_if(remaining.begin(), remaining.end(), [&](const boost::json::value& value) {
-                const auto& entry = value.as_object(); const auto id = std::string(entry.at("element_id").as_string());
-                for (const auto& node : change.removedNodes)
-                    if (const auto element = std::dynamic_pointer_cast<ElementNode>(node); element && element->id() == id) return true;
-                for (const auto& edit : change.elements) if (edit.before.id == id && (edit.after.id != id || edit.after.type != std::string(entry.at("type").as_string()))) return true;
-                return false;
-            }), remaining.end());
-            if (remaining != observersPanel_) complete.observersPanel = std::pair{observersPanel_, std::move(remaining)};
-        }
-        if (!complete.probes && (!change.removedNodes.empty() || !change.elements.empty())) {
-            auto remaining = probes_;
-            std::erase_if(remaining, [&](const DiagramProbe& probe) {
-                for (const auto& node : change.removedNodes)
-                    if (const auto element = std::dynamic_pointer_cast<ElementNode>(node); element && element->id() == probe.point.element) return true;
-                for (const auto& edit : change.elements) if (edit.before.id == probe.point.element) {
-                    const auto ports = elementPorts(edit.after.type, edit.after.params, edit.after.schema);
-                    if (edit.after.id != edit.before.id || probe.point.port >= std::max(static_cast<int>(ports.outputs.size()), edit.node->minimumOutputs())) return true;
-                }
-                return false;
-            });
-            if (remaining != probes_) complete.probes = std::pair{probes_, std::move(remaining)};
-        }
-        undoStack()->push(new ChangeCommand(this, std::move(complete), text));
+        undoStack()->push(new ChangeCommand(this, completeDiagramChange(change, probes_, observersPanel_), text));
     }
 }
 
@@ -445,7 +422,7 @@ auto DiagramScene::wiresOf(const ElementNode& node) const -> std::vector<std::sh
 
 auto DiagramScene::checkConnection(const WireEnd& a, const WireEnd& b) const -> QString
 {
-    ConnectionPlanner planner(signalWires(), [this] { return NetModel(*this).schemaJson("connection_check"); }, typesResolve_);
+    ConnectionPlanner planner(elementNodes(), signalWires(), [this] { return NetModel(*this).schemaJson("connection_check"); }, typesResolve_);
     const auto problem = planner.check(a, b);
     typesResolve_ = planner.typesResolve();
     return problem;
@@ -453,7 +430,7 @@ auto DiagramScene::checkConnection(const WireEnd& a, const WireEnd& b) const -> 
 
 auto DiagramScene::connectEnds(const WireEnd& a, const WireEnd& b, QVector<QPointF> bends) -> QString
 {
-    ConnectionPlanner planner(signalWires(), [this] { return NetModel(*this).schemaJson("connection_check"); }, typesResolve_);
+    ConnectionPlanner planner(elementNodes(), signalWires(), [this] { return NetModel(*this).schemaJson("connection_check"); }, typesResolve_);
     auto result = planner.plan(a, b, std::move(bends));
     typesResolve_ = planner.typesResolve();
     if (!result.problem.isEmpty()) {
