@@ -186,6 +186,7 @@ add_library(s7studio_app OBJECT
     src/element_picker_panel.hpp
     src/headless_nodes_panel.cpp
     src/headless_nodes_panel.hpp
+    src/node_discovery.cpp src/node_discovery.hpp
     resources/icons.qrc
     resources/demo_startup.s7diagram
     src/deployment_support.cpp
@@ -294,6 +295,7 @@ s7_add_test_executable(s7studio_nodes_panel_test
     tests/nodes_panel_test.cpp
     src/headless_nodes_panel.cpp
     src/headless_nodes_panel.hpp
+    src/node_discovery.cpp src/node_discovery.hpp
     src/network_task_runner.cpp src/network_task_runner.hpp
 )
 target_include_directories(s7studio_nodes_panel_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/s7transport/include)
@@ -301,6 +303,11 @@ target_link_libraries(s7studio_nodes_panel_test PRIVATE Qt6::Core Qt6::Gui Qt6::
 target_compile_definitions(s7studio_nodes_panel_test PRIVATE S7_TEST_CERT_DIR="${PROJECT_SOURCE_DIR}/s7runtime/examples/certs")
 set_target_properties(s7studio_nodes_panel_test PROPERTIES AUTOMOC ON)
 add_test(NAME s7studio_nodes_panel_trust COMMAND s7studio_nodes_panel_test)
+
+s7_add_test_executable(s7studio_node_discovery_test tests/node_discovery_test.cpp)
+target_link_libraries(s7studio_node_discovery_test PRIVATE s7studio_app)
+s7_enable_project_warnings(s7studio_node_discovery_test)
+add_test(NAME s7studio_node_discovery COMMAND s7studio_node_discovery_test)
 
 foreach(layout_case wire_types_ok layout_loops)
     add_test(NAME s7studio_layout_${layout_case}
