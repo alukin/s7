@@ -35,7 +35,6 @@
 #include <s7/io.hpp>
 #include <s7/element_catalog.hpp>
 #include <s7/element_registry.hpp>
-#include <s7/net.hpp>
 #include <s7/schema_library.hpp>
 
 #include "s7/plugin_loader.hpp"
@@ -63,6 +62,7 @@
 #include <QCloseEvent>
 #include <QCheckBox>
 #include <QSignalBlocker>
+#include <QScopedValueRollback>
 #include <QLabel>
 #include <QKeySequence>
 #include <QLineEdit>
@@ -77,7 +77,6 @@
 #include <QGraphicsRectItem>
 #include <QGraphicsScene>
 #include <QGraphicsTextItem>
-#include <QInputDialog>
 #include <QIcon>
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -96,7 +95,6 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-#include <s7/deployment_client.hpp>
 
 #include <algorithm>
 #include <array>
@@ -266,7 +264,6 @@ auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
 
 MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
     : QMainWindow(parent)
-    , runtimeSchema_(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}})
 {
     viewers_ = new viewers::ViewerManager(viewers::ViewerRegistry::instance(), this);
     connect(viewers_, &viewers::ViewerManager::viewerCreated, this,
@@ -315,9 +312,6 @@ MainWindow::~MainWindow()
         schemaTabs_->reset();
         delete schemaTabs_;
         schemaTabs_=nullptr;
-    }
-    if (networkTask_.joinable()) {
-        networkTask_.join(); // bounded by the control request timeouts
     }
     if (runner_) {
         disconnect(runner_, nullptr, this, nullptr);
@@ -416,7 +410,7 @@ void MainWindow::buildActions()
     overlayScopeTracesAction_->setChecked(false);
     overlayScopeTracesAction_->setToolTip("On the next run, keep the preceding Scope recording as a labelled comparison. Phase views always restart.");
     connect(overlayScopeTracesAction_, &QAction::triggered, this, [this](bool keep) {
-        clearScopesBeforeRun_ = !keep;
+        document_.setClearScopesBeforeRun(!keep);
         setWindowModified(documentModified());
     });
 
@@ -1312,9 +1306,8 @@ void MainWindow::storeTriggerPreset(const QString& observerId)
     if (const auto* old = element.params.if_contains("trigger"); old && *old == preset) return;
     element.params["trigger"] = std::move(preset);
     // Trigger settings act on the running acquisition at once, unlike other edits.
-    storingTriggerPreset_ = true;
+    const QScopedValueRollback presetGuard(storingTriggerPreset_, true);
     scene->changeElement(node, std::move(element));
-    storingTriggerPreset_ = false;
 }
 
 bool MainWindow::observerMatchesActiveRun(const QString& observerId) const
@@ -1514,7 +1507,7 @@ void MainWindow::refreshObserversPanel()
         const QSignalBlocker block(scene);
         scene->setObserversPanel(std::move(defaults), false, false);
     }
-    observersPanel_->setDocument(schemaDisplayName(runtimeSchema_, "untitled"), descriptors, scene->observersPanel());
+    observersPanel_->setDocument(schemaDisplayName(document_.schema(), "untitled"), descriptors, scene->observersPanel());
 }
 
 auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
@@ -1863,14 +1856,14 @@ void MainWindow::clearViewerSamples()
 
 bool MainWindow::documentModified() const
 {
-    return hasSavedDocument_ && currentDocument() != savedDocument_;
+    return document_.modified(currentDocument());
 }
 
 void MainWindow::refreshDocumentTitle()
 {
-    auto name = schemaDisplayName(runtimeSchema_, {}).trimmed();
+    auto name = schemaDisplayName(document_.schema(), {}).trimmed();
     if (name.isEmpty() || name.compare(QStringLiteral("untitled"), Qt::CaseInsensitive) == 0) {
-        name = QFileInfo(documentSourceLabel_).completeBaseName();
+        name = QFileInfo(document_.sourceLabel()).completeBaseName();
         if (name.isEmpty()) name = QStringLiteral("Untitled");
     }
     setWindowTitle(QStringLiteral("s7studio - %1[*]").arg(name));
@@ -1889,13 +1882,13 @@ void MainWindow::editDiagramProperties()
     dialog.resize(540, 340);
     auto* layout = new QVBoxLayout(&dialog);
     auto* form = new QFormLayout;
-    const auto oldName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
+    const auto oldName = schemaDisplayName(document_.schema(), QStringLiteral("untitled"));
     auto* name = new QLineEdit(oldName, &dialog);
     name->setObjectName(QStringLiteral("diagram.name"));
     form->addRow(QStringLiteral("Name"), name);
     layout->addLayout(form);
     auto* label = new QLabel(QStringLiteral("Description"), &dialog);
-    auto* description = new QPlainTextEdit(diagramDescription_, &dialog);
+    auto* description = new QPlainTextEdit(document_.description(), &dialog);
     description->setObjectName(QStringLiteral("diagram.description"));
     label->setBuddy(description);
     layout->addWidget(label); layout->addWidget(description, 1);
@@ -1912,16 +1905,16 @@ void MainWindow::editDiagramProperties()
     layout->addWidget(buttons);
     if (dialog.exec() != QDialog::Accepted) return;
     const auto newName = name->text().trimmed();
-    const auto oldDescription = diagramDescription_, newDescription = description->toPlainText();
+    const auto oldDescription = document_.description(), newDescription = description->toPlainText();
     if (newName == oldName && newDescription == oldDescription) return;
     // Root-document metadata belongs to the root undo history, even when the
     // command was invoked while inspecting a nested schema. Keep its tabs open.
     if (auto* tabs = findChild<QTabWidget*>(QStringLiteral("diagram.tabs"))) tabs->setCurrentWidget(diagramEditor_);
     diagramEditor_->scene()->undoStack()->push(new DiagramMetadataCommand(
         [this, oldName, newName, oldDescription, newDescription](bool revert) {
-            if (!runtimeSchema_.is_object()) runtimeSchema_ = boost::json::object{};
-            runtimeSchema_.as_object()["name"] = (revert ? oldName : newName).toStdString();
-            diagramDescription_ = revert ? oldDescription : newDescription;
+            if (!document_.schema().is_object()) document_.schema() = boost::json::object{};
+            document_.schema().as_object()["name"] = (revert ? oldName : newName).toStdString();
+            document_.setDescription(revert ? oldDescription : newDescription);
             refreshDocumentTitle();
             refreshObserversPanel();
             setWindowModified(documentModified());
@@ -1931,8 +1924,7 @@ void MainWindow::editDiagramProperties()
 void MainWindow::markDocumentSaved()
 {
     refreshObserversPanel();
-    savedDocument_ = currentDocument();
-    hasSavedDocument_ = true;
+    document_.markSaved(currentDocument());
     setWindowModified(false);
 }
 
@@ -1984,7 +1976,7 @@ void MainWindow::openRunParametersDialog()
 auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
 {
     if (overlayScopeTracesAction_) {
-        clearScopesBeforeRun_ = !overlayScopeTracesAction_->isChecked();
+        document_.setClearScopesBeforeRun(!overlayScopeTracesAction_->isChecked());
     }
 
     QDialog dialog(this);
@@ -2007,11 +1999,11 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     runtimeSecondsSpin->setRange(-1, 604800);
     runtimeSecondsSpin->setSingleStep(0.1);
     runtimeSecondsSpin->setSpecialValueText(QStringLiteral("-1 (continuous)"));
-    runtimeSecondsSpin->setValue(std::clamp(runtimeSeconds_, -1.0, 604800.0));
+    runtimeSecondsSpin->setValue(std::clamp(document_.runtimeSeconds(), -1.0, 604800.0));
 
     auto* continuous = new QCheckBox(QStringLiteral("Run continuously until stopped"), &dialog);
     continuous->setObjectName(QStringLiteral("run.continuous"));
-    continuous->setChecked(runtimeSeconds_ == -1.0);
+    continuous->setChecked(document_.runtimeSeconds() == -1.0);
     runtimeSecondsSpin->setEnabled(!continuous->isChecked());
     connect(continuous, &QCheckBox::toggled, &dialog, [runtimeSecondsSpin](bool enabled) {
         runtimeSecondsSpin->setEnabled(!enabled);
@@ -2036,7 +2028,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     frequencySpin->setDecimals(6);
     frequencySpin->setRange(0.001, 1'000'000.0);
     frequencySpin->setSingleStep(10.0);
-    frequencySpin->setValue(std::max(0.001, discretizationFrequencyHz_));
+    frequencySpin->setValue(std::max(0.001, document_.frequencyHz()));
     frequencySpin->setSuffix(QStringLiteral(" Hz"));
 
     auto* dtLabel = new QLabel(&dialog);
@@ -2052,7 +2044,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
 
     auto* clearSamplesCheck = new QCheckBox(QStringLiteral("Keep Previous Scope Traces"), &dialog);
     clearSamplesCheck->setObjectName(QStringLiteral("run.keepScopeTraces"));
-    clearSamplesCheck->setChecked(!clearScopesBeforeRun_);
+    clearSamplesCheck->setChecked(!document_.clearScopesBeforeRun());
     clearSamplesCheck->setToolTip(QStringLiteral("On the next run, keep the preceding Scope recording as a labelled comparison. Phase views always restart."));
 
     form->addRow(QStringLiteral("Model duration (s)"), runtimeSecondsSpin);
@@ -2095,11 +2087,11 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
         return false;
     }
 
-    runtimeSeconds_ = runtimeSecondsSpin->value();
-    clearScopesBeforeRun_ = !clearSamplesCheck->isChecked();
-    if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == clearScopesBeforeRun_) {
+    document_.setRuntimeSeconds(runtimeSecondsSpin->value());
+    document_.setClearScopesBeforeRun(!clearSamplesCheck->isChecked());
+    if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == document_.clearScopesBeforeRun()) {
         const QSignalBlocker blocker(overlayScopeTracesAction_);
-        overlayScopeTracesAction_->setChecked(!clearScopesBeforeRun_);
+        overlayScopeTracesAction_->setChecked(!document_.clearScopesBeforeRun());
     }
 
     applyDiscretizationFrequency(frequencySpin->value());
@@ -2126,9 +2118,9 @@ void MainWindow::launchRunWithCurrentConfiguration()
         return;
     }
     if (runner_->isRunning()) return;
-    const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
+    const double dtSeconds = 1.0 / std::max(document_.frequencyHz(), 1e-12);
     try {
-        static_cast<void>(ui::ModelRunController::computeTicks(runtimeSeconds_, dtSeconds));
+        static_cast<void>(ui::ModelRunController::computeTicks(document_.runtimeSeconds(), dtSeconds));
     } catch (const std::exception& ex) {
         const auto message = QStringLiteral("Cannot start run: %1").arg(QString::fromUtf8(ex.what()));
         appendLog(message);
@@ -2141,14 +2133,14 @@ void MainWindow::launchRunWithCurrentConfiguration()
     resetLocalRun();
     runPanel_->clearOutput();
     runPanel_->append(QStringLiteral("Running at %1 Hz, %2.")
-                          .arg(discretizationFrequencyHz_)
-                          .arg(runtimeSeconds_ < 0 ? QStringLiteral("continuously") : QStringLiteral("%1 s").arg(runtimeSeconds_)));
+                          .arg(document_.frequencyHz())
+                          .arg(document_.runtimeSeconds() < 0 ? QStringLiteral("continuously") : QStringLiteral("%1 s").arg(document_.runtimeSeconds())));
     viewers_->beginRun(previousRun ? QStringLiteral("Run %1").arg(previousRun->id) : QStringLiteral("Previous run"),
-                       !clearScopesBeforeRun_);
+                       !document_.clearScopesBeforeRun());
 
     if (diagramEditor_ && diagramEditor_->scene()) {
         static_cast<void>(syncSchemaFromScene());
-        updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
+        updateSchemaDiscretizationParams(document_.schema(), document_.frequencyHz(), dtSeconds);
     }
 
     const auto probes = currentRunProbes();
@@ -2163,7 +2155,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
     toolWindows_->show(observersDock_);
     if (previousFocus) previousFocus->setFocus(Qt::OtherFocusReason);
     observersPanel_->setRunState(RunState::Preparing, 0, dtSeconds);
-    controller_->run(runtimeSchema_, dtSeconds, ui::RunExecutionConfig{runtimeSeconds_}, probes);
+    controller_->run(document_.schema(), dtSeconds, ui::RunExecutionConfig{document_.runtimeSeconds()}, probes);
     viewers_->presentLive(runner_->liveSources());
     refreshActions();
 }
@@ -2174,13 +2166,13 @@ void MainWindow::applyDiscretizationFrequency(const double frequencyHz)
         return;
     }
 
-    discretizationFrequencyHz_ = frequencyHz;
-    const double dtSeconds = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
+    document_.setFrequencyHz(frequencyHz);
+    const double dtSeconds = 1.0 / std::max(document_.frequencyHz(), 1e-12);
 
     if (diagramEditor_ && diagramEditor_->scene()) {
         static_cast<void>(syncSchemaFromScene());
     }
-    updateSchemaDiscretizationParams(runtimeSchema_, discretizationFrequencyHz_, dtSeconds);
+    updateSchemaDiscretizationParams(document_.schema(), document_.frequencyHz(), dtSeconds);
     applySchemaParamsToScene();
 }
 
@@ -2194,31 +2186,34 @@ auto MainWindow::updateSchemaDiscretizationParams(boost::json::value& schema,
 
 bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QString& sourceLabel)
 {
+    auto candidateSession = document_;
+    candidateSession.openSchema(schemaJson, sourceLabel);
+    const auto elementCheck = prepareElementTypes(schemaJson);
+    // Deserialization may reject a schema after clearing its destination.
+    // Check it before retiring the open document and its run.
+    diagram::DiagramScene staged;
+    diagram::DiagramDocument candidate;
+    candidate.runtimeSchema = schemaJson;
+    diagram::SceneSerializer{}.deserialize(candidate, staged);
+
     if (runner_) resetLocalRun();
     if (schemaTabs_) schemaTabs_->reset();
 
     closeViewers();
     clearViewerSamples();
 
-    runtimeSchema_ = schemaJson;
-    diagramDescription_.clear();
-    documentSourceLabel_ = sourceLabel;
-    runtimeSeconds_ = 60;
-    clearScopesBeforeRun_ = true;
+    document_ = std::move(candidateSession);
     if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(false);
-    deploymentRuntimeNodes_.clear();
-    deploymentStreams_.clear();
 
-    const auto elementCheck = prepareElementTypes(runtimeSchema_);
     if (diagramEditor_) {
-        diagramEditor_->loadRuntimeSchema(runtimeSchema_);
+        diagramEditor_->loadRuntimeSchema(document_.schema());
         syncPageActions();
         syncTextFrameStyleControls();
         refreshPlacementLabels();
     }
     reportElementTypes(elementCheck, sourceLabel);
 
-    const auto name = schemaDisplayName(runtimeSchema_, sourceLabel);
+    const auto name = schemaDisplayName(document_.schema(), sourceLabel);
     appendLog(QString("[studio] loaded schema: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded schema: %1").arg(name), 5000);
     refreshDocumentTitle();
@@ -2229,6 +2224,14 @@ bool MainWindow::loadSchemaJson(const boost::json::value& schemaJson, const QStr
 bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QString& sourceLabel)
 {
     const auto document = diagram::DiagramDocument::fromJson(diagramJson);
+    auto candidateSession = document_;
+    candidateSession.openDiagram(document, sourceLabel);
+    const auto elementCheck = prepareElementTypes(document.runtimeSchema);
+    // Keep the current editor and run intact when the layout or wire model is
+    // invalid. SceneSerializer clears its destination before checking both.
+    diagram::DiagramScene staged;
+    diagram::SceneSerializer{}.deserialize(document, staged);
+
     if (runner_) resetLocalRun();
     if (schemaTabs_) schemaTabs_->reset();
 
@@ -2253,23 +2256,9 @@ bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     };
     updateProgress(0);
 
-    runtimeSchema_ = document.runtimeSchema;
-    diagramDescription_ = document.description;
-    documentSourceLabel_ = sourceLabel;
-    deploymentRuntimeNodes_ = document.runtimeNodes;
-    deploymentStreams_ = document.streams;
+    document_ = std::move(candidateSession);
+    if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(!document_.clearScopesBeforeRun());
 
-    runtimeSeconds_ = document.runConfiguration.contains("runtime_seconds")
-        ? document.runConfiguration.at("runtime_seconds").to_number<double>() : 60;
-    clearScopesBeforeRun_ = !document.runConfiguration.contains("clear_scope_traces")
-        || document.runConfiguration.at("clear_scope_traces").as_bool();
-    if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(!clearScopesBeforeRun_);
-
-    if (document.dt > 0.0) {
-        discretizationFrequencyHz_ = 1.0 / document.dt;
-    }
-
-    const auto elementCheck = prepareElementTypes(document.runtimeSchema);
     loading.setLabelText(QStringLiteral("Building diagram and restoring wire routes…"));
     updateProgress(8);
     if (diagramEditor_) {
@@ -2281,7 +2270,7 @@ bool MainWindow::loadDiagramJson(const boost::json::value& diagramJson, const QS
     updateProgress(97);
     reportElementTypes(elementCheck, sourceLabel);
 
-    const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(runtimeSchema_, sourceLabel);
+    const auto name = !document.id.isEmpty() ? document.id : schemaDisplayName(document_.schema(), sourceLabel);
     appendLog(QString("[studio] loaded diagram: %1").arg(sourceLabel));
     statusBar()->showMessage(QString("Loaded diagram: %1").arg(name), 5000);
     refreshDocumentTitle();
@@ -2345,7 +2334,7 @@ bool MainWindow::openRecentDiagram(const QString& path, bool interactive)
         if (!confirmDocumentReplacement()) return false;
         parsed = json_utils::parseFile(path);
         if (!loadDiagramJson(parsed, QFileInfo(path).fileName())) return false;
-        currentDiagramPath_ = QFileInfo(path).absoluteFilePath();
+        document_.setPath(QFileInfo(path).absoluteFilePath());
         rememberRecentDiagram(path);
         return true;
     } catch (const std::exception& ex) {
@@ -2383,19 +2372,8 @@ void MainWindow::closeCurrentDiagram()
     closeViewers();
     clearViewerSamples();
 
-    runtimeSchema_ = boost::json::object{
-        {"name", "untitled"},
-        {"elements", boost::json::array{}},
-        {"connections", boost::json::array{}}
-    };
-    currentDiagramPath_.clear();
-    documentSourceLabel_.clear();
-    diagramDescription_.clear();
-    runtimeSeconds_ = 60;
-    clearScopesBeforeRun_ = true;
+    document_.reset();
     if (overlayScopeTracesAction_) overlayScopeTracesAction_->setChecked(false);
-    deploymentRuntimeNodes_.clear();
-    deploymentStreams_.clear();
 
     if (diagramEditor_) {
         diagramEditor_->clearDiagram();
@@ -2413,12 +2391,12 @@ void MainWindow::closeCurrentDiagram()
 
 void MainWindow::saveDocument()
 {
-    if (currentDiagramPath_.isEmpty()) {
+    if (document_.path().isEmpty()) {
         saveDocumentAs();
         return;
     }
 
-    saveDocumentToPath(currentDiagramPath_);
+    saveDocumentToPath(document_.path());
 }
 
 void MainWindow::saveDocumentAs()
@@ -2427,7 +2405,7 @@ void MainWindow::saveDocumentAs()
     const auto filePath = QFileDialog::getSaveFileName(
         this,
         QStringLiteral("Save Diagram"),
-        currentDiagramPath_.isEmpty() ? QStringLiteral("diagram.s7diagram") : currentDiagramPath_,
+        document_.path().isEmpty() ? QStringLiteral("diagram.s7diagram") : document_.path(),
         QStringLiteral("Diagram files (*.s7diagram);;JSON files (*.json);;All files (*)"),
         &selectedFilter);
     if (filePath.isEmpty()) {
@@ -2475,11 +2453,11 @@ void MainWindow::openPath(const QString& filePath, const bool preferDiagram, con
         parsed = json_utils::parseFile(filePath);
         if (diagramDocument) {
             if (!loadDiagramJson(parsed, sourceLabel)) return;
-            currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
+            document_.setPath(QFileInfo(filePath).absoluteFilePath());
             rememberRecentDiagram(filePath);
         } else {
             if (!loadSchemaJson(parsed, sourceLabel)) return;
-            currentDiagramPath_.clear();
+            document_.clearPath();
             if (preferDiagram) {
                 appendLog(QString("[studio] file '%1' is a runtime schema; showing synthesized diagram view").arg(sourceLabel));
             }
@@ -2546,7 +2524,7 @@ void MainWindow::loadDemoDiagram()
         loadSchemaJson(boost::json::object{{"name", "untitled"}, {"elements", boost::json::array{}}, {"connections", boost::json::array{}}},
                        QStringLiteral("empty schema"));
     }
-    currentDiagramPath_.clear();
+    document_.clearPath();
 }
 
 void MainWindow::chooseExampleDiagram()
@@ -2583,7 +2561,7 @@ bool MainWindow::openExampleDiagram(const QString& path)
         if (!confirmDocumentReplacement()) return false;
         if (!loadDiagramJson(parsed, QFileInfo(path).fileName())) return false;
         // A bundled example is a working copy, never an implicit Save target.
-        currentDiagramPath_.clear();
+        document_.clearPath();
         markDocumentSaved();
         return true;
     } catch (const std::exception& ex) {
@@ -2751,8 +2729,6 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
     }
 
     auto document = syncSchemaFromScene();
-    document.runtimeNodes = deploymentRuntimeNodes_;
-    document.streams = deploymentStreams_;
 
     const auto payload = document.toJson();
     const auto json = boost::json::serialize(payload);
@@ -2764,10 +2740,10 @@ auto MainWindow::saveDocumentToPath(const QString& filePath) -> bool
         return false;
     }
 
-    runtimeSchema_ = document.runtimeSchema;
+    document_.schema() = document.runtimeSchema;
     markDocumentSaved();
-    currentDiagramPath_ = QFileInfo(filePath).absoluteFilePath();
-    documentSourceLabel_ = QFileInfo(filePath).fileName();
+    document_.setPath(QFileInfo(filePath).absoluteFilePath());
+    document_.setSourceLabel(QFileInfo(filePath).fileName());
     refreshDocumentTitle();
     rememberRecentDiagram(filePath);
     appendLog(QString("[studio] saved diagram: %1").arg(QFileInfo(filePath).fileName()));
@@ -2785,15 +2761,13 @@ void MainWindow::fitDiagramToView()
 auto MainWindow::serializeScene() const -> diagram::DiagramDocument
 {
     diagram::SerializationOptions options;
-    options.schemaName = schemaDisplayName(runtimeSchema_, QStringLiteral("untitled"));
-    options.dt = 1.0 / std::max(discretizationFrequencyHz_, 1e-12);
+    options.schemaName = schemaDisplayName(document_.schema(), QStringLiteral("untitled"));
+    options.dt = 1.0 / std::max(document_.frequencyHz(), 1e-12);
     const auto pageLayout = diagramEditor_->pageLayout();
     options.sheetOrientation = pageLayout.orientation;
     options.sheetWidthMm = pageLayout.widthMm;
     options.sheetHeightMm = pageLayout.heightMm;
     auto document = diagram::SceneSerializer{}.serialize(*diagramEditor_->scene(), options);
-    document.description = diagramDescription_;
-    document.runConfiguration = {{"runtime_seconds", runtimeSeconds_}, {"clear_scope_traces", clearScopesBeforeRun_}};
     // The plugins the elements come from, so a runtime (or Studio) can find them.
     auto& schema = document.runtimeSchema.as_object();
     if (auto requirements = pluginLoader_ ? pluginRequirements(schema, *pluginLoader_) : boost::json::array{}; requirements.empty()) {
@@ -2801,14 +2775,14 @@ auto MainWindow::serializeScene() const -> diagram::DiagramDocument
     } else {
         schema["requires"] = std::move(requirements);
     }
-    return document;
+    return document_.complete(std::move(document));
 }
 
 auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
 {
     if (schemaTabs_) schemaTabs_->commitAll();
     auto document = serializeScene();
-    auto schema = runtimeSchema_.is_object() ? runtimeSchema_.as_object() : boost::json::object{{"name", "untitled"}};
+    auto schema = document_.schema().is_object() ? document_.schema().as_object() : boost::json::object{{"name", "untitled"}};
     const auto& fromScene = document.runtimeSchema.as_object();
     schema["elements"] = fromScene.contains("elements") ? fromScene.at("elements") : boost::json::array{};
     schema["connections"] = fromScene.contains("connections") ? fromScene.at("connections") : boost::json::array{};
@@ -2817,17 +2791,17 @@ auto MainWindow::syncSchemaFromScene() -> diagram::DiagramDocument
     } else {
         schema.erase("requires");
     }
-    runtimeSchema_ = schema;
+    document_.schema() = schema;
     document.runtimeSchema = std::move(schema);
     return document;
 }
 
 void MainWindow::applySchemaParamsToScene()
 {
-    if (!diagramEditor_ || !diagramEditor_->scene() || !runtimeSchema_.is_object()) {
+    if (!diagramEditor_ || !diagramEditor_->scene() || !document_.schema().is_object()) {
         return;
     }
-    const auto* elements = runtimeSchema_.as_object().if_contains("elements");
+    const auto* elements = document_.schema().as_object().if_contains("elements");
     if (!elements || !elements->is_array()) {
         return;
     }
@@ -2913,10 +2887,7 @@ auto MainWindow::diagramProblem() const -> QString
 
 auto MainWindow::currentDocument() const -> boost::json::value
 {
-    auto document = serializeScene();
-    document.runtimeNodes = deploymentRuntimeNodes_;
-    document.streams = deploymentStreams_;
-    return document.toJson();
+    return serializeScene().toJson();
 }
 
 void MainWindow::refreshPlacementLabels()
@@ -2925,7 +2896,7 @@ void MainWindow::refreshPlacementLabels()
         return;
     }
     QMap<QString, QString> names;
-    for (const auto& value : deploymentRuntimeNodes_) {
+    for (const auto& value : document_.runtimeNodes()) {
         if (value.is_object()) {
             const auto& node = value.as_object();
             names[QString::fromStdString(json_utils::stringValue(node, "node_uuid", ""))] =
@@ -2938,196 +2909,6 @@ void MainWindow::refreshPlacementLabels()
         }
     }
     diagram::updatePlacementLabels(*diagramEditor_->scene(), names);
-}
-
-auto MainWindow::startNetworkTask(std::function<std::function<void()>()> work) -> bool
-{
-    if (networkTaskRunning_) {
-        QMessageBox::information(this, QStringLiteral("Busy"), QStringLiteral("A deployment request is still running."));
-        return false;
-    }
-    if (networkTask_.joinable()) {
-        networkTask_.join();
-    }
-    networkTaskRunning_ = true;
-    deployAction_->setEnabled(false);
-    openDeployedAction_->setEnabled(false);
-    networkTask_ = std::thread([this, work = std::move(work)] {
-        auto done = work();
-        QMetaObject::invokeMethod(this, [this, done = std::move(done)] {
-            networkTaskRunning_ = false;
-            deployAction_->setEnabled(true);
-            openDeployedAction_->setEnabled(true);
-            if (!shuttingDown_) {
-                done();
-            }
-        }, Qt::QueuedConnection);
-    });
-    return true;
-}
-
-void MainWindow::deployToNodes()
-{
-    if (schemaTabs_ && !schemaTabs_->commitAll()) {
-        appendLog(QStringLiteral("[studio] Apply or undo the pending schema-tab edits before continuing."));
-        return;
-    }
-
-    if (!diagramEditor_ || !diagramEditor_->scene() || !headlessNodesPanel_) {
-        return;
-    }
-    refreshWireTypeLabels();
-    if (const auto problem = diagramProblem(); !problem.isEmpty()) {
-        statusBar()->showMessage(QStringLiteral("The diagram cannot be deployed: %1").arg(problem), 8000);
-        toolWindows_->show(problemsDock_);
-        return;
-    }
-    QMap<QString, diagram::NodeAddress> known;
-    for (const auto& node : headlessNodesPanel_->knownNodes()) {
-        known[node.nodeUuid] = diagram::NodeAddress{node.nodeName, node.endpoint, node.dataEndpoint, node.dataSecurity};
-    }
-    boost::json::object deployment;
-    s7::deployment::OutputTypeLookup types;
-    try {
-        deployment = diagram::deploymentDiagram(diagram::DiagramDocument::fromJson(currentDocument()), known);
-        if (s7::deployment::placed_nodes(deployment).empty()) {
-            QMessageBox::information(this, QStringLiteral("Deploy"),
-                                     QStringLiteral("No element is placed on a node. Choose a node in each element's properties "
-                                                    "(nodes come from the Headless Nodes tool window)."));
-            return;
-        }
-        types = diagram::studioOutputTypes(deployment);
-    } catch (const std::exception& ex) {
-        QMessageBox::warning(this, QStringLiteral("Deploy"), QStringLiteral("The diagram cannot be deployed: %1").arg(ex.what()));
-        return;
-    }
-    const auto tls = headlessNodesPanel_->clientTls();
-    if (!tls.enabled) {
-        QMessageBox::warning(this, QStringLiteral("Deploy"),
-                             QStringLiteral("Deployments need the Studio certificate: set CA, certificate and key in the Headless Nodes tool window."));
-        return;
-    }
-    appendLog(QStringLiteral("[deploy] deploying to %1 node(s)...").arg(s7::deployment::placed_nodes(deployment).size()));
-    deployPanel_->setRunning(QStringLiteral("Deploying to %1 node(s)...").arg(s7::deployment::placed_nodes(deployment).size()));
-    toolWindows_->show(deployDock_);
-    startNetworkTask([this, deployment, types, tls]() -> std::function<void()> {
-        s7::deployment::DeployResult result;
-        try {
-            s7::deployment::BeastControlRequester requester(tls);
-            result = s7::deployment::deploy_diagram(deployment, types, [&](const auto& node, const auto& message) {
-                return requester(node, message);
-            });
-        } catch (const std::exception& ex) {
-            result.errors.push_back(ex.what());
-        }
-        return [this, result = std::move(result)] {
-            QStringList lines;
-            for (const auto& node : result.nodes) {
-                lines << QStringLiteral("%1 %2: %3%4")
-                             .arg(QString::fromStdString(node.node_uuid).left(8), QString::fromStdString(node.endpoint),
-                                  QString::fromStdString(node.status),
-                                  node.message.empty() ? QString() : QStringLiteral(" — ") + QString::fromStdString(node.message));
-            }
-            for (const auto& error : result.errors) {
-                appendLog(QStringLiteral("[deploy] error: %1").arg(QString::fromStdString(error)));
-            }
-            for (const auto& line : lines) {
-                appendLog(QStringLiteral("[deploy] ") + line);
-            }
-            if (!result.diagram.empty()) {
-                // Keep the streams so the next deployment continues them.
-                deploymentStreams_ = result.diagram.at("streams").as_array();
-                deploymentRuntimeNodes_ = result.diagram.at("runtime_nodes").as_array();
-                refreshPlacementLabels();
-            }
-            std::vector<ui::DeployPanel::NodeRow> rows;
-            QMap<QString, QString> names;
-            if (headlessNodesPanel_) {
-                for (const auto& known : headlessNodesPanel_->knownNodes()) {
-                    names[known.nodeUuid] = known.nodeName;
-                }
-            }
-            for (const auto& node : result.nodes) {
-                const auto uuid = QString::fromStdString(node.node_uuid);
-                rows.push_back({names.value(uuid, uuid.left(8)), QString::fromStdString(node.endpoint), QString::fromStdString(node.status),
-                                QString::fromStdString(node.message)});
-            }
-            std::vector<QString> errors;
-            for (const auto& error : result.errors) {
-                errors.push_back(QString::fromStdString(error));
-            }
-            if (result.committed) {
-                appendLog(QStringLiteral("[deploy] committed %1 revision %2")
-                              .arg(QString::fromStdString(result.deployment_id))
-                              .arg(result.revision));
-                statusBar()->showMessage(QStringLiteral("Deployed revision %1 to %2 node(s)").arg(result.revision).arg(result.nodes.size()),
-                                         8000);
-                deployPanel_->setResult(QStringLiteral("Deployed revision %1 of %2 to %3 node(s).")
-                                            .arg(result.revision)
-                                            .arg(QString::fromStdString(result.deployment_id))
-                                            .arg(result.nodes.size()),
-                                        true, rows, errors);
-            } else {
-                deployPanel_->setResult(QStringLiteral("Deployment failed: nothing was committed."), false, rows, errors);
-                toolWindows_->show(deployDock_);
-            }
-        };
-    });
-}
-
-void MainWindow::openDeployedDiagram()
-{
-    if (!headlessNodesPanel_) {
-        return;
-    }
-    const auto nodes = headlessNodesPanel_->knownNodes();
-    if (nodes.isEmpty()) {
-        QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
-                                 QStringLiteral("No node is known yet. Add a seed in the Headless Nodes tool window and refresh."));
-        return;
-    }
-    QStringList labels;
-    for (const auto& node : nodes) {
-        labels << QStringLiteral("%1  %2  (%3)").arg(node.nodeName, node.endpoint, node.nodeUuid.left(8));
-    }
-    bool accepted = false;
-    const auto chosen = QInputDialog::getItem(this, QStringLiteral("Open Deployed Diagram"), QStringLiteral("Node"), labels, 0, false, &accepted);
-    if (!accepted) {
-        return;
-    }
-    const auto node = nodes.at(static_cast<int>(labels.indexOf(chosen)));
-    const auto tls = headlessNodesPanel_->clientTls();
-    startNetworkTask([this, node, tls]() -> std::function<void()> {
-        boost::json::object response;
-        QString error;
-        try {
-            s7::deployment::BeastControlRequester requester(tls);
-            response = requester(s7::deployment::RuntimeNode{node.nodeUuid.toStdString(), {}, node.endpoint.toStdString()},
-                                 boost::json::object{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "studio-config"}, {"protocol_version", 1}});
-        } catch (const std::exception& ex) {
-            error = QString::fromUtf8(ex.what());
-        }
-        return [this, node, response = std::move(response), error] {
-            if (error.isEmpty() && json_utils::stringValue(response, "type", "") != "NETWORK_CONFIGURATION") {
-                QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
-                                         QStringLiteral("%1 has no deployed diagram: %2")
-                                             .arg(node.nodeName, QString::fromStdString(json_utils::stringValue(response, "message", ""))));
-                return;
-            }
-            if (!error.isEmpty() || !response.contains("diagram")) {
-                QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QStringLiteral("Request failed: %1").arg(error));
-                return;
-            }
-            if (!confirmDocumentReplacement()) return;
-            const auto revision = response.at("revision").to_number<std::uint64_t>();
-            try {
-                if (!loadDiagramJson(response.at("diagram"), QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision))) return;
-            } catch (const std::exception& ex) {
-                QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QString::fromUtf8(ex.what()));
-            }
-            currentDiagramPath_.clear();
-        };
-    });
 }
 
 } // namespace s7studio

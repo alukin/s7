@@ -54,8 +54,6 @@ public:
     void setBindings(QVector<InputBinding> bindings) { bindings_ = std::move(bindings); }
     // One bounded page per UI turn. Returns whether more history remains.
     virtual bool refreshSource();
-    virtual void attachLiveSource(std::shared_ptr<observation::LiveAcquisition>) {}
-    virtual void setComparisonSources(const QVector<ComparisonBinding>&) {}
     void setPreviewDroppedCount(std::uint64_t dropped) { previewDropped_ = dropped; }
     [[nodiscard]] std::uint64_t previewDroppedCount() const { return previewDropped_; }
     [[nodiscard]] auto source() const { return source_; }
@@ -83,6 +81,22 @@ private:
     QHash<observation::ChannelId, QString> units_;
     QString readError_;
     std::uint64_t previewDropped_ = 0;
+};
+
+// Optional viewer capabilities. The manager depends on these contracts rather
+// than concrete windows or no-op methods on every viewer.
+class LiveObservationViewer {
+public:
+    virtual ~LiveObservationViewer() = default;
+    virtual void attachLiveSource(std::shared_ptr<observation::LiveAcquisition> source) = 0;
+    virtual void setTriggerSettings(const observation::TriggerSettings& settings) = 0;
+    virtual void setTriggerController(std::function<bool(const observation::TriggerSettings&, QString*)> controller) = 0;
+};
+
+class ComparisonObservationViewer {
+public:
+    virtual ~ComparisonObservationViewer() = default;
+    virtual void setComparisonSources(const QVector<ComparisonBinding>& comparisons) = 0;
 };
 
 // What the host asks a viewer type to create: a stable instance id (the

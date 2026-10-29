@@ -15,6 +15,8 @@
 
 #include <QApplication>
 #include <QDialog>
+#include <QEventLoop>
+#include <QTimer>
 #include <QComboBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -225,6 +227,41 @@ void testRetainedComparisonWithoutWindows()
     delete scope;
     scope = dynamic_cast<ui::ScopeViewWindow*>(manager.openObserver("Scope", "scope"));
     require(scope->recording().series().size() == 2, "Recreation lost session-owned comparison");
+}
+
+void testLargeComparisonIsIncremental()
+{
+    auto source = std::make_shared<observation::ObservationSource>(42);
+    const auto channel = source->channel(QStringLiteral("scope/v"));
+    for (std::int64_t step = 0; step < 9000; ++step)
+        require(source->append({channel, step, step * .001, static_cast<double>(step)}), "Cannot prepare large comparison");
+    require(source->finish(), "Cannot finish large comparison");
+    const viewers::ComparisonBinding binding{QStringLiteral("previous run"), source, {{QStringLiteral("v"), channel}}};
+
+    ui::ScopeViewWindow scope(QStringLiteral("scope"));
+    scope.setComparisonSources({binding});
+    require(scope.recording().series().isEmpty(), "Large comparison blocked viewer binding");
+    QEventLoop loop;
+    QTimer poll;
+    poll.setInterval(5);
+    bool timedOut = false;
+    QObject::connect(&poll, &QTimer::timeout, &loop, [&] {
+        if (!scope.recording().series().isEmpty()) loop.quit();
+    });
+    QTimer::singleShot(5000, &loop, [&] { timedOut = true; loop.quit(); });
+    poll.start();
+    loop.exec();
+    require(!timedOut && scope.recording().series().size() == 1, "Large comparison projection did not complete");
+    const auto& series = scope.recording().series().first();
+    require(series.isComparison() && series.receivedSamples == 9000, "Incremental comparison lost samples");
+
+    ui::ScopeViewWindow cancelled(QStringLiteral("scope"));
+    cancelled.setComparisonSources({binding});
+    cancelled.clearComparisons();
+    QEventLoop cancelLoop;
+    QTimer::singleShot(20, &cancelLoop, &QEventLoop::quit);
+    cancelLoop.exec();
+    require(cancelled.recording().series().isEmpty(), "Cleared comparison was published later");
 }
 
 void testWindowIndependentResults()
@@ -446,6 +483,7 @@ int main(int argc, char** argv) try
     testManagerRoutingAndAlignment();
     testLifecycle();
     testRetainedComparisonWithoutWindows();
+    testLargeComparisonIsIncremental();
     testWindowIndependentResults();
     testRunDetails();
     testLinePlot();

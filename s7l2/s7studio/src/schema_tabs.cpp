@@ -7,6 +7,7 @@
 #include "scene_serializer.hpp"
 #include <s7/element_registry.hpp>
 #include <QSignalBlocker>
+#include <QScopedValueRollback>
 #include <QTabWidget>
 #include <QTabBar>
 #include <QUndoGroup>
@@ -76,7 +77,7 @@ diagram::DiagramEditor* SchemaTabs::open(diagram::DiagramEditor* parent,const st
 bool SchemaTabs::commitAll() {
     if (syncing_) return true;
     bool success=true;
-    syncing_=true;
+    const QScopedValueRollback syncingGuard(syncing_, true);
     try {
         // Descendants were opened after ancestors. Commit inside out so nested
         // edits propagate all the way to the root in one UI operation.
@@ -105,7 +106,6 @@ bool SchemaTabs::commitAll() {
             it->editor->scene()->undoStack()->setClean();
         }
     } catch(const std::exception& e) {success=false;emit message(QString::fromUtf8(e.what()));}
-    syncing_=false;
     return success;
 }
 boost::json::value SchemaTabs::activeSchema() const {
@@ -115,7 +115,7 @@ boost::json::value SchemaTabs::activeSchema() const {
 void SchemaTabs::refresh() {activate(tabs_->currentIndex());}
 void SchemaTabs::activate(int index) {
     if (syncing_ || index<0) return;
-    syncing_=true;
+    const QScopedValueRollback syncingGuard(syncing_, true);
     auto* editor=activeEditor();
     // Refresh ancestors before descendants after a root undo or rate update.
     for (auto& entry : entries_) {

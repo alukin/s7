@@ -13,10 +13,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
-#include <QMetaObject>
-#include <QMutexLocker>
 #include <QPlainTextEdit>
-#include <QPointer>
 #include <QPushButton>
 #include <QTabWidget>
 #include <QTimer>
@@ -37,7 +34,6 @@
 #include <algorithm>
 #include <optional>
 #include <cstring>
-#include <thread>
 #include <utility>
 
 namespace s7studio::ui {
@@ -213,6 +209,11 @@ HeadlessNodesPanel::HeadlessNodesPanel(QWidget* parent)
     setupUi();
 }
 
+HeadlessNodesPanel::~HeadlessNodesPanel()
+{
+    refreshCancelled_->store(true);
+}
+
 void HeadlessNodesPanel::setupUi()
 {
     auto* root = new QVBoxLayout(this);
@@ -346,13 +347,7 @@ void HeadlessNodesPanel::onAutoRefreshToggled(const bool enabled)
 
 void HeadlessNodesPanel::refreshNow()
 {
-    {
-        const QMutexLocker locker(&refreshMutex_);
-        if (refreshInProgress_) {
-            return;
-        }
-        refreshInProgress_ = true;
-    }
+    if (refreshTask_.busy()) return;
 
     QStringList seeds;
     for (int i = 0; i < seedList_->count(); ++i) {
@@ -366,238 +361,238 @@ void HeadlessNodesPanel::refreshNow()
     const auto requestNodeInfo = QStringLiteral("{\"type\":\"GET_NODE_INFO\",\"request_id\":\"studio-node-info\",\"protocol_version\":1}");
     const auto requestPeers = QStringLiteral("{\"type\":\"GET_PEERS\",\"request_id\":\"studio-peers\",\"protocol_version\":1,\"include_unverified\":true,\"max_entries\":256}");
 
-    QPointer<HeadlessNodesPanel> self(this);
-    std::thread([self,
-                 seeds = std::move(seeds),
-                 caFile,
-                 certFile,
-                 keyFile,
-                 requestHello,
-                 requestNodeInfo,
-                 requestPeers]() {
-        if (!self) {
-            return;
-        }
+    const auto cancelled = refreshCancelled_;
+    auto result = std::make_shared<QMap<QString, NodeSnapshot>>();
+    try {
+        refreshTask_.start([cancelled, result,
+                            seeds = std::move(seeds),
+                            caFile,
+                            certFile,
+                            keyFile,
+                            requestHello,
+                            requestNodeInfo,
+                            requestPeers]() {
+            auto requestJsonSync = [caFile, certFile, keyFile](const QString& endpoint,
+                                                               const QString& requestJson,
+                                                               QString* error,
+                                                               std::optional<s7::transport::PeerCertificate>* serverCertificate = nullptr) -> QString {
+                return request_control_once(endpoint, requestJson, caFile, certFile, keyFile, error, serverCertificate);
+            };
 
-        auto requestJsonSync = [caFile, certFile, keyFile](const QString& endpoint,
-                                                           const QString& requestJson,
-                                                           QString* error,
-                                                           std::optional<s7::transport::PeerCertificate>* serverCertificate = nullptr) -> QString {
-            return request_control_once(endpoint, requestJson, caFile, certFile, keyFile, error, serverCertificate);
-        };
+            auto& discovered = *result;
+            auto addOrUpdate = [&discovered](const NodeSnapshot& node) {
+                const auto key = HeadlessNodesPanel::nodeKeyForSnapshot(node);
+                if (key.isEmpty()) {
+                    return;
+                }
 
-        QMap<QString, NodeSnapshot> discovered;
-        auto addOrUpdate = [&discovered](const NodeSnapshot& node) {
-            const auto key = HeadlessNodesPanel::nodeKeyForSnapshot(node);
-            if (key.isEmpty()) {
-                return;
-            }
+                auto merged = discovered.value(key);
+                if (merged.endpoint.isEmpty() || (!node.endpoint.isEmpty() && merged.endpoint == key)) {
+                    merged.endpoint = node.endpoint;
+                }
+                if (!node.nodeUuid.isEmpty()) merged.nodeUuid = node.nodeUuid;
+                if (!node.nodeName.isEmpty()) merged.nodeName = node.nodeName;
+                if (node.directlyChecked) {
+                    merged.dataEndpoint = node.dataEndpoint;
+                    merged.dataSecurity = node.dataSecurity;
+                }
+                if (!node.certificateCommonName.isEmpty()) merged.certificateCommonName = node.certificateCommonName;
+                if (!node.certificateFingerprintSha256.isEmpty()) merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
+                // Trust established by contacting the node itself is never
+                // replaced by what another node reports about it.
+                if (!node.trustState.isEmpty() && (node.directlyChecked || !merged.directlyChecked)) {
+                    merged.trustState = node.trustState;
+                    merged.directlyChecked = merged.directlyChecked || node.directlyChecked;
+                }
+                if (!node.reachability.isEmpty()) merged.reachability = node.reachability;
+                if (!node.osFamily.isEmpty()) merged.osFamily = node.osFamily;
+                if (!node.architecture.isEmpty()) merged.architecture = node.architecture;
+                if (!node.activeDeployment.isEmpty()) merged.activeDeployment = node.activeDeployment;
+                if (!node.detailText.isEmpty()) merged.detailText = node.detailText;
+                merged.discoveredBy.unite(node.discoveredBy);
+                discovered.insert(key, merged);
+            };
 
-            auto merged = discovered.value(key);
-            if (merged.endpoint.isEmpty() || (!node.endpoint.isEmpty() && merged.endpoint == key)) {
-                merged.endpoint = node.endpoint;
-            }
-            if (!node.nodeUuid.isEmpty()) merged.nodeUuid = node.nodeUuid;
-            if (!node.nodeName.isEmpty()) merged.nodeName = node.nodeName;
-            if (node.directlyChecked) {
-                merged.dataEndpoint = node.dataEndpoint;
-                merged.dataSecurity = node.dataSecurity;
-            }
-            if (!node.certificateCommonName.isEmpty()) merged.certificateCommonName = node.certificateCommonName;
-            if (!node.certificateFingerprintSha256.isEmpty()) merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
-            // Trust established by contacting the node itself is never
-            // replaced by what another node reports about it.
-            if (!node.trustState.isEmpty() && (node.directlyChecked || !merged.directlyChecked)) {
-                merged.trustState = node.trustState;
-                merged.directlyChecked = merged.directlyChecked || node.directlyChecked;
-            }
-            if (!node.reachability.isEmpty()) merged.reachability = node.reachability;
-            if (!node.osFamily.isEmpty()) merged.osFamily = node.osFamily;
-            if (!node.architecture.isEmpty()) merged.architecture = node.architecture;
-            if (!node.activeDeployment.isEmpty()) merged.activeDeployment = node.activeDeployment;
-            if (!node.detailText.isEmpty()) merged.detailText = node.detailText;
-            merged.discoveredBy.unite(node.discoveredBy);
-            discovered.insert(key, merged);
-        };
+            QStringList queue = seeds;
+            QSet<QString> visited;
+            while (!cancelled->load() && !queue.isEmpty() && visited.size() < 128) {
+                const auto endpoint = queue.takeFirst();
+                if (visited.contains(endpoint)) {
+                    continue;
+                }
+                visited.insert(endpoint);
 
-        QStringList queue = seeds;
-        QSet<QString> visited;
-        while (!queue.isEmpty() && visited.size() < 128) {
-            const auto endpoint = queue.takeFirst();
-            if (visited.contains(endpoint)) {
-                continue;
-            }
-            visited.insert(endpoint);
+                NodeSnapshot node;
+                node.endpoint = endpoint;
+                node.reachability = QStringLiteral("offline");
+                node.trustState = QStringLiteral("unverified");
 
-            NodeSnapshot node;
-            node.endpoint = endpoint;
-            node.reachability = QStringLiteral("offline");
-            node.trustState = QStringLiteral("unverified");
+                QString error;
+                std::optional<s7::transport::PeerCertificate> serverCertificate;
+                const auto helloText = requestJsonSync(endpoint, requestHello, &error, &serverCertificate);
+                if (cancelled->load()) break;
+                if (helloText.isEmpty()) {
+                    node.detailText = QStringLiteral("HELLO failed: %1").arg(error);
+                    addOrUpdate(node);
+                    continue;
+                }
 
-            QString error;
-            std::optional<s7::transport::PeerCertificate> serverCertificate;
-            const auto helloText = requestJsonSync(endpoint, requestHello, &error, &serverCertificate);
-            if (helloText.isEmpty()) {
-                node.detailText = QStringLiteral("HELLO failed: %1").arg(error);
+                node.reachability = QStringLiteral("online");
+                {
+                    boost::system::error_code ec;
+                    const auto parsed = boost::json::parse(helloText.toStdString(), ec);
+                    if (!ec && parsed.is_object()) {
+                        const auto& obj = parsed.as_object();
+                        node.nodeUuid = jsonString(obj, "node_uuid");
+                        node.nodeName = jsonString(obj, "node_name");
+                        const auto [certificateCommonName, certificateFingerprint] = certificateInfoFromObject(obj);
+                        node.certificateCommonName = certificateCommonName;
+                        node.certificateFingerprintSha256 = certificateFingerprint;
+                        if (node.nodeUuid.isEmpty() && !node.certificateCommonName.isEmpty()) {
+                            node.nodeUuid = node.certificateCommonName;
+                        }
+                    }
+                }
+
+                const auto nodeInfoText = requestJsonSync(endpoint, requestNodeInfo, &error);
+                if (cancelled->load()) break;
+                if (!nodeInfoText.isEmpty()) {
+                    boost::system::error_code ec;
+                    const auto parsed = boost::json::parse(nodeInfoText.toStdString(), ec);
+                    if (!ec && parsed.is_object()) {
+                        const auto& object = parsed.as_object();
+                        if (const auto nodeIt = object.find("node"); nodeIt != object.end() && nodeIt->value().is_object()) {
+                            const auto& nodeObject = nodeIt->value().as_object();
+                            if (const auto value = jsonString(nodeObject, "node_uuid"); !value.isEmpty()) {
+                                node.nodeUuid = value;
+                            }
+                            if (const auto value = jsonString(nodeObject, "node_name"); !value.isEmpty()) {
+                                node.nodeName = value;
+                            }
+                            if (const auto value = jsonString(nodeObject, "display_name"); !value.isEmpty() && node.nodeName.isEmpty()) {
+                                node.nodeName = value;
+                            }
+                            const auto [certificateCommonName, certificateFingerprint] = certificateInfoFromObject(nodeObject);
+                            if (!certificateCommonName.isEmpty()) {
+                                node.certificateCommonName = certificateCommonName;
+                            }
+                            if (!certificateFingerprint.isEmpty()) {
+                                node.certificateFingerprintSha256 = certificateFingerprint;
+                            }
+                        }
+                        if (const auto platformIt = object.find("platform"); platformIt != object.end() && platformIt->value().is_object()) {
+                            node.osFamily = jsonString(platformIt->value().as_object(), "os_family");
+                            node.architecture = jsonString(platformIt->value().as_object(), "architecture");
+                        }
+                        if (const auto networkIt = object.find("network"); networkIt != object.end() && networkIt->value().is_object()) {
+                            const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
+                            node.dataEndpoint = jsonString(networkIt->value().as_object(), "data_listen_url");
+                            node.dataSecurity = jsonString(networkIt->value().as_object(), "data_security");
+                            if (!listenUrl.isEmpty()) {
+                                node.endpoint = listenUrl;
+                            }
+                        }
+                        if (const auto stateIt = object.find("state"); stateIt != object.end() && stateIt->value().is_object()) {
+                            const auto& state = stateIt->value().as_object();
+                            if (const auto activeIt = state.find("active_deployment"); activeIt != state.end() && activeIt->value().is_string()) {
+                                node.activeDeployment = QString::fromStdString(std::string(activeIt->value().as_string().c_str()));
+                            }
+                        }
+                        node.detailText = QString::fromStdString(boost::json::serialize(parsed));
+                    }
+                }
+
+                // Trust comes from the certificate the node presented: its
+                // identity (SAN spiffe://s7/node/<uuid>) must be the claimed node_uuid.
+                node.trustState = QString::fromStdString(
+                    s7::transport::to_string(s7::transport::check_node_identity(serverCertificate, node.nodeUuid.toStdString())));
+                node.directlyChecked = true;
+                if (node.trustState == QStringLiteral("identity_mismatch")) {
+                    const auto presented = serverCertificate ? s7::transport::node_uuid_of(*serverCertificate) : std::nullopt;
+                    node.detailText = QStringLiteral("Certificate identity %1 does not match the claimed node_uuid %2.\n")
+                                          .arg(presented ? QString::fromStdString(*presented) : QStringLiteral("(none)"), node.nodeUuid) +
+                                      node.detailText;
+                }
                 addOrUpdate(node);
-                continue;
-            }
 
-            node.reachability = QStringLiteral("online");
-            {
-                boost::system::error_code ec;
-                const auto parsed = boost::json::parse(helloText.toStdString(), ec);
-                if (!ec && parsed.is_object()) {
-                    const auto& obj = parsed.as_object();
-                    node.nodeUuid = jsonString(obj, "node_uuid");
-                    node.nodeName = jsonString(obj, "node_name");
-                    const auto [certificateCommonName, certificateFingerprint] = certificateInfoFromObject(obj);
-                    node.certificateCommonName = certificateCommonName;
-                    node.certificateFingerprintSha256 = certificateFingerprint;
-                    if (node.nodeUuid.isEmpty() && !node.certificateCommonName.isEmpty()) {
-                        node.nodeUuid = node.certificateCommonName;
-                    }
+                const auto peersText = requestJsonSync(endpoint, requestPeers, &error);
+                if (cancelled->load()) break;
+                if (peersText.isEmpty()) {
+                    continue;
                 }
-            }
-
-            const auto nodeInfoText = requestJsonSync(endpoint, requestNodeInfo, &error);
-            if (!nodeInfoText.isEmpty()) {
                 boost::system::error_code ec;
-                const auto parsed = boost::json::parse(nodeInfoText.toStdString(), ec);
-                if (!ec && parsed.is_object()) {
-                    const auto& object = parsed.as_object();
-                    if (const auto nodeIt = object.find("node"); nodeIt != object.end() && nodeIt->value().is_object()) {
-                        const auto& nodeObject = nodeIt->value().as_object();
-                        if (const auto value = jsonString(nodeObject, "node_uuid"); !value.isEmpty()) {
-                            node.nodeUuid = value;
-                        }
-                        if (const auto value = jsonString(nodeObject, "node_name"); !value.isEmpty()) {
-                            node.nodeName = value;
-                        }
-                        if (const auto value = jsonString(nodeObject, "display_name"); !value.isEmpty() && node.nodeName.isEmpty()) {
-                            node.nodeName = value;
-                        }
-                        const auto [certificateCommonName, certificateFingerprint] = certificateInfoFromObject(nodeObject);
-                        if (!certificateCommonName.isEmpty()) {
-                            node.certificateCommonName = certificateCommonName;
-                        }
-                        if (!certificateFingerprint.isEmpty()) {
-                            node.certificateFingerprintSha256 = certificateFingerprint;
-                        }
+                const auto parsed = boost::json::parse(peersText.toStdString(), ec);
+                if (ec || !parsed.is_object()) {
+                    continue;
+                }
+
+                const auto& obj = parsed.as_object();
+                const auto peersIt = obj.find("peers");
+                if (peersIt == obj.end() || !peersIt->value().is_array()) {
+                    continue;
+                }
+
+                for (const auto& peerValue : peersIt->value().as_array()) {
+                    if (!peerValue.is_object()) {
+                        continue;
                     }
-                    if (const auto platformIt = object.find("platform"); platformIt != object.end() && platformIt->value().is_object()) {
-                        node.osFamily = jsonString(platformIt->value().as_object(), "os_family");
-                        node.architecture = jsonString(platformIt->value().as_object(), "architecture");
+                    const auto& peerObject = peerValue.as_object();
+                    const auto peerEndpoint = jsonString(peerObject, "endpoint");
+                    if (peerEndpoint.isEmpty()) {
+                        continue;
                     }
-                    if (const auto networkIt = object.find("network"); networkIt != object.end() && networkIt->value().is_object()) {
+
+                    NodeSnapshot peerNode;
+                    peerNode.endpoint = peerEndpoint;
+                    peerNode.nodeUuid = jsonString(peerObject, "node_uuid");
+                    peerNode.nodeName = jsonString(peerObject, "node_name");
+                    const auto [peerCertificateCommonName, peerCertificateFingerprint] = certificateInfoFromObject(peerObject);
+                    peerNode.certificateCommonName = peerCertificateCommonName;
+                    peerNode.certificateFingerprintSha256 = peerCertificateFingerprint;
+                    if (peerNode.nodeUuid.isEmpty() && !peerNode.certificateCommonName.isEmpty()) {
+                        peerNode.nodeUuid = peerNode.certificateCommonName;
+                    }
+                    // What a peer reports is a claim until this node is contacted directly.
+                    peerNode.trustState = QStringLiteral("unverified");
+                    if (const auto claimed = jsonString(peerObject, "trust_state"); !claimed.isEmpty()) {
+                        peerNode.detailText = QStringLiteral("Trust reported by %1: %2 (not verified by Studio)").arg(endpoint, claimed);
+                    }
+                    peerNode.reachability = jsonString(peerObject, "reachability");
+                    if (peerNode.reachability.isEmpty()) {
+                        peerNode.reachability = QStringLiteral("offline");
+                    }
+                    if (const auto platformIt = peerObject.find("platform"); platformIt != peerObject.end() && platformIt->value().is_object()) {
+                        peerNode.osFamily = jsonString(platformIt->value().as_object(), "os_family");
+                        peerNode.architecture = jsonString(platformIt->value().as_object(), "architecture");
+                    }
+                    if (const auto networkIt = peerObject.find("network"); networkIt != peerObject.end() && networkIt->value().is_object()) {
                         const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
-                        node.dataEndpoint = jsonString(networkIt->value().as_object(), "data_listen_url");
-                        node.dataSecurity = jsonString(networkIt->value().as_object(), "data_security");
                         if (!listenUrl.isEmpty()) {
-                            node.endpoint = listenUrl;
+                            peerNode.endpoint = listenUrl;
                         }
                     }
-                    if (const auto stateIt = object.find("state"); stateIt != object.end() && stateIt->value().is_object()) {
-                        const auto& state = stateIt->value().as_object();
-                        if (const auto activeIt = state.find("active_deployment"); activeIt != state.end() && activeIt->value().is_string()) {
-                            node.activeDeployment = QString::fromStdString(std::string(activeIt->value().as_string().c_str()));
-                        }
-                    }
-                    node.detailText = QString::fromStdString(boost::json::serialize(parsed));
-                }
-            }
+                    peerNode.discoveredBy.insert(endpoint);
+                    addOrUpdate(peerNode);
 
-            // Trust comes from the certificate the node presented: its
-            // identity (SAN spiffe://s7/node/<uuid>) must be the claimed node_uuid.
-            node.trustState = QString::fromStdString(
-                s7::transport::to_string(s7::transport::check_node_identity(serverCertificate, node.nodeUuid.toStdString())));
-            node.directlyChecked = true;
-            if (node.trustState == QStringLiteral("identity_mismatch")) {
-                const auto presented = serverCertificate ? s7::transport::node_uuid_of(*serverCertificate) : std::nullopt;
-                node.detailText = QStringLiteral("Certificate identity %1 does not match the claimed node_uuid %2.\n")
-                                      .arg(presented ? QString::fromStdString(*presented) : QStringLiteral("(none)"), node.nodeUuid) +
-                                  node.detailText;
-            }
-            addOrUpdate(node);
-
-            const auto peersText = requestJsonSync(endpoint, requestPeers, &error);
-            if (peersText.isEmpty()) {
-                continue;
-            }
-            boost::system::error_code ec;
-            const auto parsed = boost::json::parse(peersText.toStdString(), ec);
-            if (ec || !parsed.is_object()) {
-                continue;
-            }
-
-            const auto& obj = parsed.as_object();
-            const auto peersIt = obj.find("peers");
-            if (peersIt == obj.end() || !peersIt->value().is_array()) {
-                continue;
-            }
-
-            for (const auto& peerValue : peersIt->value().as_array()) {
-                if (!peerValue.is_object()) {
-                    continue;
-                }
-                const auto& peerObject = peerValue.as_object();
-                const auto peerEndpoint = jsonString(peerObject, "endpoint");
-                if (peerEndpoint.isEmpty()) {
-                    continue;
-                }
-
-                NodeSnapshot peerNode;
-                peerNode.endpoint = peerEndpoint;
-                peerNode.nodeUuid = jsonString(peerObject, "node_uuid");
-                peerNode.nodeName = jsonString(peerObject, "node_name");
-                const auto [peerCertificateCommonName, peerCertificateFingerprint] = certificateInfoFromObject(peerObject);
-                peerNode.certificateCommonName = peerCertificateCommonName;
-                peerNode.certificateFingerprintSha256 = peerCertificateFingerprint;
-                if (peerNode.nodeUuid.isEmpty() && !peerNode.certificateCommonName.isEmpty()) {
-                    peerNode.nodeUuid = peerNode.certificateCommonName;
-                }
-                // What a peer reports is a claim until this node is contacted directly.
-                peerNode.trustState = QStringLiteral("unverified");
-                if (const auto claimed = jsonString(peerObject, "trust_state"); !claimed.isEmpty()) {
-                    peerNode.detailText = QStringLiteral("Trust reported by %1: %2 (not verified by Studio)").arg(endpoint, claimed);
-                }
-                peerNode.reachability = jsonString(peerObject, "reachability");
-                if (peerNode.reachability.isEmpty()) {
-                    peerNode.reachability = QStringLiteral("offline");
-                }
-                if (const auto platformIt = peerObject.find("platform"); platformIt != peerObject.end() && platformIt->value().is_object()) {
-                    peerNode.osFamily = jsonString(platformIt->value().as_object(), "os_family");
-                    peerNode.architecture = jsonString(platformIt->value().as_object(), "architecture");
-                }
-                if (const auto networkIt = peerObject.find("network"); networkIt != peerObject.end() && networkIt->value().is_object()) {
-                    const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
-                    if (!listenUrl.isEmpty()) {
-                        peerNode.endpoint = listenUrl;
+                    if (!visited.contains(peerEndpoint) && !queue.contains(peerEndpoint)) {
+                        queue.push_back(peerEndpoint);
                     }
                 }
-                peerNode.discoveredBy.insert(endpoint);
-                addOrUpdate(peerNode);
+            }
 
-                if (!visited.contains(peerEndpoint) && !queue.contains(peerEndpoint)) {
-                    queue.push_back(peerEndpoint);
-                }
-            }
-        }
-
-        QMetaObject::invokeMethod(self, [self, discovered = std::move(discovered)]() {
-            if (!self) {
-                return;
-            }
-            self->nodes_ = discovered;
-            self->updateNodeLists();
-            self->updateNetworkOverview();
-            {
-                const QMutexLocker locker(&self->refreshMutex_);
-                self->refreshInProgress_ = false;
-            }
-            emit self->refreshed();
-        }, Qt::QueuedConnection);
-    }).detach();
+        }, [this, result] {
+            nodes_ = std::move(*result);
+            updateNodeLists();
+            updateNetworkOverview();
+            emit refreshed();
+        }, [this](const QString& error) {
+            networkOverview_->setPlainText(QStringLiteral("Discovery failed: %1").arg(error));
+            emit refreshed();
+        });
+    } catch (const std::exception& ex) {
+        networkOverview_->setPlainText(QStringLiteral("Discovery failed: %1").arg(QString::fromUtf8(ex.what())));
+        emit refreshed();
+    }
 }
 
 void HeadlessNodesPanel::addOrUpdateNode(const NodeSnapshot& node)
@@ -782,7 +777,6 @@ auto HeadlessNodesPanel::normalizeEndpoint(const QString& raw) -> QString
 auto HeadlessNodesPanel::knownNodes() const -> QVector<KnownNode>
 {
     QVector<KnownNode> result;
-    QMutexLocker locker(&refreshMutex_);
     for (const auto& node : nodes_) {
         if (!node.nodeUuid.isEmpty() && !node.endpoint.isEmpty()) {
             const bool verified = node.directlyChecked && node.trustState == QStringLiteral("verified");

@@ -6,8 +6,10 @@
 
 #include "local_schema_runner.hpp"
 #include "diagram_document.hpp"
+#include "document_session.hpp"
 #include "element_requirements.hpp"
 #include "model_run_controller.hpp"
+#include "network_task_runner.hpp"
 #include "tool_panels.hpp"
 
 #include <QHash>
@@ -21,7 +23,6 @@
 #include <cstdint>
 #include <memory>
 #include <functional>
-#include <thread>
 #include <vector>
 
 class QMenu;
@@ -181,12 +182,12 @@ protected:
     [[nodiscard]] bool documentModified() const;
     [[nodiscard]] auto currentDocument() const -> boost::json::value;
     // The scene serialized as a document; elements and connections come from
-    // the scene (the source of truth), the rest of the schema from runtimeSchema_,
+    // the scene (the source of truth), the rest of the schema from DocumentSession,
     // which is updated to match.
     [[nodiscard]] auto syncSchemaFromScene() -> diagram::DiagramDocument;
     [[nodiscard]] auto serializeScene() const -> diagram::DiagramDocument;
     void refreshPlacementLabels();
-    // Copies element params of runtimeSchema_ (run configuration) onto the scene's elements.
+    // Copies run-configuration element params from DocumentSession onto the scene's elements.
     void applySchemaParamsToScene();
     // Loads the plugins a schema needs (searching the plugin paths) and
     // reports, after the diagram is shown, what is still missing.
@@ -195,22 +196,14 @@ protected:
     // Why the diagram cannot run or deploy (a missing element type, a wire that connects nothing); empty if it can.
     [[nodiscard]] auto diagramProblem() const -> QString;
     // Runs work off the UI thread (one at a time); `done` runs on the UI thread.
-    auto startNetworkTask(std::function<std::function<void()>()> work) -> bool;
+    auto startNetworkTask(std::function<void()> work, std::function<void()> completed) -> bool;
 
 private:
-    boost::json::value runtimeSchema_;
-    QString diagramDescription_;
-    QString documentSourceLabel_;
-    boost::json::value savedDocument_;
-    bool hasSavedDocument_ = false;
+    DocumentSession document_;
     std::uint64_t runGeneration_ = 0;
     QHash<QString, QString> runObserverTypes_;
     bool observersFrozen_ = false;
-    // Deployment data of the open diagram (`runtime_nodes`, `streams`).
-    boost::json::array deploymentRuntimeNodes_;
-    boost::json::array deploymentStreams_;
-    std::thread networkTask_;
-    bool networkTaskRunning_ = false;
+    ui::NetworkTaskRunner networkTask_;
     LocalSchemaRunner* runner_ = nullptr;
     std::unique_ptr<ui::ModelRunController> controller_;
 
@@ -278,7 +271,6 @@ private:
     QDockWidget* headlessNodesDock_ = nullptr;
     ui::HeadlessNodesPanel* headlessNodesPanel_ = nullptr;
     std::unique_ptr<s7::PluginLoader> pluginLoader_;
-    QString currentDiagramPath_;
     // Open observation viewers (Scope, Phase Portrait, ...) of this window.
     viewers::ViewerManager* viewers_ = nullptr;
     class QTimer* wireTypeTimer_ = nullptr;
@@ -289,9 +281,6 @@ private:
     QToolBar* diagramDrawToolBar_ = nullptr;
     QFontComboBox* textFrameFontCombo_ = nullptr;
     QSpinBox* textFrameFontSizeSpin_ = nullptr;
-    double discretizationFrequencyHz_ = 1000.0;
-    double runtimeSeconds_ = 60;
-    bool clearScopesBeforeRun_ = true;
     bool shuttingDown_ = false;
     bool storingTriggerPreset_ = false;
 };

@@ -202,6 +202,26 @@ int main(int argc, char** argv)
         reload(textScene, reopened);
         check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
     }
+    for (const auto& observerType : {"Scope", "LiveOscilloscope"}) {
+        DiagramScene observerScene;
+        const auto source = observerScene.addElement(element("source", "Constant"), {40, 40});
+        const auto observer = observerScene.addElement(element("observer", observerType), {400, 40});
+        const int before = observerScene.undoStack()->count();
+        check(observerScene.connectEnds(out(source), in(observer)).isEmpty(), "observer plus port connects");
+        check(observerScene.undoStack()->count() == before + 1, "observer connection and port growth share one undo step");
+        check(observerScene.signalWires().size() == 1 && observer->inputs().size() == 2,
+              "observer connection grows its next input");
+        observerScene.undoStack()->undo();
+        check(observerScene.signalWires().empty() && observer->inputs().size() == 1,
+              "undo removes observer wire and restores plus port together");
+        observerScene.undoStack()->redo();
+        check(observerScene.signalWires().size() == 1 && observer->inputs().size() == 2,
+              "redo restores observer wire and port growth together");
+        DiagramScene restored;
+        reload(observerScene, restored);
+        check(restored.signalWires().size() == 1 && restored.elementNode("observer")->inputs().size() == 2,
+              "observer connection survives save and reopen");
+    }
 
     DiagramScene scene;
     auto& undo = *scene.undoStack();

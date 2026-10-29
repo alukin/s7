@@ -71,6 +71,9 @@ Pi separately when available; desktop results do not establish its performance.
 
 ## Remote node administration and Trusted Networks
 
+The [Studio design boundaries](STUDIO_DESIGN_0_2.md) map document, discovery,
+request lifecycle, viewer and headless runtime ownership for this work.
+
 Provide the remote node control, configuration and restart workflow as part of
 0.2.0. This includes ST-009 (Settings → Trusted Networks…), Studio discovery and
 credential settings, runtime node configuration editing, and effective network
