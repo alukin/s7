@@ -169,10 +169,13 @@ add_library(s7studio_app OBJECT
     src/library_element.cpp src/library_element.hpp
     src/schema_tabs.cpp src/schema_tabs.hpp
     src/main_window.cpp
+    src/main_window_network.cpp
+    src/document_session.cpp src/document_session.hpp
     src/main_window.hpp
     src/main_window_builder.cpp
     src/main_window_builder.hpp
     src/model_run_controller.cpp
+    src/network_task_runner.cpp src/network_task_runner.hpp
     src/is_schema_runner.hpp
     src/model_run_controller.hpp
     src/json_utils.hpp
@@ -291,6 +294,7 @@ s7_add_test_executable(s7studio_nodes_panel_test
     tests/nodes_panel_test.cpp
     src/headless_nodes_panel.cpp
     src/headless_nodes_panel.hpp
+    src/network_task_runner.cpp src/network_task_runner.hpp
 )
 target_include_directories(s7studio_nodes_panel_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/s7transport/include)
 target_link_libraries(s7studio_nodes_panel_test PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets s7transport Boost::json Threads::Threads)
@@ -395,6 +399,15 @@ s7_add_test_executable(s7studio_document_safety_test tests/document_safety_test.
 target_link_libraries(s7studio_document_safety_test PRIVATE s7studio_app)
 add_test(NAME s7studio_document_safety COMMAND s7studio_document_safety_test)
 set_tests_properties(s7studio_document_safety PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+s7_add_test_executable(s7studio_network_task_runner_test tests/network_task_runner_test.cpp)
+target_link_libraries(s7studio_network_task_runner_test PRIVATE s7studio_app)
+add_test(NAME s7studio_network_task_runner COMMAND s7studio_network_task_runner_test)
+
+s7_add_test_executable(s7studio_document_session_test tests/document_session_test.cpp)
+target_link_libraries(s7studio_document_session_test PRIVATE s7studio_app)
+s7_enable_project_warnings(s7studio_document_session_test)
+add_test(NAME s7studio_document_session COMMAND s7studio_document_session_test)
 
 # Real GUI interaction/rendering gates are native-Linux tests. Cross/Wine and
 # existing offscreen tests keep their own separately documented coverage.

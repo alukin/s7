@@ -15,6 +15,7 @@
 #include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
 #include <QElapsedTimer>
+#include <QScopedValueRollback>
 #include <QLoggingCategory>
 #include <QMenu>
 #include <QPainterPath>
@@ -366,7 +367,7 @@ void DiagramScene::applyChange(const DiagramChange& change, const QString& text)
 
 void DiagramScene::apply(const DiagramChange& change, const bool revert)
 {
-    applying_ = true;
+    const QScopedValueRollback applyingGuard(applying_, true);
     for (const auto& edit : change.textFrames) edit.node->setParams(revert ? edit.before : edit.after);
     std::vector<SignalWire*> forced;
     auto setUpstream = [&](const std::shared_ptr<SignalWire>& wire, const WireEnd& end) {
@@ -784,13 +785,13 @@ auto DiagramScene::connectEnds(const WireEnd& a, const WireEnd& b, QVector<QPoin
     wire->userBends = withoutRepeats(bends);
     DiagramChange change;
     change.addedWires.push_back(wire);
-    applyChange(change, QStringLiteral("Connect"));
     if (const auto target = downstream.node.lock(); target && (target->element().type == "Scope" || target->element().type == "LiveOscilloscope") &&
         downstream.index == static_cast<int>(target->inputs().size()) - 1) {
         auto element = target->element();
         element.params["channel_count"] = static_cast<int>(target->inputs().size());
-        changeElement(target, std::move(element));
+        change.elements.push_back({target, target->element(), std::move(element)});
     }
+    applyChange(change, QStringLiteral("Connect"));
     return {};
 }
 

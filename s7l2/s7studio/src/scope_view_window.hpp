@@ -32,6 +32,7 @@ class LinePlotView;
 class SpectrumView;
 class PairAnalysisView;
 }
+namespace s7studio::observation { class ScopeProjectionCursor; }
 
 namespace s7studio::ui {
 
@@ -40,7 +41,7 @@ class Throttle;
 // A time-series view for one Studio Scope observer. Each connected observer
 // input is a separate plotted channel; observation is outside the runtime graph.
 // The recording (ScopeRecording) is drawn with Qt Graphs over model time.
-class ScopeViewWindow : public QWidget, public viewers::ObservationViewer
+class ScopeViewWindow : public QWidget, public viewers::ObservationViewer, public viewers::ComparisonObservationViewer
 {
     Q_OBJECT
 
@@ -110,10 +111,16 @@ private:
     void invalidateAnalysis();
     void analyzeInterval();
     void pollAnalysis();
+    void scheduleComparisonProjection();
+    void advanceComparisonProjection();
 
     QString probeName_;
     ScopeRecording recording_;
     QVector<std::shared_ptr<const observation::ObservationSource>> projectedComparisons_;
+    QVector<viewers::ComparisonBinding> pendingComparisons_;
+    viewers::ComparisonBinding activeComparison_;
+    std::unique_ptr<observation::ScopeProjectionCursor> comparisonCursor_;
+    bool comparisonScheduled_ = false;
     QHash<QString, QLineSeries*> lines_;
     bool dirty_ = false;
     bool updatingTimeScrollBar_ = false;

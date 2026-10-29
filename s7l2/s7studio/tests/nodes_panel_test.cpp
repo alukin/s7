@@ -138,6 +138,14 @@ int main(int argc, char** argv)
             return fail("node " + uuid + " is " + (trust.contains(uuid) ? trust[uuid] : std::string("missing")) + ", expected " + state);
         }
     }
+    // Closing the panel during discovery must retire its worker before any
+    // result can touch widgets that are being destroyed.
+    {
+        auto closing = std::make_unique<s7studio::ui::HeadlessNodesPanel>();
+        closing->addSeed(QString::fromStdString(plain.url));
+        closing->refreshNow();
+        closing.reset();
+    }
     std::printf("nodes panel trust: OK\n");
     return 0;
 }

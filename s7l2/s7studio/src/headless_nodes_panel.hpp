@@ -4,11 +4,14 @@
 #pragma once
 
 #include <QMap>
-#include <QMutex>
+#include "network_task_runner.hpp"
 #include <QSet>
 #include <QString>
 #include <QVector>
 #include <QWidget>
+
+#include <atomic>
+#include <memory>
 
 #include <s7/transport.hpp>
 
@@ -29,6 +32,7 @@ class HeadlessNodesPanel : public QWidget
 
 public:
     explicit HeadlessNodesPanel(QWidget* parent = nullptr);
+    ~HeadlessNodesPanel() override;
 
     struct KnownNode {
         QString nodeUuid;
@@ -105,8 +109,8 @@ private:
     QTimer* refreshTimer_ = nullptr;
 
     QMap<QString, NodeSnapshot> nodes_;
-    bool refreshInProgress_ = false;
-    mutable QMutex refreshMutex_;
+    NetworkTaskRunner refreshTask_;
+    std::shared_ptr<std::atomic_bool> refreshCancelled_ = std::make_shared<std::atomic_bool>(false);
 };
 
 } // namespace s7studio::ui

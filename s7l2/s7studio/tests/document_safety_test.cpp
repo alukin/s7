@@ -74,6 +74,28 @@ int main(int argc, char** argv) {
         choose(QMessageBox::Discard);
         window.openPath(input);
         require(window.currentDocument() == original && !window.documentModified(), "discard opens clean document");
+        // Parsing succeeds, but the layout version is rejected by the scene
+        // loader. An unsuccessful open must preserve the current document.
+        auto invalid = original.as_object();
+        invalid["diagram_version"] = 999;
+        invalid["diagram"].as_object()["nodes"] = boost::json::array{
+            boost::json::object{{"id", "ghost"}, {"position", boost::json::array{0, 0}}}};
+        const auto invalidPath = dir.filePath("invalid.s7diagram");
+        require(s7studio::writeFileAtomically(invalidPath,
+            QByteArray::fromStdString(boost::json::serialize(invalid)), error), "write invalid layout fixture");
+        choose(QMessageBox::Ok);
+        window.openPath(invalidPath);
+        require(window.currentDocument() == original && !window.documentModified(),
+                "failed scene load preserves the open document");
+        auto invalidRun = original.as_object();
+        invalidRun["studio_run"].as_object()["runtime_seconds"] = "invalid";
+        const auto invalidRunPath = dir.filePath("invalid-run.s7diagram");
+        require(s7studio::writeFileAtomically(invalidRunPath,
+            QByteArray::fromStdString(boost::json::serialize(invalidRun)), error), "write invalid run fixture");
+        choose(QMessageBox::Ok);
+        window.openPath(invalidRunPath);
+        require(window.currentDocument() == original && !window.documentModified(),
+                "failed run-config load preserves the open document");
         edit(window);
         scene(window)->undoStack()->undo();
         require(!window.documentModified(), "undo restores clean snapshot");

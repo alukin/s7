@@ -713,12 +713,53 @@ void ScopeViewWindow::setComparisonSources(const QVector<viewers::ComparisonBind
         for (const auto& input : comparison.inputs) channels.push_back(input.channel);
         if (channels.isEmpty()) continue;
         projectedComparisons_.push_back(comparison.source); // one attempt per window; reopening can retry a storage failure
+        if (comparison.source->status().samples > 4096) {
+            pendingComparisons_.push_back(comparison);
+            continue;
+        }
         QString error;
         auto projection = observation::scopeProjection(*comparison.source, probeName_, channels, &error);
         if (!projection) { recording_.setCaptureError(error); continue; }
         recording_.appendComparison(*projection, comparison.label);
         syncSeries(false);
     }
+    scheduleComparisonProjection();
+}
+
+void ScopeViewWindow::scheduleComparisonProjection()
+{
+    if (comparisonScheduled_ || (pendingComparisons_.isEmpty() && !comparisonCursor_)) return;
+    comparisonScheduled_ = true;
+    QTimer::singleShot(1, this, [this] {
+        comparisonScheduled_ = false;
+        advanceComparisonProjection();
+    });
+}
+
+void ScopeViewWindow::advanceComparisonProjection()
+{
+    if (!comparisonCursor_) {
+        if (pendingComparisons_.isEmpty()) return;
+        activeComparison_ = pendingComparisons_.takeFirst();
+        QVector<observation::ChannelId> channels;
+        for (const auto& input : activeComparison_.inputs) channels.push_back(input.channel);
+        comparisonCursor_ = std::make_unique<observation::ScopeProjectionCursor>(*activeComparison_.source, probeName_, std::move(channels));
+    }
+    QString error;
+    const auto step = comparisonCursor_->advance(&error);
+    if (step == observation::ProjectionStep::More) {
+        scheduleComparisonProjection();
+        return;
+    }
+    if (step == observation::ProjectionStep::Complete) {
+        recording_.appendComparison(*comparisonCursor_->takeResult(), activeComparison_.label);
+        syncSeries(false);
+    } else {
+        recording_.setCaptureError(error);
+    }
+    comparisonCursor_.reset();
+    activeComparison_ = {};
+    scheduleComparisonProjection();
 }
 
 void ScopeViewWindow::setDroppedSampleCount(const std::uint64_t dropped)
@@ -749,6 +790,9 @@ void ScopeViewWindow::clearBuffers()
 void ScopeViewWindow::clearComparisons()
 {
     invalidateAnalysis();
+    pendingComparisons_.clear();
+    comparisonCursor_.reset();
+    activeComparison_ = {};
     recording_.clearComparisons();
     syncSeries(true);
     refreshPlot();

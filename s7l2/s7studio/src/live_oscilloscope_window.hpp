@@ -22,7 +22,7 @@ namespace s7studio::viewers { class LinePlotView; class SpectrumView; class Pair
 namespace s7studio::ui {
 class ChoiceButtons;
 class Throttle;
-class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer {
+class LiveOscilloscopeWindow : public QWidget, public viewers::ObservationViewer, public viewers::LiveObservationViewer {
     Q_OBJECT
 public:
     explicit LiveOscilloscopeWindow(QString id);
@@ -42,9 +42,9 @@ public:
     QVariantList hoverTip(double x, double y, bool active = true);
     // Applies saved trigger settings, e.g. a diagram preset, without
     // reporting them back through triggerSettingsEdited().
-    void setTriggerSettings(const observation::TriggerSettings& settings);
+    void setTriggerSettings(const observation::TriggerSettings& settings) override;
     const observation::TriggerSettings& triggerSettings() const { return requestedTrigger_; }
-    void setTriggerController(std::function<bool(const observation::TriggerSettings&, QString*)> controller) { triggerController_ = std::move(controller); }
+    void setTriggerController(std::function<bool(const observation::TriggerSettings&, QString*)> controller) override { triggerController_ = std::move(controller); }
 signals:
     // The user changed and applied trigger settings in this window.
     void triggerSettingsEdited();
