@@ -3,10 +3,10 @@
 
 #include "diagram/wire_removal_planner.hpp"
 
+#include "diagram/diagram_geometry.hpp"
 #include "diagram/net_model.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <unordered_set>
 #include <utility>
 
@@ -80,9 +80,7 @@ auto WireRemovalPlanner::plan(DiagramChange change, std::vector<std::shared_ptr<
             if (trunk) {
                 const auto port = end.port();
                 const QPointF at = port ? port->scenePos() : QPointF();
-                end = WireEnd::onWire(trunk, {
-                    std::round(at.x() / kGridStep) * kGridStep,
-                    std::round(at.y() / kGridStep) * kGridStep});
+                end = WireEnd::onWire(trunk, snap(at));
             } else {
                 newTrunks.emplace_back(end, wire);
             }
