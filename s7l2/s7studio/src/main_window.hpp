@@ -58,6 +58,7 @@ class ElementPickerPanel;
 class HeadlessNodesPanel;
 class ProbesPanel;
 class ObserversPanel;
+class StudioNetworkService;
 }
 
 class SchemaTabs;
@@ -67,7 +68,8 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget* parent = nullptr, bool restoreStartupDiagram = true);
+    explicit MainWindow(QWidget* parent = nullptr, bool restoreStartupDiagram = true,
+                        std::shared_ptr<ui::StudioNetworkService> networkService = {});
     ~MainWindow() override;
 
     // Opens a diagram, runtime schema or element library file.
@@ -196,13 +198,14 @@ protected:
     // Why the diagram cannot run or deploy (a missing element type, a wire that connects nothing); empty if it can.
     [[nodiscard]] auto diagramProblem() const -> QString;
     // Runs work off the UI thread (one at a time); `done` runs on the UI thread.
-    auto startNetworkTask(std::function<void()> work, std::function<void()> completed) -> bool;
+    auto startNetworkTask(ui::NetworkTaskRunner::Work work, std::function<void()> completed) -> bool;
 
 private:
     DocumentSession document_;
     std::uint64_t runGeneration_ = 0;
     QHash<QString, QString> runObserverTypes_;
     bool observersFrozen_ = false;
+    std::shared_ptr<ui::StudioNetworkService> networkService_;
     ui::NetworkTaskRunner networkTask_;
     LocalSchemaRunner* runner_ = nullptr;
     std::unique_ptr<ui::ModelRunController> controller_;

@@ -176,6 +176,8 @@ add_library(s7studio_app OBJECT
     src/main_window_builder.hpp
     src/model_run_controller.cpp
     src/network_task_runner.cpp src/network_task_runner.hpp
+    src/studio_control_client.cpp src/studio_control_client.hpp
+    src/studio_network_service.cpp src/studio_network_service.hpp
     src/is_schema_runner.hpp
     src/model_run_controller.hpp
     src/json_utils.hpp
@@ -296,6 +298,7 @@ s7_add_test_executable(s7studio_nodes_panel_test
     src/headless_nodes_panel.cpp
     src/headless_nodes_panel.hpp
     src/node_discovery.cpp src/node_discovery.hpp
+    src/studio_control_client.cpp src/studio_control_client.hpp
     src/network_task_runner.cpp src/network_task_runner.hpp
 )
 target_include_directories(s7studio_nodes_panel_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/s7transport/include)
@@ -308,6 +311,12 @@ s7_add_test_executable(s7studio_node_discovery_test tests/node_discovery_test.cp
 target_link_libraries(s7studio_node_discovery_test PRIVATE s7studio_app)
 s7_enable_project_warnings(s7studio_node_discovery_test)
 add_test(NAME s7studio_node_discovery COMMAND s7studio_node_discovery_test)
+
+s7_add_test_executable(s7studio_network_service_test tests/studio_network_service_test.cpp)
+target_link_libraries(s7studio_network_service_test PRIVATE s7studio_app)
+target_compile_definitions(s7studio_network_service_test PRIVATE S7_TEST_CERT_DIR="${PROJECT_SOURCE_DIR}/s7runtime/examples/certs")
+s7_enable_project_warnings(s7studio_network_service_test)
+add_test(NAME s7studio_network_service COMMAND s7studio_network_service_test)
 
 foreach(layout_case wire_types_ok layout_loops)
     add_test(NAME s7studio_layout_${layout_case}

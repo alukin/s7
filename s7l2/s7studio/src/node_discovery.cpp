@@ -2,58 +2,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "node_discovery.hpp"
+#include "studio_control_client.hpp"
 
-#include <boost/asio/connect.hpp>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/ssl/context.hpp>
-#include <boost/beast/core/buffers_to_string.hpp>
-#include <boost/beast/core/flat_buffer.hpp>
-#include <boost/beast/core/tcp_stream.hpp>
-#include <boost/beast/ssl.hpp>
-#include <boost/beast/websocket.hpp>
 #include <boost/json.hpp>
 #include <boost/system/error_code.hpp>
 
 #include <chrono>
-#include <cstring>
-#include <stdexcept>
+#include <exception>
 #include <string>
 #include <utility>
 
 namespace s7studio::ui {
 namespace {
-
-namespace websocket = boost::beast::websocket;
-namespace ssl = boost::asio::ssl;
-using Tcp = boost::asio::ip::tcp;
-
-[[nodiscard]] auto tlsConfigForRequest(const QString& caFile, const QString& certFile, const QString& keyFile, bool enabled)
-    -> s7::transport::TlsConfig
-{
-    s7::transport::TlsConfig tls;
-    tls.enabled = enabled;
-    tls.ca_file = caFile.toStdString();
-    tls.cert_file = certFile.toStdString();
-    tls.key_file = keyFile.toStdString();
-    return tls;
-}
-
-void configure_client_tls_context(ssl::context& ctx, const s7::transport::TlsConfig& tls)
-{
-    if (!tls.enabled) {
-        return;
-    }
-
-    if (tls.ca_file.empty() || tls.cert_file.empty() || tls.key_file.empty()) {
-        throw std::invalid_argument("Missing TLS files (CA/cert/key) for wss endpoint.");
-    }
-
-    ctx.load_verify_file(tls.ca_file);
-    ctx.use_certificate_chain_file(tls.cert_file);
-    ctx.use_private_key_file(tls.key_file, ssl::context::pem);
-    ctx.set_verify_mode(ssl::verify_peer);
-}
 
 [[nodiscard]] auto jsonString(const boost::json::object& object, const char* key) -> QString
 {
@@ -96,88 +56,10 @@ void configure_client_tls_context(ssl::context& ctx, const s7::transport::TlsCon
     return {commonName, fingerprint};
 }
 
-[[nodiscard]] auto control_target_for_parsed(const s7::transport::ParsedWebSocketUrl& parsed) -> std::string
+bool sameCertificate(const DiscoveryReply& first, const DiscoveryReply& second)
 {
-    if (parsed.target.empty() || parsed.target == "/") {
-        return "/control";
-    }
-    if (parsed.target.ends_with("/control")) {
-        return parsed.target;
-    }
-    if (parsed.target.ends_with("/data")) {
-        auto base = parsed.target;
-        base.resize(base.size() - std::strlen("/data"));
-        if (base.empty()) {
-            return "/control";
-        }
-        return base + "/control";
-    }
-    return parsed.target + "/control";
-}
-
-auto request_control_once(const QString& endpoint, const QString& requestJson, const QString& caFile, const QString& certFile,
-                          const QString& keyFile, QString* error,
-                          std::optional<s7::transport::PeerCertificate>* serverCertificate = nullptr) -> QString
-{
-    try {
-        const auto parsed = s7::transport::parse_ws_url(endpoint.toStdString());
-        const auto host_port = (parsed.host.find(':') != std::string::npos ? "[" + parsed.host + "]" : parsed.host) + ":" + parsed.port;
-        const auto target = control_target_for_parsed(parsed);
-        const auto tls = tlsConfigForRequest(caFile, certFile, keyFile, parsed.secure);
-
-        boost::asio::io_context io;
-        Tcp::resolver resolver(io);
-        auto results = resolver.resolve(parsed.host, parsed.port);
-
-        if (parsed.secure) {
-            ssl::context ctx(ssl::context::tls_client);
-            configure_client_tls_context(ctx, tls);
-
-            websocket::stream<boost::beast::ssl_stream<boost::beast::tcp_stream>> ws(io, ctx);
-            boost::beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(2));
-            boost::beast::get_lowest_layer(ws).connect(results);
-            ws.next_layer().handshake(ssl::stream_base::client);
-            if (serverCertificate) {
-                *serverCertificate = s7::transport::verified_peer_certificate_of(ws.next_layer().native_handle());
-            }
-            ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::client));
-            ws.handshake(host_port, target);
-            ws.write(boost::asio::buffer(requestJson.toStdString()));
-            boost::beast::flat_buffer buffer;
-            ws.read(buffer);
-            boost::system::error_code close_ec;
-            ws.close(websocket::close_code::normal, close_ec);
-            return QString::fromStdString(boost::beast::buffers_to_string(buffer.data()));
-        }
-
-        websocket::stream<boost::beast::tcp_stream> ws(io);
-        boost::beast::get_lowest_layer(ws).expires_after(std::chrono::seconds(2));
-        boost::beast::get_lowest_layer(ws).connect(results);
-        ws.set_option(websocket::stream_base::timeout::suggested(boost::beast::role_type::client));
-        ws.handshake(host_port, target);
-        ws.write(boost::asio::buffer(requestJson.toStdString()));
-        boost::beast::flat_buffer buffer;
-        ws.read(buffer);
-        boost::system::error_code close_ec;
-        ws.close(websocket::close_code::normal, close_ec);
-        return QString::fromStdString(boost::beast::buffers_to_string(buffer.data()));
-    } catch (const std::exception& ex) {
-        if (error) {
-            *error = QString::fromUtf8(ex.what());
-        }
-        return {};
-    }
-}
-
-auto nodeKeyForSnapshot(const NodeSnapshot& node) -> QString
-{
-    if (!node.nodeUuid.isEmpty()) {
-        return node.nodeUuid;
-    }
-    if (!node.certificateFingerprintSha256.isEmpty()) {
-        return node.certificateFingerprintSha256;
-    }
-    return node.endpoint;
+    if (first.certificate.has_value() != second.certificate.has_value()) return false;
+    return !first.certificate || first.certificate->fingerprint_sha256 == second.certificate->fingerprint_sha256;
 }
 
 } // namespace
@@ -186,10 +68,21 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
     -> QMap<QString, NodeSnapshot>
 {
     if (!request)
-        request = [&config](const QString& endpoint, const QString& message) {
+        request = [&config, &cancelled](const QString& endpoint, const QString& message) {
             DiscoveryReply reply;
-            reply.text =
-                request_control_once(endpoint, message, config.caFile, config.certFile, config.keyFile, &reply.error, &reply.certificate);
+            try {
+                s7::transport::TlsConfig tls;
+                tls.enabled = endpoint.startsWith(QStringLiteral("wss://"));
+                tls.ca_file = config.caFile.toStdString();
+                tls.cert_file = config.certFile.toStdString();
+                tls.key_file = config.keyFile.toStdString();
+                auto response = requestStudioControl(endpoint.toStdString(), message.toStdString(), tls, cancelled,
+                                                     std::chrono::seconds(3));
+                reply.text = QString::fromStdString(response.text);
+                reply.certificate = std::move(response.certificate);
+            } catch (const std::exception& ex) {
+                reply.error = QString::fromUtf8(ex.what());
+            }
             return reply;
         };
     const auto requestHello = QStringLiteral("{\"type\":\"HELLO\",\"request_id\":\"studio-hello\",\"protocol_version\":1}");
@@ -198,44 +91,29 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
         "{\"type\":\"GET_PEERS\",\"request_id\":\"studio-peers\",\"protocol_version\":1,\"include_unverified\":true,\"max_entries\":256}");
 
     QMap<QString, NodeSnapshot> discovered;
-    auto addOrUpdate = [&discovered](const NodeSnapshot& node) {
-        const auto key = nodeKeyForSnapshot(node);
-        if (key.isEmpty()) {
-            return;
-        }
-
+    auto addOrUpdate = [&discovered](const QString& key, const NodeSnapshot& node) {
+        if (key.isEmpty()) return;
         auto merged = discovered.value(key);
-        if (merged.endpoint.isEmpty() || (!node.endpoint.isEmpty() && merged.endpoint == key)) {
-            merged.endpoint = node.endpoint;
-        }
-        if (!node.nodeUuid.isEmpty())
-            merged.nodeUuid = node.nodeUuid;
-        if (!node.nodeName.isEmpty())
-            merged.nodeName = node.nodeName;
-        if (node.directlyChecked) {
-            merged.dataEndpoint = node.dataEndpoint;
-            merged.dataSecurity = node.dataSecurity;
-        }
-        if (!node.certificateCommonName.isEmpty())
-            merged.certificateCommonName = node.certificateCommonName;
-        if (!node.certificateFingerprintSha256.isEmpty())
-            merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
-        // Trust established by contacting the node itself is never
-        // replaced by what another node reports about it.
-        if (!node.trustState.isEmpty() && (node.directlyChecked || !merged.directlyChecked)) {
-            merged.trustState = node.trustState;
+        const bool authoritative = node.directlyChecked || !merged.directlyChecked;
+        if (authoritative) {
+            if (!node.endpoint.isEmpty()) merged.endpoint = node.endpoint;
+            if (node.directlyChecked || !node.nodeUuid.isEmpty()) merged.nodeUuid = node.nodeUuid;
+            if (node.directlyChecked || !node.nodeName.isEmpty()) merged.nodeName = node.nodeName;
+            if (node.directlyChecked) {
+                merged.dataEndpoint = node.dataEndpoint;
+                merged.dataSecurity = node.dataSecurity;
+            }
+            if (node.directlyChecked || !node.certificateCommonName.isEmpty()) merged.certificateCommonName = node.certificateCommonName;
+            if (node.directlyChecked || !node.certificateFingerprintSha256.isEmpty())
+                merged.certificateFingerprintSha256 = node.certificateFingerprintSha256;
+            if (!node.trustState.isEmpty()) merged.trustState = node.trustState;
             merged.directlyChecked = merged.directlyChecked || node.directlyChecked;
+            if (!node.reachability.isEmpty()) merged.reachability = node.reachability;
+            if (node.directlyChecked || !node.osFamily.isEmpty()) merged.osFamily = node.osFamily;
+            if (node.directlyChecked || !node.architecture.isEmpty()) merged.architecture = node.architecture;
+            if (node.directlyChecked || !node.activeDeployment.isEmpty()) merged.activeDeployment = node.activeDeployment;
+            if (!node.detailText.isEmpty()) merged.detailText = node.detailText;
         }
-        if (!node.reachability.isEmpty())
-            merged.reachability = node.reachability;
-        if (!node.osFamily.isEmpty())
-            merged.osFamily = node.osFamily;
-        if (!node.architecture.isEmpty())
-            merged.architecture = node.architecture;
-        if (!node.activeDeployment.isEmpty())
-            merged.activeDeployment = node.activeDeployment;
-        if (!node.detailText.isEmpty())
-            merged.detailText = node.detailText;
         merged.discoveredBy.unite(node.discoveredBy);
         discovered.insert(key, merged);
     };
@@ -259,7 +137,7 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
             break;
         if (hello.text.isEmpty()) {
             node.detailText = QStringLiteral("HELLO failed: %1").arg(hello.error);
-            addOrUpdate(node);
+            addOrUpdate(endpoint, node);
             continue;
         }
 
@@ -283,7 +161,8 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
         const auto nodeInfo = request(endpoint, requestNodeInfo);
         if (cancelled.load())
             break;
-        if (!nodeInfo.text.isEmpty()) {
+        const bool infoSamePeer = nodeInfo.text.isEmpty() || sameCertificate(hello, nodeInfo);
+        if (!nodeInfo.text.isEmpty() && infoSamePeer) {
             boost::system::error_code ec;
             const auto parsed = boost::json::parse(nodeInfo.text.toStdString(), ec);
             if (!ec && parsed.is_object()) {
@@ -315,9 +194,7 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
                     const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
                     node.dataEndpoint = jsonString(networkIt->value().as_object(), "data_listen_url");
                     node.dataSecurity = jsonString(networkIt->value().as_object(), "data_security");
-                    if (!listenUrl.isEmpty()) {
-                        node.endpoint = listenUrl;
-                    }
+                    if (!listenUrl.isEmpty()) node.endpoint = listenUrl;
                 }
                 if (const auto stateIt = object.find("state"); stateIt != object.end() && stateIt->value().is_object()) {
                     const auto& state = stateIt->value().as_object();
@@ -331,21 +208,30 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
 
         // Trust comes from the certificate the node presented: its
         // identity (SAN spiffe://s7/node/<uuid>) must be the claimed node_uuid.
-        node.trustState = QString::fromStdString(
-            s7::transport::to_string(s7::transport::check_node_identity(hello.certificate, node.nodeUuid.toStdString())));
+        node.trustState = infoSamePeer
+            ? QString::fromStdString(s7::transport::to_string(s7::transport::check_node_identity(hello.certificate, node.nodeUuid.toStdString())))
+            : QStringLiteral("identity_mismatch");
         node.directlyChecked = true;
+        if (hello.certificate) node.certificateFingerprintSha256 = QString::fromStdString(hello.certificate->fingerprint_sha256);
+        if (!infoSamePeer) node.detailText.prepend(QStringLiteral("GET_NODE_INFO used a different server certificate.\n"));
         if (node.trustState == QStringLiteral("identity_mismatch")) {
             const auto presented = hello.certificate ? s7::transport::node_uuid_of(*hello.certificate) : std::nullopt;
             node.detailText = QStringLiteral("Certificate identity %1 does not match the claimed node_uuid %2.\n")
                                   .arg(presented ? QString::fromStdString(*presented) : QStringLiteral("(none)"), node.nodeUuid) +
                               node.detailText;
         }
-        addOrUpdate(node);
+        addOrUpdate(endpoint, node);
 
         const auto peers = request(endpoint, requestPeers);
         if (cancelled.load())
             break;
         if (peers.text.isEmpty()) {
+            continue;
+        }
+        if (!sameCertificate(hello, peers)) {
+            node.trustState = QStringLiteral("identity_mismatch");
+            node.detailText.prepend(QStringLiteral("GET_PEERS used a different server certificate.\n"));
+            addOrUpdate(endpoint, node);
             continue;
         }
         boost::system::error_code ec;
@@ -393,14 +279,8 @@ auto NodeDiscovery::discover(const DiscoveryConfig& config, const std::atomic_bo
                 peerNode.osFamily = jsonString(platformIt->value().as_object(), "os_family");
                 peerNode.architecture = jsonString(platformIt->value().as_object(), "architecture");
             }
-            if (const auto networkIt = peerObject.find("network"); networkIt != peerObject.end() && networkIt->value().is_object()) {
-                const auto listenUrl = jsonString(networkIt->value().as_object(), "listen_url");
-                if (!listenUrl.isEmpty()) {
-                    peerNode.endpoint = listenUrl;
-                }
-            }
             peerNode.discoveredBy.insert(endpoint);
-            addOrUpdate(peerNode);
+            addOrUpdate(peerEndpoint, peerNode);
 
             if (!visited.contains(peerEndpoint) && !queue.contains(peerEndpoint)) {
                 queue.push_back(peerEndpoint);

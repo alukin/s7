@@ -7,23 +7,22 @@
 #include "diagram/diagram_scene.hpp"
 #include "diagram_editor.hpp"
 #include "headless_nodes_panel.hpp"
-#include "json_utils.hpp"
 #include "schema_tabs.hpp"
+#include "studio_network_service.hpp"
 #include "tool_windows.hpp"
-
-#include <s7/deployment_client.hpp>
 
 #include <QAction>
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QStatusBar>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
 namespace s7studio {
 
-auto MainWindow::startNetworkTask(std::function<void()> work, std::function<void()> completed) -> bool
+auto MainWindow::startNetworkTask(ui::NetworkTaskRunner::Work work, std::function<void()> completed) -> bool
 {
     if (networkTask_.busy()) {
         QMessageBox::information(this, QStringLiteral("Busy"), QStringLiteral("A network request is still running."));
@@ -72,7 +71,8 @@ void MainWindow::deployToNodes()
     }
     QMap<QString, diagram::NodeAddress> known;
     for (const auto& node : headlessNodesPanel_->knownNodes()) {
-        known[node.nodeUuid] = diagram::NodeAddress{node.nodeName, node.endpoint, node.dataEndpoint, node.dataSecurity};
+        if (node.verified)
+            known[node.nodeUuid] = diagram::NodeAddress{node.nodeName, node.endpoint, node.dataEndpoint, node.dataSecurity};
     }
     boost::json::object deployment;
     s7::deployment::OutputTypeLookup types;
@@ -101,12 +101,11 @@ void MainWindow::deployToNodes()
     toolWindows_->show(deployDock_);
     auto result = std::make_shared<s7::deployment::DeployResult>();
     startNetworkTask(
-        [result, deployment, types, tls] {
+        [result, service = networkService_, deployment, types, tls](const std::atomic_bool& cancelled) {
             try {
-                s7::deployment::BeastControlRequester requester(tls);
-                *result = s7::deployment::deploy_diagram(deployment, types,
-                                                         [&](const auto& node, const auto& message) { return requester(node, message); });
+                *result = service->deploy(deployment, types, tls, cancelled);
             } catch (const std::exception& ex) {
+                if (cancelled.load()) throw;
                 result->errors.push_back(ex.what());
             }
         },
@@ -169,10 +168,11 @@ void MainWindow::openDeployedDiagram()
     if (!headlessNodesPanel_) {
         return;
     }
-    const auto nodes = headlessNodesPanel_->knownNodes();
+    auto nodes = headlessNodesPanel_->knownNodes();
+    nodes.erase(std::remove_if(nodes.begin(), nodes.end(), [](const auto& node) { return !node.verified; }), nodes.end());
     if (nodes.isEmpty()) {
         QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
-                                 QStringLiteral("No node is known yet. Add a seed in the Headless Nodes tool window and refresh."));
+                                 QStringLiteral("No verified node is known yet. Add a secure seed in the Headless Nodes tool window and refresh."));
         return;
     }
     QStringList labels;
@@ -189,17 +189,15 @@ void MainWindow::openDeployedDiagram()
     const auto tls = headlessNodesPanel_->clientTls();
     struct ConfigurationReply
     {
-        boost::json::object response;
+        ui::DeployedDiagram response;
         QString error;
     };
     auto reply = std::make_shared<ConfigurationReply>();
     startNetworkTask(
-        [reply, node, tls] {
+        [reply, node, tls, service = networkService_](const std::atomic_bool& cancelled) {
             try {
-                s7::deployment::BeastControlRequester requester(tls);
-                reply->response = requester(
-                    s7::deployment::RuntimeNode{node.nodeUuid.toStdString(), {}, node.endpoint.toStdString()},
-                    boost::json::object{{"type", "GET_NETWORK_CONFIGURATION"}, {"request_id", "studio-config"}, {"protocol_version", 1}});
+                reply->response = service->fetchDeployedDiagram(
+                    s7::deployment::RuntimeNode{node.nodeUuid.toStdString(), {}, node.endpoint.toStdString()}, tls, cancelled);
             } catch (const std::exception& ex) {
                 reply->error = QString::fromUtf8(ex.what());
             }
@@ -207,22 +205,21 @@ void MainWindow::openDeployedDiagram()
         [this, node, reply] {
             const auto& response = reply->response;
             const auto& error = reply->error;
-            if (error.isEmpty() && json_utils::stringValue(response, "type", "") != "NETWORK_CONFIGURATION") {
+            if (error.isEmpty() && !response.found) {
                 QMessageBox::information(this, QStringLiteral("Open Deployed Diagram"),
                                          QStringLiteral("%1 has no deployed diagram: %2")
-                                             .arg(node.nodeName, QString::fromStdString(json_utils::stringValue(response, "message", ""))));
+                                             .arg(node.nodeName, QString::fromStdString(response.message)));
                 return;
             }
-            if (!error.isEmpty() || !response.contains("diagram")) {
+            if (!error.isEmpty()) {
                 QMessageBox::warning(this, QStringLiteral("Open Deployed Diagram"), QStringLiteral("Request failed: %1").arg(error));
                 return;
             }
             if (!confirmDocumentReplacement())
                 return;
             try {
-                const auto revision = response.at("revision").to_number<std::uint64_t>();
-                if (!loadDiagramJson(response.at("diagram"),
-                                     QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(revision)))
+                if (!loadDiagramJson(response.diagram,
+                                     QStringLiteral("deployed on %1, revision %2").arg(node.nodeName).arg(response.revision)))
                     return;
                 document_.clearPath();
             } catch (const std::exception& ex) {

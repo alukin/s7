@@ -27,6 +27,7 @@
 #include "ui_icons.hpp"
 #include "scene_serializer.hpp"
 #include "scope_sample_mailbox.hpp"
+#include "studio_network_service.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
 #include "live_oscilloscope_window.hpp"
@@ -262,8 +263,9 @@ auto portListSummary(const std::vector<s7::PortSpec>& ports) -> QString
 
 } // namespace
 
-MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
+MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram, std::shared_ptr<ui::StudioNetworkService> networkService)
     : QMainWindow(parent)
+    , networkService_(networkService ? std::move(networkService) : ui::makeStudioNetworkService())
 {
     viewers_ = new viewers::ViewerManager(viewers::ViewerRegistry::instance(), this);
     connect(viewers_, &viewers::ViewerManager::viewerCreated, this,
@@ -298,6 +300,7 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram)
 MainWindow::~MainWindow()
 {
     shuttingDown_ = true;
+    networkTask_.requestCancel();
     retireRunForShutdown();
     delete std::exchange(observersPanel_, nullptr);
     // Nested pages can remain queued for deletion after SchemaTabs::reset().
@@ -1955,6 +1958,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
         return;
     }
     shuttingDown_ = true;
+    networkTask_.requestCancel();
     retireRunForShutdown();
     saveWindowLayout();
     if (diagramEditor_ && diagramEditor_->scene()) {

@@ -52,8 +52,9 @@ struct DiscoveryReply
 
 // Synchronous discovery on a worker thread. An injected requester makes
 // parsing, peer merging, and certificate-identity policy testable without Qt
-// widgets or a real network. Only the contacted peer's certificate can verify
-// a node; JSON fields from peers are claims.
+// widgets or a real network. Results are keyed by contacted endpoint, so
+// different endpoints claiming one UUID remain distinct. Only the contacted
+// peer's certificate can verify a node; JSON fields from peers are claims.
 class NodeDiscovery final
 {
 public:

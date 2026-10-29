@@ -12,6 +12,7 @@ namespace s7studio::ui {
 
 NetworkTaskRunner::~NetworkTaskRunner()
 {
+    requestCancel();
     if (worker_.joinable())
         worker_.join();
 }
@@ -22,12 +23,13 @@ bool NetworkTaskRunner::start(Work work, Completion finished, std::function<void
         return false;
     if (worker_.joinable())
         worker_.join();
+    cancelled_.store(false);
     busy_ = true;
     try {
         worker_ = std::thread([this, work = std::move(work), finished = std::move(finished), failed = std::move(failed)] {
             QString error;
             try {
-                work();
+                work(cancelled_);
             } catch (const std::exception& ex) {
                 error = QString::fromUtf8(ex.what());
             } catch (...) {
