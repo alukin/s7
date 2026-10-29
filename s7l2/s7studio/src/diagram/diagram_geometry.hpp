@@ -15,5 +15,6 @@ namespace s7studio::diagram {
 [[nodiscard]] bool same(QPointF a, QPointF b);
 [[nodiscard]] bool onSegment(QPointF point, QPointF a, QPointF b);
 [[nodiscard]] bool onRoute(QPointF point, const QVector<QPointF>& route);
+[[nodiscard]] auto withoutRepeats(const QVector<QPointF>& points) -> QVector<QPointF>;
 
 } // namespace s7studio::diagram

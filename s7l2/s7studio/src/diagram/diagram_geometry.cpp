@@ -51,4 +51,15 @@ bool onRoute(const QPointF point, const QVector<QPointF>& route)
     return false;
 }
 
+auto withoutRepeats(const QVector<QPointF>& points) -> QVector<QPointF>
+{
+    QVector<QPointF> result;
+    for (const auto& point : points) {
+        if (result.isEmpty() || !same(result.back(), point)) {
+            result.append(point);
+        }
+    }
+    return result;
+}
+
 } // namespace s7studio::diagram
