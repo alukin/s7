@@ -18,9 +18,9 @@
 #include <unordered_map>
 #include <vector>
 
-class QGraphicsPathItem;
-
 namespace s7studio::diagram {
+
+class DiagramInteraction;
 
 // The Studio diagram scene (STUDIO_DIAGRAM_WIRING_DESIGN.md). Wires form one
 // tree per net, rooted at the driving output; connections are drawn by
@@ -111,14 +111,11 @@ protected:
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
 
 private:
-    struct Gesture;
-    struct MoveGesture;
+    friend class DiagramInteraction;
 
     // Routing.
     void repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {});
     [[nodiscard]] auto anchorOf(const WireEnd& end) const -> std::optional<QPointF>;
-    [[nodiscard]] auto previewRoute(const WireEnd& start, const QVector<QPointF>& bends, QPointF end, const WireEnd* target) const
-        -> QVector<QPointF>;
     [[nodiscard]] auto nodeRects() const -> std::vector<QRectF>;
     void attach(SignalWire& wire);
     void checkMovedNodes();
@@ -128,27 +125,12 @@ private:
     [[nodiscard]] auto branchesOf(const SignalWire& wire) const -> std::vector<std::shared_ptr<SignalWire>>;
     [[nodiscard]] auto wiresOf(const ElementNode& node) const -> std::vector<std::shared_ptr<SignalWire>>;
 
-    // Gestures.
-    [[nodiscard]] auto portAt(QPointF scenePos) const -> std::shared_ptr<PortConnector>;
-    [[nodiscard]] auto wireAt(QPointF scenePos) const -> std::shared_ptr<SignalWire>;
-    [[nodiscard]] auto endAt(QPointF scenePos, bool wires) const -> std::optional<WireEnd>;
-    [[nodiscard]] bool insideElement(QPointF scenePos) const;
-    void markTargets(const WireEnd* start);
-    void showPreview(const QVector<QPointF>& points, bool valid);
-    void hidePreview();
-    void startDrawing(const WireEnd& start);
-    void cancelDrawing();
-    void updateDrawingPreview(QPointF scenePos);
-
-    std::unique_ptr<Gesture> gesture_;
-    std::unique_ptr<MoveGesture> moveGesture_;
-    QGraphicsPathItem* preview_ = nullptr;
+    std::unique_ptr<DiagramInteraction> interaction_;
     std::unordered_map<const QSchematic::Items::Item*, QPointF> knownPositions_;
     std::vector<DiagramProbe> probes_;
     boost::json::array observersPanel_;
     bool observersPanelManual_ = false;
     bool applying_ = false;
-    bool mouseDown_ = false;
     // Whether the diagram's types resolved before the edit being checked
     // (refusals only apply to connections that break a resolving diagram).
     mutable std::optional<bool> typesResolve_;

@@ -5,6 +5,7 @@
 
 #include "diagram/connection_planner.hpp"
 #include "diagram/diagram_geometry.hpp"
+#include "diagram/diagram_interaction.hpp"
 #include "diagram/diagram_routing.hpp"
 #include "diagram/element_ports.hpp"
 #include "diagram/net_model.hpp"
@@ -13,19 +14,14 @@
 
 #include <qschematic/wire_system/manager.hpp>
 
-#include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
 #include <QLoggingCategory>
-#include <QMenu>
-#include <QPainterPath>
-#include <QPen>
 #include <QUndoCommand>
 #include <QUndoStack>
 
 #include <algorithm>
-#include <cmath>
 #include <unordered_set>
 
 namespace s7studio::diagram {
@@ -33,65 +29,6 @@ namespace s7studio::diagram {
 namespace {
 
 Q_LOGGING_CATEGORY(lcDiagramPerformance, "s7studio.diagram.performance")
-
-constexpr double kHandleHit = 6.0;  // a press this close to a bend grabs it
-constexpr double kSegmentHit = 4.0; // a press this close to a segment grabs it
-
-auto distanceToSegment(const QPointF point, const QPointF a, const QPointF b) -> double
-{
-    const QPointF d = b - a;
-    const double length2 = QPointF::dotProduct(d, d);
-    const double t = length2 > 0.0 ? std::clamp(QPointF::dotProduct(point - a, d) / length2, 0.0, 1.0) : 0.0;
-    return QLineF(point, a + t * d).length();
-}
-
-// The grid point of the route nearest to `point`.
-auto nearestOnRoute(const QPointF point, const QVector<QPointF>& route) -> QPointF
-{
-    QPointF best = route.isEmpty() ? snap(point) : route.front();
-    double bestDistance = std::numeric_limits<double>::max();
-    for (int index = 0; index + 1 < route.size(); ++index) {
-        const QPointF a = route[index];
-        const QPointF b = route[index + 1];
-        const QPointF d = b - a;
-        const double length2 = QPointF::dotProduct(d, d);
-        const double t = length2 > 0.0 ? std::clamp(QPointF::dotProduct(point - a, d) / length2, 0.0, 1.0) : 0.0;
-        const QPointF candidate = snap(a + t * d);
-        if (!onSegment(candidate, a, b)) {
-            continue;
-        }
-        if (const double distance = QLineF(point, candidate).length(); distance < bestDistance) {
-            bestDistance = distance;
-            best = candidate;
-        }
-    }
-    return best;
-}
-
-// How many of the (ordered) user bends the route passes before reaching its
-// point `routeIndex`.
-auto bendsBefore(const QVector<QPointF>& route, const QVector<QPointF>& bends, const int routeIndex) -> int
-{
-    int count = 0;
-    for (int segment = 0; segment < routeIndex && segment + 1 < route.size(); ++segment) {
-        while (count < bends.size() && onSegment(bends[count], route[segment], route[segment + 1]) &&
-               !(segment + 1 == routeIndex && same(bends[count], route[segment + 1]))) {
-            ++count;
-        }
-    }
-    return count;
-}
-
-auto withoutRepeats(const QVector<QPointF>& points) -> QVector<QPointF>
-{
-    QVector<QPointF> result;
-    for (const auto& point : points) {
-        if (result.isEmpty() || !same(result.back(), point)) {
-            result.append(point);
-        }
-    }
-    return result;
-}
 
 auto nodeRect(const QSchematic::Items::Node& node) -> QRectF
 {
@@ -124,46 +61,17 @@ bool DiagramChange::empty() const
            elements.empty() && textFrames.empty() && !probes && !observersPanel;
 }
 
-struct DiagramScene::Gesture {
-    enum class Kind { Connect, Draw, Bend };
-
-    Kind kind = Kind::Connect;
-    // Connect and Draw: the end the wire starts at, the bends clicked so far.
-    WireEnd start;
-    QPointF press;
-    bool moved = false;
-    QVector<QPointF> bends;
-    // The last target checked, and why it was refused (empty: accepted).
-    std::optional<WireEnd> checkedTarget;
-    QString checkedProblem;
-    // Bend: the wire, its bends and route when the drag started, and the
-    // dragged bend (routeIndex) or segment (routeIndex to routeIndex + 1).
-    std::shared_ptr<SignalWire> wire;
-    QVector<QPointF> baseBends;
-    QVector<QPointF> baseRoute;
-    int routeIndex = -1;
-    bool segment = false;
-};
-
-struct DiagramScene::MoveGesture {
-    QPointF press;
-    std::vector<std::pair<std::shared_ptr<QSchematic::Items::Item>, QPointF>> items;
-    std::vector<std::shared_ptr<SignalWire>> incidentWires;
-};
-
 DiagramScene::DiagramScene(QObject* parent)
-    : Scene(parent)
+    : Scene(parent), interaction_(std::make_unique<DiagramInteraction>(*this))
 {
     setWireFactory([] { return std::make_shared<SignalWire>(); });
     connect(undoStack(), &QUndoStack::indexChanged, this, [this] {
-        if (!applying_ && !mouseDown_) {
+        if (!applying_ && !interaction_->mouseDown()) {
             checkMovedNodes();
         }
     });
     connect(this, &QSchematic::Scene::modeChanged, this, [this](const int mode) {
-        if (mode != DrawMode && gesture_ && gesture_->kind == Gesture::Kind::Draw) {
-            cancelDrawing();
-        }
+        interaction_->modeChanged(mode);
     });
 }
 
@@ -214,8 +122,7 @@ auto DiagramScene::sharedWire(const SignalWire* wire) const -> std::shared_ptr<S
 void DiagramScene::clearDiagram()
 {
     observersPanel_.clear(); observersPanelManual_ = false;
-    gesture_.reset();
-    preview_ = nullptr; // deleted by clear()
+    interaction_->clearForSceneReset();
     clear();
     knownPositions_.clear();
     typesResolve_.reset();
@@ -649,245 +556,14 @@ void DiagramScene::checkMovedNodes()
 
 // Gestures
 
-auto DiagramScene::portAt(const QPointF scenePos) const -> std::shared_ptr<PortConnector>
+bool DiagramScene::handleKey(const int key, const Qt::KeyboardModifiers modifiers)
 {
-    for (auto* item : QGraphicsScene::items(scenePos)) {
-        if (auto* port = dynamic_cast<PortConnector*>(item)) {
-            if (auto* element = port->element()) {
-                return element->port(port->direction(), port->index());
-            }
-        }
-    }
-    return nullptr;
-}
-
-auto DiagramScene::wireAt(const QPointF scenePos) const -> std::shared_ptr<SignalWire>
-{
-    for (auto* item : QGraphicsScene::items(scenePos)) {
-        if (auto* wire = dynamic_cast<SignalWire*>(item)) {
-            const auto route = wire->pointsAbsolute();
-            for (int index = 0; index + 1 < route.size(); ++index) {
-                if (distanceToSegment(scenePos, route[index], route[index + 1]) <= kSegmentHit + 2.0) {
-                    return sharedWire(wire);
-                }
-            }
-        }
-    }
-    return nullptr;
-}
-
-auto DiagramScene::endAt(const QPointF scenePos, const bool wires) const -> std::optional<WireEnd>
-{
-    if (const auto port = portAt(scenePos)) {
-        auto* element = port->element();
-        return WireEnd::onPort(element->sharedPtr<ElementNode>(), port->direction(), port->index());
-    }
-    if (wires) {
-        if (const auto wire = wireAt(scenePos)) {
-            return WireEnd::onWire(wire, nearestOnRoute(scenePos, wire->pointsAbsolute()));
-        }
-    }
-    return std::nullopt;
-}
-
-bool DiagramScene::insideElement(const QPointF scenePos) const
-{
-    for (const auto& rect : nodeRects()) {
-        if (rect.adjusted(1.0, 1.0, -1.0, -1.0).contains(scenePos)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void DiagramScene::markTargets(const WireEnd* start)
-{
-    for (const auto& node : elementNodes()) {
-        for (const auto* ports : {&node->inputs(), &node->outputs()}) {
-            for (const auto& port : *ports) {
-                auto mark = PortConnector::Mark::None;
-                if (start) {
-                    const auto end = WireEnd::onPort(node, port->direction(), port->index());
-                    if (!end.sameAs(*start)) {
-                        mark = checkConnection(*start, end).isEmpty() ? PortConnector::Mark::Target : PortConnector::Mark::Refused;
-                    }
-                }
-                port->setMark(mark);
-            }
-        }
-    }
-}
-
-void DiagramScene::showPreview(const QVector<QPointF>& points, const bool valid)
-{
-    if (!preview_) {
-        preview_ = new QGraphicsPathItem;
-        preview_->setZValue(1000.0);
-        QGraphicsScene::addItem(preview_);
-    }
-    QPainterPath path;
-    if (!points.isEmpty()) {
-        path.moveTo(points.front());
-        for (int index = 1; index < points.size(); ++index) {
-            path.lineTo(points[index]);
-        }
-    }
-    preview_->setPen(QPen(valid ? QColor(0x2e, 0x9d, 0x46) : QColor(0x1e, 0x5b, 0xd8), 1.6, Qt::DashLine));
-    preview_->setPath(path);
-    preview_->setVisible(true);
-}
-
-void DiagramScene::hidePreview()
-{
-    if (preview_) {
-        preview_->setVisible(false);
-    }
-}
-
-auto DiagramScene::previewRoute(const WireEnd& start, const QVector<QPointF>& bends, const QPointF end, const WireEnd* target) const
-    -> QVector<QPointF>
-{
-    return DiagramRouting(signalWires(), nodeRects()).previewRoute(start, bends, end, target);
-}
-
-void DiagramScene::startDrawing(const WireEnd& start)
-{
-    gesture_ = std::make_unique<Gesture>();
-    gesture_->kind = Gesture::Kind::Draw;
-    gesture_->start = start;
-    markTargets(&start);
-    if (mode() != DrawMode) {
-        setMode(DrawMode);
-    }
-    Q_EMIT statusMessage(QStringLiteral("Click to place bends, then a port or a wire to finish (Esc cancels, Backspace removes a bend)."));
-}
-
-void DiagramScene::cancelDrawing()
-{
-    gesture_.reset();
-    markTargets(nullptr);
-    hidePreview();
-}
-
-void DiagramScene::updateDrawingPreview(const QPointF scenePos)
-{
-    if (!gesture_) {
-        return;
-    }
-    auto& gesture = *gesture_;
-    const auto target = endAt(scenePos, true);
-    bool valid = false;
-    if (target && !target->sameAs(gesture.start)) {
-        if (!gesture.checkedTarget || !gesture.checkedTarget->sameAs(*target)) {
-            gesture.checkedTarget = target;
-            gesture.checkedProblem = checkConnection(gesture.start, *target);
-        }
-        valid = gesture.checkedProblem.isEmpty();
-    }
-    const QPointF end = valid ? anchorOf(*target).value_or(snap(scenePos)) : snap(scenePos);
-    showPreview(previewRoute(gesture.start, gesture.bends, end, valid ? &*target : nullptr), valid);
-}
-
-bool DiagramScene::handleKey(const int key, const Qt::KeyboardModifiers)
-{
-    if (key == Qt::Key_Escape) {
-        if (gesture_ && gesture_->kind == Gesture::Kind::Draw) {
-            cancelDrawing();
-        } else if (gesture_) {
-            if (gesture_->kind == Gesture::Kind::Bend) {
-                gesture_->wire->userBends = gesture_->baseBends;
-                gesture_->wire->setRoute(gesture_->baseRoute);
-                attach(*gesture_->wire);
-            }
-            gesture_.reset();
-            markTargets(nullptr);
-            hidePreview();
-        } else if (mode() == DrawMode) {
-            setMode(NormalMode);
-        }
-        return true;
-    }
-    if (key == Qt::Key_Delete || key == Qt::Key_Backspace) {
-        if (gesture_ && gesture_->kind == Gesture::Kind::Draw) {
-            if (gesture_->bends.isEmpty()) {
-                cancelDrawing();
-            } else {
-                gesture_->bends.removeLast();
-            }
-            return true;
-        }
-        if (mode() == NormalMode && !gesture_) {
-            deleteSelection();
-            return true;
-        }
-    }
-    return false;
+    return interaction_->handleKey(key, modifiers);
 }
 
 void DiagramScene::showWireMenu(SignalWire& wire, const QPointF scenePos, const QPoint screenPos)
 {
-    const auto shared = sharedWire(&wire);
-    if (!shared || mode() == DrawMode || gesture_) {
-        return;
-    }
-    const auto route = wire.pointsAbsolute();
-    QMenu menu;
-    auto* add = menu.addAction(QStringLiteral("Add Bend Here"));
-    QAction* remove = nullptr;
-    int nearBend = -1;
-    for (int index = 0; index < wire.userBends.size(); ++index) {
-        if (QLineF(wire.userBends[index], scenePos).length() <= kHandleHit + 2.0) {
-            nearBend = index;
-        }
-    }
-    if (nearBend >= 0) {
-        remove = menu.addAction(QStringLiteral("Remove Bend"));
-    }
-    QAction* reroute = nullptr;
-    if (!wire.userBends.isEmpty()) {
-        reroute = menu.addAction(QStringLiteral("Re-route (Remove Hand-Placed Bends)"));
-    }
-    menu.addSeparator();
-    // A probe taps the net's driving output (the same output every wire of
-    // this net shares), not this particular wire segment (doc/
-    // S7_Numerical_Modeling_Test_Plan.md section 1.1: a probe reads an
-    // element's output port, never a graph element of its own).
-    const auto driver = NetModel::driverOf(wire);
-    QAction* addProbeAction = nullptr;
-    QAction* removeProbeAction = nullptr;
-    if (driver) {
-        const bool hasProbe = std::ranges::any_of(probes_, [&](const auto& probe) { return probe.point == *driver; });
-        addProbeAction = hasProbe ? nullptr : menu.addAction(QStringLiteral("Add Probe Here"));
-        removeProbeAction = hasProbe ? menu.addAction(QStringLiteral("Remove Probe")) : nullptr;
-    }
-    menu.addSeparator();
-    auto* erase = menu.addAction(QStringLiteral("Delete Wire"));
-    const auto* chosen = menu.exec(screenPos);
-    if (chosen == add) {
-        const QPointF point = nearestOnRoute(scenePos, route);
-        int segment = 0;
-        for (int index = 0; index + 1 < route.size(); ++index) {
-            if (onSegment(point, route[index], route[index + 1])) {
-                segment = index;
-                break;
-            }
-        }
-        auto bends = wire.userBends;
-        bends.insert(bendsBefore(route, bends, segment + 1), point);
-        setUserBends(shared, bends);
-    } else if (remove && chosen == remove) {
-        auto bends = wire.userBends;
-        bends.removeAt(nearBend);
-        setUserBends(shared, bends);
-    } else if (reroute && chosen == reroute) {
-        setUserBends(shared, {});
-    } else if (addProbeAction && chosen == addProbeAction) {
-        addProbe(*driver, QStringLiteral("%1_%2").arg(QString::fromStdString(driver->element)).arg(driver->port));
-    } else if (removeProbeAction && chosen == removeProbeAction) {
-        removeProbe(*driver);
-    } else if (chosen == erase) {
-        deleteWire(shared);
-    }
+    interaction_->showWireMenu(wire, scenePos, screenPos);
 }
 
 bool DiagramScene::addProbe(PortRef point, QString name, QString unit)
@@ -932,264 +608,22 @@ void DiagramScene::setProbes(std::vector<DiagramProbe> probes)
 
 void DiagramScene::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
-    moveGesture_.reset();
-    const QPointF pos = event->scenePos();
-    if (event->button() == Qt::LeftButton) {
-        mouseDown_ = true;
-    }
-    if (mode() == DrawMode) {
-        event->accept();
-        if (event->button() == Qt::RightButton) {
-            if (gesture_) {
-                cancelDrawing();
-            } else {
-                setMode(NormalMode);
-            }
-            return;
-        }
-        if (event->button() != Qt::LeftButton) {
-            return;
-        }
-        if (!gesture_ || gesture_->kind != Gesture::Kind::Draw) {
-            if (const auto end = endAt(pos, true)) {
-                startDrawing(*end);
-            } else {
-                Q_EMIT statusMessage(QStringLiteral("Start a wire on a port or on a wire."));
-            }
-            return;
-        }
-        auto& gesture = *gesture_;
-        if (const auto end = endAt(pos, true)) {
-            if (end->sameAs(gesture.start)) {
-                return;
-            }
-            if (const auto problem = checkConnection(gesture.start, *end); !problem.isEmpty()) {
-                Q_EMIT statusMessage(problem);
-                return;
-            }
-            const auto start = gesture.start;
-            const auto bends = gesture.bends;
-            cancelDrawing();
-            connectEnds(start, *end, bends);
-            return;
-        }
-        if (insideElement(pos)) {
-            Q_EMIT statusMessage(QStringLiteral("A bend cannot be placed on an element."));
-            return;
-        }
-        const QPointF bend = snap(pos);
-        if (gesture.bends.isEmpty() || !same(gesture.bends.back(), bend)) {
-            gesture.bends.append(bend);
-        }
-        return;
-    }
-
-    QSchematic::Items::Node* moveTarget = nullptr;
-    if (mode() == NormalMode && event->button() == Qt::LeftButton) {
-        // Editing the bends of a selected wire (a press on a port connects instead).
-        if (const auto wire = wireAt(pos); wire && wire->isSelected() && !portAt(pos)) {
-            const auto route = wire->pointsAbsolute();
-            int routeIndex = -1;
-            bool segment = false;
-            for (int index = 1; index + 1 < route.size(); ++index) {
-                if (QLineF(route[index], pos).length() <= kHandleHit) {
-                    routeIndex = index;
-                }
-            }
-            if (routeIndex < 0) {
-                for (int index = 0; index + 1 < route.size(); ++index) {
-                    if (distanceToSegment(pos, route[index], route[index + 1]) <= kSegmentHit) {
-                        routeIndex = index;
-                        segment = true;
-                        break;
-                    }
-                }
-            }
-            if (routeIndex >= 0) {
-                gesture_ = std::make_unique<Gesture>();
-                gesture_->kind = Gesture::Kind::Bend;
-                gesture_->wire = wire;
-                gesture_->baseBends = wire->userBends;
-                gesture_->baseRoute = route;
-                gesture_->routeIndex = routeIndex;
-                gesture_->segment = segment;
-                gesture_->press = snap(pos);
-                event->accept();
-                return;
-            }
-        }
-        // Connecting from a port, or (Alt) from a wire.
-        std::optional<WireEnd> start;
-        if (portAt(pos)) {
-            start = endAt(pos, false);
-        } else if (event->modifiers().testFlag(Qt::AltModifier)) {
-            start = endAt(pos, true);
-        }
-        if (start) {
-            gesture_ = std::make_unique<Gesture>();
-            gesture_->kind = Gesture::Kind::Connect;
-            gesture_->start = *start;
-            gesture_->press = snap(pos);
-            markTargets(&*start);
-            event->accept();
-            return;
-        }
-        if (auto* item = itemAt(pos, QTransform())) {
-            if (auto* node = dynamic_cast<QSchematic::Items::Node*>(item);
-                node && node->mode() == QSchematic::Items::Node::Mode::None) {
-                moveTarget = node;
-            }
-        }
-    }
-    Scene::mousePressEvent(event);
-    if (moveTarget) {
-        auto move = std::make_unique<MoveGesture>();
-        move->press = pos;
-        std::unordered_set<SignalWire*> seen;
-        for (const auto& item : selectedTopLevelItems()) {
-            if (item && item->isMovable()) {
-                move->items.emplace_back(item, item->pos());
-                if (const auto node = std::dynamic_pointer_cast<ElementNode>(item)) {
-                    for (const auto& wire : wiresOf(*node)) {
-                        if (seen.insert(wire.get()).second) {
-                            move->incidentWires.push_back(wire);
-                        }
-                    }
-                }
-            }
-        }
-        if (!move->items.empty()) {
-            moveGesture_ = std::move(move);
-        }
-    }
+    interaction_->mousePressEvent(event, [this, event] { Scene::mousePressEvent(event); });
 }
 
 void DiagramScene::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
 {
-    const QPointF pos = event->scenePos();
-    if (gesture_ && gesture_->kind == Gesture::Kind::Draw) {
-        updateDrawingPreview(pos);
-        event->accept();
-        return;
-    }
-    if (gesture_ && gesture_->kind == Gesture::Kind::Connect) {
-        gesture_->moved = gesture_->moved || !same(snap(pos), gesture_->press);
-        if (gesture_->moved) {
-            updateDrawingPreview(pos);
-        }
-        event->accept();
-        return;
-    }
-    if (gesture_ && gesture_->kind == Gesture::Kind::Bend) {
-        auto& gesture = *gesture_;
-        const auto& baseRoute = gesture.baseRoute;
-        const QPointF delta = snap(pos) - gesture.press;
-        QVector<QPointF> bends = gesture.baseBends;
-        if (!gesture.segment) {
-            const QPointF point = baseRoute[gesture.routeIndex];
-            if (const auto existing = bends.indexOf(point); existing >= 0) {
-                bends[existing] = point + delta;
-            } else {
-                bends.insert(bendsBefore(baseRoute, bends, gesture.routeIndex), point + delta);
-            }
-        } else {
-            const int first = gesture.routeIndex;
-            const QPointF a = baseRoute[first];
-            const QPointF b = baseRoute[first + 1];
-            const bool horizontal = std::abs(a.y() - b.y()) < 0.5;
-            const QPointF move = horizontal ? QPointF(0.0, delta.y()) : QPointF(delta.x(), 0.0);
-            const QPointF along = QLineF(a, b).length() > 0.0 ? (b - a) / QLineF(a, b).length() * kGridStep : QPointF();
-            // Ends of the wire stay; a stub one step along the segment moves instead.
-            const QPointF movedA = (first == 0 ? a + along : a) + move;
-            const QPointF movedB = (first + 2 == baseRoute.size() ? b - along : b) + move;
-            int insertAt = bendsBefore(baseRoute, bends, first);
-            QVector<QPointF> kept;
-            for (int index = 0; index < bends.size(); ++index) {
-                if (onSegment(bends[index], a, b)) {
-                    insertAt = std::min(insertAt, index);
-                    continue;
-                }
-                kept.append(bends[index]);
-            }
-            insertAt = std::min<int>(insertAt, kept.size());
-            kept.insert(insertAt, movedB);
-            kept.insert(insertAt, movedA);
-            bends = withoutRepeats(kept);
-        }
-        gesture.wire->userBends = bends;
-        DiagramRouting(signalWires(), nodeRects()).route(
-            {gesture.wire.get()}, [this](SignalWire& wire) { attach(wire); });
-        event->accept();
-        return;
-    }
-    if (moveGesture_ && event->buttons().testFlag(Qt::LeftButton)) {
-        const QPointF delta = pos - moveGesture_->press;
-        for (const auto& [item, initialPosition] : moveGesture_->items) {
-            item->setPos(initialPosition + delta);
-        }
-        // Maintain the active connection geometry without simplifying every
-        // unrelated wire on every pointer event.
-        for (const auto& wire : moveGesture_->incidentWires) {
-            wire->simplify();
-        }
-        event->accept();
-        return;
-    }
-    Scene::mouseMoveEvent(event);
+    interaction_->mouseMoveEvent(event, [this, event] { Scene::mouseMoveEvent(event); });
 }
 
 void DiagramScene::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton) {
-        mouseDown_ = false;
-    }
-    if (gesture_ && gesture_->kind == Gesture::Kind::Draw) {
-        event->accept();
-        return;
-    }
-    if (gesture_ && gesture_->kind == Gesture::Kind::Connect) {
-        event->accept();
-        const auto start = gesture_->start;
-        if (!gesture_->moved) {
-            // A click on a port (no drag) starts drawing click by click.
-            startDrawing(start);
-            return;
-        }
-        gesture_.reset();
-        markTargets(nullptr);
-        hidePreview();
-        if (const auto target = endAt(event->scenePos(), true); target && !target->sameAs(start)) {
-            connectEnds(start, *target);
-        }
-        return;
-    }
-    if (gesture_ && gesture_->kind == Gesture::Kind::Bend) {
-        event->accept();
-        const auto wire = gesture_->wire;
-        const auto bends = wire->userBends;
-        wire->userBends = gesture_->baseBends;
-        const auto baseRoute = gesture_->baseRoute;
-        gesture_.reset();
-        if (bends != wire->userBends) {
-            setUserBends(wire, bends);
-        } else {
-            wire->setRoute(baseRoute);
-            attach(*wire);
-        }
-        return;
-    }
-    Scene::mouseReleaseEvent(event);
-    moveGesture_.reset();
-    checkMovedNodes();
+    interaction_->mouseReleaseEvent(event, [this, event] { Scene::mouseReleaseEvent(event); });
 }
 
 void DiagramScene::mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event)
 {
-    if (mode() == DrawMode || gesture_) {
-        event->accept();
-        return;
-    }
-    Scene::mouseDoubleClickEvent(event);
+    interaction_->mouseDoubleClickEvent(event, [this, event] { Scene::mouseDoubleClickEvent(event); });
 }
 
 } // namespace s7studio::diagram

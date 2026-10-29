@@ -23,6 +23,8 @@ add_library(s7studio_diagram STATIC
     src/diagram/diagram_change.hpp
     src/diagram/diagram_geometry.cpp
     src/diagram/diagram_geometry.hpp
+    src/diagram/diagram_interaction.cpp
+    src/diagram/diagram_interaction.hpp
     src/diagram/diagram_routing.cpp
     src/diagram/diagram_routing.hpp
     src/diagram/wire_removal_planner.cpp

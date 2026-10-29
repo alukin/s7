@@ -10,25 +10,12 @@
 #include <s7/type_inference.hpp>
 
 #include <algorithm>
-#include <cmath>
 #include <exception>
 #include <utility>
 
 namespace s7studio::diagram {
 
 namespace {
-
-auto withoutRepeats(const QVector<QPointF>& points) -> QVector<QPointF>
-{
-    QVector<QPointF> result;
-    for (const auto& point : points) {
-        if (result.isEmpty() || std::abs(result.back().x() - point.x()) >= 0.5 ||
-            std::abs(result.back().y() - point.y()) >= 0.5) {
-            result.append(point);
-        }
-    }
-    return result;
-}
 
 // Unknown element types (plugins not loaded) count as unresolved, so adding
 // a connection cannot make an already unresolved diagram appear worse.

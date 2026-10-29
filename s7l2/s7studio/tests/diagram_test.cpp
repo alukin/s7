@@ -472,6 +472,41 @@ int main(int argc, char** argv)
         checkRoutes(gestures, "after dragging a segment");
         gestures.undoStack()->undo();
         check(wire->userBends.isEmpty(), "undo removes the dragged bends");
+
+        const auto routeBeforeCancel = wire->pointsAbsolute();
+        const int undoBeforeCancel = gestures.undoStack()->count();
+        const QPointF press = (routeBeforeCancel[0] + routeBeforeCancel[1]) / 2.0;
+        mouse(gestures, QEvent::GraphicsSceneMousePress, press);
+        mouse(gestures, QEvent::GraphicsSceneMouseMove, press + QPointF(0, -2 * kGridStep));
+        gestures.handleKey(Qt::Key_Escape, Qt::NoModifier);
+        mouse(gestures, QEvent::GraphicsSceneMouseRelease, press + QPointF(0, -2 * kGridStep));
+        check(wire->userBends.isEmpty() && wire->pointsAbsolute() == routeBeforeCancel &&
+                  gestures.undoStack()->count() == undoBeforeCancel,
+              "Escape cancels a bend drag without an undo edit");
+    }
+    {
+        DiagramScene resetGesture;
+        const auto first = resetGesture.addElement(element("first", "Constant"), {40, 40});
+        click(resetGesture, first->port(PortDirection::Output, 0)->scenePos());
+        mouse(resetGesture, QEvent::GraphicsSceneMouseMove, {300, 200});
+        check(resetGesture.mode() == DiagramScene::DrawMode, "drawing is active before clearing");
+        resetGesture.clearDiagram();
+        resetGesture.setMode(DiagramScene::NormalMode);
+        const auto source = resetGesture.addElement(element("source", "Constant"), {40, 40});
+        const auto target = resetGesture.addElement(element("target", "Gain"), {400, 40});
+        drag(resetGesture, source->port(PortDirection::Output, 0)->scenePos(), target->port(PortDirection::Input, 0)->scenePos());
+        check(connections(resetGesture) == std::set<std::string>{"source:0->target:0"},
+              "clearing during drawing removes transient gesture and preview state");
+    }
+    {
+        DiagramScene moveGesture;
+        const auto source = moveGesture.addElement(element("source", "Constant"), {40, 40});
+        const auto target = moveGesture.addElement(element("target", "Gain"), {400, 40});
+        check(moveGesture.connectEnds(out(source), in(target)).isEmpty(), "move gesture fixture connects");
+        const QPointF before = target->pos();
+        drag(moveGesture, before + QPointF(60, 40), before + QPointF(60, 100));
+        check(target->pos() != before, "dragging an element moves it through the interaction controller");
+        checkRoutes(moveGesture, "after an element drag");
     }
 
 #ifdef S7_TEST_NOISE_PLUGIN_DIR
