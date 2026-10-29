@@ -13,8 +13,9 @@ runtime authorities. See [the release scope](RELEASE_0.2.0.md) and
 | --- | --- | --- |
 | Diagram topology and undo history | `diagram::DiagramScene` and its model helpers | One user operation produces one undo command. Serialized topology comes from the scene. |
 | Open document metadata, run settings, deployed node and stream references, saved baseline | `DocumentSession` | A deployment result updates this state; opening a document prepares a candidate before retiring the current run. |
-| Blocking Studio control requests | `ui::NetworkTaskRunner` and `main_window_network.cpp` | Workers receive value snapshots. UI completions run on the owner thread; the owner joins its worker on destruction. |
-| Discovery parsing and trust decisions | `ui::NodeDiscovery` | A worker checks the certificate presented by each contacted node. Peer reports remain unverified claims; a requester can be injected for tests. |
+| Studio administration requests | `ui::StudioNetworkService` and `ui::StudioControlClient` | Typed deployment and deployed-diagram results keep protocol JSON and socket work outside `MainWindow`. The requester is injectable for tests; each real request verifies the node certificate. |
+| Blocking Studio control tasks | `ui::NetworkTaskRunner` | Workers receive value snapshots and a cancellation flag. UI completions run on the owner thread; destruction requests cancellation and joins the worker. Prepared deployments may still need bounded abort requests, and a started commit sequence finishes. |
+| Discovery parsing and trust decisions | `ui::NodeDiscovery` | A worker checks the certificate presented by each contacted node and each successful reply. Records are keyed by contacted endpoint; peer reports cannot replace directly checked metadata. A requester can be injected for tests. |
 | Discovery UI | `ui::HeadlessNodesPanel` | Collects settings, owns the worker lifecycle, and presents service results on the UI thread. |
 | Observation data | `ObservationSource` and live acquisition | Viewers read data; they do not mutate the runtime graph. |
 | Viewer-specific presentation | Optional `LiveObservationViewer` and `ComparisonObservationViewer` capabilities | `ViewerManager` calls supported capabilities without depending on concrete window classes. |
@@ -34,10 +35,11 @@ runtime authorities. See [the release scope](RELEASE_0.2.0.md) and
 - **Liskov substitution:** every registered viewer must support the base
   presentation operations. A caller must test an optional capability before
   invoking it; type names do not imply a C++ subclass.
-- **Dependency inversion:** deployment compilation and discovery accept
-  requester callbacks. The next network increment should put configuration
-  read/validate/stage/commit and restart behind a Studio service interface
-  with fake transports for tests. Keep protocol authorization in the headless
+- **Dependency inversion:** deployment and deployed-diagram retrieval now use a
+  Studio service interface; discovery and the service accept requester
+  callbacks. The next network increment should put configuration
+  read/validate/stage/commit and restart behind typed service methods with
+  fake transports for tests. Keep protocol authorization in the headless
   transport/control layer.
 
 ## Required follow-up before 0.2.0 networking UI

@@ -45,11 +45,6 @@ HeadlessNodesPanel::HeadlessNodesPanel(QWidget* parent)
     setupUi();
 }
 
-HeadlessNodesPanel::~HeadlessNodesPanel()
-{
-    refreshCancelled_->store(true);
-}
-
 void HeadlessNodesPanel::setupUi()
 {
     auto* root = new QVBoxLayout(this);
@@ -191,11 +186,10 @@ void HeadlessNodesPanel::refreshNow()
     config.certFile = certFileEdit_->text().trimmed();
     config.keyFile = keyFileEdit_->text().trimmed();
 
-    const auto cancelled = refreshCancelled_;
     auto result = std::make_shared<QMap<QString, NodeSnapshot>>();
     try {
-        refreshTask_.start([cancelled, result, config = std::move(config)] {
-            *result = NodeDiscovery::discover(config, *cancelled);
+        refreshTask_.start([result, config = std::move(config)](const std::atomic_bool& cancelled) {
+            *result = NodeDiscovery::discover(config, cancelled);
         }, [this, result] {
             nodes_ = std::move(*result);
             updateNodeLists();
@@ -209,41 +203,6 @@ void HeadlessNodesPanel::refreshNow()
         networkOverview_->setPlainText(QStringLiteral("Discovery failed: %1").arg(QString::fromUtf8(ex.what())));
         emit refreshed();
     }
-}
-
-void HeadlessNodesPanel::addOrUpdateNode(const NodeSnapshot& node)
-{
-    auto merged = nodes_.value(node.endpoint);
-    if (merged.endpoint.isEmpty()) {
-        merged.endpoint = node.endpoint;
-    }
-    if (!node.nodeUuid.isEmpty()) {
-        merged.nodeUuid = node.nodeUuid;
-    }
-    if (!node.nodeName.isEmpty()) {
-        merged.nodeName = node.nodeName;
-    }
-    if (!node.trustState.isEmpty() && (node.directlyChecked || !merged.directlyChecked)) {
-        merged.trustState = node.trustState;
-        merged.directlyChecked = merged.directlyChecked || node.directlyChecked;
-    }
-    if (!node.reachability.isEmpty()) {
-        merged.reachability = node.reachability;
-    }
-    if (!node.osFamily.isEmpty()) {
-        merged.osFamily = node.osFamily;
-    }
-    if (!node.architecture.isEmpty()) {
-        merged.architecture = node.architecture;
-    }
-    if (!node.activeDeployment.isEmpty()) {
-        merged.activeDeployment = node.activeDeployment;
-    }
-    if (!node.detailText.isEmpty()) {
-        merged.detailText = node.detailText;
-    }
-    merged.discoveredBy.unite(node.discoveredBy);
-    nodes_.insert(node.endpoint, merged);
 }
 
 void HeadlessNodesPanel::updateNodeLists()
@@ -376,7 +335,7 @@ auto HeadlessNodesPanel::knownNodes() const -> QVector<KnownNode>
         if (!node.nodeUuid.isEmpty() && !node.endpoint.isEmpty()) {
             const bool verified = node.directlyChecked && node.trustState == QStringLiteral("verified");
             result.push_back(KnownNode{node.nodeUuid, node.nodeName, node.endpoint, node.trustState,
-                                      verified ? node.dataEndpoint : QString{}, verified ? node.dataSecurity : QString{}});
+                                      verified ? node.dataEndpoint : QString{}, verified ? node.dataSecurity : QString{}, verified});
         }
     }
     std::sort(result.begin(), result.end(), [](const KnownNode& a, const KnownNode& b) {

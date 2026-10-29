@@ -10,12 +10,17 @@
 #include <QTimer>
 
 #include <boost/json.hpp>
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/tcp.hpp>
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <future>
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "headless_nodes_panel.hpp"
 
@@ -116,6 +121,8 @@ int main(int argc, char** argv)
 
     std::map<std::string, std::string> trust;
     for (const auto& node : panel.knownNodes()) {
+        if (node.verified != (node.trustState == QStringLiteral("verified")))
+            return fail("the known-node verification flag disagrees with the direct trust check");
         if (node.trustState == QStringLiteral("verified")) {
             if (node.dataEndpoint != QStringLiteral("ws://127.0.0.1:9200") || node.dataSecurity != QStringLiteral("trusted_plaintext")) {
                 return fail("verified node's separate data endpoint was not retained");
@@ -145,6 +152,40 @@ int main(int argc, char** argv)
         closing->addSeed(QString::fromStdString(plain.url));
         closing->refreshNow();
         closing.reset();
+    }
+    // A silent peer must not keep the panel's worker alive until the network
+    // timeout when the panel is closed during its WebSocket handshake.
+    {
+        using Tcp = boost::asio::ip::tcp;
+        boost::asio::io_context io;
+        Tcp::acceptor listener(io, {boost::asio::ip::address_v4::loopback(), 0});
+        auto socket = std::make_shared<Tcp::socket>(io);
+        std::promise<bool> accepted;
+        auto acceptedFuture = accepted.get_future();
+        listener.async_accept(*socket, [&](const boost::system::error_code& error) { accepted.set_value(!error); });
+        std::thread acceptThread([&] { io.run(); });
+
+        auto closing = std::make_unique<s7studio::ui::HeadlessNodesPanel>();
+        closing->addSeed(QStringLiteral("ws://127.0.0.1:%1").arg(listener.local_endpoint().port()));
+        closing->refreshNow();
+        const bool connected = acceptedFuture.wait_for(std::chrono::seconds(2)) == std::future_status::ready && acceptedFuture.get();
+        if (!connected) listener.cancel();
+        acceptThread.join();
+        const auto beforeClose = std::chrono::steady_clock::now();
+        closing.reset();
+        if (!connected || std::chrono::steady_clock::now() - beforeClose > std::chrono::seconds(1))
+            return fail("closing during a silent peer handshake did not cancel discovery promptly");
+
+        // The same silent listener also bounds a request when the panel stays open.
+        std::atomic_bool cancelled = false;
+        s7studio::ui::DiscoveryConfig config;
+        config.seeds.push_back(QStringLiteral("ws://127.0.0.1:%1").arg(listener.local_endpoint().port()));
+        const auto beforeTimeout = std::chrono::steady_clock::now();
+        const auto found = s7studio::ui::NodeDiscovery::discover(config, cancelled);
+        const auto elapsed = std::chrono::steady_clock::now() - beforeTimeout;
+        if (elapsed > std::chrono::seconds(5) || found.size() != 1 ||
+            !found.first().detailText.contains(QStringLiteral("timed out")))
+            return fail("silent peer discovery did not report a bounded timeout");
     }
     std::printf("nodes panel trust: OK\n");
     return 0;

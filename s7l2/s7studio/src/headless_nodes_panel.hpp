@@ -11,9 +11,6 @@
 #include <QVector>
 #include <QWidget>
 
-#include <atomic>
-#include <memory>
-
 #include <s7/transport.hpp>
 
 class QCheckBox;
@@ -33,7 +30,6 @@ class HeadlessNodesPanel : public QWidget
 
 public:
     explicit HeadlessNodesPanel(QWidget* parent = nullptr);
-    ~HeadlessNodesPanel() override;
 
     struct KnownNode {
         QString nodeUuid;
@@ -42,6 +38,7 @@ public:
         QString trustState;
         QString dataEndpoint{};
         QString dataSecurity{};
+        bool verified = false;
     };
     // Discovered nodes with a known node_uuid, sorted by name.
     [[nodiscard]] auto knownNodes() const -> QVector<KnownNode>;
@@ -71,7 +68,6 @@ private:
     void updateNodeLists();
     void updateNetworkOverview();
     void openOrUpdateNodeTab(const NodeSnapshot& node);
-    void addOrUpdateNode(const NodeSnapshot& node);
     static auto normalizeEndpoint(const QString& raw) -> QString;
 
     QLineEdit* seedInput_ = nullptr;
@@ -91,7 +87,6 @@ private:
 
     QMap<QString, NodeSnapshot> nodes_;
     NetworkTaskRunner refreshTask_;
-    std::shared_ptr<std::atomic_bool> refreshCancelled_ = std::make_shared<std::atomic_bool>(false);
 };
 
 } // namespace s7studio::ui

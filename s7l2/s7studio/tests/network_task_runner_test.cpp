@@ -21,25 +21,34 @@ int main(int argc, char** argv)
     bool timedOut = false;
     QTimer::singleShot(5000, &loop, [&] { timedOut = true; loop.quit(); });
 
-    if (!runner.start([] {}, [&] { completed = true; loop.quit(); }, [&](const QString&) { failed = true; })) return 1;
-    if (!runner.busy() || runner.start([] {}, {}, {})) return 2;
+    if (!runner.start([](const std::atomic_bool&) {}, [&] { completed = true; loop.quit(); }, [&](const QString&) { failed = true; })) return 1;
+    if (!runner.busy() || runner.start([](const std::atomic_bool&) {}, {}, {})) return 2;
     loop.exec();
     if (timedOut || !completed || failed || runner.busy()) return 3;
 
     completed = false;
     QString error;
-    if (!runner.start([] {
+    if (!runner.start([](const std::atomic_bool&) {
             throw std::runtime_error("request failed");
         }, [&] { completed = true; loop.quit(); }, [&](const QString& message) { error = message; loop.quit(); })) return 4;
     loop.exec();
     if (timedOut || completed || error != QStringLiteral("request failed") || runner.busy()) return 5;
+    completed = false;
+    if (!runner.start([](const std::atomic_bool& cancelled) {
+            while (!cancelled.load()) std::this_thread::yield();
+        }, [&] { completed = true; loop.quit(); }, {})) return 6;
+    runner.requestCancel();
+    loop.exec();
+    if (timedOut || !completed || runner.busy()) return 7;
     bool callbackAfterClose = false;
     {
         s7studio::ui::NetworkTaskRunner closing;
-        if (!closing.start([] { std::this_thread::sleep_for(std::chrono::milliseconds(20)); },
-                           [&] { callbackAfterClose = true; }, {})) return 6;
+        if (!closing.start([](const std::atomic_bool& cancelled) {
+                               while (!cancelled.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                           },
+                           [&] { callbackAfterClose = true; }, {})) return 8;
     }
     QCoreApplication::processEvents();
-    if (callbackAfterClose) return 7;
+    if (callbackAfterClose) return 9;
     return 0;
 }
