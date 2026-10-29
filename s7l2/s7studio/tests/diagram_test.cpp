@@ -7,6 +7,7 @@
 #include "diagram/diagram_scene.hpp"
 #include "diagram/connection_planner.hpp"
 #include "diagram/net_model.hpp"
+#include "diagram/wire_removal_planner.hpp"
 #include "element_requirements.hpp"
 #include "scene_serializer.hpp"
 
@@ -251,6 +252,43 @@ int main(int argc, char** argv)
         reload(observerScene, restored);
         check(restored.signalWires().size() == 1 && restored.elementNode("observer")->inputs().size() == 2,
               "observer connection survives save and reopen");
+    }
+
+    // Deleting an intermediate branch reattaches its child to the surviving trunk.
+    {
+        DiagramScene removalScene;
+        const auto source = removalScene.addElement(element("source", "Constant"), {40, 40});
+        const auto first = removalScene.addElement(element("first", "Gain"), {400, 40});
+        const auto second = removalScene.addElement(element("second", "Gain"), {400, 240});
+        const auto third = removalScene.addElement(element("third", "Gain"), {400, 440});
+        check(removalScene.connectEnds(out(source), in(first)).isEmpty(), "removal fixture trunk connects");
+        check(removalScene.connectEnds(out(source), in(second)).isEmpty(), "removal fixture branch connects");
+        const auto trunk = wireInto(removalScene, first, 0);
+        const auto branch = wireInto(removalScene, second, 0);
+        check(trunk && branch && branch->upstream.wire.lock() == trunk, "removal fixture has a branch");
+        check(branch && branch->pointsAbsolute().size() >= 2, "removal fixture branch has a route");
+        if (branch && branch->pointsAbsolute().size() >= 2) {
+            check(removalScene.connectEnds(WireEnd::onWire(branch, branch->pointsAbsolute()[1]), in(third)).isEmpty(),
+                  "removal fixture nested branch connects");
+            const auto child = wireInto(removalScene, third, 0);
+            check(child != nullptr, "removal fixture has a nested branch");
+            if (child) {
+                auto planned = WireRemovalPlanner(removalScene.signalWires()).plan({}, {branch});
+                check(planned.removedWires.size() == 1 && planned.removedWires.front() == branch && planned.rehung.size() == 1 &&
+                          planned.rehung.front().wire == child && planned.rehung.front().after.wire.lock() == trunk,
+                      "removal planner rehangs a nested branch on the surviving trunk");
+                check(removalScene.signalWires().size() == 3 && child->upstream.wire.lock() == branch,
+                      "planning removal leaves the wire tree untouched");
+                const int before = removalScene.undoStack()->count();
+                removalScene.applyChange(planned, QStringLiteral("Delete wire"));
+                check(removalScene.signalWires().size() == 2 && child->upstream.wire.lock() == trunk &&
+                          removalScene.undoStack()->count() == before + 1,
+                      "removal and rehang apply as one undo step");
+                removalScene.undoStack()->undo();
+                check(removalScene.signalWires().size() == 3 && child->upstream.wire.lock() == branch,
+                      "undo restores the nested branch topology");
+            }
+        }
     }
 
     DiagramScene scene;

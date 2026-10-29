@@ -130,7 +130,6 @@ private:
     // Topology helpers.
     [[nodiscard]] auto branchesOf(const SignalWire& wire) const -> std::vector<std::shared_ptr<SignalWire>>;
     [[nodiscard]] auto wiresOf(const ElementNode& node) const -> std::vector<std::shared_ptr<SignalWire>>;
-    void collectRemoval(DiagramChange& change, std::vector<std::shared_ptr<SignalWire>> wires) const;
 
     // Gestures.
     [[nodiscard]] auto portAt(QPointF scenePos) const -> std::shared_ptr<PortConnector>;
