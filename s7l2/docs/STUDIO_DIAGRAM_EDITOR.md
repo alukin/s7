@@ -8,7 +8,10 @@ Internals of the `s7studio` diagram editor and its file format. Studio is a runt
 |---|---|
 | `s7studio/src/diagram/items.*` | Scene items, QSchematic subclasses: `ElementNode` (element id, type, params, nested schema, placement, title as typed members; one `PortConnector` per port), `PortConnector` (direction, index, name), `TextFrameNode`, `SignalWire` (its two `WireEnd`s, the bends placed by hand, and its current routed path) |
 | `s7studio/src/diagram/element_ports.*` | The ports an element shows: nested schema `exposed_inputs`/`exposed_outputs`, registry metadata, `Adder` `weights`, `Multiply` `factors`, observer `Scope` channels |
-| `s7studio/src/diagram/diagram_scene.*` | `DiagramScene` (a `QSchematic::Scene`): connection rules, gestures, undoable edits (`DiagramChange`), routing of changed wires, junction placement |
+| `s7studio/src/diagram/diagram_scene.*`, `diagram_change.hpp` | `DiagramScene` (a `QSchematic::Scene`): scene content, Qt wire attachment and one-command undo for each edit |
+| `s7studio/src/diagram/connection_planner.*`, `wire_removal_planner.*`, `diagram_edit_policy.*` | Plan connection, removal and annotation changes before the scene applies them |
+| `s7studio/src/diagram/diagram_interaction.*`, `wire_context_menu.*` | Transient draw/bend/move gestures, previews, hit testing and wire menu actions |
+| `s7studio/src/diagram/diagram_routing.*`, `diagram_geometry.*` | Route validation, junction placement, preview and repair using the grid geometry shared by the editor |
 | `s7studio/src/diagram/net_model.*` | Connections read from the wire trees, wires that connect nothing, the runtime schema of the scene |
 | `s7studio/src/diagram/wire_router.*` | Orthogonal A* router on the grid |
 | `s7studio/src/scene_serializer.*` | `DiagramDocument` ↔ scene (format version 2); layered auto-layout for plain schemas |

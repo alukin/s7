@@ -35,11 +35,25 @@ auto resolveError(const boost::json::object& schema) -> std::optional<QString>
 
 } // namespace
 
-ConnectionPlanner::ConnectionPlanner(std::vector<std::shared_ptr<SignalWire>> wires,
+ConnectionPlanner::ConnectionPlanner(std::vector<std::shared_ptr<ElementNode>> nodes,
+                                     std::vector<std::shared_ptr<SignalWire>> wires,
                                      std::function<boost::json::object()> schema,
                                      std::optional<bool> typesResolve)
-    : wires_(std::move(wires)), schema_(std::move(schema)), typesResolve_(typesResolve)
+    : nodes_(std::move(nodes)), wires_(std::move(wires)), schema_(std::move(schema)), typesResolve_(typesResolve)
 {
+}
+
+bool ConnectionPlanner::contains(const WireEnd& end) const
+{
+    if (end.isPort()) {
+        const auto node = end.node.lock();
+        return node && end.port() && std::ranges::any_of(nodes_, [&](const auto& current) { return current == node; });
+    }
+    if (end.isJunction()) {
+        const auto wire = end.wire.lock();
+        return wire && std::ranges::any_of(wires_, [&](const auto& current) { return current == wire; });
+    }
+    return false;
 }
 
 auto ConnectionPlanner::trunkOf(const WireEnd& output) const -> std::shared_ptr<SignalWire>
@@ -59,7 +73,9 @@ auto ConnectionPlanner::driverEnd(const WireEnd& end) const -> std::optional<Wir
     }
     if (end.isJunction()) {
         if (const auto wire = end.wire.lock()) {
-            if (const auto* root = NetModel::rootOf(*wire); root && root->upstream.isOutput()) {
+            if (const auto* root = NetModel::rootOf(*wire);
+                root && root->upstream.isOutput() &&
+                std::ranges::any_of(wires_, [&](const auto& current) { return current.get() == root; })) {
                 return root->upstream;
             }
         }
@@ -99,6 +115,10 @@ auto ConnectionPlanner::check(const WireEnd& a, const WireEnd& b) const -> QStri
     const int kb = kind(b);
     if (ka == 3 || kb == 3) {
         return QStringLiteral("A wire connects ports and wires.");
+    }
+    if (!contains(a) || !contains(b)) {
+        return (a.isJunction() || b.isJunction()) ? QStringLiteral("The wire is no longer in the diagram.")
+                                                  : QStringLiteral("The port is no longer in the diagram.");
     }
     if (a.sameAs(b)) {
         return QStringLiteral("Pick another port.");

@@ -317,6 +317,11 @@ void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attache
 auto DiagramRouting::previewRoute(const WireEnd& start, const QVector<QPointF>& bends, const QPointF end, const WireEnd* target) const
     -> QVector<QPointF>
 {
+    const auto startWire = start.isJunction() ? start.wire.lock() : nullptr;
+    if (start.isJunction() && (!startWire ||
+        !std::ranges::any_of(wires_, [&](const auto& current) { return current == startWire; }))) {
+        return {};
+    }
     const auto startAnchor = anchorOf(start);
     if (!startAnchor) {
         return {};
@@ -356,7 +361,7 @@ auto DiagramRouting::previewRoute(const WireEnd& start, const QVector<QPointF>& 
     for (const auto& rect : rects) {
         router.addObstacle(QRect(toGrid(rect.topLeft()), toGrid(rect.bottomRight())));
     }
-    const SignalWire* startNet = start.isJunction() ? NetModel::rootOf(*start.wire.lock()) : nullptr;
+    const SignalWire* startNet = startWire ? NetModel::rootOf(*startWire) : nullptr;
     std::unordered_map<const SignalWire*, int> nets;
     for (const auto& wire : wires) {
         const SignalWire* root = NetModel::rootOf(*wire);
