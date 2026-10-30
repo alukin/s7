@@ -11,7 +11,16 @@ Companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md` (the language-neutra
 
 ## Next-release role and current evidence
 
-The next release has one goal: dependable local simulation in Studio with its bundled runtime. [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) defines its acceptance criteria. This document remains the longer-term numerical methodology; completing every research stage below is not a condition of that release. Select a supported example/configuration matrix, validate it independently, and label examples outside the validated envelope experimental. Broad nonlinear integrator comparison, new methods, large-scale studies and the full Lorenz/statistical programme remain later research.
+The earlier local-simulation release targeted dependable simulation in Studio
+with its bundled runtime. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) defines
+that release's acceptance criteria; completing every research stage below was
+not required. This document remains the numerical methodology: select a
+supported example/configuration matrix, validate it independently, and label
+examples outside the validated envelope experimental. Broad nonlinear
+integrator comparison and feedback settling are now an explicit
+[0.2.0 research workstream](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned),
+with [N0–N4 milestones](RELEASE_0.2.0_WORKPLAN.md#numerical-research-milestones--p1-planned).
+Production adoption of new methods remains conditional on the research.
 
 Implemented evidence as of 2026-10-19:
 

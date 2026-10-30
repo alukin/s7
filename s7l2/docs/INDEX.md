@@ -42,20 +42,22 @@ Siebert's book as the maintainer's stated design inspiration, with reading
 status and attribution rules for planned example adaptations.
 
 The [0.2.0 goals](RELEASE_0.2.0.md) include indexed serial runtime execution,
+P1 numerical integration and feedback-settling research with a published report,
 qualified multi-node operation on local and remote hosts, remote node
 control/configuration/restart and Trusted Networks settings, certificate viewing
 and node certificate creation, Studio printing of diagrams and observation
 graphs, and a software signal-generator element inspired by the UNI-T UTG932E.
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) records ownership, distributed
-architecture and implementation steps, PR review gates and the concurrent
-simulation/Studio workstreams.
+architecture and implementation steps, numerical research milestones N0–N4,
+PR review gates and the concurrent Studio workstream. Experimental results do
+not imply a production integrator or settling algorithm for 0.2.0.
 Within-node parallel scheduling and its unresolved design choices are recorded
 for [0.3.0 planning](RELEASE_0.3.0_RUNTIME_PARALLELISM.md).
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
 3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
-4. `VISUAL_NUMERICAL_TESTS_PLAN.md` — the diagram-based, visualized numerical-validation test track (companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md`).
+4. [VISUAL_NUMERICAL_TESTS_PLAN.md](VISUAL_NUMERICAL_TESTS_PLAN.md) — the diagram-based numerical-validation methodology (companion to the [language-neutral test plan](../../doc/S7_Numerical_Modeling_Test_Plan.md)). The [0.2.0 research matrix](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned) assigns the next experiments.
 
 Local simulation quality was the 0.1.x target. The 0.2.0 goals and work plan now
 define the next release direction; open problems and the visual numerical plan
@@ -121,6 +123,6 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 
 - [Automated Studio GUI tests](STUDIO_GUI_TESTING.md): Qt Test/Quick Test workflows, Xvfb, real 3D rendering, skips and failure artifacts.
 
-- [Numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md): supported linear configurations, independent references, tolerances and bundled-example classification.
+- [Numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md): currently validated linear configurations, independent references, tolerances and bundled-example classification; distinct from the planned 0.2.0 research matrix.
 
 - [Studio visual usability audit (2026-10-21)](usability/2026-10-21/AUDIT.md): production screenshots, severity-ranked findings, incremental improvements and human-review limits.

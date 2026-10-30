@@ -130,7 +130,10 @@ it. The analog-computer and causal-memory contracts above remain the design
 boundary; neither locating the book nor the maintainer's tentative recollections
 authorize hidden global solver passes. Euler feedback/settling research and the
 uncertainty about the historical method are recorded in
-[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
+[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md). The [0.2.0 numerical research
+workstream](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned)
+studies alternative methods on a separate branch under this causal model;
+it does not itself authorize production runtime changes.
 
 The maintainer authorized adapting examples from this book and referencing it.
 For each adaptation, record the edition, chapter, printed page and example or

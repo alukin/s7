@@ -4,9 +4,9 @@ Working plan recorded 2026-10-30. The maintainer and Codex own architecture,
 development planning, simulation accuracy, integrator research and Studio
 usability. teren-ukr leads the distributed work, building on his Python-node
 work. The ownership split reflects that agreement; the steps below are a
-proposed sequence. This does not change the
-[0.2.0 release scope](RELEASE_0.2.0.md) or silently assign the separate
-integrator research to that release.
+proposed sequence. The [0.2.0 release scope](RELEASE_0.2.0.md) assigns the
+separate numerical research branch to this release as a P1 research deliverable,
+without requiring production adoption of an experimental algorithm.
 
 ## Ownership and decision boundaries
 
@@ -15,7 +15,7 @@ integrator research to that release.
 | Causal model, runtime and protocol architecture, release gates | Maintainer and Codex | Agree on semantics and an executable contract before implementations diverge. |
 | Distributed transport, multi-node lifecycle, headless administration and Python interoperability | teren-ukr | C++ remains the reference implementation. Changes to its protocol, authorization or causal behavior require maintainer/Codex review. |
 | Within-node parallel execution (0.3.0 planning) | Maintainer and Codex | Deferred from 0.2.0. Scheduling, cost and plugin-safety decisions remain open; the indexed serial runtime is the reference. |
-| Numerical validation and integrator/feedback research | Maintainer and Codex | Research runs separately; a release change needs its own design and reference-backed acceptance. |
+| Numerical integration and feedback-settling research (P1, planned) | Maintainer and Codex | Deliver reproducible evidence and conclusions for 0.2.0 from a separate branch; production integration requires explicit review and decision. |
 | Studio editing, observation and administration UI | Maintainer and Codex | Headless services expose typed operations; Qt remains a client. Coordinate request/result types with the distributed work. |
 
 Small PRs should follow these boundaries. A Python implementation does not
@@ -86,6 +86,32 @@ implementation. D4's generated credentials
 precede claims about remote-host provisioning. Studio's settings and node UI
 should consume the reviewed D3 service rather than introduce a second protocol.
 
+## Numerical research milestones — P1 planned
+
+The maintainer and Codex own N0–N4. This work proceeds on a dedicated research
+branch independently of D0–D5 and Studio delivery. The
+[release scope](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned)
+defines the model matrix, architecture constraints and acceptance gate;
+[open problems](OPEN_PROBLEMS.md#simulation-accuracy--numerical-research-for-020)
+records unresolved decisions. Existing indexed serial execution is the
+performance baseline, not a pending numerical milestone.
+
+| Milestone | Deliverable and review gate |
+| --- | --- |
+| N0 — Experimental specification | Define each integrator update and feedback-settling contract, including publication, held state, iteration and failure semantics. Freeze reference models, parameters, timestep grids and independent references. Record baseline measurements and correctness, convergence and performance metrics before trying new methods. |
+| N1 — Experimental implementations | Implement candidate methods on the research branch while preserving production behavior. Use configurable iteration limits and tolerances where relevant; expose non-finite values, nonconvergence and other numerical failures reproducibly. No production merge follows automatically. |
+| N2 — Numerical validation | Run harmonic oscillator, nonlinear pendulum, Van der Pol, Lorenz and linear/nonlinear closed-loop cases against independent references. Test multiple timesteps, long-duration behavior and convergence/failure cases; use short-horizon and statistical/geometric criteria for chaos. |
+| N3 — Performance analysis | Compare accuracy versus timestep and computational budget against the indexed serial runtime. Record per-step time, element evaluations, feedback iterations, memory where relevant, failure counts, long-term stability, regressions and instability. Distinguish numerical improvement from extra evaluations alone. |
+| N4 — Research conclusions | Publish a technical report with methods, reproducible results, limits and recommendations. Name promising, rejected and unresolved approaches; make an explicit recommendation on whether any implementation merits production review. Negative or inconclusive results complete the research if properly documented. |
+
+N0 precedes N1; N1 enables N2 and N3; N4 uses both validation and performance
+evidence. The 0.2.0 research gate requires the branch artifacts and report,
+including failed experiments. A proposed production change has a separate
+review: demonstrated benefit, numerical and causal-semantic approval, preserved
+existing behavior or an explicit mode, regression/compatibility checks and an
+explicit maintainer decision. No new integrator or settling mechanism is a
+required production capability for 0.2.0.
+
 ## PR review agreement
 
 The maintainer requests a Codex review of every distributed PR before merge.
@@ -119,9 +145,9 @@ not establish an unattended monitor.
    documents aligned.
 2. **Simulation accuracy, research and Studio usability:** extend independent
    numerical references and supported envelopes for saved models before
-   changing execution. Investigate integrators and feedback settling on a
-   separate research branch without adding a global solver; compare methods
-   and timestep refinement before proposing a release change. Improve diagram
+   changing execution. Deliver N0–N4 on a separate research branch without
+   adding a global solver; compare methods, feedback settling and timestep
+   refinement before proposing a production change. Improve diagram
    sizing/pictograms, printing and instrument controls through focused Studio
    owners; build the signal generator from schema elements with headless tests
    and Studio controls. Certificate viewing and network settings UI consume

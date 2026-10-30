@@ -3,6 +3,9 @@
 This matrix defines a bounded numerical claim. Automated Studio coverage uses
 its production document parser, run controller, worker and authoritative
 recording source; it does not establish manual GUI usability or platform support.
+The separate [0.2.0 numerical research matrix](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned)
+plans additional method and feedback-settling comparisons. Those experiments
+are not validated by the evidence below.
 
 ## Linear response envelope
 

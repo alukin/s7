@@ -1,4 +1,4 @@
-# S7 0.2.0 — runtime, networking, diagram visuals, printing and signal generator
+# S7 0.2.0 — runtime, networking, numerical research and Studio
 
 Runtime/node goals agreed with the maintainer on 2026-10-23; Studio diagram
 and observation-graph printing added at the maintainer's request on 2026-10-24.
@@ -13,11 +13,11 @@ baseline. The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) assigns distributed
 delivery, simulation and Studio work, with
 development steps and PR review gates.
 
-Scope clarification (2026-10-25): integrator and feedback-settling research is a
-separate project with no release assignment yet, outside both 0.1.1 and 0.2.0.
-The maintainer and Codex will work on that research separately. Its findings
-require review before any release integration is considered; see
-[OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
+Scope update (2026-10-30): numerical integration and feedback-settling research
+is a P1 0.2.0 workstream, conducted on a separate research branch. This
+supersedes the 2026-10-25 *release assignment* while preserving its requirement
+for review before production integration. Research results, including negative
+results, are a release deliverable; a new production algorithm is conditional.
 
 ## Indexed serial runtime; parallel execution deferred
 
@@ -34,6 +34,84 @@ plugin concurrency and serial/parallel selection are open decisions. The
 [0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) preserves the
 evidence, candidate ideas and unresolved contracts. It does not commit a
 particular scheduler or guarantee parallel execution in 0.3.0.
+
+## Numerical Integration and Feedback-Settling Research — P1 planned
+
+Compare existing and experimental integration methods, investigate within-step
+feedback settling and zero-delay approaches, and measure numerical accuracy,
+stability, convergence and performance. Publish evidence-based recommendations
+for future runtime work. The experimental methods, where mathematically
+applicable, are forward Euler, symplectic Euler (Euler–Cromer), the existing
+implicit trapezoidal integration, TPT/Zavalishin-style integration, and Euler
+integration combined with iterative feedback settling. These are distinct
+algorithms, not presumed equivalent. Record each integrator's state-update
+formula separately from the algorithm that resolves its feedback equations.
+
+Distinguish publication of causal memory across model steps, invalid
+direct-feedthrough algebraic cycles in the current validator, bounded iterative
+solution of an implicit equation (as in the [existing coupled Trapezoid
+stage](TRAPEZOID_INTEGRATION.md)), and experimental local feedback iteration
+intended to reduce artificial delay. A zero-delay loop may have no solution or
+multiple solutions; simple iteration may diverge even when a solution exists.
+No convergence or general loop support is assumed.
+
+The planned validation matrix below reuses committed models where possible.
+N0 in the [work plan](RELEASE_0.2.0_WORKPLAN.md) freezes equations, parameters,
+initial states, timestep grids, duration, method settings, reference provenance
+and metric tolerances before comparison. Existing tests cover only their stated
+envelopes in the [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md)
+and example READMEs; the additional method/settling comparisons are planned,
+not validated.
+
+| Model and starting configuration | Independent reference | Measures |
+| --- | --- | --- |
+| Harmonic oscillator, `x'=v, v'=-x`, `(x,v)=(1,0)`; 200 s at 1 and 2 kHz | Analytical sinusoid and exact discrete recurrences where applicable | Phase, amplitude drift, energy, stability and frequency distortion |
+| Nonlinear pendulum, `theta''=-9.81 sin(theta)`, `(theta,omega)=(1.5,0)`; 100 s at 1 and 10 kHz | Elliptic-function solution cross-checked by independent RK4, as in the [validated baseline](../examples/pendulum/README.md) | Energy conservation or drift, long-run behavior, period, phase-space trajectory and timestep convergence |
+| Van der Pol, `x''-mu(1-x²)x'+x=0`, `mu=1,3`; initial `(x,v)=(0.1,0),(2,0),(4,0)`; 40/60 s at 1 and 2 kHz | Independently refined high-accuracy solver, extending the [teaching examples](../examples/van_der_pol/README.md) | Nonlinear oscillation, limit-cycle amplitude/period, transient convergence and sensitivity to method/feedback evaluation |
+| Lorenz, `(sigma,rho,beta)=(10,28,8/3)`, initial `(1,1,1)` and `(1.000001,1,1)`; 40 s at 4 and 8 kHz | Independent high-accuracy short-horizon trajectory; independently sampled long-run statistics, extending the [teaching example](../examples/lorenz/README.md) | Early trajectory error, initial-condition sensitivity, long-run statistics, attractor geometry and numerical stability; no long-run pointwise equality gate |
+| Linear first-order plant with P/PI control and nonlinear saturated PI control; 12 s at 1 and 2 kHz, based on the [control laboratory](../examples/control/README.md) | Analytical linear response/equilibrium where available and independently computed nonlinear response | Discrete-feedback delay, phase margin/stability, settling residual and convergence, iterations, computational cost and nonconvergence/multiple- or no-solution cases |
+
+The central questions are:
+
+1. Can local feedback iteration improve analog-computer-style simulation fidelity?
+2. Under which conditions does iterative settling converge?
+3. How do convergence rate and accuracy depend on timestep, loop gain, nonlinearity and topology?
+4. Can settling reduce artifacts of explicit model-step delays?
+5. How does settling interact with each integration formula?
+6. What happens when feedback equations have multiple solutions or no solution?
+7. Can the mechanism preserve deterministic causal execution?
+8. What is its computational cost per accepted model step?
+9. Is the complexity justified by measurable improvement beyond merely doing more evaluations?
+
+Use the completed [indexed serial runtime](RUNTIME_PERFORMANCE_ARCHITECTURE.md)
+as the execution baseline. Compare error versus timestep and cost, including
+common timesteps and comparable computation budgets. Record runtime per model
+step, element evaluations, feedback iterations, convergence failures, memory
+where relevant and long-term stability. Separate truncation error, feedback
+solver residual and modeling error where possible. Smaller local error in one
+example does not establish a generally better method.
+
+S7 remains a causal graph runtime with `Element::step()` as the fundamental
+element interface. Preserve explicit causal-memory publication, signal types,
+connections, deterministic execution for supported experiments and headless
+operation. Do not introduce a global ODE solver as a replacement or a parallel
+graph scheduler in this workstream; independent ODE solvers are permitted as
+references. The coupled Trapezoid stage is a useful existing implementation,
+but experiments must preserve its current semantics. Any proposed change to
+causal ordering, publication or loop resolution needs separate architectural
+review.
+
+The **0.2.0 research deliverable** is complete only when a dedicated research
+branch contains experimental implementations, reproducible tests/benchmarks
+and documented independent references, with comparative accuracy, convergence,
+stability and performance results, known limits and failed experiments, and a
+published technical report with recommendations. This plan alone does not
+complete the milestone. Inconclusive or negative findings are valid outcomes.
+Production integration is optional and requires a demonstrated advantage on
+appropriate models, numerical and causal-semantic review, preserved existing
+behavior unless an explicit new mode is introduced, compatibility/regression
+tests and an explicit maintainer decision. No new integrator or settling method
+is required in the production runtime for 0.2.0.
 
 ## Multiple nodes on local and remote hosts
 
@@ -269,7 +347,9 @@ Plan certificate viewing/creation and remote node administration alongside
 multi-node setup, so networking acceptance uses the provisioning and
 configuration/restart workflows as well as protocol fixtures.
 
-Additional integration methods, implicit multi-rate conversion, durable stream
-journals and a new remote-observation API are not implied by these goals. Their
-scope requires separate decisions. Concrete graph sizes, node counts, platform
-targets and performance thresholds remain to be chosen from measured baselines.
+Additional integration methods are experimental under the numerical research
+workstream; production adoption needs the review above. Implicit multi-rate
+conversion, durable stream journals and a new remote-observation API are not
+implied by these goals. Their scope requires separate decisions. Concrete graph
+sizes, node counts, platform targets and performance thresholds remain to be
+chosen from measured baselines.

@@ -226,13 +226,15 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 - **Checked against the Stage 2–5 test cases in `VISUAL_NUMERICAL_TESTS_PLAN.md`:** the pendulum needs `Trig` and `Divider`; Van der Pol's `x²` and Lorenz's `xy`/`xz` terms need only `Multiply`, and `ComplexToMagnitudePhase` already exists for Stage 5's frequency-response work. Step/ramp/impulse test inputs are all constructible from existing elements (`Constant`; `EulerIntegrator` fed by a `Constant` for a ramp; `Adder(weights=[1,−1])` combining a `Constant` with its own `Delay` for an impulse) — convenient dedicated source elements would be nicer, not necessary.
 - **The listed Math Operations/Discontinuities gaps are implemented in `s7core`:** `MathFunction` (`sqrt`, `exp`, natural `log`, parameterized `pow`, `abs`, `reciprocal`), binary `Power`, `Saturation`, configurable 2–64 input `MinMax`, and `Sign`; `Divider` was added for the full double-pendulum model. These operate on real numeric types as documented in `ELEMENT_DEV_GUIDE.md`. This closes the specific list above, not all of Simulink's libraries or complex-valued math operations.
 
-## Simulation accuracy — known integrator limits; systematic comparison deferred
+## Simulation accuracy — numerical research for 0.2.0
 
-- **Release boundary (maintainer, 2026-10-25):** integrator and feedback-settling
-  research is a standalone project with no release assignment yet, outside both
-  0.1.1 and 0.2.0. Keep it on an isolated research branch and review its findings
-  before considering release integration. This supersedes the earlier 0.1.1
-  oscillator investigation/example assignment.
+- **Release assignment (2026-10-30, planned):** the maintainer and Codex own
+  integrator and feedback-settling research as a P1 0.2.0 workstream on a
+  dedicated branch. This supersedes the 2026-10-25 *unassigned* decision,
+  which had already removed research from 0.1.1. The [0.2.0 scope](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned)
+  defines the experimental matrix and release gate; [N0–N4](RELEASE_0.2.0_WORKPLAN.md#numerical-research-milestones--p1-planned)
+  define delivery. New production methods remain conditional, and historical
+  0.1.1 notes retain their original dated decision.
 
 - **Historical feedback-settling input (maintainer, 2026-10-24):** the first S7
   implementation, roughly 30 years ago, used iterations to settle feedback-
@@ -250,18 +252,18 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
   causal memory and local analog-computer networks. The current coupled
   Trapezoid endpoint solve already performs bounded within-step fixed-point
   iteration; any broader feedback-settling method needs its own contract and
-  independent numerical comparisons. No new release assignment is decided.
+  independent numerical comparisons. Its exact historical implementation
+  remains unknown.
 
-- **Research task — Euler feedback accuracy:** reproduce the long-run drift
-  reported for `2int_osc`, then compare the current explicit Euler graph,
-  existing Euler–Cromer/Symplectic compositions and coupled Trapezoid within
-  their documented applicability. Separate amplitude, energy, phase and state
-  errors; vary timestep and run length against independent references. Study
-  what the proposed settling iterations would evaluate and commit before
-  prototyping them. Do not identify the historical algorithm by inference or
-  promise a fixed accuracy multiplier. This standalone research does not
-  authorize changes to production core execution ordering or introduction of a
-  global solver during the UI work.
+- **Research task — Euler feedback accuracy:** N0–N4 must reproduce the
+  long-run drift reported for `2int_osc`, then compare explicit Euler,
+  Euler–Cromer/Symplectic, coupled Trapezoid, TPT/Zavalishin-style methods and
+  Euler with iterative settling only where their equations apply. Separate
+  amplitude, energy, phase and state errors; vary timestep and run length
+  against independent references. Specify trial evaluation, held state and
+  single commit before prototyping settling. Do not infer the historical
+  algorithm or promise a fixed accuracy multiplier. Research does not authorize
+  production ordering changes or a global solver.
   The maintainer explicitly reaffirmed the analog-computer approach and named
   Siebert's *Circuits, Signals, and Systems* as the original inspiration.
   [SIMULATION_MODEL.md](SIMULATION_MODEL.md) records the verified book reference,
@@ -273,7 +275,40 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 - **Partial mitigation implemented (2026-10-19):** `SymplecticIntegrator` (`s7core/include/s7/elements.hpp`'s `SymplecticIntegratorT<Type>`, semi-implicit Euler / Euler-Cromer: `v[n+1] = v[n] + dt·a[n]`, `x[n+1] = x[n] + dt·v[n+1]`, one `acceleration` input, `position`/`velocity` outputs; the bound requires acceleration to depend only on position, not velocity). Verified against the same oscillator (x'' = −x via `Gain(−1)` feeding its own `acceleration` input): amplitude stayed within [0.99975, 1.00025] over a 400 s run (vs. plain Euler's +10.5% at only 200 s) — bounded, not drifting. Regression-tested by `s7tests/symplectic_oscillator_smoke.cpp` (`s7tests_symplectic_oscillator_smoke`), which pins both the plain-Euler drift (against the closed-form growth factor) and the symplectic integrator's bound. **Equivalent to an existing-element composition, found afterward:** `Gain(dt)` feeding an `Accumulator` (`Feedthrough::Direct`, so its updated value is visible the same step) for velocity, wired into an `EulerIntegrator` (causal memory, closes the loop) for position, is the identical semi-implicit Euler recursion — verified to bound amplitude the same way. `SymplecticIntegrator` is the one-element convenience for this specific x''=a(x) pattern, not the only way to reach it; an earlier claim in this conversation that no composition of existing elements could do this was wrong.
 - **Coupled-linear comparison and implicit trapezoid implemented (2026-10-19):** nine diagrams in [`examples/double_pendulum`](../examples/double_pendulum/README.md) cover slow, fast and mixed modes with Euler, Symplectic and implicit Trapezoid. The earlier supplied-sample-plus-delay arrangement was first order and had substantial energy growth. Default Trapezoid is now causal memory with a coupled implicit endpoint solve; its diagrams need no artificial delays. Tests require second-order state convergence and bounded quadratic energy error on this linear model at 1/10/100 kHz over 20 seconds. The solver uses at most 64 fixed-point iterations and reports nonconvergence; this does not establish stiff-system support. See [the contract](TRAPEZOID_INTEGRATION.md) and the examples README for current results. Broader nonlinear/stiff/chaotic comparative research remains open.
 - **Nonlinear single-pendulum baseline validated (2026-10-19):** [three diagrams](../examples/pendulum/README.md), 100 seconds at 1/10 kHz, independent elliptic/RK4 reference and fixed error budgets. Symplectic and implicit Trapezoid meet these budgets; Euler fails because of accumulated energy/phase drift. Full bundled-runner Scope recording and CSV are verified against headless samples with zero drops and exact double round trips across six runs. This closes this pendulum baseline, not stiff/chaotic comparisons or general recording-overload qualification.
-- **Explicitly not solved, by the user's own request (deferred to later research):** a broader systematic comparison of `EulerIntegrator` / `TrapezoidIntegrator` / `SymplecticIntegrator` (and any future integrator) on more complicated, especially nonlinear, systems beyond the validated single-pendulum baseline — Van der Pol, the double pendulum, and other chaotic/stiff systems already referenced in `VISUAL_NUMERICAL_TESTS_PLAN.md`. Open questions include: how each integrator's energy/amplitude behavior scales with nonlinearity and step size, whether `SymplecticIntegrator`'s bounded-but-not-exact energy error matters for long chaotic-system runs (where trajectories diverge regardless of integrator, but statistical/energy properties might still be compared), and whether a higher-order symplectic scheme (e.g. Störmer–Verlet/leapfrog, second-order accurate vs. `SymplecticIntegrator`'s first order) is worth adding. The local release will validate and document the supported uses of existing methods; adding methods or the full comparative research programme remains deferred until a concrete simulation requirement justifies it.
+- **Broader comparison now planned, not validated:** the 0.2.0 research matrix
+  extends beyond the existing single-pendulum and coupled-linear baselines to
+  Van der Pol, Lorenz and feedback control. Existing teaching diagrams and
+  focused smoke checks do not establish method superiority, general stiff
+  support or long-run chaotic trajectory agreement. The full nonlinear double
+  pendulum and higher-order symplectic methods such as Störmer–Verlet remain
+  possible follow-up questions, not additional required 0.2.0 methods.
+
+Unresolved research decisions are separated below; these are questions, not
+claims about an implemented settling method:
+
+- **Mathematical:** Which model classes and loop equations admit a unique
+  solution? When do multiple or no solutions occur? Which energy, period,
+  limit-cycle or statistical properties are meaningful for each model?
+- **Numerical algorithm:** Which update equation and feedback-evaluation rule
+  does each candidate actually implement? Under what timestep, gain,
+  nonlinearity and topology is iteration contractive? How should residual,
+  tolerance, iteration cap and failure be defined? Can local settling improve
+  fidelity and reduce explicit-delay artifacts without merely buying accuracy
+  through more evaluations? How do methods interact in mixed graphs?
+- **Runtime architecture:** Can trial evaluations preserve deterministic causal
+  execution, staged publication and one state commit while excluding unsafe
+  stateful or side-effecting dependencies? Direct-feedthrough algebraic loops
+  are currently invalid; any new loop-resolution, ordering or publication
+  contract needs separate architectural review. No parallel scheduler belongs
+  to this workstream.
+- **Performance:** Compare error at equal timesteps and equal computational
+  budgets against indexed serial execution. Measure accepted-step time,
+  element evaluations, iteration counts, convergence failures, memory and
+  long-run stability. Determine when added complexity pays for itself.
+- **Production integration:** Which, if any, method demonstrates a meaningful
+  advantage, preserves existing behavior and passes numerical, causal and
+  regression review? The maintainer must decide explicitly; inconclusive or
+  negative research can still satisfy the 0.2.0 research deliverable.
 
 ## P2 — Code structure and maintainability
 
