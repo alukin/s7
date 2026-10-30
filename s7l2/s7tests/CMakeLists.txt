@@ -46,6 +46,10 @@ s7_add_test_executable(s7tests_symplectic_oscillator_smoke symplectic_oscillator
 target_link_libraries(s7tests_symplectic_oscillator_smoke PRIVATE s7core)
 add_test(NAME s7tests_symplectic_oscillator_smoke COMMAND s7tests_symplectic_oscillator_smoke)
 
+# Explicit research-only benchmark; not part of production runtime or CTest.
+add_executable(s7tests_numerical_research_baseline EXCLUDE_FROM_ALL numerical_research_baseline.cpp)
+target_link_libraries(s7tests_numerical_research_baseline PRIVATE s7core)
+
 # Headless .s7diagram + probe-sidecar runner (diagram_harness.hpp,
 # ../docs/VISUAL_NUMERICAL_TESTS_PLAN.md section 2); diagrams/*.s7diagram are
 # Studio-openable.
