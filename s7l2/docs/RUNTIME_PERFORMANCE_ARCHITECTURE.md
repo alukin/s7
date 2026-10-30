@@ -320,6 +320,30 @@ same compiled graph, including narrow chains where the serial path should win.
 The benchmark correction above shows why both branch call counts and output
 parity must be checked: equal outputs alone missed duplicated work.
 
+### Estimating region cost
+
+Yes: assign each compiled region an estimated serial cost `C(R)` in nanoseconds.
+Start with the sum of calibrated costs for its element types and parameters,
+then validate that estimate by timing whole regions in an opt-in serial
+benchmark. Whole-region timing includes virtual calls and locality effects that
+a simple element count misses. FFT size and plan, FIR tap count, and nested
+schema contents require different estimates; unknown or highly variable work
+uses the serial path until measured and audited. Keep concurrency safety as a
+separate gate from cost.
+
+For the direct-feedthrough region DAG, let `W = sum C(R)` be total work and
+`S = max_path sum C(R)` the longest causal path. With `p` workers, an optimistic
+parallel lower bound is `max(S, W/p)`. If the potential saving
+`W - max(S, W/p)` is smaller than measured dispatch/rendezvous overhead plus
+a safety margin, use the serial path immediately. For two independent chains,
+the saving is bounded by the cheaper chain's cost: a very expensive branch
+cannot make a tiny sibling worthwhile to dispatch. This bound is only a
+filter; cache contention and CPU frequency can raise actual parallel time.
+Benchmark candidate layouts on the target hardware and enable parallel mode
+only when its measured benefit clears the margin. Reuse the compiled region
+graph for either mode; the one-worker traversal still uses the canonical
+`causal_execution` order without queue operations.
+
 Object storage still has a locality cost, but arraying execution records and
 removing per-step hash lookups already has a measured opportunity. Measure
 cache misses, latency and memory use on actual graphs before considering
@@ -357,4 +381,5 @@ remain release gates.
 
 - [oneTBB Dependency Flow Graph Example](https://oneapi-spec.uxlfoundation.org/specifications/oneapi/v1.1-rev-1/elements/onetbb/source/flow_graph/dependency_flow_graph_example): predecessors determine when joined work may run.
 - [oneTBB Task Scheduler](https://oneapi-spec.uxlfoundation.org/specifications/oneapi/v1.4-rev-1/elements/onetbb/source/task_scheduler): pool tasks should represent enough nonblocking computation to justify dispatch.
+- [Blumofe and Leiserson, Scheduling Multithreaded Computations by Work Stealing](https://www.cs.cornell.edu/courses/cs612/2006sp/papers/blumofe94.pdf): work and critical-path length frame the optimistic parallel bound; measured overhead and resource contention remain separate.
 - [Linux kernel, False Sharing](https://docs.kernel.org/kernel-hacking/false-sharing.html): neighboring worker writes can cause cache-line contention; profile before padding.
