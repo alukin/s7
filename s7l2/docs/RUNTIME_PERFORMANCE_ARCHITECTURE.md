@@ -1,8 +1,115 @@
 # Runtime performance architecture investigation
 
-Status: proposal for 0.2.0 design review, 2026-10-30. This document records
-measurements and a direction; it does not change runtime semantics or claim a
-supported performance envelope.
+Status: indexed serial execution implementation for 0.2.0, 2026-10-30.
+Earlier parallel-scheduler measurements and proposals below remain research,
+not a supported performance envelope.
+
+## Indexed serial execution design
+
+The compiler currently keeps topologically ordered string IDs. Each runtime
+step resolves those IDs through the element hash map for direct evaluation,
+memory staging and every coupled trapezoid RHS iteration. Output snapshots
+and virtual dispatch are separate costs and stay unchanged in this change.
+
+The executable graph will keep its ID orders and maps for diagnostics and
+public lookup, plus parallel vectors of `Element*` in exactly the same order.
+The compiler fills these vectors after validation, element creation, input
+binding and scheduling. The map owns each element through `unique_ptr`;
+moving the graph or rehashing its map moves `unique_ptr` objects, not their
+heap-allocated elements. The pointers therefore remain stable while the graph
+owns its elements. Runtime construction moves the complete graph into its
+private member and uses the records directly. Destruction destroys the records
+with the graph. Graph replacement requires constructing a new runtime from a
+new compiled graph; nested schemas already discard and recompile their private
+runtime when their schema changes.
+
+The phases remain publication of previously staged causal-memory outputs,
+causal output snapshots, direct elements, coupled trapezoid trial evaluation,
+ordinary causal-memory staging, then step-count advance. The same memory-order
+index continues to select its output range and implicit-stage flag. Failed
+direct or trial evaluation restores published outputs; a failing memory step
+restores only that memory element's outputs, as before. Private state and
+external side effects have no new rollback guarantee. Existing port pointers,
+signal types, plugin-created elements and nested runtimes use the same
+`Element::step()` contract. Only the dispatch reference changes.
+
+Expected gain is the removal of repeated string hashing and map traversal,
+particularly for small elements and repeated implicit iterations. Compiling
+three pointer vectors adds linear storage and a small one-time lookup cost.
+Virtual calls, output snapshots, nested-schema output lookup and actual element
+work remain potential bottlenecks. The benchmark below measures the effect
+with the full production step path.
+
+## Indexed execution implementation and measurements
+
+`Compiler::compile` now resolves each ordered ID to an `Element*` after binding
+and scheduling, storing three pointer vectors on `ExecutableGraph`. Runtime
+initialization uses them to build the existing output ranges and snapshots;
+`NodeRuntime::step()` and coupled trials call these pointers directly. The ID
+orders, UUID mappings, output storage and phase boundaries are unchanged.
+The only per-step string lookup left in these workloads is inside a nested
+`Schema::step()` when it reads each exposed internal output; optimizing that
+boundary is separate from this dispatch change.
+
+The opt-in benchmark `s7core/benchmarks/indexed_execution.cpp` uses the full
+`NodeRuntime::step()` path. It covers 64/512 Gain chains, 512 independent
+Gains, the committed `double_pendulum_full.s7diagram`, a feedback loop, 16
+nested one-Gain schemas and a coupled trapezoid oscillator. Both versions run
+the same benchmark source, with the old and new `s7core` shared libraries and
+matching compile-time `ExecutableGraph` headers. The comparison script in the
+same directory alternates version order, checks final output equality and
+reports medians from five fresh processes per case. Each process warms up for
+1,000 steps, times 20,000 continuous steps as one interval, then times 2,000
+individual steps for latency percentiles. The output binding is read after
+execution, so the graph work contributes to an observable checksum.
+
+Measured 2026-10-30 on an AMD Ryzen 7 4700U, Linux x86-64, GCC 16.2.1,
+`Release` (`-O3 -DNDEBUG`), Studio off, pinned to CPU 0 with `taskset -c 0`:
+
+| Graph | Compile before/after (us) | Avg step before/after (ns) | Speedup | Throughput before/after (M steps/s) | p50 / p99 before (ns) | p50 / p99 after (ns) | RSS delta before/after (KiB) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 64 Gain chain | 356 / 358 | 1317 / 338 | 3.90x | 0.76 / 2.96 | 2444 / 2934 | 1466 / 1956 | 472 / 536 |
+| 512 Gain chain | 1942 / 1950 | 13006 / 2659 | 4.89x | 0.08 / 0.38 | 14108 / 22139 | 3841 / 4680 | 964 / 964 |
+| 512 independent Gains | 1890 / 1884 | 13003 / 2364 | 5.50x | 0.08 / 0.42 | 14108 / 21930 | 3701 / 4261 | 912 / 976 |
+| Full double pendulum | 792 / 799 | 842 / 301 | 2.80x | 1.19 / 3.32 | 1956 / 2445 | 1397 / 1886 | 516 / 644 |
+| Stateful feedback | 107 / 104 | 56 / 35 | 1.59x | 17.81 / 28.31 | 978 / 1467 | 978 / 1467 | 464 / 464 |
+| Nested schemas | 937 / 935 | 1785 / 1133 | 1.58x | 0.56 / 0.88 | 2864 / 3422 | 2375 / 2864 | 496 / 560 |
+| Coupled trapezoid | 108 / 109 | 151 / 107 | 1.41x | 6.62 / 9.34 | 1397 / 1467 | 1397 / 1467 | 464 / 528 |
+
+Compile timing is `Compiler::compile` only; runtime construction is measured
+separately by the benchmark and was 2-21 us in these runs. The RSS column is
+the process resident-set change from immediately before compilation to after
+runtime construction. It includes allocator/page granularity and library
+activity, so differences of one or two 64 KiB pages do not establish a graph
+memory regression. Independently timed p50/p99 samples include two clock reads
+per step; for very short graphs their timer overhead dominates. The aggregate
+average and throughput avoid that per-step measurement cost. Runs were pinned
+but not thermally isolated, and these workload results do not predict gains
+for I/O-heavy or expensive plugin elements.
+
+Reproduce with a Release build of each revision, using this benchmark source
+and that revision's headers/library in each build. The parent revision needs
+the opt-in source copied into its worktree and linked against its own `s7core`.
+Then run, for example:
+
+```sh
+taskset -c 0 python3 s7core/benchmarks/compare_indexed.py \
+    /path/to/baseline/s7core_indexed_benchmark \
+    build-release/s7core/s7core_indexed_benchmark \
+    --baseline-lib-dir /path/to/baseline/library-directory \
+    --repeats 5 --steps 20000
+```
+
+Correctness checks: the full headless Release suite passed (45/45), including
+saved numerical diagrams, typed F16/F128/C16/C128 integration, nested schemas,
+plugin loading and output rollback. A focused indexed-record test checks
+pointer alignment after graph moves/replacement, split/join order, multiple
+memory elements and coupled trials. Clang 22 AddressSanitizer/UndefinedBehavior
+Sanitizer passed the four focused core tests (4/4). The benchmark verified the
+same final F64 outputs before and after for all seven workloads. The Windows
+`s7core` DLL also rebuilt with Clang 22 MinGW, and the focused test passed
+under Wine. This change does not alter arbitrary private-state rollback or
+plugin interface behavior.
 
 ## Objective and constraints
 

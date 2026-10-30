@@ -12,9 +12,8 @@ namespace s7 {
 
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
-    memory_output_ranges_.reserve(graph_.memory_order.size());
-    for (const auto& id : graph_.memory_order) {
-        const auto& element = graph_.elements.at(id);
+    memory_output_ranges_.reserve(graph_.memory_execution.size());
+    for (auto* element : graph_.memory_execution) {
         const auto ports = element->output_ports();
         const auto begin = memory_outputs_.size();
         memory_outputs_.reserve(begin + ports.size());
@@ -25,7 +24,7 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
             });
         }
         memory_output_ranges_.push_back(MemoryOutputRange{begin, memory_outputs_.size()});
-        auto* integration = dynamic_cast<TrapezoidIntegration*>(element.get());
+        auto* integration = dynamic_cast<TrapezoidIntegration*>(element);
         const bool implicit = integration && integration->implicit_trapezoid_enabled();
         implicit_memory_.push_back(implicit);
         if (implicit) {
@@ -36,8 +35,7 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
         }
     }
 
-    for (const auto& id : graph_.causal_order) {
-        const auto& element = graph_.elements.at(id);
+    for (auto* element : graph_.causal_execution) {
         for (const auto& port : element->output_ports()) {
             causal_outputs_.push_back(CausalOutput{
                 .value_ptr = port.value_ptr,
@@ -45,8 +43,8 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
             });
         }
     }
-    for (const auto& id : graph_.trapezoid_rhs) {
-        for (const auto& port : graph_.elements.at(id)->output_ports()) {
+    for (auto* element : graph_.trapezoid_rhs_execution) {
+        for (const auto& port : element->output_ports()) {
             trial_outputs_.push_back({port.value_ptr, signal_type_info(port.type).storage_bytes, {}});
         }
     }
@@ -63,7 +61,7 @@ void NodeRuntime::stage_trapezoids() {
         for (auto& stage : trapezoids_) stage.integration->publish_trapezoid_candidate();
         constexpr int max_iterations = 64;
         for (int iteration = 0; iteration < max_iterations; ++iteration) {
-            for (const auto& id : graph_.trapezoid_rhs) graph_.elements.at(id)->step();
+            for (auto* element : graph_.trapezoid_rhs_execution) element->step();
             bool converged = true;
             for (auto& stage : trapezoids_) {
                 converged = stage.integration->prepare_trapezoid_correction() && converged;
@@ -154,9 +152,7 @@ void NodeRuntime::step() {
         std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
     }
     try {
-        for (const auto& id : graph_.causal_order) {
-            graph_.elements.at(id)->step();
-        }
+        for (auto* element : graph_.causal_execution) element->step();
         stage_trapezoids();
     } catch (...) {
         // A causal-order evaluation or numerical trial faulted: restore every
@@ -183,7 +179,7 @@ void NodeRuntime::step() {
     // Each causal-memory element computes its next output from this step's
     // inputs; its published output is restored right away so that other
     // causal-memory elements still read this step's values.
-    for (std::size_t element_index = 0; element_index < graph_.memory_order.size(); ++element_index) {
+    for (std::size_t element_index = 0; element_index < graph_.memory_execution.size(); ++element_index) {
         if (implicit_memory_[element_index]) continue;
         const auto range = memory_output_ranges_[element_index];
         for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
@@ -192,7 +188,7 @@ void NodeRuntime::step() {
         }
 
         try {
-            graph_.elements.at(graph_.memory_order[element_index])->step();
+            graph_.memory_execution[element_index]->step();
         } catch (...) {
             for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
                 auto& output = memory_outputs_[output_index];

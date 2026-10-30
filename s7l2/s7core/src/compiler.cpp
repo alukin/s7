@@ -201,6 +201,14 @@ ExecutableGraph Compiler::compile(const Schema& schema,
     for (const auto& id : executable_graph.causal_order) {
         if (trapezoid_rhs.contains(id)) executable_graph.trapezoid_rhs.push_back(id);
     }
+    const auto resolve = [&elements = executable_graph.elements](const std::vector<std::string>& order,
+                                                                  std::vector<Element*>& execution) {
+        execution.reserve(order.size());
+        for (const auto& id : order) execution.push_back(elements.at(id).get());
+    };
+    resolve(executable_graph.causal_order, executable_graph.causal_execution);
+    resolve(executable_graph.memory_order, executable_graph.memory_execution);
+    resolve(executable_graph.trapezoid_rhs, executable_graph.trapezoid_rhs_execution);
     return executable_graph;
 }
 

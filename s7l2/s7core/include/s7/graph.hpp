@@ -25,6 +25,11 @@ struct ExecutableGraph {
     std::vector<std::string> memory_order;
     // Stateless derivative dependencies replayed only during an implicit solve.
     std::vector<std::string> trapezoid_rhs;
+    // Compiled dispatch records parallel to the ID orders above. The map owns
+    // each heap-allocated Element; moving this graph does not move its elements.
+    std::vector<Element*> causal_execution;
+    std::vector<Element*> memory_execution;
+    std::vector<Element*> trapezoid_rhs_execution;
 };
 
 } // namespace s7

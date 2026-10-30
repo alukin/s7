@@ -114,6 +114,10 @@ target_link_libraries(s7core_smoke PRIVATE s7core)
 
 add_test(NAME s7core_smoke COMMAND s7core_smoke)
 
+s7_add_test_executable(s7core_indexed_execution_smoke tests/indexed_execution_smoke.cpp)
+target_link_libraries(s7core_indexed_execution_smoke PRIVATE s7core)
+add_test(NAME s7core_indexed_execution_smoke COMMAND s7core_indexed_execution_smoke)
+
 s7_add_test_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
 target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)
 add_test(NAME s7core_signal_types_smoke COMMAND s7core_signal_types_smoke)
@@ -175,6 +179,13 @@ add_test(NAME s7core_convolution_smoke COMMAND s7core_convolution_smoke)
 add_executable(s7core_fir_branch_benchmark EXCLUDE_FROM_ALL benchmarks/fir_branches.cpp)
 target_link_libraries(s7core_fir_branch_benchmark PRIVATE s7core Threads::Threads)
 s7_enable_project_warnings(s7core_fir_branch_benchmark)
+
+# Opt-in production NodeRuntime benchmark; kept outside normal CTest execution.
+add_executable(s7core_indexed_benchmark EXCLUDE_FROM_ALL benchmarks/indexed_execution.cpp)
+target_link_libraries(s7core_indexed_benchmark PRIVATE s7core)
+target_compile_definitions(s7core_indexed_benchmark PRIVATE
+    S7_PENDULUM_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/double_pendulum_full.s7diagram")
+s7_enable_project_warnings(s7core_indexed_benchmark)
 
 # Opt-in buffered FFT convolution workload for studying expensive independent
 # branches. FFTW remains optional and is not a runtime/core dependency.
