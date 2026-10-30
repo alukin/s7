@@ -14,6 +14,7 @@ add_library(s7core SHARED
     src/schema_library.cpp
     src/validation.cpp
     src/compiler.cpp
+    src/convolution.cpp
     src/runtime.cpp
     src/elements.cpp
     src/element_registry.cpp
@@ -165,6 +166,10 @@ s7_add_test_executable(s7core_metadata_json_smoke tests/metadata_json_smoke.cpp)
 target_link_libraries(s7core_metadata_json_smoke PRIVATE s7core)
 target_include_directories(s7core_metadata_json_smoke PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/metadata-generated)
 add_test(NAME s7core_metadata_json_smoke COMMAND s7core_metadata_json_smoke)
+
+s7_add_test_executable(s7core_convolution_smoke tests/convolution_smoke.cpp)
+target_link_libraries(s7core_convolution_smoke PRIVATE s7core)
+add_test(NAME s7core_convolution_smoke COMMAND s7core_convolution_smoke)
 
 # Opt-in branch workload using the existing scalar FIR element.
 add_executable(s7core_fir_branch_benchmark EXCLUDE_FROM_ALL benchmarks/fir_branches.cpp)

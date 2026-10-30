@@ -134,10 +134,12 @@ needs explicit shape, ownership, validity across a step, observation and
 rollback semantics before it can cross an S7 connection. The simple
 `Element::step()` interface can remain; the port value contract must grow.
 
-The requested convolution processing components should support both independent
+The [core convolution processors](CONVOLUTION.md) support both independent
 frames (full linear convolution) and a continuous stream of frames (history
-carried across calls, one output frame per input frame). These modes must be
-tested against the same direct reference with exact frame index alignment.
+carried across calls, one output frame per input frame). Their smoke test
+compares both algorithms against the same direct reference with exact frame
+index alignment. They are not yet graph elements because frame ports need the
+value contract described above.
 
 ## Proposed compiled runtime connection graph
 

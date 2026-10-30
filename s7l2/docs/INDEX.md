@@ -79,6 +79,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | Document | Content |
 |---|---|
 | [SIMULATION_MODEL.md](SIMULATION_MODEL.md) | Analog-computer simulation semantics; independent solvers allowed as test references |
+| [CONVOLUTION.md](CONVOLUTION.md) | FIR and FFT complex frame convolution processors, independent/continuous modes and graph-port limit |
 | [CONTROL_ELEMENTS.md](CONTROL_ELEMENTS.md) | Local control/measurement primitives and the separate reusable schema resource |
 | [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
 | [STUDIO_OBSERVATION_VIEWERS.md](STUDIO_OBSERVATION_VIEWERS.md) | Studio's Scope, Phase Portrait and 3D trajectory viewers (Qt Graphs, Qt Quick 3D): read-only viewer interfaces, independent run data/authoritative capture, registry and lifecycle, adding a viewer type, tests and manual visual test plan |
@@ -107,6 +108,7 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 
 - `s7core/include/s7/element.hpp` — `Element` base class and port model
 - `s7core/include/s7/elements.hpp` — built-in elements
+- `s7core/include/s7/convolution.hpp` — FIR and FFT complex frame processors
 - `s7core/include/s7/element_registry.hpp`, `element_metadata.hpp` — registry and metadata
 - `s7core/include/s7/schema.hpp`, `compiler.hpp`, `runtime.hpp` — schema, compiler, `NodeRuntime`
 - `s7core/include/s7/schema_library.hpp` — schema library loader
