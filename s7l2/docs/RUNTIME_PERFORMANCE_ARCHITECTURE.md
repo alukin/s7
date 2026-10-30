@@ -209,27 +209,50 @@ cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
 cmake --build build-release --target s7core_fir_branch_benchmark s7core_fft_convolution_benchmark
 ./build-release/s7core/s7core_fir_branch_benchmark
 ./build-release/s7core/s7core_fft_convolution_benchmark
+# Linux, when CPUs 2 and 3 are available:
+./build-release/s7core/s7core_fft_convolution_benchmark --pin 3 2 --diagnose
 ```
 
-Representative Release results on the Ryzen 7 4700U (ranges reflect repeated
-local runs; lower time is better):
+The FIR results below are the original branch experiment. The FFT figures
+originally reported here were invalid: `run_parallel` executed the right
+convolution on the worker, then executed it *again* on the coordinator after
+the completion barrier to obtain an output span. Thus its timed parallel path
+did three convolutions per frame while the serial path did two. The output
+comparison did not catch this because a convolution of the same frame is
+idempotent. The benchmark now reads the worker's completed output directly and
+checks that each branch executed exactly once per frame.
 
-| Workload per branch | Serial time per step/frame | Two-branch parallel time | Observed outcome |
-| --- | ---: | ---: | --- |
-| Scalar FIR, 64 taps | ~0.12 us | 2.0-6.2 us | large regression |
-| Scalar FIR, 4,096 taps | 6.7-6.8 us | 12.2-16.0 us | regression |
-| Scalar FIR, 16,384 taps | 27.3-27.5 us | 22.4-34.3 us | mixed, unstable result |
-| Buffered FFT, 2,048 samples + 1,024-tap impulse | 163-169 us | 207-270 us | regression |
-| Buffered FFT, 8,192 samples + 4,096-tap impulse | 922-1,074 us | 1,121-1,473 us | regression |
-| Buffered FFT, 16,384 samples + 8,192-tap impulse | 2.17-2.34 ms | 2.66-3.41 ms | regression |
+Controlled FFT Release comparison, measured 2026-10-30 on the Ryzen 7 4700U
+with GCC 16.2.1, FFTW 3.3.10, coordinator pinned to CPU 3 and worker to CPU 2
+(same L3 group). The duplicate-call and corrected binaries used the same
+source and flags except for the output read and its step-count expectation.
+They ran in alternating order, five times each. Values are medians of complete
+runs; lower is better:
 
-The worker prototype uses `std::barrier` once per step/frame and separate
-element/FFT state. It excludes compilation, runtime output snapshots,
-observation and graph replacement. The runs were not isolated or CPU-pinned;
-these measurements establish neither a scheduler speedup nor a universal
-parallelism limit. They do show that a thread pool by itself is insufficient:
-dispatch, synchronization and memory behavior must be measured on the intended
-hardware. FFTW plans were created on the coordinator thread and only executed
+| Workload per branch | Serial | Parallel with duplicate call | Corrected parallel | Corrected speedup |
+| --- | ---: | ---: | ---: | ---: |
+| 2,048 samples + 1,024-tap impulse | 171 us | 284 us | 159 us | 1.08x; noisy |
+| 8,192 samples + 4,096-tap impulse | 926 us | 1,492 us | 703 us | 1.32x |
+| 16,384 samples + 8,192-tap impulse | 2.16 ms | 3.36 ms | 1.43 ms | 1.51x |
+
+The earlier FIR prototype remains a separate result: 64 taps measured about
+0.12 us serial versus 2.0-6.2 us parallel; 4,096 taps about 6.7-6.8 us versus
+12.2-16.0 us; and 16,384 taps about 27.3-27.5 us versus 22.4-34.3 us. It
+does not establish a result for the corrected FFT benchmark.
+
+The worker prototype uses two `std::barrier` rendezvous per frame and separate
+FFT state. It excludes compilation, runtime output snapshots, observation and
+graph replacement. Use `--pin MAIN_CPU WORKER_CPU` to control each thread's
+placement and `--diagnose` to report branch work, barrier waits and FFT phases.
+Pinning both threads matters: a process-wide `taskset` mask still permitted
+both threads to run on one core during some frames. In one diagnostic run on
+CPU 2/3, the large case spent about 1.11 ms per branch serially, versus
+1.22 ms on the coordinator and 1.50 ms on the worker concurrently; the
+completion wait averaged 0.31 ms. A worker-only run was also slower in that
+sample, so these measurements do not isolate cache pressure from core frequency
+or transient machine load. The corrected benchmark establishes a speedup on
+these large independent branches, but not a universal 2x gain or a production
+scheduler result. FFTW plans were created on the coordinator and only executed
 concurrently, following [FFTW's thread-safety contract](https://www.fftw.org/fftw3_doc/Thread-safety.html).
 
 The buffered FFT benchmark matches the radiolocation example more closely than
