@@ -8,14 +8,23 @@ The maintainer subsequently assigned remote node control/restart, Trusted
 Networks, runtime node configuration editing and other networking work to
 0.2.0, excluding them from the 0.1.1 maintenance release.
 Implementation of these release goals belongs to 0.2.0.
-The [0.1.0 checklist](RELEASE_0.1.0.md) remains the current release gate.
+The [0.1.1 preview notes](RELEASE_0.1.1_NOTES.md) record the current released
+baseline. The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) assigns distributed
+delivery and the parallel architecture, simulation and Studio work, with
+development steps and PR review gates.
 
 Scope clarification (2026-10-25): integrator and feedback-settling research is a
 separate project with no release assignment yet, outside both 0.1.1 and 0.2.0.
-Its findings require review before any release integration is considered; see
+The maintainer and Codex will work on that research separately. Its findings
+require review before any release integration is considered; see
 [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
 
 ## Parallel execution within one runtime
+
+The [runtime performance investigation](RUNTIME_PERFORMANCE_ARCHITECTURE.md)
+proposes compiling the connection DAG and execution records as the basis for
+this scheduler while preserving the simple `Element::step()` contract. Its
+measurements are provisional; performance targets require benchmark gates.
 
 Run independent work in one compiled causal graph concurrently using a bounded,
 reusable worker pool. Keep a single-thread execution mode as the reference and
@@ -264,11 +273,13 @@ work and is independent of the integrator-research branch.
 
 ## Planning and release boundary
 
-First agree the parallel execution contract, plugin/thread-safety rules and
-benchmark matrix; then implement the scheduler and qualify the local/remote
-multi-node workflow. Shared headless tests and protocol fixtures should cover
-both workstreams. Studio remains an optional client; improvements to it should
-support these workflows without moving execution logic into the GUI.
+Agree the parallel execution contract, plugin/thread-safety rules and benchmark
+matrix before implementing the within-node scheduler. Establish the distributed
+contract and conformance baseline in parallel; then the Python data plane and
+multi-node work can advance independently of scheduler implementation. Shared
+headless tests and protocol fixtures should cover their integration. Studio
+remains an optional client; improvements to it should support these workflows
+without moving execution logic into the GUI.
 Plan and qualify Studio printing as an additional release workstream, with its
 own viewer/output matrix and packaging checks.
 Plan certificate viewing/creation and remote node administration alongside

@@ -165,3 +165,22 @@ s7_add_test_executable(s7core_metadata_json_smoke tests/metadata_json_smoke.cpp)
 target_link_libraries(s7core_metadata_json_smoke PRIVATE s7core)
 target_include_directories(s7core_metadata_json_smoke PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/metadata-generated)
 add_test(NAME s7core_metadata_json_smoke COMMAND s7core_metadata_json_smoke)
+
+# Opt-in branch workload using the existing scalar FIR element.
+add_executable(s7core_fir_branch_benchmark EXCLUDE_FROM_ALL benchmarks/fir_branches.cpp)
+target_link_libraries(s7core_fir_branch_benchmark PRIVATE s7core Threads::Threads)
+s7_enable_project_warnings(s7core_fir_branch_benchmark)
+
+# Opt-in buffered FFT convolution workload for studying expensive independent
+# branches. FFTW remains optional and is not a runtime/core dependency.
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(S7_BENCH_FFTW3 QUIET IMPORTED_TARGET fftw3)
+    if(S7_BENCH_FFTW3_FOUND)
+        add_executable(s7core_fft_convolution_benchmark EXCLUDE_FROM_ALL
+            benchmarks/fft_convolution_branches.cpp)
+        target_link_libraries(s7core_fft_convolution_benchmark PRIVATE
+            PkgConfig::S7_BENCH_FFTW3 Threads::Threads)
+        s7_enable_project_warnings(s7core_fft_convolution_benchmark)
+    endif()
+endif()

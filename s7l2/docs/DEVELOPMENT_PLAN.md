@@ -1,5 +1,10 @@
 # S7 Development Plan
 
+This document retains the 0.1.x local-simulation plan and implementation
+history. Current 0.2.0 ownership, distributed milestones and parallel
+architecture/simulation/Studio tracks are in the
+[0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md).
+
 ## 0.2.0 C++ goals — agreed 2026-10-23
 
 After the preview, prioritize multithreading within a single runtime and

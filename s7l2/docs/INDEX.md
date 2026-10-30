@@ -46,13 +46,19 @@ qualified multi-node operation on local and remote hosts, remote node
 control/configuration/restart and Trusted Networks settings, certificate viewing
 and node certificate creation, Studio printing of diagrams and observation
 graphs, and a software signal-generator element inspired by the UNI-T UTG932E.
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) records ownership, distributed
+architecture and implementation steps, PR review gates and the parallel
+simulation/Studio tracks.
 
 1. `../README.md` — what this implementation contains, how to build and run it.
-2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the next release: dependable Studio simulation with the bundled runtime, acceptance criteria, and deferred backlog.
+2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
 3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
 4. `VISUAL_NUMERICAL_TESTS_PLAN.md` — the diagram-based, visualized numerical-validation test track (companion to `../../doc/S7_Numerical_Modeling_Test_Plan.md`).
 
-The next-release target is local simulation quality. The development plan defines intended outcomes; the editor guide describes implemented behavior; open problems and the visual numerical plan track remaining work. Existing tests establish only their stated cases, not completion of the release criteria.
+Local simulation quality was the 0.1.x target. The 0.2.0 goals and work plan now
+define the next release direction; open problems and the visual numerical plan
+track remaining work. Existing tests establish only their stated cases, not
+completion of the 0.2.0 release criteria.
 
 Numerical examples and measured integrator comparisons: [small-angle double pendulum](../examples/double_pendulum/README.md) (nine diagrams, continuous/discrete references and reproducible reports), and [nonlinear single pendulum](../examples/pendulum/README.md) (100-second comparisons at 1/10 kHz, energy/phase/convergence and full Scope/CSV fidelity).
 
@@ -64,6 +70,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 
 | Document | Content |
 |---|---|
+| [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Runtime hot-path investigation, provisional measurements and proposed compiled connection-graph scheduler |
 | `S7_Transport_Architecture.md` | `s7transport` / `s7runtime` / `s7net` boundaries, security and data-plane baseline |
 | [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) | Separate mTLS control and configurable encrypted/trusted-plaintext data listeners, configuration and cross-language contract |
 
