@@ -16,7 +16,7 @@
 #include <string>
 
 #include <s7/canonical_json.hpp>
-#include <s7/control_plane_mvp.hpp>
+#include <s7/control_plane.hpp>
 #include <s7/transport.hpp>
 
 namespace {
@@ -116,7 +116,7 @@ try {
     static_cast<void>(network->receive(network->open_consumer(stream), &value, 1));
 
     const auto studio = s7::transport::inspect_certificate_file(std::string(S7_TEST_CERT_DIR) + "/s7_studio.cert.pem");
-    s7::ControlPlaneMvp control{
+    s7::ControlPlane control{
         s7::ControlNodeDescriptor{.node_uuid = std::string(node.at("node_uuid").as_string()),
                                   .node_name = std::string(node.at("node_name").as_string()),
                                   .listen_url = std::string(node.at("listen_url").as_string())},

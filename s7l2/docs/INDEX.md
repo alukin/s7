@@ -104,7 +104,7 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 - `s7core/include/s7/schema.hpp`, `compiler.hpp`, `runtime.hpp` — schema, compiler, `NodeRuntime`
 - `s7core/include/s7/schema_library.hpp` — schema library loader
 - `s7runtime/src/runtime_service.cpp` — JSON schema loading, node identity, control-plane wiring
-- `s7runtime/src/control_plane_mvp.cpp` — control-plane message handlers
+- `s7runtime/src/control_plane.cpp` — control-plane message handlers
 - `s7transport/src/transport.cpp` — in-memory and WebSocket transport backends
 
 - [Automated Studio GUI tests](STUDIO_GUI_TESTING.md): Qt Test/Quick Test workflows, Xvfb, real 3D rendering, skips and failure artifacts.

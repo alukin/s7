@@ -18,7 +18,7 @@
 
 #include <boost/json.hpp>
 
-#include "s7/control_plane_mvp.hpp"
+#include "s7/control_plane.hpp"
 #include "s7/core.hpp"
 #include "s7/platform.hpp"
 #include "s7/transport.hpp"
@@ -213,7 +213,7 @@ private:
     std::filesystem::path state_dir_;
     std::optional<platform::FileLock> state_dir_lock_; // released after every later member is destroyed
     std::string runtime_instance_uuid_;
-    std::shared_ptr<ControlPlaneMvp> control_plane_;
+    std::shared_ptr<ControlPlane> control_plane_;
     transport::RuntimeNetEndpointPtr network_endpoint_;
     mutable std::atomic<std::uint16_t> control_port_{0};
     mutable std::atomic<std::uint16_t> data_port_{0};

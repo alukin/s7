@@ -891,7 +891,7 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
         beast->set_node_uuid(runtime_instance_uuid_); // the identity plain WebSocket peers know this node by
     }
     graph_host_ = std::make_shared<GraphHost>(*this);
-    control_plane_ = std::make_shared<ControlPlaneMvp>(
+    control_plane_ = std::make_shared<ControlPlane>(
         build_control_descriptor(runtime_instance_uuid_, network_endpoint_, definition_, identity_cert),
         ControlPlaneOptions{
             .storage_dir = state_dir_,
@@ -919,7 +919,7 @@ RuntimeService::RuntimeService(RuntimeSchemaDefinition definition, std::filesyst
         });
 
     if (const auto beast_endpoint = std::dynamic_pointer_cast<s7::transport::BeastRuntimeNetEndpoint>(network_endpoint_)) {
-        std::weak_ptr<ControlPlaneMvp> weak_control = control_plane_;
+        std::weak_ptr<ControlPlane> weak_control = control_plane_;
         beast_endpoint->set_control_request_handler([weak_control](const transport::ControlPeer& peer,
                                                                    const std::string& request_json) {
             const auto locked = weak_control.lock();
@@ -949,7 +949,7 @@ RuntimeService::~RuntimeService()
 void RuntimeService::initialize_graph() {
     // A deployment committed before the node restarted takes precedence over
     // the startup schema.
-    if (control_plane_->restore_deployment() == ControlPlaneMvp::RestoreOutcome::Restored) {
+    if (control_plane_->restore_deployment() == ControlPlane::RestoreOutcome::Restored) {
         return;
     }
     const auto schema = build_schema_from_definition(definition_);

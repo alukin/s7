@@ -4,7 +4,7 @@
 add_executable(s7runtime
     src/main.cpp
     src/runtime_service.cpp
-    src/control_plane_mvp.cpp
+    src/control_plane.cpp
     src/plugin_loader.cpp
 )
 
@@ -32,7 +32,7 @@ target_link_libraries(s7runtime PRIVATE
 
 s7_add_test_executable(s7runtime_control_smoke
     tests/control_plane_smoke.cpp
-    src/control_plane_mvp.cpp
+    src/control_plane.cpp
     src/runtime_service.cpp
 )
 
@@ -62,7 +62,7 @@ add_test(NAME s7runtime_control_smoke COMMAND s7runtime_control_smoke)
 
 s7_add_test_executable(s7runtime_deployment_smoke
     tests/deployment_smoke.cpp
-    src/control_plane_mvp.cpp
+    src/control_plane.cpp
     src/runtime_service.cpp
 )
 
@@ -91,7 +91,7 @@ target_compile_definitions(s7runtime_deployment_smoke PRIVATE
 add_test(NAME s7runtime_deployment_smoke COMMAND s7runtime_deployment_smoke)
 
 # The control protocol conformance script, run against the control plane.
-s7_add_test_executable(s7runtime_control_fixtures_smoke tests/control_fixtures_smoke.cpp src/control_plane_mvp.cpp)
+s7_add_test_executable(s7runtime_control_fixtures_smoke tests/control_fixtures_smoke.cpp src/control_plane.cpp)
 target_include_directories(s7runtime_control_fixtures_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(s7runtime_control_fixtures_smoke PRIVATE s7core s7transport s7net Boost::json Threads::Threads)
 target_compile_definitions(s7runtime_control_fixtures_smoke PRIVATE

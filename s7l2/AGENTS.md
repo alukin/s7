@@ -81,6 +81,7 @@ ctest --test-dir build -R s7io_smoke
 - Modify `external/` only when the user explicitly requests a vendor patch; document rationale and keep such patches minimal and isolated.
 
 ## Guardrails for AI edits
+- Apply SOLID principles in new code and refactoring: keep each class focused on one responsibility, extend behavior through stable interfaces, preserve substitutability, keep interfaces narrow, and depend on abstractions at module boundaries. Make ownership and behavior testable; avoid abstractions that do not serve a concrete need.
 - Keep changes module-local unless cross-module contracts require expansion.
 - If touching compiler/validator/runtime, add or update a smoke test in the module's `tests/` directory (e.g. `s7core/tests/core_smoke.cpp`).
 - The project is pre-MVP with no deployments: breaking changes to APIs, formats, and protocols are allowed; do not add compatibility shims.

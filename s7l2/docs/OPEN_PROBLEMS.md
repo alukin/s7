@@ -277,7 +277,7 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 ## P2 — Code structure and maintainability
 
-- **Large multi-responsibility translation units** (measured 2026-10-14): `s7studio/src/main_window.cpp` (2412 lines), `s7transport/src/transport.cpp` (1772), `s7runtime/src/control_plane_mvp.cpp` (1605), `s7studio/src/diagram/diagram_scene.cpp` (1477), `s7runtime/src/runtime_service.cpp` (1387). File size alone is not a correctness problem, but reviewing changes, isolating tests, and reasoning about ownership/concurrency in these files is already difficult and will get harder. (Suggested split boundaries are in `docs/DEVELOPMENT_PLAN.md`, Phase 3.)
+- **Large multi-responsibility translation units** (measured 2026-10-14): `s7studio/src/main_window.cpp` (2412 lines), `s7transport/src/transport.cpp` (1772), `s7runtime/src/control_plane.cpp` (1605), `s7studio/src/diagram/diagram_scene.cpp` (1477), `s7runtime/src/runtime_service.cpp` (1387). File size alone is not a correctness problem, but reviewing changes, isolating tests, and reasoning about ownership/concurrency in these files is already difficult and will get harder. (Suggested split boundaries are in `docs/DEVELOPMENT_PLAN.md`, Phase 3.)
 - **Schema-backed element libraries are plain JSON files.** The 2026-09-20 plan's preference for a zipped/archive-based library format for easier distribution was never implemented; `docs/SCHEMA_LIBRARY_WORKFLOW.md` describes only a JSON `document_kind: "s7.element_library"` file. Open design decision, not a defect: decide whether archive packaging is still wanted before building it.
 
 ## P3 — Deferred architecture capabilities (documented MVP limits, not defects)

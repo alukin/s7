@@ -21,7 +21,7 @@
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/websocket.hpp>
 
-#include <s7/control_plane_mvp.hpp>
+#include <s7/control_plane.hpp>
 #include <s7/net.hpp>
 #include <s7/runtime_service.hpp>
 #include <s7/transport.hpp>
@@ -154,7 +154,7 @@ int main()
         .elements = {"PlutoSource"},
     });
 
-    auto control = std::make_shared<s7::ControlPlaneMvp>(descriptor);
+    auto control = std::make_shared<s7::ControlPlane>(descriptor);
     control->add_seed_peer("ws://seed.local:8443");
 
     s7::transport::BeastRuntimeNetEndpoint server;

@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-#ifndef S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_MVP_HPP
-#define S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_MVP_HPP
+#ifndef S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_HPP
+#define S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_HPP
 
 #include <chrono>
 #include <cstdint>
@@ -130,9 +130,9 @@ struct ControlPlaneOptions {
     std::function<boost::json::object()> network_info;
 };
 
-class ControlPlaneMvp {
+class ControlPlane {
 public:
-    explicit ControlPlaneMvp(ControlNodeDescriptor descriptor, ControlPlaneOptions options = {});
+    explicit ControlPlane(ControlNodeDescriptor descriptor, ControlPlaneOptions options = {});
 
     void add_seed_peer(const std::string& endpoint);
 
@@ -251,5 +251,5 @@ private:
 
 } // namespace s7
 
-#endif // S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_MVP_HPP
+#endif // S7RUNTIME_INCLUDE_S7_CONTROL_PLANE_HPP
 

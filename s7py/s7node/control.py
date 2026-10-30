@@ -3,7 +3,7 @@
 
 """S7 control protocol v1, node side (doc/S7_Control_Protocol_MVP.md).
 
-Mirrors the C++ reference (s7runtime/src/control_plane_mvp.cpp): the same
+Mirrors the C++ reference (s7runtime/src/control_plane.cpp): the same
 messages, errors, idempotency rules, limits and persistence. Mutations are
 authorized from the TLS session only, never from JSON fields.
 """

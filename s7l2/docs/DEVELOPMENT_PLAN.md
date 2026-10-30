@@ -605,7 +605,7 @@ The phases below retain the broader project direction. Their numbering is a back
 Refactor by behavior boundaries, preserving public APIs and adding tests before moving code:
 
 - Split `transport.cpp` into endpoint lifecycle, connection/session handling, TLS/identity, and stream routing units.
-- Split `control_plane_mvp.cpp` into request validation/dispatch, deployment transaction/persistence, stream management, and response serialization units.
+- Split `control_plane.cpp` into request validation/dispatch, deployment transaction/persistence, stream management, and response serialization units.
 - Split `runtime_service.cpp` into JSON loading, graph/deployment lifecycle, scheduling/serve loop, and clock/state handling units.
 - Break `main_window.cpp` and `diagram_scene.cpp` into UI actions/controllers and scene/model operations, leaving thin coordination entry points.
 - Decide whether schema-backed element libraries should move from plain JSON files to an archive/zip format (open preference from the earlier status plan, never acted on); only build it if still wanted.

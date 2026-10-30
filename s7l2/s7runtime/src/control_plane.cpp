@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-#include "s7/control_plane_mvp.hpp"
+#include "s7/control_plane.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -238,7 +238,7 @@ struct CertificateInfo {
 
 } // namespace
 
-ControlPlaneMvp::ControlPlaneMvp(ControlNodeDescriptor descriptor, ControlPlaneOptions options)
+ControlPlane::ControlPlane(ControlNodeDescriptor descriptor, ControlPlaneOptions options)
     : descriptor_(std::move(descriptor))
     , options_(std::move(options))
 {
@@ -248,7 +248,7 @@ ControlPlaneMvp::ControlPlaneMvp(ControlNodeDescriptor descriptor, ControlPlaneO
     }
 }
 
-void ControlPlaneMvp::add_seed_peer(const std::string& endpoint)
+void ControlPlane::add_seed_peer(const std::string& endpoint)
 {
     if (endpoint.empty()) {
         return;
@@ -266,7 +266,7 @@ void ControlPlaneMvp::add_seed_peer(const std::string& endpoint)
     persist_peers_to_disk();
 }
 
-auto ControlPlaneMvp::handle_request_json(const transport::ControlPeer& peer, const std::string& request_json)
+auto ControlPlane::handle_request_json(const transport::ControlPeer& peer, const std::string& request_json)
     -> std::string
 {
     try {
@@ -280,7 +280,7 @@ auto ControlPlaneMvp::handle_request_json(const transport::ControlPeer& peer, co
     }
 }
 
-auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, const boost::json::object& request)
+auto ControlPlane::handle_request_object(const transport::ControlPeer& peer, const boost::json::object& request)
     -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
@@ -358,7 +358,7 @@ auto ControlPlaneMvp::handle_request_object(const transport::ControlPeer& peer, 
 // Configuration changes are authorized from the TLS session alone: the peer's
 // verified certificate must carry the control-node key purpose and be the
 // pinned Studio certificate. Identity claims in the JSON are never consulted.
-auto ControlPlaneMvp::authorize_mutation(const transport::ControlPeer& peer,
+auto ControlPlane::authorize_mutation(const transport::ControlPeer& peer,
                                          const std::string& request_id,
                                          const std::string& request_type) const -> std::optional<boost::json::object>
 {
@@ -398,12 +398,12 @@ auto ControlPlaneMvp::authorize_mutation(const transport::ControlPeer& peer,
     return std::nullopt;
 }
 
-auto ControlPlaneMvp::state_name_locked() const -> std::string
+auto ControlPlane::state_name_locked() const -> std::string
 {
     return active_ ? "active" : "idle";
 }
 
-void ControlPlaneMvp::expire_prepared_locked(const std::chrono::steady_clock::time_point now)
+void ControlPlane::expire_prepared_locked(const std::chrono::steady_clock::time_point now)
 {
     for (auto it = prepared_.begin(); it != prepared_.end();) {
         if (it->second.expires <= now) {
@@ -415,12 +415,12 @@ void ControlPlaneMvp::expire_prepared_locked(const std::chrono::steady_clock::ti
     }
 }
 
-void ControlPlaneMvp::record_outcome_locked(const PreparedDeployment& prepared, const std::string& outcome)
+void ControlPlane::record_outcome_locked(const PreparedDeployment& prepared, const std::string& outcome)
 {
     record_history_locked(DeploymentOutcome{prepared.deployment_id, prepared.revision, outcome, {}});
 }
 
-void ControlPlaneMvp::record_history_locked(DeploymentOutcome outcome)
+void ControlPlane::record_history_locked(DeploymentOutcome outcome)
 {
     constexpr std::size_t max_history = 64;
     history_.push_back(std::move(outcome));
@@ -435,12 +435,12 @@ constexpr const char* kDeploymentFile = "deployment.json";
 
 } // namespace
 
-void ControlPlaneMvp::expire_transfers_locked(const std::chrono::steady_clock::time_point now)
+void ControlPlane::expire_transfers_locked(const std::chrono::steady_clock::time_point now)
 {
     std::erase_if(transfers_, [now](const auto& item) { return item.second.expires <= now; });
 }
 
-auto ControlPlaneMvp::handle_begin_transfer(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_begin_transfer(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto transfer_id = as_string(request, "transfer_id").value_or("");
@@ -482,7 +482,7 @@ auto ControlPlaneMvp::handle_begin_transfer(const boost::json::object& request) 
     return out;
 }
 
-auto ControlPlaneMvp::handle_configuration_chunk(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_configuration_chunk(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto transfer_id = as_string(request, "transfer_id").value_or("");
@@ -549,7 +549,7 @@ auto ControlPlaneMvp::handle_configuration_chunk(const boost::json::object& requ
     return out;
 }
 
-auto ControlPlaneMvp::handle_end_transfer(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_end_transfer(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto transfer_id = as_string(request, "transfer_id").value_or("");
@@ -606,7 +606,7 @@ auto ControlPlaneMvp::handle_end_transfer(const boost::json::object& request) ->
     return out;
 }
 
-bool ControlPlaneMvp::persist_active_locked() const
+bool ControlPlane::persist_active_locked() const
 {
     if (options_.storage_dir.empty() || !active_) {
         return true;
@@ -630,7 +630,7 @@ bool ControlPlaneMvp::persist_active_locked() const
     }
 }
 
-auto ControlPlaneMvp::restore_deployment() -> RestoreOutcome
+auto ControlPlane::restore_deployment() -> RestoreOutcome
 {
     const auto path = options_.storage_dir / kDeploymentFile;
     if (options_.storage_dir.empty() || !options_.deployment_host || !std::filesystem::exists(path)) {
@@ -715,7 +715,7 @@ auto ControlPlaneMvp::restore_deployment() -> RestoreOutcome
     }
 }
 
-auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_hello(const boost::json::object& request) const -> boost::json::object
 {
     std::string state;
     {
@@ -740,7 +740,7 @@ auto ControlPlaneMvp::handle_hello(const boost::json::object& request) const -> 
     return out;
 }
 
-auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_get_node_info(const boost::json::object& request) const -> boost::json::object
 {
     std::string mode;
     boost::json::value active_deployment = nullptr;
@@ -878,7 +878,7 @@ auto ControlPlaneMvp::handle_get_node_info(const boost::json::object& request) c
     return out;
 }
 
-auto ControlPlaneMvp::handle_get_peers(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_get_peers(const boost::json::object& request) const -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     bool include_unverified = true;
@@ -945,7 +945,7 @@ auto ControlPlaneMvp::handle_get_peers(const boost::json::object& request) const
     return out;
 }
 
-auto ControlPlaneMvp::handle_peer_announce(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_peer_announce(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto self_it = request.find("self");
@@ -986,7 +986,7 @@ auto ControlPlaneMvp::handle_peer_announce(const boost::json::object& request) -
     return out;
 }
 
-auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_list_deployments(const boost::json::object& request) const -> boost::json::object
 {
     boost::json::object out;
     out["type"] = "DEPLOYMENTS";
@@ -1047,7 +1047,7 @@ auto ControlPlaneMvp::handle_list_deployments(const boost::json::object& request
     return out;
 }
 
-auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_prepare_deployment(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     auto invalid = [&request_id](const std::string& message) {
@@ -1289,7 +1289,7 @@ auto ControlPlaneMvp::handle_prepare_deployment(const boost::json::object& reque
     return ready(it->second);
 }
 
-auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_commit_deployment(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto deployment_id = as_string(request, "deployment_id").value_or("");
@@ -1388,7 +1388,7 @@ auto ControlPlaneMvp::handle_commit_deployment(const boost::json::object& reques
     return committed(*active_);
 }
 
-auto ControlPlaneMvp::handle_abort_deployment(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_abort_deployment(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto deployment_id = as_string(request, "deployment_id").value_or("");
@@ -1441,7 +1441,7 @@ auto ControlPlaneMvp::handle_abort_deployment(const boost::json::object& request
     return make_error_response(request_id, "PREPARE_TOKEN_INVALID", "Unknown deployment or prepare_token.");
 }
 
-auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_get_stream_status(const boost::json::object& request) const -> boost::json::object
 {
     boost::json::object out;
     out["type"] = "STREAM_STATUS";
@@ -1493,7 +1493,7 @@ auto ControlPlaneMvp::handle_get_stream_status(const boost::json::object& reques
     return out;
 }
 
-auto ControlPlaneMvp::handle_get_network_configuration(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_get_network_configuration(const boost::json::object& request) const -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     std::optional<std::uint64_t> requested;
@@ -1526,7 +1526,7 @@ auto ControlPlaneMvp::handle_get_network_configuration(const boost::json::object
     return out;
 }
 
-auto ControlPlaneMvp::handle_recover_stream(const boost::json::object& request) -> boost::json::object
+auto ControlPlane::handle_recover_stream(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     const auto stream_id = as_string(request, "stream_id").value_or("");
@@ -1549,7 +1549,7 @@ auto ControlPlaneMvp::handle_recover_stream(const boost::json::object& request) 
     return out;
 }
 
-void ControlPlaneMvp::load_peers_from_disk()
+void ControlPlane::load_peers_from_disk()
 {
     const auto path = options_.storage_dir / "peers.json";
     if (!std::filesystem::exists(path)) {
@@ -1591,7 +1591,7 @@ void ControlPlaneMvp::load_peers_from_disk()
     }
 }
 
-void ControlPlaneMvp::persist_peers_to_disk() const
+void ControlPlane::persist_peers_to_disk() const
 {
     if (options_.storage_dir.empty()) {
         return;

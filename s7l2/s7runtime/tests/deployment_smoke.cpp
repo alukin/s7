@@ -27,7 +27,7 @@
 #include <s7/canonical_json.hpp>
 #include <s7/deployment_client.hpp>
 #include <s7/net.hpp>
-#include <s7/control_plane_mvp.hpp>
+#include <s7/control_plane.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/runtime_service.hpp>
 #include <s7/transport.hpp>
@@ -206,7 +206,7 @@ public:
 
 class Client {
 public:
-    Client(s7::ControlPlaneMvp& control, ControlPeer peer) : control_(control), peer_(std::move(peer)) {}
+    Client(s7::ControlPlane& control, ControlPeer peer) : control_(control), peer_(std::move(peer)) {}
 
     json::object send(const json::object& request)
     {
@@ -214,7 +214,7 @@ public:
     }
 
 private:
-    s7::ControlPlaneMvp& control_;
+    s7::ControlPlane& control_;
     ControlPeer peer_;
 };
 
@@ -254,7 +254,7 @@ void test_authorization()
 {
     auto host = std::make_shared<FakeHost>();
     std::vector<std::string> log;
-    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+    s7::ControlPlane control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{
                                     .authorization = studio_authorization(),
                                     .deployment_host = host,
@@ -273,7 +273,7 @@ void test_authorization()
     expect(node_response.at("details").as_object().contains("peer_certificate_sha256"), "denial names the peer certificate");
 
     // A certificate with the Studio role but not the pinned one is refused.
-    s7::ControlPlaneMvp other_pin{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+    s7::ControlPlane other_pin{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                   s7::ControlPlaneOptions{
                                       .authorization = {.studio_key_purpose_oid = kStudioKeyPurposeOid,
                                                         .studio_certificate_sha256 = std::string(64, 'a')},
@@ -282,7 +282,7 @@ void test_authorization()
     expect_error(Client(other_pin, verified_peer("s7_studio.cert.pem")).send(request), "UNAUTHORIZED", "unpinned Studio");
 
     // A node without configured Studio authorization accepts no changes.
-    s7::ControlPlaneMvp unconfigured{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid}, s7::ControlPlaneOptions{.deployment_host = host}};
+    s7::ControlPlane unconfigured{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid}, s7::ControlPlaneOptions{.deployment_host = host}};
     expect_error(Client(unconfigured, verified_peer("s7_studio.cert.pem")).send(request), "UNAUTHORIZED", "no Studio configured");
 
     const auto ok = Client(control, verified_peer("s7_studio.cert.pem")).send(request);
@@ -302,7 +302,7 @@ void test_authorization()
 void test_deployment_lifecycle()
 {
     auto host = std::make_shared<FakeHost>();
-    s7::ControlPlaneMvp control{
+    s7::ControlPlane control{
         s7::ControlNodeDescriptor{.node_uuid = kNodeUuid, .element_types = {"Constant", "Gain"}},
         s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host}};
     Client studio(control, verified_peer("s7_studio.cert.pem"));
@@ -404,7 +404,7 @@ void test_deployment_lifecycle()
 void test_prepare_expiry()
 {
     auto host = std::make_shared<FakeHost>();
-    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+    s7::ControlPlane control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{.authorization = studio_authorization(),
                                                         .deployment_host = host,
                                                         .prepare_ttl = std::chrono::seconds(0)}};
@@ -539,7 +539,7 @@ void test_stream_status_and_recovery()
 {
     auto network = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
     int recoveries = 0;
-    s7::ControlPlaneMvp control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+    s7::ControlPlane control{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                 s7::ControlPlaneOptions{.authorization = studio_authorization(),
                                                         .network = network,
                                                         .on_stream_recovered = [&recoveries] { ++recoveries; }}};
@@ -622,11 +622,11 @@ void test_deploy_client()
     constexpr const char* kOther = "33333333-4444-5555-6666-777777777777";
     auto host_a = std::make_shared<RecordingHost>();
     auto host_b = std::make_shared<RecordingHost>();
-    s7::ControlPlaneMvp node_a{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+    s7::ControlPlane node_a{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                                s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_a, .clock_sync = assumed_clock}};
-    s7::ControlPlaneMvp node_b{s7::ControlNodeDescriptor{.node_uuid = kOther},
+    s7::ControlPlane node_b{s7::ControlNodeDescriptor{.node_uuid = kOther},
                                s7::ControlPlaneOptions{.authorization = studio_authorization(), .deployment_host = host_b, .clock_sync = assumed_clock}};
-    std::map<std::string, s7::ControlPlaneMvp*> by_endpoint{{"wss://a", &node_a}, {"wss://b", &node_b}};
+    std::map<std::string, s7::ControlPlane*> by_endpoint{{"wss://a", &node_a}, {"wss://b", &node_b}};
     auto request = [&](const s7::deployment::RuntimeNode& node, const json::object& message) {
         return Client(*by_endpoint.at(node.endpoint), verified_peer("s7_studio.cert.pem")).send(message);
     };
@@ -713,7 +713,7 @@ void test_deploy_client()
     // A clock beyond its error bound, or not synchronized, is the node's own domain.
     for (const auto& sync : {s7::clock::SyncStatus{.synchronized = true, .max_error_ns = 300'000'000, .source = "kernel"},
                              s7::clock::SyncStatus{.synchronized = false, .source = "kernel"}}) {
-        s7::ControlPlaneMvp drifting{s7::ControlNodeDescriptor{.node_uuid = kOther},
+        s7::ControlPlane drifting{s7::ControlNodeDescriptor{.node_uuid = kOther},
                                      s7::ControlPlaneOptions{.clock_sync = [sync] { return sync; }, .max_clock_error_ns = 250'000'000}};
         const auto drifting_info =
             Client(drifting, ControlPeer{}).send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
@@ -775,12 +775,12 @@ void test_deployment_survives_restart()
     const auto types = s7::deployment::infer_output_types(diagram);
     const json::object list{{"type", "LIST_DEPLOYMENTS"}, {"request_id", "l"}, {"protocol_version", 1}};
     auto make_node = [&](const std::shared_ptr<RecordingHost>& host) {
-        return std::make_unique<s7::ControlPlaneMvp>(
+        return std::make_unique<s7::ControlPlane>(
             s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
             s7::ControlPlaneOptions{.storage_dir = storage, .authorization = studio_authorization(), .deployment_host = host,
                                     .clock_sync = assumed_clock});
     };
-    auto deploy_to = [&](s7::ControlPlaneMvp& node, const json::object& what) {
+    auto deploy_to = [&](s7::ControlPlane& node, const json::object& what) {
         return s7::deployment::deploy_diagram(what, types, [&](const s7::deployment::RuntimeNode&, const json::object& message) {
             return Client(node, verified_peer("s7_studio.cert.pem")).send(message);
         });
@@ -789,7 +789,7 @@ void test_deployment_survives_restart()
     {
         auto host = std::make_shared<RecordingHost>();
         auto node = make_node(host);
-        expect(node->restore_deployment() == s7::ControlPlaneMvp::RestoreOutcome::NothingPersisted, "nothing to restore at first");
+        expect(node->restore_deployment() == s7::ControlPlane::RestoreOutcome::NothingPersisted, "nothing to restore at first");
         const auto deployed = deploy_to(*node, diagram);
         expect(deployed.committed && deployed.revision == 1, "deployed");
         expect(std::filesystem::exists(storage / "deployment.json"), "the commit is persisted");
@@ -799,7 +799,7 @@ void test_deployment_survives_restart()
     {
         auto host = std::make_shared<RecordingHost>();
         auto node = make_node(host);
-        expect(node->restore_deployment() == s7::ControlPlaneMvp::RestoreOutcome::Restored, "restored");
+        expect(node->restore_deployment() == s7::ControlPlane::RestoreOutcome::Restored, "restored");
         expect(host->active && host->active->at("elements").as_array().at(0).as_object().at("id").as_string() == "c",
                "the restored graph runs");
         expect(host->model_time_step_ns == 10'000'000, "with its model time");
@@ -842,7 +842,7 @@ void test_deployment_survives_restart()
         std::ofstream(path, std::ios::trunc) << json::serialize(record);
         auto host = std::make_shared<RecordingHost>();
         auto node = make_node(host);
-        expect(node->restore_deployment() == s7::ControlPlaneMvp::RestoreOutcome::Failed, "a damaged record fails to restore");
+        expect(node->restore_deployment() == s7::ControlPlane::RestoreOutcome::Failed, "a damaged record fails to restore");
         expect(!host->active, "nothing runs");
         const auto listed = Client(*node, ControlPeer{}).send(list);
         const auto& last = listed.at("history").as_array().back().as_object();
@@ -889,7 +889,7 @@ json::object constants_diagram(const std::size_t n, const std::string& endpoint)
 void test_chunked_transfer()
 {
     auto host = std::make_shared<RecordingHost>();
-    s7::ControlPlaneMvp node{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
+    s7::ControlPlane node{s7::ControlNodeDescriptor{.node_uuid = kNodeUuid},
                              s7::ControlPlaneOptions{.authorization = studio_authorization(),
                                                      .deployment_host = host,
                                                      .max_configuration_bytes = 2048,
