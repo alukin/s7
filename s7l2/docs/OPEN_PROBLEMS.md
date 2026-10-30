@@ -282,6 +282,15 @@ The next release has one goal: **good simulation quality in `s7studio` with its 
 
 ## P3 — Deferred architecture capabilities (documented MVP limits, not defects)
 
+- **Within-node parallel execution — 0.3.0 planning:** indexed serial
+  execution is the 0.2.0 performance increment. The corrected FFT branch
+  benchmark shows that independent expensive work can benefit, while FIR and
+  small-workload results are mixed; neither prototype is a production graph
+  scheduler. Region partitioning, static price tags, plugin and stateful-element
+  safety, worker policy, rollback, graph replacement and the serial fallback
+  remain open decisions. See the [0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md)
+  and [performance evidence](RUNTIME_PERFORMANCE_ARCHITECTURE.md). No
+  within-node parallel scheduler is required for 0.2.0.
 - `SOURCE_TIME` is carried and checked like the other timestamp roles, but no element produces it yet; needs a real or deterministic acquisition-time source (e.g. an SDR input) to validate against.
 - Streams are not relayed through other nodes; identity, buffering, latency, and failure-propagation semantics for a relay need to be specified before adding one.
 - Distributed scheduling and coherence domains are undefined; `NetRuntime` and synchronized multi-node execution do not exist. Needs formal invariants and executable examples before implementation.

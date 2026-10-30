@@ -10,7 +10,7 @@ Networks, runtime node configuration editing and other networking work to
 Implementation of these release goals belongs to 0.2.0.
 The [0.1.1 preview notes](RELEASE_0.1.1_NOTES.md) record the current released
 baseline. The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) assigns distributed
-delivery and the parallel architecture, simulation and Studio work, with
+delivery, simulation and Studio work, with
 development steps and PR review gates.
 
 Scope clarification (2026-10-25): integrator and feedback-settling research is a
@@ -19,37 +19,21 @@ The maintainer and Codex will work on that research separately. Its findings
 require review before any release integration is considered; see
 [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md).
 
-## Parallel execution within one runtime
+## Indexed serial runtime; parallel execution deferred
 
-The [runtime performance investigation](RUNTIME_PERFORMANCE_ARCHITECTURE.md)
-proposes compiling the connection DAG and execution records as the basis for
-this scheduler while preserving the simple `Element::step()` contract. Its
-measurements are provisional; performance targets require benchmark gates.
+Indexed execution resolves causal, memory and coupled-trapezoid element
+references once in the compiled graph and uses those references while stepping.
+The original ID orders remain for diagnostics. The [runtime performance
+investigation](RUNTIME_PERFORMANCE_ARCHITECTURE.md) records Release before/after
+measurements, correctness checks and limits. This serial improvement is the
+0.2.0 runtime-performance increment; no within-node parallel scheduler is a
+0.2.0 goal or acceptance requirement.
 
-Run independent work in one compiled causal graph concurrently using a bounded,
-reusable worker pool. Keep a single-thread execution mode as the reference and
-allow the worker count to be configured. Begin with graphs that contain useful
-independent branches or components; define the scheduling plan and benchmark
-workloads before fixing performance targets.
-
-Preserve dependency ordering, existing element arithmetic and model time.
-Causal-memory outputs publish at the step boundary; dependent direct-feedthrough
-elements run only after their inputs are ready; next-step state is staged under
-the existing contract. Coupled implicit integration keeps its simultaneous-state
-semantics. Parallelism does not introduce a global ODE/event solver.
-
-Define which elements/plugins may execute concurrently and serialize or reject
-unsafe work explicitly. Lifecycle transitions and graph replacement occur at
-acknowledged safe boundaries. Observation stays read-only and coherent after a
-completed step, preserving the current stepping-thread contract. Do not promise
-transactional rollback of arbitrary plugin state or external side effects.
-
-Acceptance includes comparison with the single-thread reference, seeded state
-and noise behavior, insertion/scheduling-order variation, stateful feedback,
-coupled integration, failure/shutdown under load and sanitizer stress coverage.
-Measure throughput, CPU use, memory and scheduling overhead for small and large
-graphs at several worker counts; report both speedups and regressions on stated
-hardware. Cross-platform numerical checks use explicit tolerances where needed.
+Coarse execution regions, static element price tags, worker-pool behavior,
+plugin concurrency and serial/parallel selection are open decisions. The
+[0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) preserves the
+evidence, candidate ideas and unresolved contracts. It does not commit a
+particular scheduler or guarantee parallel execution in 0.3.0.
 
 ## Multiple nodes on local and remote hosts
 
@@ -273,11 +257,10 @@ work and is independent of the integrator-research branch.
 
 ## Planning and release boundary
 
-Agree the parallel execution contract, plugin/thread-safety rules and benchmark
-matrix before implementing the within-node scheduler. Establish the distributed
-contract and conformance baseline in parallel; then the Python data plane and
-multi-node work can advance independently of scheduler implementation. Shared
-headless tests and protocol fixtures should cover their integration. Studio
+Establish the distributed contract and conformance baseline; then the Python
+data plane and multi-node work can advance. Within-node parallel scheduling and
+its plugin/thread-safety contract belong to 0.3.0 planning. Shared headless
+tests and protocol fixtures should cover their integration. Studio
 remains an optional client; improvements to it should support these workflows
 without moving execution logic into the GUI.
 Plan and qualify Studio printing as an additional release workstream, with its

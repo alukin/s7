@@ -41,14 +41,16 @@ verification are recorded in the 0.1.1 plan. The simulation guide records
 Siebert's book as the maintainer's stated design inspiration, with reading
 status and attribution rules for planned example adaptations.
 
-The [0.2.0 goals](RELEASE_0.2.0.md) are parallel execution within one runtime,
+The [0.2.0 goals](RELEASE_0.2.0.md) include indexed serial runtime execution,
 qualified multi-node operation on local and remote hosts, remote node
 control/configuration/restart and Trusted Networks settings, certificate viewing
 and node certificate creation, Studio printing of diagrams and observation
 graphs, and a software signal-generator element inspired by the UNI-T UTG932E.
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) records ownership, distributed
-architecture and implementation steps, PR review gates and the parallel
-simulation/Studio tracks.
+architecture and implementation steps, PR review gates and the concurrent
+simulation/Studio workstreams.
+Within-node parallel scheduling and its unresolved design choices are recorded
+for [0.3.0 planning](RELEASE_0.3.0_RUNTIME_PARALLELISM.md).
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
@@ -70,7 +72,8 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 
 | Document | Content |
 |---|---|
-| [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Runtime hot-path investigation, provisional measurements and proposed compiled connection-graph scheduler |
+| [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Indexed serial runtime design and measured results; corrected FFT/FIR experiments and deferred scheduler ideas |
+| [RELEASE_0.3.0_RUNTIME_PARALLELISM.md](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) | Established facts, candidate approaches and open decisions for within-node parallel execution |
 | `S7_Transport_Architecture.md` | `s7transport` / `s7runtime` / `s7net` boundaries, security and data-plane baseline |
 | [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) | Separate mTLS control and configurable encrypted/trusted-plaintext data listeners, configuration and cross-language contract |
 

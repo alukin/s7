@@ -14,7 +14,7 @@ integrator research to that release.
 | --- | --- | --- |
 | Causal model, runtime and protocol architecture, release gates | Maintainer and Codex | Agree on semantics and an executable contract before implementations diverge. |
 | Distributed transport, multi-node lifecycle, headless administration and Python interoperability | teren-ukr | C++ remains the reference implementation. Changes to its protocol, authorization or causal behavior require maintainer/Codex review. |
-| Within-node parallel execution | Maintainer and Codex | This changes `s7core` scheduling and is separate from cross-node transport. It must preserve the single-thread reference. |
+| Within-node parallel execution (0.3.0 planning) | Maintainer and Codex | Deferred from 0.2.0. Scheduling, cost and plugin-safety decisions remain open; the indexed serial runtime is the reference. |
 | Numerical validation and integrator/feedback research | Maintainer and Codex | Research runs separately; a release change needs its own design and reference-backed acceptance. |
 | Studio editing, observation and administration UI | Maintainer and Codex | Headless services expose typed operations; Qt remains a client. Coordinate request/result types with the distributed work. |
 
@@ -80,8 +80,8 @@ protocol fixtures before claiming Python conformance.
 | D4. Provisioning and remote hosts | Agree certificate profiles, signing/CSR workflow, key protection and replacement behavior. Implement a headless credential tool and use independently generated credentials on at least two physical hosts. Verify mTLS control and both explicit data profiles, restart/reconnect and packaging without test-fixture keys. Studio's certificate viewer belongs to the UI track. |
 | D5. Qualification | Measure throughput, latency, CPU, memory, queue/log occupancy and recovery time on named hardware for representative topologies. Run stress/sanitizer and platform checks, document failures and limits, and close the acceptance matrix. Keep constrained-device results separate until measured there. |
 
-D1 can start after D0. The within-node scheduler can advance independently
-after its separate architecture contract. D3's protocol review precedes its
+D1 can start after D0. Within-node parallelism is outside the 0.2.0 delivery
+path and is recorded for 0.3.0 planning. D3's protocol review precedes its
 implementation. D4's generated credentials
 precede claims about remote-host provisioning. Studio's settings and node UI
 should consume the reviewed D3 service rather than introduce a second protocol.
@@ -113,9 +113,9 @@ not establish an unattended monitor.
 
 1. **Architecture and development plan:** close the 0.2.0 scope and acceptance
    matrix first. Audit graph replacement, stream ownership and shutdown; then
-   define the within-node scheduler and plugin concurrency contract against the
-   serial runtime. Review D3 administration semantics and integration
-   boundaries before implementation, keeping the language-neutral and C++
+   record the indexed serial measurements and unresolved within-node parallel
+   questions for 0.3.0 planning. Review D3 administration semantics and
+   integration boundaries before implementation, keeping the language-neutral and C++
    documents aligned.
 2. **Simulation accuracy, research and Studio usability:** extend independent
    numerical references and supported envelopes for saved models before

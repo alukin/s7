@@ -1,17 +1,20 @@
 # Runtime performance architecture investigation
 
-Status: indexed serial execution implementation for 0.2.0, 2026-10-30.
-Earlier parallel-scheduler measurements and proposals below remain research,
-not a supported performance envelope.
+Status: indexed serial execution is the completed 0.2.0 performance increment,
+2026-10-30. Parallel scheduling, region grouping and static cost tags are
+unselected 0.3.0 planning questions, recorded separately in
+[the 0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md). Earlier
+parallel measurements and proposals below are research, not a supported
+performance envelope or a 0.2.0 delivery commitment.
 
 ## Indexed serial execution design
 
-The compiler currently keeps topologically ordered string IDs. Each runtime
-step resolves those IDs through the element hash map for direct evaluation,
-memory staging and every coupled trapezoid RHS iteration. Output snapshots
-and virtual dispatch are separate costs and stay unchanged in this change.
+Before indexed execution, the compiler kept topologically ordered string IDs.
+Each runtime step resolved those IDs through the element hash map for direct
+evaluation, memory staging and every coupled trapezoid RHS iteration. Output
+snapshots and virtual dispatch are separate costs and stayed unchanged.
 
-The executable graph will keep its ID orders and maps for diagnostics and
+The executable graph keeps its ID orders and maps for diagnostics and
 public lookup, plus parallel vectors of `Element*` in exactly the same order.
 The compiler fills these vectors after validation, element creation, input
 binding and scheduling. The map owns each element through `unique_ptr`;
@@ -33,7 +36,7 @@ external side effects have no new rollback guarantee. Existing port pointers,
 signal types, plugin-created elements and nested runtimes use the same
 `Element::step()` contract. Only the dispatch reference changes.
 
-Expected gain is the removal of repeated string hashing and map traversal,
+The gain comes from removing repeated string hashing and map traversal,
 particularly for small elements and repeated implicit iterations. Compiling
 three pointer vectors adds linear storage and a small one-time lookup cost.
 Virtual calls, output snapshots, nested-schema output lookup and actual element
@@ -127,13 +130,13 @@ signal types include narrow integers, F16/F128 and complex values; the compiled
 plan must retain exact port types and existing overflow rules. Studio and
 plugins consume the same compiled runtime.
 
-## What the current runtime does
+## Historical pre-indexed runtime mechanism
 
-- `Compiler::compile` creates an `Element` object for each instance, binds an
+- Before indexed execution, `Compiler::compile` created an `Element` object for each instance, bound an
   input directly to the source object's output member, and creates string-ID
   `causal_order`, `memory_order` and `trapezoid_rhs` lists. The topological
   dependency adjacency is discarded after ordering (`s7core/src/compiler.cpp`).
-- `NodeRuntime::step` publishes staged memory outputs, copies every direct
+- The former `NodeRuntime::step` published staged memory outputs, copied every direct
   output to a rollback snapshot, looks up every direct element by string ID,
   calls virtual `step()`, runs the coupled implicit stage, then steps and stages
   causal-memory elements (`s7core/src/runtime.cpp`). An exception restores
@@ -150,7 +153,7 @@ plugins consume the same compiled runtime.
   same-toolchain C++ SDK contract (`docs/PLUGIN_INTERFACE.md`). In-tree
   `s7noise` and the out-of-tree SDK reference `s7spectral` exercise it.
 
-## Provisional microbenchmark
+## Historical provisional microbenchmark
 
 One unpaced Release (`-O3 -DNDEBUG`) probe on an AMD Ryzen 7 4700U compared
 simple F64 Gain graphs. It was compiled against the current `build-release`
@@ -271,7 +274,12 @@ compares both algorithms against the same direct reference with exact frame
 index alignment. They are not yet graph elements because frame ports need the
 value contract described above.
 
-## Proposed compiled runtime connection graph
+## Candidate parallel designs for 0.3.0 planning
+
+The following ideas have not been selected. The indexed serial runtime already
+meets the 0.2.0 performance scope. The [0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md)
+lists the questions and evidence needed before a parallel contract or release
+commitment is made.
 
 1. **Retain `Element`.** Element instances continue to own their outputs and
    state, and connections remain bound to their output pointers. `step()`,
@@ -282,48 +290,41 @@ value contract described above.
    as the canonical serial order and retain the string IDs for diagnostics.
    Add direct-feedthrough dependency indices to the same compiled graph; the
    compiler already builds this adjacency while scheduling.
-3. **Compile coarse regions.** Fuse cheap connected elements into a region
-   when their dependency edge has one successor and one predecessor. Stop at
-   split and join points, causal-memory boundaries, and elements that require
-   serial execution. A region contains an ordered run of element pointers and
-   has region-level predecessor/successor indices. An expensive independent
-   branch can be one region or a short sequence of regions. Dispatch one task
-   per ready region, not per element. A join is ready only after every incoming
-   region completes. Estimate work conservatively and require measured benefit
-   before enabling parallel dispatch; element count alone is insufficient.
-4. **Keep step phases explicit.** The coordinator publishes causal-memory
+3. **Possible coarse regions.** One candidate would fuse cheap connected
+   elements when their dependency edge has one successor and one predecessor,
+   stopping at split and join points, causal-memory boundaries and unsafe
+   elements. Expensive independent branches might run separately. Partition
+   rules, task granularity, readiness and cost estimation remain open; element
+   count alone is insufficient.
+4. **Required phase invariants.** The coordinator publishes causal-memory
    outputs and prepares rollback snapshots. Workers evaluate audited direct
    elements and finish before coupled trapezoid trials and causal-memory
    staging. Observation reads only after step completion. On failure, stop
    dispatch, drain workers and restore published outputs before rethrowing;
    existing private-state and external-side-effect limits still apply.
-5. **Handle safety outside the element API.** `has_state()` does not prove
-   thread safety. Audit built-in instances; keep blocking file/network work
-   on a serial path. Until a safe concurrent policy is established, a graph
-   containing unknown plugin or side-effecting elements uses serial execution.
-   This need not add methods to `Element`.
+5. **Unresolved concurrency policy.** `has_state()` does not prove thread
+   safety. Built-ins, plugins, nested schemas and side-effecting file/network
+   work need an audit before any concurrent execution. A serial fallback is
+   the safe starting point; whether policy needs metadata or new interfaces
+   remains undecided.
 
-The **fast serial path** traverses `causal_execution` directly, then performs
-the existing coupled trial and memory phases. Worker count one, a graph with
-insufficient independent work, or a graph with unaudited elements takes this
-path without ready queues, atomics or per-region barriers. The parallel path
-uses the region DAG stored in that same `ExecutableGraph`; it does not require
-a second graph format or a different schema compilation. The serial traversal
-keeps today's exact causal order even where independent chains are interleaved
-in that order. Parallel regions may run in a different order only when their
-elements have been audited for safe concurrent execution.
+The **current fast serial path** traverses `causal_execution` directly, then
+performs the coupled trial and memory phases. Any future worker-count-one mode
+should preserve this queue-free behavior and exact causal order. A parallel
+plan could share `ExecutableGraph`, but its representation and eligibility
+rules have not been chosen. Independent chains may be interleaved in today's
+serial order; concurrent reordering needs a proved safety contract.
 
-Region eligibility and dispatch thresholds are compile/runtime policy, not
-new element semantics. Start with known pure built-ins and an explicit cost
-estimate for expensive branches. Compare one, two and more workers on the
-same compiled graph, including narrow chains where the serial path should win.
+Region eligibility and dispatch thresholds might be compile/runtime policy
+rather than new element semantics. Compare candidate policies on the same
+compiled graph, including narrow chains where the serial path should win.
 The benchmark correction above shows why both branch call counts and output
 parity must be checked: equal outputs alone missed duplicated work.
 
 ### Estimating region cost
 
-Yes: assign a static price tag to each element instance when its schema is
-compiled, then sum those tags into a region estimate `C(R)`. The tag can depend
+One candidate is a static price tag assigned to each element instance when
+its schema is compiled, summed into a region estimate `C(R)`. The tag could depend
 on element kind, resolved signal type and fixed parameters: an Adder scales
 with input count, a FIR filter with tap count, and a future FFT graph element
 with transform size and plan. Nested schema cost includes its compiled internal
@@ -333,10 +334,10 @@ therefore need validated instance parameters retained as compiler-side metadata
 or a read-only cost hint. This does not require per-step timing or a change to
 `Element::step()`.
 
-Calibrate tag values on the target hardware using opt-in serial benchmarks, and
-check whole-region timing to account for virtual calls and locality effects.
-Unknown or highly variable work uses the serial path until measured and
-audited. Keep concurrency safety as a separate gate from cost.
+This approach would need calibration on target hardware using opt-in serial
+benchmarks, and whole-region checks for virtual calls and locality effects.
+Unknown or highly variable work should retain the serial path until measured
+and audited. Concurrency safety is a separate gate from cost.
 
 For the direct-feedthrough region DAG, let `W = sum C(R)` be total work and
 `S = max_path sum C(R)` the longest causal path. With `p` workers, an optimistic
@@ -346,10 +347,9 @@ a safety margin, use the serial path immediately. For two independent chains,
 the saving is bounded by the cheaper chain's cost: a very expensive branch
 cannot make a tiny sibling worthwhile to dispatch. This bound is only a
 filter; cache contention and CPU frequency can raise actual parallel time.
-Benchmark candidate layouts on the target hardware and enable parallel mode
-only when its measured benefit clears the margin. Reuse the compiled region
-graph for either mode; the one-worker traversal still uses the canonical
-`causal_execution` order without queue operations.
+These are candidate screening equations, not a chosen price model or threshold.
+Any later implementation needs target-hardware benchmarks and a serial path
+that keeps the canonical `causal_execution` order without queue operations.
 
 Object storage still has a locality cost, but arraying execution records and
 removing per-step hash lookups already has a measured opportunity. Measure
@@ -358,31 +358,30 @@ allocators or a second data-layout change. Schema-backed elements currently
 run nested runtimes; flattening them can be a later compiler optimization if
 its feedback and step-boundary semantics are proved equivalent.
 
-## Work sequence and decision gates
+## Possible 0.3.0 investigation sequence
 
-1. Add reproducible headless benchmarks and correctness fixtures: narrow and
+This sequence is a research proposal, not scheduled 0.3.0 implementation work.
+
+1. Extend reproducible headless benchmarks and correctness fixtures: narrow and
    wide DAGs, the full double pendulum, unequal branch weights, heavy FIR/FFT
    elements, stateful feedback, nested schemas, implicit integration, I/O
    boundaries and observed runs. Measure compilation, throughput, p50/p99
    step latency, CPU, RSS, cache misses and worker-count scaling on named
    hardware.
-2. Indexed `Element*` orders are implemented and measured above. Retain the
-   compiler's direct-feedthrough dependency adjacency as region-level indices
-   without changing element behavior.
-3. Add a bounded worker pool and coarse ready-region scheduling over the same
-   executable graph as the direct-pointer serial path. Test actual
-   concurrency with independently expensive elements, split/join ordering,
-   failure draining, graph replacement and shutdown. Compare 1/2/4/8 workers
-   and automatically use serial execution where parallel dispatch loses.
+2. Evaluate whether retaining direct-feedthrough dependency adjacency and
+   compiling coarse regions provide enough benefit without changing element
+   behavior. Compare alternatives before choosing a graph representation.
+3. If a parallel contract is approved, prototype a bounded worker pool and
+   region readiness on that contract. Test independently expensive elements,
+   split/join ordering, failure draining, graph replacement and shutdown.
+   Compare 1/2/4/8 workers and serial fallback on named hardware.
 4. Review measured bottlenecks. Consider nested-schema flattening, alternate
    snapshot handling or data placement as separate changes only with parity
    tests and a demonstrated gain.
 
-This is an AI-assisted implementation plan. The previous engineer-week range
-for a complete element/kernel redesign does not apply to this narrower graph
-compilation proposal. Set a calendar estimate after a region-plan prototype
-and the corrected heavy-branch benchmarks; correctness and numerical acceptance
-remain release gates.
+Set a calendar estimate and release commitment only after 0.3.0 planning
+selects a contract and benchmark gates. Correctness and numerical acceptance
+remain required for any implementation.
 
 ## Relevant external engineering guidance
 
