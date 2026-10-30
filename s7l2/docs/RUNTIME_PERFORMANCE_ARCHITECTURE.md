@@ -322,14 +322,21 @@ parity must be checked: equal outputs alone missed duplicated work.
 
 ### Estimating region cost
 
-Yes: assign each compiled region an estimated serial cost `C(R)` in nanoseconds.
-Start with the sum of calibrated costs for its element types and parameters,
-then validate that estimate by timing whole regions in an opt-in serial
-benchmark. Whole-region timing includes virtual calls and locality effects that
-a simple element count misses. FFT size and plan, FIR tap count, and nested
-schema contents require different estimates; unknown or highly variable work
-uses the serial path until measured and audited. Keep concurrency safety as a
-separate gate from cost.
+Yes: assign a static price tag to each element instance when its schema is
+compiled, then sum those tags into a region estimate `C(R)`. The tag can depend
+on element kind, resolved signal type and fixed parameters: an Adder scales
+with input count, a FIR filter with tap count, and a future FFT graph element
+with transform size and plan. Nested schema cost includes its compiled internal
+graph. The compiler currently sees `Element::type_name()` and port types but
+not private parameters such as `FirFilterT::taps_`; parameter-sensitive tags
+therefore need validated instance parameters retained as compiler-side metadata
+or a read-only cost hint. This does not require per-step timing or a change to
+`Element::step()`.
+
+Calibrate tag values on the target hardware using opt-in serial benchmarks, and
+check whole-region timing to account for virtual calls and locality effects.
+Unknown or highly variable work uses the serial path until measured and
+audited. Keep concurrency safety as a separate gate from cost.
 
 For the direct-feedthrough region DAG, let `W = sum C(R)` be total work and
 `S = max_path sum C(R)` the longest causal path. With `p` workers, an optimistic
