@@ -277,18 +277,20 @@ value contract described above.
    state, and connections remain bound to their output pointers. `step()`,
    `Feedthrough`, `has_state`, port registration and the current plugin element
    interface remain the author-facing contract.
-2. **Compile dense execution records.** Resolve each ID once to a stable
-   `Element*`; store direct-feedthrough successors, predecessor counts,
-   topological order, output snapshot locations, memory order, trial-RHS order
-   and observation ID mappings in arrays. Strings and maps stay available for
-   diagnostics but leave the steady-state step loop. The compiler already
-   builds the dependency adjacency temporarily, so it can retain this plan.
-3. **Compile scheduling regions.** Identify independent ready nodes and chains
-   separated by split/join points. A bounded pool takes ready regions; a join
-   becomes ready only when every required predecessor finishes. Worker count
-   one uses the same graph plan as the numerical reference. Keep a fast serial
-   path for narrow or cheap graphs. Use benchmarks to choose task granularity;
-   element count or visible diagram layout alone is not a cost model.
+2. **Retain indexed execution.** The existing `ExecutableGraph` already owns
+   stable `Element*` vectors in causal, memory and trial-RHS order. Keep these
+   as the canonical serial order and retain the string IDs for diagnostics.
+   Add direct-feedthrough dependency indices to the same compiled graph; the
+   compiler already builds this adjacency while scheduling.
+3. **Compile coarse regions.** Fuse cheap connected elements into a region
+   when their dependency edge has one successor and one predecessor. Stop at
+   split and join points, causal-memory boundaries, and elements that require
+   serial execution. A region contains an ordered run of element pointers and
+   has region-level predecessor/successor indices. An expensive independent
+   branch can be one region or a short sequence of regions. Dispatch one task
+   per ready region, not per element. A join is ready only after every incoming
+   region completes. Estimate work conservatively and require measured benefit
+   before enabling parallel dispatch; element count alone is insufficient.
 4. **Keep step phases explicit.** The coordinator publishes causal-memory
    outputs and prepares rollback snapshots. Workers evaluate audited direct
    elements and finish before coupled trapezoid trials and causal-memory
@@ -297,9 +299,26 @@ value contract described above.
    existing private-state and external-side-effect limits still apply.
 5. **Handle safety outside the element API.** `has_state()` does not prove
    thread safety. Audit built-in instances; keep blocking file/network work
-   on a serial or separate lane. Unknown plugin types default to serial until
-   their registration metadata or a separate policy explicitly permits
-   concurrent instances. This need not add methods to `Element`.
+   on a serial path. Until a safe concurrent policy is established, a graph
+   containing unknown plugin or side-effecting elements uses serial execution.
+   This need not add methods to `Element`.
+
+The **fast serial path** traverses `causal_execution` directly, then performs
+the existing coupled trial and memory phases. Worker count one, a graph with
+insufficient independent work, or a graph with unaudited elements takes this
+path without ready queues, atomics or per-region barriers. The parallel path
+uses the region DAG stored in that same `ExecutableGraph`; it does not require
+a second graph format or a different schema compilation. The serial traversal
+keeps today's exact causal order even where independent chains are interleaved
+in that order. Parallel regions may run in a different order only when their
+elements have been audited for safe concurrent execution.
+
+Region eligibility and dispatch thresholds are compile/runtime policy, not
+new element semantics. Start with known pure built-ins and an explicit cost
+estimate for expensive branches. Compare one, two and more workers on the
+same compiled graph, including narrow chains where the serial path should win.
+The benchmark correction above shows why both branch call counts and output
+parity must be checked: equal outputs alone missed duplicated work.
 
 Object storage still has a locality cost, but arraying execution records and
 removing per-step hash lookups already has a measured opportunity. Measure
@@ -316,10 +335,11 @@ its feedback and step-boundary semantics are proved equivalent.
    boundaries and observed runs. Measure compilation, throughput, p50/p99
    step latency, CPU, RSS, cache misses and worker-count scaling on named
    hardware.
-2. Compile indexed `Element*` and dependency arrays without changing element
-   behavior. Demonstrate serial parity and measure the gain from removing hot
-   string lookups.
-3. Add a bounded worker pool and coarse ready-region scheduling. Test actual
+2. Indexed `Element*` orders are implemented and measured above. Retain the
+   compiler's direct-feedthrough dependency adjacency as region-level indices
+   without changing element behavior.
+3. Add a bounded worker pool and coarse ready-region scheduling over the same
+   executable graph as the direct-pointer serial path. Test actual
    concurrency with independently expensive elements, split/join ordering,
    failure draining, graph replacement and shutdown. Compare 1/2/4/8 workers
    and automatically use serial execution where parallel dispatch loses.
@@ -329,9 +349,9 @@ its feedback and step-boundary semantics are proved equivalent.
 
 This is an AI-assisted implementation plan. The previous engineer-week range
 for a complete element/kernel redesign does not apply to this narrower graph
-compilation proposal. Set a calendar estimate after the indexed-plan prototype
-and the heavy-branch benchmark; correctness and numerical acceptance remain
-release gates.
+compilation proposal. Set a calendar estimate after a region-plan prototype
+and the corrected heavy-branch benchmarks; correctness and numerical acceptance
+remain release gates.
 
 ## Relevant external engineering guidance
 
