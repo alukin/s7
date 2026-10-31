@@ -514,6 +514,9 @@ void region_boundaries() {
         auto compiled = s7::Compiler::compile(one_way);
         require(compiled.coupled_regions.size() == 2,
                 "One-way coupled states use ordered Runge-Kutta stage blocks");
+        require(compiled.coupled_regions[0].rhs_execution.size() == 1 &&
+                compiled.coupled_regions[1].rhs_execution.empty(),
+                "Downstream stage must not replay the upstream derivative cone");
         s7::NodeRuntime coupled(std::move(compiled));
         const double pole = pade_step(Case{Model::RC, .1, 1, 0, 1, 0})[0];
         for (int step = 0; step <= 10; ++step) {
