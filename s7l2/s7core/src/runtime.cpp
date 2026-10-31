@@ -6,7 +6,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <limits>
-#include <boost/multiprecision/cpp_int.hpp>
 
 namespace s7 {
 
@@ -122,18 +121,30 @@ void NodeRuntime::set_model_time_rate(std::optional<Rate> rate) {
                 throw std::invalid_argument("Model-time rate " + rate->to_string() + " conflicts with element '"
                     + id + "' at " + declared->to_string() + ". Match the run dt and element discretization.");
         }
+        // Seeded and inferred rates count as much as declared ones: an element
+        // validated at one rate must not be stepped as another.
+        for (const auto& [id, resolved] : graph_.rates) {
+            if (resolved != *rate)
+                throw std::invalid_argument("Model-time rate " + rate->to_string() + " conflicts with element '"
+                    + id + "', which runs at " + resolved.to_string() + ". Change the run dt to match, or add a "
+                    "Resampler where the rates meet.");
+        }
     }
     model_time_rate_ = rate;
 }
 
+std::optional<Rate> NodeRuntime::graph_rate() const {
+    std::optional<Rate> common;
+    for (const auto& [id, rate] : graph_.rates) {
+        if (common && *common != rate) return std::nullopt;
+        common = rate;
+    }
+    return common;
+}
+
 namespace {
 std::int64_t timestamp_ns(std::size_t step, Rate rate) {
-    using boost::multiprecision::uint256_t;
-    const uint256_t scaled = uint256_t(step) * rate.denominator * 1'000'000'000;
-    const auto rounded = (scaled + rate.numerator / 2) / rate.numerator;
-    if (rounded > std::numeric_limits<std::int64_t>::max())
-        throw std::overflow_error("Model time exceeds the signed 64-bit nanosecond range.");
-    return rounded.convert_to<std::int64_t>();
+    return rate.step_time_ns(step);
 }
 }
 std::optional<std::int64_t> NodeRuntime::model_time_ns() const {

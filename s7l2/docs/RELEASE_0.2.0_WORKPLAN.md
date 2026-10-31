@@ -155,6 +155,26 @@ not establish an unattended monitor.
    and Studio controls. Certificate viewing and network settings UI consume
    reviewed headless contracts from the distributed track.
 
+## Model time and rate consistency — 0.2.0 tasks
+
+Decided 2026-10-31 ([ADR-022](../../doc/S7_Architectural_Decisions.md#adr-022);
+element classes in the [sample rate model, section 8](../../doc/S7_Sample_Rate_Model.md#8-model-time-and-element-rate-classification-2026-10-31)).
+Owners: maintainer and Codex.
+
+| Step | Deliverable | Status |
+| --- | --- | --- |
+| R1 | Model time checked against every resolved element rate; rational model-time rate for deployments, stream rates and real-time pacing; network stream elements declare their rate. | Implemented |
+| R2 | Rate-following elements adopt their domain's rate; Studio stops rewriting `dt`/`sample_rate_hz`. | Planned |
+| R3 | Durations in time units (seconds) with loader migration from stored sample counts; refuse a duration that is not a whole number of samples. | Planned |
+| R4 | Design rate for `FirFilter`/`IirFilter`; refuse to run at another rate. | Planned |
+| R5 | Rate domains in `NodeRuntime` and the `Resampler` element: orders 0/1/2 (default 0), pass-through at equal rates, causal interpolation, anti-aliasing when lowering the rate. | Planned |
+| R6 | Studio: the run dialog's `dt` drives every rate; mismatch errors suggest a `Resampler`; palette entry; user documentation. | Planned |
+| R7 | Test review: C++ tests and fixtures that build rate-following elements with an explicit `dt`/`sample_rate_hz` (kept as pins for now) are reviewed and rewritten to take the run's rate, so tests exercise the same rate path as documents. | Planned |
+
+Feedback across rate domains is rejected in 0.2.0 and recorded as research in
+[open problems](OPEN_PROBLEMS.md#ratedt-inference-and-validation--implemented-multi-rate-execution-deferred).
+Hardware clock domains (sound devices, networked audio) are 0.3.0 research.
+
 The first joint review should accept or amend D0's matrix and the administration
 design questions in D3. This lets distributed implementation and our local
 simulation/Studio work proceed without changing each other's contracts by

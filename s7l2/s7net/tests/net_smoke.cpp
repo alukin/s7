@@ -120,6 +120,28 @@ try {
     }
 
     {
+        // A stream with a sample rate runs at it: its group resolves to that
+        // rate (a schema seed is only a default), and a node whose model time
+        // differs is rejected, naming the stream element, not resampled.
+        s7::Schema schema{"stream_rate"};
+        schema.set_rate(s7::Rate::from_hz(1000));
+        add(schema, "in", "NetSource", {{"stream_id", kStream}, {"sample_rate", json::array{44100, 1}}});
+        add(schema, "gain", "Gain");
+        schema.connect("in", 0, "gain", 0);
+        s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+        expect(runtime.graph_rate() == s7::Rate::from_hz(44100), "the stream's group runs at the stream rate");
+        std::string error;
+        try {
+            runtime.set_model_time_rate(s7::Rate::from_hz(1000));
+        } catch (const std::invalid_argument& ex) {
+            error = ex.what();
+        }
+        expect(error.find("'in'") != std::string::npos || error.find("'gain'") != std::string::npos,
+               "model time at another rate than the stream is rejected: " + error);
+        runtime.set_model_time_rate(s7::Rate::from_hz(44100));
+    }
+
+    {
         // No data within max_wait: the stream faults and the step throws (no invented value).
         auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
         s7::RuntimeNetContext::set_endpoint(endpoint);

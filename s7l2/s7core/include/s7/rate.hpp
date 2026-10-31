@@ -30,6 +30,13 @@ struct Rate {
     [[nodiscard]] static Rate from_hz(double hz);
 
     [[nodiscard]] double to_hz() const { return static_cast<double>(numerator) / static_cast<double>(denominator); }
+    // Time of sample `step` (step / rate seconds), rounded once to whole ns:
+    // the model time of a step, and of real-time pacing on the same grid.
+    // Throws std::overflow_error past the signed 64-bit ns range.
+    [[nodiscard]] std::int64_t step_time_ns(std::uint64_t step) const;
+    // The first step whose step_time_ns() is at or after `time_ns` (0 for a
+    // time at or before zero).
+    [[nodiscard]] std::uint64_t first_step_at_ns(std::int64_t time_ns) const;
     [[nodiscard]] std::string to_string() const;
 
     friend bool operator==(const Rate&, const Rate&) = default;

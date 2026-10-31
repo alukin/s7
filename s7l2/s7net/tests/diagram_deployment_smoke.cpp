@@ -277,8 +277,13 @@ void test_timing()
     expect(stream.stream_id != untimed_id, "a timing change starts a new stream");
     diagram["dt"] = 1.0 / 3.0;
     expect(deployment::assign_streams(diagram, infer(diagram)).empty(), "reassigned with dt = 1/3 s");
-    expect(deployment::parse_streams(diagram).front().sample_rate == s7::stream::SampleRate{1'000'000'000, 333'333'333},
-           "the rate matches the model-time step in whole nanoseconds");
+    expect(deployment::parse_streams(diagram).front().sample_rate == s7::stream::SampleRate{3, 1},
+           "the rate is exactly 1 / dt, not 1 / dt rounded to whole nanoseconds");
+    expect(deployment::model_time_rate(diagram) == s7::Rate{3, 1}, "the model-time rate is exactly 1 / dt");
+    diagram["dt"] = 1.0 / 44100;
+    expect(deployment::model_time_rate(diagram) == s7::Rate{44100, 1}, "44.1 kHz is exact, not 1e9 / 22676 ns");
+    expect(deployment::model_time_step_ns(diagram) == 22676, "the ns step only paces real time");
+    diagram["dt"] = 1.0 / 3.0;
     diagram["dt"] = 0;
     expect(!deployment::assign_streams(diagram, infer(diagram)).empty(), "dt must be positive");
 

@@ -48,6 +48,13 @@ public:
     ~NetStreamElement() override;
 
     [[nodiscard]] const stream::StreamConfig& stream_config() const { return config_; }
+    // A stream with a sample rate runs at it: its node's elements and model
+    // time must agree, and a different rate needs an explicit Resampler.
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        if (!config_.sample_rate) return std::nullopt;
+        return Rate::reduced(config_.sample_rate->numerator, config_.sample_rate->denominator);
+    }
 
 protected:
     NetStreamElement(std::string_view type_name, stream::StreamConfig config, transport::StreamRole role);

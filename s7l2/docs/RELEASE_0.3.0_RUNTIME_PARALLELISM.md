@@ -90,6 +90,16 @@ is approved for implementation. This page records evidence and questions for
    throughput, latency, CPU, memory, synchronization and regressions. Test
    sanitizer and supported-platform behavior where practical.
 
+## Related 0.3.0 research: hardware and multi-rate time
+
+0.3.0 adds hardware-based elements, starting with sound sources and sinks
+using the OS sound system. Their device clocks are independent rate domains
+that drift against UTC and each other, locally and across nodes. Pacing by a
+device clock, drift-tracking resampling, networked audio streams and feedback
+across rate domains are open research, recorded in
+[open problems](OPEN_PROBLEMS.md#ratedt-inference-and-validation--implemented-multi-rate-execution-deferred);
+a rate-domain scheduler interacts with any worker-pool design above.
+
 ## 0.2.0 boundary
 
 The indexed serial runtime is sufficient for the 0.2.0 performance increment.

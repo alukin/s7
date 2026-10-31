@@ -55,3 +55,55 @@ Making the gate mandatory immediately failed every existing schema/test with no 
 **Nested schemas (2026-10-31).** A nested schema steps once per parent step, so all of its internal rates must equal the rate of the parent connected set it belongs to. A nested schema with an explicit `set_rate` already declared that rate to the parent and checked its internal elements against it. One without its own rate declared nothing, so an internal element pinned to another rate (for example a 1 kHz integrator inside a 100 Hz graph) went undetected. The compiler now gives such a nested schema the rate the parent resolved for it, and the nested compilation rejects any internal element that declares a different rate. This is detection only: the parent rate is not propagated as a seed, so a nested schema still needs its own rate or internal pins for its own validation, as before. `Schema::set_rate` also stores the reduced form and rejects a zero rate, because rates compare field-wise.
 
 It supersedes the ad hoc "propagate one `dt` value by hand" approach in `VISUAL_NUMERICAL_TESTS_PLAN.md` section 1.3 as the target design, and consolidates the dt-propagation-duplication and rate/resample entries already in `s7l2/docs/OPEN_PROBLEMS.md`.
+
+## 8. Model time and element rate classification (2026-10-31)
+
+Accepted as [ADR-022](S7_Architectural_Decisions.md#adr-022). The status column says what is implemented now; the rest is decided and scheduled in the 0.2.0 work plan, not yet built.
+
+### 8.1 One model-time rate per run
+
+The run's step (`dt`, set by the user in Studio's run dialog, by a deployment's diagram, or by a headless configuration) defines the model-time rate. It is the single source of truth. Every element's rate, whether declared, seeded by the schema or inferred from its connections, must equal the rate of the domain it runs in, and the main domain runs at the model-time rate. A mismatch stops the run before its first step with an error that names the element and both rates. Nothing is resampled or reinterpreted implicitly.
+
+Rates are exact rationals (`Rate`) end to end. Nanoseconds appear only where time is reported or real time is paced, rounded once from absolute model time (`Rate::step_time_ns`), so a step that is not a whole number of nanoseconds (44.1 kHz) neither drifts nor creates a false conflict.
+
+### 8.2 Element classification
+
+| Class | What its rate means | Examples | Rule |
+|---|---|---|---|
+| **Rate-following** | A step size; no meaning of its own in a single-rate domain. | Integrators (`dt`); generators, oscillators, `PWM`, `FrequencyMeter` (`sample_rate_hz`) | Takes the rate of its domain. Created from a document, it declares no rate and adopts the resolved one; a stored `dt`/`sample_rate_hz` is a legacy field. Built in C++ with an explicit rate, it remains a pin. |
+| **Rate-authoritative** | Fixed by the outside world. | File sources and sinks, replayed recordings, network streams; sound and other hardware devices (0.3.0) | Declares its rate. The run does not adopt it; a different run rate is an error suggesting a `Resampler`. |
+| **Rate-designed** | Built into other parameters that have no rate field. | `FirFilter` taps, `IirFilter` coefficients | Records the rate it was designed for. At another rate it recalculates its parameters exactly where its document keeps the design intent; otherwise it refuses to run. Raw coefficients cannot be recalculated. |
+| **Rate-changing** | Connects two rates explicitly. | `Resampler` | The only element whose input and output rates may differ. Splits the graph into rate domains. |
+
+Durations are given in time units (seconds), never in samples. A rate-following element converts them to samples for its domain's rate and refuses to run if the result is not a whole number of samples. Documents that stored sample counts (`start_sample`, `sweep_samples`, `bit_samples`, `period_samples`) are converted on load using the rate they were written at.
+
+Recalculation is derived each time a graph is compiled. The document keeps the design and is not rewritten when the run rate changes, so repeated changes cannot drift.
+
+### 8.3 Rate domains and the Resampler
+
+A rate domain is a set of connected elements that share one rate, bounded only by `Resampler` elements. The domain at the model-time rate steps once per run step. Every other domain steps exactly as many times as its own samples fall within the model time reached, counted with exact rational arithmetic, and runs its own publication, causal-memory staging and rollback phases.
+
+The `Resampler`:
+
+- passes values through unchanged when its input and output rates are equal;
+- interpolates with order 0 (sample and hold, the default), 1 (linear) or 2 (quadratic);
+- stays causal: orders 1 and 2 interpolate between received samples and therefore delay the output by about one input period, rather than extrapolating;
+- when it lowers the rate, first applies a linear-phase anti-aliasing low-pass filter (Kaiser-windowed sinc), whose group delay adds to that documented latency.
+
+Feedback that crosses rate domains is rejected for now; signals flow one way between domains. A loop that crosses rates needs its own analysis of causal memory at the boundary and is an open research question.
+
+### 8.4 Not covered: hardware clock domains
+
+Sound sources and sinks are the first hardware elements planned for 0.3.0. A device runs on its own oscillator, so its real rate differs slightly from its nominal rate and drifts against UTC. Across nodes, devices on different hosts drift independently. A design for this must decide which clock is the master (a device, UTC/PTP, or a reference), how real time is paced, how a resampler tracks a slowly varying ratio, and how network latency, jitter, buffering, loss and start alignment are handled. This is recorded as 0.3.0 research. The rules above deliberately keep stream and element rates exact and explicit so that such a design can build on them; they promise nothing about drift.
+
+### 8.5 Implementation status
+
+| Part | Status |
+|---|---|
+| Resolved rates kept in the compiled graph; model time checked against every one; `NodeRuntime::graph_rate()` | Implemented |
+| Rational model-time rate for deployments, stream rates and real-time pacing; network stream elements declare their rate | Implemented |
+| Rate-following elements adopting their domain's rate; Studio no longer rewriting `dt`/`sample_rate_hz` | Planned (0.2.0) |
+| Durations in time units with loader migration | Planned (0.2.0) |
+| Design rate for `FirFilter`/`IirFilter` | Planned (0.2.0) |
+| Rate domains and the `Resampler` | Planned (0.2.0) |
+| Feedback across rate domains; hardware clock domains | Research (0.3.0) |

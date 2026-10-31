@@ -44,6 +44,7 @@
 
 #include <boost/json.hpp>
 
+#include "s7/rate.hpp"
 #include "s7/signal_types.hpp"
 #include "s7/stream_protocol.hpp"
 #include "s7/transport.hpp"
@@ -92,6 +93,9 @@ struct StreamDescriptor {
 // none. Throws std::invalid_argument if `dt` is not a positive number of at
 // least 1 ns.
 [[nodiscard]] auto model_time_step_ns(const boost::json::object& diagram) -> std::optional<std::int64_t>;
+// The same `dt` as an exact rational rate (Rate::from_seconds), the model-time
+// base of every node. The ns step above is rounded and only paces real time.
+[[nodiscard]] auto model_time_rate(const boost::json::object& diagram) -> std::optional<Rate>;
 
 // The timing every stream of this diagram gets.
 struct StreamTiming {

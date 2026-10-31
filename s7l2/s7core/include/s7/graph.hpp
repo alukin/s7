@@ -5,6 +5,7 @@
 #define S7CORE_INCLUDE_S7_GRAPH_HPP
 
 #include "s7/element.hpp"
+#include "s7/rate.hpp"
 
 #include <memory>
 #include <string>
@@ -30,6 +31,9 @@ struct ExecutableGraph {
     std::vector<Element*> causal_execution;
     std::vector<Element*> memory_execution;
     std::vector<Element*> trapezoid_rhs_execution;
+    // Rate inference result: the rate of every element, declared, seeded or
+    // inferred (doc/S7_Sample_Rate_Model.md). Model time must agree with it.
+    std::unordered_map<std::string, Rate> rates;
 };
 
 } // namespace s7

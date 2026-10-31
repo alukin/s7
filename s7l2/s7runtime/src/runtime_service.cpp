@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
@@ -39,6 +40,19 @@
 
 namespace s7 {
 namespace {
+
+// Offset of grid step n from its origin: n / rate seconds, rounded once to
+// ns, exactly like the graph's model time.
+std::int64_t grid_offset_ns(const std::int64_t step, const Rate& rate)
+{
+    return rate.step_time_ns(static_cast<std::uint64_t>(step));
+}
+
+// The first grid step due at or after `elapsed_ns` from the origin.
+std::int64_t first_grid_step_at(const std::int64_t elapsed_ns, const Rate& rate)
+{
+    return static_cast<std::int64_t>(rate.first_step_at_ns(elapsed_ns));
+}
 
 const boost::json::object& expect_object(const boost::json::value& value, const std::string_view name) {
     if (!value.is_object()) {
@@ -760,6 +774,7 @@ public:
         std::unique_ptr<NodeRuntime> runtime;
         std::vector<transport::DataPeer> data_peers;
         std::optional<std::int64_t> model_time_step_ns;
+        std::optional<Rate> model_time_rate;
     };
 
     auto stage(const NodePart& part) -> std::unique_ptr<StagedConfiguration> override
@@ -789,19 +804,21 @@ public:
             }
         }
         const auto schema = build_schema_from_definition(definition);
-        // The diagram's model-time step (doc/S7_Sample_Rate_Model.md): seeds
-        // every element on this node with no rate of its own. Exact (an
-        // integer step count), unlike build_schema_from_definition's own
+        // The diagram's model-time rate (doc/S7_Sample_Rate_Model.md): seeds
+        // every element on this node with no rate of its own and is the
+        // node's model-time base. Exact (1 / dt as a rational, not a rounded
+        // ns step), unlike build_schema_from_definition's own
         // execution.step_rate_hz seed, which a deployed graph may not carry
         // (node settings stay with the node, checked above).
-        if (part.model_time_step_ns && *part.model_time_step_ns > 0) {
-            schema->set_rate(Rate::reduced(1'000'000'000ull, static_cast<std::uint64_t>(*part.model_time_step_ns)));
+        if (part.model_time_rate) {
+            schema->set_rate(*part.model_time_rate);
         }
         auto staged = std::make_unique<StagedGraph>();
         staged->runtime = std::make_unique<NodeRuntime>(
             Compiler::compile(*schema, service_.runtime_instance_uuid_, create_schema_instance_uuid()));
-        staged->runtime->set_model_time_step_ns(part.model_time_step_ns);
+        staged->runtime->set_model_time_rate(part.model_time_rate);
         staged->model_time_step_ns = part.model_time_step_ns;
+        staged->model_time_rate = part.model_time_rate;
         staged->data_peers = part.data_peers;
         return staged;
     }
@@ -814,7 +831,7 @@ public:
         }
         const auto now = clock::utc_now_ns();
         // With a model-time step the graph steps in real time from its activation.
-        const GraphPacing pacing{graph.model_time_step_ns, activate_at_ns.value_or(now)};
+        const GraphPacing pacing{graph.model_time_step_ns, activate_at_ns.value_or(now), graph.model_time_rate};
         if (activate_at_ns && *activate_at_ns > now) {
             // The serving loop installs it at that time; the current graph runs until then.
             std::lock_guard<std::mutex> lock(service_.graph_mutex_);
@@ -1119,9 +1136,13 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
             if (current.period_ns) {
                 // Continue at the next grid slot; the slots missed while stopped are skipped.
                 const auto elapsed = clock::utc_now_ns() - current.origin_utc_ns;
-                const auto slot = elapsed <= 0 ? 0 : (elapsed + *current.period_ns - 1) / *current.period_ns;
+                const auto slot = current.rate ? first_grid_step_at(elapsed, *current.rate)
+                                               : elapsed <= 0 ? 0 : (elapsed + *current.period_ns - 1) / *current.period_ns;
                 if (slot > grid_index) {
-                    current.origin_utc_ns += (slot - grid_index) * *current.period_ns;
+                    // Shift the origin so step grid_index lands on slot's due time.
+                    current.origin_utc_ns += current.rate
+                        ? grid_offset_ns(slot, *current.rate) - grid_offset_ns(grid_index, *current.rate)
+                        : (slot - grid_index) * *current.period_ns;
                     out << "runtime.execution.grid_rebased skipped_steps=" << slot - grid_index << '\n';
                     ++grid_rebases_;
                     std::lock_guard<std::mutex> lock(graph_mutex_);
@@ -1135,7 +1156,8 @@ auto RuntimeService::serve(const std::atomic<bool>& stop_requested, const std::o
 
         std::int64_t lag = 0;
         if (current.period_ns) {
-            const auto due = current.origin_utc_ns + grid_index * *current.period_ns;
+            const auto due = current.origin_utc_ns + (current.rate ? grid_offset_ns(grid_index, *current.rate)
+                                                                  : grid_index * *current.period_ns);
             const auto utc = clock::utc_now_ns();
             if (utc < due) {
                 sleep_until(now + std::chrono::nanoseconds(due - utc));

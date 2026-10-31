@@ -3,6 +3,8 @@
 
 #include "s7/rate.hpp"
 
+#include <boost/multiprecision/cpp_int.hpp>
+
 #include <cmath>
 #include <format>
 #include <numeric>
@@ -10,6 +12,29 @@
 #include <stdexcept>
 
 namespace s7 {
+
+std::int64_t Rate::step_time_ns(const std::uint64_t step) const
+{
+    using boost::multiprecision::uint256_t;
+    const uint256_t scaled = uint256_t(step) * denominator * 1'000'000'000u;
+    const uint256_t rounded = (scaled + numerator / 2) / numerator;
+    if (rounded > std::numeric_limits<std::int64_t>::max()) {
+        throw std::overflow_error("Model time exceeds the signed 64-bit nanosecond range.");
+    }
+    return rounded.convert_to<std::int64_t>();
+}
+
+std::uint64_t Rate::first_step_at_ns(const std::int64_t time_ns) const
+{
+    if (time_ns <= 0) return 0;
+    using boost::multiprecision::uint256_t;
+    const uint256_t per_second = uint256_t(denominator) * 1'000'000'000u;
+    auto step = ((uint256_t(static_cast<std::uint64_t>(time_ns)) * numerator + per_second - 1) / per_second).convert_to<std::uint64_t>();
+    // Rounding each step time to ns can move the boundary by one step.
+    while (step > 0 && step_time_ns(step - 1) >= time_ns) --step;
+    while (step_time_ns(step) < time_ns) ++step;
+    return step;
+}
 
 Rate Rate::reduced(const std::uint64_t numerator, const std::uint64_t denominator)
 {

@@ -18,6 +18,7 @@
 #include <boost/json.hpp>
 
 #include "s7/clock_sync.hpp"
+#include "s7/rate.hpp"
 #include "s7/transport.hpp"
 
 namespace s7 {
@@ -78,9 +79,10 @@ public:
 struct NodePart {
     boost::json::object schema;                  // deployment::extract_node_schema
     std::vector<transport::DataPeer> data_peers; // the nodes producing the streams it consumes
-    std::optional<std::int64_t> model_time_step_ns; // the diagram's `dt`: one step of model time
+    std::optional<std::int64_t> model_time_step_ns; // the diagram's `dt` rounded to ns: paces real time only
     std::string data_endpoint{};
     std::string data_security{};
+    std::optional<Rate> model_time_rate{}; // the same `dt` as an exact rate: the node's model-time base
 };
 
 // Runs deployed configurations on behalf of the control plane.

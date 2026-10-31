@@ -311,13 +311,22 @@ auto model_time_step_ns(const json::object& diagram) -> std::optional<std::int64
     return std::llround(ns);
 }
 
+auto model_time_rate(const json::object& diagram) -> std::optional<Rate>
+{
+    if (!model_time_step_ns(diagram)) { // validates dt as model_time_step_ns does
+        return std::nullopt;
+    }
+    const auto& dt = diagram.at("dt");
+    return Rate::from_seconds(dt.is_double() ? dt.as_double() : dt.to_number<double>());
+}
+
 auto stream_timing(const json::object& diagram) -> StreamTiming
 {
     StreamTiming timing;
-    if (const auto step = model_time_step_ns(diagram)) {
-        // 1 / dt elements per second, exactly: 1e9 / step_ns, reduced.
-        const auto divisor = std::gcd(std::uint64_t{1'000'000'000}, static_cast<std::uint64_t>(*step));
-        timing.sample_rate = stream::SampleRate{1'000'000'000 / divisor, static_cast<std::uint64_t>(*step) / divisor};
+    if (const auto rate = model_time_rate(diagram)) {
+        // 1 / dt elements per second, the same exact rate as the nodes' model
+        // time (not 1e9 / a rounded ns step, which misstates e.g. 44.1 kHz).
+        timing.sample_rate = stream::SampleRate{rate->numerator, rate->denominator};
         timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ModelTime, "model"});
     } else {
         timing.timestamps.push_back(TimestampDeclaration{wire::TimestampRole::ProcessingTime, "utc"});

@@ -31,7 +31,7 @@ constexpr std::int64_t kMaxActivationDelayNs = 60'000'000'000; // activate_at_ns
 auto node_part(const boost::json::object& diagram, const std::string& uuid) -> NodePart
 {
     NodePart part{deployment::extract_node_schema(diagram, uuid), deployment::producer_endpoints(diagram, uuid),
-                  deployment::model_time_step_ns(diagram), {}, {}};
+                  deployment::model_time_step_ns(diagram), {}, {}, deployment::model_time_rate(diagram)};
     for (const auto& node : deployment::parse_runtime_nodes(diagram)) {
         if (node.node_uuid == uuid) {
             part.data_endpoint = node.data_endpoint;

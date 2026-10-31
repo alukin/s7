@@ -16,7 +16,7 @@
 int main() try
 {
     s7::Schema schema{"observe_smoke"};
-    schema.set_rate(s7::Rate::from_hz(1));
+    schema.set_rate(s7::Rate::from_hz(1000)); // the model-time step set below
     schema.add_element("unit", [] { return std::make_unique<s7::Constant>(1.0); });
     schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
     schema.add_element("memory", [] { return std::make_unique<s7::Delay>(0.0); });

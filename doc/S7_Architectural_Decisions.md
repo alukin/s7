@@ -1008,6 +1008,34 @@ and on consecutive steps, against an unfaulted run.
 
 ------------------------------------------------------------------------
 
+# ADR-022
+
+## Title
+
+One Model-Time Rate per Run, Classified Element Rates and Explicit Resampling
+
+## Status
+
+Accepted 2026-10-31 by the maintainer. Partly implemented; see the [sample rate model, section 8](S7_Sample_Rate_Model.md#8-model-time-and-element-rate-classification-2026-10-31).
+
+## Context
+
+Model time was set in three ways that did not agree. Studio overwrote every element's `dt` and `sample_rate_hz` with the run's step before each run. Deployments rounded `dt` to whole nanoseconds, which cannot represent 44.1 kHz and conflicted with elements declaring it exactly. Setting model time checked only elements that declared a rate, not rates seeded by the schema. Durations were stored as sample counts, and filter coefficients silently changed meaning at a new rate.
+
+## Decision
+
+The run's step is the single source of truth for model time. It is an exact rational rate end to end; nanoseconds are only rounded once, from absolute time, for reporting and real-time pacing. Every element's resolved rate must equal the rate of its domain, and the main domain runs at the model-time rate. A mismatch stops the run and suggests a `Resampler`.
+
+Elements are classified by what their rate means. Rate-following elements take their domain's rate. Rate-authoritative elements (files, recordings, streams, hardware) keep theirs and are checked. Rate-designed elements record their design rate and recalculate their parameters at compile time where their design intent allows, otherwise they refuse to run. Durations are always in time units. Documents are not rewritten when the run rate changes.
+
+A different rate requires an explicit `Resampler`, which S7 never inserts. It passes values through at equal rates, interpolates causally with order 0 (default), 1 or 2, and filters against aliasing when it lowers the rate. It splits the graph into rate domains that step on an exact rational schedule. Feedback across rate domains is rejected until it has been researched.
+
+## Consequences
+
+A run either has one consistent model time or does not start. Changing `dt` in the run dialog never edits the design. A file, stream or device at another rate needs a visible resampling step, with a documented latency. Existing documents keep loading: stored sample counts are converted using the rate they were written at, and stored `dt`/`sample_rate_hz` values of rate-following elements become legacy fields. Rate-following elements built in C++ with an explicit rate remain pins for now; the 0.2.0 work plan includes reviewing such tests. Hardware clock domains, drift and networked audio are 0.3.0 research.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:
@@ -1019,6 +1047,7 @@ The current S7 architecture is based on the following accepted principles:
 - State belongs only to Element instances.
 - Connections define causality.
 - Cycles require causal memory.
+- One model-time rate per run; rates change only through an explicit Resampler.
 - Observation is independent.
 - Deployment is independent.
 - Network boundaries are explicit.

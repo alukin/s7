@@ -119,12 +119,15 @@ struct RuntimeSchemaDefinition {
 
 // How the active graph is stepped while the node serves (RuntimeService::serve).
 // grid: a deployed graph with a model-time step steps in real time on a UTC
-// grid, step n due at origin_utc_ns + n * period_ns; when it falls behind it
-// catches up (every step runs; the lag is reported). Otherwise the node's
+// grid, step n due at origin_utc_ns + n / rate seconds (rounded once to ns, so
+// a step that is not a whole number of ns does not drift from model time);
+// when it falls behind it catches up (every step runs; the lag is reported).
+// period_ns is that step rounded to ns, for reporting. Otherwise the node's
 // execution.step_rate_hz paces it on its own clock (0: not stepped).
 struct GraphPacing {
     std::optional<std::int64_t> period_ns;
     std::int64_t origin_utc_ns{};
+    std::optional<Rate> rate{};
 };
 
 struct ServeStats {

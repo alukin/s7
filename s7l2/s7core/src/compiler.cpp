@@ -218,6 +218,7 @@ ExecutableGraph Compiler::compile(const Schema& schema,
     resolve(executable_graph.causal_order, executable_graph.causal_execution);
     resolve(executable_graph.memory_order, executable_graph.memory_execution);
     resolve(executable_graph.trapezoid_rhs, executable_graph.trapezoid_rhs_execution);
+    executable_graph.rates = std::move(checked.rates);
     return executable_graph;
 }
 

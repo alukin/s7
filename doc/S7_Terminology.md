@@ -254,6 +254,44 @@ Causal memory allows valid cycles.
 
 ------------------------------------------------------------------------
 
+## Model Time
+
+The time a step represents, independent of wall-clock time. One run step advances model time by `dt`, the run's step, which the user sets for each run. Its inverse is the model-time rate, an exact rational.
+
+See [S7_Sample_Rate_Model.md section 8](S7_Sample_Rate_Model.md#8-model-time-and-element-rate-classification-2026-10-31).
+
+------------------------------------------------------------------------
+
+## Rate Domain
+
+A set of connected Elements that share one sample rate, bounded only by Resamplers. The domain at the model-time rate steps once per run step; other domains step as many times as their own samples fall within the model time reached.
+
+------------------------------------------------------------------------
+
+## Rate-Following Element
+
+An Element whose rate is only a step size (an integrator's `dt`, a generator's sample rate). It takes the rate of its Rate Domain instead of holding one of its own.
+
+------------------------------------------------------------------------
+
+## Rate-Authoritative Element
+
+An Element whose rate is fixed by the outside world: a file, a recording, a network stream or a hardware device. Its rate is checked, never adopted or changed implicitly.
+
+------------------------------------------------------------------------
+
+## Rate-Designed Element
+
+An Element whose other parameters were designed for a particular rate (filter taps or coefficients). It records that design rate, recalculates its parameters for another rate where its design intent allows, and otherwise refuses to run.
+
+------------------------------------------------------------------------
+
+## Resampler
+
+The rate-changing Element: the only Element whose input and output rates may differ. It must be placed explicitly; S7 never inserts one. It passes values through unchanged at equal rates, interpolates with order 0, 1 or 2, and filters against aliasing when it lowers the rate.
+
+------------------------------------------------------------------------
+
 # Runtime Model
 
 ## NodeRuntime

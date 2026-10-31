@@ -32,9 +32,13 @@ public:
     // Model time advanced by one step, in nanoseconds. Unset means the graph
     // has no model-time base (steps are only ordered, not timed).
     void set_model_time_step_ns(std::optional<std::int64_t> step_ns);
-    // Local rational model-time base; rejects conflicting declared element rates.
-    // Does not change scheduling or element dt.
+    // Local rational model-time base. Every element's resolved rate (declared,
+    // seeded or inferred) must equal it; a conflict names the element and
+    // suggests a Resampler. Does not change scheduling or element dt.
     void set_model_time_rate(std::optional<Rate> rate);
+    // The one rate every element of the graph resolved to, so callers can set
+    // model time from the graph; nullopt for an empty graph or mixed rates.
+    [[nodiscard]] std::optional<Rate> graph_rate() const;
     // Absolute step/rate, rounded only once to ns; throws on int64 overflow.
     [[nodiscard]] std::optional<std::int64_t> model_time_ns() const;
     [[nodiscard]] std::optional<double> model_time_seconds() const;
