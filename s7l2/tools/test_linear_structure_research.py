@@ -201,6 +201,9 @@ class LinearStructureTests(unittest.TestCase):
             self.assert_matrix(a, (M@np.zeros(2)+G[:, 0]))
 
     def test_evaluation_counts_and_publication_convention(self):
+        zero = simulate(rc(), 0.1, "finite", 0, np.array([1.]), 1.)
+        self.assertEqual(zero["total_function_evaluations"], 10)
+        self.assertEqual(zero["diagnostic_derivative_evaluations"], 0)
         result = simulate(rc(), 0.1, "finite", 4, np.array([1.]), 1.)
         self.assertEqual(result["accepted_steps"], 10)
         self.assertEqual(result["base_derivative_evaluations"], 10)

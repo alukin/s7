@@ -286,13 +286,13 @@ def simulate(system: System, h: float, method: str, corrections: int,
     # precomputed matrix recurrence. Implicit direct solves have no comparable
     # scalar graph count; Phase 1's runner measures their iterative costs.
     graph_counted = method in {"forward", "finite", "sequential", "symplectic"}
-    n_eval = (1+corrections+(method == "finite")) if graph_counted else None
+    n_eval = (1+corrections+(method == "finite" and corrections > 0)) if graph_counted else None
     result = dict(model=system.name, method=method, corrections=corrections, h=h,
                   duration=duration, drive=drive, initial=initial.tolist(),
                   accepted_steps=steps, rejected_steps=0,
                   base_derivative_evaluations=steps if graph_counted else None,
                   trial_derivative_evaluations=steps*corrections if method in {"finite", "sequential"} else 0,
-                  diagnostic_derivative_evaluations=steps if method == "finite" else 0,
+                  diagnostic_derivative_evaluations=steps if method == "finite" and corrections > 0 else 0,
                   total_function_evaluations=steps*n_eval if n_eval is not None else None,
                   pure_graph_element_evaluations=None,
                   matrix_vector_updates=steps,
@@ -389,7 +389,7 @@ def run(output: Path, plots: bool = True) -> dict:
         duration, h = 5., 0.1
         reference = trajectory(system, h, duration, "exact", 0, initial, "zero")[1][-1]
         for k in (0, 1, 2, 4, 8):
-            work = round(duration/h)*(k+2)  # includes one residual evaluation per step
+            work = round(duration/h)*(1 if k == 0 else k+2)  # k=0 is Euler; others include residuals
             finite = trajectory(system, h, duration, "finite", k, initial, "zero")[1][-1]
             euler_h = duration/work
             euler = trajectory(system, euler_h, duration, "forward", 0, initial, "zero")[1][-1]
@@ -560,7 +560,7 @@ def make_plots(output: Path, matrix: list[dict]) -> None:
         for k in (0, 1, 2, 4, 8):
             h = 0.1
             finite = trajectory(system, h, duration, "finite", k, initial, "zero")[1][-1]
-            work = round(duration/h)*(k+2)
+            work = round(duration/h)*(1 if k == 0 else k+2)
             euler_h = duration/work
             euler = trajectory(system, euler_h, duration, "forward", 0, initial, "zero")[1][-1]
             ax.scatter(work, np.linalg.norm(finite-exact_state), marker="o", label=f"{system.name} finite k={k}")
