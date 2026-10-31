@@ -112,6 +112,15 @@ existing behavior or an explicit mode, regression/compatibility checks and an
 explicit maintainer decision. No new integrator or settling mechanism is a
 required production capability for 0.2.0.
 
+The separate `feature/coupled-integration-0.2.0` PR proposes a production
+review of two methods supported by the completed research: opt-in F64 Euler
+substeps and coupled two-stage Gauss–Legendre. Its
+[numerical and causal contract](COUPLED_INTEGRATION.md) and
+[implementation design](COUPLED_INTEGRATION_0.2.0_DESIGN.md) require explicit
+review before merge. The default Euler and specialized trapezoid contracts
+remain in place; this PR does not change the N0–N4 research evidence or
+create a release gate for the new methods.
+
 ## PR review agreement
 
 The maintainer requests a Codex review of every distributed PR before merge.

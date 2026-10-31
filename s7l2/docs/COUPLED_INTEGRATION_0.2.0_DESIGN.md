@@ -29,13 +29,14 @@ trapezoid or for per-element stepping with stale peers.
 ## Region and timing contract
 
 Each selected memory element has one F64 state output, one F64 derivative
-input and one declared physical step `h`. A region contains all selected
-states connected through a derivative path of stateless direct-feedthrough
-elements. A one-way dependency between selected states is included so that
-both states see the same substep or Runge–Kutta stage. Differing policies or
-outer timesteps inside a coupled region are rejected. Independent regions
-may use different policies. Other causal-memory outputs are held at their
-published outer-step values; a feedback cycle crossing methods is rejected.
+input and one declared physical step `h`. A region contains selected states
+with the same method, outer rate and substep count connected through a
+derivative path of stateless direct-feedthrough elements. A one-way
+dependency within that configuration is included so both states see the
+same substep or Runge–Kutta stage. Differently configured regions and other
+causal-memory outputs may supply one-way held inputs. A feedback cycle
+crossing methods or configurations is rejected. Disconnected systems get
+separate regions to avoid an unnecessarily large dense stage solve.
 
 The compiler retains its existing causal order and creates an ordered trial
 cone: only stateless, explicitly approved built-in F64 arithmetic that is
@@ -75,22 +76,22 @@ snapshot/replay machinery where doing so preserves its exact behavior.
 
 ## Acceptance checklist
 
-- [ ] Old Euler and trapezoid diagrams load and produce unchanged results.
-- [ ] New element and `substeps` metadata serialize through ordinary schema
+- [x] Old Euler and trapezoid diagrams load and produce unchanged results.
+- [x] New element and `substeps` metadata serialize through ordinary schema
   and registry paths; unsupported types/values fail with useful errors.
-- [ ] Both methods solve coupled F64 states through `NodeRuntime`, including
+- [x] Both methods solve coupled F64 states through `NodeRuntime`, including
   insertion-order independence and publication of the initial state first.
-- [ ] Euler `m=1,2,4,8,16,32` matches ordinary fine Euler with identical
+- [x] Euler `m=1,2,4,8,16,32` matches ordinary fine Euler with identical
   held inputs on oscillator, RC and RLC graphs.
-- [ ] Gauss stages match independent Padé matrix/input transitions, exhibit
+- [x] Gauss stages match independent Padé matrix/input transitions, exhibit
   fourth-order refinement, and conserve lossless quadratic energy.
-- [ ] RC and all four RLC damping cases match closed-form references within
+- [x] RC and all four RLC damping cases match closed-form references within
   documented tolerances; coarse stable steps are checked separately for
   accuracy.
-- [ ] Mixed coupled policies, unsafe trial elements, nonfinite values and
+- [x] Mixed coupled policies, unsafe trial elements, nonfinite values and
   nonconvergence fail before invalid state publication; retry behavior is
   deterministic within the stated transactional boundary.
-- [ ] Existing trapezoid, compiler, validator, runtime, example and schema
+- [x] Existing trapezoid, compiler, validator, runtime, example and schema
   compatibility tests pass. Release cost and work counters are reported.
-- [ ] Documentation and examples describe only implemented methods; the
+- [x] Documentation and examples describe only implemented methods; the
   feature branch contains no research raw data or plotting code.
