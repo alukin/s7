@@ -612,3 +612,30 @@ s7_enable_project_warnings(s7studio_observer_panel_benchmark)
 add_executable(s7studio_live_trigger_benchmark EXCLUDE_FROM_ALL tests/live_trigger_benchmark.cpp)
 target_link_libraries(s7studio_live_trigger_benchmark PRIVATE s7studio_observation Threads::Threads)
 s7_enable_project_warnings(s7studio_live_trigger_benchmark)
+
+# Under Wine (the Windows cross build), Qt Quick, Qt Graphs and Qt Quick 3D
+# render through Direct3D 11 in wined3d whatever QT_QUICK_BACKEND says: on a
+# desktop that opens real windows that can hang the test, and under Xvfb it
+# crashes. The tests check behavior, not pixels, so they get Qt's null RHI and
+# no display (wine-run.sh unsets it), and a run never touches the user's
+# desktop. Rendering is checked
+# on Windows itself (docs/WINDOWS_BUILD.md).
+if (WIN32 AND CMAKE_CROSSCOMPILING)
+	get_property(s7studio_tests DIRECTORY PROPERTY TESTS)
+	foreach(s7studio_test IN LISTS s7studio_tests)
+		get_test_property(${s7studio_test} ENVIRONMENT s7studio_test_environment)
+		if (NOT s7studio_test_environment)
+			set(s7studio_test_environment "")
+		endif()
+		list(APPEND s7studio_test_environment "QSG_RHI_BACKEND=null" "S7_WINE_HEADLESS=1")
+		set_tests_properties(${s7studio_test} PROPERTIES ENVIRONMENT "${s7studio_test_environment}")
+		# Every Wine process goes through one wineserver, so a GUI test slows
+		# several times over while CPU-heavy tests run beside it (window
+		# lifecycle: 4.6 s alone, over 60 s next to the pendulum runs).
+		get_test_property(${s7studio_test} TIMEOUT s7studio_test_timeout)
+		if (s7studio_test_timeout)
+			math(EXPR s7studio_test_timeout "${s7studio_test_timeout} * 3")
+			set_tests_properties(${s7studio_test} PROPERTIES TIMEOUT ${s7studio_test_timeout})
+		endif()
+	endforeach()
+endif()

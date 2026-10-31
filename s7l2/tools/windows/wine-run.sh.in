@@ -10,6 +10,11 @@ export WINEPATH="@S7_WINE_DLL_PATH@"
 export WINEDEBUG="${WINEDEBUG:--all}"
 # No Mono/Gecko installers; a crash fails the test instead of waiting in winedbg.
 export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-mscoree,mshtml=;winedbg.exe=d}"
+# Tests that must not reach the user's desktop set S7_WINE_HEADLESS=1: Wine
+# then has no display at all (an empty DISPLAY is not the same as none).
+if [ -n "${S7_WINE_HEADLESS:-}" ]; then
+    unset DISPLAY WAYLAND_DISPLAY
+fi
 if [ ! -f "$WINEPREFIX/system.reg" ]; then
     mkdir -p "$WINEPREFIX"
     flock "$WINEPREFIX/.s7-init.lock" sh -c '[ -f "$WINEPREFIX/system.reg" ] || { wineboot -i && wineserver -w; }' >/dev/null 2>&1
