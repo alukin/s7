@@ -548,20 +548,16 @@ void invalid_mappings() {
                                                    "'out' of 'child' requires {F64}. Insert a Convert element.",
                 "Declared exposed type checked: " + (errors.empty() ? std::string() : errors[0]));
     }
-    // A nested schema at another rate than its parent is not flattened: it
-    // stays one element, whose ports are backed by F64/C64 storage, so every
-    // other type is rejected when the parent is compiled.
+    // A Schema stepped standalone, not compiled into a parent, keeps its own
+    // runtime, whose ports are backed by F64/C64 storage: every other type is
+    // rejected before any value is copied.
     for (const auto type : s7::kAllSignalTypes) {
         if (type == s7::SignalType::F64 || type == s7::SignalType::C64) continue;
-        s7::Schema parent("unseeded_parent");
-        parent.add_element("child", [type] {
-            auto child = std::make_unique<s7::Schema>("unsupported_output");
-            child->set_rate(s7::Rate::from_hz(1));
-            child->add_element("count", [] { return std::make_unique<I32Constant>(5); });
-            child->expose_output("out", type, "count", 0);
-            return child;
-        });
-        require_throws([&] { (void)s7::Compiler::compile(parent); }, "Opaque nested schema accepted an unsupported output type");
+        s7::Schema standalone("unsupported_output");
+        standalone.set_rate(s7::Rate::from_hz(1));
+        standalone.add_element("count", [] { return std::make_unique<I32Constant>(5); });
+        standalone.expose_output("out", type, "count", 0);
+        require_throws([&] { standalone.step(); }, "A standalone schema accepted an unsupported output type");
     }
 }
 

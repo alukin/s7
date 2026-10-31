@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -34,15 +35,19 @@ namespace detail {
 // declared type between the parent's connection and the internal port.
 // Validation, type and rate inference and the cycle check treat it like any
 // direct-feedthrough element; the compiler never steps it, binding its
-// consumers to its source instead.
+// consumers to its source instead. A nested schema with a rate of its own
+// pins it at its ports, as the schema element itself declared it.
 class SchemaPort final : public Element {
 public:
-    SchemaPort(std::string owner, std::string name, bool input, std::size_t index, SignalType type)
-        : Element("SchemaPort"), owner_(std::move(owner)), name_(std::move(name)), input_(input), index_(index)
+    SchemaPort(std::string owner, std::string name, bool input, std::size_t index, SignalType type,
+               std::optional<Rate> rate = std::nullopt)
+        : Element("SchemaPort"), owner_(std::move(owner)), name_(std::move(name)), input_(input), index_(index), rate_(rate)
     {
         register_input(0, port_names::in, type, nullptr);
         register_output(0, port_names::out, type, storage_);
     }
+
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_; }
 
     void step() override { throw std::logic_error("SchemaPort '" + owner_ + "' is bound through, never stepped."); }
 
@@ -58,21 +63,26 @@ private:
     std::string name_;
     bool input_;
     std::size_t index_;
+    std::optional<Rate> rate_;
     alignas(16) std::byte storage_[32]{}; // never read: consumers bind to the source
 };
 
 // The schema compiled and checked in place of a schema with nested schemas:
-// each nested schema with no rate of its own, or the rate of the schema
-// containing it, is replaced by its elements (ids "nested/inner") and a
+// every nested schema is replaced by its elements (ids "nested/inner") and a
 // SchemaPort per exposed port (ids "nested:in:name", "nested:out:name"), so
-// it behaves exactly like its inlined contents. A nested schema at another
-// rate stays one element. A Schema is never copied: specs are.
+// it behaves exactly like its inlined contents. A nested schema's own rate,
+// when it differs from the rate seeding the schema containing it, pins its
+// ports and seeds its elements, as it did for the schema element. A Schema is
+// never copied: specs are.
 struct FlatSchema {
     std::unique_ptr<Schema> schema;
     std::vector<std::string> errors;
     // Path id of every flattened nested schema -> the SchemaPort id of each of
     // its exposed outputs, by output index.
     std::unordered_map<std::string, std::vector<std::string>> nested_outputs;
+    // The rate seeding each element inside a nested schema with a rate of its
+    // own; other elements are seeded by the top-level schema's rate.
+    std::unordered_map<std::string, Rate> seeds;
 };
 [[nodiscard]] FlatSchema flatten_schema(const Schema& schema);
 

@@ -390,7 +390,7 @@ Nested Schemas are expanded into executable form.
 
 Schema composition remains semantically preserved.
 
-*Implemented 2026-10-31 ([ADR-024](S7_Architectural_Decisions.md#adr-024)).* The compiler flattens each nested Schema at the rate of its parent into the parent's graph: internal Elements get path ids (`plant/integrator`) and each exposed port becomes a typed wire that is checked but never stepped. A nested Schema keeps its id for addressing its outputs. Flattening is local to one node's compilation and never crosses a network boundary. A nested Schema at another rate keeps its own runtime.
+*Implemented 2026-10-31 ([ADR-024](S7_Architectural_Decisions.md#adr-024)).* The compiler flattens every nested Schema into the parent's graph: internal Elements get path ids (`plant/integrator`) and each exposed port becomes a typed wire that is checked but never stepped; a nested Schema's own rate is declared by its ports and seeds its Elements. A nested Schema keeps its id for addressing its outputs. Flattening is local to one node's compilation and never crosses a network boundary. Only a Schema stepped on its own keeps a private runtime.
 
 ------------------------------------------------------------------------
 

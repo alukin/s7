@@ -996,6 +996,9 @@ memory element and coupled trial has succeeded.
 The guarantee covers published outputs and staged values only. Private element
 state (for example a filter's delay line or a nested schema's runtime) and
 external side effects that advanced before the fault are not rolled back.
+Since [ADR-024](#adr-024) a nested schema in a graph is flattened, so its
+elements are covered like any other; only a standalone `Schema` keeps a
+private runtime.
 
 ## Consequences
 
@@ -1072,7 +1075,7 @@ A Nested Schema Behaves Exactly Like Its Inlined Contents
 
 ## Status
 
-Accepted 2026-10-31 by the maintainer. Implemented 2026-10-31 except nested schemas at another rate, which keep the earlier behavior (see Consequences).
+Accepted 2026-10-31 by the maintainer. Implemented 2026-10-31; revised after review the same day to flatten nested schemas with a rate of their own as well.
 
 ## Context
 
@@ -1080,7 +1083,9 @@ A nested schema ran as one element with direct feedthrough and its own private r
 
 ## Decision
 
-The compiler and the validator flatten nested schemas. Each nested schema with no rate of its own, or with the rate of the schema containing it, is replaced by its elements under path ids (`plant/integrator`). Each exposed port becomes a typed wire (`SchemaPort`) that validation, type and rate inference and the cycle check treat as an ordinary direct-feedthrough element. The compiler never steps a wire: it binds consumers to the driving output. All checks, scheduling, rate domains and step rollback then apply to the flattened graph. Feedthrough is therefore determined per path, so a loop may close through internal causal memory, and a loop through a direct path is still rejected.
+The compiler and the validator flatten every nested schema of the graph they check, after checking element ids per schema. Each is replaced by its elements under path ids (`plant/integrator`). Each exposed port becomes a typed wire (`SchemaPort`) that validation, type and rate inference and the cycle check treat as an ordinary direct-feedthrough element. The compiler never steps a wire: it binds consumers to the driving output. All checks, scheduling, rate domains and step rollback then apply to the flattened graph. Feedthrough is therefore determined per path, so a loop may close through internal causal memory, and a loop through a direct path is still rejected.
+
+A nested schema keeps a rate of its own when it differs from the rate seeding the schema around it (including when that schema has no seed): its exposed ports declare it, pinning the connected sets they join exactly as the schema element's declared rate did, and it seeds the schema's internal elements. A nested schema without a rate, or with the surrounding seed, simply shares the surrounding seed.
 
 Flattening belongs to one compilation. Documents and deployed diagrams keep their nested schemas. A nested schema is placed on one node as a whole, and each node flattens its own part, so flattening never moves or creates a network boundary. A stream may start or end at a nested schema's exposed port.
 
@@ -1088,11 +1093,11 @@ A flattened nested schema keeps its id for addressing: its outputs (`NodeRuntime
 
 ## Consequences
 
-Graphs that were valid before give bitwise-identical results, since the same operations run on the same values. Graphs with loops through internal causal memory, and implicit-trapezoid derivatives through a nested schema's stateless elements, become valid exactly when their inlined form is. Nested exposed ports accept every signal type, and inference runs across the boundary under the declared port types. Validating a parent now reports errors inside its nested schemas. A fault anywhere in a step rolls back the nested contents too (ADR-021). The per-instance nested runtime and its copying are gone for flattened schemas.
+Graphs that were valid before give bitwise-identical results, since the same operations run on the same values. Graphs with loops through internal causal memory, and implicit-trapezoid derivatives through a nested schema's stateless elements, become valid exactly when their inlined form is. Nested exposed ports accept every signal type, and inference runs across the boundary under the declared port types. Validating a parent now reports errors inside its nested schemas. A fault is rolled back exactly as for the inlined graph (ADR-021): published outputs and staged causal-memory values, now including those inside nested schemas, but not private element state such as a filter's history. The per-instance nested runtime and its copying are gone.
 
-Two rate details follow the inlined form as well. A nested schema whose own rate equals its parent's seed no longer pins its connected set; its rate only seeds, like the parent's. In a parent without a seed, an internal subgraph that is not connected to the nested schema's ports no longer borrows the rate the parent resolved for the schema, and needs a seed or a pin as it would inlined.
+Two rate details follow the inlined form as well. A nested schema whose own rate equals the surrounding seed no longer pins its connected set; its rate only seeds, like the parent's. A nested schema without a rate, in a parent without a seed, does not lend its internal subgraphs that are not connected to its ports the rate the parent resolved for it; they need a seed or a pin as they would inlined.
 
-A nested schema at another rate than its parent stays one direct-feedthrough element with its own runtime and F64/C64 ports. This case is rare: Studio gives every nested schema the run's `dt`, which equals the parent's. It is recorded in the open problems. Element ids containing `/` can collide with path ids; a collision is reported as a duplicate id. Cycles that cross nodes through streams are still not validated as a whole. That gap predates this decision and is also recorded in the open problems.
+Only a `Schema` stepped on its own, outside a compiled graph, keeps a private runtime, with F64/C64 exposed ports. Element ids are checked for uniqueness in each schema before flattening; a top-level id containing `/` or `:` that equals a path id is reported as a duplicate. Cycles that cross nodes through streams are still not validated as a whole. That gap predates this decision and is also recorded in the open problems.
 
 ------------------------------------------------------------------------
 

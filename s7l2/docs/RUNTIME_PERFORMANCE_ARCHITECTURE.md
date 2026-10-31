@@ -183,8 +183,8 @@ unchanged. A schema library element with such a port still registers and
 fails when a graph using it is compiled. Supporting all 27 signal types across
 a nested boundary would need type-generic exposed storage and is a separate,
 unscheduled extension. *Since ADR-024 this restriction applies only to a
-nested schema at another rate than its parent; a flattened nested schema's
-ports are typed wires and accept every type.*
+`Schema` stepped on its own; in a compiled graph a nested schema is flattened
+and its ports are typed wires that accept every type.*
 
 Exposed inputs were already constant time: each step reads the parent's
 binding and writes the shared input state that the proxy element publishes.
@@ -341,16 +341,15 @@ schemas.
 *Update 2026-10-31: compile-time flattening adopted ([ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024)).*
 The maintainer decided that a nested schema behaves exactly like its inlined
 contents, which requires flattening for feedback semantics, not for speed. The
-compiler now replaces each nested schema at its parent's rate by its elements
-and one never-stepped `SchemaPort` wire per exposed port, whose consumers bind
-to the driving output. A flattened schema has no runtime, input proxies,
+compiler now replaces every nested schema by its elements and one
+never-stepped `SchemaPort` wire per exposed port, whose consumers bind to the
+driving output. A flattened schema has no runtime, input proxies,
 exposed-output copies or rollback snapshots of its own. Step-boundary
 equivalence is now by construction, and `s7core_nested_flattening_smoke`
 checks bitwise equality with inlined graphs, including a feedback loop
 through a nested integrator, two levels of nesting, a nested `Resampler`, a
-trapezoid derivative through a nested schema and fault rollback. A nested
-schema at another rate keeps the runtime described above (`nested_trapezoid`
-below: a 100 Hz schema in an unseeded parent).
+trapezoid derivative through a nested schema and fault rollback. Only a
+`Schema` stepped on its own keeps the runtime described above.
 
 Measured 2026-10-31 on the same host and settings as the table above (one run
 of `compare_indexed.py --repeats 7`, pinned with `taskset -c 4`), before =
@@ -366,9 +365,12 @@ equal in every case:
 | `nested_multi` | 1,521 / 831 | 110 / 55 | 2.0x | 50 / 51 |
 | `nested_levels` | 15,663 / 980 | 807 / 87 | 9.3x | 90 / 91 |
 | `nested_feedback` | 12,206 / 1,031 | 953 / 416 | 2.3x | 411 / 411 |
-| `nested_trapezoid` (not flattened) | 1,478 / 1,473 | 136 / 138 | 1.0x | 140 / 171 |
+| `nested_trapezoid` | 1,477 / 730 | 137 / 122 | 1.1x | 111 / 121 |
 
-RSS deltas stayed between 0.5 and 0.9 MiB in both builds. This host is much
+RSS deltas stayed between 0.5 and 0.9 MiB in both builds. `nested_trapezoid` (a
+100 Hz schema in an unseeded parent) was measured again after the review
+revision flattened nested schemas with a rate of their own, together with
+`nested` and `nested_feedback`, which reproduced the rows above within 3%. This host is much
 faster than typical user machines; absolute times are optimistic.
 
 ## Objective and constraints
