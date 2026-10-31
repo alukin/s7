@@ -1,5 +1,9 @@
 # Numerical feedback research, Phase 2: discrete structure
 
+The [Phase 2 report](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md) records the
+measurements and answers to the six research questions. Its compact data is
+in [the audited summary](NUMERICAL_FEEDBACK_PHASE2_SUMMARY.json).
+
 ## Scope and review
 
 Phase 1 (`NUMERICAL_FEEDBACK_RESEARCH_N0.md` and the accompanying report)
@@ -52,7 +56,7 @@ G_k = h sum_{j=0}^{k} Q^j B.
 
 The implicit equation residual is
 `p_k-x_n-h(Ap_k+Bu_n) = -Q^(k+1) h f_0`. The solver error relative to the
-implicit root is `(I-Q)^{-1}` times this residual with sign reversed. The
+implicit root is `(I-Q)^{-1}` times this signed residual. The
 iteration converges for every initial state/input when `rho(Q)<1`; at the
 boundary convergence depends on the particular vector and Jordan structure.
 When it converges, `M_k -> (I-Q)^{-1}` and `G_k -> (I-Q)^{-1}hB`.
@@ -75,7 +79,8 @@ For `x'=v`, `v'=-omega0^2 x`, velocity-first Euler–Cromer gives
 `M_S=[[1-h² omega0²,h],[-h omega0²,1]]`. Its determinant is one and its
 trace is `2-h² omega0²`. For `0<h omega0<2`, eigenvalues lie on the unit
 circle at angle `acos(1-(h omega0)²/2)`; the modified frequency is this
-angle divided by `h`. Endpoints are defective and can grow linearly.
+angle divided by `h`. At `h omega0=2` the repeated `-1` pole is defective
+and can grow linearly; the zero-step limit is the identity.
 The map is symplectic for a separable Hamiltonian oscillator in canonical
 position/momentum coordinates (the velocity form is conjugate under constant
 mass scaling). Velocity-dependent damping and forcing are outside that claim.
@@ -98,3 +103,60 @@ eigenvalues are always reported separately from transfer poles. Coordinate
 similarity preserves `M`, `G`, `C` up to basis change in exact arithmetic;
 roundoff, sequential sweeps, mixed methods, extra delays, or distinct input
 holds can break observed equivalence for identifiable reasons.
+The implemented cancellation threshold scales with machine epsilon and the
+inverse separation of the internal poles, with a square-root-epsilon floor
+for a repeated root. A deliberately weak but nonzero mode remains visible in
+the tests. Near a multiple zero, algebraic identifiability is still limited
+by binary64 conditioning; printed roots are not exact symbolic factors.
+
+## Circuit formulas and independent references
+
+For RC, `tau=RC`, `A=-1/tau`, `B=1/tau`. The exact sampled pole is
+`exp(-h/tau)`, and exact input gain is `1-exp(-h/tau)`. With constant input
+`u`, `x(t)=u+(x(0)-u)exp(-t/tau)`. Forward Euler's pole is `1-h/tau`, stable
+in magnitude for `0<h/tau<2` but alternating for `1<h/tau<2`. Backward
+Euler's pole is `1/(1+h/tau)`; trapezoid's is
+`(1-h/(2tau))/(1+h/(2tau))`. The fixed-point correction for backward Euler
+requires `h/tau<1` for arbitrary starts, a narrower condition than either
+the solvability or stability of the implicit method.
+
+For LC with state `(x,v)`, `A=[[0,1],[-omega0²,0]]`. Since `A²=-omega0² I`,
+`Phi=I cos(omega0 h)+(A/omega0)sin(omega0 h)`. For a force applied to the
+second derivative, `B=[0,b]ᵀ`, exact `Gamma=[b(1-cos(omega0 h))/omega0²,
+b sin(omega0 h)/omega0]ᵀ`. The autonomous reference is
+`x=x0 cos(omega0 t)+v0 sin(omega0 t)/omega0` and
+`v=v0 cos(omega0 t)-omega0 x0 sin(omega0 t)`.
+Finite simultaneous correction has poles
+`p_k(±i h omega0)` with `p_k(w)=sum_{j=0}^{k+1}w^j`. At `k=1`,
+`|p_1(i theta)|²=1-theta²+theta⁴`, so it is damped for `0<theta<1` even
+though forward Euler grows for every positive `theta`. Its phase is the
+argument of `1+i theta-theta²`, not the physical angle `theta`.
+
+For series RLC, `A=[[0,1],[-1/(LC),-R/L]]`, `B=[0,1/L]ᵀ`, and capacitor
+voltage output `C=[1/C,0]`. The continuous poles are
+`-R/(2L) ± sqrt((R/(2L))²-1/(LC))`, and the continuous transfer is
+`1/(LC s²+RC s+1)`. With `L=1`, `C=0.25`, the cases `R=1,4,6` are
+under, critical and over damped. For a unit step from zero state, write
+`alpha=R/(2L)`, `omega0²=1/(LC)` and `V_C=1-g(t)`:
+
+* Under damped: `g=e^(-alpha t)[cos(omega_d t)+(alpha/omega_d)sin(omega_d t)]`,
+  `omega_d=sqrt(omega0²-alpha²)`.
+* Critical: `g=(1+alpha t)e^(-alpha t)`.
+* Over damped: with `lambda±=-alpha±sqrt(alpha²-omega0²)`,
+  `g=(lambda+ exp(lambda- t)-lambda- exp(lambda+ t))/(lambda+-lambda-)`.
+
+The augmented exponential remains the implementation reference for arbitrary
+linear systems, including singular `A`; these closed forms independently
+check its RC, LC and RLC results. The mass-spring-damper correspondence
+`q↔x`, `i↔v`, `L↔m`, `R↔b`, `1/C↔spring stiffness`, and `u↔force` gives
+identical state and input matrices when parameters are mapped. Output scaling
+must also be mapped: capacitor voltage `q/C` corresponds to spring force
+`stiffness*x`, not displacement alone.
+
+For the stated RLC pre-update output at `h=0.2`, the forward-Euler transfer
+has a constant numerator and no finite zero; backward Euler has a zero at
+`z=0`; trapezoid has a zero at `z=-1`. Exact sampling has a zero near
+`z=-0.93519` for `R=L=1,C=0.25`. All retain two internal states. These
+zeros change how a sampled input reaches capacitor voltage; they are not
+extra autonomous modes. A deliberately hidden diagonal mode in the tests
+has two internal eigenvalues but only one transfer pole after cancellation.

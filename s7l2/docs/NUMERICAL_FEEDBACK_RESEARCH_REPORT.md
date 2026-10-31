@@ -7,6 +7,16 @@ No production integrator, validator, compiler, scheduler or publication behavior
 was changed. The [N0 contract](NUMERICAL_FEEDBACK_RESEARCH_N0.md) defines the
 equations, safe trial region, sample convention and model matrix.
 
+**Provenance addendum (Phase 2):** The checked-in Phase 1 full JSON records
+the original baseline commit, but its later runner edits make that field
+ambiguous as a producing source revision. It remains historical evidence.
+The [Phase 2 report](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md) explains
+the regenerated gate/full runs under `build/linear-research/`, whose metadata
+records exact revision, source SHA-256, test timestamp, configuration and
+complete derivative/pure-graph counts including diagnostics. The old
+equal-budget table below omits diagnostic residual evaluations; use Phase 2's
+equal-total-evaluation comparison when interpreting computational effort.
+
 ## Method and reproducibility
 
 The prototype represents each model as scalar integrator outputs feeding an

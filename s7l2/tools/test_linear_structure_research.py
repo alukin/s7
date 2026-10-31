@@ -117,8 +117,12 @@ class LinearStructureTests(unittest.TestCase):
             analytical = analytical_output(system, times, np.zeros(2), "step")
             M, G = transition(system, 0.2, "exact")
             x = np.zeros(2)
-            x = M@x+G[:, 0]
-            self.assertAlmostEqual((system.C@x).item(), analytical[1], delta=2e-13)
+            for step in range(11):
+                if step in (0, 1, 5, 10):
+                    index = {0: 0, 1: 1, 5: 2, 10: 3}[step]
+                    self.assertAlmostEqual((system.C@x).item(), analytical[index], delta=2e-13)
+                if step < 10:
+                    x = M@x+G[:, 0]
             self.assertAlmostEqual(analytical[0], 0)
             self.assertGreater(analytical[-1], 0)
         system = rlc(1.)

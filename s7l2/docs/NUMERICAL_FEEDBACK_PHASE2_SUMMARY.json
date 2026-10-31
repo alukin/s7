@@ -1,0 +1,2330 @@
+{
+  "metadata": {
+    "branch": "research/numerical-feedback-0.2.0",
+    "git_commit": "553bb95e1970f7c629e814f1cdb75d9205945f49",
+    "source_sha256": "2f97c4bd984290b55da33b236504b032c4b89c7a5eddd2472060a45b8326f2aa",
+    "generated_utc": "2026-10-31T05:06:30.583003+00:00",
+    "precision": "IEEE-754 binary64",
+    "python": "3.14.8",
+    "numpy": "2.4.6",
+    "scipy": "1.16.2",
+    "matplotlib": "3.10.8",
+    "platform": "Linux-7.2.13-200.fc44.x86_64-x86_64-with-glibc2.43",
+    "tolerances": {
+      "stability_radius": 1e-10,
+      "cancellation": "256 eps scaled by inverse pole separation; sqrt(eps) floor",
+      "repeated_root_discriminant": "64 eps max(1, ||M||\u00b2)"
+    },
+    "configuration": {
+      "models": [
+        "RC",
+        "LC",
+        "RLC R=1",
+        "RLC R=4",
+        "RLC R=6",
+        "mass-spring-damper"
+      ],
+      "h_values": "0.05,0.2,0.5,1,2.5; LC also 3",
+      "methods": [
+        "exact:0",
+        "forward:0",
+        "backward:0",
+        "trapezoid:0",
+        "finite:0",
+        "finite:1",
+        "finite:2",
+        "finite:4",
+        "finite:8",
+        "finite:16",
+        "sequential:1",
+        "sequential:2",
+        "sequential:4",
+        "sequential:8"
+      ],
+      "response_h": 0.2,
+      "response_duration": 20
+    },
+    "reproduce": "python3 tools/linear_structure_research.py --output build/linear-research",
+    "notes": "Matrix laboratory timings compare only runs of this Python implementation; exact matrix setup is outside timed loop."
+  },
+  "selected_poles": [
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "exact",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6065306597126334,
+          "imag": 0.0,
+          "magnitude": 0.6065306597126334,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.0,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "forward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.5,
+          "imag": 0.0,
+          "magnitude": 0.5,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.3862943611198906,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.10653065971263342
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "backward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6666666666666666,
+          "imag": 0.0,
+          "magnitude": 0.6666666666666666,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.8109302162163289,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.060136006954033205
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "trapezoid",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6,
+          "imag": 0.0,
+          "magnitude": 0.6,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.0216512475319814,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0065306597126334465
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.5,
+          "imag": 0.0,
+          "magnitude": 0.5,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.3862943611198906,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.10653065971263342
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 1,
+      "poles": [
+        {
+          "real": 0.75,
+          "imag": 0.0,
+          "magnitude": 0.75,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.5753641449035618,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.14346934028736658
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 2,
+      "poles": [
+        {
+          "real": 0.625,
+          "imag": 0.0,
+          "magnitude": 0.625,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.9400072584914712,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.018469340287366576
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 8,
+      "poles": [
+        {
+          "real": 0.666015625,
+          "imag": 0.0,
+          "magnitude": 0.666015625,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.8128842955119819,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.059484965287366576
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 1,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "exact",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8775825618903728,
+          "imag": 0.47942553860420295,
+          "magnitude": 1.0,
+          "argument": 0.49999999999999994,
+          "stability": "marginal",
+          "damping": -0.0,
+          "frequency": 0.9999999999999999,
+          "exact_pole_distance": 5.551115123125783e-17
+        },
+        {
+          "real": 0.8775825618903728,
+          "imag": -0.47942553860420295,
+          "magnitude": 1.0,
+          "argument": -0.49999999999999994,
+          "stability": "marginal",
+          "damping": -0.0,
+          "frequency": 0.9999999999999999,
+          "exact_pole_distance": 5.551115123125783e-17
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -1.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "forward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 1.0,
+          "imag": 0.5,
+          "magnitude": 1.118033988749895,
+          "argument": 0.4636476090008061,
+          "stability": "unstable",
+          "damping": -0.22314355131420985,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.12413435308185868
+        },
+        {
+          "real": 1.0,
+          "imag": -0.5,
+          "magnitude": 1.118033988749895,
+          "argument": -0.4636476090008061,
+          "stability": "unstable",
+          "damping": -0.22314355131420985,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.12413435308185868
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "backward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8,
+          "imag": 0.3999999999999999,
+          "magnitude": 0.8944271909999159,
+          "argument": 0.463647609000806,
+          "stability": "stable",
+          "damping": 0.22314355131420982,
+          "frequency": 0.927295218001612,
+          "exact_pole_distance": 0.11102914073359871
+        },
+        {
+          "real": 0.8,
+          "imag": -0.3999999999999999,
+          "magnitude": 0.8944271909999159,
+          "argument": -0.463647609000806,
+          "stability": "stable",
+          "damping": 0.22314355131420982,
+          "frequency": 0.927295218001612,
+          "exact_pole_distance": 0.11102914073359871
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "trapezoid",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8823529411764706,
+          "imag": 0.4705882352941177,
+          "magnitude": 1.0,
+          "argument": 0.48995732625372834,
+          "stability": "marginal",
+          "damping": -0.0,
+          "frequency": 0.9799146525074567,
+          "exact_pole_distance": 0.01004263154395678
+        },
+        {
+          "real": 0.8823529411764706,
+          "imag": -0.4705882352941177,
+          "magnitude": 1.0,
+          "argument": -0.48995732625372834,
+          "stability": "marginal",
+          "damping": -0.0,
+          "frequency": 0.9799146525074567,
+          "exact_pole_distance": 0.01004263154395678
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -1.0000000000000002,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 1.0,
+          "imag": 0.5,
+          "magnitude": 1.118033988749895,
+          "argument": 0.4636476090008061,
+          "stability": "unstable",
+          "damping": -0.22314355131420985,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.12413435308185868
+        },
+        {
+          "real": 1.0,
+          "imag": -0.5,
+          "magnitude": 1.118033988749895,
+          "argument": -0.4636476090008061,
+          "stability": "unstable",
+          "damping": -0.22314355131420985,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.12413435308185868
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 1,
+      "poles": [
+        {
+          "real": 0.75,
+          "imag": 0.5,
+          "magnitude": 0.9013878188659973,
+          "argument": 0.5880026035475675,
+          "stability": "stable",
+          "damping": 0.2076393647782446,
+          "frequency": 1.176005207095135,
+          "exact_pole_distance": 0.12923087309245393
+        },
+        {
+          "real": 0.75,
+          "imag": -0.5,
+          "magnitude": 0.9013878188659973,
+          "argument": -0.5880026035475675,
+          "stability": "stable",
+          "damping": 0.2076393647782446,
+          "frequency": 1.176005207095135,
+          "exact_pole_distance": 0.12923087309245393
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.25,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 2,
+      "poles": [
+        {
+          "real": 0.75,
+          "imag": 0.375,
+          "magnitude": 0.8385254915624212,
+          "argument": 0.4636476090008061,
+          "stability": "stable",
+          "damping": 0.352220593589352,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.16486965521674596
+        },
+        {
+          "real": 0.75,
+          "imag": -0.375,
+          "magnitude": 0.8385254915624212,
+          "argument": -0.4636476090008061,
+          "stability": "stable",
+          "damping": 0.352220593589352,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.16486965521674596
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.1875,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "finite",
+      "corrections": 8,
+      "poles": [
+        {
+          "real": 0.80078125,
+          "imag": 0.400390625,
+          "magnitude": 0.8953006550536268,
+          "argument": 0.4636476090008061,
+          "stability": "stable",
+          "damping": 0.22119137936809877,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.11020416995969864
+        },
+        {
+          "real": 0.80078125,
+          "imag": -0.400390625,
+          "magnitude": 0.8953006550536268,
+          "argument": -0.4636476090008061,
+          "stability": "stable",
+          "damping": 0.22119137936809877,
+          "frequency": 0.9272952180016122,
+          "exact_pole_distance": 0.11020416995969864
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.003925398284313725,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "method": "symplectic",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.875,
+          "imag": 0.4841229182759271,
+          "magnitude": 1.0,
+          "argument": 0.5053605102841573,
+          "stability": "marginal",
+          "damping": -0.0,
+          "frequency": 1.0107210205683146,
+          "exact_pole_distance": 0.005360503866049603
+        },
+        {
+          "real": 0.875,
+          "imag": -0.4841229182759271,
+          "magnitude": 1.0,
+          "argument": -0.5053605102841573,
+          "stability": "marginal",
+          "damping": -0.0,
+          "frequency": 1.0107210205683146,
+          "exact_pole_distance": 0.005360503866049603
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "exact",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8378186666793217,
+          "imag": 0.34174644817710326,
+          "magnitude": 0.9048374180359596,
+          "argument": 0.3872983346207418,
+          "stability": "stable",
+          "damping": 0.49999999999999967,
+          "frequency": 1.936491673103709,
+          "exact_pole_distance": 1.2412670766236366e-16
+        },
+        {
+          "real": 0.8378186666793217,
+          "imag": -0.34174644817710326,
+          "magnitude": 0.9048374180359596,
+          "argument": -0.3872983346207418,
+          "stability": "stable",
+          "damping": 0.49999999999999967,
+          "frequency": 1.936491673103709,
+          "exact_pole_distance": 5.551115123125783e-17
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.9351912391642978,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "forward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.9,
+          "imag": 0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": 0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223098
+        },
+        {
+          "real": 0.9,
+          "imag": -0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": -0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223108
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "backward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8088235294117647,
+          "imag": 0.28477818722113335,
+          "magnitude": 0.8574929257125441,
+          "argument": 0.33853498186763237,
+          "stability": "stable",
+          "damping": 0.768711749369902,
+          "frequency": 1.6926749093381617,
+          "exact_pole_distance": 0.06392261525870134
+        },
+        {
+          "real": 0.8088235294117647,
+          "imag": -0.28477818722113335,
+          "magnitude": 0.8574929257125441,
+          "argument": -0.33853498186763237,
+          "stability": "stable",
+          "damping": 0.768711749369902,
+          "frequency": 1.6926749093381617,
+          "exact_pole_distance": 0.06392261525870128
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "trapezoid",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8421052631578947,
+          "imag": 0.3397353812462647,
+          "magnitude": 0.9080536347093006,
+          "argument": 0.3834647301504918,
+          "stability": "stable",
+          "damping": 0.4822591653112291,
+          "frequency": 1.917323650752459,
+          "exact_pole_distance": 0.004734902276755634
+        },
+        {
+          "real": 0.8421052631578947,
+          "imag": -0.3397353812462647,
+          "magnitude": 0.9080536347093006,
+          "argument": -0.3834647301504918,
+          "stability": "stable",
+          "damping": 0.4822591653112291,
+          "frequency": 1.917323650752459,
+          "exact_pole_distance": 0.004734902276755735
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -1.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.9,
+          "imag": 0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": 0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223098
+        },
+        {
+          "real": 0.9,
+          "imag": -0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": -0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223108
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 1,
+      "poles": [
+        {
+          "real": 0.76,
+          "imag": 0.3098386676965933,
+          "magnitude": 0.8207313811473276,
+          "argument": 0.38711159095697995,
+          "stability": "stable",
+          "damping": 0.9877970401350505,
+          "frequency": 1.9355579547848996,
+          "exact_pole_distance": 0.08410619084787872
+        },
+        {
+          "real": 0.76,
+          "imag": -0.3098386676965933,
+          "magnitude": 0.8207313811473276,
+          "argument": -0.38711159095697995,
+          "stability": "stable",
+          "damping": 0.9877970401350505,
+          "frequency": 1.9355579547848996,
+          "exact_pole_distance": 0.08410619084787861
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.04000000000000018,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 2,
+      "poles": [
+        {
+          "real": 0.804,
+          "imag": 0.2633628675421043,
+          "magnitude": 0.8460354602497463,
+          "argument": 0.316550784240131,
+          "stability": "stable",
+          "damping": 0.8359700253275267,
+          "frequency": 1.582753921200655,
+          "exact_pole_distance": 0.08536795610257072
+        },
+        {
+          "real": 0.804,
+          "imag": -0.2633628675421043,
+          "magnitude": 0.8460354602497463,
+          "argument": -0.316550784240131,
+          "stability": "stable",
+          "damping": 0.8359700253275267,
+          "frequency": 1.582753921200655,
+          "exact_pole_distance": 0.08536795610257068
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.15800000000000022,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=1",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 8,
+      "poles": [
+        {
+          "real": 0.8087370240000001,
+          "imag": 0.2848027118629721,
+          "magnitude": 0.8574194764949534,
+          "argument": 0.3385954675565523,
+          "stability": "stable",
+          "damping": 0.7691400465677125,
+          "frequency": 1.6929773377827613,
+          "exact_pole_distance": 0.06394005822910262
+        },
+        {
+          "real": 0.8087370240000001,
+          "imag": -0.2848027118629721,
+          "magnitude": 0.8574194764949534,
+          "argument": -0.3385954675565523,
+          "stability": "stable",
+          "damping": 0.7691400465677125,
+          "frequency": 1.6929773377827613,
+          "exact_pole_distance": 0.06394005822910258
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0002813395554939332,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "exact",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6703200460356393,
+          "imag": 0.0,
+          "magnitude": 0.6703200460356393,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.9999999999999998,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0
+        },
+        {
+          "real": 0.6703200460356393,
+          "imag": 0.0,
+          "magnitude": 0.6703200460356393,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.9999999999999998,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.765807542436537,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "forward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6,
+          "imag": 0.0,
+          "magnitude": 0.6,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 2.5541281188299534,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.07032004603563935
+        },
+        {
+          "real": 0.6,
+          "imag": 0.0,
+          "magnitude": 0.6,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 2.5541281188299534,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.07032004603563935
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "backward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.7142857142857143,
+          "imag": 0.0,
+          "magnitude": 0.7142857142857143,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.6823611831060643,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.043965668250074974
+        },
+        {
+          "real": 0.7142857142857143,
+          "imag": 0.0,
+          "magnitude": 0.7142857142857143,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.6823611831060643,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.043965668250074974
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "trapezoid",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6666666666666666,
+          "imag": 0.0,
+          "magnitude": 0.6666666666666666,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 2.027325540540822,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.003653379368972698
+        },
+        {
+          "real": 0.6666666666666666,
+          "imag": 0.0,
+          "magnitude": 0.6666666666666666,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 2.027325540540822,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.003653379368972698
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -1.0000000000000002,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.6,
+          "imag": 0.0,
+          "magnitude": 0.6,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 2.5541281188299534,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.07032004603563935
+        },
+        {
+          "real": 0.6,
+          "imag": 0.0,
+          "magnitude": 0.6,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 2.5541281188299534,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.07032004603563935
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 1,
+      "poles": [
+        {
+          "real": 0.76,
+          "imag": 0.0,
+          "magnitude": 0.76,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.3721842285088015,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.08967995396436068
+        },
+        {
+          "real": 0.76,
+          "imag": 0.0,
+          "magnitude": 0.76,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.3721842285088015,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.08967995396436068
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.6400000000000001,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 2,
+      "poles": [
+        {
+          "real": 0.696,
+          "imag": 0.0,
+          "magnitude": 0.696,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.8120280932385873,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.025679953964360624
+        },
+        {
+          "real": 0.696,
+          "imag": 0.0,
+          "magnitude": 0.696,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.8120280932385873,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.025679953964360624
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -1.8880000000000003,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=4",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 8,
+      "poles": [
+        {
+          "real": 0.714210816,
+          "imag": 0.0,
+          "magnitude": 0.714210816,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.6828854985957769,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0438907699643607
+        },
+        {
+          "real": 0.714210816,
+          "imag": 0.0,
+          "magnitude": 0.714210816,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 1.6828854985957769,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0438907699643607
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.008588416475860446,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "exact",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8583130340349889,
+          "imag": 0.0,
+          "magnitude": 0.8583130340349889,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.7639320225002103,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0
+        },
+        {
+          "real": 0.3509141769597359,
+          "imag": -0.0,
+          "magnitude": 0.3509141769597359,
+          "argument": -0.0,
+          "stability": "stable",
+          "damping": 5.236067977499792,
+          "frequency": 0.0,
+          "exact_pole_distance": 1.6653345369377348e-16
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.671735384031293,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "forward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.847213595499958,
+          "imag": 0.0,
+          "magnitude": 0.847213595499958,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.8290121862764497,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.011099438535030925
+        },
+        {
+          "real": -0.04721359549995813,
+          "imag": -0.0,
+          "magnitude": 0.04721359549995813,
+          "argument": -3.141592653589793,
+          "stability": "stable",
+          "damping": 15.265366938064533,
+          "frequency": 15.707963267948966,
+          "exact_pole_distance": 0.3981277724596942
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "backward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8674633879237109,
+          "imag": 0.0,
+          "magnitude": 0.8674633879237109,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.7109098608713262,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.009150353888721985
+        },
+        {
+          "real": 0.48846881546611953,
+          "imag": -0.0,
+          "magnitude": 0.48846881546611953,
+          "argument": -0.0,
+          "stability": "stable",
+          "damping": 3.5823982343162672,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.13755463850638344
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "trapezoid",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8580570704268038,
+          "imag": 0.0,
+          "magnitude": 0.8580570704268038,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.7654233302864349,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.0002559636081851391
+        },
+        {
+          "real": 0.31267463689026936,
+          "imag": -0.0,
+          "magnitude": 0.31267463689026936,
+          "argument": -0.0,
+          "stability": "stable",
+          "damping": 5.8129606392432525,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.038239540069466726
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.9999999999999999,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.847213595499958,
+          "imag": 0.0,
+          "magnitude": 0.847213595499958,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.8290121862764497,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.011099438535030925
+        },
+        {
+          "real": -0.04721359549995813,
+          "imag": -0.0,
+          "magnitude": 0.04721359549995813,
+          "argument": -3.141592653589793,
+          "stability": "stable",
+          "damping": 15.265366938064533,
+          "frequency": 15.707963267948966,
+          "exact_pole_distance": 0.3981277724596942
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 1,
+      "poles": [
+        {
+          "real": 1.0494427190999924,
+          "imag": 0.0,
+          "magnitude": 1.0494427190999924,
+          "argument": 0.0,
+          "stability": "unstable",
+          "damping": -0.24129639780419615,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.1911296850650035
+        },
+        {
+          "real": 0.870557280900008,
+          "imag": -0.0,
+          "magnitude": 0.870557280900008,
+          "argument": -0.0,
+          "stability": "stable",
+          "damping": 0.6931085982061511,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.5196431039402718
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 1.0400000000000005,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 2,
+      "poles": [
+        {
+          "real": 0.8669906831399545,
+          "imag": 0.0,
+          "magnitude": 0.8669906831399545,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.7136352417467634,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.008677649104965601
+        },
+        {
+          "real": -0.09899068313995496,
+          "imag": -0.0,
+          "magnitude": 0.09899068313995496,
+          "argument": -3.141592653589793,
+          "stability": "stable",
+          "damping": 11.563647714867834,
+          "frequency": 15.707963267948966,
+          "exact_pole_distance": 0.44990486009969105
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 5.568,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "RLC R=6",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 8,
+      "poles": [
+        {
+          "real": 0.8674633819106131,
+          "imag": 0.0,
+          "magnitude": 0.8674633819106131,
+          "argument": 0.0,
+          "stability": "stable",
+          "damping": 0.7109098955304134,
+          "frequency": 0.0,
+          "exact_pole_distance": 0.009150347875624187
+        },
+        {
+          "real": -0.2863310939106146,
+          "imag": -0.0,
+          "magnitude": 0.2863310939106146,
+          "argument": -3.141592653589793,
+          "stability": "stable",
+          "damping": 6.253032333652588,
+          "frequency": 15.707963267948966,
+          "exact_pole_distance": 0.6372452708703507
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 3.640941085936106,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "exact",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8378186666793217,
+          "imag": 0.34174644817710326,
+          "magnitude": 0.9048374180359596,
+          "argument": 0.3872983346207418,
+          "stability": "stable",
+          "damping": 0.49999999999999967,
+          "frequency": 1.936491673103709,
+          "exact_pole_distance": 1.2412670766236366e-16
+        },
+        {
+          "real": 0.8378186666793217,
+          "imag": -0.34174644817710326,
+          "magnitude": 0.9048374180359596,
+          "argument": -0.3872983346207418,
+          "stability": "stable",
+          "damping": 0.49999999999999967,
+          "frequency": 1.936491673103709,
+          "exact_pole_distance": 5.551115123125783e-17
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -0.9351912391642978,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "forward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.9,
+          "imag": 0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": 0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223098
+        },
+        {
+          "real": 0.9,
+          "imag": -0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": -0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223108
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "backward",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8088235294117647,
+          "imag": 0.28477818722113335,
+          "magnitude": 0.8574929257125441,
+          "argument": 0.33853498186763237,
+          "stability": "stable",
+          "damping": 0.768711749369902,
+          "frequency": 1.6926749093381617,
+          "exact_pole_distance": 0.06392261525870134
+        },
+        {
+          "real": 0.8088235294117647,
+          "imag": -0.28477818722113335,
+          "magnitude": 0.8574929257125441,
+          "argument": -0.33853498186763237,
+          "stability": "stable",
+          "damping": 0.768711749369902,
+          "frequency": 1.6926749093381617,
+          "exact_pole_distance": 0.06392261525870128
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "trapezoid",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.8421052631578947,
+          "imag": 0.3397353812462647,
+          "magnitude": 0.9080536347093006,
+          "argument": 0.3834647301504918,
+          "stability": "stable",
+          "damping": 0.4822591653112291,
+          "frequency": 1.917323650752459,
+          "exact_pole_distance": 0.004734902276755634
+        },
+        {
+          "real": 0.8421052631578947,
+          "imag": -0.3397353812462647,
+          "magnitude": 0.9080536347093006,
+          "argument": -0.3834647301504918,
+          "stability": "stable",
+          "damping": 0.4822591653112291,
+          "frequency": 1.917323650752459,
+          "exact_pole_distance": 0.004734902276755735
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": -1.0,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 0,
+      "poles": [
+        {
+          "real": 0.9,
+          "imag": 0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": 0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223098
+        },
+        {
+          "real": 0.9,
+          "imag": -0.3872983346207417,
+          "magnitude": 0.9797958971132713,
+          "argument": -0.40637778068433034,
+          "stability": "stable",
+          "damping": 0.10205498630063747,
+          "frequency": 2.0318889034216516,
+          "exact_pole_distance": 0.07708107791223108
+        }
+      ],
+      "transfer_zeros": [],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 1,
+      "poles": [
+        {
+          "real": 0.76,
+          "imag": 0.3098386676965933,
+          "magnitude": 0.8207313811473276,
+          "argument": 0.38711159095697995,
+          "stability": "stable",
+          "damping": 0.9877970401350505,
+          "frequency": 1.9355579547848996,
+          "exact_pole_distance": 0.08410619084787872
+        },
+        {
+          "real": 0.76,
+          "imag": -0.3098386676965933,
+          "magnitude": 0.8207313811473276,
+          "argument": -0.38711159095697995,
+          "stability": "stable",
+          "damping": 0.9877970401350505,
+          "frequency": 1.9355579547848996,
+          "exact_pole_distance": 0.08410619084787861
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.04000000000000018,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 2,
+      "poles": [
+        {
+          "real": 0.804,
+          "imag": 0.2633628675421043,
+          "magnitude": 0.8460354602497463,
+          "argument": 0.316550784240131,
+          "stability": "stable",
+          "damping": 0.8359700253275267,
+          "frequency": 1.582753921200655,
+          "exact_pole_distance": 0.08536795610257072
+        },
+        {
+          "real": 0.804,
+          "imag": -0.2633628675421043,
+          "magnitude": 0.8460354602497463,
+          "argument": -0.316550784240131,
+          "stability": "stable",
+          "damping": 0.8359700253275267,
+          "frequency": 1.582753921200655,
+          "exact_pole_distance": 0.08536795610257068
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.15800000000000022,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    },
+    {
+      "model": "mass-spring-damper",
+      "h": 0.2,
+      "method": "finite",
+      "corrections": 8,
+      "poles": [
+        {
+          "real": 0.8087370240000001,
+          "imag": 0.2848027118629721,
+          "magnitude": 0.8574194764949534,
+          "argument": 0.3385954675565523,
+          "stability": "stable",
+          "damping": 0.7691400465677125,
+          "frequency": 1.6929773377827613,
+          "exact_pole_distance": 0.06394005822910262
+        },
+        {
+          "real": 0.8087370240000001,
+          "imag": -0.2848027118629721,
+          "magnitude": 0.8574194764949534,
+          "argument": -0.3385954675565523,
+          "stability": "stable",
+          "damping": 0.7691400465677125,
+          "frequency": 1.6929773377827613,
+          "exact_pole_distance": 0.06394005822910258
+        }
+      ],
+      "transfer_zeros": [
+        {
+          "real": 0.0002813395554939332,
+          "imag": 0.0
+        }
+      ],
+      "transfer_pole_count": 2,
+      "cancellation_count": 0
+    }
+  ],
+  "selected_responses": [
+    {
+      "model": "RC",
+      "method": "exact",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 1.1102230246251565e-16,
+      "overshoot": null,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "exact",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 2.220446049250313e-16,
+      "overshoot": -2.06115369216775e-09,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "forward",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 0.040199441171442196,
+      "overshoot": null,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "forward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.04019944117144236,
+      "overshoot": -2.037034985136188e-10,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "backward",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 0.03399813084501868,
+      "overshoot": null,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "backward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.03399813084501835,
+      "overshoot": -1.2074673039208506e-08,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "trapezoid",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 0.0012316091182419386,
+      "overshoot": null,
+      "energy_ratio": null
+    },
+    {
+      "model": "RC",
+      "method": "trapezoid",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.0012316091182417166,
+      "overshoot": -1.927447090821488e-09,
+      "energy_ratio": null
+    },
+    {
+      "model": "LC",
+      "method": "exact",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 3.3584246494910985e-15,
+      "overshoot": null,
+      "energy_ratio": 1.0000000000000002
+    },
+    {
+      "model": "LC",
+      "method": "forward",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 5.598207976118051,
+      "overshoot": null,
+      "energy_ratio": 50.504948184269495
+    },
+    {
+      "model": "LC",
+      "method": "backward",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 0.8472984579573699,
+      "overshoot": null,
+      "energy_ratio": 0.019800040113920177
+    },
+    {
+      "model": "LC",
+      "method": "trapezoid",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 0.059560405613699796,
+      "overshoot": null,
+      "energy_ratio": 0.9999999999999976
+    },
+    {
+      "model": "LC",
+      "method": "symplectic",
+      "drive": "zero",
+      "h": 0.2,
+      "max_analytical_output_error": 0.12911418747052533,
+      "overshoot": null,
+      "energy_ratio": 0.9470930119689981
+    },
+    {
+      "model": "RLC R=1",
+      "method": "exact",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 1.1102230246251565e-15,
+      "overshoot": 0.44389859995640113,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=1",
+      "method": "forward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.5479776775932139,
+      "overshoot": 0.8682163200000002,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=1",
+      "method": "backward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.21486476724179782,
+      "overshoot": 0.24340449665127073,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=1",
+      "method": "trapezoid",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.020138649622645666,
+      "overshoot": 0.4521958014166132,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=4",
+      "method": "exact",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 2.220446049250313e-16,
+      "overshoot": -2.220446049250313e-16,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=4",
+      "method": "forward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.07516104118400246,
+      "overshoot": 0.0,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=4",
+      "method": "backward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.05351528051683074,
+      "overshoot": -7.216449660063518e-14,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=4",
+      "method": "trapezoid",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.006022679403815984,
+      "overshoot": -1.1102230246251565e-16,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=6",
+      "method": "exact",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 2.220446049250313e-16,
+      "overshoot": -2.7105725741716213e-07,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=6",
+      "method": "forward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.05501289366484796,
+      "overshoot": -7.375337851556196e-08,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=6",
+      "method": "backward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.030019745779191975,
+      "overshoot": -7.827186540021458e-07,
+      "energy_ratio": null
+    },
+    {
+      "model": "RLC R=6",
+      "method": "trapezoid",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.006232405859969911,
+      "overshoot": -2.6309203804419923e-07,
+      "energy_ratio": null
+    },
+    {
+      "model": "mass-spring-damper",
+      "method": "exact",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 1.1102230246251565e-15,
+      "overshoot": 0.44389859995640113,
+      "energy_ratio": null
+    },
+    {
+      "model": "mass-spring-damper",
+      "method": "forward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.5479776775932139,
+      "overshoot": 0.8682163200000002,
+      "energy_ratio": null
+    },
+    {
+      "model": "mass-spring-damper",
+      "method": "backward",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.21486476724179782,
+      "overshoot": 0.24340449665127073,
+      "energy_ratio": null
+    },
+    {
+      "model": "mass-spring-damper",
+      "method": "trapezoid",
+      "drive": "step",
+      "h": 0.2,
+      "max_analytical_output_error": 0.020138649622645666,
+      "overshoot": 0.4521958014166132,
+      "energy_ratio": null
+    }
+  ],
+  "frequency_response": [
+    {
+      "model": "RLC R=1",
+      "omega_rad_per_s": 2.0,
+      "method": "exact",
+      "magnitude": 1.9867117811302732,
+      "phase_rad": -1.7707420491853312,
+      "continuous_magnitude": 2.0,
+      "continuous_phase_rad": -1.5707963267948966
+    },
+    {
+      "model": "RLC R=1",
+      "omega_rad_per_s": 2.0,
+      "method": "forward",
+      "magnitude": 9.72813783710965,
+      "phase_rad": -1.6440100082559905,
+      "continuous_magnitude": 2.0,
+      "continuous_phase_rad": -1.5707963267948966
+    },
+    {
+      "model": "RLC R=1",
+      "omega_rad_per_s": 2.0,
+      "method": "backward",
+      "magnitude": 1.1217403295274446,
+      "phase_rad": -1.7562153625692165,
+      "continuous_magnitude": 2.0,
+      "continuous_phase_rad": -1.5707963267948966
+    },
+    {
+      "model": "RLC R=1",
+      "omega_rad_per_s": 2.0,
+      "method": "trapezoid",
+      "magnitude": 2.010484159065998,
+      "phase_rad": -1.8245828037298892,
+      "continuous_magnitude": 2.0,
+      "continuous_phase_rad": -1.5707963267948966
+    },
+    {
+      "model": "RLC R=1",
+      "omega_rad_per_s": 2.0,
+      "method": "finite",
+      "magnitude": 0.961155951955596,
+      "phase_rad": -1.7438506241298615,
+      "continuous_magnitude": 2.0,
+      "continuous_phase_rad": -1.5707963267948966
+    }
+  ],
+  "iteration_diagnostics": [
+    {
+      "model": "RC",
+      "h": 0.5,
+      "corrections": 0,
+      "spectral_radius_iteration": 0.5,
+      "residual_norm": 0.25,
+      "implicit_solver_error": 0.16666666666666663,
+      "total_function_evaluations": 2
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "corrections": 1,
+      "spectral_radius_iteration": 0.5,
+      "residual_norm": 0.125,
+      "implicit_solver_error": 0.08333333333333337,
+      "total_function_evaluations": 3
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "corrections": 2,
+      "spectral_radius_iteration": 0.5,
+      "residual_norm": 0.0625,
+      "implicit_solver_error": 0.04166666666666663,
+      "total_function_evaluations": 4
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "corrections": 4,
+      "spectral_radius_iteration": 0.5,
+      "residual_norm": 0.015625,
+      "implicit_solver_error": 0.01041666666666663,
+      "total_function_evaluations": 6
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "corrections": 8,
+      "spectral_radius_iteration": 0.5,
+      "residual_norm": 0.0009765625,
+      "implicit_solver_error": 0.0006510416666666297,
+      "total_function_evaluations": 10
+    },
+    {
+      "model": "RC",
+      "h": 0.5,
+      "corrections": 16,
+      "spectral_radius_iteration": 0.5,
+      "residual_norm": 3.814697265625e-06,
+      "implicit_solver_error": 2.5431315103796592e-06,
+      "total_function_evaluations": 18
+    },
+    {
+      "model": "RC",
+      "h": 1.0,
+      "corrections": 0,
+      "spectral_radius_iteration": 1.0,
+      "residual_norm": 1.0,
+      "implicit_solver_error": 0.5,
+      "total_function_evaluations": 2
+    },
+    {
+      "model": "RC",
+      "h": 1.0,
+      "corrections": 1,
+      "spectral_radius_iteration": 1.0,
+      "residual_norm": 1.0,
+      "implicit_solver_error": 0.5,
+      "total_function_evaluations": 3
+    },
+    {
+      "model": "RC",
+      "h": 1.0,
+      "corrections": 2,
+      "spectral_radius_iteration": 1.0,
+      "residual_norm": 1.0,
+      "implicit_solver_error": 0.5,
+      "total_function_evaluations": 4
+    },
+    {
+      "model": "RC",
+      "h": 1.0,
+      "corrections": 4,
+      "spectral_radius_iteration": 1.0,
+      "residual_norm": 1.0,
+      "implicit_solver_error": 0.5,
+      "total_function_evaluations": 6
+    },
+    {
+      "model": "RC",
+      "h": 1.0,
+      "corrections": 8,
+      "spectral_radius_iteration": 1.0,
+      "residual_norm": 1.0,
+      "implicit_solver_error": 0.5,
+      "total_function_evaluations": 10
+    },
+    {
+      "model": "RC",
+      "h": 1.0,
+      "corrections": 16,
+      "spectral_radius_iteration": 1.0,
+      "residual_norm": 1.0,
+      "implicit_solver_error": 0.5,
+      "total_function_evaluations": 18
+    },
+    {
+      "model": "RC",
+      "h": 2.5,
+      "corrections": 0,
+      "spectral_radius_iteration": 2.5,
+      "residual_norm": 6.25,
+      "implicit_solver_error": 1.7857142857142856,
+      "total_function_evaluations": 2
+    },
+    {
+      "model": "RC",
+      "h": 2.5,
+      "corrections": 1,
+      "spectral_radius_iteration": 2.5,
+      "residual_norm": 15.625,
+      "implicit_solver_error": 4.464285714285714,
+      "total_function_evaluations": 3
+    },
+    {
+      "model": "RC",
+      "h": 2.5,
+      "corrections": 2,
+      "spectral_radius_iteration": 2.5,
+      "residual_norm": 39.0625,
+      "implicit_solver_error": 11.160714285714286,
+      "total_function_evaluations": 4
+    },
+    {
+      "model": "RC",
+      "h": 2.5,
+      "corrections": 4,
+      "spectral_radius_iteration": 2.5,
+      "residual_norm": 244.140625,
+      "implicit_solver_error": 69.75446428571429,
+      "total_function_evaluations": 6
+    },
+    {
+      "model": "RC",
+      "h": 2.5,
+      "corrections": 8,
+      "spectral_radius_iteration": 2.5,
+      "residual_norm": 9536.7431640625,
+      "implicit_solver_error": 2724.783761160714,
+      "total_function_evaluations": 10
+    },
+    {
+      "model": "RC",
+      "h": 2.5,
+      "corrections": 16,
+      "spectral_radius_iteration": 2.5,
+      "residual_norm": 14551915.228366852,
+      "implicit_solver_error": 4157690.065247672,
+      "total_function_evaluations": 18
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "corrections": 0,
+      "spectral_radius_iteration": 0.5000000000000001,
+      "residual_norm": 0.25,
+      "implicit_solver_error": 0.2236067977499789,
+      "total_function_evaluations": 2
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "corrections": 1,
+      "spectral_radius_iteration": 0.5000000000000001,
+      "residual_norm": 0.125,
+      "implicit_solver_error": 0.11180339887498948,
+      "total_function_evaluations": 3
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "corrections": 2,
+      "spectral_radius_iteration": 0.5000000000000001,
+      "residual_norm": 0.0625,
+      "implicit_solver_error": 0.05590169943749479,
+      "total_function_evaluations": 4
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "corrections": 4,
+      "spectral_radius_iteration": 0.5000000000000001,
+      "residual_norm": 0.015625,
+      "implicit_solver_error": 0.013975424859373635,
+      "total_function_evaluations": 6
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "corrections": 8,
+      "spectral_radius_iteration": 0.5000000000000001,
+      "residual_norm": 0.0009765625,
+      "implicit_solver_error": 0.0008734640537108058,
+      "total_function_evaluations": 10
+    },
+    {
+      "model": "LC",
+      "h": 0.5,
+      "corrections": 16,
+      "spectral_radius_iteration": 0.5000000000000001,
+      "residual_norm": 3.814697265625e-06,
+      "implicit_solver_error": 3.411968959758378e-06,
+      "total_function_evaluations": 18
+    },
+    {
+      "model": "LC",
+      "h": 1.5,
+      "corrections": 0,
+      "spectral_radius_iteration": 1.4999999999999998,
+      "residual_norm": 2.25,
+      "implicit_solver_error": 1.2480754415067654,
+      "total_function_evaluations": 2
+    },
+    {
+      "model": "LC",
+      "h": 1.5,
+      "corrections": 1,
+      "spectral_radius_iteration": 1.4999999999999998,
+      "residual_norm": 3.375,
+      "implicit_solver_error": 1.8721131622601481,
+      "total_function_evaluations": 3
+    },
+    {
+      "model": "LC",
+      "h": 1.5,
+      "corrections": 2,
+      "spectral_radius_iteration": 1.4999999999999998,
+      "residual_norm": 5.0625,
+      "implicit_solver_error": 2.8081697433902226,
+      "total_function_evaluations": 4
+    },
+    {
+      "model": "LC",
+      "h": 1.5,
+      "corrections": 4,
+      "spectral_radius_iteration": 1.4999999999999998,
+      "residual_norm": 11.390625,
+      "implicit_solver_error": 6.318381922628,
+      "total_function_evaluations": 6
+    },
+    {
+      "model": "LC",
+      "h": 1.5,
+      "corrections": 8,
+      "spectral_radius_iteration": 1.4999999999999998,
+      "residual_norm": 57.6650390625,
+      "implicit_solver_error": 31.986808483304255,
+      "total_function_evaluations": 10
+    },
+    {
+      "model": "LC",
+      "h": 1.5,
+      "corrections": 16,
+      "spectral_radius_iteration": 1.4999999999999998,
+      "residual_norm": 1477.8918800354004,
+      "implicit_solver_error": 819.7869158553094,
+      "total_function_evaluations": 18
+    }
+  ],
+  "equal_work": [
+    {
+      "model": "RC",
+      "corrections": 0,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.05,
+      "total_function_evaluations": 100,
+      "finite_final_state_error": 0.0015841717917653274,
+      "euler_final_state_error": 0.0008174177787514504
+    },
+    {
+      "model": "RC",
+      "corrections": 1,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.03333333333333333,
+      "total_function_evaluations": 150,
+      "finite_final_state_error": 0.0022171360133200558,
+      "euler_final_state_error": 0.0005505002129955177
+    },
+    {
+      "model": "RC",
+      "corrections": 2,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.025,
+      "total_function_evaluations": 200,
+      "finite_final_state_error": 0.0017381157095032749,
+      "euler_final_state_error": 0.00041494761211493397
+    },
+    {
+      "model": "RC",
+      "corrections": 4,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.016666666666666666,
+      "total_function_evaluations": 300,
+      "finite_final_state_error": 0.0017801783632863085,
+      "euler_final_state_error": 0.0002780085866667323
+    },
+    {
+      "model": "RC",
+      "corrections": 8,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.01,
+      "total_function_evaluations": 500,
+      "finite_final_state_error": 0.0017806042378225402,
+      "euler_final_state_error": 0.000167463956670842
+    },
+    {
+      "model": "LC",
+      "corrections": 0,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.05,
+      "total_function_evaluations": 100,
+      "finite_final_state_error": 0.28305445242262334,
+      "euler_final_state_error": 0.13304542685739265
+    },
+    {
+      "model": "LC",
+      "corrections": 1,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.03333333333333333,
+      "total_function_evaluations": 150,
+      "finite_final_state_error": 0.22218206704338572,
+      "euler_final_state_error": 0.08687519386855092
+    },
+    {
+      "model": "LC",
+      "corrections": 2,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.025,
+      "total_function_evaluations": 200,
+      "finite_final_state_error": 0.2245954535522828,
+      "euler_final_state_error": 0.06448262689630893
+    },
+    {
+      "model": "LC",
+      "corrections": 4,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.016666666666666666,
+      "total_function_evaluations": 300,
+      "finite_final_state_error": 0.22067805027309645,
+      "euler_final_state_error": 0.04254349844006513
+    },
+    {
+      "model": "LC",
+      "corrections": 8,
+      "duration": 5.0,
+      "finite_h": 0.1,
+      "euler_h": 0.01,
+      "total_function_evaluations": 500,
+      "finite_final_state_error": 0.22071692576019883,
+      "euler_final_state_error": 0.025314401449728755
+    }
+  ]
+}
