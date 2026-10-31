@@ -26,6 +26,9 @@ are explicit integrator and function/state networks.
   startup demonstration remains the fallback when no recent diagram opens.
 - `2int_osc.s7diagram`: a two-integrator oscillator; inspect the Scope and
   observe forward Euler's outward amplitude drift.
+- [Gauss–Legendre oscillator](../examples/2int_osc_gauss.s7diagram): the same
+  connected ideal-integrator equations with the production coupled
+  fourth-order method. Its two temporary stages are not diagram states.
 - `2int_osc_live.s7diagram`: the bounded live oscilloscope prototype; change
   acquisition length and inspect exact samples. See [prototype usage](LIVE_OSCILLOSCOPE_PROTOTYPE.md).
 - [2D phase portrait](../examples/2int_osc_phase_portrait.md): the same

@@ -103,6 +103,14 @@ rejection, nonconvergence and published-state restoration/retry.
 `s7core_type_inference_smoke` checks sampled ramp quadrature and rejection of
 a sampled-only algebraic feedback loop.
 
+The [production coupled-integration contract](COUPLED_INTEGRATION.md) adds
+F64 Euler substeps and two-stage Gauss–Legendre. The compiler now shares
+derivative-cone discovery, and the runtime shares trial-output capture and
+replay, while this trapezoid element retains its existing equation, 64-step
+fixed-point solver, supported types, staging and publication. A feedback
+cycle crossing numerical methods is rejected; a one-way other-memory input
+is held for the outer interval.
+
 The double-pendulum tests compare all three modes/three methods at
 1/10/100 kHz for 20 model seconds, against continuous normal modes and closed-form
 discrete solutions. For implicit trapezoid, each tenfold frequency increase
