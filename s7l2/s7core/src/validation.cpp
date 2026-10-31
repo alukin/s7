@@ -568,8 +568,8 @@ CheckedSchema check_schema(const Schema& schema) {
         }
         checked.coupled_regions = std::move(connected_regions);
         for (auto& region : checked.coupled_regions) {
-            if (region.states.size() > 16)
-                checked.errors.emplace_back("Coupled integration currently supports at most 16 F64 states per region.");
+            if (region.method == CoupledMethod::GaussLegendre2 && region.states.size() > 16)
+                checked.errors.emplace_back("Gauss-Legendre integration currently supports at most 16 F64 states per region.");
             std::unordered_set<std::string> states(region.states.begin(), region.states.end());
             region.rhs = trial_rhs(instances, parents, states, true, checked.errors);
             for (const auto& id : region.states) {
