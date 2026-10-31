@@ -8,6 +8,7 @@
 #include "s7/sources.hpp"
 #include "s7/control_elements.hpp"
 #include "s7/trapezoid.hpp"
+#include "s7/coupled_integration.hpp"
 #include "s7/convert.hpp"
 #include "s7/signal_values.hpp"
 
@@ -503,18 +504,26 @@ private:
 /// causal memory: it can close a feedback loop (ODE models) without a Delay.
 /// Floating-point and complex floating-point types.
 template <SignalType Type>
-class EulerIntegratorT final : public Element {
+class EulerIntegratorT final : public Element, public CoupledIntegration {
 public:
     using value_type = signal_storage_t<Type>;
     using step_type = component_storage_t<Type>;
 
     // Without dt the integrator follows its domain's rate (adopt_rate).
-    explicit EulerIntegratorT(std::optional<step_type> dt = step_type(1), value_type initial_value = {})
+    explicit EulerIntegratorT(std::optional<step_type> dt = step_type(1), value_type initial_value = {},
+                              int substeps = 1)
         : Element("EulerIntegrator", true, Feedthrough::None)
         , follows_rate_(!dt)
         , dt_(dt ? *dt : std::numeric_limits<step_type>::quiet_NaN())
         , output_value_(initial_value)
+        , substeps_(substeps)
     {
+        if (substeps_ < 1 || substeps_ > 32)
+            throw std::invalid_argument("EulerIntegrator substeps must be between 1 and 32.");
+        if constexpr (Type != SignalType::F64) {
+            if (substeps_ != 1)
+                throw std::invalid_argument("Coupled Euler substeps require F64 integrator states.");
+        }
         register_input(0, port_names::in, Type, nullptr);
         register_output(0, port_names::out, Type, &output_value_);
     }
@@ -522,6 +531,8 @@ public:
     // output_value_ holds y[n] here; NodeRuntime publishes y[n+1] at the next step.
     void step() override
     {
+        if (substeps_ != 1)
+            throw std::logic_error("EulerIntegrator substeps require NodeRuntime's coupled numerical region.");
         output_value_ = output_value_ + read_input<value_type>(0) * dt_;
     }
 
@@ -534,11 +545,57 @@ public:
     {
         if (follows_rate_) dt_ = detail::rate_period<step_type>(rate);
     }
+    [[nodiscard]] CoupledMethod coupled_method() const override
+    {
+        return substeps_ == 1 ? CoupledMethod::None : CoupledMethod::EulerSubsteps;
+    }
+    [[nodiscard]] double coupled_step_seconds() const override { return static_cast<double>(dt_); }
+    [[nodiscard]] int coupled_substeps() const override { return substeps_; }
 
 private:
     bool follows_rate_;
     step_type dt_;
     value_type output_value_;
+    int substeps_;
+};
+
+// Fourth-order, two-stage implicit Gauss-Legendre state. NodeRuntime solves
+// all coupled F64 states in the compiled region simultaneously.
+class GaussLegendreIntegrator final : public Element, public CoupledIntegration {
+public:
+    explicit GaussLegendreIntegrator(std::optional<double> dt = 1.0, double initial_value = 0.0)
+        : Element("GaussLegendreIntegrator", true, Feedthrough::None), follows_rate_(!dt)
+        , dt_(dt ? *dt : std::numeric_limits<double>::quiet_NaN()), output_value_(initial_value)
+    {
+        if (dt && (!std::isfinite(dt_) || dt_ <= 0))
+            throw std::invalid_argument("GaussLegendreIntegrator dt must be finite and positive.");
+        if (!std::isfinite(output_value_))
+            throw std::invalid_argument("GaussLegendreIntegrator initial_value must be finite.");
+        register_input(0, port_names::in, SignalType::F64, nullptr);
+        register_output(0, port_names::out, SignalType::F64, &output_value_);
+    }
+
+    void step() override
+    {
+        throw std::logic_error("GaussLegendreIntegrator requires NodeRuntime's coupled numerical region.");
+    }
+    [[nodiscard]] CoupledMethod coupled_method() const override { return CoupledMethod::GaussLegendre2; }
+    [[nodiscard]] double coupled_step_seconds() const override { return dt_; }
+    [[nodiscard]] int coupled_substeps() const override { return 1; }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_seconds(dt_);
+    }
+    void adopt_rate(const Rate& rate) override
+    {
+        if (follows_rate_) dt_ = detail::rate_period<double>(rate);
+    }
+
+private:
+    bool follows_rate_;
+    double dt_;
+    double output_value_;
 };
 
 /// Implicit trapezoidal integration: y[n+1] = y[n] + dt/2 *
