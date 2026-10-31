@@ -24,6 +24,9 @@ struct ParameterSpec {
     std::optional<double> max_value;        // For numeric types
     std::vector<std::string> enum_values;   // For enum type
     bool required{false};                          // Must be provided?
+    // Kept only so older documents load (e.g. a rate-following element's
+    // stored dt, ADR-022); accepted but not offered for editing.
+    bool legacy{false};
 };
 
 // Port specification

@@ -5,6 +5,7 @@
 
 #include "s7/convert.hpp"
 #include "s7/elements.hpp"
+#include "s7/resampler.hpp"
 #include "s7/schema_library.hpp"
 #include "s7_schema_elements.hpp"
 #include "s7/metadata_json.hpp"
@@ -496,6 +497,20 @@ void register_builtin_elements(ElementRegistry& registry)
             });
         },
         metadata.at("AnalogOscillator")));
+
+    registry.register_element(ElementDescriptor(
+        "Resampler",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_floating()) {
+                    return std::make_unique<ResamplerT<T>>(static_cast<int>(ctx.get_int("order")),
+                                                           ctx.get_real("stopband_attenuation_db"));
+                } else {
+                    return unsupported_type(ctx);
+                }
+            });
+        },
+        metadata.at("Resampler")));
 
     registry.register_element(ElementDescriptor(
         "FirFilter",

@@ -110,7 +110,7 @@ ElementMetadata decode(const object& source)
         ParameterSpec parameter;
         parameter.name = string(p, "name", context);
         const auto label = context + "." + parameter.name;
-        keys(p, {"name", "type", "description", "default", "required", "min", "max", "enum_values"}, label);
+        keys(p, {"name", "type", "description", "default", "required", "min", "max", "enum_values", "legacy"}, label);
         unique(parameter_names, parameter.name, label);
         parameter.type = string(p, "type", label);
         if (parameter.type != "real" && parameter.type != "int" && parameter.type != "bool" && parameter.type != "string" &&
@@ -119,6 +119,7 @@ ElementMetadata decode(const object& source)
         parameter.description = string(p, "description", label);
         parameter.default_value = required(p, "default", label);
         parameter.required = boolean(p, "required", label);
+        parameter.legacy = p.contains("legacy") && boolean(p, "legacy", label);
         parameter.enum_values = strings(p, "enum_values", label);
         for (const auto* key : {"min", "max"}) if (const auto* bound = p.if_contains(key)) {
             if (!bound->is_number() || !std::isfinite(bound->to_number<double>())) invalid(label, "bounds must be finite numbers");

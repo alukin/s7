@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/rate_inference.hpp"
+#include "s7/resampler.hpp"
 
 #include "s7/element.hpp"
 #include "s7/schema.hpp"
@@ -58,6 +59,12 @@ ResolvedRates RateResolver::resolve(const Schema& schema, const std::unordered_m
         const auto to_it = index_of.find(connection.to_element);
         if (from_it == index_of.end() || to_it == index_of.end()) {
             continue; // reported by validation
+        }
+        // A rate-changing element (Resampler) joins two rate domains: its input
+        // connection belongs to the upstream domain, not to its own.
+        if (const auto target = instances.find(connection.to_element);
+            target != instances.end() && dynamic_cast<const RateChangingElement*>(target->second)) {
+            continue;
         }
         sets.merge(from_it->second, to_it->second);
     }

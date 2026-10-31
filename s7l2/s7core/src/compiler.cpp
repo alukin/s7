@@ -212,6 +212,25 @@ ExecutableGraph Compiler::compile(const Schema& schema,
     resolve(executable_graph.causal_order, executable_graph.causal_execution);
     resolve(executable_graph.memory_order, executable_graph.memory_execution);
     resolve(executable_graph.trapezoid_rhs, executable_graph.trapezoid_rhs_execution);
+    // Split the execution records by rate domain, keeping their order.
+    for (const auto& rate : checked.domain_rates) {
+        RateDomain domain;
+        domain.rate = rate;
+        const auto split = [&](const std::vector<std::string>& ids, std::vector<Element*>& records) {
+            for (const auto& id : ids) {
+                if (checked.rates.at(id) == rate) records.push_back(executable_graph.elements.at(id).get());
+            }
+        };
+        split(executable_graph.causal_order, domain.causal_execution);
+        split(executable_graph.memory_order, domain.memory_execution);
+        split(executable_graph.trapezoid_rhs, domain.trapezoid_rhs_execution);
+        executable_graph.domains.push_back(std::move(domain));
+    }
+    for (const auto& link : checked.domain_links) {
+        executable_graph.domains[link.input].captures.push_back(
+            dynamic_cast<RateChangingElement*>(executable_graph.elements.at(link.resampler).get()));
+        executable_graph.domain_links.emplace_back(link.input, link.output);
+    }
     executable_graph.rates = std::move(checked.rates);
     return executable_graph;
 }

@@ -14,6 +14,18 @@
 
 namespace s7 {
 
+class RateChangingElement;
+
+// The elements of one rate domain (ADR-022), in the same orders as the whole
+// graph's execution records, plus the Resamplers whose input it feeds.
+struct RateDomain {
+    Rate rate;
+    std::vector<Element*> causal_execution;
+    std::vector<Element*> memory_execution;
+    std::vector<Element*> trapezoid_rhs_execution;
+    std::vector<RateChangingElement*> captures;
+};
+
 
 struct ExecutableGraph {
     std::string schema_name;
@@ -34,6 +46,11 @@ struct ExecutableGraph {
     // Rate inference result: the rate of every element, declared, seeded or
     // inferred (doc/S7_Sample_Rate_Model.md). Model time must agree with it.
     std::unordered_map<std::string, Rate> rates;
+    // One domain per distinct rate, in step order: a Resampler's input domain
+    // comes before its output domain. A single-rate graph has one.
+    std::vector<RateDomain> domains;
+    // Rate-changing links between domains (indices into domains).
+    std::vector<std::pair<std::size_t, std::size_t>> domain_links;
 };
 
 } // namespace s7

@@ -23,6 +23,7 @@ add_library(s7core SHARED
     src/builtin_element_registry.cpp
     src/type_inference.cpp
     src/rate.cpp
+    src/resampler.cpp
     src/rate_inference.cpp
     src/convert.cpp
     src/platform.cpp
@@ -133,6 +134,10 @@ add_test(NAME s7core_robustness_smoke COMMAND s7core_robustness_smoke)
 s7_add_test_executable(s7core_design_rate_smoke tests/design_rate_smoke.cpp)
 target_link_libraries(s7core_design_rate_smoke PRIVATE s7core)
 add_test(NAME s7core_design_rate_smoke COMMAND s7core_design_rate_smoke)
+
+s7_add_test_executable(s7core_resampler_smoke tests/resampler_smoke.cpp)
+target_link_libraries(s7core_resampler_smoke PRIVATE s7core)
+add_test(NAME s7core_resampler_smoke COMMAND s7core_resampler_smoke)
 
 s7_add_test_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
 target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)

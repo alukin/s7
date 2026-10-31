@@ -266,7 +266,9 @@ void Schema::ensure_compiled_runtime()
     auto graph = Compiler::compile(executable, random_uuid_string(), random_uuid_string());
     // The nested runtime steps once per parent step, so every internal rate
     // must equal this schema's own rate or, without one, the parent's.
-    if (const auto expected = rate_ ? rate_ : parent_rate_) {
+    // With Resamplers inside, other domains may differ; the runtime's
+    // model-time check below covers them.
+    if (const auto expected = rate_ ? rate_ : parent_rate_; expected && graph.domain_links.empty()) {
         for (const auto& [id, element] : graph.elements) {
             if (const auto declared=element->declared_rate(); declared && *declared!=*expected)
                 throw std::invalid_argument("Schema '"+name_+"' "+(rate_ ? "rate" : "parent graph rate "+expected->to_string())
@@ -274,6 +276,9 @@ void Schema::ensure_compiled_runtime()
         }
     }
     auto runtime = std::make_unique<NodeRuntime>(std::move(graph));
+    // The nested runtime steps at this schema's rate; its model time lets it
+    // schedule any rate domains joined by Resamplers inside it.
+    if (const auto own = rate_ ? rate_ : parent_rate_) runtime->set_model_time_rate(*own);
 
     // Resolve each exposed output once. The binding addresses storage of an
     // element owned by runtime, which stays at its heap address until the

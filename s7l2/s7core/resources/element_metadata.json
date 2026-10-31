@@ -1486,7 +1486,8 @@
           "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
           "default": null,
           "required": false,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "initial_value",
@@ -1571,7 +1572,8 @@
           "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
           "default": null,
           "required": false,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "initial_value",
@@ -1674,7 +1676,8 @@
           "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
           "default": null,
           "required": false,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "initial_position",
@@ -1868,7 +1871,8 @@
           "default": null,
           "required": false,
           "min": 1.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "sample_rate_hz",
@@ -1877,7 +1881,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "amplitude",
@@ -2018,7 +2023,8 @@
           "default": null,
           "required": false,
           "min": 1.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "sample_rate_hz",
@@ -2027,7 +2033,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "low",
@@ -2109,7 +2116,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "amplitude",
@@ -2217,7 +2225,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "low",
@@ -2325,7 +2334,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "start_time",
@@ -2343,7 +2353,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "area",
@@ -2417,7 +2428,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "start_time",
@@ -2435,7 +2447,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "initial_value",
@@ -2525,7 +2538,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "amplitude",
@@ -2840,7 +2854,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "initial_value",
@@ -3037,7 +3052,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         }
       ],
       "type_variables": [
@@ -3121,7 +3137,8 @@
           "required": false,
           "min": 2.0,
           "max": 65504.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "sample_rate_hz",
@@ -3130,7 +3147,8 @@
           "default": null,
           "required": false,
           "min": 0.0,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         }
       ],
       "type_variables": [
@@ -3211,7 +3229,8 @@
           "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
           "default": null,
           "required": false,
-          "enum_values": []
+          "enum_values": [],
+          "legacy": true
         },
         {
           "name": "phase",
@@ -3885,6 +3904,95 @@
       "visual": {
         "shape": "box",
         "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "Resampler",
+      "display_name": "Resampler",
+      "description": "Converts a signal between two rate domains: the only element whose input and output rates may differ, and S7 never inserts one. At equal rates it passes values through unchanged. Otherwise each output sample interpolates the input samples received at or before its time: order 0 holds the latest sample, orders 1 (linear) and 2 (quadratic) interpolate one input period late instead of extrapolating. When lowering the rate it first applies a linear-phase anti-aliasing low-pass (passband 0.4, stopband 0.5 of the output rate), whose group delay adds latency.",
+      "category": "conversion",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "order",
+          "type": "int",
+          "description": "Interpolation order: 0 sample and hold (default), 1 linear, 2 quadratic.",
+          "default": 0,
+          "required": false,
+          "min": 0.0,
+          "max": 2.0,
+          "enum_values": []
+        },
+        {
+          "name": "stopband_attenuation_db",
+          "type": "real",
+          "description": "Anti-aliasing stopband attenuation in dB when lowering the rate (20 to 200, default 60). Higher values need longer filters and add latency.",
+          "default": 60,
+          "required": false,
+          "min": 20.0,
+          "max": 200.0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#7E57C2",
         "max_width": 110,
         "max_height": 52,
         "icon_name": ""

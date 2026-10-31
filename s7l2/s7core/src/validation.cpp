@@ -3,6 +3,7 @@
 
 #include "s7/core.hpp"
 #include "s7/rate_inference.hpp"
+#include "s7/resampler.hpp"
 #include "s7/type_inference.hpp"
 #include "s7/trapezoid.hpp"
 
@@ -308,6 +309,66 @@ CheckedSchema check_schema(const Schema& schema) {
                     checked.errors.push_back("Element '" + id + "' at " + rate->second.to_string() + ": " + error.what());
                 }
             }
+        }
+    }
+    if (checked.errors.empty()) {
+        // Rate domains (doc/S7_Sample_Rate_Model.md section 8.3): one per
+        // distinct rate, joined only by Resamplers. Each Resampler learns its
+        // input domain's rate. Domains must form a DAG: feedback across rate
+        // domains is not supported yet.
+        std::vector<Rate> rates;
+        const auto domain = [&rates](const Rate& rate) {
+            for (std::size_t i = 0; i < rates.size(); ++i) if (rates[i] == rate) return i;
+            rates.push_back(rate);
+            return rates.size() - 1;
+        };
+        for (const auto& spec : schema.elements()) domain(checked.rates.at(spec.id));
+        std::unordered_map<std::string, std::size_t> index_of;
+        for (std::size_t index = 0; index < schema.elements().size(); ++index) index_of.emplace(schema.elements()[index].id, index);
+        std::vector<CheckedSchema::DomainLink> links;
+        for (const auto& connection : schema.connections()) {
+            const auto target = index_of.find(connection.to_element);
+            if (target == index_of.end() || !checked.elements[target->second]) continue;
+            auto* changing = dynamic_cast<RateChangingElement*>(checked.elements[target->second].get());
+            if (!changing || connection.to_port != 0) continue;
+            const auto& input = checked.rates.at(connection.from_element);
+            const auto& output = checked.rates.at(connection.to_element);
+            try {
+                changing->adopt_input_rate(input);
+            } catch (const std::invalid_argument& error) {
+                checked.errors.push_back("Element '" + connection.to_element + "': " + error.what());
+                continue;
+            }
+            if (input != output) links.push_back({connection.to_element, domain(input), domain(output)});
+        }
+        // Order the domains so each Resampler's input domain steps first.
+        std::vector<std::size_t> pending(rates.size(), 0);
+        for (const auto& link : links) ++pending[link.output];
+        std::vector<std::size_t> order;
+        for (std::size_t i = 0; i < rates.size(); ++i) if (pending[i] == 0) order.push_back(i);
+        for (std::size_t next = 0; next < order.size(); ++next) {
+            for (const auto& link : links) {
+                if (link.input == order[next] && --pending[link.output] == 0) order.push_back(link.output);
+            }
+        }
+        if (order.size() != rates.size()) {
+            std::string resamplers;
+            for (const auto& link : links) {
+                if (pending[link.output] != 0) resamplers += (resamplers.empty() ? "'" : ", '") + link.resampler + "'";
+            }
+            checked.errors.push_back("Feedback across rate domains through Resampler " + resamplers +
+                                     " is not supported yet; signals may only flow one way between rates.");
+        } else {
+            std::vector<std::size_t> position(rates.size());
+            for (std::size_t i = 0; i < order.size(); ++i) {
+                position[order[i]] = i;
+                checked.domain_rates.push_back(rates[order[i]]);
+            }
+            for (auto& link : links) {
+                link.input = position[link.input];
+                link.output = position[link.output];
+            }
+            checked.domain_links = std::move(links);
         }
     }
     if (checked.errors.empty()) {

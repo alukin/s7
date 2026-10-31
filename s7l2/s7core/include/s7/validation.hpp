@@ -36,6 +36,17 @@ struct CheckedSchema {
     std::vector<std::string> trapezoid_rhs;
     // Resolved rate of each element, when validation succeeded.
     std::unordered_map<std::string, Rate> rates;
+    // Rate domains (ADR-022): one per distinct rate, in step order (every
+    // Resampler's input domain before its output domain).
+    std::vector<Rate> domain_rates;
+    // Resamplers that change the rate: element id, input domain, output domain
+    // (indices into domain_rates).
+    struct DomainLink {
+        std::string resampler;
+        std::size_t input{};
+        std::size_t output{};
+    };
+    std::vector<DomainLink> domain_links;
 };
 [[nodiscard]] CheckedSchema check_schema(const Schema& schema);
 

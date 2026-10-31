@@ -17,6 +17,7 @@
 #include "s7/schema_library.hpp"
 #include "s7/rate.hpp"
 #include "s7/rate_inference.hpp"
+#include "s7/resampler.hpp"
 #include "s7/runtime.hpp"
 #include "s7/schema.hpp"
 #include "s7/signal_arithmetic.hpp"

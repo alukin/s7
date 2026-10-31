@@ -163,6 +163,9 @@ boost::json::value ElementCatalogService::to_json() const
             parameterJson["description"] = parameter.description;
             parameterJson["default"] = parameter.default_value;
             parameterJson["required"] = parameter.required;
+            if (parameter.legacy) {
+                parameterJson["legacy"] = true;
+            }
             if (parameter.min_value.has_value()) {
                 parameterJson["min"] = *parameter.min_value;
             }

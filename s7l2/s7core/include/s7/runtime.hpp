@@ -5,6 +5,7 @@
 #define S7CORE_INCLUDE_S7_RUNTIME_HPP
 
 #include "s7/graph.hpp"
+#include "s7/resampler.hpp"
 #include "s7/rate.hpp"
 #include "s7/trapezoid.hpp"
 
@@ -105,21 +106,34 @@ private:
         std::size_t bytes{};
         std::array<std::byte, 32> base{};
     };
-    void stage_trapezoids();
-    // Restores every published output to its pre-step value after a failed step.
-    void roll_back_step(bool published_memory);
+    // Everything one rate domain needs to step (doc/S7_Sample_Rate_Model.md
+    // section 8.3). A single-rate graph has one; its step is the whole step.
+    struct DomainState {
+        Rate rate{};
+        std::vector<Element*> causal;
+        std::vector<Element*> memory;
+        std::vector<Element*> trapezoid_rhs;
+        std::vector<RateChangingElement*> captures;
+        std::vector<MemoryOutput> memory_outputs;
+        std::vector<MemoryOutputRange> memory_output_ranges;
+        std::vector<CausalOutput> causal_outputs;
+        std::vector<TrapezoidStage> trapezoids;
+        std::vector<TrialOutput> trial_outputs;
+        std::vector<bool> implicit_memory;
+        bool memory_outputs_staged{};
+        std::size_t staged_index{};
+        std::uint64_t steps{}; // samples this domain has completed
+    };
+    void build_domain(DomainState& domain);
+    void step_domain(DomainState& domain);
+    static void stage_trapezoids(DomainState& domain);
+    // Restores every published output of the domain to its pre-step value.
+    static void roll_back_step(DomainState& domain, bool published_memory);
 
     void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
     ExecutableGraph graph_;
-    std::vector<MemoryOutput> memory_outputs_;
-    std::vector<MemoryOutputRange> memory_output_ranges_;
-    std::vector<CausalOutput> causal_outputs_;
-    std::vector<TrapezoidStage> trapezoids_;
-    std::vector<TrialOutput> trial_outputs_;
-    std::vector<bool> implicit_memory_;
-    bool memory_outputs_staged_{};
-    std::size_t staged_index_{};
+    std::vector<DomainState> domains_;
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<Rate> model_time_rate_;
     std::size_t step_count_{};
