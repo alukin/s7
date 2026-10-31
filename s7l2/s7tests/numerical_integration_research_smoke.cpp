@@ -190,7 +190,7 @@ void publication_and_order() {
         auto duplicate = policy_for(test, CoupledPolicy::Method::GaussLegendre2);
         for (int j = 0; j < 30; ++j) duplicate.step();
         require(duplicate.published_of(first) == normal.published_of(first), "Deterministic repeated graph run");
-        require(normal.temporary_bytes_upper_bound() > 0, "Stage storage accounting");
+        require(normal.stage_scratch_bytes_estimate() > 0, "Stage storage accounting");
         require(normal.state_count() == 2, "GL stages must not add persistent states");
     }
 }

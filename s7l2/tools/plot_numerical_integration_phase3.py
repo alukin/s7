@@ -46,12 +46,25 @@ def system_matrix(model: str) -> np.ndarray:
     return np.array([[0., 1.], [-4., -resistance]])
 
 
+def conditioned_poles(M: np.ndarray) -> np.ndarray:
+    if len(M) == 1:
+        return np.array([complex(M[0, 0])])
+    trace = float(np.trace(M))
+    determinant = float(np.linalg.det(M))
+    discriminant = trace*trace-4*determinant
+    scale = max(1., float(np.linalg.norm(M, ord=2)**2))
+    if abs(discriminant) <= 64*np.finfo(float).eps*scale:
+        return np.array([complex(trace/2)]*2)
+    root = complex(discriminant)**.5
+    return np.array([(trace+root)/2, (trace-root)/2])
+
+
 def poles(model: str, h: float, method: str, substeps: int = 1) -> np.ndarray:
     A = system_matrix(model)
     I = np.eye(len(A))
     Q = h*A
     if method == "exact":
-        return np.exp(h*np.linalg.eigvals(A))
+        return np.exp(h*conditioned_poles(A))
     if method.startswith("euler_m") or method.startswith("euler_equal"):
         M = np.linalg.matrix_power(I+Q/substeps, substeps)
     elif method == "trapezoid":
@@ -63,7 +76,7 @@ def poles(model: str, h: float, method: str, substeps: int = 1) -> np.ndarray:
         M = np.array([[1-h*h, h], [-h, 1.]])
     else:
         raise ValueError(method)
-    return np.linalg.eigvals(M)
+    return conditioned_poles(M)
 
 
 def plot_poles(directory: Path) -> None:
@@ -216,6 +229,17 @@ def compact(rows: list[dict], directory: Path) -> dict:
         "numerical_integration_models.hpp", "numerical_integration_research_smoke.cpp")]
     sources = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in source_files}
     sources[Path(__file__).name] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    compiler = None
+    build_type = None
+    cache = directory.resolve().parents[1]/"CMakeCache.txt"
+    if cache.is_file():
+        for line in cache.read_text().splitlines():
+            if line.startswith("CMAKE_CXX_COMPILER:FILEPATH="):
+                compiler = line.split("=", 1)[1]
+            if line.startswith("CMAKE_BUILD_TYPE:STRING="):
+                build_type = line.split("=", 1)[1]
+    compiler_version = (subprocess.check_output([compiler, "--version"], text=True).splitlines()[0]
+                        if compiler else None)
     selected = []
     for model, h in (("oscillator", .1), ("rc_charge", .5), ("rc_discharge", 3.),
                      ("rlc_r0", .2), ("rlc_r1", .2), ("rlc_r4", .2), ("rlc_r6", .2)):
@@ -227,7 +251,7 @@ def compact(rows: list[dict], directory: Path) -> dict:
                                                     "max_relative_energy_drift", "final_phase_error_rad", "overshoot",
                                                     "total_derivative_evaluations", "pure_element_evaluations",
                                                     "solver_iterations", "stage_residual_evaluations",
-                                                    "wall_seconds", "cpu_seconds", "temporary_bytes_upper_bound")})
+                                                    "wall_seconds", "cpu_seconds", "stage_scratch_bytes_estimate")})
     matching = []
     for model, h in (("oscillator", .1), ("rc_charge", .5), ("rc_discharge", 3.),
                      ("rlc_r0", .2), ("rlc_r1", .2), ("rlc_r4", .2), ("rlc_r6", .2)):
@@ -264,7 +288,7 @@ def compact(rows: list[dict], directory: Path) -> dict:
                     source_sha256=sources, precision="IEEE-754 binary64",
                     python=sys.version.split()[0], numpy=np.__version__,
                     matplotlib=matplotlib.__version__, platform=platform.platform(),
-                    compiler="GCC 16.2.1 Release (build-release CMake cache; see reproduction command)",
+                    compiler=compiler_version, build_type=build_type,
                     configuration=dict(models="oscillator, RC charge/discharge, RLC R=0/1/4/6",
                                        outer_h="oscillator .05/.1/.2; RC .1/.5/2/3; RLC .05/.1/.2/.5",
                                        euler_substeps=[1, 2, 4, 8, 16, 32],

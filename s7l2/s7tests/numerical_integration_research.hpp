@@ -162,7 +162,9 @@ public:
     [[nodiscard]] const Counts& counts() const { return counts_; }
     [[nodiscard]] std::size_t state_count() const { return state_values_.size(); }
     [[nodiscard]] std::size_t trial_element_count() const { return trial_order_.size(); }
-    [[nodiscard]] std::size_t temporary_bytes_upper_bound() const {
+    // Numerical payload estimate for stage/Jacobian/snapshot vectors; excludes
+    // std::vector allocator metadata, capacity slack, and the compiled graph.
+    [[nodiscard]] std::size_t stage_scratch_bytes_estimate() const {
         const auto n = state_count();
         const auto d = 2*n;
         return sizeof(double)*(d*d + 8*d + 4*n + pure_values_.size());

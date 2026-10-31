@@ -42,7 +42,7 @@ struct Run {
     double cpu_seconds{};
     int benchmark_repeats{5};
     int substeps{};
-    std::size_t temporary_bytes_upper_bound{};
+    std::size_t stage_scratch_bytes_estimate{};
     CoupledPolicy::Counts counts;
     std::string failure;
 };
@@ -138,7 +138,7 @@ Run run_policy(const Case& test, const std::string& label, const std::filesystem
         result.failure = error.what();
     }
     result.counts = policy.counts();
-    result.temporary_bytes_upper_bound = policy.temporary_bytes_upper_bound();
+    result.stage_scratch_bytes_estimate = policy.stage_scratch_bytes_estimate();
     if (result.failure.empty()) {
         const auto create = [&] {
             auto bench_schema = s7tests::research::schema_for(test);
@@ -219,7 +219,7 @@ json::object to_json(const Run& run) {
     result["euler_substeps"] = run.substeps;
     const bool counted = run.label.starts_with("euler_m") || run.label.starts_with("euler_equal") ||
                          run.label == "gauss_legendre_2";
-    result["temporary_bytes_upper_bound"] = counted ? json::value(run.temporary_bytes_upper_bound) : json::value(nullptr);
+    result["stage_scratch_bytes_estimate"] = counted ? json::value(run.stage_scratch_bytes_estimate) : json::value(nullptr);
     result["base_derivative_evaluations"] = counted ? json::value(run.counts.base_derivatives) : json::value(nullptr);
     result["trial_derivative_evaluations"] = counted ? json::value(run.counts.trial_derivatives) : json::value(nullptr);
     result["total_derivative_evaluations"] = counted ? json::value(run.counts.total_derivatives()) : json::value(nullptr);
