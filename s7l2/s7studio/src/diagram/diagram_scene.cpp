@@ -59,7 +59,7 @@ private:
 bool DiagramChange::empty() const
 {
     return addedNodes.empty() && removedNodes.empty() && addedWires.empty() && removedWires.empty() && rehung.empty() && bends.empty() &&
-           elements.empty() && textFrames.empty() && !probes && !observersPanel;
+           elements.empty() && textFrames.empty() && sizes.empty() && !probes && !observersPanel;
 }
 
 DiagramScene::DiagramScene(QObject* parent)
@@ -226,6 +226,10 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
             forced.push_back(wire.get());
         }
     };
+    auto setSize = [&](const DiagramChange::SizeEdit& edit, const bool before) {
+        edit.node->setGridSize(before ? edit.before : edit.after);
+        for (const auto& wire : wiresOf(*edit.node)) forced.push_back(wire.get());
+    };
     if (!revert) {
         for (const auto& wire : change.removedWires) {
             removeWire(wire);
@@ -239,6 +243,7 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
         for (const auto& edit : change.elements) {
             setElement(edit.node, edit.after);
         }
+        for (const auto& edit : change.sizes) setSize(edit, false);
         for (const auto& node : change.addedNodes) {
             addItem(node);
         }
@@ -260,6 +265,7 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
         for (const auto& edit : change.elements) {
             setElement(edit.node, edit.before);
         }
+        for (const auto& edit : change.sizes) setSize(edit, true);
         for (const auto& node : change.removedNodes) {
             addItem(node);
         }
@@ -351,6 +357,19 @@ void DiagramScene::changeElement(const std::shared_ptr<ElementNode>& node, Eleme
     }
     change = WireRemovalPlanner(signalWires()).plan(std::move(change), std::move(lost));
     applyChange(change, QStringLiteral("Change %1").arg(QString::fromStdString(node->id())));
+}
+
+void DiagramScene::resizeElement(const std::shared_ptr<ElementNode>& node, QSize gridSize)
+{
+    if (!node) return;
+    const auto minimum = node->minimumGridSize();
+    gridSize = gridSize.expandedTo(minimum);
+    gridSize.setWidth(std::min(gridSize.width(), kMaximumElementSizeSteps));
+    gridSize.setHeight(std::min(gridSize.height(), kMaximumElementSizeSteps));
+    if (gridSize == node->gridSize()) return;
+    DiagramChange change;
+    change.sizes.push_back({node, node->gridSize(), gridSize});
+    applyChange(change, QStringLiteral("Resize %1").arg(QString::fromStdString(node->id())));
 }
 
 void DiagramScene::changeTextFrame(const std::shared_ptr<TextFrameNode>& node, boost::json::object params)

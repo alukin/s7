@@ -92,6 +92,10 @@ struct ElementMetadata {
     VariadicInputSpec variadic_inputs;      // If element supports variadic inputs
     std::optional<boost::json::value> schema_definition; // Schema-backed element payload, if any
     std::string library;                    // Owning module or schema library; empty: unavailable
+    // Conservative UI/research hint: true only when the element has no mutable
+    // history or side effects (Element::has_state() is false). An omitted JSON
+    // field remains false, so unknown plugin behavior is never marked stateless.
+    bool stateless{false};
 };
 
 } // namespace s7

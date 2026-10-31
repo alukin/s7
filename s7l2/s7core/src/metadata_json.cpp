@@ -96,10 +96,11 @@ ElementMetadata decode(const object& source)
     metadata.type_name = string(source, "type_name", "element");
     const auto& context = metadata.type_name;
     keys(source, {"type_name", "display_name", "description", "category", "version", "tags", "input_ports", "output_ports",
-                  "parameters", "type_variables", "visual", "variadic_inputs"}, context);
+                  "parameters", "type_variables", "visual", "variadic_inputs", "stateless"}, context);
     metadata.display_name = string(source, "display_name", context);
     metadata.description = string(source, "description", context);
     metadata.category = string(source, "category", context);
+    if (source.contains("stateless")) metadata.stateless = boolean(source, "stateless", context);
     metadata.version = string(source, "version", context);
     metadata.tags = strings(source, "tags", context);
     metadata.input_ports = ports(source, "input_ports", context);

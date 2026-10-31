@@ -41,6 +41,8 @@ int main()
         for (const auto& descriptor : registry.all_descriptors())
             if (!descriptor.metadata().schema_definition) static_cast<void>(library.at(descriptor.type_name()));
         const auto& adder = library.at("Adder");
+        require(adder.stateless && library.at("Constant").stateless && !library.at("Delay").stateless,
+                "Stateless visual hints do not match core element behavior");
         require(adder.type_variables.size() == 2 && adder.type_variables[1].defaults_to == "T", "Accumulator type default changed");
         require(adder.output_ports[0].type_rule == "A" && adder.variadic_inputs.count_parameter == "weights", "Port rules changed");
         const auto params = s7::checked_params("test", library.at("EulerIntegrator"), {});
@@ -64,6 +66,7 @@ int main()
         mutation([](auto& root) { root["format_version"] = 2; }, "unsupported");
         mutation([](auto& root) { root["library"] = 42; }, "library");
         mutation([](auto& root) { root["elemnts"] = root["elements"]; }, "unknown field");
+        mutation([](auto& root) { root["elements"].as_array().front().as_object()["stateless"] = "yes"; }, "stateless");
         mutation([](auto& root) { root["elements"].as_array().emplace_back(root["elements"].as_array().front()); }, "duplicate type");
         mutation([](auto& root) { root["elements"].as_array().front().as_object().erase("parameters"); }, "parameters");
         mutation([](auto& root) {

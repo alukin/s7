@@ -107,6 +107,7 @@ A complete fixed-type entry looks like this (one entry inside a versioned docume
     "display_name": "Linear Transform",
     "description": "Multiplies the current input by scale and adds offset. No state or delay.",
     "category": "basic", "version": "1.0.0", "tags": [],
+    "stateless": true,
     "input_ports": [{"name":"in", "description":"Input signal", "type":"F64", "optional":false, "type_rule":""}],
     "output_ports": [{"name":"out", "description":"Transformed signal", "type":"F64", "optional":false, "type_rule":""}],
     "parameters": [
@@ -161,7 +162,12 @@ Parameters are checked against these declarations whenever an element is created
 
 `checked_params()` does not generically validate nested object structure; the consuming factory owns those checks. A factory can rely on optional parameters being present when they have a non-null default. Unknown type labels are rejected by the JSON metadata loader.
 
-Conventional categories and colors used by Studio: `basic` #4CAF50, `filters` #2196F3, `io` #FF9800, `network` #9C27B0 / #5C6BC0, `conversion` #00BCD4, `simulation` #FFEB3B, `spectral` #9C27B0, `sources` #42A5F5, `custom` #795548. Shapes: `box` (processing), `circle` (sources).
+Set optional `stateless: true` only when the factory's `Element::has_state()` is
+false for every supported parameter configuration. Studio labels those elements
+**stateless**. An omitted field leaves the element unmarked. Studio uses muted
+family colors for known categories, with pale fills and dark matching text; for
+other categories it softens `visual.color` when valid. Shape metadata remains a
+hint; schema-backed diagram nodes have a double frame.
 
 ## Registration
 

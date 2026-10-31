@@ -13,6 +13,7 @@
 #include <boost/json.hpp>
 
 #include <QPointF>
+#include <QSize>
 #include <QString>
 #include <QVector>
 
@@ -21,6 +22,7 @@
 #include <vector>
 
 class QGraphicsSimpleTextItem;
+class QGraphicsSceneHoverEvent;
 
 namespace s7studio::diagram {
 
@@ -35,6 +37,8 @@ enum ItemType {
 // ports, wire points and bends always lie on the grid.
 constexpr int kGridStep = 20;
 constexpr int kElementWidthSteps = 9;
+constexpr int kMinimumElementWidthSteps = 7;
+constexpr int kMaximumElementSizeSteps = 1000;
 
 enum class PortDirection { Input, Output };
 
@@ -108,6 +112,11 @@ public:
     void setMinimumPorts(int inputs, int outputs);
     [[nodiscard]] int minimumInputs() const { return minimumInputs_; }
     [[nodiscard]] int minimumOutputs() const { return minimumOutputs_; }
+    [[nodiscard]] QSize gridSize() const;
+    [[nodiscard]] QSize minimumGridSize() const;
+    void setGridSize(QSize steps);
+    // A bottom-right handle inside the body, available only when selected.
+    [[nodiscard]] QRectF resizeHandleSceneRect() const;
 
     // "@ <node>" under the element, empty: hidden.
     void setPlacementLabel(const QString& text);
@@ -118,8 +127,13 @@ public:
     std::shared_ptr<QSchematic::Items::Item> deepCopy() const override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget = nullptr) override;
 
+protected:
+    void hoverMoveEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
+
 private:
     void rebuildPorts();
+    void placePorts();
 
     Element element_;
     int minimumInputs_ = 0;
@@ -128,6 +142,7 @@ private:
     std::vector<std::shared_ptr<PortConnector>> outputs_;
     QGraphicsSimpleTextItem* placementLabel_ = nullptr;
     QString problem_;
+    bool geometryInitialized_ = false;
 };
 
 // A diagram-only text frame (not part of the runtime schema). Its params hold

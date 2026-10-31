@@ -32,8 +32,8 @@ namespace s7studio::diagram {
 //   "diagram": {
 //     "grid": { "step": 20, "mm_per_step": 5.2917 },
 //     "nodes": [
-//       { "id": "const1", "position": [2, 4] },
-//       { "id": "add1", "position": [16, 4], "title": "Sum" },
+//       { "id": "const1", "position": [2, 4], "size": [9, 5] },
+//       { "id": "add1", "position": [16, 4], "size": [12, 7], "title": "Sum" },
 //       { "id": "delay1", "position": [30, 4] }
 //     ],
 //     "wires": [
@@ -47,7 +47,7 @@ namespace s7studio::diagram {
 // }
 //
 // - `schema` is the runtime schema (semantics, element params); `diagram` is
-//   layout only. Coordinates are whole grid steps.
+//   layout only. Coordinates and optional element `size` are whole grid steps.
 // - A wire runs from an output port, or from a junction `at` a point of
 //   another wire of the same net ("from": { "wire": "w1", "at": [x, y] }),
 //   to an input port. `bends` are the bends placed by hand; optional `route`
