@@ -50,6 +50,14 @@ add_test(NAME s7tests_symplectic_oscillator_smoke COMMAND s7tests_symplectic_osc
 add_executable(s7tests_numerical_research_baseline EXCLUDE_FROM_ALL numerical_research_baseline.cpp)
 target_link_libraries(s7tests_numerical_research_baseline PRIVATE s7core)
 
+# Phase 3: compiled real-element graph experiments. The long matrix/CSV runner
+# remains opt-in; the focused publication, solver and reference checks run in CTest.
+s7_add_test_executable(s7tests_numerical_integration_research_smoke numerical_integration_research_smoke.cpp)
+target_link_libraries(s7tests_numerical_integration_research_smoke PRIVATE s7core)
+add_test(NAME s7tests_numerical_integration_research_smoke COMMAND s7tests_numerical_integration_research_smoke)
+add_executable(s7tests_numerical_integration_research EXCLUDE_FROM_ALL numerical_integration_research.cpp)
+target_link_libraries(s7tests_numerical_integration_research PRIVATE s7core)
+
 # Isolated headless research regressions. SciPy/NumPy remain optional for the
 # production build; full research matrices and plots are opt-in script runs.
 if (NOT CMAKE_CROSSCOMPILING)
