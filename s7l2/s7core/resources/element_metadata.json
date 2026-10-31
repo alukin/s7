@@ -1566,7 +1566,7 @@
         {"name": "out", "description": "Published F64 state", "type": "F64", "optional": false, "type_rule": ""}
       ],
       "parameters": [
-        {"name": "dt", "type": "real", "description": "Legacy field, ignored: the integrator follows its domain's rate, normally the run's dt.", "default": null, "required": false, "enum_values": []},
+        {"name": "dt", "type": "value", "description": "Legacy field, ignored: the integrator follows its domain's rate, normally the run's dt.", "default": null, "required": false, "enum_values": [], "legacy": true},
         {"name": "initial_value", "type": "real", "description": "State published on the first step.", "default": 0, "required": false, "enum_values": []}
       ],
       "type_variables": [],

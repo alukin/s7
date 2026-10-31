@@ -239,6 +239,7 @@ ExecutableGraph Compiler::compile(const Schema& schema,
         region.step_seconds = checked_region.step_seconds;
         region.substeps = checked_region.substeps;
         region.state_ids = checked_region.states;
+        region.upstream_state_ids = checked_region.upstream_states;
         for (const auto& id : checked_region.states) {
             auto* element = executable_graph.elements.at(id).get();
             region.states.push_back(static_cast<double*>(element->output_ports()[0].value_ptr));

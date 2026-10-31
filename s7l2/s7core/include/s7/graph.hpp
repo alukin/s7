@@ -35,6 +35,7 @@ struct ExecutableGraph {
         double step_seconds{};
         int substeps{1};
         std::vector<std::string> state_ids;
+        std::vector<std::string> upstream_state_ids;
         std::vector<double*> states;
         std::vector<const double*> derivatives;
         std::vector<Element*> rhs_execution;

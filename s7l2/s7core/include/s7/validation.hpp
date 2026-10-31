@@ -39,6 +39,7 @@ struct CheckedSchema {
         int substeps{1};
         std::vector<std::string> states;
         std::vector<Connection> derivative_connections;
+        std::vector<std::string> upstream_states;
         std::vector<std::string> rhs;
     };
     std::vector<std::string> errors;

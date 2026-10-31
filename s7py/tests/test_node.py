@@ -144,6 +144,16 @@ class GraphTest(unittest.TestCase):
             g.step()
         self.assertAlmostEqual(g.sample("x"), (1 - dt) ** 99, places=12)
 
+    def test_euler_serialized_default_substeps(self):
+        elements = [{"id": "x", "type": "EulerIntegrator",
+                     "params": {"dt": 0.1, "initial_value": 1, "substeps": 1}},
+                    {"id": "neg", "type": "Gain", "params": {"factor": -1}}]
+        connections = [("x", "neg", 0), ("neg", "x", 0)]
+        self.assertEqual(run(graph(elements, connections), 2, "x"), [(1.0,), (0.9,)])
+        elements[0]["params"]["substeps"] = 2
+        with self.assertRaisesRegex(SchemaError, "substeps greater than 1"):
+            graph(elements, connections)
+
     def test_oscillator(self):
         g = Graph(schema([{"id": "o", "type": "AnalogOscillator",
                            "params": {"amplitude": 2, "frequency_hz": 1, "sample_rate_hz": 4, "phase": 0}}]))
