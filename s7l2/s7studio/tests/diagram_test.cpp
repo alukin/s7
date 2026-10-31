@@ -417,6 +417,24 @@ int main(int argc, char** argv)
         check(annotations.probes() == std::vector<DiagramProbe>{probe}, "undo restores a probe removed by a port change");
     }
     {
+        DiagramScene probes;
+        probes.addElement(element("a", "Constant"), {40, 40});
+        probes.addElement(element("b", "Constant"), {40, 240});
+        probes.addProbe(PortRef{"a", 0}, QStringLiteral("first"));
+        probes.addProbe(PortRef{"b", 0}, QStringLiteral("second"));
+        const auto before = probes.probes();
+        const int edits = probes.undoStack()->count();
+        check(!probes.renameProbe(PortRef{"b", 0}, QStringLiteral("first")) && probes.probes() == before &&
+                  probes.undoStack()->count() == edits,
+              "renaming a probe to another probe's name is refused without an edit");
+        check(!probes.renameProbe(PortRef{"b", 0}, QString()) && probes.probes() == before,
+              "renaming a probe to an empty name is refused");
+        check(probes.renameProbe(PortRef{"b", 0}, QStringLiteral("second")) && probes.undoStack()->count() == edits,
+              "renaming a probe to its own name succeeds without an edit");
+        check(probes.renameProbe(PortRef{"b", 0}, QStringLiteral("third")) && probes.probes().back().name == "third",
+              "renaming a probe to an unused name succeeds");
+    }
+    {
         DiagramScene planningScene;
         const auto source = planningScene.addElement(element("source", "Constant"), {40, 40});
         const auto scope = planningScene.addElement(element("scope", "Scope"), {400, 40});

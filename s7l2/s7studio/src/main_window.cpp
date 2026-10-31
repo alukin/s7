@@ -1591,7 +1591,10 @@ void MainWindow::onProbeRenameRequested(const QString& probeName, const QString&
     }
     for (const auto& probe : scene->probes()) {
         if (probe.name == probeName) {
-            scene->renameProbe(probe.point, newName);
+            if (!scene->renameProbe(probe.point, newName)) {
+                QMessageBox::warning(this, QStringLiteral("Rename Probe"),
+                                     QStringLiteral("A probe named “%1” already exists.").arg(newName));
+            }
             return;
         }
     }

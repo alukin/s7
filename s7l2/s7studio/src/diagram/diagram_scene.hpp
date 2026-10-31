@@ -51,7 +51,8 @@ public:
     // False if `point` already has a probe.
     bool addProbe(PortRef point, QString name, QString unit = {});
     void removeProbe(const PortRef& point);
-    // False if `point` has no probe.
+    // False if `point` has no probe, or `name` is empty or already names
+    // another probe: a run requires nonempty, unique probe names.
     bool renameProbe(const PortRef& point, QString name);
     // Bulk-load (opening a document); replaces every existing probe.
     void setProbes(std::vector<DiagramProbe> probes);

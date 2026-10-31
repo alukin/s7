@@ -12,6 +12,7 @@
 #include <QLineEdit>
 #include <QLineF>
 #include <QMenu>
+#include <QMessageBox>
 
 #include <algorithm>
 
@@ -89,8 +90,9 @@ void showWireContextMenu(DiagramScene& scene, SignalWire& wire, const QPointF sc
         bool accepted = false;
         const auto name = QInputDialog::getText(parent, QStringLiteral("Rename Probe"), QStringLiteral("Name"),
                                                 QLineEdit::Normal, probeName, &accepted);
-        if (accepted && !name.isEmpty()) {
-            scene.renameProbe(*driver, name);
+        if (accepted && !name.isEmpty() && !scene.renameProbe(*driver, name)) {
+            QMessageBox::warning(parent, QStringLiteral("Rename Probe"),
+                                 QStringLiteral("A probe named \u201C%1\u201D already exists.").arg(name));
         }
     } else if (removeProbeAction && chosen == removeProbeAction) {
         scene.removeProbe(*driver);

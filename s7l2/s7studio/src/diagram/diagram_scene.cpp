@@ -588,6 +588,10 @@ void DiagramScene::removeProbe(const PortRef& point)
 
 bool DiagramScene::renameProbe(const PortRef& point, QString name)
 {
+    if (name.isEmpty() ||
+        std::ranges::any_of(probes_, [&](const auto& probe) { return probe.name == name && !(probe.point == point); })) {
+        return false;
+    }
     auto after = probes_;
     for (auto& probe : after) if (probe.point == point) {
         if (probe.name == name) return true;
