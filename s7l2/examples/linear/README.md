@@ -14,8 +14,9 @@ the `scope` observer. All integrators default to `dt = 0.001 s`.
 
 To try coupled Euler substeps, edit `substeps` on each Euler integrator in
 the relevant Euler diagram (for example, set both RLC integrators to 8),
-and keep the Studio Run rate and each `dt` at the **outer** rate. Only the
-internal state solve uses `dt/substeps`; ordinary Scope observations remain
+and select the desired **outer** Studio Run rate. The integrators follow that
+rate; their stored `dt` fields are legacy metadata. Only the internal state
+solve uses the outer period divided by `substeps`; Scope samples remain
 one per outer step. The [two-integrator oscillator Gauss diagram](../2int_osc_gauss.s7diagram)
 uses the same principle of coupled states without an inserted Delay. The
 [production numerical contract](../../docs/COUPLED_INTEGRATION.md) gives
