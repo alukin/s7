@@ -221,7 +221,7 @@ QSize ElementNode::gridSize() const
 QSize ElementNode::minimumGridSize() const
 {
     const int ports = static_cast<int>(std::max(inputs_.size(), outputs_.size()));
-    return {kMinimumElementWidthSteps, std::max(5, 2 * ports + 1)};
+    return {kMinimumElementWidthSteps, minimumElementRows(ports)};
 }
 
 void ElementNode::setGridSize(QSize steps)
@@ -275,10 +275,9 @@ void ElementNode::rebuildPorts()
         names.outputs.push_back(QStringLiteral("out%1").arg(index));
     }
     const int ports = static_cast<int>(std::max(names.inputs.size(), names.outputs.size()));
-    const int rows = std::max(5, 2 * ports + 1);
     const auto current = gridSize();
     setSize(std::max(kMinimumElementWidthSteps, geometryInitialized_ ? current.width() : kElementWidthSteps) * kGridStep,
-            std::max(rows, geometryInitialized_ ? current.height() : rows) * kGridStep);
+            (geometryInitialized_ ? elementRowsForPorts(current.height(), ports) : defaultElementRows(ports)) * kGridStep);
     geometryInitialized_ = true;
 
     auto sync = [&](std::vector<std::shared_ptr<PortConnector>>& ports, const std::vector<QString>& wanted, const PortDirection direction) {
@@ -384,19 +383,32 @@ void ElementNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWid
     painter->setPen(QPen(border, isSelected() || !problem_.isEmpty() ? 2.0 : 1.2));
     painter->setBrush(colors.fill);
     painter->drawRoundedRect(sizeRect(), 6.0, 6.0);
+    // Below the full-text size the text, its margins and the inner frame
+    // shrink with the element, down to a legible limit (the two-step minimum
+    // height still holds the title); lines that do not fit are left out.
+    constexpr double kMinimumTextScale = 0.6;
+    const double scale = std::clamp(std::min(width() / (kFullTextWidthSteps * kGridStep), height() / (kFullTextHeightSteps * kGridStep)),
+                                    kMinimumTextScale, 1.0);
     if (isSchemaBacked(element_)) {
         painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(sizeRect().adjusted(5.0, 5.0, -5.0, -5.0), 4.0, 4.0);
+        const double inset = 5.0 * scale;
+        painter->drawRoundedRect(sizeRect().adjusted(inset, inset, -inset, -inset), 4.0 * scale, 4.0 * scale);
     }
 
-    const QRectF text = sizeRect().adjusted(12.0, 6.0, -12.0, -6.0);
+    painter->save();
+    painter->scale(scale, scale);
+    const QRectF body(0.0, 0.0, width() / scale, height() / scale);
+    const QRectF text = body.adjusted(12.0, 6.0, -12.0, -6.0);
     QFont titleFont = painter->font();
     titleFont.setBold(true);
     painter->setFont(titleFont);
     painter->setPen(colors.title);
     const QFontMetricsF titleMetrics(titleFont);
+    // A further text line must end inside the body.
+    const auto fits = [&body](const double top, const double lineHeight) { return top + lineHeight <= body.bottom() - 2.0; };
     painter->drawText(QRectF(text.left(), text.top(), text.width(), titleMetrics.height()), Qt::AlignLeft | Qt::AlignVCenter,
                       titleMetrics.elidedText(title(), Qt::ElideRight, text.width()));
+    double next = text.top() + titleMetrics.height();
 
     QFont typeFont = painter->font();
     typeFont.setBold(false);
@@ -404,18 +416,25 @@ void ElementNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWid
     painter->setFont(typeFont);
     painter->setPen(colors.type);
     const QFontMetricsF typeMetrics(typeFont);
-    painter->drawText(QRectF(text.left(), text.top() + titleMetrics.height(), text.width(), typeMetrics.height()),
-                      Qt::AlignLeft | Qt::AlignVCenter,
-                      typeMetrics.elidedText(QString::fromStdString(element_.type), Qt::ElideRight, text.width()));
+    if (fits(next, typeMetrics.height())) {
+        painter->drawText(QRectF(text.left(), next, text.width(), typeMetrics.height()), Qt::AlignLeft | Qt::AlignVCenter,
+                          typeMetrics.elidedText(QString::fromStdString(element_.type), Qt::ElideRight, text.width()));
+        next += typeMetrics.height();
+    }
     const auto* descriptor = s7::ElementRegistry::instance().find(element_.type);
     if (descriptor && descriptor->metadata().stateless) {
         QFont markerFont = typeFont;
         markerFont.setPointSizeF(markerFont.pointSizeF() * 0.85);
         painter->setFont(markerFont);
         painter->setPen(colors.title);
-        painter->drawText(QRectF(text.left(), height() - 26.0, width() - 36.0, 17.0),
-                          Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("stateless"));
+        // At the bottom, clear of the resize handle, below the other lines and
+        // whole, or not at all.
+        const QRectF footer(text.left(), body.bottom() - 26.0, body.width() - 36.0, 17.0);
+        const QString marker = QStringLiteral("stateless");
+        if (footer.top() >= next && QFontMetricsF(markerFont).horizontalAdvance(marker) <= footer.width())
+            painter->drawText(footer, Qt::AlignLeft | Qt::AlignVCenter, marker);
     }
+    painter->restore();
     if (isSelected()) {
         const QRectF handle(width() - 15.0, height() - 15.0, 12.0, 12.0);
         painter->setPen(QPen(kSelected, 1.5));

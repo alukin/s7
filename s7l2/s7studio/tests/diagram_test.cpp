@@ -5,6 +5,7 @@
 // undo, routing around elements, user bends and the file round trip.
 
 #include "diagram/connection_planner.hpp"
+#include "diagram/diagram_geometry.hpp"
 #include "diagram/diagram_routing.hpp"
 #include "diagram/diagram_scene.hpp"
 #include "diagram/net_model.hpp"
@@ -263,15 +264,43 @@ int main(int argc, char** argv)
         check(sizes.copySelection() && sizes.pasteSelection({800, 300}) &&
               sizes.elementNode("sink_copy1") && sizes.elementNode("sink_copy1")->gridSize() == QSize(12, 7),
               "copy and paste preserve custom element dimensions");
+        // Port-count changes keep two-step spacing on elements of default
+        // height and grow resized-down ones only as far as their ports need.
+        static_assert(elementRowsForPorts(5, 3) == 7 && elementRowsForPorts(9, 2) == 9);
+        static_assert(elementRowsForPorts(2, 2) == 3 && elementRowsForPorts(4, 2) == 4);
         sizes.resizeElement(sink, QSize(1, 1));
-        check(sink->gridSize() == QSize(kMinimumElementWidthSteps, 5), "minimum size retains labels and ports");
+        check(sink->gridSize() == QSize(2, 2), "a one-input, one-output element shrinks to two by two steps");
+        check(QVector2D(sink->inputs().front()->scenePos() - (sink->pos() + QPointF(0, kGridStep))).length() < 1e-3 &&
+              QVector2D(sink->outputs().front()->scenePos() - (sink->pos() + QPointF(2 * kGridStep, kGridStep))).length() < 1e-3,
+              "ports of a minimum element stay on the grid");
         checkRoutes(sizes, "after minimum resize");
-        auto invalid = saved;
-        invalid.diagram.at("nodes").as_array()[1].as_object()["size"] = boost::json::array{5, 5};
-        bool rejected = false;
-        try { DiagramScene bad; SceneSerializer{}.deserialize(invalid, bad); }
-        catch (const std::runtime_error&) { rejected = true; }
-        check(rejected, "reopening refuses element dimensions below the usable minimum");
+        {
+            // Small elements still paint their text, scaled and clipped.
+            QImage image(60, 60, QImage::Format_ARGB32_Premultiplied); image.fill(Qt::white);
+            QPainter painter(&image); sink->paint(&painter, nullptr, nullptr); painter.end();
+            bool drawn = false;
+            for (int y = 0; y < image.height() && !drawn; ++y)
+                for (int x = 0; x < image.width() && !drawn; ++x) drawn = image.pixel(x, y) != qRgb(255, 255, 255);
+            check(drawn, "a minimum element paints");
+        }
+        const auto adder = sizes.addElement(element("narrow_adder", "Adder"), {400, 400});
+        sizes.resizeElement(adder, QSize(1, 1));
+        check(adder->gridSize() == QSize(2, 3), "a two-input element keeps a row per port and one below");
+        check(std::abs(adder->inputs()[0]->scenePos().y() - (adder->pos().y() + kGridStep)) < 1e-3 &&
+              std::abs(adder->inputs()[1]->scenePos().y() - (adder->pos().y() + 2 * kGridStep)) < 1e-3,
+              "ports of a short element are one step apart");
+        DiagramScene smallReopened;
+        static_cast<void>(reload(sizes, smallReopened));
+        check(smallReopened.elementNode("sink")->gridSize() == QSize(2, 2) &&
+              smallReopened.elementNode("narrow_adder")->gridSize() == QSize(2, 3), "small dimensions persist");
+        for (const auto& size : {boost::json::array{1, 5}, boost::json::array{5, 1}}) {
+            auto invalid = saved;
+            invalid.diagram.at("nodes").as_array()[1].as_object()["size"] = size;
+            bool rejected = false;
+            try { DiagramScene bad; SceneSerializer{}.deserialize(invalid, bad); }
+            catch (const std::runtime_error&) { rejected = true; }
+            check(rejected, "reopening refuses element dimensions below the usable minimum");
+        }
     }
     {
         DiagramScene obstacles;
@@ -682,6 +711,50 @@ int main(int argc, char** argv)
         check(wire->userBends.isEmpty() && wire->pointsAbsolute() == routeBeforeCancel &&
                   gestures.undoStack()->count() == undoBeforeCancel,
               "Escape cancels a bend drag without an undo edit");
+    }
+    // A dragged segment never makes its wire loop: positions reachable only
+    // by crossing or doubling back (here, behind the output port) are refused.
+    {
+        check(revisitedGridPoints({QPointF(0, 0), QPointF(60, 0), QPointF(60, 40), QPointF(40, 40), QPointF(40, -20)}) == 1,
+              "a route crossing itself revisits a grid point");
+        check(revisitedGridPoints({QPointF(0, 0), QPointF(60, 0), QPointF(60, 40), QPointF(100, 40)}) == 0,
+              "a clean route revisits no grid point");
+        check(tightUTurns({QPointF(0, 0), QPointF(60, 0), QPointF(60, 20), QPointF(20, 20), QPointF(20, 80)}) == 1,
+              "a one-step hook is a tight U-turn");
+        check(tightUTurns({QPointF(0, 0), QPointF(60, 0), QPointF(60, 100), QPointF(20, 100)}) == 0,
+              "a wide U shape is not a tight U-turn");
+        DiagramScene loops;
+        const auto source = loops.addElement(element("source", "Constant"), {40, 40});
+        const auto target = loops.addElement(element("target", "Gain"), {400, 240});
+        check(loops.connectEnds(out(source), in(target)).isEmpty(), "loop fixture connects");
+        const auto wire = wireInto(loops, target, 0);
+        const auto route = wire->pointsAbsolute();
+        int vertical = -1;
+        for (int index = 1; index + 2 < route.size(); ++index)
+            if (std::abs(route[index].x() - route[index + 1].x()) < 0.5) vertical = index;
+        check(vertical > 0, "loop fixture has an inner vertical segment");
+        if (vertical > 0) {
+            const QPointF middle = snap((route[vertical] + route[vertical + 1]) / 2.0);
+            const double portX = source->port(PortDirection::Output, 0)->scenePos().x();
+            const auto dragAcross = [&](const double toX) {
+                loops.clearSelection();
+                wire->setSelected(true);
+                const QPointF to(toX, middle.y());
+                mouse(loops, QEvent::GraphicsSceneMousePress, middle);
+                for (int k = 1; k <= 4; ++k) mouse(loops, QEvent::GraphicsSceneMouseMove, middle + (to - middle) * k / 4.0);
+                mouse(loops, QEvent::GraphicsSceneMouseRelease, to);
+            };
+            const int edits = loops.undoStack()->index();
+            dragAcross(portX - 3 * kGridStep);
+            check(revisitedGridPoints(wire->pointsAbsolute()) == 0 && tightUTurns(wire->pointsAbsolute()) == 0,
+                  "dragging a segment behind its port does not loop");
+            checkRoutes(loops, "after dragging a segment behind its port");
+            while (loops.undoStack()->index() > edits) loops.undoStack()->undo();
+            dragAcross(middle.x() - kGridStep);
+            check(onRoute(QPointF(middle.x() - kGridStep, middle.y()), wire->pointsAbsolute()) &&
+                      revisitedGridPoints(wire->pointsAbsolute()) == 0,
+                  "a clean segment position is still accepted");
+        }
     }
     {
         DiagramScene resetGesture;

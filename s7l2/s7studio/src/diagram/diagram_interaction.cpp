@@ -24,6 +24,16 @@ namespace {
 
 constexpr double kSegmentHit = 4.0; // a press this close to a segment grabs it
 
+// The route leaves an output port to the right and enters an input port from
+// the left, as the router draws it.
+bool keepsPortDirections(const SignalWire& wire, const QVector<QPointF>& route)
+{
+    if (route.size() < 2) return true;
+    const auto rightward = [](const QPointF from, const QPointF to) { return std::abs(from.y() - to.y()) < 0.5 && to.x() > from.x(); };
+    return (!wire.upstream.isOutput() || rightward(route[0], route[1])) &&
+           (!wire.downstream.isInput() || rightward(route[route.size() - 2], route.back()));
+}
+
 auto distanceToSegment(const QPointF point, const QPointF a, const QPointF b) -> double
 {
     const QPointF d = b - a;
@@ -53,6 +63,13 @@ struct DiagramInteraction::Gesture {
     QVector<QPointF> baseRoute;
     int routeIndex = -1;
     bool segment = false;
+    // The last pointer position's bends and route that did not loop, and
+    // whether the route was valid and kept its port directions when the
+    // drag started.
+    QVector<QPointF> acceptedBends;
+    QVector<QPointF> acceptedRoute;
+    bool baseValid = true;
+    bool baseDirections = true;
     // Resize: the selected node and its original grid dimensions.
     std::shared_ptr<ElementNode> node;
     QSize baseSize;
@@ -362,6 +379,10 @@ void DiagramInteraction::mousePressEvent(QGraphicsSceneMouseEvent* event, const 
                 gesture_->wire = wire;
                 gesture_->baseBends = wire->userBends;
                 gesture_->baseRoute = route;
+                gesture_->acceptedBends = wire->userBends;
+                gesture_->acceptedRoute = route;
+                gesture_->baseValid = DiagramRouting(scene_.signalWires(), scene_.nodeRects()).routeIsValid(*wire);
+                gesture_->baseDirections = keepsPortDirections(*wire, route);
                 gesture_->routeIndex = routeIndex;
                 gesture_->segment = segment;
                 gesture_->press = snap(pos);
@@ -481,9 +502,28 @@ void DiagramInteraction::mouseMoveEvent(QGraphicsSceneMouseEvent* event, const s
             kept.insert(insertAt, movedA);
             bends = withoutRepeats(kept);
         }
-        gesture.wire->userBends = bends;
-        DiagramRouting(scene_.signalWires(), scene_.nodeRects()).route(
-            {gesture.wire.get()}, [this](SignalWire& wire) { scene_.attach(wire); });
+        // User bends are kept exactly, so bends the route can reach only by
+        // crossing or doubling back on itself (past the wire's port, on
+        // another net's wire, at an element) would draw a loop or a square
+        // hook; a route the router could not complete would be redone,
+        // looping, on release; and a bend on a port would turn the wire into
+        // it vertically. The wire then stays where it last was.
+        if (bends != gesture.acceptedBends) {
+            gesture.wire->userBends = bends;
+            const DiagramRouting routing(scene_.signalWires(), scene_.nodeRects());
+            routing.route({gesture.wire.get()}, [this](SignalWire& wire) { scene_.attach(wire); });
+            const auto route = gesture.wire->pointsAbsolute();
+            const auto loops = [](const QVector<QPointF>& points) { return revisitedGridPoints(points) + tightUTurns(points); };
+            if ((gesture.baseValid && !routing.routeIsValid(*gesture.wire)) ||
+                (gesture.baseDirections && !keepsPortDirections(*gesture.wire, route)) || loops(route) > loops(gesture.baseRoute)) {
+                gesture.wire->userBends = gesture.acceptedBends;
+                gesture.wire->setRoute(gesture.acceptedRoute);
+                scene_.attach(*gesture.wire);
+            } else {
+                gesture.acceptedBends = bends;
+                gesture.acceptedRoute = route;
+            }
+        }
         event->accept();
         return;
     }

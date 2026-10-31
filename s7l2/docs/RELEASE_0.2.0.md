@@ -284,6 +284,10 @@ footer use registry metadata; element text keeps readable contrast. The diagram
 tests cover resize,
 undo/redo, cancellation, routing, clipboard and file round trips; rendered
 examples were inspected. Printing qualification belongs to the printing goal.
+Later on 2026-10-31 the minimum shrank from 7 × 5 to 2 × 2 steps (taller for
+more ports, which are then one step apart), with body text scaled down to 60 %
+below 7 × 5 steps and lower text lines dropped when they do not fit. Saved
+diagrams with elements below 7 × 5 steps do not open in earlier 0.2.0 builds.
 
 ## Studio diagram and observation-graph printing
 

@@ -194,7 +194,7 @@ auto ConnectionPlanner::plan(const WireEnd& a, const WireEnd& b, QVector<QPointF
         const int count = std::max({static_cast<int>(ports.inputs.size()), static_cast<int>(ports.outputs.size()),
                                     target->minimumInputs(), target->minimumOutputs()});
         const QSize beforeSize = target->gridSize();
-        const QSize afterSize(beforeSize.width(), std::max(beforeSize.height(), std::max(5, 2 * count + 1)));
+        const QSize afterSize(beforeSize.width(), elementRowsForPorts(beforeSize.height(), count));
         result.change.elements.push_back({target, target->element(), std::move(element), beforeSize, afterSize});
     }
     return result;

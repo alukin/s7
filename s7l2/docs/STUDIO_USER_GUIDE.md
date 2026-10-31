@@ -42,8 +42,10 @@ free spot automatically. Categories cannot be dragged. Press **Esc** to cancel;
 dropping outside the canvas changes nothing. Each insertion is one undo step.
 
 Select an element and drag the square at its bottom-right corner to resize it
-on the grid. Connected wires follow the ports; **Esc** cancels a resize, and
-**Ctrl+Z** undoes it. The chosen size is saved with the diagram, including
+on the grid, down to two grid steps square (taller when it has more ports).
+The text shrinks with small elements; the type and **stateless** lines are left
+out when they no longer fit. Connected wires follow the ports; **Esc** cancels
+a resize, and **Ctrl+Z** undoes it. The chosen size is saved with the diagram, including
 inside nested schemas. A double frame marks a schema-backed element. Element
 bodies use soft family colors and show the name and type in dark matching text.
 An element with no mutable state or side effects has a **stateless** label at

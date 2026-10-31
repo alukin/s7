@@ -6,6 +6,7 @@
 #include "diagram/items.hpp"
 
 #include <QLineF>
+#include <QSet>
 
 #include <algorithm>
 #include <cmath>
@@ -100,6 +101,53 @@ auto withoutRepeats(const QVector<QPointF>& points) -> QVector<QPointF>
         }
     }
     return result;
+}
+
+int revisitedGridPoints(const QVector<QPointF>& route)
+{
+    QSet<std::pair<int, int>> seen;
+    int revisited = 0;
+    const auto visit = [&](const QPoint point) {
+        const std::pair key(point.x(), point.y());
+        if (seen.contains(key)) {
+            ++revisited;
+        } else {
+            seen.insert(key);
+        }
+    };
+    for (int index = 0; index + 1 < route.size(); ++index) {
+        const QPoint a = toGrid(route[index]);
+        const QPoint b = toGrid(route[index + 1]);
+        if (a.x() != b.x() && a.y() != b.y()) {
+            continue; // not orthogonal; other checks reject such routes
+        }
+        const QPoint step((b.x() > a.x()) - (b.x() < a.x()), (b.y() > a.y()) - (b.y() < a.y()));
+        // Each segment's start; the next segment starts at its end.
+        for (QPoint point = a; point != b; point += step) {
+            visit(point);
+        }
+    }
+    if (!route.isEmpty()) {
+        visit(toGrid(route.back()));
+    }
+    return revisited;
+}
+
+int tightUTurns(const QVector<QPointF>& route)
+{
+    int turns = 0;
+    for (int index = 0; index + 3 < route.size(); ++index) {
+        const QPoint first = toGrid(route[index + 1]) - toGrid(route[index]);
+        const QPoint middle = toGrid(route[index + 2]) - toGrid(route[index + 1]);
+        const QPoint last = toGrid(route[index + 3]) - toGrid(route[index + 2]);
+        const bool oneStep = std::abs(middle.x()) + std::abs(middle.y()) == 1;
+        const bool opposite = (first.x() * last.x() < 0 && first.y() == 0 && last.y() == 0) ||
+                              (first.y() * last.y() < 0 && first.x() == 0 && last.x() == 0);
+        if (oneStep && opposite) {
+            ++turns;
+        }
+    }
+    return turns;
 }
 
 } // namespace s7studio::diagram

@@ -17,6 +17,7 @@
 #include <QString>
 #include <QVector>
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -37,8 +38,25 @@ enum ItemType {
 // ports, wire points and bends always lie on the grid.
 constexpr int kGridStep = 20;
 constexpr int kElementWidthSteps = 9;
-constexpr int kMinimumElementWidthSteps = 7;
+constexpr int kMinimumElementWidthSteps = 2;
+constexpr int kMinimumElementHeightSteps = 2;
 constexpr int kMaximumElementSizeSteps = 1000;
+// Below this size an element's text shrinks with it.
+constexpr int kFullTextWidthSteps = 7;
+constexpr int kFullTextHeightSteps = 5;
+
+// Height in grid steps of a new element with `ports` ports on its busier
+// side: ports two steps apart.
+[[nodiscard]] constexpr int defaultElementRows(const int ports) { return std::max(5, 2 * ports + 1); }
+// The least height that keeps `ports` ports on the edge, one step apart.
+[[nodiscard]] constexpr int minimumElementRows(const int ports) { return std::max(kMinimumElementHeightSteps, ports + 1); }
+// Height after the port count changes to `ports`: an element of at least the
+// default height keeps ports two steps apart; one resized smaller grows only
+// as far as its ports need.
+[[nodiscard]] constexpr int elementRowsForPorts(const int rows, const int ports)
+{
+    return std::max(rows, rows >= 5 ? defaultElementRows(ports) : minimumElementRows(ports));
+}
 
 enum class PortDirection { Input, Output };
 

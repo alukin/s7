@@ -68,7 +68,7 @@ auto gridSize(const boost::json::value& value, const std::string& id) -> QSize
     }
     const auto width = value.as_array()[0].as_int64();
     const auto height = value.as_array()[1].as_int64();
-    if (width < kMinimumElementWidthSteps || height < 5 || width > kMaximumElementSizeSteps || height > kMaximumElementSizeSteps) {
+    if (width < kMinimumElementWidthSteps || height < kMinimumElementHeightSteps || width > kMaximumElementSizeSteps || height > kMaximumElementSizeSteps) {
         throw error("size of '" + id + "' is outside the supported grid dimensions");
     }
     return {static_cast<int>(width), static_cast<int>(height)};

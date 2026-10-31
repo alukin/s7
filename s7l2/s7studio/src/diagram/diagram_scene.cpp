@@ -347,8 +347,7 @@ void DiagramScene::changeElement(const std::shared_ptr<ElementNode>& node, Eleme
 
     DiagramChange change;
     const QSize beforeSize = node->gridSize();
-    const int requiredRows = std::max(5, 2 * std::max(inputs, outputs) + 1);
-    const QSize afterSize(beforeSize.width(), std::max(beforeSize.height(), requiredRows));
+    const QSize afterSize(beforeSize.width(), elementRowsForPorts(beforeSize.height(), std::max(inputs, outputs)));
     change.elements.push_back({node, node->element(), element, beforeSize, afterSize});
     std::vector<std::shared_ptr<SignalWire>> lost;
     for (const auto& wire : signalWires()) {

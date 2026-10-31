@@ -78,7 +78,7 @@ bool DiagramEditor::addLibraryElement(const QString& identifier, const std::opti
         element.params["design_rate_hz"] = designRateHz_();
     const auto ports = elementPorts(element.type, element.params, element.schema);
     const auto rows = static_cast<int>(std::max(ports.inputs.size(), ports.outputs.size()));
-    const QSizeF size(kElementWidthSteps * kGridStep, std::max(5, 2 * rows + 1) * kGridStep);
+    const QSizeF size(kElementWidthSteps * kGridStep, defaultElementRows(rows) * kGridStep);
     const auto node = scene()->addElement(element, scenePosition ? *scenePosition : suggestedNewItemPosition(size));
     scene()->setMode(QSchematic::Scene::NormalMode);
     scene()->clearSelection();
