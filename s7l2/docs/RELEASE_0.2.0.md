@@ -29,6 +29,14 @@ measurements, correctness checks and limits. This serial improvement is the
 0.2.0 runtime-performance increment; no within-node parallel scheduler is a
 0.2.0 goal or acceptance requirement.
 
+Nested schemas now resolve their exposed-output bindings once when their
+private runtime is compiled, instead of looking up each internal output by
+element ID on every step. Exposed types (F64/C64), output order, publication
+timing and fault behavior are unchanged; the performance record documents
+binding lifetime, measurements and remaining overhead. **S7 0.2.0 uses
+sequential nested-schema execution. Parallel nested-schema scheduling remains
+outside the release scope and is a possible subject of 0.3.0 research.**
+
 Coarse execution regions, static element price tags, worker-pool behavior,
 plugin concurrency and serial/parallel selection are open decisions. The
 [0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) preserves the

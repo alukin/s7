@@ -1,7 +1,8 @@
 # Runtime performance architecture investigation
 
 Status: indexed serial execution is the completed 0.2.0 performance increment,
-2026-10-30. Parallel scheduling, region grouping and static cost tags are
+2026-10-30, extended on 2026-10-31 by compiled nested-schema output bindings.
+Nested schemas execute sequentially. Parallel scheduling, region grouping and static cost tags are
 unselected 0.3.0 planning questions, recorded separately in
 [the 0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md). Earlier
 parallel measurements and proposals below are research, not a supported
@@ -39,7 +40,8 @@ signal types, plugin-created elements and nested runtimes use the same
 The gain comes from removing repeated string hashing and map traversal,
 particularly for small elements and repeated implicit iterations. Compiling
 three pointer vectors adds linear storage and a small one-time lookup cost.
-Virtual calls, output snapshots, nested-schema output lookup and actual element
+Virtual calls, output snapshots, nested-schema output lookup (since replaced by
+[compiled bindings](#nested-schema-exposed-output-bindings)) and actual element
 work remain potential bottlenecks. The benchmark below measures the effect
 with the full production step path.
 
@@ -50,9 +52,9 @@ and scheduling, storing three pointer vectors on `ExecutableGraph`. Runtime
 initialization uses them to build the existing output ranges and snapshots;
 `NodeRuntime::step()` and coupled trials call these pointers directly. The ID
 orders, UUID mappings, output storage and phase boundaries are unchanged.
-The only per-step string lookup left in these workloads is inside a nested
-`Schema::step()` when it reads each exposed internal output; optimizing that
-boundary is separate from this dispatch change.
+The only per-step string lookup left in these workloads was inside a nested
+`Schema::step()` when it read each exposed internal output; the next section
+removes it as a separate change.
 
 The opt-in benchmark `s7core/benchmarks/indexed_execution.cpp` uses the full
 `NodeRuntime::step()` path. It covers 64/512 Gain chains, 512 independent
@@ -113,6 +115,174 @@ same final F64 outputs before and after for all seven workloads. The Windows
 `s7core` DLL also rebuilt with Clang 22 MinGW, and the focused test passed
 under Wine. This change does not alter arbitrary private-state rollback or
 plugin interface behavior.
+
+## Nested-schema exposed-output bindings
+
+**Decision: S7 0.2.0 uses sequential nested-schema execution. Parallel
+nested-schema scheduling remains outside the release scope and is a possible
+subject of 0.3.0 research.** This change keeps that model and only removes
+repeated lookups at the nested boundary.
+
+A schema-backed element owns a private `NodeRuntime`. Its `step()` copies
+exposed inputs into the runtime's input proxies, steps that runtime
+synchronously, then copies exposed outputs into the schema element's own
+output storage, which parent connections are bound to. Before this change,
+the output copy called `real_output_of`/`complex_output_of` with the internal
+element ID and port for every exposed output on every step. Each call did two
+element-map lookups (type check and binding) and built a temporary
+`std::vector` of the element's output bindings, so every exposed output cost
+string hashing and a heap allocation per step.
+
+`Schema::ensure_compiled_runtime()` now resolves each exposed output once, after
+constructing the nested runtime and after the existing check of element, port
+and type: `output_type_of` rejects an unknown element or port, and a type
+different from the declared one is rejected as before. The resulting
+`OutputBinding` (the existing `const void*` port binding) is stored in a
+private vector parallel to the exposed outputs, so their order and port
+indices are unchanged. `step()` reads each value through `bound_value<F64>` or
+`bound_value<C64>` and assigns it to the unchanged exposed-output storage. No
+new storage owner or indirection is added, and the public by-ID accessors are
+unchanged.
+
+Binding lifetime and invalidation:
+
+- A binding points at output storage of an element owned by the nested
+  runtime's `ExecutableGraph`. Each element is heap-allocated behind its
+  `unique_ptr`, so the address is stable for the runtime's whole lifetime
+  (the same property the indexed `Element*` records rely on).
+- The bindings and input states are built locally and committed together with
+  the runtime only after compilation and validation succeed. A failed
+  compilation therefore leaves no runtime, binding or input state behind.
+  Before, a failed compilation could leave input states that a later
+  successful one appended to.
+- `invalidate_compiled_runtime()` clears the bindings with the runtime. It runs
+  on every element, connection, exposed input/output or rate change, and the
+  next step or input binding recompiles and re-resolves.
+- Moving a `Schema` moves the runtime `unique_ptr` and the binding vector
+  together; neither the elements nor their storage move. The exposed-output
+  storage the parent reads stays in a `std::deque`, whose element addresses
+  are kept by moves and by appending further exposed outputs.
+- Each nesting level resolves its own bindings into its direct children's
+  storage, which those children own and keep at stable addresses.
+
+Supported types are unchanged. Exposed outputs carry F64 and C64 values only,
+matching the schema element's existing exposed storage. Another declared type
+still compiles and still fails on its first step with the same typed-read
+error; this change does not broaden or narrow that boundary. The exposed
+*input* path has the same F64/C64 storage but no such check: an exposed input
+of another type reads its source as the wrong type. That is a pre-existing
+defect, left for a separate fix that decides whether to reject these types at
+`expose_input`/`expose_output`.
+
+Exposed inputs were already constant time: each step reads the parent's
+binding and writes the shared input state that the proxy element publishes.
+Those structures are unchanged. The only input-side change is borrowing the
+state pointer instead of creating a temporary `shared_ptr` (two atomic updates)
+per input per step; it was measured separately at 5-8% lower step time on the
+one-Gain chains, for example 395 to 371 ns for 16 schemas. Ownership by the
+schema and the proxy is unchanged.
+
+Execution order is unchanged: copy inputs, step the nested runtime
+synchronously, copy outputs, return to the parent. If the nested runtime
+throws, `Schema::step()` propagates before copying any output, and the parent
+runtime restores its own published outputs as before. A nested runtime that
+completes its step is private state of the schema element: when a later parent
+element faults, it is not rolled back, which is also unchanged.
+
+### Measurements
+
+The opt-in `s7core_indexed_benchmark` gained nested cases (`--cases nested` in
+`compare_indexed.py`). Methodology is as above: one benchmark source built
+against each revision's headers and library, the full production
+`NodeRuntime::step()` path, a read of the final output binding compared for
+exact equality between versions, alternating order, and medians of seven
+fresh processes per case and version. The baseline is parent revision
+`0b75330`. Compile time is `Compiler::compile` of the root schema, which also
+compiles and constructs every nested runtime through `Schema::bind_inputs`.
+
+Measured 2026-10-31 on an AMD Ryzen 9 7940HS, Linux 7.0 x86-64, GCC 16.0.1
+(20260322 snapshot), `Release` (`-O3 -DNDEBUG`), `S7_BUILD_STUDIO=OFF`, pinned
+with `taskset -c 4`, 1,000 warm-up steps and 20,000 timed steps:
+
+| Case | Workload | Compile before/after (us) | Avg step before/after (ns) | Speedup | Throughput before/after (M steps/s) | p50 / p99 before (ns) | p50 / p99 after (ns) | RSS delta before/after (KiB) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `nested1` | 1 one-Gain schema | 1,474 / 1,457 | 55 / 33 | 1.66x | 18.33 / 30.47 | 50 / 60 | 30 / 31 | 464 / 464 |
+| `nested` | 16 chained one-Gain schemas | 12,815 / 12,883 | 744 / 371 | 2.01x | 1.34 / 2.70 | 751 / 771 | 371 / 381 | 576 / 556 |
+| `nested64` | 64 chained one-Gain schemas | 49,142 / 49,039 | 2,915 / 1,496 | 1.95x | 0.34 / 0.67 | 2905 / 3026 | 1493 / 1553 | 852 / 868 |
+| `nested_large` | 1 schema, 64-Gain internal chain | 1,659 / 1,607 | 358 / 328 | 1.09x | 2.80 / 3.05 | 370 / 371 | 341 / 351 | 588 / 588 |
+| `nested_multi` | 1 schema, 8 exposed outputs | 1,505 / 1,470 | 403 / 92 | 4.39x | 2.48 / 10.91 | 401 / 411 | 90 / 91 | 492 / 436 |
+| `nested_levels` | 2 levels: 4 x 4 one-Gain schemas | 15,780 / 15,886 | 909 / 437 | 2.08x | 1.10 / 2.29 | 912 / 942 | 441 / 461 | 584 / 580 |
+| `nested_feedback` | 16 chained stateful feedback schemas | 12,905 / 12,761 | 1,066 / 701 | 1.52x | 0.94 / 1.43 | 1072 / 1103 | 702 / 741 | 604 / 600 |
+| `nested_trapezoid` | Coupled trapezoid oscillator, 2 outputs | 1,491 / 1,469 | 168 / 121 | 1.38x | 5.97 / 8.24 | 160 / 171 | 120 / 121 | 596 / 596 |
+
+A second complete run gave speedups within 0.03x of these. Final outputs were
+bit-identical before and after in every case. The gain scales with the number
+of exposed outputs per step, so it is largest for `nested_multi` and smallest
+when internal work dominates (`nested_large`). The seven original cases were
+also rerun. The cases without nested schemas varied by up to ±5% between runs
+in both directions, and that code path is unchanged. Compile time and RSS
+differences are within run-to-run and page-granularity noise. The structural
+memory cost is 24 bytes per `Schema` object (480 to 504 bytes on this build)
+plus 8 bytes per exposed output, in one allocation per nested compilation.
+
+The 1,133 ns reported above for 16 nested schemas was measured on a Ryzen 7
+4700U. On this host, the parent revision measures 744 ns, the baseline for the
+table. This development host is much faster than typical user machines.
+Absolute times are optimistic, and ratios may differ on slower CPUs. Runs were
+pinned but not thermally isolated.
+
+Reproduce with a detached worktree of the parent revision and the benchmark
+source of this revision copied into it:
+
+```sh
+git worktree add --detach /path/to/baseline 0b75330
+cp s7core/benchmarks/indexed_execution.cpp /path/to/baseline/s7l2/s7core/benchmarks/
+cmake -S /path/to/baseline/s7l2 -B /path/to/build-baseline -G Ninja -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF
+cmake -S . -B build-bench -G Ninja -DCMAKE_BUILD_TYPE=Release -DS7_BUILD_STUDIO=OFF
+cmake --build /path/to/build-baseline --target s7core_indexed_benchmark
+cmake --build build-bench --target s7core_indexed_benchmark
+taskset -c 4 python3 s7core/benchmarks/compare_indexed.py \
+    /path/to/build-baseline/s7core/s7core_indexed_benchmark \
+    build-bench/s7core/s7core_indexed_benchmark --repeats 7 --cases nested
+```
+
+### Correctness evidence
+
+`s7core_nested_schema_bindings_smoke` compares nested schemas with the
+equivalent flat graph for exact equality at every step. It covers one and
+several exposed outputs, mixed F64/C64 outputs and a C64 input, declared
+output order and types, four nesting levels, two independent stateful
+instances, a parent feedback loop passing through a nested schema, and a
+nested coupled trapezoid oscillator. It also checks same-step direct outputs
+and one-step-delayed causal-memory outputs. Further cases cover a standalone
+schema recompiled after added elements, connections, outputs and a rate
+change, whose exposed storage address stays fixed; move construction and move
+assignment of a stepped stateful schema with continued state; 100 repeated
+compile/step/destroy cycles; missing element, out-of-range port and mismatched
+type mappings; repeated failure after a failed compilation; the I32
+step-time failure; and fault propagation without partial publication, both
+standalone and inside a parent, with recovery on the next step.
+
+The same test source also passes against the unmodified parent library. That
+confirms the behavior it checks was unchanged. A mutation that kept stale
+bindings across recompilation was reported by AddressSanitizer as a
+heap-use-after-free in the recompilation case.
+
+Results on this host: the Release headless suite passed 46/46, including the
+saved-diagram numerical regressions (the parent revision passed the same 45).
+Clang 22.1.2 with `-fsanitize=address,undefined` passed all 24 `s7core_*` and
+`s7tests_*` tests. Studio and Windows builds were not run for this change.
+
+Remaining nested overhead: each nested schema still runs a complete
+`NodeRuntime::step()` (step-count and thread-ID bookkeeping and rollback
+snapshots of its internal outputs). It also runs one input-proxy element per
+exposed input, and the parent snapshots the schema element's outputs as well.
+A one-Gain schema therefore costs about 23 ns per step on this host, against
+about 5 ns for the same Gain in a flat graph. These parts were not measured
+separately. Removing them would require a different boundary, such as
+compile-time flattening, whose feedback and step-boundary equivalence is
+unproved. That stays outside 0.2.0, as does any parallel execution of nested
+schemas.
 
 ## Objective and constraints
 

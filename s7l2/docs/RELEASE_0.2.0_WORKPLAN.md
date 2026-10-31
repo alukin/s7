@@ -14,7 +14,7 @@ without requiring production adoption of an experimental algorithm.
 | --- | --- | --- |
 | Causal model, runtime and protocol architecture, release gates | Maintainer and Codex | Agree on semantics and an executable contract before implementations diverge. |
 | Distributed transport, multi-node lifecycle, headless administration and Python interoperability | teren-ukr | C++ remains the reference implementation. Changes to its protocol, authorization or causal behavior require maintainer/Codex review. |
-| Within-node parallel execution (0.3.0 planning) | Maintainer and Codex | Deferred from 0.2.0. Scheduling, cost and plugin-safety decisions remain open; the indexed serial runtime is the reference. |
+| Within-node parallel execution (0.3.0 planning) | Maintainer and Codex | Deferred from 0.2.0. Scheduling, cost and plugin-safety decisions remain open; the indexed serial runtime, with sequential nested schemas and compiled exposed-output bindings, is the reference. |
 | Numerical integration and feedback-settling research (P1, planned) | Maintainer and Codex | Deliver reproducible evidence and conclusions for 0.2.0 from a separate branch; production integration requires explicit review and decision. |
 | Studio editing, observation and administration UI | Maintainer and Codex | Headless services expose typed operations; Qt remains a client. Coordinate request/result types with the distributed work. |
 
@@ -140,7 +140,9 @@ not establish an unattended monitor.
 1. **Architecture and development plan:** close the 0.2.0 scope and acceptance
    matrix first. Audit graph replacement, stream ownership and shutdown; then
    record the indexed serial measurements and unresolved within-node parallel
-   questions for 0.3.0 planning. Review D3 administration semantics and
+   questions for 0.3.0 planning. Nested-schema exposed outputs are bound once
+   at compilation (done 2026-10-31); nested schemas stay sequential in 0.2.0,
+   and their parallel scheduling is a possible 0.3.0 research topic. Review D3 administration semantics and
    integration boundaries before implementation, keeping the language-neutral and C++
    documents aligned.
 2. **Simulation accuracy, research and Studio usability:** extend independent
