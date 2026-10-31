@@ -38,6 +38,11 @@ causal-memory outputs may supply one-way held inputs. A feedback cycle
 crossing methods or configurations is rejected. Disconnected systems get
 separate regions to avoid an unnecessarily large dense stage solve.
 
+Each region belongs to its resolved rate domain. The normal domain scheduler
+advances it at that rate, including one-way held inputs through a Resampler.
+Numerical diagnostics count accepted samples once per active domain; they do
+not multiply that count by the number of regions.
+
 The compiler retains its existing causal order and creates an ordered trial
 cone: only stateless, explicitly approved built-in F64 arithmetic that is
 both downstream of a selected state and upstream of a selected derivative
