@@ -18,6 +18,14 @@ namespace s7studio::viewers {
 // caller stores the pointer first and then adds it to its layout.
 auto createQuickWidget() -> QQuickWidget*;
 
+// Prepares a not-yet-shown top-level window to host QQuickWidgets later,
+// e.g. the Observers previews created when a run starts. Adding the first
+// QQuickWidget to a visible window makes Qt destroy and recreate its native
+// window to switch it to RHI composition, so the whole window disappears for
+// a moment. A hidden, empty QQuickWidget child created before the window is
+// shown makes Qt create the window that way from the start.
+void prepareWindowForQuickWidgets(QWidget& window);
+
 // Scene renders of these widgets are paced on the GUI thread so plots do not
 // all render in the same event-loop pass (see RenderPacer). This sets the
 // shortest interval between one widget's renders, e.g. for small previews;

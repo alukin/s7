@@ -28,6 +28,7 @@
 #include "scene_serializer.hpp"
 #include "scope_sample_mailbox.hpp"
 #include "studio_network_service.hpp"
+#include "viewers/quick_support.hpp"
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
 #include "live_oscilloscope_window.hpp"
@@ -267,6 +268,8 @@ MainWindow::MainWindow(QWidget* parent, bool restoreStartupDiagram, std::shared_
     : QMainWindow(parent)
     , networkService_(networkService ? std::move(networkService) : ui::makeStudioNetworkService())
 {
+    // The Observers dock adds plot previews when a run starts.
+    viewers::prepareWindowForQuickWidgets(*this);
     viewers_ = new viewers::ViewerManager(viewers::ViewerRegistry::instance(), this);
     connect(viewers_, &viewers::ViewerManager::viewerCreated, this,
         [this](const QString& typeId, const QString& instanceId, viewers::ObservationViewer* viewer) {

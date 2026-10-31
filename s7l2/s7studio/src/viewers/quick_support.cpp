@@ -155,6 +155,15 @@ auto createQuickWidget() -> QQuickWidget*
     return widget;
 }
 
+void prepareWindowForQuickWidgets(QWidget& window)
+{
+    Q_ASSERT(!window.isVisible());
+    auto* anchor = new QQuickWidget(&window);
+    anchor->setObjectName(QStringLiteral("studio.quickCompositionAnchor"));
+    anchor->setFocusPolicy(Qt::NoFocus);
+    anchor->hide();
+}
+
 void setMinimumFrameInterval(QQuickWidget& widget, int milliseconds)
 {
     if (auto* paced = dynamic_cast<ObservationQuickWidget*>(&widget)) paced->setMinimumFrameInterval(milliseconds);
