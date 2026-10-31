@@ -148,6 +148,42 @@ void test_conflicts_and_errors()
     bad_value.connect("source", 0, "gain", 0);
     expect_error(bad_value, "negative value for unsigned U8", "parameters convert exactly");
 
+    // Floating-point parameters take the nearest value, but never silently
+    // become infinite or zero; JSON integers convert exactly.
+    const auto value_error = []<SignalType T>(const char* text) -> std::string {
+        try {
+            (void)s7::signal_value_from_json<T>(json::parse(text), "p");
+        } catch (const std::invalid_argument& error) {
+            return error.what();
+        }
+        return {};
+    };
+    expect(value_error.operator()<SignalType::F32>("1e40") == "p: 1e+40 is out of range for F32 (largest finite 3.40282e+38)",
+           "F32 overflow rejected: " + value_error.operator()<SignalType::F32>("1e40"));
+    expect(!value_error.operator()<SignalType::F32>("-1e40").empty(), "negative F32 overflow rejected");
+    expect(value_error.operator()<SignalType::F16>("65520") == "p: 65520 is out of range for F16 (largest finite 65504)",
+           "F16 overflow rejected: " + value_error.operator()<SignalType::F16>("65520"));
+    expect(s7::signal_value_from_json<SignalType::F16>(json::parse("65519"), "p") == s7::float16_t(65504),
+           "a value rounding to the largest finite F16 is kept");
+    expect(value_error.operator()<SignalType::F16>("1e-9") == "p: 1e-09 underflows to 0 in F16 (smallest positive 5.96046e-08)",
+           "F16 underflow rejected: " + value_error.operator()<SignalType::F16>("1e-9"));
+    expect(value_error.operator()<SignalType::F32>("1e-50").find("underflows to 0 in F32") != std::string::npos, "F32 underflow rejected");
+    expect(s7::signal_value_from_json<SignalType::F32>(json::parse("1e-40"), "p") > 0.0f, "a subnormal F32 is kept");
+    expect(s7::signal_value_from_json<SignalType::F16>(json::parse("0"), "p") == s7::float16_t(0), "zero stays zero");
+    expect(value_error.operator()<SignalType::F64>("1e400") == "p: is not a finite number", "a JSON literal beyond double is rejected");
+    expect(value_error.operator()<SignalType::C32>("[1, 1e40]").find("out of range for C32") != std::string::npos,
+           "complex components are checked");
+    expect(s7::signal_value_from_json<SignalType::F128>(json::parse("9007199254740993"), "p") ==
+               s7::float128_t(9007199254740992) + s7::float128_t(1),
+           "F128 integer parameters are exact beyond 2^53");
+    expect(s7::signal_value_from_json<SignalType::F128>(json::parse("18446744073709551615"), "p") ==
+               s7::math::ldexp(s7::float128_t(1), 64) - s7::float128_t(1),
+           "F128 holds the largest uint64 exactly");
+    s7::Schema overflowing{"overflowing"};
+    overflowing.set_rate(s7::Rate::from_hz(1));
+    add(overflowing, "gain", "Gain", {{"type", "F32"}, {"factor", 1e40}});
+    expect_error(overflowing, "1e+40 is out of range for F32", "an out-of-range Gain factor is a validation error");
+
     s7::Schema fractional{"fractional"};
     fractional.set_rate(s7::Rate::from_hz(1));
     add(fractional, "c", "Constant", {{"type", "I32"}, {"value", 1.5}});

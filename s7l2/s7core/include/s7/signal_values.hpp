@@ -11,9 +11,13 @@
 #include <boost/json.hpp>
 
 #include <cmath>
+#include <iomanip>
+#include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "s7/signal_arithmetic.hpp"
 #include "s7/signal_types.hpp"
@@ -181,21 +185,54 @@ template <SignalType Type>
     bad_value(what, "expected an integer for " + type_name);
 }
 
+[[nodiscard]] inline std::string format_number(const double value)
+{
+    std::ostringstream text;
+    text << std::setprecision(6) << value;
+    return text.str();
+}
+
+// The nearest value of F, as for a literal, rounded once: JSON integers
+// convert directly (exact in F128 up to 2^113), other numbers from the
+// double the JSON parser read. A value whose nearest F is infinite, or a
+// nonzero value that becomes 0, is rejected: either would silently change
+// the parameter's meaning.
 template <typename F>
-[[nodiscard]] F float_from_json(const boost::json::value& json, const std::string_view what)
+[[nodiscard]] F float_from_json(const boost::json::value& json, const std::string_view what, const std::string_view type)
 {
     if (!json.is_number()) {
         bad_value(what, "expected a number");
     }
-    // Nearest representable value of the target type, as for a literal.
-    return static_cast<F>(json.to_number<double>());
+    const double number = json.to_number<double>();
+    if (!std::isfinite(number)) { // a literal beyond double's range parses as infinity
+        bad_value(what, "is not a finite number");
+    }
+    // Integers go through a type that holds every int64/uint64 exactly, so F
+    // still rounds once. Not directly into F16/F32: GCC 15/16 fold isinf() of
+    // an integer converted to _Float16 to false although the conversion can
+    // overflow (65520 -> inf), so the range check below would never fire.
+    using Exact = std::conditional_t<(sizeof(F) >= sizeof(double)), F, float128_t>;
+    const F value = json.is_int64()    ? static_cast<F>(static_cast<Exact>(json.get_int64()))
+                    : json.is_uint64() ? static_cast<F>(static_cast<Exact>(json.get_uint64()))
+                                       : static_cast<F>(number);
+    if (math::isinf(value)) {
+        bad_value(what, format_number(number) + " is out of range for " + std::string(type) + " (largest finite " +
+                            format_number(static_cast<double>(std::numeric_limits<F>::max())) + ")");
+    }
+    if (value == F(0) && number != 0) {
+        bad_value(what, format_number(number) + " underflows to 0 in " + std::string(type) + " (smallest positive " +
+                            format_number(static_cast<double>(std::numeric_limits<F>::denorm_min())) + ")");
+    }
+    return value;
 }
 
 } // namespace detail
 
 // Converts a JSON parameter value into Type's storage. Integers must be exact
-// and in range; floating-point values take the nearest representable value;
-// complex values are a number (imaginary part 0), [re, im] or {"re", "im"}.
+// and in range; floating-point values take the nearest representable value,
+// which must be finite and, for a nonzero value, nonzero (JSON numbers other
+// than integers have double precision, also for F128); complex values are a
+// number (imaginary part 0), [re, im] or {"re", "im"}.
 template <SignalType Type>
 [[nodiscard]] signal_storage_t<Type> signal_value_from_json(const boost::json::value& json, const std::string_view what)
 {
@@ -204,7 +241,7 @@ template <SignalType Type>
     if constexpr (kind == SignalKind::SignedInteger || kind == SignalKind::UnsignedInteger) {
         return detail::integer_from_json<Type>(json, what);
     } else if constexpr (kind == SignalKind::Float) {
-        return detail::float_from_json<value_type>(json, what);
+        return detail::float_from_json<value_type>(json, what, signal_type_name(Type));
     } else {
         const boost::json::value* re = &json;
         const boost::json::value* im = nullptr;
@@ -223,7 +260,8 @@ template <SignalType Type>
         }
         if constexpr (kind == SignalKind::ComplexFloat) {
             using F = typename value_type::value_type;
-            return value_type{detail::float_from_json<F>(*re, what), im ? detail::float_from_json<F>(*im, what) : F{}};
+            const auto type = signal_type_name(Type);
+            return value_type{detail::float_from_json<F>(*re, what, type), im ? detail::float_from_json<F>(*im, what, type) : F{}};
         } else {
             return value_type{detail::integer_from_json<Type>(*re, what),
                               im ? detail::integer_from_json<Type>(*im, what) : typename IntegerRange<Type>::component{}};

@@ -120,7 +120,10 @@ auto parameter_problem(const ParameterSpec& spec, const boost::json::value& valu
         return is_integer(value) ? in_range(value.to_number<double>()) : "must be an integer";
     }
     if (spec.type == "real") {
-        return value.is_number() ? in_range(value.to_number<double>()) : "must be a number";
+        if (!value.is_number()) return "must be a number";
+        // A JSON literal beyond double's range (1e400) parses as infinity.
+        if (!std::isfinite(value.to_number<double>())) return "must be a finite number";
+        return in_range(value.to_number<double>());
     }
     if (spec.type == "bool") {
         return value.is_bool() ? "" : "must be true or false";
