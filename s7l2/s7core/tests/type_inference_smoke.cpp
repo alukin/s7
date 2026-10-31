@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <iostream>
 #include <stdexcept>
@@ -299,6 +300,14 @@ void test_convert()
     expect(convert<SignalType::I16, SignalType::I8>(16384, M::Normalized) == 64, "I16 -> I8 rescales");
     expect(convert<SignalType::I16, SignalType::I8>(16512, M::Normalized) == 64, "I16 -> I8 rounds half to even");
     expect(convert<SignalType::I8, SignalType::I16>(-128, M::Normalized) == -32768, "I8 -> I16 rescales");
+    // The most negative code narrows to the most negative code (GCC 15/16
+    // once dropped the sign here at -O1 and above; see shift_right_rounded).
+    expect(convert<SignalType::I16, SignalType::I8>(-32768, M::Normalized) == -128, "I16 min -> I8 min");
+    expect(convert<SignalType::I32, SignalType::I16>(std::numeric_limits<std::int32_t>::min(), M::Normalized) == -32768,
+           "I32 min -> I16 min");
+    expect(convert<SignalType::I16, SignalType::I12>(-32768, M::Normalized) == -2048, "I16 min -> I12 min");
+    expect(convert<SignalType::I128, SignalType::I8>(s7::kInt128Min, M::Normalized) == -128, "I128 min -> I8 min");
+    expect(convert<SignalType::I16, SignalType::I8>(-16512, M::Normalized) == -64, "negative half rounds to even");
     expect(convert<SignalType::U8, SignalType::F64>(255, M::Normalized) == 255.0 / 256.0, "unsigned codes are unipolar");
     expect(throws([] { (void)convert<SignalType::U8, SignalType::I8>(1, M::Normalized); }),
            "signed <-> unsigned normalized is refused");
@@ -309,7 +318,47 @@ void test_convert()
     expect(convert<SignalType::CU8, SignalType::CI8>(CU8{128, 0}, M::Normalized) == CI8{0, -128}, "CU8 -> CI8 offset binary");
     const auto iq = convert<SignalType::CU8, SignalType::C32>(CU8{255, 0}, M::Normalized);
     expect(iq.real() == 127.0f / 128.0f && iq.imag() == -1.0f, "CU8 -> C32 normalized");
+    // RTL-SDR offset binary at the edge codes, both directions, normalized
+    expect(convert<SignalType::CU8, SignalType::CI8>(CU8{0, 255}, M::Normalized) == CI8{-128, 127}, "CU8 edges -> CI8");
+    expect(convert<SignalType::CU8, SignalType::CI8>(CU8{127, 129}, M::Normalized) == CI8{-1, 1}, "CU8 near zero -> CI8");
+    expect(convert<SignalType::CI8, SignalType::CU8>(CI8{-128, 127}, M::Normalized) == CU8{0, 255}, "CI8 edges -> CU8");
+    expect(convert<SignalType::CI8, SignalType::CU8>(CI8{-1, 0}, M::Normalized) == CU8{127, 128}, "CI8 near zero -> CU8");
     using CI16 = s7::signal_storage_t<SignalType::CI16>;
+    expect(convert<SignalType::CU8, SignalType::CI16>(CU8{0, 255}, M::Normalized) == CI16{-32768, 32512}, "CU8 -> CI16 rescales");
+    expect(convert<SignalType::CI16, SignalType::CU8>(CI16{-32768, 32767}, M::Normalized) == CU8{0, 255}, "CI16 -> CU8 rescales");
+    expect(convert<SignalType::C32, SignalType::CU8>(std::complex<float>{-1.0f, 1.0f}, M::Normalized) == CU8{0, 255},
+           "C32 full scale -> CU8 saturates at the top code");
+    expect(convert<SignalType::C32, SignalType::CU8>(std::complex<float>{0.0f, -0.5f}, M::Normalized) == CU8{128, 64}, "C32 -> CU8");
+    expect(throws([] { (void)convert<SignalType::C32, SignalType::CU8>(std::complex<float>{2.0f, 0.0f}, M::Normalized,
+                                                                         R::HalfEven, O::Fault); }),
+           "C32 out of range -> CU8 can fault");
+    // An offset-binary code has no plain numeric value: value mode is refused.
+    expect(throws([] { (void)convert<SignalType::CU8, SignalType::CI8>(CU8{128, 128}); }), "CU8 -> CI8 value mode is refused");
+    expect(throws([] { (void)convert<SignalType::CU8, SignalType::C32>(CU8{128, 128}); }), "CU8 -> C32 value mode is refused");
+    expect(throws([] { (void)convert<SignalType::CI8, SignalType::CU8>(CI8{0, 0}); }), "CI8 -> CU8 value mode is refused");
+    expect(throws([] { (void)convert<SignalType::C64, SignalType::CU8>(std::complex<double>{}); }), "C64 -> CU8 value mode is refused");
+    expect(convert<SignalType::CU8, SignalType::CU8>(CU8{7, 200}) == CU8{7, 200}, "CU8 -> CU8 is the identity in either mode");
+    // Both refusals come when the element is created, not at its first step.
+    expect(throws([] { (void)s7::make_convert(SignalType::CU8, SignalType::CI16, {}); }), "value-mode CU8 Convert is not created");
+    expect(throws([] { (void)s7::make_convert(SignalType::U8, SignalType::I8, {M::Normalized}); }),
+           "signed <-> unsigned normalized Convert is not created");
+    // 12-bit SDR samples (ADALM-Pluto, LimeSDR, USRP sc12, Airspy) are CI12:
+    // normalized conversion gives full scale, and CI12 -> CI16 puts the 12 bits
+    // at the top, the transmit format of the AD9361.
+    using CI12 = s7::signal_storage_t<SignalType::CI12>;
+    const auto full = convert<SignalType::CI12, SignalType::C32>(CI12{2047, -2048}, M::Normalized);
+    expect(full.real() == 2047.0f / 2048.0f && full.imag() == -1.0f, "CI12 -> C32 normalized is full scale");
+    expect(convert<SignalType::CI12, SignalType::CI16>(CI12{2047, -2048}, M::Normalized) == CI16{32752, -32768},
+           "CI12 -> CI16 normalized: 12 bits at the top");
+    expect(convert<SignalType::CI16, SignalType::CI12>(CI16{32752, -32768}, M::Normalized) == CI12{2047, -2048},
+           "CI16 -> CI12 normalized: the top 12 bits");
+    expect(convert<SignalType::CI16, SignalType::CI12>(CI16{32767, 8}, M::Normalized) == CI12{2047, 0},
+           "CI16 -> CI12 normalized rounds half to even and saturates");
+    expect(convert<SignalType::CI12, SignalType::CI16>(CI12{2047, -2048}) == CI16{2047, -2048}, "CI12 -> CI16 value");
+    expect(convert<SignalType::CI16, SignalType::CI12>(CI16{3000, -3000}) == CI12{2047, -2048}, "CI16 -> CI12 value saturates");
+    expect(convert<SignalType::CI8, SignalType::CI12>(CI8{-128, 127}, M::Normalized) == CI12{-2048, 2032}, "CI8 -> CI12 normalized");
+    expect(throws([] { (void)convert<SignalType::CU8, SignalType::CI12>(CU8{128, 128}); }), "CU8 -> CI12 value mode is refused");
+    expect(convert<SignalType::CU8, SignalType::CI12>(CU8{0, 255}, M::Normalized) == CI12{-2048, 2032}, "CU8 -> CI12 normalized");
     expect(convert<SignalType::CI16, SignalType::C64>(CI16{300, -5}) == std::complex<double>{300, -5}, "CI16 -> C64 value");
     expect(convert<SignalType::C64, SignalType::CI8>(std::complex<double>{1.5, 2.5}) == CI8{2, 2}, "C64 -> CI8 rounds");
     expect(throws([] { (void)s7::make_convert(SignalType::F64, SignalType::C64, {}); }), "real -> complex is refused");
@@ -334,6 +383,31 @@ void test_convert()
     no_mode.set_rate(s7::Rate::from_hz(1));
     add(no_mode, "c", "Convert", {{"from", "I16"}, {"to", "F32"}});
     expect_error(no_mode, "parameter 'mode' is required", "Convert requires a mode");
+
+    // In a graph: two I12 streams combine into CI12 I/Q, and CI12 arithmetic
+    // saturates at 12 bits.
+    s7::Schema iq12{"iq12"};
+    iq12.set_rate(s7::Rate::from_hz(1));
+    add(iq12, "i", "Constant", {{"type", "I12"}, {"value", 2000}});
+    add(iq12, "q", "Constant", {{"type", "I12"}, {"value", -2000}});
+    add(iq12, "pair", "ReImToComplex");
+    add(iq12, "sum", "Adder");
+    iq12.connect("i", 0, "pair", 0);
+    iq12.connect("q", 0, "pair", 1);
+    iq12.connect("pair", 0, "sum", 0);
+    iq12.connect("pair", 0, "sum", 1);
+    s7::NodeRuntime iq_runtime{s7::Compiler::compile(iq12)};
+    iq_runtime.step();
+    expect(iq_runtime.output_type_of("pair") == SignalType::CI12, "I12 pairs make CI12");
+    expect(iq_runtime.output_of<SignalType::CI12>("sum") == CI12{2047, -2048}, "CI12 sum saturates at 12 bits");
+
+    // In a graph: an RTL-SDR stream converted in value mode is a validation error.
+    s7::Schema rtl{"rtl"};
+    rtl.set_rate(s7::Rate::from_hz(1));
+    add(rtl, "iq", "Constant", {{"type", "CU8"}, {"value", json::array{128, 128}}});
+    add(rtl, "c", "Convert", {{"mode", "value"}, {"to", "C32"}});
+    rtl.connect("iq", 0, "c", 0);
+    expect_error(rtl, "CU8 is offset binary", "value-mode CU8 Convert is refused by validation");
 }
 
 static_assert(s7::widens_exactly(SignalType::I8, SignalType::I32));

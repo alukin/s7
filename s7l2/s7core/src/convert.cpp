@@ -40,7 +40,7 @@ ConvertOverflow convert_overflow_from_name(const std::string_view name)
     throw std::invalid_argument("Convert overflow must be 'saturate' or 'fault', got '" + std::string(name) + "'.");
 }
 
-// All 26 x 26 type pairs are instantiated here, once.
+// All 27 x 27 type pairs are instantiated here, once.
 std::unique_ptr<Element> make_convert(const SignalType from, const SignalType to, const ConvertOptions& options)
 {
     return visit_signal_type(from, [&]<SignalType From>() -> std::unique_ptr<Element> {

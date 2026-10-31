@@ -175,6 +175,27 @@ Feedback across rate domains is rejected in 0.2.0 and recorded as research in
 [open problems](OPEN_PROBLEMS.md#ratedt-inference-and-validation--implemented-multi-rate-execution-deferred).
 Hardware clock domains (sound devices, networked audio) are 0.3.0 research.
 
+## SDR sample formats — 0.2.0 tasks
+
+Decided and implemented 2026-10-31 ([ADR-023](../../doc/S7_Architectural_Decisions.md#adr-023)). S7's integer and complex integer types exist for SDR I/Q
+([wire protocol, section 8](../../doc/S7_Network_Wire_Protocol_v1.md)). The
+formats the common devices' host libraries deliver:
+
+| Device | Converter | Host sample format | S7 type |
+| --- | --- | --- | --- |
+| RTL-SDR (RTL2832U) | 8 bit | unsigned offset binary; measured zero near 127.4 (gr-osmosdr), not 128 | CU8 |
+| HackRF One | 8 bit | signed 8-bit I/Q, interleaved, receive and transmit | CI8 (exact; normalized c/128) |
+| ADALM-Pluto (AD9361/AD9363) | 12 bit | two's complement; receive `le:S12/16>>0` (low 12 bits, sign-extended), transmit `le:S16/16>>0` (top 12 bits used) | CI12 |
+| LimeSDR | 12 bit | `I16` (12 bits shifted to the top, per community reports); `I12` packed 3 bytes per I/Q pair on the link | CI12 |
+| USRP (UHD) | 12–16 bit | link formats sc16, sc12 (B2xx), sc8 (B2xx/N2xx, scaled by `peak`) | CI16, CI12, CI8 |
+| Airspy | 12 bit | `INT16_IQ` by default; optional 12-bit packing on USB | CI12 |
+
+| Step | Deliverable | Status |
+| --- | --- | --- |
+| S1 | CU8: `Convert` in `value` mode to or from CU8 is refused (an offset-binary code has no plain numeric value; it used to clip half the range); normalized (c−128)/128 is a documented convention, with DC removed explicitly in the graph. Signed↔unsigned normalized conversions are refused at validation instead of at the first step. | Implemented |
+| S2 | SDR elements publish samples at the converter's native width: CU8, CI8, CI12 or CI16. 12-bit samples are never published as CI16 (low-aligned Pluto receive data would read 1/16 of full scale, about −24 dB); normalized `Convert` CI12 → CI16 gives the high-aligned transmit format. The rule for every SDR element, in the element developer guide, with conversion tests. (Decided first as "12 bits at the top of CI16"; superseded by CI12 once S3 was approved.) | Implemented |
+| S3 | `CI12` (`0x0207`), a pair of I12 packed on the wire (3 bytes per I/Q pair, 25% less than CI16), with the arithmetic of the other complex integer types. Nodes advertise the types they transport in `NODE_INFO.data_protocol.signal_types`; a node without the list has the original catalog (ids up to `0x0206`), and the deployment client refuses a CI12 stream to a node that does not list it. Wire fixtures include CI12. | Implemented |
+
 The first joint review should accept or amend D0's matrix and the administration
 design questions in D3. This lets distributed implementation and our local
 simulation/Studio work proceed without changing each other's contracts by

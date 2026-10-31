@@ -795,7 +795,13 @@ auto ControlPlane::handle_get_node_info(const boost::json::object& request) cons
         {"max_chunk_bytes", std::min(options_.max_chunk_bytes, kMaxChunkBytes)},
         {"max_transfer_bytes", std::min(options_.max_transfer_bytes, kMaxTransferBytes)},
     };
-    out["data_protocol"] = boost::json::object{{"packet_versions", std::move(packet_versions)}, {"extensions", std::move(extensions)}};
+    boost::json::array signal_types;
+    for (const auto type : kAllSignalTypes) {
+        signal_types.emplace_back(signal_type_name(type));
+    }
+    out["data_protocol"] = boost::json::object{{"packet_versions", std::move(packet_versions)},
+                                               {"extensions", std::move(extensions)},
+                                               {"signal_types", std::move(signal_types)}};
     // Its UTC clock is the shared "utc" domain only while it is synchronized
     // within the bound; otherwise it is this node's own domain.
     const auto sync = options_.clock_sync ? options_.clock_sync() : clock::read_kernel_sync();

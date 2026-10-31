@@ -179,7 +179,7 @@ standalone step), before any value is copied. A top-level schema's exposed
 ports are only boundary metadata and are never stepped, so `expose_input` and
 `expose_output` still accept every type and existing top-level documents load
 unchanged. A schema library element with such a port still registers and
-fails when a graph using it is compiled. Supporting all 26 signal types across
+fails when a graph using it is compiled. Supporting all 27 signal types across
 a nested boundary would need type-generic exposed storage and is a separate,
 unscheduled extension.
 
@@ -346,7 +346,7 @@ reference. Causal-memory publication, model time, explicit network boundaries,
 read-only observation and the coupled trapezoid trial semantics remain intact.
 No global ODE/event solver is introduced.
 
-The runtime must work headlessly and on the supported C++ toolchains. Its 26
+The runtime must work headlessly and on the supported C++ toolchains. Its 27
 signal types include narrow integers, F16/F128 and complex values; the compiled
 plan must retain exact port types and existing overflow rules. Studio and
 plugins consume the same compiled runtime.

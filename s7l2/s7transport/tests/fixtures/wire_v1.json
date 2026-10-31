@@ -252,6 +252,25 @@
       "hex": "01000602090000006700000000000000feffffffffffffffffffffffffffffff00000000000000000000000000000001"
     },
     {
+      "name": "ci12_iq",
+      "type": "CI12",
+      "stream_alias": 9,
+      "sequence": 104,
+      "values": [
+        [
+          -2048,
+          2047
+        ],
+        [
+          -1,
+          1
+        ]
+      ],
+      "timestamps": [],
+      "send_time_ns": null,
+      "hex": "0100070209000000680000000000000000f87fff1f00"
+    },
+    {
       "name": "i8_values",
       "type": "I8",
       "stream_alias": 10,
@@ -520,6 +539,11 @@
       "name": "complex_half",
       "hex": "0100010201000000010000000000000001",
       "reason": "incomplete complex value"
+    },
+    {
+      "name": "ci12_half",
+      "hex": "010007020100000001000000000000000100",
+      "reason": "one 12-bit value is half a CI12 element"
     },
     {
       "name": "ext_padding_not_zero",

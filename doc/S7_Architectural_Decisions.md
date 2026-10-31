@@ -1036,6 +1036,34 @@ A run either has one consistent model time or does not start. Changing `dt` in t
 
 ------------------------------------------------------------------------
 
+# ADR-023
+
+## Title
+
+SDR Sample Formats: CU8 Converts Normalized Only, 12-Bit I/Q Is CI12, Types Added to the Wire Catalog Are Advertised
+
+## Status
+
+Accepted 2026-10-31 by the maintainer. Implemented 2026-10-31.
+
+## Context
+
+S7's integer and complex integer types exist for SDR I/Q. The common devices deliver: RTL-SDR unsigned 8-bit offset binary whose measured zero is near 127.4, not 128; HackRF signed 8-bit; ADALM-Pluto (AD9361/AD9363), LimeSDR, USRP sc12 and Airspy signed 12-bit, either packed (3 bytes per I/Q pair) or in 16-bit words aligned low (Pluto receive) or high (Pluto transmit). `Convert` in value mode treated CU8 codes as plain unsigned numbers and clipped half their range into signed types. S7 had no complex 12-bit type, so 12-bit I/Q travelled as CI16 at 4/3 of its native width, and normalized CI16 read low-aligned 12-bit data at 1/16 of full scale. The wire protocol required every implementation to transport every listed type, so a new type could not be added without breaking existing nodes.
+
+## Decision
+
+`Convert` refuses value mode to or from CU8: an offset-binary code has no plain numeric value. Normalized CU8 is (c − 128)/128 by convention; DC is removed explicitly in the graph. Signed↔unsigned normalized conversions are refused when the element is created.
+
+CI12 (`0x0207`) is a pair of I12, stored as two 16-bit integers restricted to the 12-bit range and packed on the wire like I12 (in-phase then quadrature, 3 bytes per element). An SDR element publishes samples at its converter's native width (CU8, CI8, CI12, CI16); 12-bit samples are never published as CI16, so normalized conversion gives full scale on every device and CI12 → CI16 normalized gives the high-aligned transmit format.
+
+Every node transports the original v1 catalog (wire ids up to `0x0206`). `NODE_INFO.data_protocol.signal_types` lists every type a node transports; a node that lists none has the original catalog. The deployment client refuses a stream whose type an end does not list, before anything is prepared. Later types are added the same way, without a new packet version.
+
+## Consequences
+
+Diagrams that converted CU8 in value mode, or signed↔unsigned in normalized mode, are now validation errors instead of producing wrong values or failing at the first step; no example in the repository did either. CI12 streams run only between nodes of this version or later, and an older node is refused with a message naming the stream, type and node. CI12 has the same arithmetic as the other complex integer types, saturating or wrapping at 12 bits. The catalog has 27 types, which adds template instantiations and compile time.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:
@@ -1048,6 +1076,7 @@ The current S7 architecture is based on the following accepted principles:
 - Connections define causality.
 - Cycles require causal memory.
 - One model-time rate per run; rates change only through an explicit Resampler.
+- SDR samples keep their native format; types added to the wire catalog are advertised by each node.
 - Observation is independent.
 - Deployment is independent.
 - Network boundaries are explicit.

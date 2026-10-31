@@ -88,10 +88,20 @@ auto has_utc_domain(const json::object& node_info) -> bool
     });
 }
 
-// NODE_INFO.data_protocol of a node: packet versions and extensions ("0x8001").
+// NODE_INFO.data_protocol of a node: packet versions, extensions ("0x8001")
+// and the signal types it transports (none listed: the original v1 catalog).
 struct DataProtocol {
     std::vector<std::uint64_t> packet_versions;
     std::vector<std::string> extensions;
+    std::optional<std::vector<std::string>> signal_types;
+
+    [[nodiscard]] bool transports(const SignalType type) const
+    {
+        if (!signal_types) {
+            return wire::in_original_type_catalog(type);
+        }
+        return std::ranges::find(*signal_types, signal_type_name(type)) != signal_types->end();
+    }
 };
 
 auto data_protocol_of(const json::object& node_info) -> std::optional<DataProtocol>
@@ -115,12 +125,21 @@ auto data_protocol_of(const json::object& node_info) -> std::optional<DataProtoc
             }
         }
     }
+    if (const auto* types = protocol->as_object().if_contains("signal_types"); types && types->is_array()) {
+        auto& names = result.signal_types.emplace();
+        for (const auto& type : types->as_array()) {
+            if (type.is_string()) {
+                names.emplace_back(type.as_string());
+            }
+        }
+    }
     return result;
 }
 
 // Wire draft section 12.1 item 4: no in-band negotiation, so every stream's
-// producer and consumers must share a packet version, and a stream with
-// per-packet timestamps needs the TIMESTAMPS extension at both ends.
+// producer and consumers must share a packet version, every end must transport
+// the stream's type (ADR-023), and a stream with per-packet timestamps needs
+// the TIMESTAMPS extension at both ends.
 auto check_data_protocols(const json::object& diagram, const std::unordered_map<std::string, DataProtocol>& protocols)
     -> std::vector<std::string>
 {
@@ -139,11 +158,18 @@ auto check_data_protocols(const json::object& diagram, const std::unordered_map<
                                  consumer_end.node_uuid + " share no data packet version.");
             }
         }
-        if (explicit_timestamps) {
-            std::vector<std::string> ends{stream.producer.node_uuid};
-            for (const auto& consumer_end : stream.consumers) {
-                ends.push_back(consumer_end.node_uuid);
+        std::vector<std::string> ends{stream.producer.node_uuid};
+        for (const auto& consumer_end : stream.consumers) {
+            ends.push_back(consumer_end.node_uuid);
+        }
+        for (const auto& node : ends) {
+            if (!protocols.at(node).transports(stream.data_type)) {
+                errors.push_back("Stream " + wire::to_string(stream.stream_id) + " carries " +
+                                 std::string(signal_type_name(stream.data_type)) + ", which node " + node +
+                                 " does not transport (NODE_INFO.data_protocol.signal_types).");
             }
+        }
+        if (explicit_timestamps) {
             for (const auto& node : ends) {
                 const auto& extensions = protocols.at(node).extensions;
                 if (std::ranges::find(extensions, timestamps_extension) == extensions.end()) {

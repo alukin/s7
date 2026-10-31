@@ -56,7 +56,9 @@ enum class SignalKind : std::uint8_t {
 };
 
 // X(name, storage type, kind, value bits per component, wire id)
-// I12/U12 are stored in 16-bit integers restricted to the 12-bit range.
+// I12/U12 (and the components of CI12) are stored in 16-bit integers
+// restricted to the 12-bit range. CI12 is listed with the complex integers;
+// its wire id is the next free one (added 2026-10-31, ADR-023).
 #define S7_SIGNAL_TYPES(X)                                                           \
     X(I8, std::int8_t, SignedInteger, 8, 0x0001)                                     \
     X(U8, std::uint8_t, UnsignedInteger, 8, 0x0002)                                  \
@@ -80,6 +82,7 @@ enum class SignalKind : std::uint8_t {
     X(C128, std::complex<::s7::float128_t>, ComplexFloat, 128, 0x0104)               \
     X(CI8, ::s7::ComplexInt<std::int8_t>, ComplexInteger, 8, 0x0201)                 \
     X(CU8, ::s7::ComplexInt<std::uint8_t>, ComplexUnsigned, 8, 0x0202)               \
+    X(CI12, ::s7::ComplexInt<std::int16_t>, ComplexInteger, 12, 0x0207)             \
     X(CI16, ::s7::ComplexInt<std::int16_t>, ComplexInteger, 16, 0x0203)              \
     X(CI32, ::s7::ComplexInt<std::int32_t>, ComplexInteger, 32, 0x0204)              \
     X(CI64, ::s7::ComplexInt<std::int64_t>, ComplexInteger, 64, 0x0205)              \
@@ -92,7 +95,7 @@ enum class SignalType : std::uint16_t {
 #undef S7_SIGNAL_TYPE_ENUM
 };
 
-inline constexpr std::array<SignalType, 26> kAllSignalTypes{
+inline constexpr std::array<SignalType, 27> kAllSignalTypes{
 #define S7_SIGNAL_TYPE_LIST(name, storage, kind, bits, id) SignalType::name,
     S7_SIGNAL_TYPES(S7_SIGNAL_TYPE_LIST)
 #undef S7_SIGNAL_TYPE_LIST
@@ -217,6 +220,7 @@ constexpr decltype(auto) visit_signal_type(const SignalType type, F&& f)
         case SignalType::C128: return SignalType::F128;
         case SignalType::CI8: return SignalType::I8;
         case SignalType::CU8: return SignalType::U8;
+        case SignalType::CI12: return SignalType::I12;
         case SignalType::CI16: return SignalType::I16;
         case SignalType::CI32: return SignalType::I32;
         case SignalType::CI64: return SignalType::I64;

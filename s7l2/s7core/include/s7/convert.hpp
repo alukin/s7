@@ -10,8 +10,12 @@
 // mode "value": the numeric value is kept (int16 1000 -> float 1000.0).
 // mode "normalized": fixed-point scaling. A signed code c of b bits means
 //   c / 2^(b-1) in [-1, 1); an unsigned code means c / 2^b in [0, 1); CU8
-//   components are offset binary, (c - 128) / 128. Integer -> integer
+//   components are offset binary, (c - 128) / 128 (RTL-SDR's measured zero is
+//   nearer 127.4: remove that DC explicitly in the graph). Integer -> integer
 //   rescales between bit widths of the same kind (shifting, rounded).
+//   Signed <-> unsigned codes are refused.
+// CU8 converts in normalized mode only: an offset-binary code has no plain
+//   numeric value, so value mode to or from CU8 is refused.
 // rounding: "half_even" or "toward_zero", for results that are not exact.
 // overflow: "saturate" (clamp to the target range; NaN -> 0) or "fault"
 //   (throw, which stops the step).
@@ -155,7 +159,48 @@ template <typename To, typename F>
             ++quotient;
         }
     }
-    return {value.negative && quotient != 0, quotient};
+    // Named first: GCC 15 and 16 at -O1 and above drop the sign when this is
+    // returned as `{value.negative && quotient != 0, quotient}` and the call is
+    // inlined into `wide = shift_right_rounded(wide, ...)` (I16 -32768 -> I8
+    // normalized gave +127); Clang and GCC at -O0 were correct.
+    const bool negative = value.negative && quotient != 0;
+    return WideInteger{negative, quotient};
+}
+
+// Refuses the conversions that have no meaning, so that an element can be
+// refused when it is created rather than at its first step:
+// - value mode to or from CU8: an offset-binary code has no plain numeric
+//   value (RTL-SDR's true zero lies near 127.4, not exactly at 128);
+// - normalized mode between signed and unsigned integer codes.
+template <SignalType From, SignalType To>
+void check_convert_options(const ConvertOptions& options)
+{
+    constexpr auto from_part = component_signal_type(From);
+    constexpr auto to_part = component_signal_type(To);
+    constexpr bool from_offset = signal_type_info(From).kind == SignalKind::ComplexUnsigned;
+    constexpr bool to_offset = signal_type_info(To).kind == SignalKind::ComplexUnsigned;
+    const auto names = [] { return std::string(signal_type_name(From)) + " -> " + std::string(signal_type_name(To)); };
+    if constexpr (From != To && (from_offset || to_offset)) {
+        if (options.mode == ConvertMode::Value) {
+            throw std::invalid_argument("Convert " + names() +
+                                        ": CU8 is offset binary and has no plain numeric value; use mode 'normalized', "
+                                        "where a code c means (c - 128) / 128.");
+        }
+    }
+    constexpr auto is_integer = [](const SignalType type) {
+        const auto kind = signal_type_info(type).kind;
+        return kind == SignalKind::SignedInteger || kind == SignalKind::UnsignedInteger;
+    };
+    if constexpr (is_integer(from_part) && is_integer(to_part)) {
+        constexpr bool from_signed = from_offset || IntegerRange<from_part>::is_signed;
+        constexpr bool to_signed = to_offset || IntegerRange<to_part>::is_signed;
+        if constexpr (from_signed != to_signed) {
+            if (options.mode == ConvertMode::Normalized) {
+                throw std::invalid_argument("Convert " + names() +
+                                            ": normalized mode needs both signed or both unsigned codes.");
+            }
+        }
+    }
 }
 
 } // namespace detail
@@ -178,6 +223,7 @@ template <SignalType From, SignalType To>
     const auto from_name = signal_type_name(From);
     const auto to_name = signal_type_name(To);
     const bool normalized = options.mode == ConvertMode::Normalized;
+    detail::check_convert_options<From, To>(options);
 
     if constexpr (from_integer && to_integer) {
         auto wide = detail::to_wide(value);
@@ -190,8 +236,8 @@ template <SignalType From, SignalType To>
         constexpr bool from_signed = from_offset || IntegerRange<from_part>::is_signed;
         constexpr bool to_signed = to_offset || IntegerRange<to_part>::is_signed;
         if constexpr (from_signed != to_signed) {
-            throw std::invalid_argument("Convert " + std::string(from_name) + " -> " + std::string(to_name) +
-                                        ": normalized mode needs both signed or both unsigned codes.");
+            throw std::logic_error("Convert " + std::string(from_name) + " -> " + std::string(to_name) +
+                                   ": signedness was checked above.");
         } else {
             constexpr unsigned from_bits = IntegerRange<from_part>::bits;
             constexpr unsigned to_bits = IntegerRange<to_part>::bits;
@@ -288,6 +334,7 @@ public:
         : Element("Convert")
         , options_(options)
     {
+        detail::check_convert_options<From, To>(options);
         register_input(0, port_names::in, From, nullptr);
         register_output(0, port_names::out, To, &output_value_);
     }

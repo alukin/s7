@@ -27,12 +27,14 @@ void expect(const bool condition, const std::string& what)
 static_assert(s7::signal_type_info(SignalType::F64).wire_type_id() == 0x000F);
 static_assert(s7::signal_type_info(SignalType::CI16).storage_bytes == 4);
 static_assert(s7::IntegerRange<SignalType::I12>::min == -2048 && s7::IntegerRange<SignalType::I12>::max == 2047);
+static_assert(s7::IntegerRange<SignalType::CI12>::min == -2048 && s7::IntegerRange<SignalType::CI12>::max == 2047);
+static_assert(s7::component_signal_type(SignalType::CI12) == SignalType::I12);
 static_assert(s7::integer_add<SignalType::I8>(100, 100, Overflow::Saturate) == 127);
 static_assert(s7::kInt128Min < 0 && s7::kInt128Max > 0 && s7::kInt128Min + s7::kInt128Max == -1);
 
 void test_catalog()
 {
-    expect(s7::kAllSignalTypes.size() == 26, "26 types");
+    expect(s7::kAllSignalTypes.size() == 27, "27 types");
     for (const auto type : s7::kAllSignalTypes) {
         const auto info = s7::signal_type_info(type);
         expect(s7::signal_type_from_name(info.name) == type, "name round trip " + std::string(info.name));
@@ -46,6 +48,11 @@ void test_catalog()
     expect(!s7::signal_type_from_name("DOUBLE"), "old names are gone");
     expect(s7::signal_type_info(SignalType::I12).storage_bytes == 2 && s7::signal_type_info(SignalType::I12).component_bits == 12,
            "I12 stored in 16 bits");
+    const auto ci12 = s7::signal_type_info(SignalType::CI12);
+    expect(ci12.wire_type_id() == 0x0207 && ci12.storage_bytes == 4 && ci12.component_bits == 12 &&
+               ci12.kind == s7::SignalKind::ComplexInteger,
+           "CI12: two 12-bit components, each stored in 16 bits");
+    expect(s7::complex_signal_type_of(SignalType::I12) == SignalType::CI12, "I12's complex type is CI12");
     expect(s7::signal_type_info(SignalType::F128).storage_bytes == 16, "binary128 storage");
     expect(s7::signal_type_info(SignalType::CI128).storage_bytes == 32, "CI128 storage");
     expect(s7::signal_type_info(SignalType::C16).is_floating() && !s7::signal_type_info(SignalType::CU8).is_floating(), "kinds");

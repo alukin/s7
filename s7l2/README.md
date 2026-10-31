@@ -32,7 +32,7 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 
 ## Implemented
 
-- Element model with exactly typed ports: 26 signal types (integers I8–U128 including 12-bit, F16–F128, complex floating and integer types), stored natively (C++26), inferred from connections, converted only by an explicit `Convert` element; generic arithmetic, filter, integrator, oscillator, file I/O and network elements. Parameters are checked against each element's declaration.
+- Element model with exactly typed ports: 27 signal types (integers I8–U128 including 12-bit, F16–F128, complex floating and integer types including 12-bit I/Q for SDR), stored natively (C++26), inferred from connections, converted only by an explicit `Convert` element; generic arithmetic, filter, integrator, oscillator, file I/O and network elements. Parameters are checked against each element's declaration.
 - Validation before execution: port indices and types, single driver per input, every input connected, cycles must contain causal memory.
 - Compilation to an executable graph with instance UUIDs; elements with direct feedthrough (stateful or not) run in causal order; causal-memory elements (`Delay`, `PreviousValue`) publish their outputs one step later.
 - Nested schemas as elements with exposed inputs/outputs; schema-backed element libraries (`.json`, `.s7library`, `.gz`).

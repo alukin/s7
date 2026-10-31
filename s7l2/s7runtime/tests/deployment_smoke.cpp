@@ -703,7 +703,13 @@ void test_deploy_client()
 
     // NODE_INFO advertises the data protocol and the clock domains.
     const auto info = Client(node_b, ControlPeer{}).send(json::object{{"type", "GET_NODE_INFO"}, {"request_id", "i"}, {"protocol_version", 1}});
-    expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}}, {"extensions", json::array{"0x0002", "0x8001"}}},
+    json::array all_types;
+    for (const auto type : s7::kAllSignalTypes) {
+        all_types.emplace_back(s7::signal_type_name(type));
+    }
+    expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}},
+                                                    {"extensions", json::array{"0x0002", "0x8001"}},
+                                                    {"signal_types", all_types}},
            "data protocol advertised: " + json::serialize(info.at("data_protocol")));
     expect(info.at("clock_domains").as_array().size() == 2 && info.at("clock_domains").as_array()[1].as_object().at("id").as_string() == "utc",
            "a synchronized clock is the shared utc domain");
@@ -752,6 +758,59 @@ void test_deploy_client()
     untimed.erase("dt"); // per-packet timestamps
     refuse_with([](json::object& response) { response["data_protocol"].as_object()["extensions"] = json::array{}; }, untimed,
                 "does not support (extension 0x8001)");
+
+    // CI12 (added after the original v1 catalog, ADR-023) is deployed on a
+    // stream only when both ends list it in data_protocol.signal_types; a node
+    // listing no types has the original catalog only.
+    auto ci12 = again.diagram;
+    ci12.erase("streams");
+    auto& ci12_elements = ci12["schema"].as_object()["elements"].as_array();
+    ci12_elements[0].as_object()["params"] = json::object{{"type", "CI12"}, {"value", json::array{2047, -2048}}};
+    ci12_elements[1].as_object()["type"] = "Delay";
+    ci12_elements[1].as_object()["params"] = json::object{};
+    const auto ci12_types = s7::deployment::infer_output_types(ci12);
+    auto refuse_ci12 = [&](const std::function<void(json::object&)>& alter, const std::string& what) {
+        auto altered = [&](const s7::deployment::RuntimeNode& node, const json::object& message) {
+            auto response = request(node, message);
+            if (node.endpoint == "wss://b" && response.at("type").as_string() == "NODE_INFO") {
+                alter(response);
+            }
+            return response;
+        };
+        const auto refused = s7::deployment::deploy_diagram(ci12, ci12_types, altered);
+        const std::string expected = "carries CI12, which node 33333333-4444-5555-6666-777777777777 does not transport";
+        expect(!refused.committed && !refused.errors.empty() && refused.errors.front().find(expected) != std::string::npos,
+               what + ": " + (refused.errors.empty() ? std::string() : refused.errors.front()));
+        expect(host_b->prepared == prepared_before, what + ": nothing prepared");
+    };
+    refuse_ci12([](json::object& response) { response["data_protocol"].as_object().erase("signal_types"); },
+                "a node listing no types has only the original catalog");
+    refuse_ci12(
+        [](json::object& response) {
+            json::array original;
+            for (const auto type : s7::kAllSignalTypes) {
+                if (s7::wire::in_original_type_catalog(type)) {
+                    original.emplace_back(s7::signal_type_name(type));
+                }
+            }
+            response["data_protocol"].as_object()["signal_types"] = std::move(original);
+        },
+        "a node without CI12 in its list");
+    {
+        // The same node without signal_types still takes original-catalog streams.
+        auto altered = [&](const s7::deployment::RuntimeNode& node, const json::object& message) {
+            auto response = request(node, message);
+            if (node.endpoint == "wss://b" && response.at("type").as_string() == "NODE_INFO") {
+                response["data_protocol"].as_object().erase("signal_types");
+            }
+            return response;
+        };
+        const auto original = s7::deployment::deploy_diagram(again.diagram, types, altered);
+        expect(original.committed, "an F64 stream deploys to a node that lists no types");
+    }
+    const auto with_ci12 = s7::deployment::deploy_diagram(ci12, ci12_types, request);
+    expect(with_ci12.committed, "both ends list CI12: deployed");
+    expect(with_ci12.diagram.at("streams").as_array().at(0).as_object().at("data_type") == "CI12", "the stream carries CI12");
 
     // An endpoint answering as another node is refused before anything is prepared.
     by_endpoint["wss://b"] = &node_a;

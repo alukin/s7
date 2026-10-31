@@ -28,7 +28,7 @@ TYPES = {  # id -> (name, kind, component bits)
     0x000D: ("F16", "float", 16), 0x000E: ("F32", "float", 32), 0x000F: ("F64", "float", 64), 0x0010: ("F128", "float", 128),
     0x0101: ("C16", "cfloat", 16), 0x0102: ("C32", "cfloat", 32), 0x0103: ("C64", "cfloat", 64), 0x0104: ("C128", "cfloat", 128),
     0x0201: ("CI8", "cint", 8), 0x0202: ("CU8", "cuint", 8), 0x0203: ("CI16", "cint", 16), 0x0204: ("CI32", "cint", 32),
-    0x0205: ("CI64", "cint", 64), 0x0206: ("CI128", "cint", 128),
+    0x0205: ("CI64", "cint", 64), 0x0206: ("CI128", "cint", 128), 0x0207: ("CI12", "cint12", 12),
 }
 TYPE_NAMES = {name for name, _, _ in TYPES.values()}
 ROLES = {1: "MODEL_TIME", 2: "SOURCE_TIME", 3: "PROCESSING_TIME"}
@@ -72,7 +72,7 @@ def decode_payload(type_id, payload):
     if not payload:
         raise Invalid("empty payload")
     _, kind, bits = TYPES[type_id]
-    if kind in ("int12", "uint12"):
+    if kind in ("int12", "uint12", "cint12"):
         if len(payload) % 3 == 1:
             raise Invalid("not a 12-bit payload length")
         codes = []
@@ -84,7 +84,12 @@ def decode_payload(type_id, payload):
             if last >> 12:
                 raise Invalid("unused bits of an odd 12-bit value")
             codes.append(last)
-        return [c - 4096 if kind == "int12" and c >> 11 else c for c in codes]
+        values = [c - 4096 if kind in ("int12", "cint12") and c >> 11 else c for c in codes]
+        if kind != "cint12":
+            return values
+        if len(values) % 2:
+            raise Invalid("incomplete complex value")
+        return [values[i:i + 2] for i in range(0, len(values), 2)]
     parts = 2 if kind.startswith("c") else 1
     element = parts * bits // 8
     if len(payload) % element:

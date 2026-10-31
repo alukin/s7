@@ -37,6 +37,16 @@ inline constexpr std::uint16_t kCriticalExtensionBit = 0x8000;
 // (wire draft section 12.1 item 4).
 inline constexpr std::array<std::uint8_t, 1> kSupportedPacketVersions{kDataVersion};
 inline constexpr std::array<std::uint16_t, 2> kSupportedExtensions{kSendTimeExtension, kTimestampsExtension};
+// NODE_INFO.data_protocol.signal_types lists every type this node transports
+// (all of kAllSignalTypes). Every node transports the original v1 catalog,
+// wire ids up to 0x0206; a later type (CI12, 0x0207) is deployed on a stream
+// only when both ends list it, and a node that lists no types has only the
+// original catalog (ADR-023).
+inline constexpr std::uint16_t kLastOriginalTypeId = 0x0206;
+[[nodiscard]] constexpr bool in_original_type_catalog(const SignalType type)
+{
+    return static_cast<std::uint16_t>(type) <= kLastOriginalTypeId;
+}
 
 // A malformed or unsupported message; the receiver drops it and reports a fault.
 class FormatError : public std::runtime_error {

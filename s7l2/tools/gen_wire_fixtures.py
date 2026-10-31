@@ -25,9 +25,10 @@ TYPE_IDS = {
     "F16": 0x000D, "F32": 0x000E, "F64": 0x000F, "F128": 0x0010,
     "C16": 0x0101, "C32": 0x0102, "C64": 0x0103, "C128": 0x0104,
     "CI8": 0x0201, "CU8": 0x0202, "CI16": 0x0203, "CI32": 0x0204, "CI64": 0x0205, "CI128": 0x0206,
+    "CI12": 0x0207,
 }
 COMPONENT = {"C16": "F16", "C32": "F32", "C64": "F64", "C128": "F128", "CI8": "I8", "CU8": "U8",
-             "CI16": "I16", "CI32": "I32", "CI64": "I64", "CI128": "I128"}
+             "CI16": "I16", "CI32": "I32", "CI64": "I64", "CI128": "I128", "CI12": "I12"}
 INT_BITS = {"I8": 8, "U8": 8, "I16": 16, "U16": 16, "I32": 32, "U32": 32, "I64": 64, "U64": 64,
             "I128": 128, "U128": 128}
 ROLES = {"MODEL_TIME": 1, "SOURCE_TIME": 2, "PROCESSING_TIME": 3}
@@ -61,8 +62,10 @@ def component_bytes(component, value):
 
 
 def payload(type_name, values):
-    if type_name in ("I12", "U12"):
-        codes = [int(v) & 0x0FFF for v in values]
+    if type_name in ("I12", "U12", "CI12"):
+        # CI12 packs its components (in-phase, then quadrature) as 12-bit values.
+        flat = [part for v in values for part in v] if type_name == "CI12" else values
+        codes = [int(v) & 0x0FFF for v in flat]
         out = bytearray()
         for i in range(0, len(codes) - 1, 2):
             word = codes[i] | (codes[i + 1] << 12)
@@ -122,6 +125,7 @@ VALID = [
     ("cu8_iq", "CU8", 9, 101, [[128, 128], [0, 255]], []),
     ("ci16_iq", "CI16", 9, 102, [[-300, 300]], []),
     ("ci128_value", "CI128", 9, 103, [["-2", str(1 << 120)]], []),
+    ("ci12_iq", "CI12", 9, 104, [[-2048, 2047], [-1, 1]], []),
     ("i8_values", "I8", 10, 0, [-128, 127, 0], []),
     ("u8_values", "U8", 10, 1, [0, 255], []),
     ("u16_values", "U16", 10, 2, [0, 65535, 4660], []),
@@ -179,6 +183,7 @@ def invalid_cases():
         ("i12_bad_length", data_packet("I12", 1, 1, [1])[:16] + bytes([1, 0, 0, 0]), "4 bytes is not a 12-bit payload length"),
         ("i12_unused_bits", data_packet("I12", 1, 1, [1])[:16] + bytes([1, 0x10]), "unused bits of the odd 12-bit value"),
         ("complex_half", data_packet("CI8", 1, 1, [[1, 2]])[:-1], "incomplete complex value"),
+        ("ci12_half", data_packet("CI12", 1, 1, [[1, 2]])[:16] + bytes([1, 0]), "one 12-bit value is half a CI12 element"),
         ("ext_padding_not_zero", ts[:41] + bytes([1]) + ts[42:], "extension padding not zero"),
         ("unknown_critical_ext", good[:1] + bytes([1]) + good[2:16] + struct.pack("<HHH", 4, 0x8099, 0) + bytes(2) + good[16:],
          "unknown critical extension"),
