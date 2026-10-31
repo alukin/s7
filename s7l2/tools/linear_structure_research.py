@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import importlib.metadata
 import json
 import math
 import platform
@@ -350,7 +351,8 @@ def run(output: Path, plots: bool = True) -> dict:
                     source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                     generated_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
                     precision="IEEE-754 binary64", python=sys.version.split()[0], numpy=np.__version__,
-                    scipy=scipy.__version__, platform=platform.platform(),
+                    scipy=scipy.__version__, matplotlib=importlib.metadata.version("matplotlib") if plots else None,
+                    platform=platform.platform(),
                     tolerances=dict(stability_radius=1e-10,
                                     cancellation="256 eps scaled by inverse pole separation; sqrt(eps) floor",
                                     repeated_root_discriminant="64 eps max(1, ||M||²)"),
