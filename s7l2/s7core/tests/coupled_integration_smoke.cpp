@@ -250,6 +250,29 @@ void gauss_equilibrium_scaling() {
         require(runtime.numerical_diagnostics().failed_steps == 0,
                 "Gauss charging must not fail at the residual roundoff floor");
     }
+
+    // A derivative near one on a million-unit state needs a Jacobian probe
+    // large enough to survive rounding after multiplication by h*a_ij.
+    constexpr double equilibrium = 1e6, h = .001, tau = .0001;
+    const double initial = equilibrium + 1e-4;
+    s7::Schema stiff("gauss_large_state_small_derivative");
+    stiff.set_rate(s7::Rate::from_seconds(h));
+    stiff.add_element(s7::make_element_spec("x", *gauss, {{"initial_value", initial}}));
+    stiff.add_element("equilibrium", [=] { return std::make_unique<s7::Constant>(equilibrium); });
+    stiff.add_element("difference", [] { return std::make_unique<s7::Adder>(std::vector<double>{1, -1}); });
+    stiff.add_element("rate", [=] { return std::make_unique<s7::Gain>(1/tau); });
+    stiff.connect("equilibrium", 0, "difference", 0);
+    stiff.connect("x", 0, "difference", 1);
+    stiff.connect("difference", 0, "rate", 0);
+    stiff.connect("rate", 0, "x", 0);
+    s7::NodeRuntime stiff_runtime(s7::Compiler::compile(stiff));
+    stiff_runtime.step(); stiff_runtime.step();
+    const double z = -h/tau;
+    const double pole = (1+z/2+z*z/12)/(1-z/2+z*z/12);
+    near(stiff_runtime.real_output_of("x"), equilibrium+pole*(initial-equilibrium), 2e-6,
+         "Gauss large-state Jacobian transition");
+    require(stiff_runtime.numerical_diagnostics().jacobian_probes > 0,
+            "Large-state case must exercise finite-difference Newton probes");
 }
 
 void energy_phase_and_order() {
