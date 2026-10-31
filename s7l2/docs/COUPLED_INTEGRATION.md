@@ -33,7 +33,8 @@ In C++, construct `GaussLegendreIntegrator(dt, initial)` or
 `EulerIntegrator(dt, initial, substeps)` in an ordinary `Schema` to declare
 an explicit rate, or pass `std::nullopt` for a rate-following element. `Compiler`
 then identifies the region and `NodeRuntime::step()` executes it. The public
-`NodeRuntime::numerical_diagnostics()` reports accepted physical steps,
+`NodeRuntime::numerical_diagnostics()` reports accepted numerical-domain samples
+(counted once per domain even when several regions are solved),
 numerical failures, base/trial derivative-vector evaluations, pure-element
 evaluations, stage residuals, Jacobian probes, line-search trials, Newton
 iterations, the last normalized residual, and a numerical scratch **payload
@@ -88,13 +89,15 @@ external I/O is performed.
 
 ## Eligible regions and failures
 
-The compiler forms a connected numerical region from selected F64 causal
+The compiler forms a connected numerical region within one rate domain from selected F64 causal
 memory states and derivative dependencies through built-in F64 `Gain`,
 `Adder`, and `Multiply`. It retains the normal compiled causal order. A
 one-way dependency between states with the same method and configuration
 belongs to the same region; disconnected systems are solved separately.
 Regions with different methods or configurations can supply one-way held
-inputs to each other. Other memory outputs can also be held inputs, but a
+inputs to each other. A Resampler can supply a held input from another rate
+domain; its input domain steps first under the normal domain scheduler.
+Other memory outputs can also be held inputs, but a
 feedback cycle crossing policies or a normal Euler/trapezoid state is a
 validation error. Stateful direct feedthrough, nested execution, unknown
 plugin operations, I/O, and unsupported pure elements **inside the varying
@@ -125,7 +128,7 @@ shared, but no trapezoid tolerance or publication rule changed.
 `s7core_coupled_integration_smoke` uses actual compiled graphs and independent
 closed forms/Padé matrices for oscillator, RC and RLC. It checks Euler
 fine-step equivalence for `m=1,2,4,8,16,32`, fourth-order refinement,
-quadratic energy, phase, ordering, region boundaries, diagram/registry
+quadratic energy, phase, ordering, region and rate-domain boundaries, diagram/registry
 configuration, mixed-method validation, nonfinite/nonconvergent solves, and
 rollback/retry. Existing trapezoid and linear-example tests remain gates.
 
@@ -137,28 +140,28 @@ not settle to a trivial zero residual; accuracy uses a constant input and
 independent exact references. Thus the timing and error columns describe
 different input traces, and short timings are directional rather than a
 throughput guarantee. Results on the Linux/GCC 16.2.1 host at code revision
-`b68aeea`, after the final rebase:
+`cde4b6b`, after the rate-domain rebase:
 
 | Model, outer `h` | Method | Maximum state error, constant input | Median wall time/step, alternating input | Derivative vectors/step, alternating input |
 |---|---|---:|---:|---:|
-| RC charge, `.5 s` | Euler | .117879 | .094 µs | uninstrumented |
-| RC charge, `.5 s` | Euler `m=32` | .002893 | .452 µs | 32 |
-| RC charge, `.5 s` | Trapezoid | .007879 | .300 µs | uninstrumented |
-| RC charge, `.5 s` | Gauss–Legendre | 3.24105e−5 | .375 µs | 15 |
-| RLC `R=1`, `.2 s` | Euler | .279358 | .054 µs | uninstrumented |
-| RLC `R=1`, `.2 s` | Euler `m=32` | .004788 | .537 µs | 32 |
+| RC charge, `.5 s` | Euler | .117879 | .097 µs | uninstrumented |
+| RC charge, `.5 s` | Euler `m=32` | .002893 | .458 µs | 32 |
+| RC charge, `.5 s` | Trapezoid | .007879 | .301 µs | uninstrumented |
+| RC charge, `.5 s` | Gauss–Legendre | 3.24105e−5 | .368 µs | 15 |
+| RLC `R=1`, `.2 s` | Euler | .279358 | .051 µs | uninstrumented |
+| RLC `R=1`, `.2 s` | Euler `m=32` | .004788 | .540 µs | 32 |
 | RLC `R=1`, `.2 s` | Trapezoid | .009451 | .336 µs | uninstrumented |
-| RLC `R=1`, `.2 s` | Gauss–Legendre | 2.58046e−5 | .749 µs | 23 |
+| RLC `R=1`, `.2 s` | Gauss–Legendre | 2.58046e−5 | .765 µs | 23 |
 
-These correspond to about `.75 µs` of RC GL execution per simulated second
-and `3.75 µs` for RLC GL at the stated outer timesteps. The recorded GL
+These correspond to about `.74 µs` of RC GL execution per simulated second
+and `3.83 µs` for RLC GL at the stated outer timesteps. The recorded GL
 work averaged two Newton iterations per outer step for the alternating
 source. The numerical scratch payload estimate was 320 bytes for RC and
 656 bytes for RLC; this is not peak heap use.
 
 Connected-region splitting was measured before and after on the same
 Release benchmark. Sixteen **independent** RC states, previously grouped
-into one dense `32×32` Newton system, fell from `25.5 µs` to `5.47 µs`
+into one dense `32×32` Newton system, fell from `25.5 µs` to `5.63 µs`
 per outer step; estimated numerical scratch payload fell from 12,800 to
 5,120 bytes. A genuinely coupled `n`-state region still needs `2n`
 unknowns, a dense `2n×2n` Jacobian, roughly `2n` residual probes per
@@ -179,7 +182,8 @@ The CSV belongs in the ignored build directory, not in Git. The bundled
 diagrams are validated and executed by `s7tests_linear_examples_smoke`.
 
 On the feature branch, the Release headless `build-tests` target built and
-`ctest --test-dir build --output-on-failure -j4` passed **49/49** tests. The
+`ctest --test-dir build --output-on-failure -j4` passed **51/51** tests after
+the rate-domain rebase. The
 network tests require local socket access; their first sandboxed run failed
 with `open: Operation not permitted`, and all passed when rerun with loopback
 access. A separate Release Qt build passed the `s7studio_diagram`,
