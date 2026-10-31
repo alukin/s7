@@ -89,13 +89,23 @@ void Schema::step() {
 
     compiled_runtime_->step();
 
-    for (std::size_t index = 0; index < exposed_outputs_.size(); ++index) {
-        const auto& output = exposed_outputs_[index];
+    for (std::size_t index = 0; index < exposed_output_sources_.size(); ++index) {
         auto& value = exposed_output_values_[index];
-        if (output.type == SignalType::C64) {
-            value.complex = compiled_runtime_->complex_output_of(output.from_element, output.from_port);
-        } else {
+        const auto source = exposed_output_sources_[index];
+        switch (value.type) {
+        case SignalType::C64:
+            value.complex = bound_value<SignalType::C64>(source);
+            break;
+        case SignalType::F64:
+            value.scalar = bound_value<SignalType::F64>(source);
+            break;
+        default: {
+            // Exposed outputs carry only F64 and C64 values. Keep the
+            // existing failure for any other type: the typed read throws.
+            const auto& output = exposed_outputs_[index];
             value.scalar = compiled_runtime_->real_output_of(output.from_element, output.from_port);
+            break;
+        }
         }
     }
 }
@@ -193,6 +203,7 @@ std::optional<Rate> Schema::rate() const {
 
 void Schema::invalidate_compiled_runtime()
 {
+    exposed_output_sources_.clear();
     compiled_runtime_.reset();
     exposed_input_states_.clear();
 }
@@ -214,7 +225,10 @@ void Schema::ensure_compiled_runtime()
         executable.connect(connection.from_element, connection.from_port, connection.to_element, connection.to_port);
     }
 
-    exposed_input_states_.reserve(exposed_inputs_.size());
+    // Built locally and committed with the runtime, so a failed compilation
+    // leaves no input state or output binding from a discarded runtime.
+    std::vector<std::shared_ptr<void>> inputStates;
+    inputStates.reserve(exposed_inputs_.size());
     for (std::size_t index = 0; index < exposed_inputs_.size(); ++index) {
         const auto& input = exposed_inputs_[index];
         auto state = std::make_shared<ExposedInputState>(input.type);
@@ -223,7 +237,7 @@ void Schema::ensure_compiled_runtime()
             return std::make_unique<SchemaInputProxy>(type, state);
         });
         executable.connect(proxyId, 0, input.to_element, input.to_port);
-        exposed_input_states_.push_back(std::move(state));
+        inputStates.push_back(std::move(state));
     }
 
     auto graph = Compiler::compile(executable, random_uuid_string(), random_uuid_string());
@@ -235,14 +249,22 @@ void Schema::ensure_compiled_runtime()
     }
     auto runtime = std::make_unique<NodeRuntime>(std::move(graph));
 
+    // Resolve each exposed output once. The binding addresses storage of an
+    // element owned by runtime, which stays at its heap address until the
+    // runtime is destroyed, including across moves of this Schema.
+    std::vector<OutputBinding> outputSources;
+    outputSources.reserve(exposed_outputs_.size());
     for (const auto& output : exposed_outputs_) {
         const auto internalType = runtime->output_type_of(output.from_element, output.from_port);
         if (internalType != output.type) {
             throw std::runtime_error("Exposed output '" + output.name +
                                      "' type does not match internal source port type.");
         }
+        outputSources.push_back(runtime->output_binding_of(output.from_element, output.from_port));
     }
 
+    exposed_input_states_ = std::move(inputStates);
+    exposed_output_sources_ = std::move(outputSources);
     compiled_runtime_ = std::move(runtime);
 }
 

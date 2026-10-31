@@ -17,6 +17,8 @@ import subprocess
 
 
 CASES = ("gain64", "gain512", "wide512", "pendulum", "feedback", "nested", "trapezoid")
+NESTED_CASES = ("nested1", "nested", "nested64", "nested_large", "nested_multi", "nested_levels",
+                "nested_feedback", "nested_trapezoid")
 METRICS = ("compile_us", "init_us", "avg_ns", "steps_per_sec", "p50_ns", "p99_ns", "rss_delta_bytes")
 
 
@@ -37,12 +39,16 @@ def main():
     parser.add_argument("--optimized-lib-dir", default="")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--steps", type=int, default=20000)
+    parser.add_argument("--cases", default="default",
+                        help="'default', 'nested', or a comma-separated list of case names")
     args = parser.parse_args()
     if args.repeats < 1 or args.steps < 1000:
         parser.error("repeats must be positive and steps must be at least 1000")
 
+    cases = {"default": CASES, "nested": NESTED_CASES}.get(args.cases, tuple(args.cases.split(",")))
+
     print("case,version,compile_us,init_us,avg_ns,steps_per_sec,p50_ns,p99_ns,rss_delta_bytes,checksum")
-    for case in CASES:
+    for case in cases:
         values = {"before": [], "after": []}
         for repetition in range(args.repeats):
             order = ("before", "after") if repetition % 2 == 0 else ("after", "before")

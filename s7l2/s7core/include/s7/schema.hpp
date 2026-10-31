@@ -106,6 +106,10 @@ private:
     std::deque<ExposedOutput> exposed_outputs_;
     std::vector<std::shared_ptr<void>> exposed_input_states_;
     std::deque<ExposedOutputValue> exposed_output_values_;
+    // Internal output storage of each exposed output, parallel to
+    // exposed_outputs_. Resolved with compiled_runtime_ and pointing into
+    // elements it owns, so it is replaced and cleared together with it.
+    std::vector<OutputBinding> exposed_output_sources_;
     std::unique_ptr<NodeRuntime> compiled_runtime_;
 };
 
