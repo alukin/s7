@@ -208,7 +208,8 @@ s7::Schema rate_graph(double inner_dt) {
 void nested_schema_rates() {
     // 100 Hz parent around a nested schema whose inner integrator runs at 1 kHz.
     const auto error = error_of([] { (void)s7::Compiler::compile(rate_graph(0.001)); });
-    require(error.find("parent graph rate") != std::string::npos, "Nested rate mismatch accepted: " + error);
+    // Flattened (ADR-024), the inner integrator is checked like any element.
+    require(error.find("Rate conflict: 'child/i' declares 1000 Hz") != std::string::npos, "Nested rate mismatch accepted: " + error);
     s7::NodeRuntime runtime(s7::Compiler::compile(rate_graph(0.01)));
     runtime.set_model_time_rate(s7::Rate::from_hz(100));
     runtime.step();

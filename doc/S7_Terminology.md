@@ -248,7 +248,7 @@ Examples:
 - Delay
 - PreviousValue
 
-State-holding Elements with direct feedthrough (Accumulator, TrapezoidIntegrator, FIR/IIR filters, nested Schemas) are not causal memory; EulerIntegrator (forward Euler) is.
+State-holding Elements with direct feedthrough (Accumulator, sampled-mode TrapezoidIntegrator, FIR/IIR filters) are not causal memory; EulerIntegrator (forward Euler) is. A nested Schema is neither as a whole: it behaves like its inlined contents, so each of its paths has the feedthrough of the Elements on it ([ADR-024](S7_Architectural_Decisions.md#adr-024)).
 
 Causal memory allows valid cycles.
 

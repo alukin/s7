@@ -294,16 +294,52 @@ public:
 
         for (const auto& [id, counts] : input_connection_count) {
             for (std::size_t port = 0; port < counts.size(); ++port) {
+                const auto input = input_name(instances, id, port);
                 if (counts[port] == 0) {
-                    errors.emplace_back("Input port " + std::to_string(port) + " of '" + id + "' is unconnected.");
+                    errors.emplace_back(input + " is unconnected.");
                 } else if (counts[port] > 1) {
-                    errors.emplace_back("Input port " + std::to_string(port) + " of '" + id + "' has multiple drivers.");
+                    errors.emplace_back(input + " has multiple drivers.");
                 }
             }
         }
     }
 
 private:
+    static const detail::SchemaPort* schema_port(const InstanceMap& instances, const std::string& id)
+    {
+        const auto it = instances.find(id);
+        return it == instances.end() ? nullptr : dynamic_cast<const detail::SchemaPort*>(it->second);
+    }
+
+    // Ports named as the user wrote them: a flattened nested schema's
+    // exposed ports by the schema's id and port index or name.
+    static std::string input_name(const InstanceMap& instances, const std::string& id, const std::size_t port)
+    {
+        if (const auto* boundary = schema_port(instances, id)) {
+            return boundary->input() ? "Input port " + std::to_string(boundary->index()) + " of '" + boundary->owner() + "'"
+                                     : "Exposed output '" + boundary->name() + "' of '" + boundary->owner() + "'";
+        }
+        return "Input port " + std::to_string(port) + " of '" + id + "'";
+    }
+
+    static std::string source_label(const InstanceMap& instances, const std::string& id, const std::size_t port)
+    {
+        if (const auto* boundary = schema_port(instances, id)) {
+            return boundary->input() ? "exposed input '" + boundary->name() + "' of '" + boundary->owner() + "'"
+                                     : "'" + boundary->owner() + "' output port " + std::to_string(boundary->index());
+        }
+        return "'" + id + "' output port " + std::to_string(port);
+    }
+
+    static std::string target_label(const InstanceMap& instances, const std::string& id, const std::size_t port)
+    {
+        if (const auto* boundary = schema_port(instances, id)) {
+            return boundary->input() ? "'" + boundary->owner() + "' input port " + std::to_string(boundary->index())
+                                     : "exposed output '" + boundary->name() + "' of '" + boundary->owner() + "'";
+        }
+        return "'" + id + "' input port " + std::to_string(port);
+    }
+
     static void validate_port_types(const Connection& connection,
                                     const InstanceMap& instances,
                                     std::vector<std::string>& errors) {
@@ -327,10 +363,9 @@ private:
         }
 
 
-        errors.emplace_back("Port type mismatch: '" + connection.from_element + "' output port " +
-                            std::to_string(connection.from_port) + " (type " +
-                            std::string{signal_type_name(from_type)} + ") -> '" + connection.to_element +
-                            "' input port " + std::to_string(connection.to_port) + " (type " +
+        errors.emplace_back("Port type mismatch: " + source_label(instances, connection.from_element, connection.from_port) +
+                            " (type " + std::string{signal_type_name(from_type)} + ") -> " +
+                            target_label(instances, connection.to_element, connection.to_port) + " (type " +
                             std::string{signal_type_name(to_type)} + ").");
     }
 };
@@ -355,8 +390,18 @@ public:
 
 namespace detail {
 
-CheckedSchema check_schema(const Schema& schema) {
+CheckedSchema check_schema(const Schema& nested_schema) {
     CheckedSchema checked;
+    // Nested schemas are inlined first (ADR-024): every check below sees the
+    // flattened graph, so a nested schema behaves exactly like its contents.
+    auto flat = flatten_schema(nested_schema);
+    checked.flat = std::move(flat.schema);
+    checked.nested_outputs = std::move(flat.nested_outputs);
+    if (!flat.errors.empty()) {
+        checked.errors = std::move(flat.errors);
+        return checked;
+    }
+    const Schema& schema = *checked.flat;
     // Generic elements get their types first; the checks below then see
     // concrete elements only.
     auto resolved = TypeResolver::resolve(schema);

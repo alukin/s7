@@ -64,6 +64,10 @@ struct ExecutableGraph {
     // Rate-changing links between domains (indices into domains).
     std::vector<std::pair<std::size_t, std::size_t>> domain_links;
     std::vector<CoupledRegion> coupled_regions;
+    // Each flattened nested schema (ADR-024), by path id: the element output
+    // behind each of its exposed outputs, so its outputs stay addressable
+    // although the schema itself is not an element of this graph.
+    std::unordered_map<std::string, std::vector<std::pair<std::string, std::size_t>>> output_aliases;
 };
 
 } // namespace s7

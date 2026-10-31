@@ -569,10 +569,22 @@ const std::string& NodeRuntime::element_id_of_instance_uuid(const std::string& e
     return it->second;
 }
 
+std::pair<std::string, std::size_t> NodeRuntime::aliased_output(const std::string& element_id, const std::size_t port) const {
+    const auto alias = graph_.output_aliases.find(element_id);
+    if (alias == graph_.output_aliases.end()) {
+        throw std::out_of_range("Unknown element output requested: '" + element_id + "'.");
+    }
+    if (port >= alias->second.size()) {
+        throw std::out_of_range("Output port out of range for element '" + element_id + "'.");
+    }
+    return alias->second[port];
+}
+
 OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std::size_t port) const {
     const auto element_it = graph_.elements.find(element_id);
     if (element_it == graph_.elements.end()) {
-        throw std::out_of_range("Unknown element output requested: '" + element_id + "'.");
+        const auto [source, source_port] = aliased_output(element_id, port);
+        return output_binding_of(source, source_port);
     }
 
     const auto outputs = element_it->second->outputs();
@@ -586,7 +598,8 @@ OutputBinding NodeRuntime::output_binding_of(const std::string& element_id, std:
 SignalType NodeRuntime::output_type_of(const std::string& element_id, std::size_t port) const {
     const auto element_it = graph_.elements.find(element_id);
     if (element_it == graph_.elements.end()) {
-        throw std::out_of_range("Unknown element output requested: '" + element_id + "'.");
+        const auto [source, source_port] = aliased_output(element_id, port);
+        return output_type_of(source, source_port);
     }
 
     const auto ports = element_it->second->output_ports();
