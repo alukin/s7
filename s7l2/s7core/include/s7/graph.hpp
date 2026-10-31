@@ -6,6 +6,7 @@
 
 #include "s7/element.hpp"
 #include "s7/rate.hpp"
+#include "s7/coupled_integration.hpp"
 
 #include <memory>
 #include <string>
@@ -28,6 +29,16 @@ struct RateDomain {
 
 
 struct ExecutableGraph {
+    struct CoupledRegion {
+        CoupledMethod method{CoupledMethod::None};
+        Rate rate;
+        double step_seconds{};
+        int substeps{1};
+        std::vector<std::string> state_ids;
+        std::vector<double*> states;
+        std::vector<const double*> derivatives;
+        std::vector<Element*> rhs_execution;
+    };
     std::string schema_name;
     std::string runtime_instance_uuid;
     std::string schema_instance_uuid;
@@ -51,6 +62,7 @@ struct ExecutableGraph {
     std::vector<RateDomain> domains;
     // Rate-changing links between domains (indices into domains).
     std::vector<std::pair<std::size_t, std::size_t>> domain_links;
+    std::vector<CoupledRegion> coupled_regions;
 };
 
 } // namespace s7

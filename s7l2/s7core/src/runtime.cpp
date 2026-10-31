@@ -5,10 +5,42 @@
 
 #include <algorithm>
 #include <cstring>
+#include <cmath>
 #include <stdexcept>
 #include <limits>
 
 namespace s7 {
+
+void NodeRuntime::TrialRegion::add_output(void* value_ptr, std::size_t bytes) {
+    if (bytes > 32) throw std::invalid_argument("Numerical trial output exceeds snapshot storage.");
+    outputs.push_back({.value_ptr=value_ptr, .bytes=bytes});
+}
+
+void NodeRuntime::TrialRegion::capture() {
+    for (auto& output : outputs) std::memcpy(output.base.data(), output.value_ptr, output.bytes);
+}
+
+void NodeRuntime::TrialRegion::restore() noexcept {
+    for (auto& output : outputs) std::memcpy(output.value_ptr, output.base.data(), output.bytes);
+}
+
+void NodeRuntime::TrialRegion::replay(std::size_t* evaluated) {
+    for (auto* element : rhs_execution) {
+        element->step();
+        if (evaluated) ++*evaluated;
+    }
+}
+
+void NodeRuntime::CoupledStage::prepare_storage() {
+    const auto n = region.states.size(), d = 2*n;
+    base.resize(n); f0.resize(n); current.resize(n); endpoint.resize(n);
+    stage1.resize(n); stage2.resize(n); f1.resize(n); f2.resize(n);
+    k.resize(d); residual.resize(d); displaced.resize(d); candidate.resize(d);
+    candidate_residual.resize(d); jacobian.resize(d*d); rhs.resize(d);
+    delta.resize(d); row_scale.resize(d);
+    diagnostics.scratch_payload_bytes = sizeof(double)*(8*n + 8*d + d*d) +
+        trial.outputs.size()*sizeof(TrialRegion::Output);
+}
 
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
 {
@@ -29,6 +61,15 @@ NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(ex
             state.captures = domain.captures;
             domains_.push_back(std::move(state));
         }
+    }
+    for (auto& region : graph_.coupled_regions) {
+        auto domain = std::ranges::find_if(domains_, [&](const DomainState& state) {
+            return state.rate == region.rate;
+        });
+        if (domain == domains_.end()) throw std::logic_error("Compiled coupled region has no rate domain.");
+        CoupledStage stage;
+        stage.region = std::move(region);
+        domain->coupled_stages.push_back(std::move(stage));
     }
     for (auto& domain : domains_) build_domain(domain);
 }
@@ -53,7 +94,7 @@ void NodeRuntime::build_domain(DomainState& domain)
         if (implicit) {
             domain.trapezoids.push_back({integration, domain.memory_output_ranges.back()});
             for (const auto& port : ports) {
-                domain.trial_outputs.push_back({port.value_ptr, signal_type_info(port.type).storage_bytes, {}});
+                domain.trapezoid_trial.add_output(port.value_ptr, signal_type_info(port.type).storage_bytes);
             }
         }
     }
@@ -68,23 +109,39 @@ void NodeRuntime::build_domain(DomainState& domain)
     }
     for (auto* element : domain.trapezoid_rhs) {
         for (const auto& port : element->output_ports()) {
-            domain.trial_outputs.push_back({port.value_ptr, signal_type_info(port.type).storage_bytes, {}});
+            domain.trapezoid_trial.add_output(port.value_ptr, signal_type_info(port.type).storage_bytes);
         }
+    }
+    domain.trapezoid_trial.rhs_execution = domain.trapezoid_rhs;
+    for (auto& stage : domain.coupled_stages) {
+        stage.trial.rhs_execution = stage.region.rhs_execution;
+        for (auto* value : stage.region.states) {
+            const auto it = std::ranges::find_if(domain.memory_outputs, [value](const MemoryOutput& output) {
+                return output.value_ptr == value;
+            });
+            if (it == domain.memory_outputs.end()) throw std::logic_error("Compiled numerical state has no memory output in its rate domain.");
+            stage.memory_output_indices.push_back(static_cast<std::size_t>(it-domain.memory_outputs.begin()));
+            stage.trial.add_output(value, sizeof(double));
+            const auto memory_index = std::ranges::find_if(domain.memory_output_ranges, [index=stage.memory_output_indices.back()]
+                (const MemoryOutputRange& range) { return range.begin <= index && index < range.end; });
+            domain.implicit_memory[static_cast<std::size_t>(memory_index-domain.memory_output_ranges.begin())] = true;
+        }
+        for (auto* element : stage.region.rhs_execution)
+            for (const auto& port : element->output_ports())
+                stage.trial.add_output(port.value_ptr, signal_type_info(port.type).storage_bytes);
+        stage.prepare_storage();
     }
 }
 
 void NodeRuntime::stage_trapezoids(DomainState& domain) {
     if (domain.trapezoids.empty()) return;
-    for (auto& output : domain.trial_outputs) std::memcpy(output.base.data(), output.value_ptr, output.bytes);
-    const auto restore = [&domain] {
-        for (auto& output : domain.trial_outputs) std::memcpy(output.value_ptr, output.base.data(), output.bytes);
-    };
+    domain.trapezoid_trial.capture();
     try {
         for (auto& stage : domain.trapezoids) stage.integration->prepare_trapezoid_step();
         for (auto& stage : domain.trapezoids) stage.integration->publish_trapezoid_candidate();
         constexpr int max_iterations = 64;
         for (int iteration = 0; iteration < max_iterations; ++iteration) {
-            for (auto* element : domain.trapezoid_rhs) element->step();
+            domain.trapezoid_trial.replay();
             bool converged = true;
             for (auto& stage : domain.trapezoids) {
                 converged = stage.integration->prepare_trapezoid_correction() && converged;
@@ -97,15 +154,183 @@ void NodeRuntime::stage_trapezoids(DomainState& domain) {
                         std::memcpy(output.staged[domain.staged_index ^ 1].data(), output.value_ptr, output.bytes);
                     }
                 }
-                restore();
+                domain.trapezoid_trial.restore();
                 return;
             }
         }
         throw std::runtime_error("Implicit TrapezoidIntegrator did not converge after 64 iterations; "
                                  "reduce dt (fixed-point solver requires a contractive step).");
     } catch (...) {
-        restore();
+        domain.trapezoid_trial.restore();
         throw;
+    }
+}
+
+namespace {
+double infinity_norm(const std::vector<double>& values) {
+    double maximum = 0;
+    for (const double value : values) maximum = std::max(maximum, std::abs(value));
+    return maximum;
+}
+
+void require_finite(const std::vector<double>& values, const char* context) {
+    for (const double value : values)
+        if (!std::isfinite(value)) throw std::runtime_error(std::string("Nonfinite ") + context + " in coupled integration.");
+}
+}
+
+void NodeRuntime::evaluate_derivative(CoupledStage& stage, const std::vector<double>& state,
+                                      std::vector<double>& result) {
+    require_finite(state, "trial state");
+    for (std::size_t i = 0; i < state.size(); ++i) *stage.region.states[i] = state[i];
+    stage.trial.replay(&stage.diagnostics.pure_element_evaluations);
+    for (std::size_t i = 0; i < result.size(); ++i) result[i] = *stage.region.derivatives[i];
+    require_finite(result, "trial derivative");
+    ++stage.diagnostics.trial_derivative_vectors;
+}
+
+void NodeRuntime::stage_residual(CoupledStage& stage, const std::vector<double>& k,
+                                 std::vector<double>& result) {
+    constexpr double a11 = .25, a12 = .25-0.28867513459481288225;
+    constexpr double a21 = .25+0.28867513459481288225, a22 = .25;
+    const auto n = stage.region.states.size();
+    const auto h = stage.region.step_seconds;
+    for (std::size_t i = 0; i < n; ++i) {
+        stage.stage1[i] = stage.base[i] + h*(a11*k[i]+a12*k[n+i]);
+        stage.stage2[i] = stage.base[i] + h*(a21*k[i]+a22*k[n+i]);
+    }
+    evaluate_derivative(stage, stage.stage1, stage.f1);
+    evaluate_derivative(stage, stage.stage2, stage.f2);
+    for (std::size_t i = 0; i < n; ++i) {
+        result[i] = k[i]-stage.f1[i];
+        result[n+i] = k[n+i]-stage.f2[i];
+    }
+    require_finite(result, "stage residual");
+    ++stage.diagnostics.stage_residual_evaluations;
+}
+
+void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
+    const auto n = stage.region.states.size(), d = 2*n;
+    for (std::size_t i = 0; i < n; ++i) stage.k[i] = stage.k[n+i] = stage.f0[i];
+    stage_residual(stage, stage.k, stage.residual);
+    constexpr double atol = 1e-13, rtol = 1e-13;
+    constexpr int max_iterations = 12;
+    for (int iteration = 0;; ++iteration) {
+        const double normalized = infinity_norm(stage.residual) /
+            (atol + rtol*std::max(1., infinity_norm(stage.k)));
+        if (!std::isfinite(normalized)) throw std::runtime_error("Nonfinite Gauss-Legendre normalized residual.");
+        stage.diagnostics.last_normalized_residual = normalized;
+        if (normalized <= 1) {
+            for (std::size_t i = 0; i < n; ++i)
+                stage.current[i] = stage.base[i] + stage.region.step_seconds*(stage.k[i]+stage.k[n+i])/2;
+            require_finite(stage.current, "Gauss-Legendre endpoint");
+            return;
+        }
+        if (iteration == max_iterations)
+            throw std::runtime_error("Gauss-Legendre stage solve did not converge after 12 Newton iterations; residual=" +
+                                     std::to_string(normalized) + ".");
+        for (std::size_t col = 0; col < d; ++col) {
+            stage.candidate = stage.k;
+            const double epsilon = std::sqrt(std::numeric_limits<double>::epsilon())*(1+std::abs(stage.k[col]));
+            stage.candidate[col] += epsilon;
+            stage_residual(stage, stage.candidate, stage.displaced);
+            ++stage.diagnostics.jacobian_probes;
+            for (std::size_t row = 0; row < d; ++row)
+                stage.jacobian[row*d+col] = (stage.displaced[row]-stage.residual[row])/epsilon;
+        }
+        require_finite(stage.jacobian, "Gauss-Legendre Jacobian");
+        for (std::size_t row = 0; row < d; ++row) {
+            stage.rhs[row] = -stage.residual[row];
+            double scale = 0;
+            for (std::size_t col = 0; col < d; ++col)
+                scale = std::max(scale, std::abs(stage.jacobian[row*d+col]));
+            stage.row_scale[row] = scale;
+            if (!(scale > 0)) throw std::runtime_error("Singular Gauss-Legendre stage Jacobian.");
+        }
+        // Scaled partial pivoting: the threshold is relative to the row,
+        // rather than a fixed absolute number tied to one state scale.
+        for (std::size_t col = 0; col < d; ++col) {
+            std::size_t pivot = col;
+            for (std::size_t row = col+1; row < d; ++row)
+                if (std::abs(stage.jacobian[row*d+col])/stage.row_scale[row] >
+                    std::abs(stage.jacobian[pivot*d+col])/stage.row_scale[pivot]) pivot = row;
+            if (std::abs(stage.jacobian[pivot*d+col]) <=
+                64*std::numeric_limits<double>::epsilon()*stage.row_scale[pivot])
+                throw std::runtime_error("Ill-conditioned Gauss-Legendre stage Jacobian.");
+            if (pivot != col) {
+                for (std::size_t j = 0; j < d; ++j)
+                    std::swap(stage.jacobian[col*d+j], stage.jacobian[pivot*d+j]);
+                std::swap(stage.rhs[col], stage.rhs[pivot]);
+                std::swap(stage.row_scale[col], stage.row_scale[pivot]);
+            }
+            for (std::size_t row = col+1; row < d; ++row) {
+                const double factor = stage.jacobian[row*d+col]/stage.jacobian[col*d+col];
+                for (std::size_t j = col; j < d; ++j)
+                    stage.jacobian[row*d+j] -= factor*stage.jacobian[col*d+j];
+                stage.rhs[row] -= factor*stage.rhs[col];
+            }
+        }
+        for (std::size_t reverse = d; reverse > 0; --reverse) {
+            const auto row = reverse-1;
+            double value = stage.rhs[row];
+            for (std::size_t col = row+1; col < d; ++col) value -= stage.jacobian[row*d+col]*stage.delta[col];
+            stage.delta[row] = value/stage.jacobian[row*d+row];
+        }
+        require_finite(stage.delta, "Gauss-Legendre Newton correction");
+        bool reduced = false;
+        for (int search = 0; search < 10; ++search) {
+            const double factor = std::ldexp(1., -search);
+            for (std::size_t i = 0; i < d; ++i) stage.candidate[i] = stage.k[i]+factor*stage.delta[i];
+            stage_residual(stage, stage.candidate, stage.candidate_residual);
+            ++stage.diagnostics.line_search_trials;
+            if (infinity_norm(stage.candidate_residual) < infinity_norm(stage.residual)) {
+                stage.k.swap(stage.candidate);
+                stage.residual.swap(stage.candidate_residual);
+                reduced = true;
+                break;
+            }
+        }
+        ++stage.diagnostics.solver_iterations;
+        if (!reduced) throw std::runtime_error("Gauss-Legendre line search did not reduce the stage residual.");
+    }
+}
+
+void NodeRuntime::stage_coupled(DomainState& domain) {
+    const auto next = domain.staged_index ^ 1;
+    for (auto& stage : domain.coupled_stages) {
+        stage.trial.capture();
+        try {
+            const auto n = stage.region.states.size();
+            for (std::size_t i = 0; i < n; ++i) {
+                stage.base[i] = *stage.region.states[i];
+                stage.f0[i] = *stage.region.derivatives[i];
+            }
+            require_finite(stage.base, "published state");
+            require_finite(stage.f0, "base derivative");
+            ++stage.diagnostics.base_derivative_vectors;
+            if (stage.region.method == CoupledMethod::EulerSubsteps) {
+                stage.current = stage.base;
+                const double delta = stage.region.step_seconds/stage.region.substeps;
+                for (int j = 0; j < stage.region.substeps; ++j) {
+                    if (j > 0) evaluate_derivative(stage, stage.current, stage.f1);
+                    const auto& f = j == 0 ? stage.f0 : stage.f1;
+                    for (std::size_t i = 0; i < n; ++i) stage.endpoint[i] = stage.current[i]+delta*f[i];
+                    require_finite(stage.endpoint, "Euler substep endpoint");
+                    stage.current.swap(stage.endpoint);
+                }
+            } else {
+                solve_gauss_legendre(stage);
+            }
+            stage.trial.restore();
+            for (std::size_t i = 0; i < n; ++i) {
+                auto& output = domain.memory_outputs[stage.memory_output_indices[i]];
+                std::memcpy(output.staged[next].data(), &stage.current[i], sizeof(double));
+            }
+        } catch (...) {
+            stage.trial.restore();
+            ++stage.diagnostics.failed_steps;
+            throw;
+        }
     }
 }
 
@@ -240,6 +465,7 @@ void NodeRuntime::step_domain(DomainState& domain) {
     }
     try {
         for (auto* element : domain.causal) element->step();
+        stage_coupled(domain);
         stage_trapezoids(domain);
     } catch (...) {
         roll_back_step(domain, publishing);
@@ -366,6 +592,28 @@ ComplexValue NodeRuntime::complex_output_of_instance_uuid(const std::string& ele
 
 std::size_t NodeRuntime::step_count() const {
     return step_count_;
+}
+
+NodeRuntime::NumericalDiagnostics NodeRuntime::numerical_diagnostics() const {
+    NumericalDiagnostics total;
+    for (const auto& domain : domains_) {
+        if (!domain.coupled_stages.empty()) total.accepted_steps += domain.steps;
+        for (const auto& stage : domain.coupled_stages) {
+            const auto& value = stage.diagnostics;
+            total.failed_steps += value.failed_steps;
+            total.base_derivative_vectors += value.base_derivative_vectors;
+            total.trial_derivative_vectors += value.trial_derivative_vectors;
+            total.pure_element_evaluations += value.pure_element_evaluations;
+            total.stage_residual_evaluations += value.stage_residual_evaluations;
+            total.jacobian_probes += value.jacobian_probes;
+            total.line_search_trials += value.line_search_trials;
+            total.solver_iterations += value.solver_iterations;
+            total.last_normalized_residual = std::max(total.last_normalized_residual, value.last_normalized_residual);
+            total.scratch_payload_bytes += value.scratch_payload_bytes;
+        }
+    }
+    // Count domain samples once per domain, even when it solves several regions.
+    return total;
 }
 
 } // namespace s7

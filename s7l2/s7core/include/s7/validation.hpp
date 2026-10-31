@@ -5,6 +5,7 @@
 #define S7CORE_INCLUDE_S7_VALIDATION_HPP
 
 #include "s7/schema.hpp"
+#include "s7/coupled_integration.hpp"
 
 #include <memory>
 #include <string>
@@ -31,6 +32,15 @@ namespace detail {
 // once (elements[i] belongs to schema.elements()[i]; null where creation
 // failed). The compiler builds the graph from these instances.
 struct CheckedSchema {
+    struct CoupledRegion {
+        CoupledMethod method{CoupledMethod::None};
+        Rate rate;
+        double step_seconds{};
+        int substeps{1};
+        std::vector<std::string> states;
+        std::vector<Connection> derivative_connections;
+        std::vector<std::string> rhs;
+    };
     std::vector<std::string> errors;
     std::vector<std::unique_ptr<Element>> elements;
     std::vector<std::string> trapezoid_rhs;
@@ -47,6 +57,7 @@ struct CheckedSchema {
         std::size_t output{};
     };
     std::vector<DomainLink> domain_links;
+    std::vector<CoupledRegion> coupled_regions;
 };
 [[nodiscard]] CheckedSchema check_schema(const Schema& schema);
 

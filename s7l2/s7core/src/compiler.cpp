@@ -232,6 +232,27 @@ ExecutableGraph Compiler::compile(const Schema& schema,
         executable_graph.domain_links.emplace_back(link.input, link.output);
     }
     executable_graph.rates = std::move(checked.rates);
+    for (const auto& checked_region : checked.coupled_regions) {
+        ExecutableGraph::CoupledRegion region;
+        region.method = checked_region.method;
+        region.rate = checked_region.rate;
+        region.step_seconds = checked_region.step_seconds;
+        region.substeps = checked_region.substeps;
+        region.state_ids = checked_region.states;
+        for (const auto& id : checked_region.states) {
+            auto* element = executable_graph.elements.at(id).get();
+            region.states.push_back(static_cast<double*>(element->output_ports()[0].value_ptr));
+        }
+        for (const auto& edge : checked_region.derivative_connections) {
+            const auto* source = executable_graph.elements.at(edge.from_element).get();
+            region.derivatives.push_back(static_cast<const double*>(source->output_ports()[edge.from_port].value_ptr));
+        }
+        const std::unordered_set<std::string> rhs(checked_region.rhs.begin(), checked_region.rhs.end());
+        for (const auto& id : executable_graph.causal_order) {
+            if (rhs.contains(id)) region.rhs_execution.push_back(executable_graph.elements.at(id).get());
+        }
+        executable_graph.coupled_regions.push_back(std::move(region));
+    }
     return executable_graph;
 }
 
