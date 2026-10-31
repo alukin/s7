@@ -10,7 +10,7 @@ from linear_structure_research import (System, analytical_output, analyze, exact
                                        frequency_response, continuous_frequency_response,
                                        lc, mechanical,
                                        rc, rlc, sequential_iteration_matrix,
-                                       simultaneous_residual, simulate, transfer,
+                                       simultaneous_residual, simulate, trajectory, transfer,
                                        transition)
 from numerical_feedback_research import Graph, model, transition as graph_transition
 
@@ -81,6 +81,11 @@ class LinearStructureTests(unittest.TestCase):
             self.assertAlmostEqual(result["energy_ratio"], radius**20, delta=1e-12)
         self.assertTrue(any(p["stability"] == "unstable" for p in analyze(system, 2.5, "symplectic")["poles"]))
         self.assertEqual(analyze(system, 1., "forward")["poles"][0]["stability"], "unstable")
+        _, states, _ = trajectory(system, h, 100., "symplectic", 0, initial, "zero")
+        modified_energy = 0.5*(states[:, 0]**2+states[:, 1]**2-h*states[:, 0]*states[:, 1])
+        self.assertLess(np.max(np.abs(modified_energy-modified_energy[0])), 2e-12)
+        physical_energy = 0.5*np.sum(states**2, axis=1)
+        self.assertLess(np.max(physical_energy)-np.min(physical_energy), 0.5)
 
     def test_rlc_regimes_critical_multiplicity_and_equivalence(self):
         for R, classification in ((1., "underdamped"), (4., "critical"), (6., "overdamped")):

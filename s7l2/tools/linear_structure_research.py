@@ -461,6 +461,9 @@ def make_plots(output: Path, matrix: list[dict]) -> None:
     records = [r for r in matrix if r["model"] == "LC" and r["h"] == 0.5 and r["method"] == "finite"]
     fig, ax = plt.subplots()
     ax.add_patch(Circle((0, 0), 1, fill=False, linestyle="--", color="grey"))
+    ax.plot([max(r["poles"], key=lambda p: p["imag"])["real"] for r in records],
+            [max(r["poles"], key=lambda p: p["imag"])["imag"] for r in records],
+            color="grey", linewidth=1)
     for r in records:
         ax.scatter([p["real"] for p in r["poles"]], [p["imag"] for p in r["poles"]], label=f"k={r['corrections']}")
     ax.set(xlabel="Re(z)", ylabel="Im(z)", title="LC finite corrections, h omega0=0.5")
@@ -469,13 +472,13 @@ def make_plots(output: Path, matrix: list[dict]) -> None:
 
     # Phase, damping, and timestep trajectories use the exact sampled poles
     # as the reference; plotted branches are the positive-imaginary poles.
-    for metric, ylabel in (("frequency", "Oscillation frequency (rad/s)"),
-                          ("damping", "Numerical damping (1/s)")):
+    for metric, ylabel, reference_value in (("frequency", "Frequency error (rad/s)", 1.),
+                                             ("damping", "Damping error (1/s)", 0.)):
         fig, ax = plt.subplots()
         for method in ("exact", "forward", "backward", "trapezoid", "symplectic"):
             subset = sorted((r for r in matrix if r["model"] == "LC" and r["method"] == method
                              and r["h"] <= 1.), key=lambda r: r["h"])
-            ax.plot([r["h"] for r in subset], [max(r["poles"], key=lambda p: p["imag"])[metric]
+            ax.plot([r["h"] for r in subset], [max(r["poles"], key=lambda p: p["imag"])[metric]-reference_value
                     for r in subset], marker="o", label=method)
         ax.set(xlabel="h omega0 (dimensionless; omega0=1 rad/s)", ylabel=ylabel,
                title=f"LC {metric} error versus step", xlim=(0, 1.05))
@@ -504,7 +507,7 @@ def make_plots(output: Path, matrix: list[dict]) -> None:
             t, _, y = trajectory(system, 0.2, duration, method, k, np.zeros(2), drive)
             ax.plot(t, y, label=f"{method} k={k}" if method == "finite" else method)
         ax.set(xlabel="Time (s)", ylabel="Capacitor voltage (V)",
-               title=f"RLC R=1 Ω, L=1 H, C=0.25 F: {drive} input, h=0.2 s")
+               title=f"RLC R=1 Ω, L=1 H, C=0.25 F: {'held sinusoid' if drive == 'sin' else 'step'} input, h=0.2 s")
         ax.grid(True); ax.legend(); fig.savefig(output/f"RLC_{drive}_response.png", dpi=150); plt.close(fig)
 
     fig, ax = plt.subplots()
