@@ -76,8 +76,10 @@ without changing production causal semantics.
 [real-graph C++ results](NUMERICAL_INTEGRATION_PHASE3_REPORT.md) and
 [compact reproducible summary](NUMERICAL_INTEGRATION_PHASE3_SUMMARY.json)
 compare coupled Euler substeps with two-stage Gauss–Legendre on the oscillator,
-RC and RLC. The new execution policy is research-only; the existing runtime
-and editable examples retain their documented methods.
+RC and RLC. The Phase 3 runner and its execution policy are research tools;
+this branch does not change production runtime behavior. The separate
+[production integration PR](https://github.com/alukin/s7/pull/8) adds opt-in
+Euler substeps and Gauss–Legendre with its own runtime contract and examples.
 
 Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/2int_osc_phase_portrait.md), with same-step state-pair and plot verification at 1/10/100 kHz. See also the [three-integrator helix with 3D Phase Trajectory](../examples/3int_helix_phase_trajectory.md), verified at 1/10 kHz.
 

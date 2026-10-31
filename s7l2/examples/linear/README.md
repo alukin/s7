@@ -165,16 +165,19 @@ discrete transitions, not about drawing order in Studio.
 **Construct.** Open the existing editable RC, RLC and mechanical diagrams
 above. For RLC and the mechanical analogue, map `q↔x`, `i↔v`, `L↔m`,
 `R↔b`, and `1/C↔stiffness`; map capacitor voltage `q/C` to spring force
-`stiffness*x` if comparing output waveforms. The diagrams use only production
-Euler and Euler–Cromer elements. The finite feedback-correction methods in
+`stiffness*x` if comparing output waveforms. The original Euler and symplectic
+diagrams use production Euler and Euler–Cromer elements. The finite
+feedback-correction methods in
 [Phase 2 research](../../docs/NUMERICAL_FEEDBACK_RESEARCH_PHASE2.md) are
 separate research-runner experiments, not editable S7 elements.
 The coupled Euler substeps and Gauss–Legendre stages in the
 [Phase 3 real-graph study](../../docs/NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
-also use a headless research execution policy, so the editable diagrams here
-still exercise only their production-supported methods. That study uses the
-same RC and RLC equations, plus the two-integrator oscillator, and includes
-tests that compare its Euler substeps with ordinary finer-step S7 execution.
+use a headless research execution policy. The separate
+[production integration PR](https://github.com/alukin/s7/pull/8) adds opt-in
+runtime methods and editable diagrams; the Phase 3 runner remains a research
+tool. That study uses the same RC and RLC equations, plus the two-integrator
+oscillator, and compares its Euler substeps with ordinary finer-step S7
+execution.
 
 **Simulate.** Compare the supplied 1 and 2 kHz runs, then deliberately enlarge
 `dt` in a copy of a diagram. Keep each element's `dt` consistent with the run
