@@ -86,6 +86,12 @@ enum class Feedthrough : std::uint8_t {
 class Element {
 public:
     virtual ~Element() = default;
+    // Declared because the virtual destructor suppresses the implicit moves;
+    // moving transfers port and binding storage without allocating.
+    Element(const Element&) = default;
+    Element& operator=(const Element&) = default;
+    Element(Element&&) noexcept = default;
+    Element& operator=(Element&&) noexcept = default;
 
     [[nodiscard]] std::string_view type_name() const { return type_name_; }
     // Stateless operations may be reevaluated at numerical trial states.

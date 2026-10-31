@@ -76,12 +76,13 @@ Schema::Schema(std::string name)
 }
 
 Schema::~Schema() = default;
-Schema::Schema(Schema&&) noexcept = default;
+Schema::Schema(Schema&&) = default;
 Schema& Schema::operator=(Schema&&) noexcept = default;
 
 void Schema::bind_inputs(std::span<const InputBinding> bindings)
 {
     Element::bind_inputs(bindings);
+    bound_input_count_ = bindings.size();
     ensure_compiled_runtime();
 }
 
@@ -216,6 +217,13 @@ void Schema::ensure_compiled_runtime()
 {
     if (compiled_runtime_) {
         return;
+    }
+    // Every exposed-input change invalidates the runtime, so checking here
+    // covers inputs exposed after binding and a schema never bound.
+    if (bound_input_count_ != exposed_inputs_.size()) {
+        throw std::logic_error("Schema '" + name_ + "' has " + std::to_string(exposed_inputs_.size()) +
+                               " exposed inputs but " + std::to_string(bound_input_count_) +
+                               " input bindings; call bind_inputs() after exposing inputs.");
     }
 
     Schema executable{name_};

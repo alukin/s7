@@ -38,7 +38,8 @@ class Schema : public Element {
 public:
     explicit Schema(std::string name);
     ~Schema();
-    Schema(Schema&&) noexcept;
+    // Not noexcept: moving the exposed-port deques may allocate.
+    Schema(Schema&&);
     Schema& operator=(Schema&&) noexcept;
     Schema(const Schema&) = delete;
     Schema& operator=(const Schema&) = delete;
@@ -111,6 +112,9 @@ private:
     // elements it owns, so it is replaced and cleared together with it.
     std::vector<OutputBinding> exposed_output_sources_;
     std::unique_ptr<NodeRuntime> compiled_runtime_;
+    // Input bindings given to the last bind_inputs(); step() reads one per
+    // exposed input, so exposing an input requires binding again.
+    std::size_t bound_input_count_{};
 };
 
 } // namespace s7

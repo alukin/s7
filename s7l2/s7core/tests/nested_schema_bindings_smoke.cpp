@@ -18,6 +18,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -400,6 +401,8 @@ void moves() {
 
     // The compiled runtime and its bindings move with the schema; state continues.
     s7::Schema constructed(std::move(first));
+    // NOLINTNEXTLINE(bugprone-use-after-move): the moved-from base is empty, not aliasing.
+    require(first.output_count() == 0 && constructed.output_count() == 1, "Moved-from schema kept its ports");
     for (int i = 3; i < 5; ++i) {
         constructed.step();
         require(f64_output(constructed, 0) == reference[static_cast<std::size_t>(i)], "After move construction");
@@ -502,6 +505,40 @@ void invalid_mappings() {
                    "Schema JSON with an I32 exposed input was accepted");
 }
 
+void input_binding_count() {
+    s7::Schema schema("standalone_inputs");
+    schema.set_rate(s7::Rate::from_hz(1));
+    schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
+    schema.add_element("zero", [] { return std::make_unique<s7::Constant>(0.0); });
+    schema.connect("zero", 0, "sum", 1);
+    schema.expose_input("a", s7::SignalType::F64, "sum", 0);
+    schema.expose_output("out", s7::SignalType::F64, "sum", 0);
+    require_throws([&] { schema.step(); }, "Stepped a schema whose exposed input was never bound");
+
+    const F64 a = 2.0;
+    bind_one(schema, a);
+    schema.step();
+    require(f64_output(schema, 0) == 2.0, "Bound schema output");
+
+    // Exposing another input needs a new bind_inputs() before stepping.
+    schema.add_element("sum2", [] { return std::make_unique<s7::Adder>(); });
+    schema.connect("sum", 0, "sum2", 0);
+    schema.expose_input("b", s7::SignalType::F64, "sum2", 1);
+    schema.expose_output("total", s7::SignalType::F64, "sum2", 0);
+    require_throws([&] { schema.step(); }, "Stepped with fewer bindings than exposed inputs");
+    const F64 b = 5.0;
+    const std::array<s7::InputBinding, 2> bindings{s7::bind_input<s7::SignalType::F64>(a),
+                                                   s7::bind_input<s7::SignalType::F64>(b)};
+    schema.bind_inputs(bindings);
+    schema.step();
+    require(f64_output(schema, 1) == 7.0, "Rebound schema output");
+}
+
+// Element moves no longer copy (and allocate) port and binding storage.
+static_assert(std::is_nothrow_move_constructible_v<s7::Gain>);
+static_assert(std::is_nothrow_move_assignable_v<s7::Gain>);
+static_assert(std::is_nothrow_move_assignable_v<s7::Schema>);
+
 class FaultingGain final : public s7::Element {
 public:
     explicit FaultingGain(const bool& fail) : Element("FaultingGain"), fail_(fail) {
@@ -595,6 +632,7 @@ int main() try {
     moves();
     repeated_construction();
     invalid_mappings();
+    input_binding_count();
     fault_rollback();
     std::cout << "Nested schema output bindings, order, types, timing, recompilation, moves and faults passed\n";
 } catch (const std::exception& error) {
