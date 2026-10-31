@@ -482,15 +482,11 @@ CheckedSchema check_schema(const Schema& schema) {
         // integrator state. Independent sources/other memory outputs are held
         // fixed for this interval; stateful direct-feedthrough dependencies
         // must never be stepped repeatedly by the numerical solver.
-        const auto parents = parents_of(schema);
         std::unordered_set<std::string> implicit;
         for (const auto& [id, instance] : instances) {
             const auto* integration = dynamic_cast<const TrapezoidIntegration*>(instance);
             if (integration && integration->implicit_trapezoid_enabled()) implicit.insert(id);
         }
-        if (!implicit.empty())
-            checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, false, checked.errors);
-
         // Group selected F64 states by method, outer rate and substep count.
         // Split disconnected states later: placing them in one dense GL
         // solve is equivalent mathematically but scales unnecessarily.
@@ -527,71 +523,149 @@ CheckedSchema check_schema(const Schema& schema) {
                     it->derivative_connections.push_back(edge);
             }
         }
-        const auto dependencies = memory_dependencies(instances, parents);
-        // A one-way derivative dependency still belongs to the same
-        // numerical stage, but disconnected systems must not inflate one
-        // dense 2n-by-2n Newton solve.
-        std::vector<CheckedSchema::CoupledRegion> connected_regions;
-        for (const auto& group : checked.coupled_regions) {
-            const std::unordered_set<std::string> members(group.states.begin(), group.states.end());
-            std::unordered_map<std::string, std::vector<std::string>> adjacent;
-            for (const auto& id : group.states) adjacent[id];
-            for (const auto& id : group.states) {
-                for (const auto& ancestor : dependencies.at(id)) {
-                    if (ancestor == id || !members.contains(ancestor)) continue;
-                    adjacent[id].push_back(ancestor);
-                    adjacent[ancestor].push_back(id);
+        if (!implicit.empty() || !checked.coupled_regions.empty()) {
+            const auto parents = parents_of(schema);
+            if (!implicit.empty())
+                checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, false, checked.errors);
+            if (!checked.coupled_regions.empty()) {
+                const auto dependencies = memory_dependencies(instances, parents);
+                AdjacencyMap memory_graph;
+                for (const auto& [id, ancestors] : dependencies) {
+                    auto& edges = memory_graph[id];
+                    edges.insert(edges.end(), ancestors.begin(), ancestors.end());
                 }
-            }
-            std::unordered_set<std::string> assigned;
-            for (const auto& seed : group.states) {
-                if (!assigned.insert(seed).second) continue;
-                std::vector<std::string> queue{seed};
-                for (std::size_t index = 0; index < queue.size(); ++index) {
-                    for (const auto& next : adjacent.at(queue[index]))
-                        if (assigned.insert(next).second) queue.push_back(next);
-                }
-                const std::unordered_set<std::string> component(queue.begin(), queue.end());
-                CheckedSchema::CoupledRegion region;
-                region.method = group.method;
-                region.rate = group.rate;
-                region.step_seconds = group.step_seconds;
-                region.substeps = group.substeps;
-                for (const auto& id : group.states) {
-                    if (!component.contains(id)) continue;
-                    region.states.push_back(id);
-                    for (const auto& edge : group.derivative_connections)
-                        if (edge.to_element == id) region.derivative_connections.push_back(edge);
-                }
-                connected_regions.push_back(std::move(region));
-            }
-        }
-        checked.coupled_regions = std::move(connected_regions);
-        for (auto& region : checked.coupled_regions) {
-            if (region.method == CoupledMethod::GaussLegendre2 && region.states.size() > 16)
-                checked.errors.emplace_back("Gauss-Legendre integration currently supports at most 16 F64 states per region.");
-            std::unordered_set<std::string> states(region.states.begin(), region.states.end());
-            region.rhs = trial_rhs(instances, parents, states, true, checked.errors);
-            for (const auto& id : region.states) {
-                for (const auto& external : dependencies.at(id)) {
-                    if (states.contains(external)) continue;
-                    std::unordered_set<std::string> seen;
-                    std::vector<std::string> stack{external};
-                    bool feedback = false;
-                    while (!stack.empty() && !feedback) {
-                        auto current = std::move(stack.back());
-                        stack.pop_back();
-                        if (!seen.insert(current).second) continue;
-                        if (states.contains(current)) {
-                            feedback = true;
-                        } else if (const auto it = dependencies.find(current); it != dependencies.end()) {
-                            stack.insert(stack.end(), it->second.begin(), it->second.end());
+                const auto components = GraphAlgorithms::strongly_connected_components(memory_graph);
+                std::unordered_map<std::string, std::size_t> component_of;
+                for (std::size_t index = 0; index < components.size(); ++index)
+                    for (const auto& id : components[index]) component_of.emplace(id, index);
+                std::unordered_map<std::string, std::size_t> group_of;
+                for (std::size_t index = 0; index < checked.coupled_regions.size(); ++index)
+                    for (const auto& id : checked.coupled_regions[index].states) group_of.emplace(id, index);
+                // One error per memory cycle that crosses a numerical policy.
+                for (const auto& component : components) {
+                    std::optional<std::size_t> selected;
+                    std::string selected_id, external;
+                    for (const auto& id : component) {
+                        if (const auto it = group_of.find(id); it != group_of.end()) {
+                            selected = it->second;
+                            selected_id = id;
+                            break;
                         }
                     }
-                    if (feedback)
-                        checked.errors.emplace_back("Coupled integration feedback at '" + id +
+                    if (!selected) continue;
+                    for (const auto& id : component) {
+                        const auto it = group_of.find(id);
+                        if (it == group_of.end() || it->second != *selected) {
+                            external = id;
+                            break;
+                        }
+                    }
+                    if (!external.empty())
+                        checked.errors.emplace_back("Coupled integration feedback at '" + selected_id +
                             "' crosses method or region through '" + external +
                             "'; use one numerical policy for all coupled states.");
+                }
+
+                std::vector<CheckedSchema::CoupledRegion> regions;
+                for (std::size_t group_index = 0; group_index < checked.coupled_regions.size(); ++group_index) {
+                    const auto& group = checked.coupled_regions[group_index];
+                    const auto append = [&](const std::unordered_set<std::string>& members,
+                                            const std::vector<std::string>& upstream) {
+                        CheckedSchema::CoupledRegion region;
+                        region.method = group.method;
+                        region.rate = group.rate;
+                        region.step_seconds = group.step_seconds;
+                        region.substeps = group.substeps;
+                        region.upstream_states = upstream;
+                        for (const auto& id : group.states) {
+                            if (!members.contains(id)) continue;
+                            region.states.push_back(id);
+                            for (const auto& edge : group.derivative_connections)
+                                if (edge.to_element == id) region.derivative_connections.push_back(edge);
+                        }
+                        regions.push_back(std::move(region));
+                    };
+                    if (group.method == CoupledMethod::GaussLegendre2) {
+                        // Each strongly coupled block needs one dense solve. A
+                        // one-way cascade is a DAG of small stage solves.
+                        std::vector<std::size_t> order;
+                        std::unordered_set<std::size_t> seen;
+                        for (const auto& id : group.states)
+                            if (const auto component = component_of.at(id); seen.insert(component).second)
+                                order.push_back(component);
+                        std::unordered_map<std::size_t, std::size_t> pending;
+                        std::unordered_map<std::size_t, std::vector<std::size_t>> dependents;
+                        for (const auto component : order) pending.emplace(component, 0);
+                        for (const auto& id : group.states) {
+                            const auto target = component_of.at(id);
+                            for (const auto& ancestor : dependencies.at(id)) {
+                                const auto other = group_of.find(ancestor);
+                                if (other == group_of.end() || other->second != group_index) continue;
+                                const auto source_component = component_of.at(ancestor);
+                                if (source_component == target) continue;
+                                auto& downstream = dependents[source_component];
+                                if (std::ranges::find(downstream, target) == downstream.end()) {
+                                    downstream.push_back(target);
+                                    ++pending[target];
+                                }
+                            }
+                        }
+                        std::vector<std::size_t> ready;
+                        for (const auto component : order)
+                            if (pending[component] == 0) ready.push_back(component);
+                        for (std::size_t index = 0; index < ready.size(); ++index) {
+                            const auto component = ready[index];
+                            std::unordered_set<std::string> members, upstream_set;
+                            for (const auto& id : group.states)
+                                if (component_of.at(id) == component) members.insert(id);
+                            for (const auto& id : members) {
+                                for (const auto& ancestor : dependencies.at(id)) {
+                                    const auto other = group_of.find(ancestor);
+                                    if (other != group_of.end() && other->second == group_index &&
+                                        component_of.at(ancestor) != component) upstream_set.insert(ancestor);
+                                }
+                            }
+                            std::vector<std::string> upstream;
+                            for (const auto& id : group.states)
+                                if (upstream_set.contains(id)) upstream.push_back(id);
+                            append(members, upstream);
+                            for (const auto downstream : dependents[component])
+                                if (--pending[downstream] == 0) ready.push_back(downstream);
+                        }
+                        if (ready.size() != order.size())
+                            throw std::logic_error("Memory SCC condensation must be acyclic.");
+                    } else {
+                        // Euler substeps need simultaneous values at every
+                        // internal substep, so retain weakly connected groups.
+                        const std::unordered_set<std::string> members(group.states.begin(), group.states.end());
+                        std::unordered_map<std::string, std::vector<std::string>> adjacent;
+                        for (const auto& id : group.states) adjacent[id];
+                        for (const auto& id : group.states) {
+                            for (const auto& ancestor : dependencies.at(id)) {
+                                if (ancestor == id || !members.contains(ancestor)) continue;
+                                adjacent[id].push_back(ancestor);
+                                adjacent[ancestor].push_back(id);
+                            }
+                        }
+                        std::unordered_set<std::string> assigned;
+                        for (const auto& seed : group.states) {
+                            if (!assigned.insert(seed).second) continue;
+                            std::vector<std::string> queue{seed};
+                            for (std::size_t index = 0; index < queue.size(); ++index)
+                                for (const auto& next : adjacent.at(queue[index]))
+                                    if (assigned.insert(next).second) queue.push_back(next);
+                            append(std::unordered_set<std::string>(queue.begin(), queue.end()), {});
+                        }
+                    }
+                }
+                checked.coupled_regions = std::move(regions);
+                for (auto& region : checked.coupled_regions) {
+                    if (region.method == CoupledMethod::GaussLegendre2 && region.states.size() > 16)
+                        checked.errors.emplace_back("Gauss-Legendre integration at '" + region.states.front() +
+                            "' currently supports at most 16 F64 states per strongly coupled region.");
+                    std::unordered_set<std::string> varying(region.states.begin(), region.states.end());
+                    varying.insert(region.upstream_states.begin(), region.upstream_states.end());
+                    region.rhs = trial_rhs(instances, parents, varying, true, checked.errors);
                 }
             }
         }

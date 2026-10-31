@@ -4,6 +4,7 @@
 #include "s7/builtin_element_registry.hpp"
 #include "s7/element_registry.hpp"
 #include "core_metadata.hpp"
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
@@ -45,6 +46,12 @@ int main()
         const auto params = s7::checked_params("test", library.at("EulerIntegrator"), {});
         // dt is a legacy field with no default: the integrator follows its domain's rate.
         require(!params.contains("dt") && params.at("initial_value") == 0, "Integrator defaults changed");
+        const auto& gauss_params = library.at("GaussLegendreIntegrator").parameters;
+        const auto gauss_dt = std::ranges::find_if(gauss_params, [](const auto& parameter) {
+            return parameter.name == "dt";
+        });
+        require(gauss_dt != gauss_params.end() && gauss_dt->legacy && gauss_dt->type == "value",
+                "Gauss dt must be hidden as a legacy value in Studio");
         rejects([&] { static_cast<void>(s7::checked_params("test", library.at("Convert"), {})); }, "required");
         rejects([&] { static_cast<void>(s7::checked_params("test", library.at("MinMax"), {{"input_count",1}})); }, "at least 2");
         rejects([&] { static_cast<void>(library.at("MissingFactory")); }, "MissingFactory");

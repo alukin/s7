@@ -37,8 +37,9 @@ then identifies the region and `NodeRuntime::step()` executes it. The public
 (counted once per domain even when several regions are solved),
 numerical failures, base/trial derivative-vector evaluations, pure-element
 evaluations, stage residuals, Jacobian probes, line-search trials, Newton
-iterations, the last normalized residual, and a numerical scratch **payload
-estimate**. Ordinary Euler and trapezoid have no fabricated method counters
+iterations, the maximum of each region's most recent normalized residual,
+and a numerical scratch **payload estimate**. Ordinary Euler and trapezoid
+have no fabricated method counters
 in that result. The estimate excludes allocator metadata/capacity and the
 compiled graph; it is not peak process memory.
 
@@ -89,11 +90,13 @@ external I/O is performed.
 
 ## Eligible regions and failures
 
-The compiler forms a connected numerical region within one rate domain from selected F64 causal
-memory states and derivative dependencies through built-in F64 `Gain`,
-`Adder`, and `Multiply`. It retains the normal compiled causal order. A
-one-way dependency between states with the same method and configuration
-belongs to the same region; disconnected systems are solved separately.
+The compiler groups selected F64 causal-memory states within one rate domain
+by derivative dependencies through built-in F64 `Gain`, `Adder`, and
+`Multiply`. It retains the normal compiled causal order. Gauss–Legendre
+solves strongly connected blocks in dependency order; a downstream block
+reads the upstream block's trial values at each stage. Euler substeps keep
+weakly connected states together so every internal substep is simultaneous.
+Disconnected systems are solved separately.
 Regions with different methods or configurations can supply one-way held
 inputs to each other. A Resampler can supply a held input from another rate
 domain; its input domain steps first under the normal domain scheduler.
@@ -105,10 +108,12 @@ trial cone** are rejected. They are never repeatedly stepped. Ordinary
 causal-cycle validation remains in force.
 
 Gauss–Legendre currently supports at most 16 F64 state components in one
-connected region. It uses damped Newton with a finite-difference Jacobian,
+strongly connected block. One-way cascades can have more total states. It
+uses damped Newton with a finite-difference Jacobian,
 scaled partial pivoting, a 10-trial backtracking line search, at most 12
-Newton iterations, and normalized infinity residual tolerance
-`atol=rtol=1e−13`. Work arrays are allocated with the region and reused
+Newton iterations, and a state-scaled residual tolerance with
+`atol=rtol=1e−13` plus a state-rounding floor. Work arrays are allocated with
+the block and reused
 across steps. Nonfinite values, a singular/ill-conditioned Jacobian, a
 nonreducing line search, or nonconvergence raise a runtime error naming the
 failure. The runtime restores published state and trial pure outputs, stages

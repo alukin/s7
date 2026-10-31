@@ -8,6 +8,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <limits>
+#include <unordered_map>
 
 namespace s7 {
 
@@ -39,7 +40,7 @@ void NodeRuntime::CoupledStage::prepare_storage() {
     candidate_residual.resize(d); jacobian.resize(d*d); rhs.resize(d);
     delta.resize(d); row_scale.resize(d);
     diagnostics.scratch_payload_bytes = sizeof(double)*(8*n + 8*d + d*d) +
-        trial.outputs.size()*sizeof(TrialRegion::Output);
+        trial.outputs.size()*sizeof(TrialRegion::Output) + stage_inputs.size()*sizeof(StageInput);
 }
 
 NodeRuntime::NodeRuntime(ExecutableGraph executable_graph) : graph_(std::move(executable_graph))
@@ -129,6 +130,22 @@ void NodeRuntime::build_domain(DomainState& domain)
         for (auto* element : stage.region.rhs_execution)
             for (const auto& port : element->output_ports())
                 stage.trial.add_output(port.value_ptr, signal_type_info(port.type).storage_bytes);
+    }
+    std::unordered_map<std::string, std::pair<std::size_t, std::size_t>> stage_of;
+    for (std::size_t index = 0; index < domain.coupled_stages.size(); ++index) {
+        const auto& stage = domain.coupled_stages[index];
+        for (std::size_t state = 0; state < stage.region.state_ids.size(); ++state)
+            stage_of.emplace(stage.region.state_ids[state], std::pair{index, state});
+    }
+    for (std::size_t index = 0; index < domain.coupled_stages.size(); ++index) {
+        auto& stage = domain.coupled_stages[index];
+        for (const auto& id : stage.region.upstream_state_ids) {
+            const auto [source, state] = stage_of.at(id);
+            if (source >= index) throw std::logic_error("Coupled stage dependency is not topologically ordered.");
+            auto* value = domain.coupled_stages[source].region.states[state];
+            stage.stage_inputs.push_back({.value=value, .source_stage=source, .source_state=state});
+            stage.trial.add_output(value, sizeof(double));
+        }
         stage.prepare_storage();
     }
 }
@@ -167,12 +184,6 @@ void NodeRuntime::stage_trapezoids(DomainState& domain) {
 }
 
 namespace {
-double infinity_norm(const std::vector<double>& values) {
-    double maximum = 0;
-    for (const double value : values) maximum = std::max(maximum, std::abs(value));
-    return maximum;
-}
-
 void require_finite(const std::vector<double>& values, const char* context) {
     for (const double value : values)
         if (!std::isfinite(value)) throw std::runtime_error(std::string("Nonfinite ") + context + " in coupled integration.");
@@ -199,7 +210,9 @@ void NodeRuntime::stage_residual(CoupledStage& stage, const std::vector<double>&
         stage.stage1[i] = stage.base[i] + h*(a11*k[i]+a12*k[n+i]);
         stage.stage2[i] = stage.base[i] + h*(a21*k[i]+a22*k[n+i]);
     }
+    for (const auto& input : stage.stage_inputs) *input.value = input.first;
     evaluate_derivative(stage, stage.stage1, stage.f1);
+    for (const auto& input : stage.stage_inputs) *input.value = input.second;
     evaluate_derivative(stage, stage.stage2, stage.f2);
     for (std::size_t i = 0; i < n; ++i) {
         result[i] = k[i]-stage.f1[i];
@@ -214,12 +227,26 @@ void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
     for (std::size_t i = 0; i < n; ++i) stage.k[i] = stage.k[n+i] = stage.f0[i];
     stage_residual(stage, stage.k, stage.residual);
     constexpr double atol = 1e-13, rtol = 1e-13;
+    const auto normalized_residual = [&](const std::vector<double>& residual) {
+        double maximum = 0;
+        for (std::size_t i = 0; i < d; ++i) {
+            const auto state = i < n ? i : i-n;
+            const double magnitude = std::max({std::abs(stage.base[state]),
+                                               std::abs(stage.stage1[state]),
+                                               std::abs(stage.stage2[state])});
+            // The residual has derivative units. Convert the state tolerance
+            // to derivative units and retain a floor for state rounding.
+            const double tolerance = (atol + rtol*magnitude +
+                16*std::numeric_limits<double>::epsilon()*magnitude)/stage.region.step_seconds;
+            maximum = std::max(maximum, std::abs(residual[i])/tolerance);
+        }
+        return maximum;
+    };
     constexpr int max_iterations = 12;
     for (int iteration = 0;; ++iteration) {
-        const double normalized = infinity_norm(stage.residual) /
-            (atol + rtol*std::max(1., infinity_norm(stage.k)));
+        const double normalized = normalized_residual(stage.residual);
         if (!std::isfinite(normalized)) throw std::runtime_error("Nonfinite Gauss-Legendre normalized residual.");
-        stage.diagnostics.last_normalized_residual = normalized;
+        stage.diagnostics.max_last_normalized_residual = normalized;
         if (normalized <= 1) {
             for (std::size_t i = 0; i < n; ++i)
                 stage.current[i] = stage.base[i] + stage.region.step_seconds*(stage.k[i]+stage.k[n+i])/2;
@@ -231,7 +258,11 @@ void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
                                      std::to_string(normalized) + ".");
         for (std::size_t col = 0; col < d; ++col) {
             stage.candidate = stage.k;
-            const double epsilon = std::sqrt(std::numeric_limits<double>::epsilon())*(1+std::abs(stage.k[col]));
+            const auto state = col < n ? col : col-n;
+            const double stage_magnitude = std::max({std::abs(stage.base[state]),
+                std::abs(stage.stage1[state]), std::abs(stage.stage2[state])});
+            const double epsilon = std::sqrt(std::numeric_limits<double>::epsilon())*
+                std::max({1., std::abs(stage.k[col]), stage_magnitude/stage.region.step_seconds});
             stage.candidate[col] += epsilon;
             stage_residual(stage, stage.candidate, stage.displaced);
             ++stage.diagnostics.jacobian_probes;
@@ -283,7 +314,7 @@ void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
             for (std::size_t i = 0; i < d; ++i) stage.candidate[i] = stage.k[i]+factor*stage.delta[i];
             stage_residual(stage, stage.candidate, stage.candidate_residual);
             ++stage.diagnostics.line_search_trials;
-            if (infinity_norm(stage.candidate_residual) < infinity_norm(stage.residual)) {
+            if (normalized_residual(stage.candidate_residual) < normalized) {
                 stage.k.swap(stage.candidate);
                 stage.residual.swap(stage.candidate_residual);
                 reduced = true;
@@ -298,6 +329,11 @@ void NodeRuntime::solve_gauss_legendre(CoupledStage& stage) {
 void NodeRuntime::stage_coupled(DomainState& domain) {
     const auto next = domain.staged_index ^ 1;
     for (auto& stage : domain.coupled_stages) {
+        for (auto& input : stage.stage_inputs) {
+            const auto& source = domain.coupled_stages[input.source_stage];
+            input.first = source.stage1[input.source_state];
+            input.second = source.stage2[input.source_state];
+        }
         stage.trial.capture();
         try {
             const auto n = stage.region.states.size();
@@ -608,7 +644,8 @@ NodeRuntime::NumericalDiagnostics NodeRuntime::numerical_diagnostics() const {
             total.jacobian_probes += value.jacobian_probes;
             total.line_search_trials += value.line_search_trials;
             total.solver_iterations += value.solver_iterations;
-            total.last_normalized_residual = std::max(total.last_normalized_residual, value.last_normalized_residual);
+            total.max_last_normalized_residual = std::max(total.max_last_normalized_residual,
+                                                          value.max_last_normalized_residual);
             total.scratch_payload_bytes += value.scratch_payload_bytes;
         }
     }

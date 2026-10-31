@@ -262,13 +262,15 @@ class Accumulator(Element):
 class EulerIntegrator(Element):
     """y[n+1] = y[n] + dt * x[n]; causal memory, so it can close a loop."""
 
-    params = GENERIC + ("dt", "initial_value")
+    params = GENERIC + ("dt", "initial_value", "substeps")
     memory = True
     stateful = True
     input_count = 1
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
+        if _integer(params, "substeps", 1, 1, 32) != 1:
+            raise SchemaError("EulerIntegrator substeps greater than 1 are not supported by s7py")
         self.dt = _number(params, "dt", 1.0)
         self.outputs[0] = _number(params, "initial_value", 0.0)
 

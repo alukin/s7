@@ -11,6 +11,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace {
@@ -171,7 +172,7 @@ void gl_transition_and_convergence() {
         near(actual[1], expected[1], 3e-13, "GL Padé second state and input operator");
         const auto count = runtime.numerical_diagnostics();
         require(count.stage_residual_evaluations*2 == count.trial_derivative_vectors &&
-                count.last_normalized_residual <= 1, "GL solver work/residual accounting");
+                count.max_last_normalized_residual <= 1, "GL solver work/residual accounting");
     }
     double previous = 0;
     for (double h : {.2, .1, .05}) {
@@ -212,13 +213,42 @@ void nonlinear_gauss_reference() {
         require(error > 0 && error < 1e-4, "Nonlinear GL exact-solution error");
         const auto diagnostics = runtime.numerical_diagnostics();
         require(diagnostics.accepted_steps == static_cast<std::size_t>(steps+1) &&
-                std::isfinite(diagnostics.last_normalized_residual) &&
-                diagnostics.last_normalized_residual <= 1 && diagnostics.failed_steps == 0,
+                std::isfinite(diagnostics.max_last_normalized_residual) &&
+                diagnostics.max_last_normalized_residual <= 1 && diagnostics.failed_steps == 0,
                 "Nonlinear GL finite residual and accepted publication");
         if (previous_error)
             require(previous_error/error > 12 && previous_error/error < 20,
                     "Nonlinear GL fourth-order refinement");
         previous_error = error;
+    }
+}
+
+void gauss_equilibrium_scaling() {
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    const auto* gauss = registry.find("GaussLegendreIntegrator");
+    require(gauss, "Gauss element metadata is registered");
+    for (const auto [voltage, tau, h, steps] : {
+             std::tuple{12., .001, .001, 30},
+             std::tuple{100., .01, .001, 120},
+             std::tuple{1e6, .001, .001, 30}}) {
+        s7::Schema schema("gauss_nonzero_equilibrium");
+        schema.set_rate(s7::Rate::from_seconds(h));
+        schema.add_element(s7::make_element_spec("x", *gauss, {{"initial_value", 0.}}));
+        schema.add_element("voltage", [voltage] { return std::make_unique<s7::Constant>(voltage); });
+        schema.add_element("difference", [] { return std::make_unique<s7::Adder>(std::vector<double>{1, -1}); });
+        schema.add_element("rate", [tau] { return std::make_unique<s7::Gain>(1/tau); });
+        schema.connect("voltage", 0, "difference", 0);
+        schema.connect("x", 0, "difference", 1);
+        schema.connect("difference", 0, "rate", 0);
+        schema.connect("rate", 0, "x", 0);
+        s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+        for (int step = 0; step <= steps; ++step) runtime.step();
+        const double final = runtime.real_output_of("x");
+        require(std::isfinite(final) && std::abs(final-voltage) < 1e-4*voltage,
+                "Gauss charging must settle at a nonzero equilibrium");
+        require(runtime.numerical_diagnostics().failed_steps == 0,
+                "Gauss charging must not fail at the residual roundoff floor");
     }
 }
 
@@ -327,8 +357,21 @@ void restrictions_and_failure() {
     mixed.connect("gl", 0, "euler", 0);
     mixed.connect("euler", 0, "gl", 0);
     const auto mixed_result = s7::Validator::validate(mixed);
-    require(!mixed_result.ok() && mixed_result.errors.front().find("crosses method") != std::string::npos,
-            "Mixed coupled methods must fail validation");
+    require(mixed_result.errors.size() == 1 &&
+            mixed_result.errors.front().find("crosses method") != std::string::npos,
+            "Mixed coupled feedback must produce one cycle error");
+
+    s7::Schema multi_cycle("three_state_cross_method_cycle");
+    multi_cycle.add_element("gauss_a", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 1.); });
+    multi_cycle.add_element("gauss_b", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 0.); });
+    multi_cycle.add_element("euler", [] { return std::make_unique<s7::EulerIntegrator>(.1, 0.); });
+    multi_cycle.connect("gauss_a", 0, "gauss_b", 0);
+    multi_cycle.connect("gauss_b", 0, "euler", 0);
+    multi_cycle.connect("euler", 0, "gauss_a", 0);
+    const auto multi_result = s7::Validator::validate(multi_cycle);
+    require(multi_result.errors.size() == 1 &&
+            multi_result.errors.front().find("crosses method") != std::string::npos,
+            "A multi-state cross-method SCC must produce one error");
 
     s7::Schema unsafe("stateful_trial");
     unsafe.add_element("x", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 1.); });
@@ -469,8 +512,8 @@ void region_boundaries() {
         one_way.connect("a", 0, "negative", 0); one_way.connect("negative", 0, "a", 0);
         one_way.connect("a", 0, "b", 0);
         auto compiled = s7::Compiler::compile(one_way);
-        require(compiled.coupled_regions.size() == 1,
-                "One-way coupled states share their Runge-Kutta stages");
+        require(compiled.coupled_regions.size() == 2,
+                "One-way coupled states use ordered Runge-Kutta stage blocks");
         s7::NodeRuntime coupled(std::move(compiled));
         const double pole = pade_step(Case{Model::RC, .1, 1, 0, 1, 0})[0];
         for (int step = 0; step <= 10; ++step) {
@@ -518,10 +561,37 @@ void region_size_limits() {
          "17-state Euler source transition");
     near(runtime.real_output_of("x1"), .095, 2e-14,
          "17-state Euler dependent transition");
-    const auto rejected = s7::Validator::validate(chain(true));
+    auto gauss = chain(true);
+    require(s7::Validator::validate(gauss).ok(), "One-way 17-state Gauss cascade must validate");
+    auto compiled_gauss = s7::Compiler::compile(gauss);
+    require(compiled_gauss.coupled_regions.size() == 17,
+            "One-way Gauss cascade must use one-state stage blocks");
+    s7::NodeRuntime gauss_runtime(std::move(compiled_gauss));
+    gauss_runtime.step(); gauss_runtime.step();
+    const double pole = pade_step(Case{Model::RC, .1, 1, 0, 1, 0})[0];
+    near(gauss_runtime.real_output_of("x0"), pole, 2e-13, "Gauss cascade source");
+    near(gauss_runtime.real_output_of("x1"), .1*std::exp(-.1), 1e-6,
+         "Gauss cascade dependent state");
+
+    s7::Schema ring("strongly_coupled_17_state_gauss_ring");
+    for (int i = 0; i < 17; ++i) {
+        ring.add_element("x"+std::to_string(i), [] {
+            return std::make_unique<s7::GaussLegendreIntegrator>(.1, 0.);
+        });
+        ring.add_element("rhs"+std::to_string(i), [] {
+            return std::make_unique<s7::Adder>(std::vector<double>{1, -1});
+        });
+    }
+    for (int i = 0; i < 17; ++i) {
+        const auto id = "x"+std::to_string(i), rhs = "rhs"+std::to_string(i);
+        ring.connect("x"+std::to_string((i+16)%17), 0, rhs, 0);
+        ring.connect(id, 0, rhs, 1); ring.connect(rhs, 0, id, 0);
+    }
+    const auto rejected = s7::Validator::validate(ring);
     require(!rejected.ok() && std::ranges::any_of(rejected.errors, [](const std::string& error) {
-        return error.find("Gauss-Legendre integration currently supports at most 16") != std::string::npos;
-    }), "Connected 17-state Gauss region must report its size limit");
+        return error.find("Gauss-Legendre integration at 'x0'") != std::string::npos &&
+               error.find("at most 16") != std::string::npos;
+    }), "Strongly coupled 17-state Gauss region must name its size limit");
 }
 
 void rate_domain_stages() {
@@ -567,6 +637,7 @@ int main() try {
     substep_equivalence();
     gl_transition_and_convergence();
     nonlinear_gauss_reference();
+    gauss_equilibrium_scaling();
     energy_phase_and_order();
     responses();
     restrictions_and_failure();

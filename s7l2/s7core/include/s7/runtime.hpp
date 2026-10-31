@@ -34,7 +34,7 @@ public:
         std::size_t jacobian_probes{};
         std::size_t line_search_trials{};
         std::size_t solver_iterations{};
-        double last_normalized_residual{};
+        double max_last_normalized_residual{};
         std::size_t scratch_payload_bytes{};
     };
 
@@ -132,9 +132,17 @@ private:
         void replay(std::size_t* evaluated = nullptr);
     };
     struct CoupledStage {
+        struct StageInput {
+            double* value{};
+            std::size_t source_stage{};
+            std::size_t source_state{};
+            double first{};
+            double second{};
+        };
         ExecutableGraph::CoupledRegion region;
         TrialRegion trial;
         std::vector<std::size_t> memory_output_indices;
+        std::vector<StageInput> stage_inputs;
         NumericalDiagnostics diagnostics;
         // Reused numerical buffers; no per-step stage or Jacobian allocation.
         std::vector<double> base, f0, current, endpoint, stage1, stage2, f1, f2;
