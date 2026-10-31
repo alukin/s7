@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace s7 {
@@ -83,6 +84,9 @@ public:
     [[nodiscard]] NumericalDiagnostics numerical_diagnostics() const;
 
 private:
+    // The element output behind an output of a flattened nested schema.
+    [[nodiscard]] std::pair<std::string, std::size_t> aliased_output(const std::string& element_id, std::size_t port) const;
+
     // Output of a causal-memory element. Its step() writes the next step's
     // value; the runtime stages it and publishes it at the start of the next
     // step, so all outputs read after step() belong to the same step.

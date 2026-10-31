@@ -14,8 +14,10 @@
 #include <unordered_map>
 #include <vector>
 
+#include "s7/deployment_client.hpp"
 #include "s7/diagram_deployment.hpp"
 #include "s7/net.hpp"
+#include "s7/schema_library.hpp"
 
 namespace {
 
@@ -336,6 +338,79 @@ void test_descriptor_fixtures()
     expect(checked >= 20, "descriptor fixtures checked");
 }
 
+
+// Nested schemas are placed and deployed whole: each node flattens its own
+// part when it compiles it (ADR-024), so a stream may start at a nested
+// schema's exposed output and end at another's exposed input, and inside a
+// node a loop may close through a nested schema's internal memory.
+void test_nested_stream_ends()
+{
+    auto diagram = json::parse(R"json({
+        "document_kind": "s7.diagram",
+        "runtime_nodes": [
+            { "node_uuid": "aaaaaaaa-0000-4000-8000-000000000001", "name": "a", "endpoint": "ws://127.0.0.1:9101" },
+            { "node_uuid": "bbbbbbbb-0000-4000-8000-000000000002", "name": "b", "endpoint": "ws://127.0.0.1:9102" }
+        ],
+        "schema": {
+            "name": "nested_split", "dt": 1.0,
+            "elements": [
+                { "id": "src", "type": "Constant", "params": { "value": 1.5 }, "node": "aaaaaaaa-0000-4000-8000-000000000001" },
+                { "id": "box_a", "type": "Schema", "node": "aaaaaaaa-0000-4000-8000-000000000001", "schema": {
+                    "name": "box_a", "dt": 1.0,
+                    "elements": [ { "id": "double", "type": "Gain", "params": { "factor": 2 } } ],
+                    "connections": [],
+                    "exposed_inputs": [ { "name": "u", "type": "F64", "element": "double", "port": 0 } ],
+                    "exposed_outputs": [ { "name": "y", "type": "F64", "element": "double", "port": 0 } ] } },
+                { "id": "sum", "type": "Adder", "params": {}, "node": "bbbbbbbb-0000-4000-8000-000000000002" },
+                { "id": "box_b", "type": "Schema", "node": "bbbbbbbb-0000-4000-8000-000000000002", "schema": {
+                    "name": "box_b", "dt": 1.0,
+                    "elements": [ { "id": "delay", "type": "Delay", "params": {} } ],
+                    "connections": [],
+                    "exposed_inputs": [ { "name": "u", "type": "F64", "element": "delay", "port": 0 } ],
+                    "exposed_outputs": [ { "name": "y", "type": "F64", "element": "delay", "port": 0 } ] } }
+            ],
+            "connections": [
+                { "from_element": "src", "from_port": 0, "to_element": "box_a", "to_port": 0 },
+                { "from_element": "box_a", "from_port": 0, "to_element": "sum", "to_port": 0 },
+                { "from_element": "sum", "from_port": 0, "to_element": "box_b", "to_port": 0 },
+                { "from_element": "box_b", "from_port": 0, "to_element": "sum", "to_port": 1 }
+            ]
+        },
+        "diagram": { "version": 1, "nodes": [], "wires": [] }
+    })json").as_object();
+    auto& registry = s7::ElementRegistry::instance();
+    expect(deployment::assign_streams(diagram, deployment::infer_output_types(diagram, registry)).empty(), "streams assigned");
+    const auto streams = deployment::parse_streams(diagram);
+    expect(streams.size() == 1 && streams[0].producer == deployment::StreamEndpoint{kA, "box_a", 0} &&
+               streams[0].consumers == std::vector<deployment::StreamEndpoint>{{kB, "sum", 0}},
+           "the stream starts at the nested schema's exposed output");
+    const auto a = deployment::extract_node_schema(diagram, kA);
+    const auto b = deployment::extract_node_schema(diagram, kB);
+    expect(has_element(a, "box_a") && has_element(b, "box_b"), "each node gets its nested schema whole");
+
+    auto endpoint = std::make_shared<s7::transport::InMemoryRuntimeNetEndpoint>();
+    s7::RuntimeNetContext::set_endpoint(endpoint);
+    {
+        auto with_dt = [](json::object part) {
+            part["dt"] = 1.0;
+            return s7::SchemaLibraryLoader::build_schema(json::value(std::move(part)), s7::ElementRegistry::instance());
+        };
+        s7::NodeRuntime node_a{s7::Compiler::compile(with_dt(a))};
+        s7::NodeRuntime node_b{s7::Compiler::compile(with_dt(b))};
+        // On B, sum[n] = 3 + sum[n-1] through box_b's internal Delay.
+        std::vector<double> sums;
+        for (int step = 0; step < 3; ++step) {
+            node_a.step();
+            node_b.step();
+            sums.push_back(node_b.real_output_of("sum"));
+        }
+        expect(node_a.real_output_of("box_a") == 3.0, "A's nested output feeds the stream");
+        expect(sums == std::vector<double>{3, 6, 9}, "B's loop through the nested Delay");
+        expect(node_b.real_output_of("box_b/delay") == 6.0, "B's nested element addressed by path");
+    }
+    s7::RuntimeNetContext::set_endpoint(nullptr);
+}
+
 } // namespace
 
 int main()
@@ -346,6 +421,7 @@ try {
     test_node_parts();
     test_timing();
     test_descriptor_fixtures();
+    test_nested_stream_ends();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7net diagram deployment smoke: " << ex.what() << '\n';

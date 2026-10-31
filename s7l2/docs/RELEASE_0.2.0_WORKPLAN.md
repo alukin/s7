@@ -184,6 +184,18 @@ Feedback across rate domains is rejected in 0.2.0 and recorded as research in
 [open problems](OPEN_PROBLEMS.md#ratedt-inference-and-validation--implemented-multi-rate-execution-deferred).
 Hardware clock domains (sound devices, networked audio) are 0.3.0 research.
 
+## Nested schemas behave like their inlined contents — 0.2.0
+
+Decided 2026-10-31 ([ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024)).
+The compiler flattens each nested schema at its parent's rate into the parent
+graph, so feedthrough is per path and a loop may close through causal memory
+inside a nested schema. Flattening is local to one node's compilation and never
+crosses a network boundary; a stream may start or end at a nested schema's
+exposed port. Implemented on the `feature/nested-schema-flattening` branch for
+review. Open limits: a nested schema at another rate stays opaque, and loops
+across nodes are not validated as a whole
+([open problems](OPEN_PROBLEMS.md#nested-schemas--flattened-adr-024-two-limits-recorded-2026-10-31)).
+
 ## SDR sample formats — 0.2.0 tasks
 
 Decided and implemented 2026-10-31 ([ADR-023](../../doc/S7_Architectural_Decisions.md#adr-023)). S7's integer and complex integer types exist for SDR I/Q

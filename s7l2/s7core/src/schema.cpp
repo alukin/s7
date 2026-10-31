@@ -152,7 +152,7 @@ void Schema::expose_input(std::string name,
     }
 
     const std::size_t portIndex = exposed_inputs_.size();
-    exposed_inputs_.push_back(ExposedInput{std::move(name), type, std::move(to_element), to_port});
+    exposed_inputs_.push_back(ExposedPort{std::move(name), type, std::move(to_element), to_port});
     register_input(portIndex, exposed_inputs_.back().name, type, nullptr);
     invalidate_compiled_runtime();
 }
@@ -172,7 +172,7 @@ void Schema::expose_output(std::string name,
         }
     }
 
-    exposed_outputs_.push_back(ExposedOutput{std::move(name), type, std::move(from_element), from_port});
+    exposed_outputs_.push_back(ExposedPort{std::move(name), type, std::move(from_element), from_port});
     exposed_output_values_.push_back(ExposedOutputValue{type, RealValue{}, ComplexValue{}});
     const std::size_t portIndex = exposed_outputs_.size() - 1;
     auto& storage = exposed_output_values_.back();
@@ -259,7 +259,7 @@ void Schema::ensure_compiled_runtime()
         executable.add_element(proxyId, [type = input.type, state] {
             return std::make_unique<SchemaInputProxy>(type, state);
         });
-        executable.connect(proxyId, 0, input.to_element, input.to_port);
+        executable.connect(proxyId, 0, input.element, input.port);
         inputStates.push_back(std::move(state));
     }
 
@@ -286,12 +286,12 @@ void Schema::ensure_compiled_runtime()
     std::vector<OutputBinding> outputSources;
     outputSources.reserve(exposed_outputs_.size());
     for (const auto& output : exposed_outputs_) {
-        const auto internalType = runtime->output_type_of(output.from_element, output.from_port);
+        const auto internalType = runtime->output_type_of(output.element, output.port);
         if (internalType != output.type) {
             throw std::runtime_error("Exposed output '" + output.name +
                                      "' type does not match internal source port type.");
         }
-        outputSources.push_back(runtime->output_binding_of(output.from_element, output.from_port));
+        outputSources.push_back(runtime->output_binding_of(output.element, output.port));
     }
 
     exposed_input_states_ = std::move(inputStates);

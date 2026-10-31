@@ -119,23 +119,40 @@ ExecutableGraph Compiler::compile(const Schema& schema) {
     return compile(schema, {}, {});
 }
 
-ExecutableGraph Compiler::compile(const Schema& schema,
+ExecutableGraph Compiler::compile(const Schema& nested_schema,
                                   std::string runtime_instance_uuid,
                                   std::string schema_instance_uuid) {
     // Validation creates every element once; the graph is built from them.
-    auto checked = detail::check_schema(schema);
+    auto checked = detail::check_schema(nested_schema);
     if (!checked.errors.empty()) {
         throw std::invalid_argument("Schema validation failed:\n" + join_errors(checked.errors));
     }
+    // Everything below works on the flattened schema (ADR-024).
+    const Schema& schema = *checked.flat;
 
     ExecutableGraph executable_graph;
     executable_graph.schema_name = schema.name();
     executable_graph.runtime_instance_uuid = validated_or_generated_uuid(runtime_instance_uuid);
     executable_graph.schema_instance_uuid = validated_or_generated_uuid(schema_instance_uuid);
 
+    // The exposed ports of flattened nested schemas are wires: they are
+    // scheduled like other elements, but never stepped or kept, and every
+    // consumer binds to the element output that drives them.
+    std::unordered_set<std::string> schema_ports;
+    std::unordered_map<std::string, std::pair<std::string, std::size_t>> driver; // "to:port" -> source
+    for (const auto& connection : schema.connections()) {
+        driver.emplace(connection.to_element + ":" + std::to_string(connection.to_port),
+                       std::pair{connection.from_element, connection.from_port});
+    }
     PrototypeMap prototypes;
     for (std::size_t index = 0; index < schema.elements().size(); ++index) {
         const auto& spec = schema.elements()[index];
+        if (dynamic_cast<const detail::SchemaPort*>(checked.elements[index].get())) {
+            prototypes.emplace(spec.id, PrototypeInfo{1, 1, false});
+            schema_ports.insert(spec.id);
+            checked.elements[index].reset();
+            continue;
+        }
         auto element = std::move(checked.elements[index]);
         const auto element_instance_uuid = element_instance_uuid_for(executable_graph.schema_instance_uuid, spec.id);
         if (executable_graph.instance_uuid_to_id.contains(element_instance_uuid)) {
@@ -158,30 +175,39 @@ ExecutableGraph Compiler::compile(const Schema& schema,
             executable_graph.causal_order.push_back(spec.id);
         }
     }
+    // The element output behind a chain of SchemaPorts (validation rejected
+    // unconnected ports and direct-feedthrough cycles, so the chain ends).
+    const auto source_of = [&](std::pair<std::string, std::size_t> source) {
+        while (schema_ports.contains(source.first)) source = driver.at(source.first + ":0");
+        return source;
+    };
 
     std::unordered_set<std::string> driven_inputs;
     driven_inputs.reserve(schema.connections().size());
 
     std::unordered_map<std::string, std::vector<InputBinding>> element_inputs;
     for (const auto& spec : schema.elements()) {
+        if (schema_ports.contains(spec.id)) continue;
         const auto& info = prototypes.at(spec.id);
         element_inputs.emplace(spec.id, std::vector<InputBinding>(info.input_count));
     }
 
     for (const auto& connection : schema.connections()) {
-        const auto source = executable_graph.elements.at(connection.from_element)->outputs();
-        if (connection.from_port >= source.size()) {
-            throw std::runtime_error("Connection from '" + connection.from_element + "' uses invalid output port " +
-                                     std::to_string(connection.from_port) + ".");
-        }
-
         const auto key = connection.to_element + ":" + std::to_string(connection.to_port);
         if (!driven_inputs.insert(key).second) {
             throw std::runtime_error("Input port " + std::to_string(connection.to_port) + " of '" +
                                      connection.to_element + "' has multiple drivers.");
         }
+        if (schema_ports.contains(connection.to_element)) continue;
 
-        element_inputs[connection.to_element][connection.to_port] = source[connection.from_port];
+        const auto [from_element, from_port] = source_of({connection.from_element, connection.from_port});
+        const auto source = executable_graph.elements.at(from_element)->outputs();
+        if (from_port >= source.size()) {
+            throw std::runtime_error("Connection from '" + from_element + "' uses invalid output port " +
+                                     std::to_string(from_port) + ".");
+        }
+
+        element_inputs[connection.to_element][connection.to_port] = source[from_port];
     }
 
     // Validation gave every element its resolved rate (adopt_rate) before
@@ -200,6 +226,9 @@ ExecutableGraph Compiler::compile(const Schema& schema,
 
     executable_graph.causal_order =
         CausalScheduler::schedule(schema, prototypes, executable_graph.causal_order);
+    // Dropping the ports keeps a valid order: each port's consumers already
+    // come after its source.
+    std::erase_if(executable_graph.causal_order, [&](const std::string& id) { return schema_ports.contains(id); });
     const std::unordered_set<std::string> trapezoid_rhs(checked.trapezoid_rhs.begin(), checked.trapezoid_rhs.end());
     for (const auto& id : executable_graph.causal_order) {
         if (trapezoid_rhs.contains(id)) executable_graph.trapezoid_rhs.push_back(id);
@@ -231,6 +260,7 @@ ExecutableGraph Compiler::compile(const Schema& schema,
             dynamic_cast<RateChangingElement*>(executable_graph.elements.at(link.resampler).get()));
         executable_graph.domain_links.emplace_back(link.input, link.output);
     }
+    for (const auto& id : schema_ports) checked.rates.erase(id);
     executable_graph.rates = std::move(checked.rates);
     for (const auto& checked_region : checked.coupled_regions) {
         ExecutableGraph::CoupledRegion region;
@@ -245,14 +275,27 @@ ExecutableGraph Compiler::compile(const Schema& schema,
             region.states.push_back(static_cast<double*>(element->output_ports()[0].value_ptr));
         }
         for (const auto& edge : checked_region.derivative_connections) {
-            const auto* source = executable_graph.elements.at(edge.from_element).get();
-            region.derivatives.push_back(static_cast<const double*>(source->output_ports()[edge.from_port].value_ptr));
+            // A derivative may be fed through a flattened nested schema's port.
+            const auto [from_element, from_port] = source_of({edge.from_element, edge.from_port});
+            const auto* source = executable_graph.elements.at(from_element).get();
+            region.derivatives.push_back(static_cast<const double*>(source->output_ports()[from_port].value_ptr));
         }
         const std::unordered_set<std::string> rhs(checked_region.rhs.begin(), checked_region.rhs.end());
         for (const auto& id : executable_graph.causal_order) {
             if (rhs.contains(id)) region.rhs_execution.push_back(executable_graph.elements.at(id).get());
         }
         executable_graph.coupled_regions.push_back(std::move(region));
+    }
+    // A flattened nested schema keeps its id for addressing its outputs
+    // (observers, probes, NodeRuntime::output_of) and its instance UUID.
+    for (const auto& [nested, ports] : checked.nested_outputs) {
+        auto& outputs = executable_graph.output_aliases[nested];
+        for (const auto& port : ports) outputs.push_back(source_of({port, 0}));
+        const auto uuid = element_instance_uuid_for(executable_graph.schema_instance_uuid, nested);
+        if (!executable_graph.instance_uuid_to_id.emplace(uuid, nested).second) {
+            throw std::invalid_argument("Duplicate generated element instance UUID for element id: '" + nested + "'.");
+        }
+        executable_graph.id_to_instance_uuid.emplace(nested, uuid);
     }
     return executable_graph;
 }

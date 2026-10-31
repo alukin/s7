@@ -4,8 +4,10 @@
 #include "s7/type_inference.hpp"
 
 #include "s7/schema.hpp"
+#include "s7/validation.hpp"
 
 #include <stdexcept>
+#include <string_view>
 #include <unordered_map>
 
 namespace s7 {
@@ -155,6 +157,20 @@ public:
     }
 
 private:
+    // A flattened nested schema's exposed port by the schema's id (ADR-024).
+    std::string label(const std::string& element, const char* direction, const std::size_t port) const
+    {
+        if (const auto it = index_.find(element); it != index_.end()) {
+            if (const auto* boundary = dynamic_cast<const detail::SchemaPort*>(elements_[it->second].probe.get())) {
+                const bool outer = boundary->input() == (std::string_view(direction) == "input");
+                return outer ? port_label(boundary->owner(), direction, boundary->index())
+                             : std::string("exposed ") + (boundary->input() ? "input" : "output") + " '" + boundary->name() +
+                                   "' of '" + boundary->owner() + "'";
+            }
+        }
+        return port_label(element, direction, port);
+    }
+
     void collect()
     {
         for (const auto& spec : schema_.elements()) {
@@ -312,9 +328,9 @@ private:
                 const auto to_types = image(to, to_rule);
                 const auto common = from_types.intersect(to_types);
                 if (common.empty()) {
-                    result_.errors.push_back("Type conflict: " + port_label(connection.from_element, "output", connection.from_port) +
+                    result_.errors.push_back("Type conflict: " + label(connection.from_element, "output", connection.from_port) +
                                              " has type " + from_types.to_string() + " but " +
-                                             port_label(connection.to_element, "input", connection.to_port) + " requires " +
+                                             label(connection.to_element, "input", connection.to_port) + " requires " +
                                              to_types.to_string() + ". Insert a Convert element.");
                     return;
                 }

@@ -495,11 +495,65 @@ void invalid_mappings() {
     topRuntime.step();
     require(topRuntime.output_of<s7::SignalType::I32>("gain") == 15, "Top-level schema with I32 exposed ports");
 
-    // Nested, the ports are backed by F64/C64 storage: every other type is
-    // rejected when the parent is compiled, before any value is misread.
+    // Flattened into its parent (ADR-024), a nested schema passes any type
+    // across its exposed ports, and inference runs across the boundary.
+    {
+        auto parent = root("parent_of_integer");
+        parent.add_element("source", [] { return std::make_unique<I32Constant>(2); });
+        parent.add_element("child", [] {
+            auto child = std::make_unique<s7::Schema>("integer_child");
+            child->set_rate(s7::Rate::from_hz(1));
+            child->add_element("gain", [] { return std::make_unique<I32Gain>(3); });
+            child->expose_input("in", s7::SignalType::I32, "gain", 0);
+            child->expose_output("out", s7::SignalType::I32, "gain", 0);
+            return child;
+        });
+        parent.connect("source", 0, "child", 0);
+        s7::NodeRuntime runtime(s7::Compiler::compile(parent));
+        runtime.step();
+        require(runtime.output_of<s7::SignalType::I32>("child") == 6, "I32 through a flattened nested schema");
+        require(runtime.output_of<s7::SignalType::I32>("child/gain") == 6, "Internal elements are addressable by path");
+    }
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    {
+        const auto definition = boost::json::parse(R"json({
+            "name": "integer_library_schema", "dt": 1.0,
+            "elements": [{"id": "gain", "type": "Gain", "params": {"factor": 2}}],
+            "connections": [],
+            "exposed_inputs": [{"name": "in", "type": "I32", "element": "gain", "port": 0}],
+            "exposed_outputs": [{"name": "out", "type": "I32", "element": "gain", "port": 0}]
+        })json");
+        auto parent = root("parent_of_json");
+        parent.add_element("source", [] { return std::make_unique<I32Constant>(2); });
+        parent.add_element("child", [definition, &registry] {
+            return std::make_unique<s7::Schema>(s7::SchemaLibraryLoader::build_schema(definition, registry));
+        });
+        parent.connect("source", 0, "child", 0);
+        s7::NodeRuntime runtime(s7::Compiler::compile(parent));
+        runtime.step();
+        require(runtime.output_of<s7::SignalType::I32>("child") == 4, "A generic Gain inside infers I32 from the boundary");
+    }
+    // The declared port type is still a constraint on both sides.
+    {
+        auto parent = root("parent_of_mismatch");
+        parent.add_element("child", [] {
+            auto child = std::make_unique<s7::Schema>("mismatch");
+            child->add_element("count", [] { return std::make_unique<I32Constant>(5); });
+            child->expose_output("out", s7::SignalType::F64, "count", 0);
+            return child;
+        });
+        const auto errors = s7::Validator::validate(parent).errors;
+        require(errors.size() == 1 && errors[0] == "Type conflict: 'child/count' output 0 has type {I32} but exposed output "
+                                                   "'out' of 'child' requires {F64}. Insert a Convert element.",
+                "Declared exposed type checked: " + (errors.empty() ? std::string() : errors[0]));
+    }
+    // A nested schema at another rate than its parent is not flattened: it
+    // stays one element, whose ports are backed by F64/C64 storage, so every
+    // other type is rejected when the parent is compiled.
     for (const auto type : s7::kAllSignalTypes) {
         if (type == s7::SignalType::F64 || type == s7::SignalType::C64) continue;
-        auto parent = root("parent_of_unsupported");
+        s7::Schema parent("unseeded_parent");
         parent.add_element("child", [type] {
             auto child = std::make_unique<s7::Schema>("unsupported_output");
             child->set_rate(s7::Rate::from_hz(1));
@@ -507,37 +561,8 @@ void invalid_mappings() {
             child->expose_output("out", type, "count", 0);
             return child;
         });
-        require_throws([&] { (void)s7::Compiler::compile(parent); }, "Nested schema accepted an unsupported output type");
+        require_throws([&] { (void)s7::Compiler::compile(parent); }, "Opaque nested schema accepted an unsupported output type");
     }
-    {
-        auto parent = root("parent_of_integer");
-        parent.add_element("source", [] { return std::make_unique<I32Constant>(2); });
-        parent.add_element("child", [integer_schema] {
-            auto child = std::make_unique<s7::Schema>("integer_child");
-            integer_schema(*child);
-            return child;
-        });
-        parent.connect("source", 0, "child", 0);
-        require_throws([&] { (void)s7::Compiler::compile(parent); }, "Nested schema accepted an I32 input");
-    }
-
-    // The same rule applies to a nested schema loaded from JSON.
-    auto& registry = s7::ElementRegistry::instance();
-    s7::register_builtin_elements(registry);
-    const auto definition = boost::json::parse(R"json({
-        "name": "integer_library_schema", "dt": 1.0,
-        "elements": [{"id": "gain", "type": "Gain", "params": {"factor": 2}}],
-        "connections": [],
-        "exposed_inputs": [{"name": "in", "type": "I32", "element": "gain", "port": 0}],
-        "exposed_outputs": []
-    })json");
-    auto parent = root("parent_of_json");
-    parent.add_element("source", [] { return std::make_unique<I32Constant>(2); });
-    parent.add_element("child", [definition, &registry] {
-        return std::make_unique<s7::Schema>(s7::SchemaLibraryLoader::build_schema(definition, registry));
-    });
-    parent.connect("source", 0, "child", 0);
-    require_throws([&] { (void)s7::Compiler::compile(parent); }, "Nested JSON schema accepted an I32 input");
 }
 
 void input_binding_count() {

@@ -29,13 +29,16 @@ measurements, correctness checks and limits. This serial improvement is the
 0.2.0 runtime-performance increment; no within-node parallel scheduler is a
 0.2.0 goal or acceptance requirement.
 
-Nested schemas now resolve their exposed-output bindings once when their
-private runtime is compiled, instead of looking up each internal output by
-element ID on every step. The bindings do not change output order or
-publication timing. A nested schema's exposed ports carry F64 and C64 only. Any other
-type is now rejected when the parent graph is compiled, instead of failing on
-a later step or misreading an input; top-level exposed ports accept any type. The performance record documents binding lifetime,
-measurements and remaining overhead. A step that faults in any phase now
+A nested schema now behaves exactly like its inlined contents
+([ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024)): the compiler
+flattens it into its parent, so a feedback loop may close through causal
+memory inside it, its exposed ports accept every signal type, errors inside it
+are reported when the parent is validated, and it adds no per-step cost of its
+own. Only a nested schema at another rate than its parent keeps its own
+runtime, which resolves its exposed-output bindings once when compiled, and
+F64/C64 exposed ports; other types are rejected there when the parent graph is
+compiled. The performance record documents measurements and the remaining
+overhead. A step that faults in any phase now
 publishes nothing and keeps the previously staged causal-memory values
 ([ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021)). **S7 0.2.0 uses
 sequential nested-schema execution. Parallel nested-schema scheduling remains

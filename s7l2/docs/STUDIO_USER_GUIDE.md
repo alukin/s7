@@ -121,9 +121,15 @@ Changing it never edits the diagram:
   diagram). A run at another rate stops with an error naming the filter,
   because raw coefficients cannot be recalculated; redesign them for the new
   rate.
-- Files, recordings, network streams and nested schemas with their own rate
-  keep that rate. If it differs from the run's, the run does not start and the
-  error names the element and both rates.
+- Files, recordings and network streams keep their own rate. If it differs
+  from the run's, the run does not start and the error names the element and
+  both rates.
+- Nested schemas run at the run's rate and behave exactly like their contents
+  placed in the parent diagram. A feedback loop may close through an
+  integrator or delay inside a nested schema; a loop through it with no such
+  element on the path is reported as a cycle without causal memory. Problems
+  inside a nested schema are reported with the element's path, for example
+  `plant/integrator`.
 
 To connect parts that run at different rates, place a **Resampler**
 (Conversion) where they meet. At equal rates it passes values through

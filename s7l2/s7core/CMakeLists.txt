@@ -13,6 +13,7 @@ add_library(s7core SHARED
     src/schema.cpp
     src/schema_library.cpp
     src/validation.cpp
+    src/flatten.cpp
     src/compiler.cpp
     src/convolution.cpp
     src/runtime.cpp
@@ -138,6 +139,10 @@ add_test(NAME s7core_design_rate_smoke COMMAND s7core_design_rate_smoke)
 s7_add_test_executable(s7core_resampler_smoke tests/resampler_smoke.cpp)
 target_link_libraries(s7core_resampler_smoke PRIVATE s7core)
 add_test(NAME s7core_resampler_smoke COMMAND s7core_resampler_smoke)
+
+s7_add_test_executable(s7core_nested_flattening_smoke tests/nested_flattening_smoke.cpp)
+target_link_libraries(s7core_nested_flattening_smoke PRIVATE s7core)
+add_test(NAME s7core_nested_flattening_smoke COMMAND s7core_nested_flattening_smoke)
 
 s7_add_test_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
 target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)

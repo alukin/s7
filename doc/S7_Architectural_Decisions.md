@@ -1064,6 +1064,38 @@ Diagrams that converted CU8 in value mode, or signed↔unsigned in normalized mo
 
 ------------------------------------------------------------------------
 
+# ADR-024
+
+## Title
+
+A Nested Schema Behaves Exactly Like Its Inlined Contents
+
+## Status
+
+Accepted 2026-10-31 by the maintainer. Implemented 2026-10-31 except nested schemas at another rate, which keep the earlier behavior (see Consequences).
+
+## Context
+
+A nested schema ran as one element with direct feedthrough and its own private runtime. A feedback loop through it was therefore rejected even when every path inside it crossed causal memory. The everyday case is a plant model packaged as a subsystem, with an integrator from its input to its output, in a control loop. Inlined, that graph is valid. Packaged, it needed an extra outer `Delay`, which added a step of latency and changed the results. "Schema is Element" held for structure but not for behavior. Nested exposed ports also carried only F64 and C64, internal errors surfaced only at compilation, and a fault later in a step could not roll back a nested schema's internal state. Simply declaring such a schema causal memory would be wrong: a causal-memory element publishes what it computed in the previous step, so the schema's outputs would arrive one step late.
+
+## Decision
+
+The compiler and the validator flatten nested schemas. Each nested schema with no rate of its own, or with the rate of the schema containing it, is replaced by its elements under path ids (`plant/integrator`). Each exposed port becomes a typed wire (`SchemaPort`) that validation, type and rate inference and the cycle check treat as an ordinary direct-feedthrough element. The compiler never steps a wire: it binds consumers to the driving output. All checks, scheduling, rate domains and step rollback then apply to the flattened graph. Feedthrough is therefore determined per path, so a loop may close through internal causal memory, and a loop through a direct path is still rejected.
+
+Flattening belongs to one compilation. Documents and deployed diagrams keep their nested schemas. A nested schema is placed on one node as a whole, and each node flattens its own part, so flattening never moves or creates a network boundary. A stream may start or end at a nested schema's exposed port.
+
+A flattened nested schema keeps its id for addressing: its outputs (`NodeRuntime::output_of("plant", j)`, observers and probes) and its instance UUID resolve to the element outputs behind its exposed outputs. Errors name the schema's ports as before ("Input port 0 of 'plant' is unconnected") or the internal element by path.
+
+## Consequences
+
+Graphs that were valid before give bitwise-identical results, since the same operations run on the same values. Graphs with loops through internal causal memory, and implicit-trapezoid derivatives through a nested schema's stateless elements, become valid exactly when their inlined form is. Nested exposed ports accept every signal type, and inference runs across the boundary under the declared port types. Validating a parent now reports errors inside its nested schemas. A fault anywhere in a step rolls back the nested contents too (ADR-021). The per-instance nested runtime and its copying are gone for flattened schemas.
+
+Two rate details follow the inlined form as well. A nested schema whose own rate equals its parent's seed no longer pins its connected set; its rate only seeds, like the parent's. In a parent without a seed, an internal subgraph that is not connected to the nested schema's ports no longer borrows the rate the parent resolved for the schema, and needs a seed or a pin as it would inlined.
+
+A nested schema at another rate than its parent stays one direct-feedthrough element with its own runtime and F64/C64 ports. This case is rare: Studio gives every nested schema the run's `dt`, which equals the parent's. It is recorded in the open problems. Element ids containing `/` can collide with path ids; a collision is reported as a duplicate id. Cycles that cross nodes through streams are still not validated as a whole. That gap predates this decision and is also recorded in the open problems.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:
@@ -1077,6 +1109,7 @@ The current S7 architecture is based on the following accepted principles:
 - Cycles require causal memory.
 - One model-time rate per run; rates change only through an explicit Resampler.
 - SDR samples keep their native format; types added to the wire catalog are advertised by each node.
+- A nested schema behaves exactly like its inlined contents.
 - Observation is independent.
 - Deployment is independent.
 - Network boundaries are explicit.

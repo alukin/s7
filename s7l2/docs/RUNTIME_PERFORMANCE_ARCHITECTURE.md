@@ -1,7 +1,8 @@
 # Runtime performance architecture investigation
 
 Status: indexed serial execution is the completed 0.2.0 performance increment,
-2026-10-30, extended on 2026-10-31 by compiled nested-schema output bindings.
+2026-10-30, extended on 2026-10-31 by compiled nested-schema output bindings
+and then by flattening nested schemas into their parent graph (ADR-024).
 Nested schemas execute sequentially. Parallel scheduling, region grouping and static cost tags are
 unselected 0.3.0 planning questions, recorded separately in
 [the 0.3.0 planning record](RELEASE_0.3.0_RUNTIME_PARALLELISM.md). Earlier
@@ -181,7 +182,9 @@ ports are only boundary metadata and are never stepped, so `expose_input` and
 unchanged. A schema library element with such a port still registers and
 fails when a graph using it is compiled. Supporting all 27 signal types across
 a nested boundary would need type-generic exposed storage and is a separate,
-unscheduled extension.
+unscheduled extension. *Since ADR-024 this restriction applies only to a
+nested schema at another rate than its parent; a flattened nested schema's
+ports are typed wires and accept every type.*
 
 Exposed inputs were already constant time: each step reads the parent's
 binding and writes the shared input state that the proxy element publishes.
@@ -334,6 +337,39 @@ separately. Removing them would require a different boundary, such as
 compile-time flattening, whose feedback and step-boundary equivalence is
 unproved. That stays outside 0.2.0, as does any parallel execution of nested
 schemas.
+
+*Update 2026-10-31: compile-time flattening adopted ([ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024)).*
+The maintainer decided that a nested schema behaves exactly like its inlined
+contents, which requires flattening for feedback semantics, not for speed. The
+compiler now replaces each nested schema at its parent's rate by its elements
+and one never-stepped `SchemaPort` wire per exposed port, whose consumers bind
+to the driving output. A flattened schema has no runtime, input proxies,
+exposed-output copies or rollback snapshots of its own. Step-boundary
+equivalence is now by construction, and `s7core_nested_flattening_smoke`
+checks bitwise equality with inlined graphs, including a feedback loop
+through a nested integrator, two levels of nesting, a nested `Resampler`, a
+trapezoid derivative through a nested schema and fault rollback. A nested
+schema at another rate keeps the runtime described above (`nested_trapezoid`
+below: a 100 Hz schema in an unseeded parent).
+
+Measured 2026-10-31 on the same host and settings as the table above (one run
+of `compare_indexed.py --repeats 7`, pinned with `taskset -c 4`), before =
+`origin/main` 2725f01, after = this change; checksums of the final outputs are
+equal in every case:
+
+| Case | Compile before/after (us) | Avg step before/after (ns) | Speedup | p50 / p99 after (ns) |
+| --- | ---: | ---: | ---: | ---: |
+| `nested1` | 1,488 / 676 | 50 / 18 | 2.8x | 20 / 31 |
+| `nested` | 12,823 / 899 | 660 / 87 | 7.6x | 90 / 91 |
+| `nested64` | 47,955 / 1,450 | 2,675 / 321 | 8.3x | 331 / 341 |
+| `nested_large` | 1,717 / 1,002 | 355 / 321 | 1.1x | 331 / 341 |
+| `nested_multi` | 1,521 / 831 | 110 / 55 | 2.0x | 50 / 51 |
+| `nested_levels` | 15,663 / 980 | 807 / 87 | 9.3x | 90 / 91 |
+| `nested_feedback` | 12,206 / 1,031 | 953 / 416 | 2.3x | 411 / 411 |
+| `nested_trapezoid` (not flattened) | 1,478 / 1,473 | 136 / 138 | 1.0x | 140 / 171 |
+
+RSS deltas stayed between 0.5 and 0.9 MiB in both builds. This host is much
+faster than typical user machines; absolute times are optimistic.
 
 ## Objective and constraints
 

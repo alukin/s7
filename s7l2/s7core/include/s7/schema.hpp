@@ -67,6 +67,17 @@ public:
     [[nodiscard]] const std::vector<ElementSpec>& elements() const;
     [[nodiscard]] const std::vector<Connection>& connections() const;
 
+    // An exposed port: its name and type, and the internal element port it
+    // feeds (inputs) or is fed by (outputs).
+    struct ExposedPort {
+        std::string name;
+        SignalType type{SignalType::F64};
+        std::string element;
+        std::size_t port{};
+    };
+    [[nodiscard]] const std::deque<ExposedPort>& exposed_inputs() const { return exposed_inputs_; }
+    [[nodiscard]] const std::deque<ExposedPort>& exposed_outputs() const { return exposed_outputs_; }
+
     // Schema-wide rate seed (doc/S7_Sample_Rate_Model.md section 3): used by
     // RateResolver for every connected set of elements with no rate of its
     // own (no element in it pins one). Unset by default.
@@ -79,20 +90,6 @@ public:
     void adopt_rate(const Rate& rate) override;
 
 private:
-
-    struct ExposedInput {
-        std::string name;
-        SignalType type{SignalType::F64};
-        std::string to_element;
-        std::size_t to_port{};
-    };
-
-    struct ExposedOutput {
-        std::string name;
-        SignalType type{SignalType::F64};
-        std::string from_element;
-        std::size_t from_port{};
-    };
 
     struct ExposedOutputValue {
         SignalType type{SignalType::F64};
@@ -107,8 +104,8 @@ private:
     std::optional<Rate> rate_;
     std::vector<ElementSpec> elements_;
     std::vector<Connection> connections_;
-    std::deque<ExposedInput> exposed_inputs_;
-    std::deque<ExposedOutput> exposed_outputs_;
+    std::deque<ExposedPort> exposed_inputs_;
+    std::deque<ExposedPort> exposed_outputs_;
     std::vector<std::shared_ptr<void>> exposed_input_states_;
     std::deque<ExposedOutputValue> exposed_output_values_;
     // Internal output storage of each exposed output, parallel to
