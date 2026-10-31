@@ -4,15 +4,30 @@ Explicit analog-computer graphs for first- and second-order dynamics. Open a
 diagram in Studio, select **1 kHz**, run **10 s** (resonance: **30 s**), and open
 the `scope` observer. All integrators default to `dt = 0.001 s`.
 
-| Exercise | Forward Euler | Symplectic block |
-|---|---|---|
-| RC charging | [diagram](rc_charge_euler.s7diagram) | [diagram](rc_charge_symplectic.s7diagram) |
-| RC discharging | [diagram](rc_discharge_euler.s7diagram) | [diagram](rc_discharge_symplectic.s7diagram) |
-| Series RLC step | [diagram](rlc_step_euler.s7diagram) | [diagram](rlc_step_symplectic.s7diagram) |
-| Series RLC resonant drive | [diagram](rlc_resonance_euler.s7diagram) | [diagram](rlc_resonance_symplectic.s7diagram) |
-| Mass–spring–damper release | [diagram](mass_spring_damper_euler.s7diagram) | [diagram](mass_spring_damper_symplectic.s7diagram) |
+| Exercise | Forward Euler | Symplectic block | Gauss–Legendre |
+|---|---|---|---|
+| RC charging | [diagram](rc_charge_euler.s7diagram) | [diagram](rc_charge_symplectic.s7diagram) | [diagram](rc_charge_gauss.s7diagram) |
+| RC discharging | [diagram](rc_discharge_euler.s7diagram) | [diagram](rc_discharge_symplectic.s7diagram) | [diagram](rc_discharge_gauss.s7diagram) |
+| Series RLC step | [diagram](rlc_step_euler.s7diagram) | [diagram](rlc_step_symplectic.s7diagram) | [diagram](rlc_step_gauss.s7diagram) |
+| Series RLC resonant drive | [diagram](rlc_resonance_euler.s7diagram) | [diagram](rlc_resonance_symplectic.s7diagram) | — |
+| Mass–spring–damper release | [diagram](mass_spring_damper_euler.s7diagram) | [diagram](mass_spring_damper_symplectic.s7diagram) | — |
 
-Status: **numerically validated within the [stated matrix](../../docs/NUMERICAL_VALIDATION_MATRIX.md)**.
+To try coupled Euler substeps, edit `substeps` on each Euler integrator in
+the relevant Euler diagram (for example, set both RLC integrators to 8),
+and keep the Studio Run rate and each `dt` at the **outer** rate. Only the
+internal state solve uses `dt/substeps`; ordinary Scope observations remain
+one per outer step. The [two-integrator oscillator Gauss diagram](../2int_osc_gauss.s7diagram)
+uses the same principle of coupled states without an inserted Delay. The
+[production numerical contract](../../docs/COUPLED_INTEGRATION.md) gives
+eligibility, held-input and solver limits. The resonant-drive example is
+excluded from the new Gauss diagrams because its source varies in time and
+the production policy holds each sampled source value across the outer step.
+
+The original Euler and symplectic diagrams are **numerically validated within
+the [stated matrix](../../docs/NUMERICAL_VALIDATION_MATRIX.md)**. The new
+Gauss diagrams are loaded and checked against closed-form RC/RLC responses
+by `s7tests_linear_examples_smoke`; the oscillator variant is checked there
+against `cos(1)` after one simulated second.
 Analytical state checks and exact headless/Studio worker-recording parity cover
 the default parameters at 1 and 2 kHz. Manual Studio open → run → observe → edit →
 rerun usability has not yet been qualified. There are no nested components in these
