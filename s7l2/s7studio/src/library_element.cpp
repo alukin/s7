@@ -6,6 +6,7 @@
 #include "diagram/element_ports.hpp"
 #include "viewers/viewer_registry.hpp"
 #include <s7/element_registry.hpp>
+#include <algorithm>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMimeData>
@@ -70,6 +71,11 @@ bool DiagramEditor::addLibraryElement(const QString& identifier, const std::opti
     // when configuring/compiling. Do not create runtime/plugin instances here.
     if (observer && (type == "Scope" || type == "LiveOscilloscope")) element.params["channel_count"] = 0;
     if (descriptor && descriptor->metadata().schema_definition) element.schema = *descriptor->metadata().schema_definition;
+    // Coefficients are designed at the diagram's current rate; that rate is
+    // recorded so a later run at another rate is refused rather than misread.
+    if (descriptor && designRateHz_ &&
+        std::ranges::any_of(descriptor->metadata().parameters, [](const auto& p) { return p.name == "design_rate_hz"; }))
+        element.params["design_rate_hz"] = designRateHz_();
     const auto ports = elementPorts(element.type, element.params, element.schema);
     const auto rows = static_cast<int>(std::max(ports.inputs.size(), ports.outputs.size()));
     const QSizeF size(kElementWidthSteps * kGridStep, std::max(5, 2 * rows + 1) * kGridStep);

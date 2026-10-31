@@ -705,12 +705,14 @@ void MainWindow::buildUi()
 
     const auto widgets = ui::MainWindowBuilder::buildCentralWidgets(this);
     diagramEditor_ = widgets.diagramEditor;
+    diagramEditor_->setDesignRateSource([this] { return document_.frequencyHz(); });
     connect(diagramEditor_, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
     connect(diagramEditor_, &diagram::DiagramEditor::elementPropertiesRequested, this, &MainWindow::showElementProperties);
     schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
     connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
     connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
         editor->addActions(editorShortcuts_);
+        editor->setDesignRateSource([this] { return document_.frequencyHz(); });
         connect(editor, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
         connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
         connect(editor,&diagram::DiagramEditor::elementPropertiesRequested,this,&MainWindow::showElementProperties);

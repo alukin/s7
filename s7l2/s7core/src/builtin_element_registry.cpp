@@ -52,6 +52,12 @@ double duration_param(const ElementCreationContext& ctx, const std::string& seco
     return fallback;
 }
 
+// The rate a rate-designed element's coefficients were written for, if recorded.
+std::optional<double> design_rate_param(const ElementCreationContext& ctx)
+{
+    return ctx.has_param("design_rate_hz") ? std::optional{ctx.get_real("design_rate_hz")} : std::nullopt;
+}
+
 // An array parameter of at least min_size values of type T.
 template <SignalType T>
 std::vector<signal_storage_t<T>> param_array(const ElementCreationContext& ctx, const std::string& name, const std::size_t min_size)
@@ -497,7 +503,7 @@ void register_builtin_elements(ElementRegistry& registry)
             return make_accumulating(ctx, [&]<SignalType T, SignalType A>() -> std::unique_ptr<Element> {
                 auto taps = ctx.has_param("taps") ? param_array<A>(ctx, "taps", 1)
                                                   : std::vector<signal_storage_t<A>>{SignalOps<A>::one()};
-                return std::make_unique<FirFilterT<T, A>>(std::move(taps), overflow_param(ctx));
+                return std::make_unique<FirFilterT<T, A>>(std::move(taps), overflow_param(ctx), design_rate_param(ctx));
             });
         },
         metadata.at("FirFilter")));
@@ -509,7 +515,7 @@ void register_builtin_elements(ElementRegistry& registry)
                 if constexpr (signal_type_info(T).is_floating()) {
                     using V = signal_storage_t<T>;
                     return std::make_unique<IirFilterT<T>>(param_value<T>(ctx, "b0", V(1)), param_value<T>(ctx, "b1", V(0)),
-                                                           param_value<T>(ctx, "a1", V(0)));
+                                                           param_value<T>(ctx, "a1", V(0)), design_rate_param(ctx));
                 } else {
                     return unsupported_type(ctx);
                 }

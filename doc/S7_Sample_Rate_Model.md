@@ -104,6 +104,6 @@ Sound sources and sinks are the first hardware elements planned for 0.3.0. A dev
 | Rational model-time rate for deployments, stream rates and real-time pacing; network stream elements declare their rate | Implemented |
 | Rate-following elements adopting their domain's rate (`Element::adopt_rate`, at validation); Studio no longer rewriting `dt`/`sample_rate_hz` | Implemented |
 | Durations in time units with loader migration | Implemented |
-| Design rate for `FirFilter`/`IirFilter` | Planned (0.2.0) |
+| Design rate for `FirFilter`/`IirFilter`, recorded from a document's saved dt (`record_design_rates`) and when a filter is added | Implemented |
 | Rate domains and the `Resampler` | Planned (0.2.0) |
 | Feedback across rate domains; hardware clock domains | Research (0.3.0) |

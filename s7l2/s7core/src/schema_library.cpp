@@ -4,6 +4,7 @@
 #include "s7/schema_library.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <sstream>
@@ -358,6 +359,37 @@ bool configure_schema_discretization(boost::json::value& schema, const double dt
         // elements take the rate seeded here (doc/S7_Sample_Rate_Model.md section 8).
     }
     return true;
+}
+
+bool record_design_rates(boost::json::value& schema, const double dt, const ElementRegistry& registry)
+{
+    if (!schema.is_object()) return false;
+    auto& root = schema.as_object();
+    double rate_dt = dt;
+    if (const auto* own = root.if_contains("dt"); own && own->is_number()) rate_dt = own->to_number<double>();
+    auto* elements = root.if_contains("elements");
+    if (!elements || !elements->is_array()) return false;
+    bool recorded = false;
+    for (auto& value : elements->as_array()) {
+        if (!value.is_object()) continue;
+        auto& element = value.as_object();
+        if (auto* nested = element.if_contains("schema"); nested && nested->is_object()) {
+            recorded = record_design_rates(*nested, rate_dt, registry) || recorded;
+            continue;
+        }
+        const auto* type = element.if_contains("type");
+        const auto* descriptor = type && type->is_string() ? registry.find(std::string(type->as_string())) : nullptr;
+        if (!descriptor || !(rate_dt > 0) || !std::isfinite(rate_dt)) continue;
+        const auto& parameters = descriptor->metadata().parameters;
+        if (std::none_of(parameters.begin(), parameters.end(), [](const ParameterSpec& p) { return p.name == "design_rate_hz"; }))
+            continue;
+        if (!element.if_contains("params") || !element["params"].is_object()) element["params"] = boost::json::object{};
+        auto& params = element["params"].as_object();
+        if (const auto* existing = params.if_contains("design_rate_hz"); existing && !existing->is_null()) continue;
+        params["design_rate_hz"] = Rate::from_seconds(rate_dt).to_hz();
+        recorded = true;
+    }
+    return recorded;
 }
 
 auto SchemaLibraryDefinition::to_json() const -> boost::json::value

@@ -686,8 +686,33 @@ private:
     value_type velocity_;
 };
 
+/// The rate a rate-designed element's coefficients were written for
+/// (doc/S7_Sample_Rate_Model.md section 8.2). Raw coefficients keep no design
+/// intent (cutoff, prototype), so they cannot be recalculated for another
+/// rate: adopting a different rate is refused. Without a recorded design rate
+/// the coefficients are used as given, as before.
+class DesignRate {
+public:
+    explicit DesignRate(const std::optional<double> hz)
+    {
+        if (hz) rate_ = Rate::from_hz(*hz);
+    }
+    void check(const Rate& rate, const std::string_view coefficients) const
+    {
+        if (rate_ && *rate_ != rate) {
+            throw std::invalid_argument(std::string(coefficients) + " were designed for " + rate_->to_string() +
+                                        " and cannot be recalculated for " + rate.to_string() +
+                                        "; redesign them for this rate, or add a Resampler.");
+        }
+    }
+
+private:
+    std::optional<Rate> rate_;
+};
+
 /// FIR filter: y[n] = sum_k taps[k] * x[n-k], computed in the accumulator type
 /// Acc (default: the input type), as a hardware MAC with a wide accumulator.
+/// Rate-designed: an optional design rate is checked against the rate it runs at.
 /// Arithmetic types.
 template <SignalType Type, SignalType Acc = Type>
 class FirFilterT final : public Element {
@@ -696,11 +721,13 @@ public:
     using value_type = signal_storage_t<Acc>;
     using Ops = SignalOps<Acc>;
 
-    explicit FirFilterT(std::vector<value_type> taps, Overflow overflow = Overflow::Saturate)
+    explicit FirFilterT(std::vector<value_type> taps, Overflow overflow = Overflow::Saturate,
+                        std::optional<double> design_rate_hz = std::nullopt)
         : Element("FirFilter", true)
         , taps_(std::move(taps))
         , history_(taps_.size(), value_type{})
         , overflow_(overflow)
+        , design_rate_(design_rate_hz)
     {
         if (taps_.empty()) {
             throw std::invalid_argument("FirFilter requires at least one tap.");
@@ -722,23 +749,27 @@ public:
         output_value_ = sum;
     }
 
+    void adopt_rate(const Rate& rate) override { design_rate_.check(rate, "FirFilter taps"); }
+
 private:
     std::vector<value_type> taps_;
     std::vector<value_type> history_;
     Overflow overflow_;
+    DesignRate design_rate_;
     value_type output_value_{};
 };
 
 /// First-order IIR filter: y[n] = b0 x[n] + b1 x[n-1] - a1 y[n-1].
+/// Rate-designed: an optional design rate is checked against the rate it runs at.
 /// Floating-point and complex floating-point types.
 template <SignalType Type>
 class IirFilterT final : public Element {
 public:
     using value_type = signal_storage_t<Type>;
 
-    IirFilterT(value_type b0, value_type b1, value_type a1)
+    IirFilterT(value_type b0, value_type b1, value_type a1, std::optional<double> design_rate_hz = std::nullopt)
         : Element("IirFilter", true)
-        , b0_(b0), b1_(b1), a1_(a1)
+        , b0_(b0), b1_(b1), a1_(a1), design_rate_(design_rate_hz)
     {
         register_input(0, port_names::in, Type, nullptr);
         register_output(0, port_names::out, Type, &output_value_);
@@ -753,8 +784,11 @@ public:
         output_value_ = y;
     }
 
+    void adopt_rate(const Rate& rate) override { design_rate_.check(rate, "IirFilter coefficients"); }
+
 private:
     value_type b0_, b1_, a1_;
+    DesignRate design_rate_;
     value_type x1_{}, y1_{};
     value_type output_value_{};
 };

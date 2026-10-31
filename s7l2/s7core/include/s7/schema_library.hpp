@@ -40,6 +40,16 @@ struct SchemaLibraryDefinition {
 bool configure_schema_discretization(boost::json::value& schema, double dt,
                                     const ElementRegistry& registry = ElementRegistry::instance());
 
+// Records the design rate of rate-designed elements (those whose metadata
+// declares a "design_rate_hz" parameter, e.g. FirFilter and IirFilter) that
+// have none: the rate of the schema they were written in, its own "dt" if it
+// has one, otherwise `dt`. Nested schemas use their own "dt". Call it with a
+// document's saved dt when the document is opened, never with a run's dt,
+// which is not the rate the coefficients were designed for. Returns whether
+// anything was recorded.
+bool record_design_rates(boost::json::value& schema, double dt,
+                         const ElementRegistry& registry = ElementRegistry::instance());
+
 class SchemaLibraryLoader {
 public:
     [[nodiscard]] static auto load_from_file(const std::filesystem::path& file_path) -> SchemaLibraryDefinition;

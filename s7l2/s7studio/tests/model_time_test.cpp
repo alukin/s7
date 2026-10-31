@@ -125,6 +125,25 @@ private slots:
         const auto error = runner_->recordedSource()->status().runError;
         QVERIFY2(error.contains("conflicts with element") && error.contains("Resampler"), qPrintable(error));
     }
+    void openedFiltersKeepTheirDesignRate() {
+        // An older document's FIR was designed for its saved 1 ms dt. Opening
+        // records that rate; running it at 0.5 ms is refused, naming the filter.
+        auto model = schema();
+        model.as_object()["elements"].as_array().push_back(boost::json::object{
+            {"id", "fir"}, {"type", "FirFilter"}, {"params", {{"taps", boost::json::array{.5, .5}}}}});
+        model.as_object()["connections"].as_array().push_back(boost::json::object{
+            {"from_element", "source"}, {"from_port", 0}, {"to_element", "fir"}, {"to_port", 0}});
+        const auto document = diagram::DiagramDocument::fromJson(boost::json::object{
+            {"document_kind", "s7.diagram"}, {"dt", .001}, {"schema", model}});
+        const auto& fir = document.runtimeSchema.at("elements").as_array().back().at("params");
+        QCOMPARE(fir.at("design_rate_hz").to_number<double>(), 1000.);
+        const auto entered = gate_->entered.load();
+        runner_->run(document.runtimeSchema, .0005, 3, {{"scope/v", "fir", 0}});
+        QCOMPARE(runner_->state(), RunState::Error);
+        QCOMPARE(gate_->entered.load(), entered);
+        const auto error = runner_->recordedSource()->status().runError;
+        QVERIFY2(error.contains("'fir'") && error.contains("cannot be recalculated"), qPrintable(error));
+    }
     void fractionalPauseResumeAndRerun() {
         const double dt = 1. / 44100;
         auto model = schema();

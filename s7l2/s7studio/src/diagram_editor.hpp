@@ -56,6 +56,9 @@ public:
     // Shared placement for library double-click and canvas drops. A missing
     // position uses the normal free-spot suggestion; supplied positions snap.
     bool addLibraryElement(const QString& identifier, std::optional<QPointF> scenePosition = std::nullopt);
+    // The diagram's rate in Hz, recorded as the design rate of rate-designed
+    // elements (FIR/IIR coefficients) when they are added (ADR-022).
+    void setDesignRateSource(std::function<double()> rateHz) { designRateHz_ = std::move(rateHz); }
     void setPageLayout(const DiagramPageLayout& pageLayout);
     [[nodiscard]] auto pageLayout() const -> DiagramPageLayout;
 
@@ -86,6 +89,7 @@ protected:
     void resizeEvent(QResizeEvent* event) override;
 
 private:
+    std::function<double()> designRateHz_;
     std::unique_ptr<DiagramScene> _scene;
     QSchematic::View* _view = nullptr;
     bool _pendingPageFit = false;

@@ -3,6 +3,8 @@
 
 #include "diagram_document.hpp"
 
+#include <s7/schema_library.hpp>
+
 #include <stdexcept>
 #include <cmath>
 #include <set>
@@ -144,6 +146,12 @@ auto DiagramDocument::fromJson(const boost::json::value& json) -> DiagramDocumen
     } else {
         // If no explicit schema field, treat the document itself as containing runtime data
         doc.runtimeSchema = json;
+    }
+    // Filters in an older document were designed for its saved dt (ADR-022);
+    // record that rate so a run at another dt is refused, not misread. A
+    // document without a saved dt has no known design rate.
+    if (root.contains("dt") && doc.dt > 0) {
+        static_cast<void>(s7::record_design_rates(doc.runtimeSchema, doc.dt));
     }
     
     return doc;

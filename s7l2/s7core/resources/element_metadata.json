@@ -3314,6 +3314,15 @@
           "default": null,
           "required": false,
           "enum_values": []
+        },
+        {
+          "name": "design_rate_hz",
+          "type": "real",
+          "description": "Rate in Hz the coefficients were designed for. Running at another rate is refused, because raw coefficients cannot be recalculated. Studio records the diagram rate when the element is created or an older document is opened.",
+          "default": null,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
         }
       ],
       "type_variables": [
@@ -3455,6 +3464,15 @@
           "description": "Feedback coefficient a1",
           "default": 0,
           "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "design_rate_hz",
+          "type": "real",
+          "description": "Rate in Hz the coefficients were designed for. Running at another rate is refused, because raw coefficients cannot be recalculated. Studio records the diagram rate when the element is created or an older document is opened.",
+          "default": null,
+          "required": false,
+          "min": 0.0,
           "enum_values": []
         }
       ],
