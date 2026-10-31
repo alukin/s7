@@ -38,13 +38,14 @@ Parents parents_of(const Schema& schema) {
 // trapezoid and the new F64 regions. Only operations whose output varies
 // with a trial state are replayed; independent sources stay held.
 std::vector<std::string> trial_rhs(const InstanceMap& instances, const Parents& parents,
-                                   const std::unordered_set<std::string>& states, bool restricted,
+                                   const std::unordered_set<std::string>& roots,
+                                   const std::unordered_set<std::string>& varying_states, bool restricted,
                                    std::vector<std::string>& errors) {
     std::vector<std::string> rhs;
     std::unordered_map<std::string, bool> varying;
     std::unordered_set<std::string> visiting;
     const auto known = [&](const std::string& id) -> std::optional<bool> {
-        if (states.contains(id)) return true;
+        if (varying_states.contains(id)) return true;
         if (instances.at(id)->has_causal_memory()) return false;
         if (const auto it = varying.find(id); it != varying.end()) return it->second;
         return std::nullopt;
@@ -97,7 +98,7 @@ std::vector<std::string> trial_rhs(const InstanceMap& instances, const Parents& 
             if (!stack.empty()) stack.back().depends = depends || stack.back().depends;
         }
     };
-    for (const auto& id : states) {
+    for (const auto& id : roots) {
         if (const auto it = parents.find(id); it != parents.end()) {
             for (const auto& parent : it->second) visit(parent);
         }
@@ -526,7 +527,7 @@ CheckedSchema check_schema(const Schema& schema) {
         if (!implicit.empty() || !checked.coupled_regions.empty()) {
             const auto parents = parents_of(schema);
             if (!implicit.empty())
-                checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, false, checked.errors);
+                checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, implicit, false, checked.errors);
             if (!checked.coupled_regions.empty()) {
                 const auto dependencies = memory_dependencies(instances, parents);
                 AdjacencyMap memory_graph;
@@ -665,7 +666,8 @@ CheckedSchema check_schema(const Schema& schema) {
                             "' currently supports at most 16 F64 states per strongly coupled region.");
                     std::unordered_set<std::string> varying(region.states.begin(), region.states.end());
                     varying.insert(region.upstream_states.begin(), region.upstream_states.end());
-                    region.rhs = trial_rhs(instances, parents, varying, true, checked.errors);
+                    const std::unordered_set<std::string> roots(region.states.begin(), region.states.end());
+                    region.rhs = trial_rhs(instances, parents, roots, varying, true, checked.errors);
                 }
             }
         }
