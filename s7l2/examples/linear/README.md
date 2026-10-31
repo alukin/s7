@@ -169,6 +169,12 @@ above. For RLC and the mechanical analogue, map `q↔x`, `i↔v`, `L↔m`,
 Euler and Euler–Cromer elements. The finite feedback-correction methods in
 [Phase 2 research](../../docs/NUMERICAL_FEEDBACK_RESEARCH_PHASE2.md) are
 separate research-runner experiments, not editable S7 elements.
+The coupled Euler substeps and Gauss–Legendre stages in the
+[Phase 3 real-graph study](../../docs/NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
+also use a headless research execution policy, so the editable diagrams here
+still exercise only their production-supported methods. That study uses the
+same RC and RLC equations, plus the two-integrator oscillator, and includes
+tests that compare its Euler substeps with ordinary finer-step S7 execution.
 
 **Simulate.** Compare the supplied 1 and 2 kHz runs, then deliberately enlarge
 `dt` in a copy of a diagram. Keep each element's `dt` consistent with the run

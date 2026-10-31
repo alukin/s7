@@ -72,6 +72,12 @@ the [pole-zero research report](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md)
 and its [compact numerical summary](NUMERICAL_FEEDBACK_PHASE2_SUMMARY.json)
 extend the [Phase 1 feedback report](NUMERICAL_FEEDBACK_RESEARCH_REPORT.md)
 without changing production causal semantics.
+[Phase 3's integration contract](NUMERICAL_INTEGRATION_PHASE3_SPEC.md),
+[real-graph C++ results](NUMERICAL_INTEGRATION_PHASE3_REPORT.md) and
+[compact reproducible summary](NUMERICAL_INTEGRATION_PHASE3_SUMMARY.json)
+compare coupled Euler substeps with two-stage Gauss–Legendre on the oscillator,
+RC and RLC. The new execution policy is research-only; the existing runtime
+and editable examples retain their documented methods.
 
 Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/2int_osc_phase_portrait.md), with same-step state-pair and plot verification at 1/10/100 kHz. See also the [three-integrator helix with 3D Phase Trajectory](../examples/3int_helix_phase_trajectory.md), verified at 1/10 kHz.
 
