@@ -503,19 +503,19 @@ CheckedSchema check_schema(const Schema& schema) {
                 checked.errors.emplace_back("Coupled integration requires one F64 state and derivative at '" + spec.id + "'.");
                 continue;
             }
-            const auto rate = element->declared_rate();
-            if (!rate) {
-                checked.errors.emplace_back("Coupled integration requires a declared dt at '" + spec.id + "'.");
+            const auto rate = checked.rates.find(spec.id);
+            if (rate == checked.rates.end()) {
+                checked.errors.emplace_back("Coupled integration requires a resolved rate at '" + spec.id + "'.");
                 continue;
             }
             auto it = std::ranges::find_if(checked.coupled_regions, [&](const auto& region) {
-                return region.method == integration->coupled_method() && region.rate == *rate &&
+                return region.method == integration->coupled_method() && region.rate == rate->second &&
                        region.substeps == integration->coupled_substeps();
             });
             if (it == checked.coupled_regions.end()) {
                 CheckedSchema::CoupledRegion region;
                 region.method = integration->coupled_method();
-                region.rate = *rate;
+                region.rate = rate->second;
                 region.step_seconds = integration->coupled_step_seconds();
                 region.substeps = integration->coupled_substeps();
                 checked.coupled_regions.push_back(std::move(region));
