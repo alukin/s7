@@ -403,6 +403,30 @@ def run(output: Path, plots: bool = True) -> dict:
     return result
 
 
+def compact_summary(data: dict) -> dict:
+    selected = []
+    for row in data["pole_matrix"]:
+        h = 0.5 if row["model"] in {"RC", "LC"} else 0.2
+        if row["h"] != h or row["method"] == "sequential":
+            continue
+        if row["method"] == "finite" and row["corrections"] not in (0, 1, 2, 8):
+            continue
+        selected.append(dict(model=row["model"], h=h, method=row["method"],
+                             corrections=row["corrections"], poles=row["poles"],
+                             transfer_zeros=row["transfer"]["transfer_zeros"],
+                             transfer_pole_count=len(row["transfer"]["transfer_poles"]),
+                             cancellation_count=len(row["transfer"]["cancellations"])))
+    responses = [dict(model=r["model"], method=r["method"], drive=r["drive"],
+                      h=r["h"], max_analytical_output_error=r["max_analytical_output_error"],
+                      overshoot=r.get("overshoot"), energy_ratio=r.get("energy_ratio"))
+                 for r in data["responses"] if r["method"] in {"exact", "forward", "backward", "trapezoid", "symplectic"}]
+    frequencies = [r for r in data["frequency_response"]
+                   if r["model"] == "RLC R=1" and r["omega_rad_per_s"] == 2.]
+    return dict(metadata=data["metadata"], selected_poles=selected, selected_responses=responses,
+                frequency_response=frequencies,
+                iteration_diagnostics=data["iteration_diagnostics"], equal_work=data["equal_work"])
+
+
 def make_plots(output: Path, matrix: list[dict]) -> None:
     import matplotlib
     matplotlib.use("Agg")
@@ -545,7 +569,11 @@ def make_plots(output: Path, matrix: list[dict]) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=Path("build/linear-research"))
+    parser.add_argument("--compact-output", type=Path)
     parser.add_argument("--no-plots", action="store_true")
     args = parser.parse_args()
     data = run(args.output, not args.no_plots)
+    if args.compact_output:
+        args.compact_output.parent.mkdir(parents=True, exist_ok=True)
+        args.compact_output.write_text(json.dumps(compact_summary(data), indent=2, default=_json_default)+"\n")
     print(f"{len(data['pole_matrix'])} pole cases, {len(data['responses'])} responses in {args.output}")

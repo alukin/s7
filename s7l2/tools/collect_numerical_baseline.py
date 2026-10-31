@@ -19,7 +19,7 @@ def main():
     binary = args.binary.resolve()
     if not binary.is_file():
         raise FileNotFoundError(binary)
-    cache = binary.parents[2]/"CMakeCache.txt"
+    cache = binary.parents[1]/"CMakeCache.txt"
     compiler = None
     if cache.is_file():
         for line in cache.read_text().splitlines():
