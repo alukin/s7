@@ -91,16 +91,39 @@ private slots:
             QVERIFY_EXCEPTION_THROWN(static_cast<void>(diagram::DiagramDocument::fromJson(json)), std::invalid_argument);
         }
     }
-    void runRateMustMatchIntegrator() {
+    void runRateBindsEveryElement() {
+        // A document integrator follows the run's dt (ADR-022): its stored dt
+        // is a legacy field, so a 44.1 kHz run of a 1 ms design is consistent.
         auto model = schema();
         model.as_object()["elements"].as_array().push_back(boost::json::object{
             {"id", "integral"}, {"type", "EulerIntegrator"}, {"params", {{"dt", .001}}}});
         model.as_object()["connections"].as_array().push_back(boost::json::object{
             {"from_element", "source"}, {"from_port", 0}, {"to_element", "integral"}, {"to_port", 0}});
-        runner_->run(model, 1. / 44100, 3, {{"scope/v", "integral", 0}});
+        QSignalSpy completed(runner_.get(), &LocalSchemaRunner::runCompleted);
+        runner_->run(model, 1. / 44100, 1, {{"scope/v", "integral", 0}});
+        QTRY_COMPARE(gate_->entered.load(), 1);
+        QVERIFY(runner_->state() != RunState::Error);
+        gate_->allow();
+        QTRY_COMPARE(completed.count(), 1);
+        QVERIFY(completed.front().at(0).toBool());
+
+        // A nested schema with its own explicit rate is authoritative: a run at
+        // another rate does not start, and the error names the element.
+        auto pinned = schema();
+        pinned.as_object()["elements"].as_array().push_back(boost::json::object{{"id", "held"}, {"type", "Schema"}, {"schema", boost::json::object{
+            {"name", "held"}, {"dt", .001},
+            {"elements", boost::json::array{boost::json::object{{"id", "g"}, {"type", "Gain"}}}},
+            {"connections", boost::json::array{}},
+            {"exposed_inputs", boost::json::array{boost::json::object{{"name", "in"}, {"type", "F64"}, {"element", "g"}, {"port", 0}}}},
+            {"exposed_outputs", boost::json::array{boost::json::object{{"name", "out"}, {"type", "F64"}, {"element", "g"}, {"port", 0}}}}}}});
+        pinned.as_object()["connections"].as_array().push_back(boost::json::object{
+            {"from_element", "source"}, {"from_port", 0}, {"to_element", "held"}, {"to_port", 0}});
+        const auto entered = gate_->entered.load();
+        runner_->run(pinned, 1. / 44100, 3, {{"scope/v", "held", 0}});
         QCOMPARE(runner_->state(), RunState::Error);
-        QCOMPARE(gate_->entered.load(), 0);
-        QVERIFY(runner_->recordedSource()->status().runError.contains("conflicts with element 'integral'"));
+        QCOMPARE(gate_->entered.load(), entered);
+        const auto error = runner_->recordedSource()->status().runError;
+        QVERIFY2(error.contains("conflicts with element") && error.contains("Resampler"), qPrintable(error));
     }
     void fractionalPauseResumeAndRerun() {
         const double dt = 1. / 44100;

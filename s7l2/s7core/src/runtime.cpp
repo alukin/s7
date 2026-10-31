@@ -119,7 +119,8 @@ void NodeRuntime::set_model_time_rate(std::optional<Rate> rate) {
         for (const auto& [id, element] : graph_.elements) {
             if (const auto declared = element->declared_rate(); declared && *declared != *rate)
                 throw std::invalid_argument("Model-time rate " + rate->to_string() + " conflicts with element '"
-                    + id + "' at " + declared->to_string() + ". Match the run dt and element discretization.");
+                    + id + "' at " + declared->to_string() + ". Change the run dt to match, or add a "
+                    "Resampler where the rates meet.");
         }
         // Seeded and inferred rates count as much as declared ones: an element
         // validated at one rate must not be stepped as another.
