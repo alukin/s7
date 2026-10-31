@@ -166,6 +166,10 @@ s7_add_test_executable(s7core_trapezoid_smoke tests/trapezoid_smoke.cpp)
 target_link_libraries(s7core_trapezoid_smoke PRIVATE s7core)
 add_test(NAME s7core_trapezoid_smoke COMMAND s7core_trapezoid_smoke)
 
+s7_add_test_executable(s7core_coupled_integration_smoke tests/coupled_integration_smoke.cpp)
+target_link_libraries(s7core_coupled_integration_smoke PRIVATE s7core)
+add_test(NAME s7core_coupled_integration_smoke COMMAND s7core_coupled_integration_smoke)
+
 s7_add_test_executable(s7core_pwm_smoke tests/pwm_smoke.cpp)
 target_link_libraries(s7core_pwm_smoke PRIVATE s7core)
 target_compile_definitions(s7core_pwm_smoke PRIVATE S7_PWM_EXAMPLE="${PROJECT_SOURCE_DIR}/examples/pwm_pid_rlc.s7diagram")

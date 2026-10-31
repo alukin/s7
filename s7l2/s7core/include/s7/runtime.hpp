@@ -24,6 +24,20 @@ namespace s7 {
 // one thread at a time (normally the thread that steps the runtime).
 class NodeRuntime {
 public:
+    struct NumericalDiagnostics {
+        std::size_t accepted_steps{};
+        std::size_t failed_steps{};
+        std::size_t base_derivative_vectors{};
+        std::size_t trial_derivative_vectors{};
+        std::size_t pure_element_evaluations{};
+        std::size_t stage_residual_evaluations{};
+        std::size_t jacobian_probes{};
+        std::size_t line_search_trials{};
+        std::size_t solver_iterations{};
+        double last_normalized_residual{};
+        std::size_t scratch_payload_bytes{};
+    };
+
     explicit NodeRuntime(ExecutableGraph executable_graph);
 
     void step();
@@ -64,6 +78,9 @@ public:
     [[nodiscard]] ComplexValue complex_output_of(const std::string& element_id, std::size_t port = 0) const;
     [[nodiscard]] ComplexValue complex_output_of_instance_uuid(const std::string& element_instance_uuid, std::size_t port = 0) const;
     [[nodiscard]] std::size_t step_count() const;
+    // Aggregated counters for opt-in F64 coupled regions; existing trapezoid
+    // and ordinary elements are deliberately not assigned fabricated counts.
+    [[nodiscard]] NumericalDiagnostics numerical_diagnostics() const;
 
 private:
     // Output of a causal-memory element. Its step() writes the next step's
@@ -101,10 +118,28 @@ private:
     };
     // Temporary trial storage, restored before any ordinary memory step or
     // observation. Solver failure restores it before propagating the error.
-    struct TrialOutput {
-        void* value_ptr{};
-        std::size_t bytes{};
-        std::array<std::byte, 32> base{};
+    struct TrialRegion {
+        struct Output {
+            void* value_ptr{};
+            std::size_t bytes{};
+            std::array<std::byte, 32> base{};
+        };
+        std::vector<Output> outputs;
+        std::vector<Element*> rhs_execution;
+        void add_output(void* value_ptr, std::size_t bytes);
+        void capture();
+        void restore() noexcept;
+        void replay(std::size_t* evaluated = nullptr);
+    };
+    struct CoupledStage {
+        ExecutableGraph::CoupledRegion region;
+        TrialRegion trial;
+        std::vector<std::size_t> memory_output_indices;
+        NumericalDiagnostics diagnostics;
+        // Reused numerical buffers; no per-step stage or Jacobian allocation.
+        std::vector<double> base, f0, current, endpoint, stage1, stage2, f1, f2;
+        std::vector<double> k, residual, displaced, candidate, candidate_residual, jacobian, rhs, delta, row_scale;
+        void prepare_storage();
     };
     // Everything one rate domain needs to step (doc/S7_Sample_Rate_Model.md
     // section 8.3). A single-rate graph has one; its step is the whole step.
@@ -118,7 +153,8 @@ private:
         std::vector<MemoryOutputRange> memory_output_ranges;
         std::vector<CausalOutput> causal_outputs;
         std::vector<TrapezoidStage> trapezoids;
-        std::vector<TrialOutput> trial_outputs;
+        TrialRegion trapezoid_trial;
+        std::vector<CoupledStage> coupled_stages;
         std::vector<bool> implicit_memory;
         bool memory_outputs_staged{};
         std::size_t staged_index{};
@@ -127,6 +163,10 @@ private:
     void build_domain(DomainState& domain);
     void step_domain(DomainState& domain);
     static void stage_trapezoids(DomainState& domain);
+    void stage_coupled(DomainState& domain);
+    void evaluate_derivative(CoupledStage& stage, const std::vector<double>& state, std::vector<double>& result);
+    void stage_residual(CoupledStage& stage, const std::vector<double>& k, std::vector<double>& result);
+    void solve_gauss_legendre(CoupledStage& stage);
     // Restores every published output of the domain to its pre-step value.
     static void roll_back_step(DomainState& domain, bool published_memory);
 

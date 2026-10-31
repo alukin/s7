@@ -26,6 +26,112 @@ using AdjacencyMap = std::unordered_map<std::string, std::vector<std::string>>;
 // Elements by id, each created once for the whole check.
 using InstanceMap = std::unordered_map<std::string, const Element*>;
 
+using Parents = std::unordered_map<std::string, std::vector<std::string>>;
+
+Parents parents_of(const Schema& schema) {
+    Parents parents;
+    for (const auto& edge : schema.connections()) parents[edge.to_element].push_back(edge.from_element);
+    return parents;
+}
+
+// The same causal derivative-cone analysis serves existing implicit
+// trapezoid and the new F64 regions. Only operations whose output varies
+// with a trial state are replayed; independent sources stay held.
+std::vector<std::string> trial_rhs(const InstanceMap& instances, const Parents& parents,
+                                   const std::unordered_set<std::string>& states, bool restricted,
+                                   std::vector<std::string>& errors) {
+    std::vector<std::string> rhs;
+    std::unordered_map<std::string, bool> varying;
+    std::unordered_set<std::string> visiting;
+    const auto known = [&](const std::string& id) -> std::optional<bool> {
+        if (states.contains(id)) return true;
+        if (instances.at(id)->has_causal_memory()) return false;
+        if (const auto it = varying.find(id); it != varying.end()) return it->second;
+        return std::nullopt;
+    };
+    struct Frame {
+        std::string id;
+        std::size_t next{};
+        bool depends{};
+    };
+    const auto visit = [&](const std::string& start) {
+        if (known(start)) return;
+        std::vector<Frame> stack;
+        visiting.insert(start);
+        stack.push_back({start});
+        while (!stack.empty()) {
+            auto& frame = stack.back();
+            const auto parent_it = parents.find(frame.id);
+            const auto count = parent_it == parents.end() ? 0 : parent_it->second.size();
+            if (frame.next < count) {
+                const auto parent = parent_it->second[frame.next++];
+                if (const auto value = known(parent)) {
+                    frame.depends = *value || frame.depends;
+                } else if (!visiting.insert(parent).second) {
+                    errors.emplace_back(restricted ? "Cycle detected without causal memory in coupled derivative graph."
+                                                   : "Cycle detected without causal memory in TrapezoidIntegrator derivative graph.");
+                } else {
+                    stack.push_back({parent});
+                }
+                continue;
+            }
+            const auto id = std::move(frame.id);
+            const bool depends = frame.depends;
+            stack.pop_back();
+            visiting.erase(id);
+            varying[id] = depends;
+            if (depends) {
+                const auto* element = instances.at(id);
+                if (element->has_state()) {
+                    errors.emplace_back((restricted ? "Coupled integration" : "Implicit TrapezoidIntegrator") +
+                        std::string(" derivative depends on stateful direct-feedthrough element '") + id +
+                        "'; only stateless feedback operations may be reevaluated.");
+                } else if (restricted && !dynamic_cast<const Gain*>(element) &&
+                           !dynamic_cast<const Adder*>(element) && !dynamic_cast<const Multiply*>(element)) {
+                    errors.emplace_back("Coupled integration derivative contains unsupported trial element '" + id +
+                                        "'; only built-in F64 arithmetic may be replayed.");
+                } else {
+                    rhs.push_back(id);
+                }
+            }
+            if (!stack.empty()) stack.back().depends = depends || stack.back().depends;
+        }
+    };
+    for (const auto& id : states) {
+        if (const auto it = parents.find(id); it != parents.end()) {
+            for (const auto& parent : it->second) visit(parent);
+        }
+    }
+    return rhs;
+}
+
+// Memory-level dependency graph, used to refuse a feedback cycle crossing
+// numerical methods. A one-way other-memory input is held for this interval.
+std::unordered_map<std::string, std::unordered_set<std::string>> memory_dependencies(
+    const InstanceMap& instances, const Parents& parents) {
+    std::unordered_map<std::string, std::unordered_set<std::string>> result;
+    for (const auto& [id, element] : instances) {
+        if (!element->has_causal_memory()) continue;
+        auto& ancestors = result[id];
+        std::unordered_set<std::string> seen;
+        std::vector<std::string> stack;
+        if (const auto it = parents.find(id); it != parents.end())
+            stack.insert(stack.end(), it->second.begin(), it->second.end());
+        while (!stack.empty()) {
+            auto current = std::move(stack.back());
+            stack.pop_back();
+            if (!seen.insert(current).second) continue;
+            if (instances.at(current)->has_causal_memory()) {
+                ancestors.insert(current);
+                continue;
+            }
+            if (const auto it = parents.find(current); it != parents.end())
+                stack.insert(stack.end(), it->second.begin(), it->second.end());
+        }
+    }
+    return result;
+}
+
 PrototypeMap prototypes_of(const InstanceMap& instances) {
     PrototypeMap prototypes;
     for (const auto& [id, element] : instances) {
@@ -376,70 +482,78 @@ CheckedSchema check_schema(const Schema& schema) {
         // integrator state. Independent sources/other memory outputs are held
         // fixed for this interval; stateful direct-feedthrough dependencies
         // must never be stepped repeatedly by the numerical solver.
+        const auto parents = parents_of(schema);
         std::unordered_set<std::string> implicit;
-        std::unordered_map<std::string, std::vector<std::string>> parents;
         for (const auto& [id, instance] : instances) {
             const auto* integration = dynamic_cast<const TrapezoidIntegration*>(instance);
             if (integration && integration->implicit_trapezoid_enabled()) implicit.insert(id);
         }
-        if (!implicit.empty()) {
-            for (const auto& connection : schema.connections()) {
-                parents[connection.to_element].push_back(connection.from_element);
+        if (!implicit.empty())
+            checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, false, checked.errors);
+
+        // Group selected F64 states by method, outer rate and substep count.
+        // Disconnected states with the same policy can share one solve; this
+        // is mathematically equivalent but the dense GL work scales with 2n.
+        for (const auto& spec : schema.elements()) {
+            const auto* integration = dynamic_cast<const CoupledIntegration*>(instances.at(spec.id));
+            if (!integration || integration->coupled_method() == CoupledMethod::None) continue;
+            const auto* element = instances.at(spec.id);
+            if (!element->has_causal_memory() || element->input_count() != 1 || element->output_count() != 1 ||
+                element->input_ports()[0].type != SignalType::F64 || element->output_ports()[0].type != SignalType::F64) {
+                checked.errors.emplace_back("Coupled integration requires one F64 state and derivative at '" + spec.id + "'.");
+                continue;
             }
-            std::unordered_map<std::string, bool> varying;
-            std::unordered_set<std::string> visiting;
-            // Known without a walk: integrators vary, causal memory and
-            // already classified elements do not need revisiting.
-            const auto known = [&](const std::string& id) -> std::optional<bool> {
-                if (implicit.contains(id)) return true;
-                if (instances.at(id)->has_causal_memory()) return false;
-                if (const auto it = varying.find(id); it != varying.end()) return it->second;
-                return std::nullopt;
-            };
-            // Post-order walk over derivative parents with an explicit stack,
-            // so a long derivative chain cannot exhaust the call stack.
-            struct Frame {
-                std::string id;
-                std::size_t next{};
-                bool depends{};
-            };
-            const auto visit = [&](const std::string& start) {
-                if (known(start)) return;
-                std::vector<Frame> stack;
-                visiting.insert(start);
-                stack.push_back({start});
-                while (!stack.empty()) {
-                    auto& frame = stack.back();
-                    const auto& inputs = parents[frame.id];
-                    if (frame.next < inputs.size()) {
-                        const auto parent = inputs[frame.next++];
-                        if (const auto value = known(parent)) {
-                            frame.depends = *value || frame.depends;
-                        } else if (!visiting.insert(parent).second) {
-                            checked.errors.emplace_back("Cycle detected without causal memory in TrapezoidIntegrator derivative graph.");
-                        } else {
-                            stack.push_back({parent});
-                        }
-                        continue;
-                    }
-                    const auto id = std::move(frame.id);
-                    const bool depends = frame.depends;
-                    stack.pop_back();
-                    visiting.erase(id);
-                    varying[id] = depends;
-                    if (depends) {
-                        if (instances.at(id)->has_state()) {
-                            checked.errors.emplace_back("Implicit TrapezoidIntegrator derivative depends on stateful "
-                                "direct-feedthrough element '" + id + "'; only stateless feedback operations may be reevaluated.");
-                        } else {
-                            checked.trapezoid_rhs.push_back(id);
+            const auto rate = element->declared_rate();
+            if (!rate) {
+                checked.errors.emplace_back("Coupled integration requires a declared dt at '" + spec.id + "'.");
+                continue;
+            }
+            auto it = std::ranges::find_if(checked.coupled_regions, [&](const auto& region) {
+                return region.method == integration->coupled_method() && region.rate == *rate &&
+                       region.substeps == integration->coupled_substeps();
+            });
+            if (it == checked.coupled_regions.end()) {
+                CheckedSchema::CoupledRegion region;
+                region.method = integration->coupled_method();
+                region.rate = *rate;
+                region.step_seconds = integration->coupled_step_seconds();
+                region.substeps = integration->coupled_substeps();
+                checked.coupled_regions.push_back(std::move(region));
+                it = std::prev(checked.coupled_regions.end());
+            }
+            it->states.push_back(spec.id);
+            for (const auto& edge : schema.connections()) {
+                if (edge.to_element == spec.id && edge.to_port == 0)
+                    it->derivative_connections.push_back(edge);
+            }
+        }
+        const auto dependencies = memory_dependencies(instances, parents);
+        for (auto& region : checked.coupled_regions) {
+            if (region.states.size() > 16)
+                checked.errors.emplace_back("Coupled integration currently supports at most 16 F64 states per region.");
+            std::unordered_set<std::string> states(region.states.begin(), region.states.end());
+            region.rhs = trial_rhs(instances, parents, states, true, checked.errors);
+            for (const auto& id : region.states) {
+                for (const auto& external : dependencies.at(id)) {
+                    if (states.contains(external)) continue;
+                    std::unordered_set<std::string> seen;
+                    std::vector<std::string> stack{external};
+                    bool feedback = false;
+                    while (!stack.empty() && !feedback) {
+                        auto current = std::move(stack.back());
+                        stack.pop_back();
+                        if (!seen.insert(current).second) continue;
+                        if (states.contains(current)) {
+                            feedback = true;
+                        } else if (const auto it = dependencies.find(current); it != dependencies.end()) {
+                            stack.insert(stack.end(), it->second.begin(), it->second.end());
                         }
                     }
-                    if (!stack.empty()) stack.back().depends = depends || stack.back().depends;
+                    if (feedback)
+                        checked.errors.emplace_back("Coupled integration feedback at '" + id +
+                            "' crosses method or region through '" + external +
+                            "'; use one numerical policy for all coupled states.");
                 }
-            };
-            for (const auto& id : implicit) {
-                for (const auto& parent : parents[id]) visit(parent);
             }
         }
     }
