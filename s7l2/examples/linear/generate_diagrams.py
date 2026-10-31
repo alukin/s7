@@ -38,8 +38,9 @@ def make(model, method):
         element('source', 'Constant', dict(value=drive), 3, 18,
                 'Applied force (N)' if mechanical else 'Applied voltage (V)')
     if rc:
-        if method == 'euler':
-            element('state', 'EulerIntegrator', dict(dt=.001, initial_value=initial),
+        if method != 'symplectic':
+            element('state', 'GaussLegendreIntegrator' if method == 'gauss' else 'EulerIntegrator',
+                    dict(dt=.001, initial_value=initial),
                     43, 18, 'Capacitor voltage (V)')
             state = ('state', 0)
         else:
@@ -60,9 +61,10 @@ def make(model, method):
                     'Position / velocity' if mechanical else 'Charge / current')
             position, velocity, target = ('state', 0), ('state', 1), 'state'
         else:
-            element('velocity', 'EulerIntegrator', dict(dt=.001, initial_value=0),
+            kind = 'GaussLegendreIntegrator' if method == 'gauss' else 'EulerIntegrator'
+            element('velocity', kind, dict(dt=.001, initial_value=0),
                     37, 18, 'Velocity (m/s)' if mechanical else 'Current (A)')
-            element('position', 'EulerIntegrator', dict(dt=.001, initial_value=initial),
+            element('position', kind, dict(dt=.001, initial_value=initial),
                     51, 18, 'Position (m)' if mechanical else 'Charge (C)')
             wire('velocity', 'position')
             position, velocity, target = ('position', 0), ('velocity', 0), 'velocity'
@@ -103,3 +105,6 @@ if __name__ == '__main__':
         for method in ('euler', 'symplectic'):
             diagram = make(model, method)
             (ROOT / f'{diagram["id"]}.s7diagram').write_text(json.dumps(diagram, indent=2) + '\n')
+    for model in ('rc_charge', 'rc_discharge', 'rlc_step'):
+        diagram = make(model, 'gauss')
+        (ROOT / f'{diagram["id"]}.s7diagram').write_text(json.dumps(diagram, indent=2) + '\n')

@@ -64,5 +64,17 @@ int main() try {
             std::cout << model << ' ' << method << ": max errors " << coarse << ", " << fine << '\n';
         }
     }
+    for (const std::string model : {"rc_charge", "rc_discharge", "rlc_step"}) {
+        const double error = check(model, "gauss", .001);
+        std::cout << model << " gauss: max error " << error << '\n';
+    }
+    auto oscillator = s7tests::read_json_object(std::filesystem::path(S7_LINEAR_DIR).parent_path() /
+                                                  "2int_osc_gauss.s7diagram");
+    auto oscillator_schema = s7tests::build_schema(oscillator);
+    require(s7::Validator::validate(oscillator_schema).ok(), "Gauss oscillator diagram must validate");
+    s7::NodeRuntime oscillator_runtime(s7::Compiler::compile(oscillator_schema));
+    for (int k = 0; k <= 1000; ++k) oscillator_runtime.step();
+    require(std::abs(oscillator_runtime.real_output_of("eulerintegrator_1")-std::cos(1.)) < 1e-9,
+            "Gauss oscillator diagram must execute the actual coupled method");
     return 0;
 } catch (const std::exception& ex) { std::cerr << ex.what() << '\n'; return 1; }
