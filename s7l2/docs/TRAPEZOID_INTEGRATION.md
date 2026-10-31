@@ -120,13 +120,13 @@ measured results and reproduction commands.
 
 The [Phase 3 real-graph comparison](NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
 executes Euler substeps and two-stage Gauss–Legendre through a research harness.
-The separate [production integration PR](https://github.com/alukin/s7/pull/8)
-adds opt-in runtime methods; the Phase 3 harness remains research code.
-It records cases where this trapezoid implementation's fixed-point solve
-fails at large `dt` even though its mathematical transition exists. Those
+The production methods above implement the same equations through the runtime;
+the Phase 3 harness remains research code. The comparison records cases where
+this trapezoid implementation's fixed-point solve fails at large `dt` even
+though its mathematical transition exists. Those
 failures reflect the solver's contraction requirement, not instability of
-the implicit trapezoidal formula. This research branch does not change this
-trapezoid implementation or its publication contract.
+the implicit trapezoidal formula. The coupled integration work retains this
+trapezoid implementation and its publication contract.
 
 Mathematical background: [G. Fass, numerical ODE lecture notes](https://www.math.iit.edu/~fass/472Notes)
 (trapezoidal rule and fixed-point solution), and the

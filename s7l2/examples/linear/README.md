@@ -155,11 +155,12 @@ cmake --build build --target s7tests_linear_examples_smoke --parallel 2
 ctest --test-dir build -R '^s7tests_linear_examples_smoke$' --output-on-failure
 ```
 
-The test loads all ten saved diagrams, validates and compiles their actual
-connections, and checks every published state at 1 and 2 kHz. Durations are
-10 s, or 30 s for resonance. It checks initial states, timestamps, finite values,
-and maximum absolute error below 0.05 in each state's stated units (including
-capacitor voltage). The coarse/fine maximum-error ratio must be 1.8–2.2.
+The test loads all ten original Euler and symplectic diagrams, validates and
+compiles their connections, and checks every published state at 1 and 2 kHz.
+Durations are 10 s, or 30 s for resonance. It checks initial states, timestamps,
+finite values, and maximum absolute error below 0.05 in each state's stated
+units (including capacitor voltage). The coarse/fine maximum-error ratio must
+be 1.8–2.2.
 This is a teaching envelope, not a general integrator qualification.
 
 References are closed-form solutions, independent of the S7 execution path.
@@ -188,17 +189,18 @@ feedback-correction methods in
 separate research-runner experiments, not editable S7 elements.
 The coupled Euler substeps and Gauss–Legendre stages in the
 [Phase 3 real-graph study](../../docs/NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
-use a headless research execution policy. The separate
-[production integration PR](https://github.com/alukin/s7/pull/8) adds opt-in
-runtime methods and editable diagrams; the Phase 3 runner remains a research
-tool. That study uses the same RC and RLC equations, plus the two-integrator
-oscillator, and compares its Euler substeps with ordinary finer-step S7
-execution.
+use a headless research execution policy. The
+[production integration contract](../../docs/COUPLED_INTEGRATION.md) describes
+the separate runtime methods and the Gauss diagrams above; the Phase 3 runner
+remains a research tool. That study uses the same RC and RLC equations, plus
+the two-integrator oscillator, and compares its Euler substeps with ordinary
+finer-step S7 execution.
 
 **Simulate.** Compare the supplied 1 and 2 kHz runs, then deliberately enlarge
-`dt` in a copy of a diagram. Keep each element's `dt` consistent with the run
-rate. For oscillators, observe many periods; a short trajectory can hide
-amplitude growth or a small frequency error.
+the outer step by lowering the Studio Run rate in a copy of a diagram. The
+registry-created integrators follow that rate; their stored `dt` fields are
+legacy metadata. For oscillators, observe many periods; a short trajectory can
+hide amplitude growth or a small frequency error.
 
 **Measure.** Record charge/discharge time constants, RLC overshoot and settling,
 and oscillator phase and energy. A transfer-function zero describes how the
