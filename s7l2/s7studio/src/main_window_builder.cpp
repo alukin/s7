@@ -31,8 +31,11 @@ private:
     {
         // Stylesheet palette expressions can retain the palette from their
         // first polish. Resolve the same role again on desktop palette changes.
-        window_->setStyleSheet(QStringLiteral("QToolBar { background: %1; } QToolBar QToolButton { color: palette(button-text); } QToolBar QToolButton:disabled { color: palette(mid); }")
-            .arg(QApplication::palette().color(QPalette::Button).name()));
+        // A border makes the stylesheet draw the whole toolbar; with a
+        // background alone the base style (e.g. Fusion's gradient) paints over it.
+        const auto palette = QApplication::palette();
+        window_->setStyleSheet(QStringLiteral("QToolBar { background: %1; border: none; border-bottom: 1px solid %2; } QToolBar QToolButton { color: palette(button-text); } QToolBar QToolButton:disabled { color: palette(mid); }")
+            .arg(palette.color(QPalette::Button).name(), palette.color(QPalette::Mid).name()));
     }
     bool eventFilter(QObject* watched, QEvent* event) override
     {
@@ -41,6 +44,22 @@ private:
     }
     QMainWindow* window_;
 };
+
+// Icon-only buttons are announced by their command name without a
+// dialog-opening ellipsis. Qt's derived name keeps "…" in some versions
+// (6.10), so name each button explicitly and follow later text changes.
+void nameToolButtonsWithoutEllipsis(QToolBar* toolbar)
+{
+    for (auto* action : toolbar->actions()) {
+        auto* button = toolbar->widgetForAction(action);
+        if (!button) continue;
+        const auto update = [action, button] {
+            button->setAccessibleName(QString(action->text()).remove(QStringLiteral("...")).remove(QChar(0x2026)));
+        };
+        update();
+        QObject::connect(action, &QAction::changed, button, update);
+    }
+}
 }
 
 auto MainWindowBuilder::createActions(QMainWindow* window) -> MainWindowActions
@@ -168,6 +187,8 @@ auto MainWindowBuilder::buildMenuAndToolbar(QMainWindow* window, const MainWindo
     runToolBar->addAction(actions.resumeAction);
     runToolBar->addAction(actions.stopAction);
     runToolBar->addAction(actions.resetAction);
+    nameToolButtonsWithoutEllipsis(fileToolBar);
+    nameToolButtonsWithoutEllipsis(runToolBar);
     return menus;
 }
 
