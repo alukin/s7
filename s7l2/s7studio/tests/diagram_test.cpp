@@ -210,6 +210,23 @@ int main(int argc, char** argv)
         check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
     }
     {
+        DiagramScene edits;
+        const auto node = edits.addElement(element("changing", "Gain"), {40, 40});
+        check(node->gridSize() == QSize(9, 5), "one-input element starts at its minimum height");
+        auto adder = node->element();
+        adder.type = "Adder";
+        adder.params = {{"weights", boost::json::array{1, 1, 1, 1}}};
+        edits.changeElement(node, adder);
+        check(node->inputs().size() == 4 && node->gridSize() == QSize(9, 9),
+              "adding ports expands the element to fit them");
+        edits.undoStack()->undo();
+        check(node->element().type == "Gain" && node->inputs().size() == 1 && node->gridSize() == QSize(9, 5),
+              "undoing a port-count edit restores the prior dimensions");
+        edits.undoStack()->redo();
+        check(node->element().type == "Adder" && node->inputs().size() == 4 && node->gridSize() == QSize(9, 9),
+              "redoing a port-count edit restores the expanded dimensions");
+    }
+    {
         DiagramScene sizes;
         const auto source = sizes.addElement(element("source", "Constant"), {40, 40});
         const auto sink = sizes.addElement(element("sink", "Gain"), {400, 40});
@@ -255,6 +272,33 @@ int main(int argc, char** argv)
         try { DiagramScene bad; SceneSerializer{}.deserialize(invalid, bad); }
         catch (const std::runtime_error&) { rejected = true; }
         check(rejected, "reopening refuses element dimensions below the usable minimum");
+    }
+    {
+        DiagramScene obstacles;
+        const auto source = obstacles.addElement(element("source", "Constant"), {40, 100});
+        const auto sink = obstacles.addElement(element("sink", "Gain"), {700, 100});
+        const auto blocker = obstacles.addElement(element("blocker", "Constant"), {340, 20});
+        check(obstacles.connectEnds(out(source), in(sink)).isEmpty(), "disconnected obstacle fixture connects");
+        check(obstacles.signalWires().size() == 1 &&
+              obstacles.signalWires().front()->upstream.node.lock() == source &&
+              obstacles.signalWires().front()->downstream.node.lock() == sink,
+              "resized obstacle has no incident wires");
+        checkRoutes(obstacles, "before disconnected obstacle resize");
+        const auto originalRoute = obstacles.signalWires().front()->pointsAbsolute();
+        blocker->setSelected(true);
+        const auto handle = blocker->resizeHandleSceneRect().center();
+        mouse(obstacles, QEvent::GraphicsSceneMousePress, handle);
+        mouse(obstacles, QEvent::GraphicsSceneMouseMove, handle + QPointF(0, 3 * kGridStep));
+        check(obstacles.signalWires().front()->pointsAbsolute() != originalRoute,
+              "disconnected obstacle reroutes the unrelated wire during preview");
+        checkRoutes(obstacles, "during disconnected obstacle resize");
+        mouse(obstacles, QEvent::GraphicsSceneMouseRelease, handle + QPointF(0, 3 * kGridStep));
+        check(blocker->gridSize() == QSize(9, 8), "disconnected obstacle resize is committed");
+        checkRoutes(obstacles, "after disconnected obstacle resize");
+        obstacles.undoStack()->undo();
+        checkRoutes(obstacles, "after disconnected obstacle resize undo");
+        obstacles.undoStack()->redo();
+        checkRoutes(obstacles, "after disconnected obstacle resize redo");
     }
     {
         auto nested = element("nested", "MyLibraryElement");

@@ -190,7 +190,12 @@ auto ConnectionPlanner::plan(const WireEnd& a, const WireEnd& b, QVector<QPointF
         downstream.index == static_cast<int>(target->inputs().size()) - 1) {
         auto element = target->element();
         element.params["channel_count"] = static_cast<int>(target->inputs().size());
-        result.change.elements.push_back({target, target->element(), std::move(element)});
+        const auto ports = elementPorts(element.type, element.params, element.schema);
+        const int count = std::max({static_cast<int>(ports.inputs.size()), static_cast<int>(ports.outputs.size()),
+                                    target->minimumInputs(), target->minimumOutputs()});
+        const QSize beforeSize = target->gridSize();
+        const QSize afterSize(beforeSize.width(), std::max(beforeSize.height(), std::max(5, 2 * count + 1)));
+        result.change.elements.push_back({target, target->element(), std::move(element), beforeSize, afterSize});
     }
     return result;
 }

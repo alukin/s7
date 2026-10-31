@@ -262,20 +262,18 @@ void DiagramRouting::route(std::vector<SignalWire*> forced, const Attached& atta
 
 void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attached& attached, const std::function<void()>& routeProgress) const
 {
-    if (forced.empty()) {
-        return;
-    }
-
     QElapsedTimer timer;
     timer.start();
     const auto initiallyForced = forced.size();
     std::size_t checkedRoutes = 0;
     std::size_t reroutedRoutes = forced.size();
     int validationPasses = 0;
-    route(std::move(forced), attached, routeProgress);
-    // A moved element can invalidate any wire's route, not just those on
-    // forced's own nets (e.g. a dragged element now overlapping an unrelated
-    // wire), so the settle passes below re-check every wire in the scene.
+    if (!forced.empty()) {
+        route(std::move(forced), attached, routeProgress);
+    }
+    // A moved or resized element can invalidate a wire even when none of its
+    // own wires were forced (e.g. an unrelated wire under a new obstacle).
+    // The settle passes re-check every wire in the scene.
     std::vector<SignalWire*> candidates;
     for (const auto& wire : wires_) {
         candidates.push_back(wire.get());
