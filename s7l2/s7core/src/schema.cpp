@@ -79,7 +79,8 @@ void Schema::step() {
 
     for (std::size_t index = 0; index < exposed_inputs_.size(); ++index) {
         const auto& input = exposed_inputs_[index];
-        const auto& state = std::static_pointer_cast<ExposedInputState>(exposed_input_states_[index]);
+        // Borrow the state; a shared_ptr copy would add two atomic updates per input.
+        auto* const state = static_cast<ExposedInputState*>(exposed_input_states_[index].get());
         if (input.type == SignalType::C64) {
             state->complex = read_input<ComplexValue>(index);
         } else {
