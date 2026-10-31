@@ -363,6 +363,41 @@ This release item plans software emulation. Hardware control and complete UTG
 feature parity require separate scope decisions. Implementation remains future
 work and is independent of the integrator-research branch.
 
+## Test suite grouping and selection
+
+Reminder added at the maintainer's request on 2026-10-31. Refine and group the
+tests so a change runs the tests that cover it, not the whole suite. For
+example, a Studio UI-only change (plot shortcuts, element painting, dialogs)
+should not need the expensive numerical runs such as the double/coupled
+pendulum tests.
+
+Current state: CTest labels exist only for a few Studio GUI tests (`gui`,
+`qt-regression`, `rendering`, `quick3d`); everything else runs unlabelled. A
+full `ctest -R s7studio -j16` (42 tests) takes about 3 min 15 s on the 7940HS
+dev host, almost all of it in `s7studio_coupled_pendulum` (~194 s),
+`s7studio_gui_workflows` (~77 s) and `s7studio_nonlinear_pendulum` (~39 s);
+most other tests take seconds. User machines are several times slower.
+
+Proposed scope for review:
+
+- Label every test by area (core, runtime, networking/distributed,
+  cross-language, Studio diagram, Studio viewers, Studio GUI workflows) and by
+  cost (`fast`, `slow`), with long numerical/simulation runs in their own label.
+- Document selections, e.g. `ctest -L studio -LE slow` for UI changes, and a
+  table from changed paths to the labels to run, in the developer
+  documentation and `AGENTS.md`.
+- Keep the full suite, including slow numerical tests, for CI, merges to
+  `main`, release qualification and changes to runtime, element or numerical
+  code. Selection must narrow local runs, not reduce release coverage.
+- Check whether the slow tests can be shortened (fewer steps, smaller cases)
+  without losing what they verify; record the tolerances they keep.
+- Fix timing-dependent tests found while measuring: in
+  `s7studio_window_lifecycle`, `closeAndDestruct(close-paused)` and
+  `closeAndDestruct(destruct-paused)` sometimes miss the `Stopping` state
+  before the window goes (`stoppedBeforeDestruction`). On 2026-10-31 it failed
+  68 of 160 runs with 16 copies in parallel on the dev host, and occasionally
+  in `ctest -j16`; it passes when run alone.
+
 ## Planning and release boundary
 
 Establish the distributed contract and conformance baseline; then the Python
