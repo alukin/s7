@@ -321,7 +321,7 @@ claims about an implemented settling method:
 
 ## Nested schemas — flattened (ADR-024); one limit recorded 2026-10-31
 
-- **Open: feedback loops across nodes are not validated as a whole.** Deployment resolves types over the whole diagram, but each node validates only its own part, in which `NetSource` and `NetSink` are direct-feedthrough stream ends. A loop that leaves a node through one stream and returns through another is therefore never checked for causal memory, and without memory on its path the nodes wait on each other until `max_wait_ms` expires. This predates ADR-024 and does not depend on nesting. A fix would check cycles over the whole diagram before `PREPARE_DEPLOYMENT`, treating each stream as a wire, and would need a decision on whether a stream may ever count as causal memory.
+- **Open: feedback loops across nodes are not validated as a whole.** Deployment resolves types over the whole diagram, but each node validates only its own part, in which `NetSource` and `NetSink` are direct-feedthrough stream ends. A loop that leaves a node through one stream and returns through another is therefore never checked for causal memory, and without memory on its path the nodes wait on each other until `max_wait_ms` expires. This predates ADR-024 and does not depend on nesting. A fix would check cycles over the whole diagram before `PREPARE_DEPLOYMENT`, treating each stream as a wire, and would need a decision on whether a stream may ever count as causal memory. **Scheduled for 0.2.0** (2026-10-31): [work plan](RELEASE_0.2.0_WORKPLAN.md#feedback-loops-across-nodes--020-task), steps X1–X3.
 
 ## P3 — Deferred architecture capabilities (documented MVP limits, not defects)
 

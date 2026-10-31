@@ -196,6 +196,22 @@ exposed port. Implemented on the `feature/nested-schema-flattening` branch for
 review (PR #10). Open limit: loops across nodes are not validated as a whole
 ([open problems](OPEN_PROBLEMS.md#nested-schemas--flattened-adr-024-one-limit-recorded-2026-10-31)).
 
+## Feedback loops across nodes — 0.2.0 task
+
+Recorded 2026-10-31 as a 0.2.0 task by the maintainer
+([open problem](OPEN_PROBLEMS.md#nested-schemas--flattened-adr-024-one-limit-recorded-2026-10-31)).
+Deployment resolves types over the whole diagram, but each node validates only
+its own part, in which `NetSource` and `NetSink` are direct-feedthrough stream
+ends. A loop that leaves a node through one stream and returns through another
+is never checked for causal memory; without memory on its path, the nodes wait
+on each other until `max_wait_ms` expires.
+
+| Step | Deliverable | Status |
+| --- | --- | --- |
+| X1 | Decide whether a stream may ever count as causal memory, or is always a direct wire (affects whether a cross-node loop needs an explicit `Delay`), and record it in an ADR. | Planned (needs decision) |
+| X2 | Check cycles over the whole diagram before `PREPARE_DEPLOYMENT` (deployment client, used by Studio and `s7ctl`), treating each stream as decided in X1; a loop without causal memory refuses the deployment, naming the elements and streams on it, before any node is prepared. Nested schemas are flattened for the check (ADR-024). | Planned |
+| X3 | Tests: a refused cross-node loop without memory, an accepted one with a `Delay` on either node, a loop through a nested schema's internal memory, and Studio's deploy path reporting the refusal. | Planned |
+
 ## SDR sample formats — 0.2.0 tasks
 
 Decided and implemented 2026-10-31 ([ADR-023](../../doc/S7_Architectural_Decisions.md#adr-023)). S7's integer and complex integer types exist for SDR I/Q

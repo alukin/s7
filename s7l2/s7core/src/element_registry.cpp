@@ -368,6 +368,7 @@ void ElementRegistry::register_element(const ElementDescriptor& descriptor) {
     size_t index = descriptors_.size();
     name_to_index_[type_name] = index;
     descriptors_.push_back(descriptor);
+    ++generation_;
 }
 
 const ElementDescriptor* ElementRegistry::find(const std::string& type_name) const {
@@ -415,11 +416,13 @@ void ElementRegistry::unregister(const std::vector<std::string>& type_names) {
     for (size_t index = 0; index < descriptors_.size(); ++index) {
         name_to_index_[descriptors_[index].type_name()] = index;
     }
+    ++generation_;
 }
 
 void ElementRegistry::clear() {
     descriptors_.clear();
     name_to_index_.clear();
+    ++generation_;
 }
 
 } // namespace s7

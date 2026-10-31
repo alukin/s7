@@ -6,6 +6,8 @@
 
 #include "s7/element_registry.hpp"
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -38,7 +40,8 @@ public:
     // Get all available categories
     [[nodiscard]] std::vector<std::string> categories() const;
 
-    // Get element by type name
+    // Get element by type name; the pointer is valid until the registry's
+    // registrations change.
     [[nodiscard]] const ElementCatalogEntry* find_element(
         const std::string& type_name
     ) const;
@@ -48,10 +51,13 @@ public:
 
 private:
     const ElementRegistry& registry_;
+    // Entries built from the registry at entries_generation_; rebuilt when
+    // the registry's registrations have changed since (plugins, libraries).
     mutable std::vector<ElementCatalogEntry> entries_;
-    mutable bool entries_cached_ = false;
+    mutable std::optional<std::uint64_t> entries_generation_;
 
     void build_entries() const;
+    void refresh() const;
 };
 
 } // namespace s7

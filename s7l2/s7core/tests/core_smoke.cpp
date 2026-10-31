@@ -740,6 +740,42 @@ int main() try
         if (!catalogEntry || catalogEntry->input_count != 1 || catalogEntry->output_count != 1) {
             throw std::runtime_error("Schema library catalog entry was not indexed correctly.");
         }
+
+        // A catalog follows registrations made after it was built.
+        registry.unregister({"DoubleGain"});
+        if (catalog.find_element("DoubleGain") || catalog.all_elements().size() != registry.element_count()) {
+            throw std::runtime_error("The element catalog kept an unregistered type.");
+        }
+        s7::SchemaLibraryLoader::register_library(library, registry);
+        if (!catalog.find_element("DoubleGain") || catalog.all_elements().size() != registry.element_count()) {
+            throw std::runtime_error("The element catalog missed a type registered after it was built.");
+        }
+    }
+
+    {
+        // FirFilter's ring buffer computes y[n] = sum_k taps[k] * x[n-k] with
+        // the same products in the same order as shifting the history.
+        for (const std::size_t count : {1u, 2u, 3u, 7u, 16u}) {
+            std::vector<double> taps;
+            for (std::size_t k = 0; k < count; ++k) taps.push_back(0.1 * static_cast<double>(k + 1) - 0.37);
+            s7::FirFilter fir(taps);
+            double input = 0.0;
+            const s7::InputBinding binding = &input;
+            fir.bind_inputs(std::span(&binding, 1));
+            std::vector<double> history(count, 0.0);
+            for (int n = 0; n < 50; ++n) {
+                input = std::sin(0.7 * n) * 3.0 + 0.001 * n * n;
+                for (std::size_t k = count - 1; k > 0; --k) history[k] = history[k - 1];
+                history[0] = input;
+                double expected = 0.0;
+                for (std::size_t k = 0; k < count; ++k) expected = expected + taps[k] * history[k];
+                fir.step();
+                if (*static_cast<const double*>(fir.outputs()[0]) != expected) {
+                    throw std::runtime_error("FirFilter with " + std::to_string(count) + " taps differs from the reference at step " +
+                                             std::to_string(n) + ".");
+                }
+            }
+        }
     }
 
     {

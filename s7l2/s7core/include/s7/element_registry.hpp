@@ -106,6 +106,10 @@ public:
     // Clear all registrations (for testing)
     void clear();
 
+    // Advances whenever the registered types change (register, unregister,
+    // clear), so derived views such as ElementCatalogService can refresh.
+    [[nodiscard]] std::uint64_t generation() const { return generation_; }
+
 private:
     ElementRegistry() = default;
     ~ElementRegistry() = default;
@@ -116,6 +120,7 @@ private:
 
     std::vector<ElementDescriptor> descriptors_;
     std::unordered_map<std::string, size_t> name_to_index_;  // O(1) lookup
+    std::uint64_t generation_{};
 };
 
 } // namespace s7

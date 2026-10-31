@@ -41,14 +41,19 @@ void ElementCatalogService::build_entries() const
         return a.display_name < b.display_name;
     });
 
-    entries_cached_ = true;
+    entries_generation_ = registry_.generation();
+}
+
+void ElementCatalogService::refresh() const
+{
+    if (entries_generation_ != registry_.generation()) {
+        build_entries();
+    }
 }
 
 std::vector<ElementCatalogEntry> ElementCatalogService::all_elements() const
 {
-    if (!entries_cached_) {
-        build_entries();
-    }
+    refresh();
     return entries_;
 }
 
@@ -80,9 +85,7 @@ std::vector<std::string> ElementCatalogService::categories() const
 
 const ElementCatalogEntry* ElementCatalogService::find_element(const std::string& type_name) const
 {
-    if (!entries_cached_) {
-        build_entries();
-    }
+    refresh();
 
     for (const auto& entry : entries_) {
         if (entry.type_name == type_name) {

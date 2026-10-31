@@ -782,7 +782,7 @@ public:
                         std::optional<double> design_rate_hz = std::nullopt)
         : Element("FirFilter", true)
         , taps_(std::move(taps))
-        , history_(taps_.size(), value_type{})
+        , history_(2 * taps_.size(), value_type{})
         , overflow_(overflow)
         , design_rate_(design_rate_hz)
     {
@@ -795,13 +795,17 @@ public:
 
     void step() override
     {
-        for (std::size_t index = history_.size() - 1; index > 0; --index) {
-            history_[index] = history_[index - 1];
-        }
-        history_[0] = widen<Type, Acc>(read_input<input_type>(0));
+        // A ring buffer stored twice: the newest sample goes to newest_ and
+        // newest_ + N, so x[n-k] is history_[newest_ + k] for every k < N,
+        // contiguous, without shifting N values each step. The products and
+        // their order are those of y[n] = sum_k taps[k] * x[n-k].
+        const auto count = taps_.size();
+        newest_ = newest_ == 0 ? count - 1 : newest_ - 1;
+        history_[newest_] = history_[newest_ + count] = widen<Type, Acc>(read_input<input_type>(0));
+        const value_type* recent = history_.data() + newest_;
         value_type sum = Ops::zero();
-        for (std::size_t index = 0; index < taps_.size(); ++index) {
-            sum = Ops::add(sum, Ops::multiply(taps_[index], history_[index], overflow_), overflow_);
+        for (std::size_t index = 0; index < count; ++index) {
+            sum = Ops::add(sum, Ops::multiply(taps_[index], recent[index], overflow_), overflow_);
         }
         output_value_ = sum;
     }
@@ -810,7 +814,8 @@ public:
 
 private:
     std::vector<value_type> taps_;
-    std::vector<value_type> history_;
+    std::vector<value_type> history_; // 2 N values: see step()
+    std::size_t newest_{};
     Overflow overflow_;
     DesignRate design_rate_;
     value_type output_value_{};
