@@ -115,16 +115,14 @@ int main(int argc, char** argv)
         plot->setYRange(-1.0, 8.0);
         plot->bridge()->plotAreaSize = QSizeF(400, 200);
         emit plot->hoveredPoint(20.001, 7.0, true);
-        const auto rows = plot->bridge()->hoverTip;
         const auto markers = plot->bridge()->hoverMarkers;
         auto* readout = scope.findChild<QLabel*>(QStringLiteral("scope.hoverReadout"));
-        if (rows.size() != 1 || !rows.front().toMap().value("text").toString().contains(QStringLiteral("= 7"))
-            || markers.size() != 1 || markers.front().toMap().value("y").toDouble() != 7.0
-            || !readout || !readout->text().contains(QStringLiteral("= 7")) || plot->bridge()->hoverTipEnabled
+        if (markers.size() != 1 || markers.front().toMap().value("y").toDouble() != 7.0
+            || !readout || !readout->text().contains(QStringLiteral("= 7"))
             || !plot->bridge()->cursorVisible || std::abs(plot->bridge()->cursorX - 20.001) > 1e-12)
             throw std::runtime_error("Scope hover did not show the exact stored sample");
         emit plot->hoveredPoint(20.001, 7.0, false);
-        if (!plot->bridge()->hoverTip.isEmpty() || !plot->bridge()->hoverMarkers.isEmpty() || !readout->text().isEmpty()
+        if (!plot->bridge()->hoverMarkers.isEmpty() || !readout->text().isEmpty()
             || plot->bridge()->cursorVisible)
             throw std::runtime_error("Scope hover did not clear on pointer exit");
     }
@@ -140,7 +138,7 @@ int main(int argc, char** argv)
         plot->setYRange(0.0, 1.0);
         plot->bridge()->plotAreaSize = QSizeF(400, 200);
         emit plot->hoveredPoint(.5, .5, true);
-        if (plot->bridge()->hoverTip.size() != 1 || plot->bridge()->hoverMarkers.size() != 1)
+        if (plot->bridge()->hoverMarkers.size() != 1)
             throw std::runtime_error("Scope hover missed a sparse line segment");
         scope.clearSamples();
         scope.appendSample(0.0, 0.0);
@@ -150,7 +148,7 @@ int main(int argc, char** argv)
         plot->setXRange(0.0, 1.0);
         plot->setYRange(0.0, 1.0);
         emit plot->hoveredPoint(.25, .25, true);
-        if (!plot->bridge()->hoverTip.isEmpty())
+        if (!plot->bridge()->hoverMarkers.isEmpty())
             throw std::runtime_error("Scope hover crossed an explicit trace gap");
     }
     // Display reduction must retain an isolated peak and a broken trace;

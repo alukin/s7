@@ -441,7 +441,6 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     plot_->setLegendVisible(true);
     plot_->setAxisTitles(QStringLiteral("model time (s)"), QStringLiteral("value (unit unspecified)"));
     plot_->bridge()->inspectionEnabled = true;
-    plot_->bridge()->hoverTipEnabled = false;
     emit plot_->bridge()->inspectionChanged();
     plot_->setToolTip(QStringLiteral("Hover over a trace for stored sample values. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     tabs_ = new QTabWidget(this);
@@ -851,10 +850,9 @@ void ScopeViewWindow::updateHover(const double timeSeconds, const double value, 
             if (distance < bestDistance) { bestDistance = distance; bestTime = sample->x(); }
         }
     }
-    if (rows != bridge->hoverTip || markers != bridge->hoverMarkers) {
-        bridge->hoverTip = rows;
+    if (markers != bridge->hoverMarkers) {
         bridge->hoverMarkers = markers;
-        emit bridge->hoverTipChanged();
+        emit bridge->hoverMarkersChanged();
     }
     QStringList values;
     for (const auto& row : rows) values.push_back(row.toMap().value(QStringLiteral("text")).toString());

@@ -319,7 +319,7 @@ Rectangle {
         width: view.plotArea.width
         height: view.plotArea.height
         clip: true
-        // Rings on the samples the pointer tooltip describes.
+        // Rings on the stored samples nearest the pointer.
         Repeater {
             model: plot.hoverMarkers
             delegate: Rectangle {
@@ -628,49 +628,6 @@ Rectangle {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: { entry.forceActiveFocus(); plot.selectLegend(entry.modelData.index) }
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    // Translucent value box beside the pointer; it flips sides near the edges.
-    Rectangle {
-        id: hoverTip
-        objectName: "viewer.hoverTip"
-        readonly property point pointer: inspectionHover.point.position
-        visible: plot.inspectionEnabled && plot.hoverTipEnabled && !root.markerDragging && inspectionHover.hovered && plot.hoverTip.length > 0
-        width: tipColumn.implicitWidth + 14
-        height: tipColumn.implicitHeight + 10
-        x: pointer.x + 18 + width <= root.width ? pointer.x + 18 : Math.max(0, pointer.x - 18 - width)
-        y: Math.max(0, Math.min(pointer.y + 18 + height <= root.height ? pointer.y + 18 : pointer.y - 18 - height,
-                                root.height - height))
-        color: "#d9ffffff"
-        border.color: "#99707070"
-        radius: 4
-
-        Column {
-            id: tipColumn
-            x: 7
-            y: 5
-            spacing: 2
-            Repeater {
-                model: plot.hoverTip
-                Row {
-                    id: tipRow
-                    required property var modelData
-                    spacing: 6
-                    Rectangle {
-                        visible: tipRow.modelData.color !== undefined
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 12
-                        height: 3
-                        color: tipRow.modelData.color !== undefined ? tipRow.modelData.color : "transparent"
-                    }
-                    Text {
-                        text: tipRow.modelData.text
-                        font.pixelSize: 12
-                        color: tipRow.modelData.color !== undefined ? "#202020" : "#505050"
                     }
                 }
             }

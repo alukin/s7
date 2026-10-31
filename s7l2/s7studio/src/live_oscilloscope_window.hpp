@@ -37,9 +37,9 @@ public:
     viewers::LinePlotView* plotView() const { return plot_; }
     const observation::LiveFrame& displayedFrame() const { return *frame_; }
     QString inspect(double time, bool active = true);
-    // Tooltip rows for traces drawn within a few pixels of the pointer at
-    // (x, y) in plot coordinates; empty when no trace is near.
-    QVariantList hoverTip(double x, double y, bool active = true);
+    // Markers on the samples of traces drawn within a few pixels of the
+    // pointer at (x, y) in plot coordinates; empty when no trace is near.
+    QVariantList hoverMarkers(double x, double y, bool active = true);
     // Applies saved trigger settings, e.g. a diagram preset, without
     // reporting them back through triggerSettingsEdited().
     void setTriggerSettings(const observation::TriggerSettings& settings) override;

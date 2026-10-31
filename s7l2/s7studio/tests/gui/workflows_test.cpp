@@ -18,6 +18,7 @@
 #include "viewers/pair_analysis_view.hpp"
 #include "viewers/window_inspection_panel.hpp"
 #include "analysis/worker_pool.hpp"
+#include <QElapsedTimer>
 #include <QSemaphore>
 #include <QThreadPool>
 #include <QJsonDocument>
@@ -121,6 +122,20 @@ class Workflows : public QObject {
         QDir{}.mkpath(directory);
         QTest::qWait(150);
         QVERIFY(widget->grab().save(directory + '/' + name + ".png"));
+    }
+    // Live views compute frames and axis ranges asynchronously, so one hover
+    // can land before the data or range it targets. Hover again until done()
+    // holds, recomputing the target and nudging by a pixel so each attempt is
+    // a pointer move the plot reacts to.
+    template <typename Target, typename Done>
+    static bool hoverUntil(QWidget* widget, Target target, Done done, int timeout_ms = 5000) {
+        QElapsedTimer timer; timer.start();
+        for (int nudge = 0; timer.elapsed() < timeout_ms; nudge ^= 1) {
+            QTest::mouseMove(widget, target() + QPoint(nudge, 0));
+            QTest::qWait(50);
+            if (done()) return true;
+        }
+        return false;
     }
     QAction* action(const char* name) { return window_->findChild<QAction*>(QString::fromLatin1(name)); }
     s7studio::diagram::DiagramEditor* editor() { return window_->findChild<s7studio::diagram::DiagramEditor*>(); }
@@ -956,15 +971,14 @@ private slots:
         const QPointF onTrace(area.left() + (.5 - plot->xMin()) / (plot->xMax() - plot->xMin()) * area.width(),
             area.top() + (plot->yMax() - .5) / (plot->yMax() - plot->yMin()) * area.height());
         QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
-        auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
+        // Values appear in the readout; there is no pointer tooltip.
+        QVERIFY(!quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"));
         auto* readout = viewer.findChild<QLabel*>(QStringLiteral("scope.hoverReadout")); QVERIFY(readout);
         QTRY_VERIFY(readout->text().contains(QStringLiteral("hover-check = 0.5")));
-        QVERIFY(!tip->isVisible());
         QCOMPARE(plot->bridge()->hoverMarkers.size(), 1);
         QVERIFY(plot->bridge()->cursorVisible);
         QTest::mouseMove(quick, QPoint(2, 2));
-        QTRY_VERIFY(!tip->isVisible());
-        QVERIFY(plot->bridge()->hoverTip.isEmpty());
+        QTRY_VERIFY(plot->bridge()->hoverMarkers.isEmpty());
         QVERIFY(readout->text().isEmpty());
     }
 
@@ -1264,35 +1278,35 @@ private slots:
         auto* graph = quick->rootObject()->findChild<QQuickItem*>("viewer.graphs"); QVERIFY(graph);
         const auto area = graph->property("plotArea").toRectF(); QVERIFY(area.width() > 0);
         const auto center = graph->mapToScene(area.center()).toPoint();
-        QTest::mouseMove(quick, center); QTRY_VERIFY(viewer->plotView()->bridge()->cursorVisible);
+        // Without a window manager another top-level window can end up stacked
+        // over the viewer, which then never sees the pointer; raise it first.
+        viewer->raise(); viewer->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(viewer));
+        QTRY_COMPARE(QApplication::topLevelAt(quick->mapToGlobal(center)), viewer);
+        QVERIFY(hoverUntil(quick, [center] { return center; }, [&] { return viewer->plotView()->bridge()->cursorVisible; }));
         auto* readout = viewer->findChild<QLabel*>("live.readout"); QVERIFY(readout);
         QTRY_VERIFY(readout->text().contains("Stored sample")); QVERIFY(readout->text().contains("step"));
         const auto index = viewer->displayedFrame().nearest(viewer->plotView()->bridge()->cursorX); QVERIFY(index);
         QVERIFY(readout->text().contains(QString::number(viewer->displayedFrame().values[*index], 'g', 5)));
         capture(viewer, "live-oscilloscope-hover");
-        // Pointer on the trace: a translucent value box beside it and a ring on the sample.
-        const auto& shown = viewer->displayedFrame(); auto* view = viewer->plotView();
-        const auto sample = *shown.nearest((view->xMin()+view->xMax())/2);
-        const QPointF onTrace(area.left()+(shown.plottedTime(sample)-view->xMin())/(view->xMax()-view->xMin())*area.width(),
-            area.top()+(view->yMax()-shown.values[sample*static_cast<std::size_t>(shown.channels.size())])/(view->yMax()-view->yMin())*area.height());
-        QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
-        auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
-        QTRY_VERIFY(tip->isVisible()); QVERIFY(!view->bridge()->hoverMarkers.isEmpty());
-        QVERIFY(view->bridge()->hoverTip.last().toMap()["text"].toString().contains(shown.channels.front().name));
-        capture(viewer, "live-oscilloscope-hover-tip", true);
-        {   // On the trace itself the translucent tooltip and an on-curve marker appear.
-            auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
-            const auto& frame = viewer->displayedFrame(); auto* plot = viewer->plotView();
-            const auto i = *frame.nearest((plot->xMin()+plot->xMax())/2);
-            const QPointF onCurve(area.left()+(frame.plottedTime(i)-plot->xMin())/(plot->xMax()-plot->xMin())*area.width(),
-                                  area.top()+(plot->yMax()-frame.values[i*frame.channels.size()])/(plot->yMax()-plot->yMin())*area.height());
-            QTest::mouseMove(quick, graph->mapToScene(onCurve).toPoint());
-            QTRY_VERIFY(tip->isVisible());
-            QVERIFY(plot->bridge()->hoverTip.size() >= 2); QCOMPARE(plot->bridge()->hoverMarkers.size(), 1);
-            QVERIFY(plot->bridge()->hoverTip[1].toMap()["text"].toString().startsWith(frame.channels.front().name + " = "));
-            capture(viewer, "live-oscilloscope-hover-tip", true);
-            QTest::mouseMove(quick, center);
-        }
+        // Pointer on the trace: a ring marks the nearest stored sample. The frame
+        // and y range can still change after the time-scale edit, so each attempt
+        // re-reads them instead of holding a reference to one frame.
+        auto* view = viewer->plotView();
+        double hoveredTime = 0;
+        const auto onTrace = [&] {
+            const auto& shown = viewer->displayedFrame();
+            const auto sample = *shown.nearest((view->xMin()+view->xMax())/2);
+            hoveredTime = shown.plottedTime(sample);
+            return graph->mapToScene(QPointF(area.left()+(hoveredTime-view->xMin())/(view->xMax()-view->xMin())*area.width(),
+                area.top()+(view->yMax()-shown.values[sample*static_cast<std::size_t>(shown.channels.size())])/(view->yMax()-view->yMin())*area.height())).toPoint();
+        };
+        QVERIFY(!quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"));
+        QVERIFY(hoverUntil(quick, onTrace, [&] { return view->bridge()->hoverMarkers.size() == 1; }));
+        // The one-pixel nudge may pick a neighbouring sample.
+        QVERIFY(std::abs(view->bridge()->hoverMarkers.front().toMap()["x"].toDouble() - hoveredTime)
+                <= 2*(view->xMax()-view->xMin())/area.width());
+        capture(viewer, "live-oscilloscope-hover-marker", true);
+        QTest::mouseMove(quick, center);
         auto* cursor = quick->rootObject()->findChild<QQuickItem*>("viewer.sampleCursor"); QVERIFY(cursor);
         QVERIFY(cursor->isVisible());
         const auto lower = viewer->plotView()->xMin(), upper = viewer->plotView()->xMax();
@@ -1389,8 +1403,9 @@ private slots:
         QTRY_VERIFY(graph->property("plotArea").toRectF().width() > 100);
         const auto area = graph->property("plotArea").toRectF();
         const auto position = graph->mapToScene(area.center()).toPoint();
-        QTest::mouseMove(quick, position);
-        QTRY_VERIFY(spectrum->controlPanel()->findChild<QLabel*>("spectrum.readout")->text().contains("Computed spectrum"));
+        // The spectrum may finish computing after the first hover.
+        QVERIFY(hoverUntil(quick, [position] { return position; }, [&] {
+            return spectrum->controlPanel()->findChild<QLabel*>("spectrum.readout")->text().contains("Computed spectrum"); }));
         QVERIFY(spectrum->controlPanel()->findChild<QLabel*>("spectrum.readout")->text().contains("100 Hz baseband"));
         const auto spectrumGeometry = spectrum->plotView()->geometry();
         spectrum->inspect(-1); QCoreApplication::processEvents();
@@ -2065,10 +2080,12 @@ private slots:
             ? static_cast<s7studio::ui::ScopeViewWindow*>(viewer)->plotView()
             : viewer->widget()->findChild<s7studio::viewers::LinePlotView*>();
         if (plot) {
-            const auto width = plot->xMax() - plot->xMin();
             viewer->widget()->raise(); viewer->widget()->activateWindow();
             QVERIFY(QTest::qWaitForWindowActive(viewer->widget()));
             plot->setFocus(); QTRY_VERIFY(plot->hasFocus());
+            // Read the range only now: a stopped run can still refit it while
+            // the window activates.
+            const auto width = plot->xMax() - plot->xMin();
             QTest::keyClick(plot, Qt::Key_Equal);
             QVERIFY(plot->xMax() - plot->xMin() < width);
             QTest::keyClick(plot, Qt::Key_Home);

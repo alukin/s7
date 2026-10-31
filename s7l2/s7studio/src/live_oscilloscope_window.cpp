@@ -450,7 +450,7 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         render(false);
     });
     connect(plot_, &viewers::LinePlotView::hovered, this, [this](double time, bool active) { inspect(time, active); });
-    connect(plot_, &viewers::LinePlotView::hoveredPoint, this, [this](double x, double y, bool active) { hoverTip(x, y, active); });
+    connect(plot_, &viewers::LinePlotView::hoveredPoint, this, [this](double x, double y, bool active) { hoverMarkers(x, y, active); });
     connect(spectrum_, &viewers::SpectrumView::inspectingChanged, this, [this](bool active) { inspecting_ = active; updateStatus(); });
     connect(spectrum_->plotView(), &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
     for (auto* view : {constellation_, correlation_}) {
@@ -708,7 +708,7 @@ void LiveOscilloscopeWindow::clearSamples()
     constellation_->clear(); correlation_->clear();
     for (auto* series : plot_->series()) viewers::LinePlotView::setPoints(series, {});
     plot_->bridge()->cursorVisible = false; plot_->bridge()->triggerVisible = false; emit plot_->bridge()->inspectionChanged();
-    hoverTip(0, 0, false);
+    hoverMarkers(0, 0, false);
     readout_->setText("Hover over the plot for stored sample values."); updateStatus();
 }
 bool LiveOscilloscopeWindow::refreshSource()
@@ -854,14 +854,14 @@ QString LiveOscilloscopeWindow::inspect(double time, bool active)
     } else readout_->setText(active ? "No retained sample at this model time." : "Hover over the plot for stored sample values.");
     emit plot_->bridge()->inspectionChanged(); updateStatus(); return readout_->text();
 }
-QVariantList LiveOscilloscopeWindow::hoverTip(double x, double y, bool active)
+QVariantList LiveOscilloscopeWindow::hoverMarkers(double x, double y, bool active)
 {
     constexpr double tolerance = 10; // pixels from pointer to a drawn trace
     const auto& frame = *frame_;
     auto* bridge = plot_->bridge();
     const auto area = bridge->plotAreaSize;
     const double sx = area.width()/(plot_->xMax()-plot_->xMin()), sy = area.height()/(plot_->yMax()-plot_->yMin());
-    QVariantList rows, markers;
+    QVariantList markers;
     if (active && !frame.times.empty() && area.width() > 0 && area.height() > 0 && std::isfinite(sx) && std::isfinite(sy)) {
         // Samples within the tolerance in x, plus one neighbour per side so
         // segments crossing the pointer column count when zoomed in.
@@ -899,28 +899,17 @@ QVariantList LiveOscilloscopeWindow::hoverTip(double x, double y, bool active)
             if (best.distance <= tolerance) hits.push_back(best);
         }
         std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.distance < b.distance; });
-        const bool triggered = frame.trigger && frame.trigger->triggered;
         for (const auto& hit : hits) {
             const auto i = hit.index;
-            if (rows.isEmpty() || i != hits.front().index)
-                rows.append(QVariantMap{{"text", QStringLiteral("%1 s%2 • step %3").arg(frame.plottedTime(i), 0, 'g', 5)
-                    .arg(triggered ? " from trigger" : "").arg(frame.steps[i])}});
-            const auto& channel = frame.channels[hit.channel];
             const double raw = frame.values[i*stride+static_cast<std::size_t>(hit.channel)];
             const double gain = controls_[hit.channel].gain->value(), offset = controls_[hit.channel].offset->value();
-            QString text = QStringLiteral("%1 = %2%3").arg(channel.name).arg(raw, 0, 'g', 5)
-                .arg(channel.unit.isEmpty() ? QString() : " " + channel.unit);
-            if ((gain != 1 || offset != 0) && (!bridge->channelAxis || hit.channel != bridge->selectedLegend))
-                text += QStringLiteral(" (display level %1)").arg(raw*gain+offset, 0, 'g', 5);
-            const auto color = plot_->series()[hit.channel]->color();
-            rows.append(QVariantMap{{"text", text}, {"color", color}});
-            markers.append(QVariantMap{{"x", frame.plottedTime(i)}, {"y", raw*gain+offset}, {"color", color}});
+            markers.append(QVariantMap{{"x", frame.plottedTime(i)}, {"y", raw*gain+offset}, {"color", plot_->series()[hit.channel]->color()}});
         }
     }
-    if (rows != bridge->hoverTip || markers != bridge->hoverMarkers) {
-        bridge->hoverTip = rows; bridge->hoverMarkers = markers; emit bridge->hoverTipChanged();
+    if (markers != bridge->hoverMarkers) {
+        bridge->hoverMarkers = markers; emit bridge->hoverMarkersChanged();
     }
-    return rows;
+    return markers;
 }
 void LiveOscilloscopeWindow::updateStatus(const QString& suffix)
 {

@@ -571,7 +571,7 @@ private slots:
         level->setText("0.5"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
         QCOMPARE(edited.count(), 1); QCOMPARE(viewer.triggerSettings().level, .5);
     }
-    void hoverTipFollowsDrawnTraces() {
+    void hoverMarkersFollowDrawnTraces() {
         auto source = std::make_shared<LiveAcquisition>(14, .001,
             QVector<observation::LiveChannel>{{"live/up", "V", "f64"}, {"live/flat", "", "f64"}});
         QVERIFY(source->setTimeSpan(.1));
@@ -584,32 +584,30 @@ private slots:
         QTRY_VERIFY(bridge->plotAreaSize.width() > 100 && bridge->plotAreaSize.height() > 100);
         auto* freeze = viewer.findChild<QPushButton*>("live.freeze"); QVERIFY(freeze); freeze->setChecked(true);
         viewer.plotView()->setXRange(0, .1); viewer.plotView()->setYRange(-1, 1.1);
-        auto text = [](const QVariantList& rows) { QStringList lines; for (const auto& row : rows) lines << row.toMap()["text"].toString(); return lines.join('\n'); };
-        // On a stored sample: header with its step, value with unit, and a marker on it.
-        auto rows = viewer.hoverTip(.05, .5);
-        QCOMPARE(rows.size(), 2); QVERIFY(text(rows).contains("step 50")); QVERIFY(text(rows).contains("live/up = 0.5 V"));
+        const auto at = [](const QVariantList& markers, double x, double y) {
+            return markers.size() == 1 && std::abs(markers.front().toMap()["x"].toDouble() - x) < 1e-12
+                && markers.front().toMap()["y"].toDouble() == y;
+        };
+        // On a stored sample: one marker on it, published to the plot.
+        QVERIFY(at(viewer.hoverMarkers(.05, .5), .05, .5));
         QCOMPARE(bridge->hoverMarkers.size(), 1);
-        QCOMPARE(bridge->hoverMarkers.front().toMap()["y"].toDouble(), .5);
-        // Away from every trace: nothing to show.
-        QVERIFY(viewer.hoverTip(.05, .2).isEmpty()); QVERIFY(bridge->hoverTip.isEmpty());
-        // Zoomed in so samples are far apart: a point on the drawn segment still counts.
+        // Away from every trace: no marker.
+        QVERIFY(viewer.hoverMarkers(.05, .2).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
+        // Zoomed in so samples are far apart: a point on the drawn segment marks its nearer sample.
         viewer.plotView()->setXRange(.0495, .0515); viewer.plotView()->setYRange(.48, .53);
-        rows = viewer.hoverTip(.05075, .5075);
-        QVERIFY(text(rows).contains("live/up = 0.51 V")); QVERIFY(text(rows).contains("step 51"));
-        // A unitless channel; hidden channels are never reported.
+        QVERIFY(at(viewer.hoverMarkers(.05075, .5075), .051, .51));
+        // Hidden channels are never marked.
         viewer.plotView()->setXRange(0, .1); viewer.plotView()->setYRange(-1, 1.1);
-        QVERIFY(text(viewer.hoverTip(.02, -.5)).contains("live/flat = -0.5"));
+        QVERIFY(at(viewer.hoverMarkers(.02, -.5), .02, -.5));
         viewer.findChild<QCheckBox*>("live.channel.1.visible")->setChecked(false);
         QTRY_VERIFY(viewer.plotView()->series()[1]->points().isEmpty());
-        QVERIFY(viewer.hoverTip(.02, -.5).isEmpty());
-        // Gain moves the trace; the selected axis and hover stay in raw units.
+        QVERIFY(viewer.hoverMarkers(.02, -.5).isEmpty());
+        // Gain moves the trace, and the marker sits on the drawn trace.
         constexpr double gain = 1.97530864202469;
         viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(gain);
         QTRY_COMPARE(viewer.plotView()->series().front()->points().at(49).y(), .5*gain);
-        QVERIFY(text(viewer.hoverTip(.05, .5*gain)).contains("live/up = 0.5 V"));
-        QVERIFY(!text(viewer.hoverTip(.05, .5*gain)).contains("shown"));
-        QCOMPARE(bridge->hoverMarkers.front().toMap()["y"].toDouble(), .5*gain);
-        QVERIFY(viewer.hoverTip(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
+        QVERIFY(at(viewer.hoverMarkers(.05, .5*gain), .05, .5*gain));
+        QVERIFY(viewer.hoverMarkers(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
     }
 };
 QTEST_MAIN(LiveOscilloscopeTest)
