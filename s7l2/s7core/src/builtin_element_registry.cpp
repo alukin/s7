@@ -315,13 +315,22 @@ void register_builtin_elements(ElementRegistry& registry)
                 if constexpr (signal_type_info(T).is_floating()) {
                     return std::make_unique<EulerIntegratorT<T>>(
                         std::nullopt, // follows its domain's rate; a stored dt is a legacy field
-                        param_value<T>(ctx, "initial_value", {}));
+                        param_value<T>(ctx, "initial_value", {}), static_cast<int>(ctx.get_int("substeps")));
                 } else {
                     return unsupported_type(ctx);
                 }
             });
         },
         metadata.at("EulerIntegrator")));
+
+    registry.register_element(ElementDescriptor(
+        "GaussLegendreIntegrator",
+        [](const ElementCreationContext& ctx) -> std::unique_ptr<Element> {
+            return std::make_unique<GaussLegendreIntegrator>(
+                std::nullopt, // follows its domain's rate; a stored dt is a legacy field
+                param_value<SignalType::F64>(ctx, "initial_value", 0.0));
+        },
+        metadata.at("GaussLegendreIntegrator")));
 
     registry.register_element(ElementDescriptor(
         "TrapezoidIntegrator",

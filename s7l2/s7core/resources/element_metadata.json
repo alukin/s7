@@ -1459,7 +1459,7 @@
     {
       "type_name": "EulerIntegrator",
       "display_name": "Euler Integrator",
-      "description": "Integrates the input with forward Euler: y[n+1] = y[n] + dt*x[n]. Publishes initial_value first and stages the next state for the following step; can close feedback loops. Oscillator amplitude can grow with this method; timestep refinement is needed for accuracy.",
+      "description": "Integrates the input with forward Euler. Optional F64 substeps advance all connected selected integrators together at dt/substeps while publishing only outer-step states. The default one-substep behavior is unchanged.",
       "category": "filters",
       "version": "1.0.0",
       "tags": [],
@@ -1506,6 +1506,16 @@
           "default": 0,
           "required": false,
           "enum_values": []
+        },
+        {
+          "name": "substeps",
+          "type": "int",
+          "description": "Number of simultaneous forward-Euler internal steps per outer dt, 1 to 32. Values greater than one require F64 and a safe coupled derivative graph. Intermediate states are never published.",
+          "default": 1,
+          "required": false,
+          "min": 1,
+          "max": 32,
+          "enum_values": []
         }
       ],
       "type_variables": [
@@ -1541,6 +1551,27 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "GaussLegendreIntegrator",
+      "display_name": "Gauss-Legendre Integrator",
+      "description": "Fourth-order two-stage implicit integration of connected F64 states. NodeRuntime solves both stages jointly; temporary stages are not published. Constant external inputs are held over each outer step. A-stable, not L-stable.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [],
+      "input_ports": [
+        {"name": "in", "description": "F64 derivative", "type": "F64", "optional": false, "type_rule": ""}
+      ],
+      "output_ports": [
+        {"name": "out", "description": "Published F64 state", "type": "F64", "optional": false, "type_rule": ""}
+      ],
+      "parameters": [
+        {"name": "dt", "type": "real", "description": "Legacy field, ignored: the integrator follows its domain's rate, normally the run's dt.", "default": null, "required": false, "enum_values": []},
+        {"name": "initial_value", "type": "real", "description": "State published on the first step.", "default": 0, "required": false, "enum_values": []}
+      ],
+      "type_variables": [],
+      "visual": {"shape": "box", "color": "#4CAF50", "max_width": 110, "max_height": 52, "icon_name": ""},
+      "variadic_inputs": {"enabled": false, "min_count": 0, "max_count": 0, "port_name_template": "", "signal_type": "F64", "type_rule": "", "count_parameter": ""}
     },
     {
       "type_name": "TrapezoidIntegrator",
