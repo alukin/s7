@@ -253,29 +253,40 @@ Keep credential tooling independent of runtime graph execution and keep Qt out
 of headless provisioning paths. Full PKI lifecycle services (such as an online
 CA or revocation distribution) require separate scope decisions.
 
-## Studio element resizing and type pictograms
+## Studio element resizing
 
-Requested by the maintainer on 2026-10-25 for 0.2.0:
+Requested by the maintainer on 2026-10-25 for 0.2.0; presentation scope
+corrected on 2026-10-31:
 
 - Make element shapes resizable in the diagram editor. Define resize handles,
   grid behavior and minimum dimensions that keep ports and labels usable.
   Preserve wire attachments/routing, selection, undo/redo and saved geometry
   through reopening, including nested schemas.
-- Add pictograms inside element bodies to distinguish element types visually.
-  Use project-owned rendering and element/library metadata; retain readable
-  names/types and an explicit fallback when a pictogram is unavailable.
-  Cover built-in, schema-backed, plugin and observer elements.
+- Give schema-backed elements a double frame while keeping every element body
+  text-only, with readable name and type.
+- Use soft family colors for element fills and borders, with dark matching text.
+  Mark elements explicitly declared stateless with a small text label; leave
+  elements whose statefulness is unknown unmarked.
 
-These are presentation changes: resizing or choosing a pictogram must not
-change element identity, port semantics or the executing causal graph. Plan
-narrow/large shapes, zoom/display scaling and color/grayscale readability.
-Carry the resized geometry and pictograms into diagram printing below.
+These presentation changes must not change element identity, port semantics
+or the executing causal graph. Check narrow/large shapes, zoom/display scaling
+and color/grayscale readability. Carry resized geometry and double frames into
+diagram printing below. Element pictograms are outside the 0.2.0 release scope.
+
+Implementation (2026-10-31): Studio now uses a selected element's bottom-right
+handle for grid-snapped resizing, with port/wire updates, one undo step and
+saved dimensions in both root and nested layouts. Schema-backed elements have
+a double frame and text-only bodies. Muted family colors and a `stateless`
+footer use registry metadata; element text keeps readable contrast. The diagram
+tests cover resize,
+undo/redo, cancellation, routing, clipboard and file round trips; rendered
+examples were inspected. Printing qualification belongs to the printing goal.
 
 ## Studio diagram and observation-graph printing
 
 The maintainer reaffirmed diagram and plot printing on 2026-10-25 alongside
-resizable shapes and type pictograms. Printed diagrams must include their saved
-sizes and body pictograms with readable labels and complete wire connections.
+resizable shapes. Printed diagrams must include saved element sizes and double
+frames, with readable names/types and complete wire connections.
 
 Provide printing for diagrams and observation graphs. This is missing
 functionality, not a tested feature of 0.1.0: the current Studio has page-layout

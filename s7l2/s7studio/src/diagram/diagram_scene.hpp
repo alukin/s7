@@ -73,6 +73,7 @@ public:
     auto addTextFrame(const std::string& id, const boost::json::object& params, QPointF position) -> std::shared_ptr<TextFrameNode>;
     // Replaces an element's identity and params; wires on ports it no longer has are removed.
     void changeElement(const std::shared_ptr<ElementNode>& node, ElementNode::Element element);
+    void resizeElement(const std::shared_ptr<ElementNode>& node, QSize gridSize);
     void changeTextFrame(const std::shared_ptr<TextFrameNode>& node, boost::json::object params);
     void deleteSelection();
     bool copySelection() const;

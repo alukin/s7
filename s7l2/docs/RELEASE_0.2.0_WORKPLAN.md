@@ -159,7 +159,7 @@ not establish an unattended monitor.
    changing execution. Deliver N0–N4 on a separate research branch without
    adding a global solver; compare methods, feedback settling and timestep
    refinement before proposing a production change. Improve diagram
-   sizing/pictograms, printing and instrument controls through focused Studio
+   sizing, printing and instrument controls through focused Studio
    owners; build the signal generator from schema elements with headless tests
    and Studio controls. Certificate viewing and network settings UI consume
    reviewed headless contracts from the distributed track.

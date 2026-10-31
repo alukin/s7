@@ -21,6 +21,8 @@
 
 #include <QApplication>
 #include <QGraphicsSceneMouseEvent>
+#include <QImage>
+#include <QPainter>
 #include <QSizeF>
 #include <QUndoStack>
 #include <QVector2D>
@@ -206,6 +208,115 @@ int main(int argc, char** argv)
         DiagramScene reopened;
         reload(textScene, reopened);
         check(reopened.textFrames().front()->params() == after, "text formatting survives redo and file round trip");
+    }
+    {
+        DiagramScene sizes;
+        const auto source = sizes.addElement(element("source", "Constant"), {40, 40});
+        const auto sink = sizes.addElement(element("sink", "Gain"), {400, 40});
+        check(sizes.connectEnds(out(source), in(sink)).isEmpty(), "resize fixture connects");
+        const auto originalSchema = NetModel(sizes).schemaJson("resize");
+        const int edits = sizes.undoStack()->count();
+        sink->setSelected(true);
+        const auto handle = sink->resizeHandleSceneRect().center();
+        drag(sizes, handle, handle + QPointF(3 * kGridStep, 2 * kGridStep));
+        check(sink->gridSize() == QSize(12, 7) && sizes.undoStack()->count() == edits + 1,
+              "corner drag snaps dimensions and produces one undo edit");
+        checkRoutes(sizes, "after resize");
+        check(NetModel(sizes).schemaJson("resize") == originalSchema, "resizing does not change the runtime graph");
+        sizes.undoStack()->undo();
+        check(sink->gridSize() == QSize(9, 5), "resize undo restores dimensions");
+        checkRoutes(sizes, "after resize undo");
+        sizes.undoStack()->redo();
+        check(sink->gridSize() == QSize(12, 7), "resize redo restores dimensions");
+        DiagramScene reopened;
+        const auto saved = reload(sizes, reopened);
+        check(saved.diagram.at("nodes").as_array().size() == 2 && reopened.elementNode("sink")->gridSize() == QSize(12, 7),
+              "resized geometry survives file round trip");
+        checkRoutes(reopened, "after resized file round trip");
+
+        const auto cancelHandle = sink->resizeHandleSceneRect().center();
+        mouse(sizes, QEvent::GraphicsSceneMousePress, cancelHandle);
+        mouse(sizes, QEvent::GraphicsSceneMouseMove, cancelHandle + QPointF(60, 40));
+        sizes.handleKey(Qt::Key_Escape, Qt::NoModifier);
+        mouse(sizes, QEvent::GraphicsSceneMouseRelease, cancelHandle + QPointF(60, 40));
+        check(sink->gridSize() == QSize(12, 7) && sizes.undoStack()->count() == edits + 1,
+              "Escape cancels resize without a new edit");
+        sizes.clearSelection();
+        sink->setSelected(true);
+        check(sizes.copySelection() && sizes.pasteSelection({800, 300}) &&
+              sizes.elementNode("sink_copy1") && sizes.elementNode("sink_copy1")->gridSize() == QSize(12, 7),
+              "copy and paste preserve custom element dimensions");
+        sizes.resizeElement(sink, QSize(1, 1));
+        check(sink->gridSize() == QSize(kMinimumElementWidthSteps, 5), "minimum size retains labels and ports");
+        checkRoutes(sizes, "after minimum resize");
+        auto invalid = saved;
+        invalid.diagram.at("nodes").as_array()[1].as_object()["size"] = boost::json::array{5, 5};
+        bool rejected = false;
+        try { DiagramScene bad; SceneSerializer{}.deserialize(invalid, bad); }
+        catch (const std::runtime_error&) { rejected = true; }
+        check(rejected, "reopening refuses element dimensions below the usable minimum");
+    }
+    {
+        auto nested = element("nested", "MyLibraryElement");
+        DiagramScene inner;
+        const auto innerNode = inner.addElement(element("inner_source", "Constant"), {40, 40});
+        inner.resizeElement(innerNode, QSize(13, 8));
+        SerializationOptions options;
+        options.schemaName = QStringLiteral("inner");
+        const auto innerDocument = SceneSerializer{}.serialize(inner, options);
+        nested.schema = innerDocument.runtimeSchema;
+        nested.schema.as_object()["diagram"] = innerDocument.diagram;
+        nested.schema.as_object()["diagram_version"] = kDiagramVersion;
+        DiagramScene root;
+        const auto node = root.addElement(nested, {40, 40});
+        root.resizeElement(node, QSize(14, 9));
+        DiagramScene reopened;
+        reload(root, reopened);
+        check(reopened.elementNode("nested")->gridSize() == QSize(14, 9),
+              "schema-backed element retains its geometry on reopen");
+        DiagramScene reopenedInner;
+        SceneSerializer{}.deserialize(DiagramDocument::fromJson(reopened.elementNode("nested")->element().schema), reopenedInner);
+        check(reopenedInner.elementNode("inner_source")->gridSize() == QSize(13, 8),
+              "resized elements inside a nested schema survive root reopen");
+        const auto render = [](ElementNode& item) {
+            QImage image(180, 100, QImage::Format_ARGB32_Premultiplied);
+            image.fill(Qt::white);
+            QPainter painter(&image);
+            item.paint(&painter, nullptr);
+            return image;
+        };
+        ElementNode normal(element("plain", "Gain"));
+        ElementNode framed(nested);
+        const auto plainImage = render(normal);
+        const auto framedImage = render(framed);
+        ElementNode filter(element("filter", "Delay"));
+        const auto filterImage = render(filter);
+        check(plainImage.pixelColor(5, 50) != framedImage.pixelColor(5, 50),
+              "nested schema paints a second frame inside the body");
+        check(plainImage.pixelColor(90, 70) != filterImage.pixelColor(90, 70) &&
+              plainImage.pixelColor(90, 70) != framedImage.pixelColor(90, 70),
+              "element families and nested schemas use distinct soft fills");
+        check(plainImage.pixelColor(90, 70) == plainImage.pixelColor(90, 85) &&
+              framedImage.pixelColor(90, 70) == framedImage.pixelColor(90, 85),
+              "element bodies remain text-only without a central pictogram");
+        bool coloredText = false;
+        for (int y = 8; y < 37; ++y) {
+            for (int x = 12; x < 100; ++x) {
+                const auto pixel = plainImage.pixelColor(x, y);
+                coloredText = coloredText || (pixel.value() < 170 && pixel.green() > pixel.red() + 5);
+            }
+        }
+        check(coloredText, "element name/type use a readable family-colored ink");
+        const auto footerHasInk = [](const QImage& image) {
+            for (int y = 76; y < 92; ++y) {
+                for (int x = 12; x < 100; ++x) {
+                    if (image.pixelColor(x, y).value() < 170) return true;
+                }
+            }
+            return false;
+        };
+        check(footerHasInk(plainImage) && !footerHasInk(filterImage),
+              "stateless elements have a text marker while stateful filters do not");
     }
     {
         DiagramScene annotations;

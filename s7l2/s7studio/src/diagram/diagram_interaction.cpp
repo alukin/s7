@@ -35,7 +35,7 @@ auto distanceToSegment(const QPointF point, const QPointF a, const QPointF b) ->
 } // namespace
 
 struct DiagramInteraction::Gesture {
-    enum class Kind { Connect, Draw, Bend };
+    enum class Kind { Connect, Draw, Bend, Resize };
 
     Kind kind = Kind::Connect;
     // Connect and Draw: the end the wire starts at, the bends clicked so far.
@@ -53,6 +53,9 @@ struct DiagramInteraction::Gesture {
     QVector<QPointF> baseRoute;
     int routeIndex = -1;
     bool segment = false;
+    // Resize: the selected node and its original grid dimensions.
+    std::shared_ptr<ElementNode> node;
+    QSize baseSize;
 };
 
 struct DiagramInteraction::MoveGesture {
@@ -228,6 +231,11 @@ bool DiagramInteraction::handleKey(const int key, const Qt::KeyboardModifiers)
                 gesture_->wire->userBends = gesture_->baseBends;
                 gesture_->wire->setRoute(gesture_->baseRoute);
                 scene_.attach(*gesture_->wire);
+            } else if (gesture_->kind == Gesture::Kind::Resize) {
+                gesture_->node->setGridSize(gesture_->baseSize);
+                std::vector<SignalWire*> wires;
+                for (const auto& wire : scene_.wiresOf(*gesture_->node)) wires.push_back(wire.get());
+                scene_.repairRoutes(std::move(wires));
             }
             gesture_.reset();
             markTargets(nullptr);
@@ -318,6 +326,17 @@ void DiagramInteraction::mousePressEvent(QGraphicsSceneMouseEvent* event, const 
 
     QSchematic::Items::Node* moveTarget = nullptr;
     if (scene_.mode() == DiagramScene::NormalMode && event->button() == Qt::LeftButton) {
+        for (const auto& node : scene_.elementNodes()) {
+            if (node->isSelected() && node->resizeHandleSceneRect().contains(pos)) {
+                gesture_ = std::make_unique<Gesture>();
+                gesture_->kind = Gesture::Kind::Resize;
+                gesture_->node = node;
+                gesture_->baseSize = node->gridSize();
+                gesture_->press = snap(pos);
+                event->accept();
+                return;
+            }
+        }
         // Editing the bends of a selected wire (a press on a port connects instead).
         if (const auto wire = wireAt(pos); wire && wire->isSelected() && !portAt(pos)) {
             const auto route = wire->pointsAbsolute();
@@ -408,6 +427,20 @@ void DiagramInteraction::mouseMoveEvent(QGraphicsSceneMouseEvent* event, const s
         gesture_->moved = gesture_->moved || !same(snap(pos), gesture_->press);
         if (gesture_->moved) {
             updateDrawingPreview(pos);
+        }
+        event->accept();
+        return;
+    }
+    if (gesture_ && gesture_->kind == Gesture::Kind::Resize) {
+        auto& gesture = *gesture_;
+        const QPointF delta = snap(pos) - gesture.press;
+        const QSize wanted = gesture.baseSize + QSize(static_cast<int>(delta.x() / kGridStep),
+                                                       static_cast<int>(delta.y() / kGridStep));
+        if (wanted.expandedTo(gesture.node->minimumGridSize()) != gesture.node->gridSize()) {
+            gesture.node->setGridSize(wanted);
+            std::vector<SignalWire*> wires;
+            for (const auto& wire : scene_.wiresOf(*gesture.node)) wires.push_back(wire.get());
+            scene_.repairRoutes(std::move(wires));
         }
         event->accept();
         return;
@@ -508,6 +541,16 @@ void DiagramInteraction::mouseReleaseEvent(QGraphicsSceneMouseEvent* event, cons
             wire->setRoute(baseRoute);
             scene_.attach(*wire);
         }
+        return;
+    }
+    if (gesture_ && gesture_->kind == Gesture::Kind::Resize) {
+        event->accept();
+        const auto node = gesture_->node;
+        const QSize after = node->gridSize();
+        const QSize before = gesture_->baseSize;
+        gesture_.reset();
+        node->setGridSize(before);
+        scene_.resizeElement(node, after);
         return;
     }
     base();

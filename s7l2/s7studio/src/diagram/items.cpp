@@ -7,6 +7,8 @@
 #include "diagram/element_ports.hpp"
 #include "json_utils.hpp"
 
+#include <s7/element_registry.hpp>
+
 #include <qschematic/items/label.hpp>
 
 #include <QBrush>
@@ -14,6 +16,7 @@
 #include <QFont>
 #include <QFontMetricsF>
 #include <QGraphicsSceneContextMenuEvent>
+#include <QGraphicsSceneHoverEvent>
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsSimpleTextItem>
 #include <QLineF>
@@ -24,6 +27,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 
 namespace s7studio::diagram {
@@ -34,14 +38,81 @@ constexpr double kPortMarker = 5.0;  // half size of the port symbol
 constexpr double kPortHitArea = 8.0; // half size of the area a press on the port hits
 constexpr double kHandle = 3.5;
 
-const QColor kNodeFill(0xf3, 0xf6, 0xfb);
 const QColor kNodeBorder(0x3c, 0x4a, 0x60);
-const QColor kSelected(0x1e, 0x5b, 0xd8);
+const QColor kSelected(0x4f, 0x6f, 0x9c);
 const QColor kWire(0x20, 0x20, 0x20);
 const QColor kProblem(0xc6, 0x28, 0x28);
 const QColor kTypeLabel(0x30, 0x30, 0x90);
 const QColor kProbeMarker(0x2e, 0x7d, 0x32);
 constexpr double kProbeMarkerRadius = 3.5;
+
+bool isSchemaBacked(const ElementNode::Element& element)
+{
+    if (element.schema.is_object()) return true;
+    const auto* descriptor = s7::ElementRegistry::instance().find(element.type);
+    return descriptor && descriptor->metadata().schema_definition.has_value();
+}
+
+QColor mix(const QColor& first, const QColor& second, const double secondWeight)
+{
+    const double firstWeight = 1.0 - secondWeight;
+    return QColor::fromRgbF(first.redF() * firstWeight + second.redF() * secondWeight,
+                            first.greenF() * firstWeight + second.greenF() * secondWeight,
+                            first.blueF() * firstWeight + second.blueF() * secondWeight);
+}
+
+double luminance(const QColor& color)
+{
+    const auto linear = [](const double channel) {
+        return channel <= 0.04045 ? channel / 12.92 : std::pow((channel + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * linear(color.redF()) + 0.7152 * linear(color.greenF()) + 0.0722 * linear(color.blueF());
+}
+
+double contrast(const QColor& first, const QColor& second)
+{
+    const double a = luminance(first), b = luminance(second);
+    return (std::max(a, b) + 0.05) / (std::min(a, b) + 0.05);
+}
+
+QColor familyColor(const ElementNode::Element& element)
+{
+    if (isSchemaBacked(element)) return QColor(0x91, 0x7e, 0xa7); // muted violet
+    if (isObserverElementType(element.type)) return QColor(0x6c, 0x96, 0x91); // sea green
+    const auto* descriptor = s7::ElementRegistry::instance().find(element.type);
+    if (!descriptor) return QColor(0x83, 0x91, 0x9c); // unavailable type
+    const auto& category = descriptor->metadata().category;
+    if (category == "basic") return QColor(0x79, 0x9b, 0x80);
+    if (category == "filters") return QColor(0x75, 0x91, 0xaf);
+    if (category == "sources") return QColor(0x79, 0x9f, 0xbc);
+    if (category == "control") return QColor(0xa6, 0x89, 0x79);
+    if (category == "conversion") return QColor(0x72, 0x9c, 0xa0);
+    if (category == "measurement") return QColor(0x8d, 0x9d, 0x76);
+    if (category == "network") return QColor(0x84, 0x8d, 0xb0);
+    if (category == "io") return QColor(0xa8, 0x91, 0x75);
+    if (category == "spectral") return QColor(0x9b, 0x86, 0xa9);
+    if (category == "noise" || category == "simulation") return QColor(0xaa, 0x9c, 0x72);
+    const QColor metadata(QString::fromStdString(descriptor->metadata().visual.color));
+    return metadata.isValid() ? mix(metadata, QColor(0x87, 0x96, 0x9e), 0.55) : QColor(0x83, 0x91, 0x9c);
+}
+
+struct ElementColors {
+    QColor fill;
+    QColor border;
+    QColor title;
+    QColor type;
+};
+
+ElementColors elementColors(const ElementNode::Element& element)
+{
+    const QColor accent = familyColor(element);
+    const QColor fill = mix(accent, Qt::white, 0.78);
+    QColor title = accent;
+    for (int i = 0; i < 16 && contrast(title, fill) < 4.5; ++i) {
+        title = mix(title, QColor(0x24, 0x30, 0x3a), 0.16);
+    }
+    return {fill, accent, title, mix(title, QColor(0x3f, 0x4b, 0x56), 0.25)};
+}
 
 // Grid rows of an element `rows` high holding `count` ports: two rows apart
 // where they fit, centred.
@@ -138,7 +209,35 @@ ElementNode::ElementNode(Element element)
     setConnectorsMovable(false);
     setConnectorsSnapToGrid(false);
     setHighlightEnabled(false);
+    setAcceptHoverEvents(true);
     rebuildPorts();
+}
+
+QSize ElementNode::gridSize() const
+{
+    return {static_cast<int>(std::lround(width() / kGridStep)), static_cast<int>(std::lround(height() / kGridStep))};
+}
+
+QSize ElementNode::minimumGridSize() const
+{
+    const int ports = static_cast<int>(std::max(inputs_.size(), outputs_.size()));
+    return {kMinimumElementWidthSteps, std::max(5, 2 * ports + 1)};
+}
+
+void ElementNode::setGridSize(QSize steps)
+{
+    steps = steps.expandedTo(minimumGridSize());
+    steps.setWidth(std::min(steps.width(), kMaximumElementSizeSteps));
+    steps.setHeight(std::min(steps.height(), kMaximumElementSizeSteps));
+    setSize(steps.width() * kGridStep, steps.height() * kGridStep);
+    placePorts();
+    update();
+}
+
+QRectF ElementNode::resizeHandleSceneRect() const
+{
+    constexpr double hit = 16.0;
+    return QRectF(pos().x() + width() - hit, pos().y() + height() - hit, hit, hit);
 }
 
 QString ElementNode::title() const
@@ -177,7 +276,10 @@ void ElementNode::rebuildPorts()
     }
     const int ports = static_cast<int>(std::max(names.inputs.size(), names.outputs.size()));
     const int rows = std::max(5, 2 * ports + 1);
-    setSize(kElementWidthSteps * kGridStep, rows * kGridStep);
+    const auto current = gridSize();
+    setSize(std::max(kMinimumElementWidthSteps, geometryInitialized_ ? current.width() : kElementWidthSteps) * kGridStep,
+            std::max(rows, geometryInitialized_ ? current.height() : rows) * kGridStep);
+    geometryInitialized_ = true;
 
     auto sync = [&](std::vector<std::shared_ptr<PortConnector>>& ports, const std::vector<QString>& wanted, const PortDirection direction) {
         while (ports.size() > wanted.size()) {
@@ -204,12 +306,23 @@ void ElementNode::rebuildPorts()
                 }
                 addConnector(port);
             }
-            const double x = direction == PortDirection::Input ? 0.0 : width();
-            ports[index]->setPos(x, portRow(rows, static_cast<int>(wanted.size()), static_cast<int>(index)) * kGridStep);
         }
     };
     sync(inputs_, names.inputs, PortDirection::Input);
     sync(outputs_, names.outputs, PortDirection::Output);
+    placePorts();
+}
+
+void ElementNode::placePorts()
+{
+    const int rows = gridSize().height();
+    for (const auto* ports : {&inputs_, &outputs_}) {
+        const bool input = ports == &inputs_;
+        for (std::size_t index = 0; index < ports->size(); ++index) {
+            (*ports)[index]->setPos(input ? 0.0 : width(),
+                                    portRow(rows, static_cast<int>(ports->size()), static_cast<int>(index)) * kGridStep);
+        }
+    }
     if (placementLabel_) {
         placementLabel_->setPos(0.0, height() + 2.0);
     }
@@ -246,23 +359,41 @@ std::shared_ptr<QSchematic::Items::Item> ElementNode::deepCopy() const
 {
     auto clone = std::make_shared<ElementNode>(element_);
     clone->setMinimumPorts(minimumInputs_, minimumOutputs_);
+    clone->setGridSize(gridSize());
     clone->setPos(pos());
     return clone;
+}
+
+void ElementNode::hoverMoveEvent(QGraphicsSceneHoverEvent* event)
+{
+    Node::hoverMoveEvent(event);
+    if (isSelected() && resizeHandleSceneRect().contains(mapToScene(event->pos()))) setCursor(Qt::SizeFDiagCursor);
+}
+
+void ElementNode::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
+{
+    unsetCursor();
+    Node::hoverLeaveEvent(event);
 }
 
 void ElementNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWidget*)
 {
     painter->setRenderHint(QPainter::Antialiasing);
-    const QColor border = !problem_.isEmpty() ? kProblem : (isSelected() ? kSelected : kNodeBorder);
+    const auto colors = elementColors(element_);
+    const QColor border = !problem_.isEmpty() ? kProblem : (isSelected() ? kSelected : colors.border);
     painter->setPen(QPen(border, isSelected() || !problem_.isEmpty() ? 2.0 : 1.2));
-    painter->setBrush(kNodeFill);
+    painter->setBrush(colors.fill);
     painter->drawRoundedRect(sizeRect(), 6.0, 6.0);
+    if (isSchemaBacked(element_)) {
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRoundedRect(sizeRect().adjusted(5.0, 5.0, -5.0, -5.0), 4.0, 4.0);
+    }
 
     const QRectF text = sizeRect().adjusted(12.0, 6.0, -12.0, -6.0);
     QFont titleFont = painter->font();
     titleFont.setBold(true);
     painter->setFont(titleFont);
-    painter->setPen(QColor(0x1a, 0x1a, 0x1a));
+    painter->setPen(colors.title);
     const QFontMetricsF titleMetrics(titleFont);
     painter->drawText(QRectF(text.left(), text.top(), text.width(), titleMetrics.height()), Qt::AlignLeft | Qt::AlignVCenter,
                       titleMetrics.elidedText(title(), Qt::ElideRight, text.width()));
@@ -271,11 +402,27 @@ void ElementNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWid
     typeFont.setBold(false);
     typeFont.setPointSizeF(typeFont.pointSizeF() * 0.9);
     painter->setFont(typeFont);
-    painter->setPen(QColor(0x60, 0x68, 0x78));
+    painter->setPen(colors.type);
     const QFontMetricsF typeMetrics(typeFont);
     painter->drawText(QRectF(text.left(), text.top() + titleMetrics.height(), text.width(), typeMetrics.height()),
                       Qt::AlignLeft | Qt::AlignVCenter,
                       typeMetrics.elidedText(QString::fromStdString(element_.type), Qt::ElideRight, text.width()));
+    const auto* descriptor = s7::ElementRegistry::instance().find(element_.type);
+    if (descriptor && descriptor->metadata().stateless) {
+        QFont markerFont = typeFont;
+        markerFont.setPointSizeF(markerFont.pointSizeF() * 0.85);
+        painter->setFont(markerFont);
+        painter->setPen(colors.title);
+        painter->drawText(QRectF(text.left(), height() - 26.0, width() - 36.0, 17.0),
+                          Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("stateless"));
+    }
+    if (isSelected()) {
+        const QRectF handle(width() - 15.0, height() - 15.0, 12.0, 12.0);
+        painter->setPen(QPen(kSelected, 1.5));
+        painter->setBrush(colors.fill);
+        painter->drawRect(handle);
+        painter->drawLine(handle.topLeft() + QPointF(3, 9), handle.topLeft() + QPointF(9, 3));
+    }
 }
 
 // TextFrameNode

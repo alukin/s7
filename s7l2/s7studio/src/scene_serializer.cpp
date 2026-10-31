@@ -60,6 +60,20 @@ auto gridJson(const QPointF point) -> boost::json::array
     return boost::json::array{std::lround(point.x() / kGridStep), std::lround(point.y() / kGridStep)};
 }
 
+auto gridSize(const boost::json::value& value, const std::string& id) -> QSize
+{
+    if (!value.is_array() || value.as_array().size() != 2 ||
+        !value.as_array()[0].is_int64() || !value.as_array()[1].is_int64()) {
+        throw error("size of '" + id + "' must be [width, height] in whole grid steps");
+    }
+    const auto width = value.as_array()[0].as_int64();
+    const auto height = value.as_array()[1].as_int64();
+    if (width < kMinimumElementWidthSteps || height < 5 || width > kMaximumElementSizeSteps || height > kMaximumElementSizeSteps) {
+        throw error("size of '" + id + "' is outside the supported grid dimensions");
+    }
+    return {static_cast<int>(width), static_cast<int>(height)};
+}
+
 // Element rows (height in grid steps) as ElementNode sizes them.
 auto elementRows(const ElementNode& node) -> int
 {
@@ -224,7 +238,8 @@ auto SceneSerializer::serialize(const DiagramScene& scene, const SerializationOp
 
     boost::json::array nodes;
     for (const auto& node : scene.elementNodes()) {
-        boost::json::object object{{"id", node->id()}, {"position", gridJson(node->pos())}};
+        boost::json::object object{{"id", node->id()}, {"position", gridJson(node->pos())},
+                                   {"size", boost::json::array{node->gridSize().width(), node->gridSize().height()}}};
         if (isObserverElementType(node->element().type)) {
             object["observer"] = true;
             object["type"] = node->element().type;
@@ -325,6 +340,7 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
     struct Model {
         ElementNode::Element element;
         std::optional<QPoint> position;
+        std::optional<QSize> size;
         int inputs = 0;
         int outputs = 0;
     };
@@ -406,6 +422,9 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
             if (const auto* position = json_utils::findObjectValue(object, "position")) {
                 model.position = gridPoint(*position, "position of '" + id + "'");
             }
+            if (const auto* size = json_utils::findObjectValue(object, "size")) {
+                model.size = gridSize(*size, id);
+            }
             model.element.title = QString::fromStdString(json_utils::stringValue(object, "title", ""));
         }
     }
@@ -415,6 +434,12 @@ void SceneSerializer::deserialize(const DiagramDocument& document, DiagramScene&
     for (auto& model : models) {
         auto node = std::make_shared<ElementNode>(model.element);
         node->setMinimumPorts(model.inputs, model.outputs);
+        if (model.size) {
+            if (model.size->height() < node->minimumGridSize().height()) {
+                throw error("size of '" + model.element.id + "' cannot fit its ports");
+            }
+            node->setGridSize(*model.size);
+        }
         rows[model.element.id] = elementRows(*node);
         nodes.push_back(std::move(node));
     }

@@ -5,6 +5,7 @@
   "elements": [
     {
       "type_name": "Constant",
+      "stateless": true,
       "display_name": "Constant",
       "description": "Outputs a fixed value on every causal step; has no inputs.",
       "category": "basic",
@@ -93,6 +94,7 @@
     },
     {
       "type_name": "Gain",
+      "stateless": true,
       "display_name": "Gain",
       "description": "Multiplies the current input signal by a configurable factor. The output is available in the same step.",
       "category": "basic",
@@ -199,6 +201,7 @@
     },
     {
       "type_name": "Divider",
+      "stateless": true,
       "display_name": "Divider",
       "description": "Divide numerator by denominator",
       "category": "basic",
@@ -271,6 +274,7 @@
     },
     {
       "type_name": "MathFunction",
+      "stateless": true,
       "display_name": "Math Function",
       "description": "Apply a scalar math function",
       "category": "basic",
@@ -359,6 +363,7 @@
     },
     {
       "type_name": "Power",
+      "stateless": true,
       "display_name": "Power",
       "description": "Raise the base input to the exponent input",
       "category": "basic",
@@ -431,6 +436,7 @@
     },
     {
       "type_name": "Saturation",
+      "stateless": true,
       "display_name": "Saturation",
       "description": "Clamp an input between inclusive limits",
       "category": "basic",
@@ -524,6 +530,7 @@
     },
     {
       "type_name": "MinMax",
+      "stateless": true,
       "display_name": "MinMax",
       "description": "Select the minimum or maximum of its inputs",
       "category": "basic",
@@ -629,6 +636,7 @@
     },
     {
       "type_name": "Sign",
+      "stateless": true,
       "display_name": "Sign",
       "description": "Return -1, 0 or 1 according to the input sign",
       "category": "basic",
@@ -706,6 +714,7 @@
     },
     {
       "type_name": "Comparator",
+      "stateless": true,
       "display_name": "Comparator",
       "description": "Output 1 if lhs 'operation' rhs holds, else 0",
       "category": "basic",
@@ -805,6 +814,7 @@
     },
     {
       "type_name": "Adder",
+      "stateless": true,
       "display_name": "Adder",
       "description": "Weighted sum of N inputs",
       "category": "basic",
@@ -962,6 +972,7 @@
     },
     {
       "type_name": "Multiply",
+      "stateless": true,
       "display_name": "Multiply",
       "description": "Product of N inputs",
       "category": "basic",
@@ -1773,6 +1784,7 @@
     },
     {
       "type_name": "Trig",
+      "stateless": true,
       "display_name": "Trigonometric Function",
       "description": "y = f(x): sin, cos, tan, asin, acos, atan, sinh, cosh or tanh of an arbitrary input",
       "category": "filters",
@@ -2639,6 +2651,7 @@
     },
     {
       "type_name": "Switch",
+      "stateless": true,
       "display_name": "Switch",
       "description": "Select off/on input with numeric control (zero/nonzero) All inputs are current-step signals; control=0 selects off, otherwise on. No state or timestep is added.",
       "category": "control",
@@ -2966,6 +2979,7 @@
     },
     {
       "type_name": "PhaseWrap",
+      "stateless": true,
       "display_name": "PhaseWrap",
       "description": "Wrap phase into a half-open interval Output lies in [lower,lower+period). period must be finite, strictly positive and representable at lower; inputs must be finite. No state or time delay.",
       "category": "control",
@@ -3574,6 +3588,7 @@
     },
     {
       "type_name": "ReImToComplex",
+      "stateless": true,
       "display_name": "Re/Im to Complex",
       "description": "Combine real and imaginary channels",
       "category": "conversion",
@@ -3653,6 +3668,7 @@
     },
     {
       "type_name": "ComplexToReIm",
+      "stateless": true,
       "display_name": "Complex to Re/Im",
       "description": "Split complex input into real and imaginary channels",
       "category": "conversion",
@@ -3732,6 +3748,7 @@
     },
     {
       "type_name": "ComplexToMagnitudePhase",
+      "stateless": true,
       "display_name": "Complex to Magnitude/Phase",
       "description": "Magnitude and phase of a complex input, in its component type",
       "category": "conversion",
@@ -3804,6 +3821,7 @@
     },
     {
       "type_name": "Convert",
+      "stateless": true,
       "display_name": "Convert",
       "description": "Explicit type conversion (value or normalized), with stated rounding and overflow",
       "category": "conversion",

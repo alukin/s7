@@ -29,6 +29,7 @@ bool DiagramScene::copySelection() const
     for (const auto& node : elementNodes()) if (node->isSelected()) {
         auto clone = std::make_shared<ElementNode>(node->element());
         clone->setMinimumPorts(node->minimumInputs(), node->minimumOutputs());
+        clone->setGridSize(node->gridSize());
         clone->setPos(node->pos());
         staging.addNodeItem(clone); nodes.emplace(node->id(), clone);
     }

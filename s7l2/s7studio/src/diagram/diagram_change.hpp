@@ -34,6 +34,11 @@ struct DiagramChange {
         boost::json::object before;
         boost::json::object after;
     };
+    struct SizeEdit {
+        std::shared_ptr<ElementNode> node;
+        QSize before;
+        QSize after;
+    };
 
     std::vector<std::shared_ptr<QSchematic::Items::Node>> addedNodes;
     std::vector<std::shared_ptr<QSchematic::Items::Node>> removedNodes;
@@ -43,6 +48,7 @@ struct DiagramChange {
     std::vector<Bends> bends;
     std::vector<ElementEdit> elements;
     std::vector<TextFrameEdit> textFrames;
+    std::vector<SizeEdit> sizes;
     std::optional<std::pair<std::vector<DiagramProbe>, std::vector<DiagramProbe>>> probes;
     std::optional<std::pair<boost::json::array, boost::json::array>> observersPanel;
 
