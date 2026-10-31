@@ -9,6 +9,8 @@ See docs/NUMERICAL_FEEDBACK_RESEARCH_N0.md for the frozen contract.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import hashlib
 import json
 import math
 import platform
@@ -390,9 +392,17 @@ def main() -> None:
             result = run_case(name,h,duration,method,trials,mu,start)
             results.append(result)
             print(name,h,method,trials,"error",result.get("max_error"),"failure",result["failure"],flush=True)
-    metadata = dict(branch_commit=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
+    metadata = dict(branch=subprocess.check_output(["git", "branch", "--show-current"], text=True).strip(),
+                    git_commit=subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
+                    source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                    generated_utc=dt.datetime.now(dt.timezone.utc).isoformat(),
                     python=platform.python_version(), numpy=np.__version__,
-                    scipy=__import__("scipy").__version__, host=platform.node(),
+                    scipy=__import__("scipy").__version__, platform=platform.platform(),
+                    precision="IEEE-754 binary64", host=platform.node(),
+                    tolerances=dict(atol=1e-12, rtol=1e-12, reference_rtol=2e-13,
+                                    reference_atol=2e-14),
+                    configuration=dict(suite=args.suite, cases=cases, methods=methods),
+                    reproduce=f"python3 tools/numerical_feedback_research.py --suite {args.suite} --output build/numerical-feedback-{args.suite}.json",
                     suite=args.suite, results=results)
     if args.output:
         args.output.write_text(json.dumps(metadata,indent=2)+"\n")

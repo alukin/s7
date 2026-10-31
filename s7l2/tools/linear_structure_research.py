@@ -370,6 +370,33 @@ def run(output: Path, plots: bool = True) -> dict:
                                       continuous_magnitude=abs(reference),
                                       continuous_phase_rad=np.angle(reference)))
     result["frequency_response"] = frequency
+    iteration_diagnostics = []
+    for system, initial, hs in ((rc(), np.array([1.]), (0.5, 1., 2.5)),
+                                 (lc(), np.array([1., 0.]), (0.5, 1.5))):
+        for h in hs:
+            for k in (0, 1, 2, 4, 8, 16):
+                residual_norm, solver_error, evaluations = simultaneous_residual(system, initial, 0., h, k)
+                iteration_diagnostics.append(dict(model=system.name, h=h, corrections=k,
+                                                  spectral_radius_iteration=float(max(abs(np.linalg.eigvals(h*system.A)))),
+                                                  residual_norm=residual_norm,
+                                                  implicit_solver_error=solver_error,
+                                                  total_function_evaluations=evaluations))
+    result["iteration_diagnostics"] = iteration_diagnostics
+    equal_work = []
+    for system, initial in ((rc(), np.array([1.])), (lc(), np.array([1., 0.]))):
+        duration, h = 5., 0.1
+        reference = trajectory(system, h, duration, "exact", 0, initial, "zero")[1][-1]
+        for k in (0, 1, 2, 4, 8):
+            work = round(duration/h)*(k+2)  # includes one residual evaluation per step
+            finite = trajectory(system, h, duration, "finite", k, initial, "zero")[1][-1]
+            euler_h = duration/work
+            euler = trajectory(system, euler_h, duration, "forward", 0, initial, "zero")[1][-1]
+            equal_work.append(dict(model=system.name, corrections=k, duration=duration,
+                                   finite_h=h, euler_h=euler_h,
+                                   total_function_evaluations=work,
+                                   finite_final_state_error=float(np.linalg.norm(finite-reference)),
+                                   euler_final_state_error=float(np.linalg.norm(euler-reference))))
+    result["equal_work"] = equal_work
     (output/"summary.json").write_text(json.dumps(result, indent=2, default=_json_default)+"\n")
     if plots:
         make_plots(output, matrix)
