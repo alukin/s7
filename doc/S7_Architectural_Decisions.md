@@ -1016,7 +1016,7 @@ One Model-Time Rate per Run, Classified Element Rates and Explicit Resampling
 
 ## Status
 
-Accepted 2026-10-31 by the maintainer. Partly implemented; see the [sample rate model, section 8](S7_Sample_Rate_Model.md#8-model-time-and-element-rate-classification-2026-10-31).
+Accepted 2026-10-31 by the maintainer. Implemented 2026-10-31 except the items listed as research; see the [sample rate model, section 8](S7_Sample_Rate_Model.md#8-model-time-and-element-rate-classification-2026-10-31).
 
 ## Context
 
@@ -1032,7 +1032,7 @@ A different rate requires an explicit `Resampler`, which S7 never inserts. It pa
 
 ## Consequences
 
-A run either has one consistent model time or does not start. Changing `dt` in the run dialog never edits the design. A file, stream or device at another rate needs a visible resampling step, with a documented latency. Existing documents keep loading: stored sample counts are converted using the rate they were written at, and stored `dt`/`sample_rate_hz` values of rate-following elements become legacy fields. Rate-following elements built in C++ with an explicit rate remain pins for now; the 0.2.0 work plan includes reviewing such tests. Hardware clock domains, drift and networked audio are 0.3.0 research.
+A run either has one consistent model time or does not start. Changing `dt` in the run dialog never edits the design. A file, stream or device at another rate needs a visible resampling step, with a documented latency. Existing documents keep loading: stored sample counts are converted using the rate they were written at, and stored `dt`/`sample_rate_hz` values of rate-following elements become legacy fields. Rate-following elements built in C++ with an explicit rate remain pins for now; the 0.2.0 work plan includes reviewing such tests. Hardware clock domains, drift and networked audio are 0.3.0 research. In a graph with several rate domains, ADR-021's all-or-nothing rule holds per domain step: a fault partway through a run step leaves domains that already completed that step advanced, although a retry continues exactly.
 
 ------------------------------------------------------------------------
 

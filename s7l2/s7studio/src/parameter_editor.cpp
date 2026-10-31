@@ -36,6 +36,8 @@ ParameterEditor::ParameterEditor(std::optional<s7::ElementMetadata> metadata, bo
     form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     form->setRowWrapPolicy(QFormLayout::WrapLongRows);
     if (metadata_) for (const auto& spec : metadata_->parameters) {
+        // Legacy fields stay in the parameters (and the JSON tab) unedited.
+        if (spec.legacy) continue;
         if (!original_.contains(spec.name) && !spec.default_value.is_null()) original_[spec.name] = spec.default_value;
         const auto name = QString::fromStdString(spec.name);
         QWidget* editor;

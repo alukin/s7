@@ -69,10 +69,11 @@ keys must be supplied even when metadata provides a suggested value.
 | FrequencyMeter | (rate from the run) | Rising crossings; invalid until two crossings |
 | PWM | period (s) | Duty input latched at carrier boundary; period is 2 to 65504 whole samples |
 | AnalogOscillator | amplitude, frequency_hz, phase | Sine source; phase in radians |
-| FirFilter | taps, overflow, A | Nonempty typed taps; current sample first; zero history |
-| IirFilter | b0, b1, a1 | Subtract a1 feedback; zero previous input/output |
+| FirFilter | taps, overflow, A, design_rate_hz | Nonempty typed taps; current sample first; zero history; refused at a rate other than its design rate |
+| IirFilter | b0, b1, a1, design_rate_hz | Subtract a1 feedback; zero previous input/output; refused at a rate other than its design rate |
 | ReImToComplex, ComplexToReIm, ComplexToMagnitudePhase | none | Component type relationships; phase in radians |
 | Convert | from, to, mode, rounding, overflow | mode required; explicit conversion, no implicit wire conversion |
+| Resampler | order, stopband_attenuation_db | Joins two rates; pass-through at equal rates; orders 0/1/2, anti-aliasing when lowering the rate |
 
 Schema library entries PhaseDifference, FirstOrderLag, RMSDetector, PIController
 and PIDController have **no wrapper parameter keys**. The source is

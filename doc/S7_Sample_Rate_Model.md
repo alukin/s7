@@ -81,7 +81,9 @@ Recalculation is derived each time a graph is compiled. The document keeps the d
 
 ### 8.3 Rate domains and the Resampler
 
-A rate domain is a set of connected elements that share one rate, bounded only by `Resampler` elements. The domain at the model-time rate steps once per run step. Every other domain steps exactly as many times as its own samples fall within the model time reached, counted with exact rational arithmetic, and runs its own publication, causal-memory staging and rollback phases.
+A rate domain holds every element that runs at one rate; a graph has one domain per distinct resolved rate, and only a `Resampler` that changes the rate links two of them (a `Resampler` between equal rates is an ordinary element of one domain). Rate inference does not join a `Resampler`'s input connection, so its two sides resolve separately. During run step k (model time k/R), each domain takes every sample at or before that time, floor(k·A/R) + 1 in total, counted exactly in 256-bit integers; domains step in an order that puts each `Resampler`'s input domain first. Each domain runs its own publication, causal-memory staging and rollback phases, so a single-rate graph steps exactly as before. A domain whose rate differs from the model-time rate must be joined to a model-rate domain through `Resampler`s; a graph with several domains needs a model time to be scheduled. A nested schema gives its internal runtime its own rate, so it can contain domains too.
+
+Two limits apply to graphs with several domains. If a step faults partway, domains that already completed their samples in that step stay advanced; retrying continues exactly, because each domain counts its own samples, but ADR-021's all-or-nothing guarantee holds per domain step, not per run step. Observers record once per run step, so a faster domain is observed at the run's rate.
 
 The `Resampler`:
 
@@ -105,5 +107,6 @@ Sound sources and sinks are the first hardware elements planned for 0.3.0. A dev
 | Rate-following elements adopting their domain's rate (`Element::adopt_rate`, at validation); Studio no longer rewriting `dt`/`sample_rate_hz` | Implemented |
 | Durations in time units with loader migration | Implemented |
 | Design rate for `FirFilter`/`IirFilter`, recorded from a document's saved dt (`record_design_rates`) and when a filter is added | Implemented |
-| Rate domains and the `Resampler` | Planned (0.2.0) |
+| Rate domains and the `Resampler` (orders 0/1/2, anti-aliasing, pass-through at equal rates) | Implemented |
+| Studio: run dialog drives every rate, legacy rate fields hidden, Resampler in the palette, mismatch errors suggest it | Implemented |
 | Feedback across rate domains; hardware clock domains | Research (0.3.0) |

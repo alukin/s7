@@ -102,6 +102,39 @@ A run freezes its configuration. Edits made during execution apply to the
 next run. Pause takes effect at a completed causal step. Stop and close wait
 for the current element operation, so a slow plugin can delay them.
 
+### Run rate, element rates and resampling
+
+The frequency in **Run Configuration** is the run's rate (`dt = 1/f`), and it
+is the only source of model time
+([sample rate model, section 8](../../doc/S7_Sample_Rate_Model.md#8-model-time-and-element-rate-classification-2026-10-31)).
+Changing it never edits the diagram:
+
+- Integrators, generators, oscillators, PWM and the frequency meter follow the
+  run's rate. Their durations are times in seconds (`start_time`,
+  `sweep_time`, `bit_time`, PWM `period`), so events stay at the same model
+  time; a duration that is not a whole number of samples at the new rate is
+  reported in the problems list. Older diagrams that store `dt`,
+  `sample_rate_hz` or sample counts still open; those legacy fields are kept
+  in the Advanced JSON tab but no longer shown for editing.
+- FIR and IIR filters record the rate their coefficients were designed for
+  (the diagram's rate when the filter was added, or the saved `dt` of an older
+  diagram). A run at another rate stops with an error naming the filter,
+  because raw coefficients cannot be recalculated; redesign them for the new
+  rate.
+- Files, recordings, network streams and nested schemas with their own rate
+  keep that rate. If it differs from the run's, the run does not start and the
+  error names the element and both rates.
+
+To connect parts that run at different rates, place a **Resampler**
+(Conversion) where they meet. At equal rates it passes values through
+unchanged. Its `order` selects 0 (hold the latest sample, the default),
+1 (linear) or 2 (quadratic) interpolation; orders 1 and 2 delay the signal by
+one input sample so that they interpolate between received samples. When it
+lowers the rate it first filters against aliasing, which adds a further delay
+of about half the filter length; `stopband_attenuation_db` (default 60) trades
+filter length for rejection. Feedback loops that cross rates are not supported
+yet. Observers still record once per run step.
+
 For bounded live inspection, add **Observers → Live oscilloscope (prototype)**,
 connect its inputs and double-click it. Its settings change the acquisition window
 in samples or model seconds during a run. Hover snaps to raw samples and shows
