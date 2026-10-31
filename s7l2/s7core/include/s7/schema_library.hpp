@@ -32,9 +32,11 @@ struct SchemaLibraryDefinition {
     [[nodiscard]] auto to_json() const -> boost::json::value;
 };
 
-// Configure a fixed-step graph and its embedded schema elements together.
-// Registry-only schema elements are materialized into independent JSON payloads.
-// This changes dt/rate parameters, not element update rules or execution order.
+// Configure a fixed-step graph and its embedded schema elements together: sets
+// the schema-level "dt" seed of the graph and every nested schema, which the
+// rate-following elements adopt. Registry-only schema elements are
+// materialized into independent JSON payloads. Element parameters, update
+// rules and execution order are not changed.
 bool configure_schema_discretization(boost::json::value& schema, double dt,
                                     const ElementRegistry& registry = ElementRegistry::instance());
 

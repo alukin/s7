@@ -165,8 +165,9 @@ void test_symplectic_integrator_registry_matches_closed_form()
 
     const double dt = 0.1;
     s7::Schema schema{"symplectic_registry_check"};
+    schema.set_rate(s7::Rate::from_seconds(dt)); // the run's dt, which the integrator follows
     schema.add_element(s7::make_element_spec("integ", *descriptor,
-                                              {{"type", "F64"}, {"dt", dt}, {"initial_position", 1.0}, {"initial_velocity", 0.0}}));
+                                              {{"type", "F64"}, {"initial_position", 1.0}, {"initial_velocity", 0.0}}));
     schema.add_element("neg", [] { return std::make_unique<s7::Gain>(-1.0); });
     schema.connect("integ", 0, "neg", 0);
     schema.connect("neg", 0, "integ", 0);

@@ -66,13 +66,23 @@ s7::ResolvedRates resolved_rates(const s7::Schema& schema)
     return result;
 }
 
+// Rate pins: elements built in C++ with an explicit rate (rate-authoritative
+// elements and, for now, C++-built rate-following ones) and schema seeds.
+// Elements created from a document follow their domain's rate instead
+// (doc/S7_Sample_Rate_Model.md section 8).
+template <typename Make>
+void pinned(s7::Schema& schema, const std::string& id, Make make)
+{
+    schema.add_element(id, [make] { return make(); });
+}
+
 void test_pinned_component_agrees()
 {
     // x' = v, v' = -x, both integrators at dt = 0.5: one rate, 2 Hz, for
     // every element in the loop.
     s7::Schema schema{"harmonic"};
-    add(schema, "x", "EulerIntegrator", {{"dt", 0.5}, {"initial_value", 1}});
-    add(schema, "v", "EulerIntegrator", {{"dt", 0.5}});
+    pinned(schema, "x", [] { return std::make_unique<s7::EulerIntegrator>(0.5, 1.0); });
+    pinned(schema, "v", [] { return std::make_unique<s7::EulerIntegrator>(0.5); });
     add(schema, "minus", "Gain", {{"factor", -1}});
     schema.connect("v", 0, "x", 0);
     schema.connect("x", 0, "minus", 0);
@@ -86,12 +96,35 @@ void test_pinned_component_agrees()
     expect(expected.numerator == 2 && expected.denominator == 1, "1/0.5 s reduces to exactly 2 Hz");
 }
 
+void test_document_elements_follow_the_seed()
+{
+    // A document's stored dt is a legacy field: the integrators follow the seed.
+    s7::Schema schema{"document_harmonic"};
+    add(schema, "x", "EulerIntegrator", {{"dt", 0.5}, {"initial_value", 1}});
+    add(schema, "v", "EulerIntegrator", {{"dt", 0.25}});
+    add(schema, "minus", "Gain", {{"factor", -1}});
+    schema.connect("v", 0, "x", 0);
+    schema.connect("x", 0, "minus", 0);
+    schema.connect("minus", 0, "v", 0);
+    expect_error(schema, "cannot be determined", "document integrators pin nothing without a seed");
+    schema.set_rate(s7::Rate::from_hz(100));
+    const auto resolved = resolved_rates(schema);
+    expect(resolved.rates.at("x") == s7::Rate::from_hz(100) && resolved.rates.at("v") == s7::Rate::from_hz(100),
+           "document integrators follow the seed, whatever dt they store");
+    s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
+    runtime.step();
+    runtime.step();
+    // After two steps v holds v[1] = v[0] - dt * x[0] = -dt: the seed's 0.01 s,
+    // not the 0.25 s the document stores.
+    expect(runtime.real_output_of("v") == -0.01, "dt comes from the seed");
+}
+
 void test_conflict_is_reported()
 {
     s7::Schema schema{"mismatched"};
     add(schema, "one", "Constant", {{"value", 1}});
-    add(schema, "fast", "EulerIntegrator", {{"dt", 0.1}});
-    add(schema, "slow", "EulerIntegrator", {{"dt", 0.5}});
+    pinned(schema, "fast", [] { return std::make_unique<s7::EulerIntegrator>(0.1); });
+    pinned(schema, "slow", [] { return std::make_unique<s7::EulerIntegrator>(0.5); });
     add(schema, "sum", "Adder");
     schema.connect("one", 0, "fast", 0);
     schema.connect("one", 0, "slow", 0);
@@ -124,7 +157,7 @@ void test_components_are_resolved_independently()
 {
     s7::Schema schema{"two_components"};
     add(schema, "feed", "Constant", {{"value", 1}});
-    add(schema, "ramp", "EulerIntegrator", {{"dt", 0.25}});
+    pinned(schema, "ramp", [] { return std::make_unique<s7::EulerIntegrator>(0.25); });
     add(schema, "double_it", "Gain", {{"factor", 2}});
     schema.connect("feed", 0, "ramp", 0);
     schema.connect("ramp", 0, "double_it", 0);
@@ -141,9 +174,13 @@ void test_components_are_resolved_independently()
 void test_isolated_pinned_element()
 {
     s7::Schema schema{"oscillator"};
-    add(schema, "osc", "AnalogOscillator", {{"sample_rate_hz", 48000}});
+    pinned(schema, "osc", [] { return std::make_unique<s7::AnalogOscillator>(1.0, 1.0, 48000.0); });
     const auto resolved = resolved_rates(schema);
-    expect(resolved.rates.at("osc") == s7::Rate::from_hz(48000), "AnalogOscillator's own sample_rate_hz pins its rate");
+    expect(resolved.rates.at("osc") == s7::Rate::from_hz(48000), "a C++-built oscillator's sample rate pins its rate");
+
+    s7::Schema document{"document_oscillator"};
+    add(document, "osc", "AnalogOscillator", {{"sample_rate_hz", 48000}});
+    expect_error(document, "cannot be determined", "a document oscillator's stored sample_rate_hz pins nothing");
 }
 
 } // namespace
@@ -152,6 +189,7 @@ int main()
 try {
     s7::register_builtin_elements(s7::ElementRegistry::instance());
     test_pinned_component_agrees();
+    test_document_elements_follow_the_seed();
     test_conflict_is_reported();
     test_undetermined_without_a_pin_or_seed();
     test_components_are_resolved_independently();
@@ -160,8 +198,8 @@ try {
         s7::Schema schema{"fractional_rate_conflict"};
         schema.set_rate(s7::Rate::from_seconds(.0010000001));
         add(schema, "one", "Constant", {{"value", 1}});
-        add(schema, "ramp", "EulerIntegrator", {{"dt", .0010000002}});
-        add(schema, "other", "EulerIntegrator", {{"dt", .0010000001}});
+        pinned(schema, "ramp", [] { return std::make_unique<s7::EulerIntegrator>(.0010000002); });
+        pinned(schema, "other", [] { return std::make_unique<s7::EulerIntegrator>(.0010000001); });
         schema.connect("one", 0, "ramp", 0);
         schema.connect("ramp", 0, "other", 0);
         expect_error(schema, "Rate conflict", "sub-nanosecond period mismatch is not silently accepted");

@@ -184,14 +184,8 @@ ExecutableGraph Compiler::compile(const Schema& schema,
         element_inputs[connection.to_element][connection.to_port] = source[connection.from_port];
     }
 
-    // A nested schema without its own rate checks its internal rates against
-    // the rate this graph resolved for it, before it compiles on binding.
-    for (const auto& [id, rate] : checked.rates) {
-        if (auto* nested = dynamic_cast<Schema*>(executable_graph.elements.at(id).get()); nested && !nested->rate()) {
-            if (nested->parent_rate_ != rate) nested->invalidate_compiled_runtime();
-            nested->parent_rate_ = rate;
-        }
-    }
+    // Validation gave every element its resolved rate (adopt_rate) before
+    // binding: a nested schema compiles on binding and checks against it.
 
     for (auto& [id, bindings] : element_inputs) {
         for (std::size_t port = 0; port < bindings.size(); ++port) {

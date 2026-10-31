@@ -53,8 +53,8 @@ try {
     constexpr double sample_rate = 48000.0;
     constexpr double frequency = 1234.5;
     s7::Schema schema{"third_party_plugin"};
-    schema.set_rate(s7::Rate::from_hz(1));
-    add(schema, "sine", "AnalogOscillator", {{"amplitude", 0.5}, {"frequency_hz", frequency}, {"sample_rate_hz", sample_rate}});
+    schema.set_rate(s7::Rate::from_hz(sample_rate)); // the oscillator follows the run's rate
+    add(schema, "sine", "AnalogOscillator", {{"amplitude", 0.5}, {"frequency_hz", frequency}});
     add(schema, "fft", "WindowedFFT", {{"fft_size", 1024}, {"hop_size", 256}, {"sample_rate_hz", sample_rate}});
     schema.connect("sine", 0, "fft", 0);
 

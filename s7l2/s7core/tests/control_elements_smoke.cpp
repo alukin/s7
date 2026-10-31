@@ -102,7 +102,7 @@ template <s7::SignalType T> void reset_publication() {
     schema.add_element("derivative",[] {return std::make_unique<s7::ConstantT<T>>(V(1));});
     schema.add_element("enable",[] {return std::make_unique<s7::ConstantT<T>>(V(1));});
     schema.add_element("reset_value",[] {return std::make_unique<s7::ConstantT<T>>(V(-0.5));});
-    schema.add_element("reset",[] {return std::make_unique<s7::StepGeneratorT<T>>(V(0),V(1),8,2);});
+    schema.add_element("reset",[] {return std::make_unique<s7::StepGeneratorT<T>>(V(0),V(1),8.0,0.25);});
     schema.add_element("state",[] {return std::make_unique<s7::ControlledIntegratorT<T>>(V(0.125));});
     schema.connect("derivative",0,"state",0);schema.connect("enable",0,"state",1);
     schema.connect("reset",0,"state",2);schema.connect("reset_value",0,"state",3);

@@ -1483,8 +1483,8 @@
         {
           "name": "dt",
           "type": "value",
-          "description": "Positive finite model timestep in seconds, using the signal's real component type. Must agree with the graph rate; Studio Run Configuration sets it.",
-          "default": 1,
+          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
+          "default": null,
           "required": false,
           "enum_values": []
         },
@@ -1568,8 +1568,8 @@
         {
           "name": "dt",
           "type": "value",
-          "description": "Positive finite model timestep in seconds, using the signal's real component type. Must agree with the graph rate; smaller steps can improve implicit convergence.",
-          "default": 1,
+          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
+          "default": null,
           "required": false,
           "enum_values": []
         },
@@ -1671,8 +1671,8 @@
         {
           "name": "dt",
           "type": "value",
-          "description": "Positive finite model timestep in seconds, using the signal's real component type. Must agree with the graph rate. Harmonic oscillator stability requires dt*angular_frequency < 2.",
-          "default": 1,
+          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
+          "default": null,
           "required": false,
           "enum_values": []
         },
@@ -1853,10 +1853,19 @@
           "enum_values": []
         },
         {
+          "name": "sweep_time",
+          "type": "real",
+          "description": "Sweep duration in seconds, a whole number of samples at the run rate (default 1 s).",
+          "default": null,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
           "name": "sweep_samples",
           "type": "int",
-          "description": "Sweep duration in model sample intervals",
-          "default": 1000,
+          "description": "Legacy sample count, used only when sweep_time is absent: converted at the stored sample_rate_hz.",
+          "default": null,
           "required": false,
           "min": 1.0,
           "enum_values": []
@@ -1864,8 +1873,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -1994,10 +2003,19 @@
           "enum_values": []
         },
         {
+          "name": "bit_time",
+          "type": "real",
+          "description": "Duration of one bit in seconds, a whole number of samples at the run rate (default 0.001 s).",
+          "default": null,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
           "name": "bit_samples",
           "type": "int",
-          "description": "Model samples per bit",
-          "default": 1,
+          "description": "Legacy sample count, used only when bit_time is absent: converted at the stored sample_rate_hz.",
+          "default": null,
           "required": false,
           "min": 1.0,
           "enum_values": []
@@ -2005,8 +2023,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2087,8 +2105,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2195,8 +2213,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2303,8 +2321,17 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "start_time",
+          "type": "real",
+          "description": "Time of the impulse in seconds, a whole number of samples at the run rate (default 0).",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2312,8 +2339,8 @@
         {
           "name": "start_sample",
           "type": "int",
-          "description": "Zero-based model sample of the transition or impulse",
-          "default": 0,
+          "description": "Legacy sample count, used only when start_time is absent: converted at the stored sample_rate_hz.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2386,8 +2413,17 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
+          "name": "start_time",
+          "type": "real",
+          "description": "Time of the step in seconds, a whole number of samples at the run rate (default 0).",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2395,8 +2431,8 @@
         {
           "name": "start_sample",
           "type": "int",
-          "description": "Zero-based model sample of the transition or impulse",
-          "default": 0,
+          "description": "Legacy sample count, used only when start_time is absent: converted at the stored sample_rate_hz.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2485,8 +2521,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2800,8 +2836,8 @@
         {
           "name": "dt",
           "type": "value",
-          "description": "Model step in seconds",
-          "default": 0.001,
+          "description": "Legacy field, ignored: the integrator steps at its domain's rate, normally the run's dt. Older documents store a value here.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -2997,8 +3033,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model samples per second",
-          "default": 1000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -3069,10 +3105,19 @@
           "enum_values": []
         },
         {
+          "name": "period",
+          "type": "real",
+          "description": "Carrier period in seconds, 2 to 65504 whole samples at the run rate (default 0.0001 s).",
+          "default": null,
+          "required": false,
+          "min": 0.0,
+          "enum_values": []
+        },
+        {
           "name": "period_samples",
           "type": "int",
-          "description": "Samples per carrier period (frequency = sample rate / period)",
-          "default": 100,
+          "description": "Legacy sample count, used only when period is absent: converted at the stored sample_rate_hz.",
+          "default": null,
           "required": false,
           "min": 2.0,
           "max": 65504.0,
@@ -3081,8 +3126,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Model sample rate in Hz",
-          "default": 100000,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "min": 0.0,
           "enum_values": []
@@ -3163,8 +3208,8 @@
         {
           "name": "sample_rate_hz",
           "type": "real",
-          "description": "Sample rate in Hz",
-          "default": 1,
+          "description": "Legacy field, ignored: the element runs at its domain's rate, normally the run's rate. Older documents store a value here; it converts their sample counts.",
+          "default": null,
           "required": false,
           "enum_values": []
         },

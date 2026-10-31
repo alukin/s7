@@ -43,7 +43,8 @@ int main()
         require(adder.type_variables.size() == 2 && adder.type_variables[1].defaults_to == "T", "Accumulator type default changed");
         require(adder.output_ports[0].type_rule == "A" && adder.variadic_inputs.count_parameter == "weights", "Port rules changed");
         const auto params = s7::checked_params("test", library.at("EulerIntegrator"), {});
-        require(params.at("dt") == 1 && params.at("initial_value") == 0, "Integrator defaults changed");
+        // dt is a legacy field with no default: the integrator follows its domain's rate.
+        require(!params.contains("dt") && params.at("initial_value") == 0, "Integrator defaults changed");
         rejects([&] { static_cast<void>(s7::checked_params("test", library.at("Convert"), {})); }, "required");
         rejects([&] { static_cast<void>(s7::checked_params("test", library.at("MinMax"), {{"input_count",1}})); }, "at least 2");
         rejects([&] { static_cast<void>(library.at("MissingFactory")); }, "MissingFactory");

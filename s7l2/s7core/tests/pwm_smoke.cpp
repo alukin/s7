@@ -19,7 +19,7 @@ template <s7::SignalType T> void pulses() {
     // Use an actual compiled graph to exercise port wiring and state scheduling.
     s7::Schema schema("pulses");
     schema.add_element("duty", [] { return std::make_unique<s7::ConstantT<T>>(V(0.25)); });
-    schema.add_element("pwm", [] { return std::make_unique<s7::PwmT<T>>(8, 100000); });
+    schema.add_element("pwm", [] { return std::make_unique<s7::PwmT<T>>(8 / 100000.0, 100000.0); });
     schema.connect("duty", 0, "pwm", 0);
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
     for (int n=0; n<32; ++n) {
@@ -30,7 +30,7 @@ template <s7::SignalType T> void pulses() {
 
 void boundaries() {
     double duty = 0.5;
-    s7::PWM pwm(4, 1000);
+    s7::PWM pwm(0.004, 1000.0); // 4 samples
     const s7::InputBinding binding[] = {&duty};
     pwm.bind_inputs(binding);
     const auto gate = [&] { pwm.step(); return pwm.output_ports()[0].as<double>(); };
@@ -45,8 +45,25 @@ void boundaries() {
     try { pwm.step(); } catch(const std::domain_error&) {rejected=true;}
     require(rejected, "Nonfinite duty rejected");
     rejected=false;
-    try { s7::PWM invalid(1,1000); } catch(const std::invalid_argument&) {rejected=true;}
+    try { s7::PWM invalid(0.001, 1000.0); } catch(const std::invalid_argument&) {rejected=true;}
     require(rejected, "Invalid carrier period rejected");
+    rejected=false;
+    try { s7::PWM fractional(0.0045, 1000.0); } catch(const std::invalid_argument&) {rejected=true;}
+    require(rejected, "A period that is not a whole number of samples is rejected");
+    // Without a rate the PWM follows the rate it adopts; the period stays a time.
+    s7::PWM following(0.004, std::nullopt);
+    require(!following.declared_rate(), "Following PWM declares no rate");
+    following.adopt_rate(s7::Rate::from_hz(2000));
+    double half = 0.5;
+    const s7::InputBinding half_binding[] = {&half};
+    following.bind_inputs(half_binding);
+    int high = 0;
+    for (int n = 0; n < 8; ++n) { following.step(); high += following.output_ports()[0].as<double>() == 1; }
+    require(high == 4, "0.004 s at 2 kHz is an 8-sample carrier");
+    rejected=false;
+    s7::PWM odd(0.0045, std::nullopt);
+    try { odd.adopt_rate(s7::Rate::from_hz(1000)); } catch(const std::invalid_argument&) {rejected=true;}
+    require(rejected, "Adopting a rate the period does not fit is rejected");
 }
 
 void example() {
@@ -57,6 +74,8 @@ void example() {
     const auto& saved = document.at("schema").as_object();
     s7::register_builtin_elements(s7::ElementRegistry::instance());
     s7::Schema schema("pwm_pid_rlc");
+    // The diagram's dt is the run rate every element follows, as in Studio.
+    schema.set_rate(s7::Rate::from_seconds(document.at("dt").to_number<double>()));
     for (const auto& v : saved.at("elements").as_array()) {
         const auto& e = v.as_object();
         const auto* descriptor = s7::ElementRegistry::instance().find(std::string(e.at("type").as_string()));

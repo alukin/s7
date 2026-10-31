@@ -185,11 +185,12 @@ void test_integrators()
 {
     // Rectangle rule on a constant and trapezoid rule on the resulting ramp:
     // x[n] = n*dt, and the trapezoid rule is exact for linear input: y[n] = (n*dt)^2 / 2.
+    // The integrators follow the schema's rate: dt = 1 / 2 Hz.
     s7::Schema schema{"integrators"};
-    schema.set_rate(s7::Rate::from_hz(1));
+    schema.set_rate(s7::Rate::from_hz(2));
     add(schema, "one", "Constant", {{"value", 1}});
-    add(schema, "ramp", "EulerIntegrator", {{"dt", 0.5}});
-    add(schema, "area", "TrapezoidIntegrator", {{"dt", 0.5}, {"mode", "sampled"}});
+    add(schema, "ramp", "EulerIntegrator");
+    add(schema, "area", "TrapezoidIntegrator", {{"mode", "sampled"}});
     schema.connect("one", 0, "ramp", 0);
     schema.connect("ramp", 0, "area", 0);
     s7::NodeRuntime runtime{s7::Compiler::compile(schema)};
@@ -203,9 +204,9 @@ void test_integrators()
     // x' = v, v' = -x closed through two EulerIntegrators, no Delay, in F128.
     // Forward Euler multiplies x^2 + v^2 by exactly (1 + dt^2) per step.
     s7::Schema ode{"harmonic"};
-    ode.set_rate(s7::Rate::from_hz(1));
-    add(ode, "x", "EulerIntegrator", {{"type", "F128"}, {"dt", 0.001}, {"initial_value", 1}});
-    add(ode, "v", "EulerIntegrator", {{"dt", 0.001}});
+    ode.set_rate(s7::Rate::from_hz(1000));
+    add(ode, "x", "EulerIntegrator", {{"type", "F128"}, {"initial_value", 1}});
+    add(ode, "v", "EulerIntegrator");
     add(ode, "minus", "Gain", {{"factor", -1}});
     ode.connect("v", 0, "x", 0);
     ode.connect("x", 0, "minus", 0);
@@ -218,7 +219,9 @@ void test_integrators()
     const auto x = oscillator.output_of<SignalType::F128>("x");
     const auto v = oscillator.output_of<SignalType::F128>("v");
     s7::float128_t growth = 1;
-    const auto dt = static_cast<s7::float128_t>(0.001); // the parameter's value, as converted
+    // The integrators follow the 1 kHz rate: dt = 1/1000 divided in F128, not
+    // the binary64 0.001.
+    const auto dt = s7::float128_t(1) / s7::float128_t(1000);
     for (int n = 0; n < steps; ++n) {
         growth *= 1 + dt * dt;
     }
@@ -229,8 +232,8 @@ void test_integrators()
     // Supplied-sample quadrature still has direct feedthrough; implicit mode
     // is tested separately and has genuine causal-memory publication.
     s7::Schema algebraic{"algebraic"};
-    algebraic.set_rate(s7::Rate::from_hz(1));
-    add(algebraic, "y", "TrapezoidIntegrator", {{"dt", 0.1}, {"mode", "sampled"}});
+    algebraic.set_rate(s7::Rate::from_hz(10));
+    add(algebraic, "y", "TrapezoidIntegrator", {{"mode", "sampled"}});
     add(algebraic, "minus", "Gain", {{"factor", -1}});
     algebraic.connect("y", 0, "minus", 0);
     algebraic.connect("minus", 0, "y", 0);
@@ -444,7 +447,8 @@ void test_parameter_checks()
                  "all problems listed");
 
     // Declared defaults are applied: a Gain without parameters has factor 1,
-    // an AnalogOscillator its declared amplitude and rates.
+    // an AnalogOscillator its declared amplitude. Its legacy sample_rate_hz
+    // has no default: the oscillator follows its domain's rate.
     s7::Schema defaults{"defaults"};
     defaults.set_rate(s7::Rate::from_hz(1));
     add(defaults, "one", "Constant", {{"value", 3.0}});
@@ -454,7 +458,7 @@ void test_parameter_checks()
     runtime.step();
     expect(runtime.real_output_of("gain") == 3.0, "omitted factor defaults to 1");
     const auto checked = s7::checked_params("osc", s7::ElementRegistry::instance().find("AnalogOscillator")->metadata(), {});
-    expect(checked.at("amplitude").to_number<double>() == 1.0 && checked.contains("sample_rate_hz"), "defaults filled in");
+    expect(checked.at("amplitude").to_number<double>() == 1.0 && !checked.contains("sample_rate_hz"), "defaults filled in");
 }
 
 // Validation and compilation create every element exactly once.

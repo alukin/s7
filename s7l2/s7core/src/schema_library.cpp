@@ -354,12 +354,8 @@ bool configure_schema_discretization(boost::json::value& schema, const double dt
             element["schema"]=*descriptor->metadata().schema_definition;
         if (auto* nested=element.if_contains("schema"); nested && nested->is_object())
             configure_schema_discretization(*nested,dt,registry);
-        if (!descriptor) continue;
-        for (const auto& parameter : descriptor->metadata().parameters) {
-            if (parameter.name!="dt" && parameter.name!="sample_rate_hz") continue;
-            if (!element.if_contains("params")) element["params"]=boost::json::object{};
-            element["params"].as_object()[parameter.name]=parameter.name=="dt" ? dt : 1/dt;
-        }
+        // Element dt/sample_rate_hz parameters are not rewritten: rate-following
+        // elements take the rate seeded here (doc/S7_Sample_Rate_Model.md section 8).
     }
     return true;
 }

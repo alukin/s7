@@ -10,6 +10,7 @@
 // purely local rate so the two never drift apart in representation.
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace s7 {
@@ -37,6 +38,10 @@ struct Rate {
     // The first step whose step_time_ns() is at or after `time_ns` (0 for a
     // time at or before zero).
     [[nodiscard]] std::uint64_t first_step_at_ns(std::int64_t time_ns) const;
+    // A duration in seconds as a whole number of samples at this rate, or
+    // nullopt if it is negative, not finite, or not whole within 1e-6 of a
+    // sample (a decimal duration such as 0.05 s is not exact in binary).
+    [[nodiscard]] std::optional<std::uint64_t> whole_samples(double seconds) const;
     [[nodiscard]] std::string to_string() const;
 
     friend bool operator==(const Rate&, const Rate&) = default;

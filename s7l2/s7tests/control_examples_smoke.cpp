@@ -15,16 +15,10 @@ void require(bool ok, const std::string& message) {
 std::unique_ptr<s7::NodeRuntime> load(const std::string& path, double dt) {
     auto document = s7tests::read_json_object(std::filesystem::path(S7_EDUCATIONAL_DIR) / path);
     boost::json::value json = document.at("schema");
-    // Source event times and PWM carrier frequency must stay fixed under refinement.
-    // configure_schema_discretization updates rates, not sample-count parameters.
-    const double original_dt = document.at("dt").to_number<double>();
-    for (auto& value : json.as_object().at("elements").as_array()) {
-        auto& params = value.as_object().at("params").as_object();
-        for (const char* count : {"start_sample", "period_samples"})
-            if (auto* v = params.if_contains(count))
-                *v = std::llround(v->to_number<double>() * original_dt / dt);
-    }
-    if (dt != original_dt) s7::configure_schema_discretization(json, dt);
+    // Source event times and the PWM carrier period stay fixed under
+    // refinement: elements follow the seeded dt, and a stored sample count is
+    // converted to time at the rate the document was written at.
+    s7::configure_schema_discretization(json, dt);
     auto schema = s7::SchemaLibraryLoader::build_schema(json);
     const auto validation = s7::Validator::validate(schema);
     for (const auto& error : validation.errors) std::cerr << error << '\n';

@@ -108,7 +108,7 @@ ResolvedRates RateResolver::resolve(const Schema& schema, const std::unordered_m
             names += (names.empty() ? "" : ", ") + id;
         }
         result.errors.push_back("The rate of '" + members.front() + "' cannot be determined (connected to: " + names +
-                                 "). Pin a rate on one of them (e.g. an integrator's \"dt\"), or set the schema's rate.");
+                                 "). Set the run's dt (the schema's rate), or connect an element whose rate is fixed, such as a file, stream or recording.");
     }
 
     if (!result.errors.empty()) {

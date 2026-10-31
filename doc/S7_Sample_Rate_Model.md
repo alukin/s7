@@ -102,8 +102,8 @@ Sound sources and sinks are the first hardware elements planned for 0.3.0. A dev
 |---|---|
 | Resolved rates kept in the compiled graph; model time checked against every one; `NodeRuntime::graph_rate()` | Implemented |
 | Rational model-time rate for deployments, stream rates and real-time pacing; network stream elements declare their rate | Implemented |
-| Rate-following elements adopting their domain's rate; Studio no longer rewriting `dt`/`sample_rate_hz` | Planned (0.2.0) |
-| Durations in time units with loader migration | Planned (0.2.0) |
+| Rate-following elements adopting their domain's rate (`Element::adopt_rate`, at validation); Studio no longer rewriting `dt`/`sample_rate_hz` | Implemented |
+| Durations in time units with loader migration | Implemented |
 | Design rate for `FirFilter`/`IirFilter` | Planned (0.2.0) |
 | Rate domains and the `Resampler` | Planned (0.2.0) |
 | Feedback across rate domains; hardware clock domains | Research (0.3.0) |

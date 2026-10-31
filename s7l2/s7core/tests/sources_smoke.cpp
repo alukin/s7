@@ -44,8 +44,8 @@ template <s7::SignalType T> void waveforms() {
     s7::PulseGeneratorT<T> off(V(-2),V(3),V(1),8,0);
     s7::PulseGeneratorT<T> on(V(-2),V(3),V(1),8,1);
     for (int n=0;n<16;++n) require(sample(off)==V(-2) && sample(on)==V(3), "Pulse endpoint duty");
-    s7::StepGeneratorT<T> step(V(-2),V(3),8,2);
-    s7::ImpulseGeneratorT<T> impulse(V(0.5),8,2);
+    s7::StepGeneratorT<T> step(V(-2),V(3),8.0,0.25);       // 2 samples at 8 Hz
+    s7::ImpulseGeneratorT<T> impulse(V(0.5),8.0,0.25);
     for (int n=0;n<12;++n) {
         require(sample(step)==V(n<2 ? -2 : 3), "Step transition sample");
         require(sample(impulse)==V(n==2 ? 4 : 0), "Impulse is one sample, area/dt");
@@ -93,7 +93,7 @@ void add(s7::Schema& schema, const char* id, const char* type, boost::json::obje
 template <s7::SignalType T> void integrate_delta() {
     using V = s7::signal_storage_t<T>;
     s7::Schema schema("integrated_delta");
-    schema.add_element("delta",[] {return std::make_unique<s7::ImpulseGeneratorT<T>>(V(1),8,2);});
+    schema.add_element("delta",[] {return std::make_unique<s7::ImpulseGeneratorT<T>>(V(1),8.0,0.25);});
     schema.add_element("integral",[] {return std::make_unique<s7::EulerIntegratorT<T>>(V(0.125));});
     schema.connect("delta",0,"integral",0);
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
@@ -106,7 +106,7 @@ template <s7::SignalType T> void integrate_delta() {
 template <s7::SignalType T> void sweeps_and_prbs() {
     using V = s7::signal_storage_t<T>;
     for (bool logarithmic : {false,true}) for (bool repeat : {false,true}) {
-        s7::ChirpGeneratorT<T> source(V(1),V(4),8,64,V(2),V(3),V(0),
+        s7::ChirpGeneratorT<T> source(V(1),V(4),0.125,64.0,V(2),V(3),V(0), // 8 samples at 64 Hz
             logarithmic ? s7::ChirpSweep::Logarithmic : s7::ChirpSweep::Linear,repeat);
         const double ratio=std::pow(4.0,1.0/8);
         const auto sum = [&](int n) {
@@ -121,7 +121,7 @@ template <s7::SignalType T> void sweeps_and_prbs() {
     }
     for(unsigned order : {7u,15u}) {
         const std::size_t period=(1u<<order)-1;
-        s7::PrbsGeneratorT<T> source(order,1,1,1000,V(-2),V(3));
+        s7::PrbsGeneratorT<T> source(order,1,0.001,1000.0,V(-2),V(3));
         std::vector<unsigned> bits;
         std::size_t ones=0;
         for(std::size_t n=0;n<period;++n) {
@@ -139,7 +139,7 @@ template <s7::SignalType T> void sweeps_and_prbs() {
             require(sample(source)==V(bits[n] ? 3 : -2), "PRBS repeats after its full period");
         }
     }
-    s7::PrbsGeneratorT<T> slow(7,65,3), fast(7,65,1);
+    s7::PrbsGeneratorT<T> slow(7,65,0.003), fast(7,65,0.001); // 3 and 1 samples at 1 kHz
     for(int n=0;n<50;++n) {
         const V expected=sample(fast);
         for(int k=0;k<3;++k) require(sample(slow)==expected, "PRBS bit hold and alternate seed");
@@ -152,6 +152,7 @@ void registry() {
     for (const char* type : {"TriangleGenerator","PulseGenerator","ImpulseGenerator","StepGenerator","ControlledOscillator","ChirpGenerator","PRBSGenerator"}) {
         for (const char* signal : {"F16","F32","F64","F128"}) {
             s7::Schema schema("registered_source");
+            schema.set_rate(s7::Rate::from_hz(1000)); // document sources follow the schema's rate
             add(schema,"source",type,{{"type",signal}});
             if(std::string(type)=="ControlledOscillator") {
                 add(schema,"frequency","Constant",{{"value",1}});
@@ -166,15 +167,32 @@ void registry() {
         std::pair{"TriangleGenerator",boost::json::object{{"rise_fraction",1.1}}},
         {"PulseGenerator",{{"duty",-0.1}}},
         {"StepGenerator",{{"start_sample",-1}}},
-        {"ImpulseGenerator",{{"sample_rate_hz",0}}},
+        {"ImpulseGenerator",{{"start_time",-1}}},
+        {"StepGenerator",{{"start_time",0.0005}}}, // half a sample at 1 kHz
+        {"PRBSGenerator",{{"bit_time",0.0015}}},
         {"ControlledOscillator",{{"type","I32"}}}}) {
         s7::Schema schema("invalid");
+        schema.set_rate(s7::Rate::from_hz(1000));
         add(schema,"source",entry.first,entry.second);
         require(!s7::Validator::validate(schema).ok(), "Invalid registry parameter is rejected");
     }
+    // Durations are times: a legacy sample count converts at its stored rate
+    // (4 samples at 8 Hz = 0.5 s), then counts at the run's rate (8 at 16 Hz).
+    for (const auto& params : {boost::json::object{{"start_sample",4},{"sample_rate_hz",8}},
+                               boost::json::object{{"start_time",0.5}}}) {
+        s7::Schema timed("timed_step");
+        timed.set_rate(s7::Rate::from_hz(16));
+        add(timed,"source","StepGenerator",params);
+        s7::NodeRuntime runtime(s7::Compiler::compile(timed));
+        for (int n=0;n<12;++n) {
+            runtime.step();
+            require(runtime.real_output_of("source")==(n<8 ? 0 : 1), "Step at 0.5 s whatever rate the document used");
+        }
+    }
+    // Rate-authoritative pins (built in C++) still conflict.
     s7::Schema mismatch("mismatched_rates");
-    add(mismatch,"source","ImpulseGenerator",{{"sample_rate_hz",8}});
-    add(mismatch,"integral","EulerIntegrator",{{"dt",0.25}});
+    mismatch.add_element("source",[] { return std::make_unique<s7::ImpulseGenerator>(1.0,8.0,0.0); });
+    mismatch.add_element("integral",[] { return std::make_unique<s7::EulerIntegrator>(0.25); });
     mismatch.connect("source",0,"integral",0);
     require(!s7::Validator::validate(mismatch).ok(), "Conflicting model rates rejected");
 }
@@ -195,11 +213,12 @@ int main() {
         sweeps_and_prbs<s7::SignalType::F16>(); sweeps_and_prbs<s7::SignalType::F32>();
         sweeps_and_prbs<s7::SignalType::F64>(); sweeps_and_prbs<s7::SignalType::F128>();
         rejects([] {s7::ChirpGenerator bad(0,1,8,1000,1,0,0,s7::ChirpSweep::Logarithmic);});
-        rejects([] {s7::ChirpGenerator bad(1,2,0);});
+        rejects([] {s7::ChirpGenerator bad(1,2,0.0);});
         rejects([] {s7::PRBSGenerator bad(8);});
         rejects([] {s7::PRBSGenerator bad(7,0);});
         rejects([] {s7::PRBSGenerator bad(7,128);});
-        rejects([] {s7::PRBSGenerator bad(7,1,0);});
+        rejects([] {s7::PRBSGenerator bad(7,1,0.0);});
+        rejects([] {s7::StepGenerator bad(0,1,1000.0,0.0005);}); // not a whole number of samples
         registry();
         std::cout << "Sources: waveforms, VCO/chirp phase, maximal PRBS periods, delta integration, registry and validation passed\n";
     } catch(const std::exception& e) {std::cerr << e.what() << '\n';return 1;}

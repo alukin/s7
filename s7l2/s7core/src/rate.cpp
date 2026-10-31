@@ -36,6 +36,16 @@ std::uint64_t Rate::first_step_at_ns(const std::int64_t time_ns) const
     return step;
 }
 
+std::optional<std::uint64_t> Rate::whole_samples(const double seconds) const
+{
+    if (!std::isfinite(seconds) || seconds < 0) return std::nullopt;
+    const long double samples = static_cast<long double>(seconds) * numerator / denominator;
+    if (samples > static_cast<long double>(std::numeric_limits<std::uint64_t>::max())) return std::nullopt;
+    const long double whole = std::round(samples);
+    if (std::abs(samples - whole) > 1e-6L) return std::nullopt;
+    return static_cast<std::uint64_t>(whole);
+}
+
 Rate Rate::reduced(const std::uint64_t numerator, const std::uint64_t denominator)
 {
     if (numerator == 0 || denominator == 0) {

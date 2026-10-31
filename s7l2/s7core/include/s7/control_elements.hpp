@@ -75,16 +75,21 @@ enum class IntegratorReset { Rising, Level };
 template <SignalType Type> class ControlledIntegratorT final : public Element {
 public:
     using V = signal_storage_t<Type>;
-    ControlledIntegratorT(V dt=V(0.001), V initial=V(0),
+    // Without dt the integrator follows its domain's rate (adopt_rate).
+    ControlledIntegratorT(std::optional<V> dt=V(0.001), V initial=V(0),
         V lower=std::numeric_limits<V>::lowest(), V upper=std::numeric_limits<V>::max(),
         IntegratorReset reset=IntegratorReset::Rising)
-        : Element("ControlledIntegrator",true,Feedthrough::None), dt_(dt), lower_(lower), upper_(upper),
+        : Element("ControlledIntegrator",true,Feedthrough::None), follows_rate_(!dt),
+          dt_(dt ? *dt : std::numeric_limits<V>::quiet_NaN()), lower_(lower), upper_(upper),
           output_(initial), reset_(reset) {
-        for (const auto value : {dt,initial,lower,upper}) detail::control_finite<Type>(value);
-        if (!(dt>V(0))) throw std::invalid_argument("ControlledIntegrator dt must be positive.");
+        for (const auto value : {initial,lower,upper}) detail::control_finite<Type>(value);
+        if (dt) {
+            detail::control_finite<Type>(*dt);
+            if (!(*dt>V(0))) throw std::invalid_argument("ControlledIntegrator dt must be positive.");
+            (void)Rate::from_seconds(static_cast<double>(*dt));
+        }
         if (!(lower<=initial && initial<=upper))
             throw std::invalid_argument("ControlledIntegrator requires lower_limit <= initial_value <= upper_limit.");
-        (void)Rate::from_seconds(static_cast<double>(dt));
         register_input(0,"derivative",Type,nullptr);
         register_input(1,"enable",Type,nullptr);
         register_input(2,"reset",Type,nullptr);
@@ -109,8 +114,15 @@ public:
         output_=next<lower_ ? lower_ : (next>upper_ ? upper_ : next);
         previous_reset_=requested;
     }
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_seconds(static_cast<double>(dt_)); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_seconds(static_cast<double>(dt_));
+    }
+    void adopt_rate(const Rate& rate) override {
+        if (follows_rate_) dt_=detail::rate_period<V>(rate);
+    }
 private:
+    bool follows_rate_;
     V dt_,lower_,upper_,output_;
     IntegratorReset reset_;
     bool previous_reset_{};
@@ -153,8 +165,11 @@ template <SignalType Type> class FrequencyMeterT final : public Element {
 public:
     using V = signal_storage_t<Type>;
     using P = std::conditional_t<Type==SignalType::F128,V,double>;
-    explicit FrequencyMeterT(double sample_rate_hz=1000) : Element("FrequencyMeter",true), rate_(sample_rate_hz) {
-        (void)Rate::from_hz(rate_);
+    // Without a rate the meter follows its domain's rate (adopt_rate).
+    explicit FrequencyMeterT(std::optional<double> sample_rate_hz=1000.0)
+        : Element("FrequencyMeter",true), follows_rate_(!sample_rate_hz),
+          rate_(sample_rate_hz ? *sample_rate_hz : std::numeric_limits<double>::quiet_NaN()) {
+        if (sample_rate_hz) (void)Rate::from_hz(rate_);
         register_input(0,port_names::in,Type,nullptr);
         register_output(0,"frequency_hz",Type,&frequency_);
         register_output(1,"valid",Type,&valid_);
@@ -181,8 +196,15 @@ public:
         }
         previous_=input; have_previous_=true;
     }
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(rate_); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_hz(rate_);
+    }
+    void adopt_rate(const Rate& rate) override {
+        if (follows_rate_) rate_=rate.to_hz();
+    }
 private:
+    bool follows_rate_;
     double rate_;
     V previous_{},frequency_{},valid_{};
     P last_fraction_{};

@@ -508,9 +508,11 @@ public:
     using value_type = signal_storage_t<Type>;
     using step_type = component_storage_t<Type>;
 
-    explicit EulerIntegratorT(step_type dt = step_type(1), value_type initial_value = {})
+    // Without dt the integrator follows its domain's rate (adopt_rate).
+    explicit EulerIntegratorT(std::optional<step_type> dt = step_type(1), value_type initial_value = {})
         : Element("EulerIntegrator", true, Feedthrough::None)
-        , dt_(dt)
+        , follows_rate_(!dt)
+        , dt_(dt ? *dt : std::numeric_limits<step_type>::quiet_NaN())
         , output_value_(initial_value)
     {
         register_input(0, port_names::in, Type, nullptr);
@@ -523,9 +525,18 @@ public:
         output_value_ = output_value_ + read_input<value_type>(0) * dt_;
     }
 
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_seconds(static_cast<double>(dt_)); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_seconds(static_cast<double>(dt_));
+    }
+    void adopt_rate(const Rate& rate) override
+    {
+        if (follows_rate_) dt_ = detail::rate_period<step_type>(rate);
+    }
 
 private:
+    bool follows_rate_;
     step_type dt_;
     value_type output_value_;
 };
@@ -542,10 +553,12 @@ public:
     using value_type = signal_storage_t<Type>;
     using step_type = component_storage_t<Type>;
 
-    explicit TrapezoidIntegratorT(step_type dt = step_type(1), value_type initial_value = {},
+    // Without dt the integrator follows its domain's rate (adopt_rate).
+    explicit TrapezoidIntegratorT(std::optional<step_type> dt = step_type(1), value_type initial_value = {},
                                  TrapezoidMode mode = TrapezoidMode::Implicit)
         : Element("TrapezoidIntegrator", true, mode == TrapezoidMode::Sampled ? Feedthrough::Direct : Feedthrough::None)
-        , half_dt_(dt / step_type(2))
+        , follows_rate_(!dt)
+        , half_dt_(dt ? *dt / step_type(2) : std::numeric_limits<step_type>::quiet_NaN())
         , output_value_(initial_value)
         , sampled_(mode == TrapezoidMode::Sampled)
     {
@@ -595,10 +608,16 @@ public:
 
     [[nodiscard]] std::optional<Rate> declared_rate() const override
     {
+        if (follows_rate_) return std::nullopt;
         return Rate::from_seconds(static_cast<double>(half_dt_) * 2.0);
+    }
+    void adopt_rate(const Rate& rate) override
+    {
+        if (follows_rate_) half_dt_ = detail::rate_period<step_type>(rate) / step_type(2);
     }
 
 private:
+    bool follows_rate_;
     step_type half_dt_;
     value_type output_value_;
     bool sampled_;
@@ -629,10 +648,12 @@ public:
     using value_type = signal_storage_t<Type>;
     using step_type = component_storage_t<Type>;
 
-    explicit SymplecticIntegratorT(step_type dt = step_type(1), value_type initial_position = {},
+    // Without dt the integrator follows its domain's rate (adopt_rate).
+    explicit SymplecticIntegratorT(std::optional<step_type> dt = step_type(1), value_type initial_position = {},
                                    value_type initial_velocity = {})
         : Element("SymplecticIntegrator", true, Feedthrough::None)
-        , dt_(dt)
+        , follows_rate_(!dt)
+        , dt_(dt ? *dt : std::numeric_limits<step_type>::quiet_NaN())
         , position_(initial_position)
         , velocity_(initial_velocity)
     {
@@ -648,9 +669,18 @@ public:
         position_ = position_ + velocity_ * dt_;
     }
 
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_seconds(static_cast<double>(dt_)); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_seconds(static_cast<double>(dt_));
+    }
+    void adopt_rate(const Rate& rate) override
+    {
+        if (follows_rate_) dt_ = detail::rate_period<step_type>(rate);
+    }
 
 private:
+    bool follows_rate_;
     step_type dt_;
     value_type position_;
     value_type velocity_;
@@ -736,11 +766,17 @@ class PwmT final : public Element {
 public:
     using value_type = signal_storage_t<Type>;
 
-    PwmT(std::size_t period_samples, double sample_rate_hz)
-        : Element("PWM", true), period_samples_(period_samples), sample_rate_hz_(sample_rate_hz)
+    // period: carrier period in seconds, 2..65504 whole samples. Without a
+    // sample rate the PWM follows its domain's rate (adopt_rate).
+    PwmT(double period, std::optional<double> sample_rate_hz)
+        : Element("PWM", true), period_(period), follows_rate_(!sample_rate_hz)
     {
-        if (period_samples < 2 || period_samples > 65504 || !std::isfinite(sample_rate_hz) || sample_rate_hz <= 0) {
-            throw std::invalid_argument("PWM requires 2 <= period_samples <= 65504 and a finite positive sample_rate_hz.");
+        if (sample_rate_hz) {
+            if (!std::isfinite(*sample_rate_hz) || *sample_rate_hz <= 0) {
+                throw std::invalid_argument("PWM requires a finite positive sample_rate_hz.");
+            }
+            rate_ = Rate::from_hz(*sample_rate_hz);
+            configure();
         }
         register_input(0, "duty", Type, nullptr);
         register_output(0, "gate", Type, &output_value_);
@@ -748,6 +784,7 @@ public:
 
     void step() override
     {
+        if (!rate_) throw std::logic_error("PWM follows its domain's rate and has not adopted one.");
         if (sample_ == 0) {
             duty_ = read_input<value_type>(0);
             if (duty_ - duty_ != value_type(0)) throw std::domain_error("PWM duty must be finite.");
@@ -757,11 +794,30 @@ public:
         if (++sample_ == period_samples_) sample_ = 0;
     }
 
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(sample_rate_hz_); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        if (follows_rate_) return std::nullopt;
+        return rate_;
+    }
+    void adopt_rate(const Rate& rate) override
+    {
+        if (!follows_rate_) return;
+        rate_ = rate;
+        configure();
+    }
 
 private:
-    std::size_t period_samples_, sample_{};
-    double sample_rate_hz_;
+    void configure()
+    {
+        period_samples_ = detail::duration_samples(*rate_, period_, "period");
+        if (period_samples_ < 2 || period_samples_ > 65504) {
+            throw std::invalid_argument("PWM period must be 2..65504 samples; it is " + std::to_string(period_samples_) + ".");
+        }
+    }
+    double period_;
+    bool follows_rate_;
+    std::optional<Rate> rate_;
+    std::size_t period_samples_{}, sample_{};
     value_type duty_{}, output_value_{};
 };
 
@@ -775,18 +831,24 @@ class AnalogOscillatorT final : public Element {
 public:
     using value_type = signal_storage_t<Type>;
 
-    AnalogOscillatorT(value_type amplitude, value_type frequency_hz, double sample_rate_hz, value_type phase = {})
+    // Without a sample rate the oscillator follows its domain's rate (adopt_rate).
+    AnalogOscillatorT(value_type amplitude, value_type frequency_hz, std::optional<double> sample_rate_hz,
+                      value_type phase = {})
         : Element("AnalogOscillator", true)
         , amplitude_(amplitude)
+        , frequency_hz_(frequency_hz)
         , phase_(phase)
-        , sample_rate_hz_(sample_rate_hz)
+        , follows_rate_(!sample_rate_hz)
+        , sample_rate_hz_(sample_rate_hz ? *sample_rate_hz : 0.0)
     {
-        if (!(sample_rate_hz > 0.0) || !std::isfinite(sample_rate_hz)) {
-            throw std::invalid_argument("AnalogOscillator requires a positive, finite sample rate.");
+        if (sample_rate_hz) {
+            if (!(*sample_rate_hz > 0.0) || !std::isfinite(*sample_rate_hz)) {
+                throw std::invalid_argument("AnalogOscillator requires a positive, finite sample rate.");
+            }
+            configure();
+        } else {
+            phase_increment_ = std::numeric_limits<value_type>::quiet_NaN();
         }
-        using Increment = std::conditional_t<(sizeof(value_type) < sizeof(float)), float, value_type>;
-        phase_increment_ = static_cast<value_type>(Increment(2) * math::pi_v<Increment> * static_cast<Increment>(frequency_hz)
-                                                   / static_cast<Increment>(sample_rate_hz));
         register_output(0, port_names::out, Type, &output_value_);
     }
 
@@ -800,11 +862,29 @@ public:
         }
     }
 
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(sample_rate_hz_); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override
+    {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_hz(sample_rate_hz_);
+    }
+    void adopt_rate(const Rate& rate) override
+    {
+        if (!follows_rate_) return;
+        sample_rate_hz_ = rate.to_hz();
+        configure();
+    }
 
 private:
+    void configure()
+    {
+        using Increment = std::conditional_t<(sizeof(value_type) < sizeof(float)), float, value_type>;
+        phase_increment_ = static_cast<value_type>(Increment(2) * math::pi_v<Increment> * static_cast<Increment>(frequency_hz_)
+                                                   / static_cast<Increment>(sample_rate_hz_));
+    }
     value_type amplitude_;
+    value_type frequency_hz_;
     value_type phase_;
+    bool follows_rate_;
     double sample_rate_hz_;
     value_type phase_increment_{};
     value_type output_value_{};

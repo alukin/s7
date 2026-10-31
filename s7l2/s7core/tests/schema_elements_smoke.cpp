@@ -87,21 +87,33 @@ void independence_and_limits() {
     auto schema=s7::SchemaLibraryLoader::build_schema(a);
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
     for(int n=0;n<2000;++n) {runtime.step();require(runtime.real_output_of("component")==1,"PI normalized saturation");}
-    // A nested explicit rate must be visible to parent connection validation.
+    // A nested explicit rate must be visible to parent connection validation:
+    // two nested schemas declaring different rates cannot be connected.
     auto mismatch=model("FirstOrderLag",{2,.1});
-    mismatch.as_object().at("elements").as_array().push_back(boost::json::object{{"id","other"},{"type","EulerIntegrator"},{"params",{{"dt",.002}}}});
+    auto slower=*s7::ElementRegistry::instance().find("FirstOrderLag")->metadata().schema_definition;
+    slower.as_object()["dt"]=.002;
+    mismatch.as_object().at("elements").as_array().push_back(boost::json::object{{"id","other"},{"type","FirstOrderLag"},{"schema",slower}});
+    mismatch.as_object().at("elements").as_array().push_back(constant("other_tau",.1));
     mismatch.as_object().at("connections").as_array().push_back(boost::json::object{{"from_element","component"},{"from_port",0},{"to_element","other"},{"to_port",0}});
+    mismatch.as_object().at("connections").as_array().push_back(boost::json::object{{"from_element","other_tau"},{"from_port",0},{"to_element","other"},{"to_port",1}});
     auto invalid=s7::SchemaLibraryLoader::build_schema(mismatch);
     require(!s7::Validator::validate(invalid).ok(),"Parent detects rate conflict with nested schema");
-    auto bad_rate=model("FirstOrderLag",{2,.1});
+    // Inside a nested schema, elements follow its rate: a dt stored in its
+    // document is a legacy field and cannot contradict the schema's rate.
+    auto stored_dt=model("FirstOrderLag",{2,.1});
     auto nested=*s7::ElementRegistry::instance().find("FirstOrderLag")->metadata().schema_definition;
     for(auto& e : nested.as_object().at("elements").as_array())
         if(e.as_object().at("id").as_string()=="state") e.as_object()["params"].as_object()["dt"]=.002;
-    bad_rate.as_object().at("elements").as_array()[0].as_object()["schema"]=nested;
-    bool rejected=false;
-    try {auto graph=s7::SchemaLibraryLoader::build_schema(bad_rate);(void)s7::Compiler::compile(graph);}
-    catch(const std::exception&) {rejected=true;}
-    require(rejected,"Nested internal rates cannot contradict their declared schema rate");
+    stored_dt.as_object().at("elements").as_array()[0].as_object()["schema"]=nested;
+    auto follows=s7::SchemaLibraryLoader::build_schema(stored_dt);
+    s7::NodeRuntime following(s7::Compiler::compile(follows));
+    auto reference=s7::SchemaLibraryLoader::build_schema(model("FirstOrderLag",{2,.1}));
+    s7::NodeRuntime unchanged(s7::Compiler::compile(reference));
+    for(int n=0;n<100;++n) {
+        following.step(); unchanged.step();
+        require(following.real_output_of("component")==unchanged.real_output_of("component"),
+                "Nested elements follow the nested schema's rate, not a stored dt");
+    }
     // A schema remains direct feedthrough; internal memory is not silently
     // promoted into a new outer-loop causal boundary.
     require(schema.elements().size()>0,"Schema resource materializes");

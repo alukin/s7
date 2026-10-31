@@ -74,9 +74,11 @@ public:
     [[nodiscard]] std::optional<Rate> rate() const;
     // A nested schema with an explicit rate participates in parent rate validation.
     [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_; }
+    // Without a rate of its own, the parent's resolved rate is what every
+    // internal rate is checked against when this schema compiles.
+    void adopt_rate(const Rate& rate) override;
 
 private:
-    friend class Compiler;
 
     struct ExposedInput {
         std::string name;

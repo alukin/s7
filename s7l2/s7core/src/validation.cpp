@@ -295,6 +295,19 @@ CheckedSchema check_schema(const Schema& schema) {
             checked.errors.insert(checked.errors.end(), rates.errors.begin(), rates.errors.end());
         } else {
             checked.rates = std::move(rates.rates);
+            // Each element adopts its resolved rate here, so a parameter with no
+            // exact meaning at that rate (a duration that is not a whole number
+            // of samples) is a validation error, not a later compile failure.
+            for (std::size_t index = 0; index < schema.elements().size(); ++index) {
+                const auto& id = schema.elements()[index].id;
+                const auto rate = checked.rates.find(id);
+                if (rate == checked.rates.end() || !checked.elements[index]) continue;
+                try {
+                    checked.elements[index]->adopt_rate(rate->second);
+                } catch (const std::invalid_argument& error) {
+                    checked.errors.push_back("Element '" + id + "' at " + rate->second.to_string() + ": " + error.what());
+                }
+            }
         }
     }
     if (checked.errors.empty()) {

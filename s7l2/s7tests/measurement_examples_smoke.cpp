@@ -13,15 +13,9 @@ void require(bool ok,const std::string& message) {if(!ok) throw std::runtime_err
 std::unique_ptr<s7::NodeRuntime> load(const std::string& file,double dt) {
     auto document=s7tests::read_json_object(std::filesystem::path(S7_MEASUREMENT_DIR)/file);
     boost::json::value json=document.at("schema");
-    const double native=document.at("dt").to_number<double>();
-    if(dt!=native) {
-        for(auto& value:json.as_object().at("elements").as_array()) {
-            auto& params=value.as_object().at("params").as_object();
-            if(auto* count=params.if_contains("start_sample"))
-                *count=std::llround(count->to_number<double>()*native/dt);
-        }
-        s7::configure_schema_discretization(json,dt);
-    }
+    // Elements follow the seeded dt; stored sample counts are converted to
+    // time at the rate the document was written at.
+    s7::configure_schema_discretization(json,dt);
     auto schema=s7::SchemaLibraryLoader::build_schema(json);
     const auto checked=s7::Validator::validate(schema);
     for(const auto& error:checked.errors) std::cerr<<error<<'\n';

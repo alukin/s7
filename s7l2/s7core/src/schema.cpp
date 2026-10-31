@@ -197,6 +197,12 @@ const std::vector<Connection>& Schema::connections() const {
     return connections_;
 }
 
+void Schema::adopt_rate(const Rate& rate) {
+    if (rate_ || parent_rate_ == rate) return;
+    parent_rate_ = rate;
+    invalidate_compiled_runtime();
+}
+
 void Schema::set_rate(const Rate rate) {
     // Rates compare field-wise, so keep the reduced form (and reject zero).
     rate_ = Rate::reduced(rate.numerator, rate.denominator);

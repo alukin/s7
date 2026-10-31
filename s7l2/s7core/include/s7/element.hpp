@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -109,6 +110,13 @@ public:
     // element with no such parameter, whose rate is purely inferred from its
     // connections (doc/S7_Sample_Rate_Model.md section 3, s7/rate_inference.hpp).
     [[nodiscard]] virtual std::optional<Rate> declared_rate() const { return std::nullopt; }
+    // The rate rate inference resolved for this element, given once by the
+    // compiler before inputs are bound (doc/S7_Sample_Rate_Model.md section
+    // 8). A rate-following element (declaring no rate) derives its step size,
+    // increments and sample counts here; it may throw when a parameter has no
+    // exact meaning at that rate (a duration that is not a whole number of
+    // samples). Elements with no rate-dependent behavior ignore it.
+    virtual void adopt_rate(const Rate& /*rate*/) {}
 
     [[nodiscard]] std::size_t input_count() const { return input_ports_.size(); }
     [[nodiscard]] std::size_t output_count() const { return output_ports_.size(); }
@@ -189,6 +197,26 @@ private:
 };
 
 using ElementFactory = std::function<std::unique_ptr<Element>()>;
+
+namespace detail {
+// One sample period of `rate` (1 / rate seconds) as T, divided from the exact
+// rational in a type at least as wide as double.
+template <typename T>
+[[nodiscard]] T rate_period(const Rate& rate)
+{
+    using W = std::conditional_t<(sizeof(T) > sizeof(double)), T, double>;
+    return static_cast<T>(static_cast<W>(rate.denominator) / static_cast<W>(rate.numerator));
+}
+
+// A duration parameter as a whole number of samples at `rate`; throws
+// std::invalid_argument naming the parameter when it has no exact meaning.
+[[nodiscard]] inline std::uint64_t duration_samples(const Rate& rate, const double seconds, const std::string_view name)
+{
+    if (const auto samples = rate.whole_samples(seconds)) return *samples;
+    throw std::invalid_argument("'" + std::string(name) + "' of " + std::to_string(seconds) +
+                                " s is not a whole number of samples at " + rate.to_string() + ".");
+}
+} // namespace detail
 
 } // namespace s7
 

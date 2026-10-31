@@ -164,8 +164,8 @@ Owners: maintainer and Codex.
 | Step | Deliverable | Status |
 | --- | --- | --- |
 | R1 | Model time checked against every resolved element rate; rational model-time rate for deployments, stream rates and real-time pacing; network stream elements declare their rate. | Implemented |
-| R2 | Rate-following elements adopt their domain's rate; Studio stops rewriting `dt`/`sample_rate_hz`. | Planned |
-| R3 | Durations in time units (seconds) with loader migration from stored sample counts; refuse a duration that is not a whole number of samples. | Planned |
+| R2 | Rate-following elements adopt their domain's rate; Studio stops rewriting `dt`/`sample_rate_hz`. | Implemented |
+| R3 | Durations in time units (seconds) with loader migration from stored sample counts; refuse a duration that is not a whole number of samples. | Implemented |
 | R4 | Design rate for `FirFilter`/`IirFilter`; refuse to run at another rate. | Planned |
 | R5 | Rate domains in `NodeRuntime` and the `Resampler` element: orders 0/1/2 (default 0), pass-through at equal rates, causal interpolation, anti-aliasing when lowering the rate. | Planned |
 | R6 | Studio: the run dialog's `dt` drives every rate; mismatch errors suggest a `Resampler`; palette entry; user documentation. | Planned |

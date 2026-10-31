@@ -233,13 +233,13 @@ void f16_oscillator_rate() {
     require(cd.declared_rate() == s7::Rate::from_hz(44100), "F16 oscillator rate rounded");
     s7::AnalogOscillatorT<SignalType::F16> fast(float16_t(1), float16_t(1000), 96000.0);
     require(fast.declared_rate() == s7::Rate::from_hz(96000), "F16 oscillator above the F16 range");
-    // Through the registry, with the parameter in its JSON form.
+    // Through the registry: the oscillator follows the schema's 44.1 kHz rate.
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     const auto* descriptor = registry.find("AnalogOscillator"); require(descriptor, "AnalogOscillator not registered");
     s7::Schema schema("f16_tone");
-    schema.add_element(s7::make_element_spec("osc", *descriptor,
-        {{"type", "F16"}, {"frequency_hz", 1000}, {"sample_rate_hz", 44100}}));
+    schema.set_rate(s7::Rate::from_hz(44100));
+    schema.add_element(s7::make_element_spec("osc", *descriptor, {{"type", "F16"}, {"frequency_hz", 1000}}));
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
     runtime.set_model_time_rate(s7::Rate::from_hz(44100));
     runtime.step();
