@@ -186,6 +186,42 @@ void gl_transition_and_convergence() {
     }
 }
 
+void nonlinear_gauss_reference() {
+    double previous_error = 0;
+    for (const double h : {.2, .1, .05}) {
+        s7::Schema schema("nonlinear_gauss_reference");
+        schema.add_element("x", [h] { return std::make_unique<s7::GaussLegendreIntegrator>(h, 1.); });
+        schema.add_element("square", [] { return std::make_unique<s7::Multiply>(); });
+        schema.add_element("cube", [] { return std::make_unique<s7::Multiply>(); });
+        schema.add_element("negative", [] { return std::make_unique<s7::Gain>(-1.); });
+        schema.connect("x", 0, "square", 0); schema.connect("x", 0, "square", 1);
+        schema.connect("square", 0, "cube", 0); schema.connect("x", 0, "cube", 1);
+        schema.connect("cube", 0, "negative", 0); schema.connect("negative", 0, "x", 0);
+        s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+        runtime.step();
+        near(runtime.real_output_of("x"), 1., 0, "Nonlinear GL first publication");
+        near(runtime.real_output_of("negative"), -1., 0, "Nonlinear trial outputs restored");
+        runtime.step();
+        near(runtime.real_output_of("x"), 1/std::sqrt(1+2*h), 1e-4,
+             "Nonlinear GL first accepted endpoint");
+        near(runtime.real_output_of("negative"), -std::pow(runtime.real_output_of("x"), 3), 2e-13,
+             "Nonlinear GL published derivative");
+        const int steps = static_cast<int>(std::llround(1/h));
+        for (int j = 2; j <= steps; ++j) runtime.step();
+        const double error = std::abs(runtime.real_output_of("x")-1/std::sqrt(3.));
+        require(error > 0 && error < 1e-4, "Nonlinear GL exact-solution error");
+        const auto diagnostics = runtime.numerical_diagnostics();
+        require(diagnostics.accepted_steps == static_cast<std::size_t>(steps+1) &&
+                std::isfinite(diagnostics.last_normalized_residual) &&
+                diagnostics.last_normalized_residual <= 1 && diagnostics.failed_steps == 0,
+                "Nonlinear GL finite residual and accepted publication");
+        if (previous_error)
+            require(previous_error/error > 12 && previous_error/error < 20,
+                    "Nonlinear GL fourth-order refinement");
+        previous_error = error;
+    }
+}
+
 void energy_phase_and_order() {
     const Case oscillator{Model::Oscillator, .1, 1, 0, 1, 0};
     s7::NodeRuntime a(s7::Compiler::compile(graph(oscillator, Method::GaussLegendre)));
@@ -420,14 +456,72 @@ void region_boundaries() {
     near(runtime.real_output_of("a"), runtime.real_output_of("b"), 0,
          "Independent regions have identical transitions");
 
-    s7::Schema one_way("one_way_coupled_gl");
-    one_way.add_element("a", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 1.); });
-    one_way.add_element("b", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 0.); });
-    one_way.add_element("negative", [] { return std::make_unique<s7::Gain>(-1.); });
-    one_way.connect("a", 0, "negative", 0); one_way.connect("negative", 0, "a", 0);
-    one_way.connect("a", 0, "b", 0);
-    require(s7::Compiler::compile(one_way).coupled_regions.size() == 1,
-            "One-way coupled states share their Runge-Kutta stages");
+    for (const bool reverse : {false, true}) {
+        s7::Schema one_way("one_way_coupled_gl");
+        const auto add_state = [&](const std::string& id, double initial) {
+            one_way.add_element(id, [initial] {
+                return std::make_unique<s7::GaussLegendreIntegrator>(.1, initial);
+            });
+        };
+        if (reverse) { add_state("b", 0.); add_state("a", 1.); }
+        else { add_state("a", 1.); add_state("b", 0.); }
+        one_way.add_element("negative", [] { return std::make_unique<s7::Gain>(-1.); });
+        one_way.connect("a", 0, "negative", 0); one_way.connect("negative", 0, "a", 0);
+        one_way.connect("a", 0, "b", 0);
+        auto compiled = s7::Compiler::compile(one_way);
+        require(compiled.coupled_regions.size() == 1,
+                "One-way coupled states share their Runge-Kutta stages");
+        s7::NodeRuntime coupled(std::move(compiled));
+        const double pole = pade_step(Case{Model::RC, .1, 1, 0, 1, 0})[0];
+        for (int step = 0; step <= 10; ++step) {
+            coupled.step();
+            const double expected_a = std::pow(pole, step);
+            near(coupled.real_output_of("a"), expected_a, 2e-13,
+                 "One-way GL source follows independent Pade transition");
+            near(coupled.real_output_of("b"), 1-expected_a, 2e-13,
+                 "One-way GL dependent state uses the peer trial stage");
+        }
+        near(coupled.real_output_of("b"), 1-std::exp(-1.), 1e-7,
+             "One-way GL dependent state follows the exact response");
+    }
+}
+
+void region_size_limits() {
+    const auto chain = [](bool gauss) {
+        s7::Schema schema("connected_17_state_numerical_region");
+        for (int i = 0; i < 17; ++i) {
+            const auto id = "x"+std::to_string(i);
+            schema.add_element(id, [gauss, i]() -> std::unique_ptr<s7::Element> {
+                if (gauss) return std::make_unique<s7::GaussLegendreIntegrator>(.1, i == 0 ? 1. : 0.);
+                return std::make_unique<s7::EulerIntegrator>(.1, i == 0 ? 1. : 0., 2);
+            });
+            if (i == 0) {
+                schema.add_element("rhs0", [] { return std::make_unique<s7::Gain>(-1.); });
+                schema.connect(id, 0, "rhs0", 0); schema.connect("rhs0", 0, id, 0);
+            } else {
+                const auto rhs = "rhs"+std::to_string(i);
+                schema.add_element(rhs, [] { return std::make_unique<s7::Adder>(std::vector<double>{1, -1}); });
+                schema.connect("x"+std::to_string(i-1), 0, rhs, 0);
+                schema.connect(id, 0, rhs, 1); schema.connect(rhs, 0, id, 0);
+            }
+        }
+        return schema;
+    };
+    auto euler = chain(false);
+    require(s7::Validator::validate(euler).ok(), "Connected 17-state Euler region must validate");
+    auto compiled = s7::Compiler::compile(euler);
+    require(compiled.coupled_regions.size() == 1 && compiled.coupled_regions[0].states.size() == 17,
+            "Connected Euler chain must remain one numerical region");
+    s7::NodeRuntime runtime(std::move(compiled));
+    runtime.step(); runtime.step();
+    near(runtime.real_output_of("x0"), std::pow(1-.1/2, 2), 2e-14,
+         "17-state Euler source transition");
+    near(runtime.real_output_of("x1"), .095, 2e-14,
+         "17-state Euler dependent transition");
+    const auto rejected = s7::Validator::validate(chain(true));
+    require(!rejected.ok() && std::ranges::any_of(rejected.errors, [](const std::string& error) {
+        return error.find("Gauss-Legendre integration currently supports at most 16") != std::string::npos;
+    }), "Connected 17-state Gauss region must report its size limit");
 }
 
 void rate_domain_stages() {
@@ -472,11 +566,13 @@ void rate_domain_stages() {
 int main() try {
     substep_equivalence();
     gl_transition_and_convergence();
+    nonlinear_gauss_reference();
     energy_phase_and_order();
     responses();
     restrictions_and_failure();
     registry_configuration();
     region_boundaries();
+    region_size_limits();
     rate_domain_stages();
     std::cout << "Coupled integration production checks passed\n";
     return 0;
