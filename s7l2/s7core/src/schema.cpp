@@ -51,6 +51,17 @@ private:
     std::shared_ptr<ExposedInputState> state_;
 };
 
+// Exposed ports are backed by F64 or C64 storage (ExposedInputState,
+// ExposedOutputValue), so no other type may cross the schema boundary.
+void require_exposable_type(const char* direction, const std::string& name, const SignalType type)
+{
+    if (type != SignalType::F64 && type != SignalType::C64) {
+        throw std::invalid_argument(std::string("Schema exposed ") + direction + " '" + name + "' has type " +
+                                    std::string(signal_type_name(type)) +
+                                    "; nested schemas expose only F64 and C64 ports.");
+    }
+}
+
 auto random_uuid_string() -> std::string
 {
     return boost::uuids::to_string(boost::uuids::random_generator()());
@@ -93,20 +104,10 @@ void Schema::step() {
     for (std::size_t index = 0; index < exposed_output_sources_.size(); ++index) {
         auto& value = exposed_output_values_[index];
         const auto source = exposed_output_sources_[index];
-        switch (value.type) {
-        case SignalType::C64:
+        if (value.type == SignalType::C64) {
             value.complex = bound_value<SignalType::C64>(source);
-            break;
-        case SignalType::F64:
+        } else {
             value.scalar = bound_value<SignalType::F64>(source);
-            break;
-        default: {
-            // Exposed outputs carry only F64 and C64 values. Keep the
-            // existing failure for any other type: the typed read throws.
-            const auto& output = exposed_outputs_[index];
-            value.scalar = compiled_runtime_->real_output_of(output.from_element, output.from_port);
-            break;
-        }
         }
     }
 }
@@ -146,6 +147,7 @@ void Schema::expose_input(std::string name,
             throw std::invalid_argument("Schema exposed input name is duplicated: '" + name + "'.");
         }
     }
+    require_exposable_type("input", name, type);
 
     const std::size_t portIndex = exposed_inputs_.size();
     exposed_inputs_.push_back(ExposedInput{std::move(name), type, std::move(to_element), to_port});
@@ -167,6 +169,7 @@ void Schema::expose_output(std::string name,
             throw std::invalid_argument("Schema exposed output name is duplicated: '" + name + "'.");
         }
     }
+    require_exposable_type("output", name, type);
 
     exposed_outputs_.push_back(ExposedOutput{std::move(name), type, std::move(from_element), from_port});
     exposed_output_values_.push_back(ExposedOutputValue{type, RealValue{}, ComplexValue{}});

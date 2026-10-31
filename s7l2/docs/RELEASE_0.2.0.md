@@ -31,9 +31,11 @@ measurements, correctness checks and limits. This serial improvement is the
 
 Nested schemas now resolve their exposed-output bindings once when their
 private runtime is compiled, instead of looking up each internal output by
-element ID on every step. Exposed types (F64/C64), output order, publication
-timing and fault behavior are unchanged; the performance record documents
-binding lifetime, measurements and remaining overhead. **S7 0.2.0 uses
+element ID on every step. Output order, publication timing and fault behavior
+are unchanged. Exposed ports carry F64 and C64 only. Any other declared type is
+now rejected when the schema is built, instead of failing on a later step or
+misreading an input. The performance record documents binding lifetime,
+measurements and remaining overhead. **S7 0.2.0 uses
 sequential nested-schema execution. Parallel nested-schema scheduling remains
 outside the release scope and is a possible subject of 0.3.0 research.**
 

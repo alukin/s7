@@ -7,6 +7,9 @@
 // causal order.
 
 #include <s7/core.hpp>
+#include <s7/schema_library.hpp>
+
+#include <boost/json.hpp>
 
 #include <array>
 #include <complex>
@@ -472,14 +475,31 @@ void invalid_mappings() {
     require_throws([&] { broken.step(); }, "Broken schema stepped");
     require_throws([&] { broken.step(); }, "Broken schema stepped on retry");
 
-    // Exposed outputs carry F64 and C64 only. Another type still compiles but
-    // fails on its first step, as before.
-    s7::Schema integer("integer_output");
+    // Exposed ports are backed by F64/C64 storage; any other type is rejected
+    // when exposed instead of misreading values or failing on a later step.
+    s7::Schema integer("integer_ports");
     integer.set_rate(s7::Rate::from_hz(1));
-    integer.add_element("count", [] { return std::make_unique<s7::ConstantT<s7::SignalType::I32>>(5); });
-    integer.expose_output("out", s7::SignalType::I32, "count", 0);
-    integer.bind_inputs({});
-    require_throws([&] { integer.step(); }, "Unsupported I32 exposed output did not fail");
+    integer.add_element("count", [] { return std::make_unique<s7::GainT<s7::SignalType::I32>>(2); });
+    for (const auto type : s7::kAllSignalTypes) {
+        if (type == s7::SignalType::F64 || type == s7::SignalType::C64) continue;
+        require_throws([&] { integer.expose_input("in", type, "count", 0); }, "Unsupported exposed input type accepted");
+        require_throws([&] { integer.expose_output("out", type, "count", 0); },
+                       "Unsupported exposed output type accepted");
+    }
+    require(integer.input_count() == 0 && integer.output_count() == 0, "Rejected exposure registered a port");
+
+    // The same rule applies to schemas loaded from JSON.
+    auto& registry = s7::ElementRegistry::instance();
+    s7::register_builtin_elements(registry);
+    const auto definition = boost::json::parse(R"json({
+        "name": "integer_library_schema", "dt": 1.0,
+        "elements": [{"id": "gain", "type": "Gain", "params": {"factor": 2}}],
+        "connections": [],
+        "exposed_inputs": [{"name": "in", "type": "I32", "element": "gain", "port": 0}],
+        "exposed_outputs": []
+    })json");
+    require_throws([&] { (void)s7::SchemaLibraryLoader::build_schema(definition, registry); },
+                   "Schema JSON with an I32 exposed input was accepted");
 }
 
 class FaultingGain final : public s7::Element {

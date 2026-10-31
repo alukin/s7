@@ -165,14 +165,17 @@ Binding lifetime and invalidation:
 - Each nesting level resolves its own bindings into its direct children's
   storage, which those children own and keep at stable addresses.
 
-Supported types are unchanged. Exposed outputs carry F64 and C64 values only,
-matching the schema element's existing exposed storage. Another declared type
-still compiles and still fails on its first step with the same typed-read
-error; this change does not broaden or narrow that boundary. The exposed
-*input* path has the same F64/C64 storage but no such check: an exposed input
-of another type reads its source as the wrong type. That is a pre-existing
-defect, left for a separate fix that decides whether to reject these types at
-`expose_input`/`expose_output`.
+Supported types: exposed inputs and outputs carry F64 and C64 values only,
+because the schema element's exposed storage and input proxies hold only those
+two representations. Before, the schema accepted any declared type. An exposed
+output of another type compiled and then threw on every step. An exposed input
+of another type read its source's bytes as a `double` without any error.
+`expose_input` and `expose_output` now reject every other type with
+`std::invalid_argument` and register no port. The schema library loader,
+`s7runtime` deployments and Studio all build schemas through these calls, so
+such a definition fails when it is loaded, with the port name and type in the
+message. Supporting all 26 signal types would need type-generic exposed
+storage and is a separate, unscheduled extension.
 
 Exposed inputs were already constant time: each step reads the parent's
 binding and writes the shared input state that the proxy element publishes.
@@ -259,14 +262,15 @@ schema recompiled after added elements, connections, outputs and a rate
 change, whose exposed storage address stays fixed; move construction and move
 assignment of a stepped stateful schema with continued state; 100 repeated
 compile/step/destroy cycles; missing element, out-of-range port and mismatched
-type mappings; repeated failure after a failed compilation; the I32
-step-time failure; and fault propagation without partial publication, both
-standalone and inside a parent, with recovery on the next step.
+type mappings; repeated failure after a failed compilation; rejection of all
+24 other signal types as exposed inputs or outputs, directly and from schema
+JSON; and fault propagation without partial publication, both standalone and
+inside a parent, with recovery on the next step.
 
-The same test source also passes against the unmodified parent library. That
-confirms the behavior it checks was unchanged. A mutation that kept stale
-bindings across recompilation was reported by AddressSanitizer as a
-heap-use-after-free in the recompilation case.
+Apart from the type rejection, the same test source also passes against the
+unmodified parent library. That confirms the behavior it checks was unchanged.
+A mutation that kept stale bindings across recompilation was reported by
+AddressSanitizer as a heap-use-after-free in the recompilation case.
 
 Results on this host: the Release headless suite passed 46/46, including the
 saved-diagram numerical regressions (the parent revision passed the same 45).
