@@ -299,7 +299,7 @@ Keeping State does not make an Element causal memory. An Accumulator (y[n] = y[n
 
 The default implicit TrapezoidIntegrator publishes its current state and stages the next state for the following step, like EulerIntegrator. Coupled implicit integrators compute their next states together by reevaluating only stateless derivative dependencies; this does not permit direct-feedthrough cycles. Sampled mode instead integrates a supplied sequence and uses the current input. See [the TrapezoidIntegrator numerical contract](../s7l2/docs/TRAPEZOID_INTEGRATION.md).
 
-A nested Schema behaves exactly like its inlined contents ([ADR-024](S7_Architectural_Decisions.md#adr-024)). It adds no delay beyond the Elements it contains, and feedthrough is determined per path: an output that depends on an input only through causal memory inside the Schema may close an outer cycle, and an output with a direct path from an input may not. Its exposed ports are wires of their declared types. A nested Schema at another rate than the Schema containing it is the exception: it is treated as one Element with direct feedthrough.
+A nested Schema behaves exactly like its inlined contents ([ADR-024](S7_Architectural_Decisions.md#adr-024)). It adds no delay beyond the Elements it contains, and feedthrough is determined per path: an output that depends on an input only through causal memory inside the Schema may close an outer cycle, and an output with a direct path from an input may not. Its exposed ports are wires of their declared types. A nested Schema with a rate of its own, different from the rate seeding the Schema containing it, keeps that rate: its ports declare it and it seeds its Elements.
 
 Evaluation of one step:
 

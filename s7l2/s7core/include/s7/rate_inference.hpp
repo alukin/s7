@@ -46,8 +46,11 @@ public:
     // id. Validation (validation.cpp) builds this once for its own type/
     // connection/cycle checks; this resolver reuses it instead of creating
     // every element a second time.
+    // `seeds`: elements seeded by another rate than the schema's (those
+    // inside a flattened nested schema with a rate of its own, ADR-024).
     [[nodiscard]] static ResolvedRates resolve(const Schema& schema,
-                                               const std::unordered_map<std::string, const Element*>& instances);
+                                               const std::unordered_map<std::string, const Element*>& instances,
+                                               const std::unordered_map<std::string, Rate>& seeds = {});
 };
 
 } // namespace s7

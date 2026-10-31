@@ -187,14 +187,14 @@ Hardware clock domains (sound devices, networked audio) are 0.3.0 research.
 ## Nested schemas behave like their inlined contents — 0.2.0
 
 Decided 2026-10-31 ([ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024)).
-The compiler flattens each nested schema at its parent's rate into the parent
-graph, so feedthrough is per path and a loop may close through causal memory
-inside a nested schema. Flattening is local to one node's compilation and never
+The compiler flattens every nested schema into the parent graph, so
+feedthrough is per path and a loop may close through causal memory inside a
+nested schema; a nested schema's own rate is declared by its ports and seeds
+its elements. Flattening is local to one node's compilation and never
 crosses a network boundary; a stream may start or end at a nested schema's
 exposed port. Implemented on the `feature/nested-schema-flattening` branch for
-review. Open limits: a nested schema at another rate stays opaque, and loops
-across nodes are not validated as a whole
-([open problems](OPEN_PROBLEMS.md#nested-schemas--flattened-adr-024-two-limits-recorded-2026-10-31)).
+review (PR #10). Open limit: loops across nodes are not validated as a whole
+([open problems](OPEN_PROBLEMS.md#nested-schemas--flattened-adr-024-one-limit-recorded-2026-10-31)).
 
 ## SDR sample formats — 0.2.0 tasks
 

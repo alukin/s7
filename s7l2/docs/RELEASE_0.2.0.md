@@ -34,11 +34,11 @@ A nested schema now behaves exactly like its inlined contents
 flattens it into its parent, so a feedback loop may close through causal
 memory inside it, its exposed ports accept every signal type, errors inside it
 are reported when the parent is validated, and it adds no per-step cost of its
-own. Only a nested schema at another rate than its parent keeps its own
-runtime, which resolves its exposed-output bindings once when compiled, and
-F64/C64 exposed ports; other types are rejected there when the parent graph is
-compiled. The performance record documents measurements and the remaining
-overhead. A step that faults in any phase now
+own. A nested schema's own rate is declared by its ports and seeds its
+elements. Only a `Schema` stepped on its own, outside a compiled graph, keeps a
+private runtime, which resolves its exposed-output bindings once when compiled
+and carries F64/C64 exposed ports only. The performance record documents
+measurements. A step that faults in any phase now
 publishes nothing and keeps the previously staged causal-memory values
 ([ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021)). **S7 0.2.0 uses
 sequential nested-schema execution. Parallel nested-schema scheduling remains

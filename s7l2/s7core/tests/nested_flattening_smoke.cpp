@@ -4,9 +4,9 @@
 // A nested schema behaves exactly like its inlined contents (ADR-024): it is
 // flattened into its parent, so a feedback loop through causal memory inside
 // it is valid, a loop through its direct paths is not, results are bitwise
-// those of the inlined graph, and a faulting step rolls back its internal
-// state too. A nested schema at another rate than its parent stays one
-// direct-feedthrough element.
+// those of the inlined graph, and a faulting step is rolled back exactly as
+// for the inlined graph. A nested schema with a rate of its own keeps it: its
+// ports pin it and it seeds its elements.
 
 #include <s7/builtin_element_registry.hpp>
 #include <s7/core.hpp>
@@ -219,6 +219,37 @@ void errors_name_the_nested_schema() {
     require(has_error(inner_error, "Connection references unknown target element 'box/missing'."),
             "Internal error reported with its path: " + errors_of(inner_error));
 
+    // Ids are unique per level before flattening: a nested schema and another
+    // element named alike are reported even though the nested id disappears
+    // into path ids, and Validator agrees with Compiler.
+    s7::Schema twins("twins");
+    twins.set_rate(s7::Rate::from_hz(1));
+    twins.add_element("box", [] {
+        auto box = std::make_unique<s7::Schema>("box");
+        box->add_element("value", [] { return std::make_unique<s7::Constant>(1.0); });
+        box->expose_output("y", s7::SignalType::F64, "value", 0);
+        return box;
+    });
+    twins.add_element("box", [] { return std::make_unique<s7::Constant>(2.0); });
+    require(has_error(twins, "Duplicate element id: 'box'."), "Duplicate id beside a nested schema: " + errors_of(twins));
+    bool rejected = false;
+    try {
+        (void)s7::Compiler::compile(twins);
+    } catch (const std::invalid_argument& error) {
+        rejected = std::string(error.what()).find("Duplicate element id: 'box'.") != std::string::npos;
+    }
+    require(rejected, "Compile rejects the duplicate the same way");
+    // Inside a nested schema, by path.
+    s7::Schema inner_twins("inner_twins");
+    inner_twins.set_rate(s7::Rate::from_hz(1));
+    inner_twins.add_element("box", [] {
+        auto box = std::make_unique<s7::Schema>("box");
+        box->add_element("c", [] { return std::make_unique<s7::Constant>(1.0); });
+        box->add_element("c", [] { return std::make_unique<s7::Constant>(2.0); });
+        return box;
+    });
+    require(has_error(inner_twins, "Duplicate element id: 'box/c'."), "Duplicate id inside a nested schema: " + errors_of(inner_twins));
+
     // A path id that collides with a top-level id is a duplicate.
     auto collision = plant_only();
     collision.add_element("plant/gain", [] { return std::make_unique<s7::Constant>(1.0); });
@@ -260,21 +291,71 @@ void document_nested_schemas() {
             "The nested schema's instance UUID addresses its output");
 }
 
-// A nested schema at another rate stays one direct-feedthrough element: a
-// loop through it is rejected even with memory inside (doc/OPEN_PROBLEMS.md).
-void other_rate_stays_opaque() {
-    s7::Schema schema("unseeded");
-    schema.add_element("sum", [] { return std::make_unique<s7::Adder>(); });
-    schema.add_element("one", [] { return std::make_unique<s7::Constant>(1.0); });
-    schema.add_element("plant", [] {
-        auto plant = plant_schema(1);
-        plant->set_rate(s7::Rate::from_hz(10));
-        return plant;
+// A nested schema with a rate of its own is flattened too: its ports pin that
+// rate, as the schema element declared it, and it seeds its elements. An
+// unseeded parent around a 100 Hz plant is the same single-rate loop as the
+// inlined one.
+void own_rate_flattened() {
+    const auto unseeded_loop = [] {
+        s7::Schema schema("unseeded_loop");
+        schema.add_element("setpoint", [] { return std::make_unique<s7::Constant>(1.0); });
+        schema.add_element("error", [] { return std::make_unique<s7::Adder>(std::vector<double>{1.0, -1.0}); });
+        schema.add_element("controller", [] { return std::make_unique<s7::Gain>(3.0); });
+        schema.add_element("plant", [] {
+            auto plant = plant_schema(1);
+            plant->set_rate(s7::Rate::from_hz(100));
+            return plant;
+        });
+        schema.connect("setpoint", 0, "error", 0);
+        schema.connect("error", 0, "controller", 0);
+        schema.connect("controller", 0, "plant", 0);
+        schema.connect("plant", 0, "error", 1);
+        return schema;
+    };
+    require(errors_of(unseeded_loop()).empty(), "A loop through a 100 Hz plant in an unseeded parent: " + errors_of(unseeded_loop()));
+    require(run(unseeded_loop(), "plant", 200) == run(control_loop(0), "integrator", 200),
+            "Unseeded parent: bitwise the inlined 100 Hz results");
+
+    // At another rate than its seeded parent, its ports pin their connected
+    // set, and its elements, connected or not, take its rate.
+    s7::Schema other("other_rate");
+    other.set_rate(s7::Rate::from_hz(100));
+    other.add_element("one", [] { return std::make_unique<s7::Constant>(1.0); });
+    other.add_element("sink", [] { return std::make_unique<s7::Gain>(1.0); });
+    other.add_element("slow", [] {
+        auto slow = std::make_unique<s7::Schema>("slow");
+        slow->set_rate(s7::Rate::from_hz(10));
+        slow->add_element("gain", [] { return std::make_unique<s7::Gain>(2.0); });
+        slow->add_element("idle", [] { return std::make_unique<s7::Constant>(0.0); });
+        slow->expose_input("u", s7::SignalType::F64, "gain", 0);
+        slow->expose_output("y", s7::SignalType::F64, "gain", 0);
+        return slow;
     });
-    schema.connect("one", 0, "sum", 0);
-    schema.connect("sum", 0, "plant", 0);
-    schema.connect("plant", 0, "sum", 1);
-    require(has_error(schema, "Cycle detected without causal memory."), "An opaque nested schema keeps direct feedthrough");
+    other.connect("one", 0, "slow", 0);
+    other.connect("slow", 0, "sink", 0);
+    const auto graph = s7::Compiler::compile(other);
+    const auto ten = s7::Rate::from_hz(10);
+    require(graph.rates.at("one") == ten && graph.rates.at("sink") == ten && graph.rates.at("slow/gain") == ten &&
+                graph.rates.at("slow/idle") == ten,
+            "The nested rate pins its connected set and seeds its elements");
+
+    // A conflict names the nested schema, not its port.
+    s7::Schema conflict("conflict");
+    conflict.add_element("x", [] { return std::make_unique<s7::EulerIntegrator>(0.01); });
+    conflict.add_element("zero", [] { return std::make_unique<s7::Constant>(0.0); });
+    conflict.add_element("slow", [] {
+        auto slow = std::make_unique<s7::Schema>("slow");
+        slow->set_rate(s7::Rate::from_hz(10));
+        slow->add_element("gain", [] { return std::make_unique<s7::Gain>(2.0); });
+        slow->expose_input("u", s7::SignalType::F64, "gain", 0);
+        return slow;
+    });
+    conflict.connect("zero", 0, "x", 0);
+    conflict.connect("x", 0, "slow", 0);
+    const auto message = errors_of(conflict);
+    require(message.find("nested schema 'slow'") != std::string::npos && message.find("10 Hz") != std::string::npos &&
+                message.find("'x'") != std::string::npos,
+            "A rate conflict names the nested schema: " + message);
 }
 
 // Rates follow the inlined form too: in a parent without a seed, an internal
@@ -330,6 +411,63 @@ void fault_rolls_back_nested_state() {
         values.push_back(std::bit_cast<std::uint64_t>(runtime.real_output_of("plant")));
     }
     require(values == reference, "After the fault the run continues exactly");
+}
+
+// Rollback is exactly as inlined, no more: ADR-021 restores published
+// outputs and staged causal memory, not private state such as a filter's
+// history. A nested FIR before a fault behaves bitwise like the inlined one,
+// both continuing from their advanced history.
+void fault_with_nested_filter() {
+    const auto build = [](bool nested, const bool* fail) {
+        s7::Schema schema("filtered");
+        schema.set_rate(s7::Rate::from_hz(100));
+        schema.add_element("ramp_one", [] { return std::make_unique<s7::Constant>(1.0); });
+        schema.add_element("ramp", [] { return std::make_unique<s7::EulerIntegrator>(std::nullopt); });
+        schema.connect("ramp_one", 0, "ramp", 0);
+        std::string out = "fir";
+        if (nested) {
+            schema.add_element("box", [] {
+                auto box = std::make_unique<s7::Schema>("box");
+                box->add_element("fir", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{0.5, 0.25, 0.25}); });
+                box->expose_input("u", s7::SignalType::F64, "fir", 0);
+                box->expose_output("y", s7::SignalType::F64, "fir", 0);
+                return box;
+            });
+            out = "box";
+        } else {
+            schema.add_element("fir", [] { return std::make_unique<s7::FirFilter>(std::vector<double>{0.5, 0.25, 0.25}); });
+        }
+        schema.connect("ramp", 0, out, 0);
+        schema.add_element("monitor", [fail] { return std::make_unique<FaultingGain>(fail); });
+        schema.connect(out, 0, "monitor", 0);
+        return std::pair{std::move(schema), out};
+    };
+    const auto faulted_run = [&](bool nested) {
+        bool fail = false;
+        auto [schema, out] = build(nested, &fail);
+        s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+        runtime.set_model_time_rate(s7::Rate::from_hz(100));
+        std::vector<std::uint64_t> values;
+        for (int n = 0; n < 12; ++n) {
+            if (n == 5) {
+                fail = true;
+                try {
+                    runtime.step();
+                } catch (const std::runtime_error&) {
+                }
+                fail = false;
+            }
+            runtime.step();
+            values.push_back(std::bit_cast<std::uint64_t>(runtime.real_output_of(out)));
+        }
+        return values;
+    };
+    const auto nested = faulted_run(true);
+    require(nested == faulted_run(false), "A fault after a nested FIR: bitwise the inlined results");
+    bool fail = false;
+    auto [reference_schema, reference_out] = build(true, &fail);
+    require(nested != run(reference_schema, reference_out, 12),
+            "The FIR's private history is not rolled back (ADR-021), nested or not");
 }
 
 // An implicit trapezoid's derivative may pass through a nested schema's
@@ -410,9 +548,10 @@ int main() try {
     feedthrough_per_output();
     errors_name_the_nested_schema();
     document_nested_schemas();
-    other_rate_stays_opaque();
+    own_rate_flattened();
     rates_follow_the_inlined_form();
     fault_rolls_back_nested_state();
+    fault_with_nested_filter();
     trapezoid_derivative_through_nested();
     resampler_inside();
     std::cout << "Nested schemas flattened: loops through internal memory, per-output feedthrough, errors, rollback, rates\n";

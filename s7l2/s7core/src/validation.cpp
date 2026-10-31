@@ -397,6 +397,7 @@ CheckedSchema check_schema(const Schema& nested_schema) {
     auto flat = flatten_schema(nested_schema);
     checked.flat = std::move(flat.schema);
     checked.nested_outputs = std::move(flat.nested_outputs);
+    const auto seeds = std::move(flat.seeds);
     if (!flat.errors.empty()) {
         checked.errors = std::move(flat.errors);
         return checked;
@@ -443,7 +444,7 @@ CheckedSchema check_schema(const Schema& nested_schema) {
         CycleRulesValidator::validate(schema, prototypes, checked.errors);
     }
     if (checked.errors.empty()) {
-        auto rates = RateResolver::resolve(schema, instances);
+        auto rates = RateResolver::resolve(schema, instances, seeds);
         if (!rates.ok()) {
             checked.errors.insert(checked.errors.end(), rates.errors.begin(), rates.errors.end());
         } else {
