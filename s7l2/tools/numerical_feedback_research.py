@@ -288,6 +288,7 @@ def run_case(name: str, h: float, duration: float, method: str, trials: int,
     total_trials = 0
     failure = None
     started = time.perf_counter_ns()
+    cpu_started = time.process_time_ns()
     for n in range(1, steps+1):
         try:
             staged, r, used = transition(g, z, h, method, trials)
@@ -308,6 +309,9 @@ def run_case(name: str, h: float, duration: float, method: str, trials: int,
             samples.append(z.copy())
             next_sample += 1
     elapsed = time.perf_counter_ns() - started
+    cpu_elapsed = time.process_time_ns() - cpu_started
+    base_evaluations = n if failure is None else n
+    trial_evaluations = g.derivative_evaluations - base_evaluations
     result = dict(model=name, mu=mu if name == "vdp" else None, initial=start,
                   method=method, refinements=trials, h=h, duration=duration,
                   accepted_steps=n if failure is None else n-1,
@@ -315,6 +319,11 @@ def run_case(name: str, h: float, duration: float, method: str, trials: int,
                   pure_element_evaluations=g.pure_evaluations,
                   diagnostic_derivative_evaluations=g.diagnostic_derivative_evaluations,
                   diagnostic_pure_element_evaluations=g.diagnostic_pure_evaluations,
+                  base_derivative_evaluations=base_evaluations,
+                  trial_derivative_evaluations=trial_evaluations,
+                  total_function_evaluations=g.derivative_evaluations + g.diagnostic_derivative_evaluations,
+                  total_pure_element_evaluations=g.pure_evaluations + g.diagnostic_pure_evaluations,
+                  cpu_ns_per_accepted_step=cpu_elapsed/max(1,n if failure is None else n-1),
                   trial_region=[g.ops[i].name for i in g.region],
                   mean_trial_refinements=total_trials/max(1,n if failure is None else n-1),
                   max_normalized_residual=(largest_residual if method in {"backward", "trapezoid"} else None),

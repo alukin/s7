@@ -8,6 +8,16 @@ from numerical_feedback_research import Graph, StepFailure, model, run_case, tra
 
 
 class ResearchContractTests(unittest.TestCase):
+    def test_total_cost_includes_diagnostic_evaluation(self):
+        result = run_case("linear", 0.1, 0.2, "backward", 2)
+        self.assertEqual(result["accepted_steps"], 2)
+        self.assertEqual(result["base_derivative_evaluations"], 2)
+        self.assertEqual(result["trial_derivative_evaluations"], 4)
+        self.assertEqual(result["diagnostic_derivative_evaluations"], 2)
+        self.assertEqual(result["total_function_evaluations"], 8)
+        self.assertEqual(result["total_pure_element_evaluations"],
+                         result["pure_element_evaluations"] + result["diagnostic_pure_element_evaluations"])
+
     def test_forward_euler_is_one_update(self):
         graph, initial, _ = model("oscillator")
         endpoint, residual, used = transition(graph, initial, 0.1, "euler", 0)
