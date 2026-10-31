@@ -28,6 +28,8 @@ struct DiagramChange {
         std::shared_ptr<ElementNode> node;
         ElementNode::Element before;
         ElementNode::Element after;
+        QSize beforeSize;
+        QSize afterSize;
     };
     struct TextFrameEdit {
         std::shared_ptr<TextFrameNode> node;

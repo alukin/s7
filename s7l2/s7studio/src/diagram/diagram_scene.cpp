@@ -220,8 +220,9 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
         wire->upstream = end;
         forced.push_back(wire.get());
     };
-    auto setElement = [&](const std::shared_ptr<ElementNode>& node, const ElementNode::Element& element) {
+    auto setElement = [&](const std::shared_ptr<ElementNode>& node, const ElementNode::Element& element, const QSize size) {
         node->setElement(element);
+        node->setGridSize(size);
         for (const auto& wire : wiresOf(*node)) {
             forced.push_back(wire.get());
         }
@@ -241,7 +242,7 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
             removeItem(node);
         }
         for (const auto& edit : change.elements) {
-            setElement(edit.node, edit.after);
+            setElement(edit.node, edit.after, edit.afterSize);
         }
         for (const auto& edit : change.sizes) setSize(edit, false);
         for (const auto& node : change.addedNodes) {
@@ -263,7 +264,7 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
             removeItem(node);
         }
         for (const auto& edit : change.elements) {
-            setElement(edit.node, edit.before);
+            setElement(edit.node, edit.before, edit.beforeSize);
         }
         for (const auto& edit : change.sizes) setSize(edit, true);
         for (const auto& node : change.removedNodes) {
@@ -345,7 +346,10 @@ void DiagramScene::changeElement(const std::shared_ptr<ElementNode>& node, Eleme
     const int outputs = std::max(static_cast<int>(ports.outputs.size()), node->minimumOutputs());
 
     DiagramChange change;
-    change.elements.push_back({node, node->element(), element});
+    const QSize beforeSize = node->gridSize();
+    const int requiredRows = std::max(5, 2 * std::max(inputs, outputs) + 1);
+    const QSize afterSize(beforeSize.width(), std::max(beforeSize.height(), requiredRows));
+    change.elements.push_back({node, node->element(), element, beforeSize, afterSize});
     std::vector<std::shared_ptr<SignalWire>> lost;
     for (const auto& wire : signalWires()) {
         const bool lostInput = wire->downstream.isInput() && wire->downstream.node.lock() == node && wire->downstream.index >= inputs;
