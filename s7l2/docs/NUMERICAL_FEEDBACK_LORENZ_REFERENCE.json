@@ -1,0 +1,30 @@
+{
+  "method": "DOP853",
+  "rtol": 2e-13,
+  "atol": 2e-14,
+  "refined_max_step": 0.005,
+  "results": [
+    {
+      "initial": [
+        1,
+        1,
+        1
+      ],
+      "duration": 2,
+      "max_state_discrepancy": 4.45351663575532e-11,
+      "first_nfev": 2633,
+      "refined_nfev": 6017
+    },
+    {
+      "initial": [
+        1.000001,
+        1,
+        1
+      ],
+      "duration": 2,
+      "max_state_discrepancy": 4.452842312637755e-11,
+      "first_nfev": 2633,
+      "refined_nfev": 6017
+    }
+  ]
+}

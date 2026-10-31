@@ -151,3 +151,49 @@ With `w=sqrt(3.75)` and `h=exp(-t/2)*(cos(w*t)+sin(w*t)/(2*w))`, mechanical
 release is `x=h`, RLC step is `q=(1-h)/4`, and resonant drive is
 `q=-cos(2*t)/2+h/2`. Velocity/current references are their analytical
 derivatives. RC references are the exponentials above.
+
+## Predict → Construct → Simulate → Measure → Explain: discrete structure
+
+**Predict.** A continuous pole `s` becomes `exp(s*dt)` under exact sampling.
+Forward Euler instead uses `1+s*dt`; its RC pole becomes negative for
+`dt>RC` and unstable for `dt>2RC`. For the LC oscillator, its complex poles
+have magnitude greater than one for every positive `dt`, so energy grows.
+Euler–Cromer keeps its undamped oscillator poles on the unit circle for
+`0<dt*omega0<2`, but changes phase. These predictions are about the chosen
+discrete transitions, not about drawing order in Studio.
+
+**Construct.** Open the existing editable RC, RLC and mechanical diagrams
+above. For RLC and the mechanical analogue, map `q↔x`, `i↔v`, `L↔m`,
+`R↔b`, and `1/C↔stiffness`; map capacitor voltage `q/C` to spring force
+`stiffness*x` if comparing output waveforms. The original Euler and symplectic
+diagrams use production Euler and Euler–Cromer elements. The finite
+feedback-correction methods in
+[Phase 2 research](../../docs/NUMERICAL_FEEDBACK_RESEARCH_PHASE2.md) are
+separate research-runner experiments, not editable S7 elements.
+The coupled Euler substeps and Gauss–Legendre stages in the
+[Phase 3 real-graph study](../../docs/NUMERICAL_INTEGRATION_PHASE3_REPORT.md)
+use a headless research execution policy. The separate
+[production integration PR](https://github.com/alukin/s7/pull/8) adds opt-in
+runtime methods and editable diagrams; the Phase 3 runner remains a research
+tool. That study uses the same RC and RLC equations, plus the two-integrator
+oscillator, and compares its Euler substeps with ordinary finer-step S7
+execution.
+
+**Simulate.** Compare the supplied 1 and 2 kHz runs, then deliberately enlarge
+`dt` in a copy of a diagram. Keep each element's `dt` consistent with the run
+rate. For oscillators, observe many periods; a short trajectory can hide
+amplitude growth or a small frequency error.
+
+**Measure.** Record charge/discharge time constants, RLC overshoot and settling,
+and oscillator phase and energy. A transfer-function zero describes how the
+sampled input appears at a chosen output; it does not by itself add a state.
+The research plots show that the same two-state RLC system has different
+discrete zeros under different methods and output timing conventions.
+
+**Explain.** Additional fixed-point corrections approach the backward-Euler
+equation only when that solver converges. Solving it accurately can still
+produce a damped oscillator where the continuous system conserves energy.
+Equivalent continuous state coordinates give equivalent discrete poles for
+matrix-function methods in exact arithmetic. Sequential block updates, extra
+delays, mixed methods or distinct input holds can change the transition itself;
+mere regrouping of pure arithmetic blocks does not.

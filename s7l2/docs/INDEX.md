@@ -66,6 +66,21 @@ completion of the 0.2.0 release criteria.
 
 Numerical examples and measured integrator comparisons: [small-angle double pendulum](../examples/double_pendulum/README.md) (nine diagrams, continuous/discrete references and reproducible reports), and [nonlinear single pendulum](../examples/pendulum/README.md) (100-second comparisons at 1/10 kHz, energy/phase/convergence and full Scope/CSV fidelity).
 
+The [linear-response laboratory](../examples/linear/README.md) contains editable
+RC, RLC and mechanical analogues. [Phase 2 discrete-structure mathematics](NUMERICAL_FEEDBACK_RESEARCH_PHASE2.md),
+the [pole-zero research report](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md)
+and its [compact numerical summary](NUMERICAL_FEEDBACK_PHASE2_SUMMARY.json)
+extend the [Phase 1 feedback report](NUMERICAL_FEEDBACK_RESEARCH_REPORT.md)
+without changing production causal semantics.
+[Phase 3's integration contract](NUMERICAL_INTEGRATION_PHASE3_SPEC.md),
+[real-graph C++ results](NUMERICAL_INTEGRATION_PHASE3_REPORT.md) and
+[compact reproducible summary](NUMERICAL_INTEGRATION_PHASE3_SUMMARY.json)
+compare coupled Euler substeps with two-stage Gauss–Legendre on the oscillator,
+RC and RLC. The Phase 3 runner and its execution policy are research tools;
+this branch does not change production runtime behavior. The separate
+[production integration PR](https://github.com/alukin/s7/pull/8) adds opt-in
+Euler substeps and Gauss–Legendre with its own runtime contract and examples.
+
 Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/2int_osc_phase_portrait.md), with same-step state-pair and plot verification at 1/10/100 kHz. See also the [three-integrator helix with 3D Phase Trajectory](../examples/3int_helix_phase_trajectory.md), verified at 1/10 kHz.
 
 [Local simulation acceptance](LOCAL_SIMULATION_ACCEPTANCE.md) records Release regression, installed-package and measured operational evidence with remaining release gates.
