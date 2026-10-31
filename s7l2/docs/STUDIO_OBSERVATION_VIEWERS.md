@@ -252,7 +252,10 @@ INCOMPLETE state, with loading, preview-skip and capture-error details retained.
 A completed source may still be loading its presentation history. Comparison
 labels remain separate, with incomplete imported runs visibly marked.
 
-Focus a 2D plot to use +/− for zoom, arrow keys for pan and Home to fit all data.
+Focus a 2D plot to use Ctrl++ (or Ctrl+=) and Ctrl+− for zoom, Ctrl+] and Ctrl+[
+to zoom the time (horizontal) axis only, arrow keys for pan and Home to fit all
+data. In Scope and Live Oscilloscope, hovering near a drawn trace shows a value
+box beside the pointer with the stored sample values and rings the samples.
 Mouse wheel/drag remain supported; these actions only change the view. Scope
 separates display controls from result save/open/comparison controls. Clear
 display does not delete authoritative captured results. Phase/3D status occupies

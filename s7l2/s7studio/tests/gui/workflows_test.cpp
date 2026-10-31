@@ -971,14 +971,18 @@ private slots:
         const QPointF onTrace(area.left() + (.5 - plot->xMin()) / (plot->xMax() - plot->xMin()) * area.width(),
             area.top() + (plot->yMax() - .5) / (plot->yMax() - plot->yMin()) * area.height());
         QTest::mouseMove(quick, graph->mapToScene(onTrace).toPoint());
-        // Values appear in the readout; there is no pointer tooltip.
-        QVERIFY(!quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"));
+        // Values appear in the readout and in the value box beside the pointer.
+        auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
         auto* readout = viewer.findChild<QLabel*>(QStringLiteral("scope.hoverReadout")); QVERIFY(readout);
         QTRY_VERIFY(readout->text().contains(QStringLiteral("hover-check = 0.5")));
+        QTRY_VERIFY(tip->isVisible());
+        QVERIFY(plot->bridge()->hoverTip.front().toMap()["text"].toString().contains(QStringLiteral("hover-check = 0.5")));
+        QVERIFY(plot->toolTip().isEmpty());
         QCOMPARE(plot->bridge()->hoverMarkers.size(), 1);
         QVERIFY(plot->bridge()->cursorVisible);
         QTest::mouseMove(quick, QPoint(2, 2));
-        QTRY_VERIFY(plot->bridge()->hoverMarkers.isEmpty());
+        QTRY_VERIFY(!tip->isVisible());
+        QVERIFY(plot->bridge()->hoverMarkers.isEmpty());
         QVERIFY(readout->text().isEmpty());
     }
 
@@ -1300,12 +1304,13 @@ private slots:
             return graph->mapToScene(QPointF(area.left()+(hoveredTime-view->xMin())/(view->xMax()-view->xMin())*area.width(),
                 area.top()+(view->yMax()-shown.values[sample*static_cast<std::size_t>(shown.channels.size())])/(view->yMax()-view->yMin())*area.height())).toPoint();
         };
-        QVERIFY(!quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"));
-        QVERIFY(hoverUntil(quick, onTrace, [&] { return view->bridge()->hoverMarkers.size() == 1; }));
+        auto* tip = quick->rootObject()->findChild<QQuickItem*>("viewer.hoverTip"); QVERIFY(tip);
+        QVERIFY(hoverUntil(quick, onTrace, [&] { return view->bridge()->hoverMarkers.size() == 1 && tip->isVisible(); }));
+        QVERIFY(view->bridge()->hoverTip.last().toMap()["text"].toString().startsWith(viewer->displayedFrame().channels.front().name + " = "));
         // The one-pixel nudge may pick a neighbouring sample.
         QVERIFY(std::abs(view->bridge()->hoverMarkers.front().toMap()["x"].toDouble() - hoveredTime)
                 <= 2*(view->xMax()-view->xMin())/area.width());
-        capture(viewer, "live-oscilloscope-hover-marker", true);
+        capture(viewer, "live-oscilloscope-hover-tip", true);
         QTest::mouseMove(quick, center);
         auto* cursor = quick->rootObject()->findChild<QQuickItem*>("viewer.sampleCursor"); QVERIFY(cursor);
         QVERIFY(cursor->isVisible());
@@ -2086,7 +2091,10 @@ private slots:
             // Read the range only now: a stopped run can still refit it while
             // the window activates.
             const auto width = plot->xMax() - plot->xMin();
+            // A bare '=' does nothing; Ctrl+= zooms in.
             QTest::keyClick(plot, Qt::Key_Equal);
+            QCOMPARE(plot->xMax() - plot->xMin(), width);
+            QTest::keyClick(plot, Qt::Key_Equal, Qt::ControlModifier);
             QVERIFY(plot->xMax() - plot->xMin() < width);
             QTest::keyClick(plot, Qt::Key_Home);
         }

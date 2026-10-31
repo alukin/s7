@@ -127,7 +127,6 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
 
     plot_ = new viewers::LinePlotView(this);
     plot_->setAxisTitles(xProbeName_ + " (unit unspecified)", yProbeName_ + " (unit unspecified)");
-    plot_->setToolTip(QStringLiteral("Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     curve_ = plot_->addSeries(QStringLiteral("%1 vs %2").arg(yProbeName_, xProbeName_), {kTrajectoryColor, 1.4, false});
     rootLayout->addWidget(plot_, 1);
 

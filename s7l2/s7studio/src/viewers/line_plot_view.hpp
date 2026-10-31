@@ -43,9 +43,11 @@ class LinePlotBridge : public QObject
     // Pixel size of the plot area, written by QML, so owners can measure
     // pointer distances in pixels rather than axis units.
     Q_PROPERTY(QSizeF plotAreaSize MEMBER plotAreaSize NOTIFY plotAreaChanged)
-    // On-curve markers ({x, y, color}) in data coordinates for the samples
-    // nearest the pointer.
-    Q_PROPERTY(QVariantList hoverMarkers MEMBER hoverMarkers NOTIFY hoverMarkersChanged)
+    // Pointer value box rows ({text, color?}) and on-curve markers
+    // ({x, y, color}) in data coordinates for the samples nearest the
+    // pointer. Empty rows hide the value box.
+    Q_PROPERTY(QVariantList hoverTip MEMBER hoverTip NOTIFY hoverChanged)
+    Q_PROPERTY(QVariantList hoverMarkers MEMBER hoverMarkers NOTIFY hoverChanged)
     Q_PROPERTY(double xMin READ xMin NOTIFY xRangeChanged)
     Q_PROPERTY(double xMax READ xMax NOTIFY xRangeChanged)
     Q_PROPERTY(double yMin READ yMin NOTIFY yRangeChanged)
@@ -99,7 +101,7 @@ public:
     QRectF densityBounds;
     QVariantList selectionMarkers;
     QSizeF plotAreaSize;
-    QVariantList hoverMarkers;
+    QVariantList hoverTip, hoverMarkers;
     QVariantList channelZeroMarkers;
     QVariantMap instrumentTrigger;
     bool markerFocus = false;
@@ -131,7 +133,7 @@ signals:
     void densityChanged();
     void selectionChanged();
     void plotAreaChanged();
-    void hoverMarkersChanged();
+    void hoverChanged();
     void xRangeChanged();
     void yRangeChanged();
     void titlesChanged();

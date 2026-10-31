@@ -571,7 +571,37 @@ private slots:
         level->setText("0.5"); QVERIFY(QMetaObject::invokeMethod(level, "editingFinished", Qt::DirectConnection));
         QCOMPARE(edited.count(), 1); QCOMPARE(viewer.triggerSettings().level, .5);
     }
-    void hoverMarkersFollowDrawnTraces() {
+    void plotZoomShortcutsNeedCtrl() {
+        viewers::LinePlotView plot; plot.resize(400, 300); plot.show();
+        plot.activateWindow(); QVERIFY(QTest::qWaitForWindowActive(&plot));
+        plot.setFocus(); QTRY_VERIFY(plot.hasFocus());
+        plot.setXRange(0, 10); plot.setYRange(-1, 1);
+        const auto width = [&] { return plot.xMax()-plot.xMin(); };
+        const auto height = [&] { return plot.yMax()-plot.yMin(); };
+        // Bare keys no longer zoom.
+        for (const auto key : {Qt::Key_Plus, Qt::Key_Equal, Qt::Key_Minus, Qt::Key_BracketLeft, Qt::Key_BracketRight})
+            QTest::keyClick(&plot, key);
+        QCOMPARE(width(), 10.); QCOMPARE(height(), 2.);
+        // Ctrl+= / Ctrl++ / Ctrl+Shift++ zoom both axes in, Ctrl+− out.
+        QTest::keyClick(&plot, Qt::Key_Equal, Qt::ControlModifier);
+        QVERIFY(width() < 10); QVERIFY(height() < 2);
+        QTest::keyClick(&plot, Qt::Key_Minus, Qt::ControlModifier);
+        QVERIFY(std::abs(width()-10) < 1e-9); QVERIFY(std::abs(height()-2) < 1e-12);
+        QTest::keyClick(&plot, Qt::Key_Plus, Qt::ControlModifier); QVERIFY(width() < 10);
+        QTest::keyClick(&plot, Qt::Key_Minus, Qt::ControlModifier);
+        QTest::keyClick(&plot, Qt::Key_Plus, Qt::ControlModifier | Qt::ShiftModifier); QVERIFY(width() < 10);
+        plot.setXRange(0, 10); plot.setYRange(-1, 1);
+        // Ctrl+] / Ctrl+[ zoom the time axis only, about its centre.
+        QSignalSpy navigated(&plot, &viewers::LinePlotView::navigated);
+        QTest::keyClick(&plot, Qt::Key_BracketRight, Qt::ControlModifier);
+        QVERIFY(width() < 10); QCOMPARE(plot.yMin(), -1.); QCOMPARE(plot.yMax(), 1.);
+        QVERIFY(std::abs((plot.xMin()+plot.xMax())/2-5) < 1e-12);
+        QTest::keyClick(&plot, Qt::Key_BracketLeft, Qt::ControlModifier);
+        QTest::keyClick(&plot, Qt::Key_BracketLeft, Qt::ControlModifier);
+        QVERIFY(width() > 10); QCOMPARE(plot.yMin(), -1.); QCOMPARE(plot.yMax(), 1.);
+        QCOMPARE(navigated.count(), 3);
+    }
+    void hoverTipFollowsDrawnTraces() {
         auto source = std::make_shared<LiveAcquisition>(14, .001,
             QVector<observation::LiveChannel>{{"live/up", "V", "f64"}, {"live/flat", "", "f64"}});
         QVERIFY(source->setTimeSpan(.1));
@@ -588,26 +618,31 @@ private slots:
             return markers.size() == 1 && std::abs(markers.front().toMap()["x"].toDouble() - x) < 1e-12
                 && markers.front().toMap()["y"].toDouble() == y;
         };
-        // On a stored sample: one marker on it, published to the plot.
+        const auto text = [bridge] { QStringList lines; for (const auto& row : bridge->hoverTip) lines << row.toMap()["text"].toString(); return lines.join('\n'); };
+        // On a stored sample: one marker on it, and a value box with its step
+        // and the value with its unit.
         QVERIFY(at(viewer.hoverMarkers(.05, .5), .05, .5));
-        QCOMPARE(bridge->hoverMarkers.size(), 1);
-        // Away from every trace: no marker.
-        QVERIFY(viewer.hoverMarkers(.05, .2).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
+        QCOMPARE(bridge->hoverMarkers.size(), 1); QCOMPARE(bridge->hoverTip.size(), 2);
+        QVERIFY(text().contains("step 50")); QVERIFY(text().contains("live/up = 0.5 V"));
+        // Away from every trace: no marker and no value box.
+        QVERIFY(viewer.hoverMarkers(.05, .2).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty()); QVERIFY(bridge->hoverTip.isEmpty());
         // Zoomed in so samples are far apart: a point on the drawn segment marks its nearer sample.
         viewer.plotView()->setXRange(.0495, .0515); viewer.plotView()->setYRange(.48, .53);
         QVERIFY(at(viewer.hoverMarkers(.05075, .5075), .051, .51));
-        // Hidden channels are never marked.
+        QVERIFY(text().contains("live/up = 0.51 V")); QVERIFY(text().contains("step 51"));
+        // A unitless channel; hidden channels are never reported.
         viewer.plotView()->setXRange(0, .1); viewer.plotView()->setYRange(-1, 1.1);
-        QVERIFY(at(viewer.hoverMarkers(.02, -.5), .02, -.5));
+        QVERIFY(at(viewer.hoverMarkers(.02, -.5), .02, -.5)); QVERIFY(text().contains("live/flat = -0.5"));
         viewer.findChild<QCheckBox*>("live.channel.1.visible")->setChecked(false);
         QTRY_VERIFY(viewer.plotView()->series()[1]->points().isEmpty());
-        QVERIFY(viewer.hoverMarkers(.02, -.5).isEmpty());
-        // Gain moves the trace, and the marker sits on the drawn trace.
+        QVERIFY(viewer.hoverMarkers(.02, -.5).isEmpty()); QVERIFY(bridge->hoverTip.isEmpty());
+        // Gain moves the trace: the marker sits on the drawn trace, the value
+        // box keeps raw units.
         constexpr double gain = 1.97530864202469;
         viewer.findChild<QDoubleSpinBox*>("live.channel.0.gain")->setValue(gain);
         QTRY_COMPARE(viewer.plotView()->series().front()->points().at(49).y(), .5*gain);
-        QVERIFY(at(viewer.hoverMarkers(.05, .5*gain), .05, .5*gain));
-        QVERIFY(viewer.hoverMarkers(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty());
+        QVERIFY(at(viewer.hoverMarkers(.05, .5*gain), .05, .5*gain)); QVERIFY(text().contains("live/up = 0.5 V"));
+        QVERIFY(viewer.hoverMarkers(.05, .5, false).isEmpty()); QVERIFY(bridge->hoverMarkers.isEmpty()); QVERIFY(bridge->hoverTip.isEmpty());
     }
 };
 QTEST_MAIN(LiveOscilloscopeTest)

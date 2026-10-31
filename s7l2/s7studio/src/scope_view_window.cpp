@@ -442,7 +442,6 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     plot_->setAxisTitles(QStringLiteral("model time (s)"), QStringLiteral("value (unit unspecified)"));
     plot_->bridge()->inspectionEnabled = true;
     emit plot_->bridge()->inspectionChanged();
-    plot_->setToolTip(QStringLiteral("Hover over a trace for stored sample values. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
     tabs_ = new QTabWidget(this);
     tabs_->setObjectName(QStringLiteral("scope.analysisTabs"));
     auto* timePage = new QWidget(tabs_);
@@ -452,7 +451,7 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     timeScrollBar_ = new QScrollBar(Qt::Horizontal, this);
     timeScrollBar_->setRange(0, 10000);
     timeScrollBar_->setEnabled(false);
-    timeScrollBar_->setToolTip(QStringLiteral("Scroll the visible time range. Zoom with the mouse wheel and pan by dragging. Keyboard: +/− zoom, arrows pan, Home fits all data."));
+    timeScrollBar_->setToolTip(QStringLiteral("Scroll the visible time range."));
     timeLayout->addWidget(timeScrollBar_);
     tabs_->addTab(timePage, QStringLiteral("Time"));
     spectrum_ = new viewers::SpectrumView(tabs_);
@@ -850,9 +849,10 @@ void ScopeViewWindow::updateHover(const double timeSeconds, const double value, 
             if (distance < bestDistance) { bestDistance = distance; bestTime = sample->x(); }
         }
     }
-    if (markers != bridge->hoverMarkers) {
+    if (rows != bridge->hoverTip || markers != bridge->hoverMarkers) {
+        bridge->hoverTip = rows;
         bridge->hoverMarkers = markers;
-        emit bridge->hoverMarkersChanged();
+        emit bridge->hoverChanged();
     }
     QStringList values;
     for (const auto& row : rows) values.push_back(row.toMap().value(QStringLiteral("text")).toString());

@@ -861,7 +861,7 @@ QVariantList LiveOscilloscopeWindow::hoverMarkers(double x, double y, bool activ
     auto* bridge = plot_->bridge();
     const auto area = bridge->plotAreaSize;
     const double sx = area.width()/(plot_->xMax()-plot_->xMin()), sy = area.height()/(plot_->yMax()-plot_->yMin());
-    QVariantList markers;
+    QVariantList rows, markers;
     if (active && !frame.times.empty() && area.width() > 0 && area.height() > 0 && std::isfinite(sx) && std::isfinite(sy)) {
         // Samples within the tolerance in x, plus one neighbour per side so
         // segments crossing the pointer column count when zoomed in.
@@ -899,15 +899,27 @@ QVariantList LiveOscilloscopeWindow::hoverMarkers(double x, double y, bool activ
             if (best.distance <= tolerance) hits.push_back(best);
         }
         std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.distance < b.distance; });
+        const bool triggered = frame.trigger && frame.trigger->triggered;
         for (const auto& hit : hits) {
             const auto i = hit.index;
+            // A time header per distinct sample, then one value row per trace.
+            if (rows.isEmpty() || i != hits.front().index)
+                rows.append(QVariantMap{{"text", QStringLiteral("%1 s%2 • step %3").arg(frame.plottedTime(i), 0, 'g', 5)
+                    .arg(triggered ? " from trigger" : "").arg(frame.steps[i])}});
+            const auto& channel = frame.channels[hit.channel];
             const double raw = frame.values[i*stride+static_cast<std::size_t>(hit.channel)];
             const double gain = controls_[hit.channel].gain->value(), offset = controls_[hit.channel].offset->value();
-            markers.append(QVariantMap{{"x", frame.plottedTime(i)}, {"y", raw*gain+offset}, {"color", plot_->series()[hit.channel]->color()}});
+            QString text = QStringLiteral("%1 = %2%3").arg(channel.name).arg(raw, 0, 'g', 5)
+                .arg(channel.unit.isEmpty() ? QString() : " " + channel.unit);
+            if ((gain != 1 || offset != 0) && (!bridge->channelAxis || hit.channel != bridge->selectedLegend))
+                text += QStringLiteral(" (display level %1)").arg(raw*gain+offset, 0, 'g', 5);
+            const auto color = plot_->series()[hit.channel]->color();
+            rows.append(QVariantMap{{"text", text}, {"color", color}});
+            markers.append(QVariantMap{{"x", frame.plottedTime(i)}, {"y", raw*gain+offset}, {"color", color}});
         }
     }
-    if (markers != bridge->hoverMarkers) {
-        bridge->hoverMarkers = markers; emit bridge->hoverMarkersChanged();
+    if (rows != bridge->hoverTip || markers != bridge->hoverMarkers) {
+        bridge->hoverTip = rows; bridge->hoverMarkers = markers; emit bridge->hoverChanged();
     }
     return markers;
 }

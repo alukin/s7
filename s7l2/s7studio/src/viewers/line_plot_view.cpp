@@ -132,16 +132,31 @@ LinePlotView::LinePlotView(QWidget* parent)
     bridge_ = new LinePlotBridge(*this);
     setFocusPolicy(Qt::StrongFocus);
     setAccessibleName(QStringLiteral("Observation plot"));
-    setAccessibleDescription(QStringLiteral("Plus and minus zoom, arrows pan, Home fits all data. Axes and units are shown on the plot."));
-    auto shortcut = [this](int key, auto operation) {
-        auto* action = new QShortcut(QKeySequence(key), this);
+    setAccessibleDescription(QStringLiteral("Ctrl+Plus and Ctrl+Minus zoom, Ctrl+] and Ctrl+[ zoom the horizontal axis only, "
+                                            "arrows pan, Home fits all data. Axes and units are shown on the plot."));
+    auto shortcut = [this](const QKeySequence& key, auto operation) {
+        auto* action = new QShortcut(key, this);
         action->setContext(Qt::WidgetWithChildrenShortcut);
         connect(action, &QShortcut::activated, this, operation);
         connect(bridge_, &LinePlotBridge::markerFocusChanged, action, [this, action] { action->setEnabled(!bridge_->markerFocus); });
     };
-    shortcut(Qt::Key_Plus, [this] { bridge_->zoom(.5, .5, .85); });
-    shortcut(Qt::Key_Equal, [this] { bridge_->zoom(.5, .5, .85); });
-    shortcut(Qt::Key_Minus, [this] { bridge_->zoom(.5, .5, 1 / .85); });
+    // Main-keyboard '+' may need Shift, so Ctrl+= zooms in as well; Qt matches
+    // keypad keys without their KeypadModifier.
+    auto zoomIn = QKeySequence::keyBindings(QKeySequence::ZoomIn), zoomOut = QKeySequence::keyBindings(QKeySequence::ZoomOut);
+    for (const auto& key : {QKeySequence(Qt::CTRL | Qt::Key_Equal), QKeySequence(Qt::CTRL | Qt::Key_Plus),
+                            QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Plus)})
+        if (!zoomIn.contains(key)) zoomIn.append(key);
+    if (!zoomOut.contains(QKeySequence(Qt::CTRL | Qt::Key_Minus))) zoomOut.append(QKeySequence(Qt::CTRL | Qt::Key_Minus));
+    for (const auto& key : zoomIn) shortcut(key, [this] { bridge_->zoom(.5, .5, .85); });
+    for (const auto& key : zoomOut) shortcut(key, [this] { bridge_->zoom(.5, .5, 1 / .85); });
+    // The horizontal (time) axis alone, about its centre.
+    const auto zoomX = [this](double factor) {
+        emit navigated();
+        const double centre = (xMin_ + xMax_) / 2, half = (xMax_ - xMin_) * factor / 2;
+        setXRange(centre - half, centre + half);
+    };
+    shortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketRight), [zoomX] { zoomX(.85); });
+    shortcut(QKeySequence(Qt::CTRL | Qt::Key_BracketLeft), [zoomX] { zoomX(1 / .85); });
     shortcut(Qt::Key_Left, [this] { bridge_->pan(-.1, 0); });
     shortcut(Qt::Key_Right, [this] { bridge_->pan(.1, 0); });
     shortcut(Qt::Key_Up, [this] { bridge_->pan(0, .1); });
