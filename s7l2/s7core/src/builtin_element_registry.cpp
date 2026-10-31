@@ -465,7 +465,7 @@ void register_builtin_elements(ElementRegistry& registry)
                     using V = signal_storage_t<T>;
                     return std::make_unique<AnalogOscillatorT<T>>(param_value<T>(ctx, "amplitude", V(1)),
                                                                   param_value<T>(ctx, "frequency_hz", V(1)),
-                                                                  param_value<T>(ctx, "sample_rate_hz", V(1)),
+                                                                  ctx.get_real("sample_rate_hz"),
                                                                   param_value<T>(ctx, "phase", V(0)));
                 } else {
                     return unsupported_type(ctx);

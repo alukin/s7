@@ -767,22 +767,26 @@ private:
 
 /// Sine source: amplitude * sin(phase), phase advancing by
 /// 2 pi frequency / sample_rate per step, computed in the element's type.
+/// The sample rate is kept as a double, like the other sources; F16 computes
+/// the increment in float because common rates (44100 Hz) are not F16 values.
 /// Floating-point types.
 template <SignalType Type>
 class AnalogOscillatorT final : public Element {
 public:
     using value_type = signal_storage_t<Type>;
 
-    AnalogOscillatorT(value_type amplitude, value_type frequency_hz, value_type sample_rate_hz, value_type phase = {})
+    AnalogOscillatorT(value_type amplitude, value_type frequency_hz, double sample_rate_hz, value_type phase = {})
         : Element("AnalogOscillator", true)
         , amplitude_(amplitude)
         , phase_(phase)
         , sample_rate_hz_(sample_rate_hz)
     {
-        if (!(sample_rate_hz > value_type(0))) {
-            throw std::invalid_argument("AnalogOscillator requires a positive sample rate.");
+        if (!(sample_rate_hz > 0.0) || !std::isfinite(sample_rate_hz)) {
+            throw std::invalid_argument("AnalogOscillator requires a positive, finite sample rate.");
         }
-        phase_increment_ = value_type(2) * math::pi_v<value_type> * frequency_hz / sample_rate_hz;
+        using Increment = std::conditional_t<(sizeof(value_type) < sizeof(float)), float, value_type>;
+        phase_increment_ = static_cast<value_type>(Increment(2) * math::pi_v<Increment> * static_cast<Increment>(frequency_hz)
+                                                   / static_cast<Increment>(sample_rate_hz));
         register_output(0, port_names::out, Type, &output_value_);
     }
 
@@ -796,12 +800,12 @@ public:
         }
     }
 
-    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(static_cast<double>(sample_rate_hz_)); }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override { return Rate::from_hz(sample_rate_hz_); }
 
 private:
     value_type amplitude_;
     value_type phase_;
-    value_type sample_rate_hz_;
+    double sample_rate_hz_;
     value_type phase_increment_{};
     value_type output_value_{};
 };

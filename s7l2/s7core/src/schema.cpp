@@ -198,7 +198,8 @@ const std::vector<Connection>& Schema::connections() const {
 }
 
 void Schema::set_rate(const Rate rate) {
-    rate_ = rate;
+    // Rates compare field-wise, so keep the reduced form (and reject zero).
+    rate_ = Rate::reduced(rate.numerator, rate.denominator);
     invalidate_compiled_runtime();
 }
 
@@ -257,10 +258,13 @@ void Schema::ensure_compiled_runtime()
     }
 
     auto graph = Compiler::compile(executable, random_uuid_string(), random_uuid_string());
-    if (rate_) {
+    // The nested runtime steps once per parent step, so every internal rate
+    // must equal this schema's own rate or, without one, the parent's.
+    if (const auto expected = rate_ ? rate_ : parent_rate_) {
         for (const auto& [id, element] : graph.elements) {
-            if (const auto declared=element->declared_rate(); declared && *declared!=*rate_)
-                throw std::invalid_argument("Schema '"+name_+"' rate conflicts with internal element '"+id+"'.");
+            if (const auto declared=element->declared_rate(); declared && *declared!=*expected)
+                throw std::invalid_argument("Schema '"+name_+"' "+(rate_ ? "rate" : "parent graph rate "+expected->to_string())
+                                            +" conflicts with internal element '"+id+"' at "+declared->to_string()+".");
         }
     }
     auto runtime = std::make_unique<NodeRuntime>(std::move(graph));

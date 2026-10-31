@@ -132,8 +132,10 @@ public:
     void step() override {
         const V input=read_input<V>(0);
         detail::control_finite<Type>(input);
-        // Reduce separately first, avoiding overflow from input-lower for large inputs.
-        V phase=math::fmod(input,period_)-math::fmod(lower_,period_);
+        // Reduce separately first, avoiding overflow from input-lower for large
+        // inputs. The difference lies in (-2*period, 2*period); fmod (exact)
+        // brings it into (-period, period) for the single correction below.
+        V phase=math::fmod(math::fmod(input,period_)-math::fmod(lower_,period_),period_);
         detail::control_finite<Type>(phase);
         if (phase<V(0)) phase+=period_;
         if (phase>=period_) phase-=period_;

@@ -9,6 +9,7 @@
 #include <cmath>
 #include <format>
 #include <limits>
+#include <optional>
 
 namespace s7 {
 
@@ -53,7 +54,9 @@ int64_t ElementCreationContext::get_int(const std::string& name) const {
     }
     if (value.is_double()) {
         auto d = value.as_double();
-        if (d < std::numeric_limits<int64_t>::min() || d > std::numeric_limits<int64_t>::max()) {
+        // int64 max converts up to 2^63, so compare with the exact bounds; this
+        // also rejects NaN, which every ordered comparison fails.
+        if (!(d >= -0x1p63 && d < 0x1p63)) {
             throw std::invalid_argument("Parameter '" + name + "' out of int64 range");
         }
         return static_cast<int64_t>(d);
@@ -287,12 +290,20 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
                                            [&](const ParameterSpec& parameter) { return parameter.name == count; });
             sizing = spec != metadata.parameters.end() ? &spec->default_value : nullptr;
         }
+        std::optional<std::uint64_t> requested;
         if (sizing && sizing->is_array()) {
-            generic.input_count = sizing->as_array().size();
+            requested = sizing->as_array().size();
         } else if (sizing && sizing->is_int64() && sizing->get_int64() >= 0) {
-            generic.input_count = static_cast<std::size_t>(sizing->get_int64());
+            requested = static_cast<std::uint64_t>(sizing->get_int64());
         } else if (sizing && sizing->is_uint64()) {
-            generic.input_count = static_cast<std::size_t>(sizing->get_uint64());
+            requested = sizing->get_uint64();
+        }
+        // Type inference allocates one rule per port before the parameter checks
+        // report an oversized count, so cap the ports it sees just past the
+        // maximum: still invalid, but bounded for any untrusted count.
+        if (requested) {
+            generic.input_count = static_cast<std::size_t>(
+                std::min<std::uint64_t>(*requested, std::uint64_t{metadata.variadic_inputs.max_count} + 1));
         }
     }
     generic.create = [shared, alias, id, params = std::move(params)](const std::span<const SignalType> types) {

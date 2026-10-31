@@ -7,7 +7,7 @@
 #include "s7/trapezoid.hpp"
 
 #include <algorithm>
-#include <functional>
+#include <optional>
 #include <unordered_set>
 
 namespace s7 {
@@ -60,52 +60,57 @@ public:
         std::vector<std::string> order;
         order.reserve(adjacency.size());
 
-        std::function<void(const std::string&)> dfs1 = [&](const std::string& node) {
-            if (!visited.insert(node).second) {
-                return;
-            }
-
-            const auto it = adjacency.find(node);
-            if (it != adjacency.end()) {
-                for (const auto& next : it->second) {
-                    dfs1(next);
-                }
-            }
-
-            order.push_back(node);
+        // Kosaraju with explicit stacks (same visit order as the recursive
+        // form), so a long chain of elements cannot exhaust the call stack.
+        struct Frame {
+            const std::string* node;
+            std::size_t next;
         };
-
-        for (const auto& [node, _] : adjacency) {
-            dfs1(node);
+        const auto neighbours = [](const AdjacencyMap& graph, const std::string& node) -> const std::vector<std::string>* {
+            const auto it = graph.find(node);
+            return it != graph.end() ? &it->second : nullptr;
+        };
+        std::vector<Frame> stack;
+        for (const auto& [root, _] : adjacency) {
+            if (!visited.insert(root).second) continue;
+            stack.push_back({&root, 0});
+            while (!stack.empty()) {
+                auto& frame = stack.back();
+                const auto* next = neighbours(adjacency, *frame.node);
+                if (next && frame.next < next->size()) {
+                    const auto& child = (*next)[frame.next++];
+                    if (visited.insert(child).second) stack.push_back({&child, 0});
+                    continue;
+                }
+                order.push_back(*frame.node);
+                stack.pop_back();
+            }
         }
 
         const auto reversed = reverse_graph(adjacency);
         visited.clear();
 
         std::vector<std::vector<std::string>> components;
-        std::function<void(const std::string&, std::vector<std::string>&)> dfs2 =
-            [&](const std::string& node, std::vector<std::string>& component) {
-                if (!visited.insert(node).second) {
-                    return;
-                }
-
-                component.push_back(node);
-
-                const auto it = reversed.find(node);
-                if (it != reversed.end()) {
-                    for (const auto& next : it->second) {
-                        dfs2(next, component);
-                    }
-                }
-            };
-
         for (auto it = order.rbegin(); it != order.rend(); ++it) {
-            if (visited.contains(*it)) {
+            if (!visited.insert(*it).second) {
                 continue;
             }
 
-            std::vector<std::string> component;
-            dfs2(*it, component);
+            std::vector<std::string> component{*it};
+            stack.push_back({&*it, 0});
+            while (!stack.empty()) {
+                auto& frame = stack.back();
+                const auto* next = neighbours(reversed, *frame.node);
+                if (next && frame.next < next->size()) {
+                    const auto& child = (*next)[frame.next++];
+                    if (visited.insert(child).second) {
+                        component.push_back(child);
+                        stack.push_back({&child, 0});
+                    }
+                    continue;
+                }
+                stack.pop_back();
+            }
             components.push_back(std::move(component));
         }
 
@@ -288,6 +293,8 @@ CheckedSchema check_schema(const Schema& schema) {
         auto rates = RateResolver::resolve(schema, instances);
         if (!rates.ok()) {
             checked.errors.insert(checked.errors.end(), rates.errors.begin(), rates.errors.end());
+        } else {
+            checked.rates = std::move(rates.rates);
         }
     }
     if (checked.errors.empty()) {
@@ -307,30 +314,58 @@ CheckedSchema check_schema(const Schema& schema) {
             }
             std::unordered_map<std::string, bool> varying;
             std::unordered_set<std::string> visiting;
-            std::function<bool(const std::string&)> visit = [&](const std::string& id) {
+            // Known without a walk: integrators vary, causal memory and
+            // already classified elements do not need revisiting.
+            const auto known = [&](const std::string& id) -> std::optional<bool> {
                 if (implicit.contains(id)) return true;
                 if (instances.at(id)->has_causal_memory()) return false;
                 if (const auto it = varying.find(id); it != varying.end()) return it->second;
-                if (!visiting.insert(id).second) {
-                    checked.errors.emplace_back("Cycle detected without causal memory in TrapezoidIntegrator derivative graph.");
-                    return false;
-                }
-                bool depends = false;
-                for (const auto& parent : parents[id]) depends = visit(parent) || depends;
-                visiting.erase(id);
-                varying[id] = depends;
-                if (depends) {
-                    if (instances.at(id)->has_state()) {
-                        checked.errors.emplace_back("Implicit TrapezoidIntegrator derivative depends on stateful "
-                            "direct-feedthrough element '" + id + "'; only stateless feedback operations may be reevaluated.");
-                    } else {
-                        checked.trapezoid_rhs.push_back(id);
+                return std::nullopt;
+            };
+            // Post-order walk over derivative parents with an explicit stack,
+            // so a long derivative chain cannot exhaust the call stack.
+            struct Frame {
+                std::string id;
+                std::size_t next{};
+                bool depends{};
+            };
+            const auto visit = [&](const std::string& start) {
+                if (known(start)) return;
+                std::vector<Frame> stack;
+                visiting.insert(start);
+                stack.push_back({start});
+                while (!stack.empty()) {
+                    auto& frame = stack.back();
+                    const auto& inputs = parents[frame.id];
+                    if (frame.next < inputs.size()) {
+                        const auto parent = inputs[frame.next++];
+                        if (const auto value = known(parent)) {
+                            frame.depends = *value || frame.depends;
+                        } else if (!visiting.insert(parent).second) {
+                            checked.errors.emplace_back("Cycle detected without causal memory in TrapezoidIntegrator derivative graph.");
+                        } else {
+                            stack.push_back({parent});
+                        }
+                        continue;
                     }
+                    const auto id = std::move(frame.id);
+                    const bool depends = frame.depends;
+                    stack.pop_back();
+                    visiting.erase(id);
+                    varying[id] = depends;
+                    if (depends) {
+                        if (instances.at(id)->has_state()) {
+                            checked.errors.emplace_back("Implicit TrapezoidIntegrator derivative depends on stateful "
+                                "direct-feedthrough element '" + id + "'; only stateless feedback operations may be reevaluated.");
+                        } else {
+                            checked.trapezoid_rhs.push_back(id);
+                        }
+                    }
+                    if (!stack.empty()) stack.back().depends = depends || stack.back().depends;
                 }
-                return depends;
             };
             for (const auto& id : implicit) {
-                for (const auto& parent : parents[id]) static_cast<void>(visit(parent));
+                for (const auto& parent : parents[id]) visit(parent);
             }
         }
     }

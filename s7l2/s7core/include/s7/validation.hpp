@@ -8,6 +8,7 @@
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace s7 {
@@ -33,6 +34,8 @@ struct CheckedSchema {
     std::vector<std::string> errors;
     std::vector<std::unique_ptr<Element>> elements;
     std::vector<std::string> trapezoid_rhs;
+    // Resolved rate of each element, when validation succeeded.
+    std::unordered_map<std::string, Rate> rates;
 };
 [[nodiscard]] CheckedSchema check_schema(const Schema& schema);
 

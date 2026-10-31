@@ -3162,7 +3162,7 @@
         },
         {
           "name": "sample_rate_hz",
-          "type": "value",
+          "type": "real",
           "description": "Sample rate in Hz",
           "default": 1,
           "required": false,

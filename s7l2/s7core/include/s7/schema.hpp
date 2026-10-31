@@ -76,6 +76,8 @@ public:
     [[nodiscard]] std::optional<Rate> declared_rate() const override { return rate_; }
 
 private:
+    friend class Compiler;
+
     struct ExposedInput {
         std::string name;
         SignalType type{SignalType::F64};
@@ -115,6 +117,9 @@ private:
     // Input bindings given to the last bind_inputs(); step() reads one per
     // exposed input, so exposing an input requires binding again.
     std::size_t bound_input_count_{};
+    // Rate the parent graph resolved for this nested schema when it has none
+    // of its own; internal elements that pin a rate must match it.
+    std::optional<Rate> parent_rate_;
 };
 
 } // namespace s7

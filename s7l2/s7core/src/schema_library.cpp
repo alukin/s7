@@ -4,10 +4,14 @@
 #include "s7/schema_library.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 #include <string_view>
 
 #include <zlib.h>
@@ -259,6 +263,79 @@ auto library_element_metadata(const SchemaLibraryDefinition& library,
     return metadata;
 }
 
+// Element types a schema definition instantiates by name. An element with an
+// inline "schema" is built from that schema, so only its contents count.
+void collect_referenced_types(const boost::json::object& schema, std::vector<std::string>& types)
+{
+    const auto* elements = schema.if_contains("elements");
+    if (!elements || !elements->is_array()) return;
+    for (const auto& value : elements->as_array()) {
+        if (!value.is_object()) continue;
+        const auto& element = value.as_object();
+        if (const auto* nested = element.if_contains("schema"); nested && nested->is_object()) {
+            collect_referenced_types(nested->as_object(), types);
+        } else if (const auto* type = element.if_contains("type"); type && type->is_string()) {
+            types.emplace_back(type->as_string());
+        }
+    }
+}
+
+// A library element whose schema contains itself, directly or through other
+// schema-backed types (in this library or already registered), would build
+// without end when instantiated. Iterative DFS, so a long chain of library
+// types cannot exhaust the stack.
+void reject_recursive_library_types(const SchemaLibraryDefinition& definition, const ElementRegistry& registry)
+{
+    std::unordered_map<std::string, const boost::json::value*> schemas;
+    for (const auto& element : definition.elements) schemas.emplace(element.type_name, &element.schema);
+    const auto schema_of = [&](const std::string& type) -> const boost::json::value* {
+        if (const auto it = schemas.find(type); it != schemas.end()) return it->second;
+        const auto* descriptor = registry.find(type);
+        return descriptor && descriptor->metadata().schema_definition ? &*descriptor->metadata().schema_definition : nullptr;
+    };
+
+    enum class Mark : std::uint8_t { Visiting, Done };
+    std::unordered_map<std::string, Mark> marks;
+    struct Frame {
+        std::string type;
+        std::vector<std::string> used;
+        std::size_t next{};
+    };
+    for (const auto& root : definition.elements) {
+        if (marks.contains(root.type_name)) continue;
+        std::vector<Frame> stack;
+        const auto enter = [&](const std::string& type) {
+            marks[type] = Mark::Visiting;
+            Frame frame{type, {}, 0};
+            if (const auto* schema = schema_of(type); schema && schema->is_object())
+                collect_referenced_types(schema->as_object(), frame.used);
+            stack.push_back(std::move(frame));
+        };
+        enter(root.type_name);
+        while (!stack.empty()) {
+            auto& frame = stack.back();
+            if (frame.next == frame.used.size()) {
+                marks[frame.type] = Mark::Done;
+                stack.pop_back();
+                continue;
+            }
+            const auto used = frame.used[frame.next++];
+            const auto it = marks.find(used);
+            if (it == marks.end()) {
+                enter(used);
+            } else if (it->second == Mark::Visiting) {
+                std::string cycle;
+                bool inCycle = false;
+                for (const auto& open : stack) {
+                    inCycle = inCycle || open.type == used;
+                    if (inCycle) cycle += open.type + " -> ";
+                }
+                throw std::invalid_argument("Schema library element '" + used + "' contains itself: " + cycle + used + ".");
+            }
+        }
+    }
+}
+
 } // namespace
 
 bool configure_schema_discretization(boost::json::value& schema, const double dt, const ElementRegistry& registry)
@@ -376,6 +453,7 @@ void SchemaLibraryLoader::register_library(const SchemaLibraryDefinition& defini
             throw std::invalid_argument("Element type already registered: '" + element.type_name + "'.");
         }
     }
+    reject_recursive_library_types(definition, registry);
 
     for (const auto& element : definition.elements) {
         const auto metadata = library_element_metadata(definition, element);

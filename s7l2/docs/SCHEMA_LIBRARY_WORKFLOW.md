@@ -135,6 +135,8 @@ Notes:
 - Each library element must include `schema` as an object.
 - Port exposure is derived from schema `exposed_inputs` / `exposed_outputs`.
 - Any runtime element entry with a nested `schema` payload is treated as a composite schema-backed element.
+- A library element may not contain itself, directly or through other schema-backed types in the same library or in libraries already loaded. Registration rejects such a cycle and names it (`'A' contains itself: A -> B -> A`); otherwise instantiating the element would recurse without end.
+- A nested schema's exposed ports carry only F64 and C64 values. An element with another exposed type registers, but compiling a graph that uses it fails.
 
 ---
 

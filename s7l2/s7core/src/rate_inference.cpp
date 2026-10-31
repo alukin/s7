@@ -21,12 +21,17 @@ public:
         std::iota(parent_.begin(), parent_.end(), std::size_t{0});
     }
 
-    std::size_t find(const std::size_t index)
+    // Iterative with path compression, so a long chain cannot exhaust the stack.
+    std::size_t find(std::size_t index)
     {
-        if (parent_[index] != index) {
-            parent_[index] = find(parent_[index]);
+        auto root = index;
+        while (parent_[root] != root) root = parent_[root];
+        while (parent_[index] != root) {
+            const auto next = parent_[index];
+            parent_[index] = root;
+            index = next;
         }
-        return parent_[index];
+        return root;
     }
 
     void merge(const std::size_t a, const std::size_t b) { parent_[find(a)] = find(b); }
