@@ -168,17 +168,20 @@ Binding lifetime and invalidation:
 - Each nesting level resolves its own bindings into its direct children's
   storage, which those children own and keep at stable addresses.
 
-Supported types: exposed inputs and outputs carry F64 and C64 values only,
-because the schema element's exposed storage and input proxies hold only those
-two representations. Before, the schema accepted any declared type. An exposed
+Supported types: a schema used as an element carries F64 and C64 values only
+across its boundary, because its exposed storage and input proxies hold only
+those two representations. Before, any declared type was accepted. An exposed
 output of another type compiled and then threw on every step. An exposed input
-of another type read its source's bytes as a `double` without any error.
-`expose_input` and `expose_output` now reject every other type with
-`std::invalid_argument` and register no port. The schema library loader,
-`s7runtime` deployments and Studio all build schemas through these calls, so
-such a definition fails when it is loaded, with the port name and type in the
-message. Supporting all 26 signal types would need type-generic exposed
-storage and is a separate, unscheduled extension.
+of another type read its source's bytes as a `double` without any error. Such a
+nested schema is now rejected with `std::invalid_argument` when its runtime is
+compiled, which happens when the parent graph is compiled (or on the first
+standalone step), before any value is copied. A top-level schema's exposed
+ports are only boundary metadata and are never stepped, so `expose_input` and
+`expose_output` still accept every type and existing top-level documents load
+unchanged. A schema library element with such a port still registers and
+fails when a graph using it is compiled. Supporting all 26 signal types across
+a nested boundary would need type-generic exposed storage and is a separate,
+unscheduled extension.
 
 Exposed inputs were already constant time: each step reads the parent's
 binding and writes the shared input state that the proxy element publishes.
@@ -265,9 +268,10 @@ schema recompiled after added elements, connections, outputs and a rate
 change, whose exposed storage address stays fixed; move construction and move
 assignment of a stepped stateful schema with continued state; 100 repeated
 compile/step/destroy cycles; missing element, out-of-range port and mismatched
-type mappings; repeated failure after a failed compilation; rejection of all
-24 other signal types as exposed inputs or outputs, directly and from schema
-JSON; and fault propagation without partial publication, both standalone and
+type mappings; repeated failure after a failed compilation; a top-level
+schema with I32 exposed ports that still runs; rejection at parent
+compilation of every other signal type on a nested schema, including one
+loaded from JSON; and fault propagation without partial publication, both standalone and
 inside a parent, with recovery on the next step.
 
 Apart from the type rejection, the same test source also passes against the
@@ -315,8 +319,10 @@ own regression test:
   copied its port and binding vectors. `Element` now has defaulted copy and
   `noexcept` move operations. `Schema`'s move constructor is no longer
   declared `noexcept`, because moving its `std::deque` members can allocate in
-  libstdc++. Its move assignment stays `noexcept`. A moved-from schema now has
-  no ports instead of pointing at the moved storage.
+  libstdc++. Its move assignment stays `noexcept`. Port pointers are still
+  copied unchanged, so moving an ordinary element (one whose ports address
+  its own members) leaves them aliasing the source, as before; `Schema` stays
+  valid because its exposed storage moves with it.
 
 Remaining nested overhead: each nested schema still runs a complete
 `NodeRuntime::step()` (step-count and thread-ID bookkeeping and rollback

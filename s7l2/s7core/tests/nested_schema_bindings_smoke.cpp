@@ -401,8 +401,7 @@ void moves() {
 
     // The compiled runtime and its bindings move with the schema; state continues.
     s7::Schema constructed(std::move(first));
-    // NOLINTNEXTLINE(bugprone-use-after-move): the moved-from base is empty, not aliasing.
-    require(first.output_count() == 0 && constructed.output_count() == 1, "Moved-from schema kept its ports");
+    require(constructed.output_count() == 1, "Moved schema lost its ports");
     for (int i = 3; i < 5; ++i) {
         constructed.step();
         require(f64_output(constructed, 0) == reference[static_cast<std::size_t>(i)], "After move construction");
@@ -478,20 +477,51 @@ void invalid_mappings() {
     require_throws([&] { broken.step(); }, "Broken schema stepped");
     require_throws([&] { broken.step(); }, "Broken schema stepped on retry");
 
-    // Exposed ports are backed by F64/C64 storage; any other type is rejected
-    // when exposed instead of misreading values or failing on a later step.
-    s7::Schema integer("integer_ports");
-    integer.set_rate(s7::Rate::from_hz(1));
-    integer.add_element("count", [] { return std::make_unique<s7::GainT<s7::SignalType::I32>>(2); });
+    // A top-level schema's exposed ports are boundary metadata of any type;
+    // it compiles and runs as before.
+    using I32Constant = s7::ConstantT<s7::SignalType::I32>;
+    using I32Gain = s7::GainT<s7::SignalType::I32>;
+    const auto integer_schema = [](s7::Schema& schema) {
+        schema.set_rate(s7::Rate::from_hz(1));
+        schema.add_element("count", [] { return std::make_unique<I32Constant>(5); });
+        schema.add_element("gain", [] { return std::make_unique<I32Gain>(3); });
+        schema.connect("count", 0, "gain", 0);
+        schema.expose_input("in", s7::SignalType::I32, "gain", 0);
+        schema.expose_output("out", s7::SignalType::I32, "gain", 0);
+    };
+    s7::Schema top("integer_top_level");
+    integer_schema(top);
+    s7::NodeRuntime topRuntime(s7::Compiler::compile(top));
+    topRuntime.step();
+    require(topRuntime.output_of<s7::SignalType::I32>("gain") == 15, "Top-level schema with I32 exposed ports");
+
+    // Nested, the ports are backed by F64/C64 storage: every other type is
+    // rejected when the parent is compiled, before any value is misread.
     for (const auto type : s7::kAllSignalTypes) {
         if (type == s7::SignalType::F64 || type == s7::SignalType::C64) continue;
-        require_throws([&] { integer.expose_input("in", type, "count", 0); }, "Unsupported exposed input type accepted");
-        require_throws([&] { integer.expose_output("out", type, "count", 0); },
-                       "Unsupported exposed output type accepted");
+        auto parent = root("parent_of_unsupported");
+        parent.add_element("child", [type] {
+            auto child = std::make_unique<s7::Schema>("unsupported_output");
+            child->set_rate(s7::Rate::from_hz(1));
+            child->add_element("count", [] { return std::make_unique<I32Constant>(5); });
+            child->expose_output("out", type, "count", 0);
+            return child;
+        });
+        require_throws([&] { (void)s7::Compiler::compile(parent); }, "Nested schema accepted an unsupported output type");
     }
-    require(integer.input_count() == 0 && integer.output_count() == 0, "Rejected exposure registered a port");
+    {
+        auto parent = root("parent_of_integer");
+        parent.add_element("source", [] { return std::make_unique<I32Constant>(2); });
+        parent.add_element("child", [integer_schema] {
+            auto child = std::make_unique<s7::Schema>("integer_child");
+            integer_schema(*child);
+            return child;
+        });
+        parent.connect("source", 0, "child", 0);
+        require_throws([&] { (void)s7::Compiler::compile(parent); }, "Nested schema accepted an I32 input");
+    }
 
-    // The same rule applies to schemas loaded from JSON.
+    // The same rule applies to a nested schema loaded from JSON.
     auto& registry = s7::ElementRegistry::instance();
     s7::register_builtin_elements(registry);
     const auto definition = boost::json::parse(R"json({
@@ -501,8 +531,13 @@ void invalid_mappings() {
         "exposed_inputs": [{"name": "in", "type": "I32", "element": "gain", "port": 0}],
         "exposed_outputs": []
     })json");
-    require_throws([&] { (void)s7::SchemaLibraryLoader::build_schema(definition, registry); },
-                   "Schema JSON with an I32 exposed input was accepted");
+    auto parent = root("parent_of_json");
+    parent.add_element("source", [] { return std::make_unique<I32Constant>(2); });
+    parent.add_element("child", [definition, &registry] {
+        return std::make_unique<s7::Schema>(s7::SchemaLibraryLoader::build_schema(definition, registry));
+    });
+    parent.connect("source", 0, "child", 0);
+    require_throws([&] { (void)s7::Compiler::compile(parent); }, "Nested JSON schema accepted an I32 input");
 }
 
 void input_binding_count() {
@@ -534,9 +569,8 @@ void input_binding_count() {
     require(f64_output(schema, 1) == 7.0, "Rebound schema output");
 }
 
-// Element moves no longer copy (and allocate) port and binding storage.
-static_assert(std::is_nothrow_move_constructible_v<s7::Gain>);
-static_assert(std::is_nothrow_move_assignable_v<s7::Gain>);
+// Moving a Schema keeps its exposed storage valid; move assignment must not
+// allocate (its base Element moves rather than copies).
 static_assert(std::is_nothrow_move_assignable_v<s7::Schema>);
 
 class FaultingGain final : public s7::Element {

@@ -51,8 +51,10 @@ private:
     std::shared_ptr<ExposedInputState> state_;
 };
 
-// Exposed ports are backed by F64 or C64 storage (ExposedInputState,
-// ExposedOutputValue), so no other type may cross the schema boundary.
+// Exposed ports of a nested schema are backed by F64 or C64 storage
+// (ExposedInputState, ExposedOutputValue), so no other type may cross the
+// boundary of a schema used as an element. A top-level schema's exposed ports
+// are only boundary metadata and accept any type.
 void require_exposable_type(const char* direction, const std::string& name, const SignalType type)
 {
     if (type != SignalType::F64 && type != SignalType::C64) {
@@ -148,7 +150,6 @@ void Schema::expose_input(std::string name,
             throw std::invalid_argument("Schema exposed input name is duplicated: '" + name + "'.");
         }
     }
-    require_exposable_type("input", name, type);
 
     const std::size_t portIndex = exposed_inputs_.size();
     exposed_inputs_.push_back(ExposedInput{std::move(name), type, std::move(to_element), to_port});
@@ -170,7 +171,6 @@ void Schema::expose_output(std::string name,
             throw std::invalid_argument("Schema exposed output name is duplicated: '" + name + "'.");
         }
     }
-    require_exposable_type("output", name, type);
 
     exposed_outputs_.push_back(ExposedOutput{std::move(name), type, std::move(from_element), from_port});
     exposed_output_values_.push_back(ExposedOutputValue{type, RealValue{}, ComplexValue{}});
@@ -218,6 +218,10 @@ void Schema::ensure_compiled_runtime()
     if (compiled_runtime_) {
         return;
     }
+    // Runs before a nested schema's first step: from bind_inputs() when a
+    // parent graph is compiled, or from step() when used standalone.
+    for (const auto& input : exposed_inputs_) require_exposable_type("input", input.name, input.type);
+    for (const auto& output : exposed_outputs_) require_exposable_type("output", output.name, output.type);
     // Every exposed-input change invalidates the runtime, so checking here
     // covers inputs exposed after binding and a schema never bound.
     if (bound_input_count_ != exposed_inputs_.size()) {

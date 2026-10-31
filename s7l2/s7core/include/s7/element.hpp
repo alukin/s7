@@ -87,7 +87,11 @@ class Element {
 public:
     virtual ~Element() = default;
     // Declared because the virtual destructor suppresses the implicit moves;
-    // moving transfers port and binding storage without allocating.
+    // moving transfers port and binding storage without allocating. Port
+    // pointers are copied unchanged: they still address the source's storage
+    // unless the derived class keeps that storage valid (as Schema does) or
+    // re-registers its ports. Elements are normally created in place by a
+    // factory and owned through unique_ptr, so they are not moved.
     Element(const Element&) = default;
     Element& operator=(const Element&) = default;
     Element(Element&&) noexcept = default;
