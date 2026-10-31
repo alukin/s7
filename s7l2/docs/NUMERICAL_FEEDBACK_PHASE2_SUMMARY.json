@@ -1,9 +1,9 @@
 {
   "metadata": {
     "branch": "research/numerical-feedback-0.2.0",
-    "git_commit": "553bb95e1970f7c629e814f1cdb75d9205945f49",
-    "source_sha256": "2f97c4bd984290b55da33b236504b032c4b89c7a5eddd2472060a45b8326f2aa",
-    "generated_utc": "2026-10-31T05:06:30.583003+00:00",
+    "git_commit": "af0f6930b9939f3e5fa140274bdffd98f9057766",
+    "source_sha256": "0732aad1d482b0a289f05f1b575704c59e60f64cd381f6887dc44cdcde652342",
+    "generated_utc": "2026-10-31T05:08:53.967643+00:00",
     "precision": "IEEE-754 binary64",
     "python": "3.14.8",
     "numpy": "2.4.6",
@@ -2231,10 +2231,10 @@
       "corrections": 0,
       "duration": 5.0,
       "finite_h": 0.1,
-      "euler_h": 0.05,
-      "total_function_evaluations": 100,
+      "euler_h": 0.1,
+      "total_function_evaluations": 50,
       "finite_final_state_error": 0.0015841717917653274,
-      "euler_final_state_error": 0.0008174177787514504
+      "euler_final_state_error": 0.0015841717917653274
     },
     {
       "model": "RC",
@@ -2281,10 +2281,10 @@
       "corrections": 0,
       "duration": 5.0,
       "finite_h": 0.1,
-      "euler_h": 0.05,
-      "total_function_evaluations": 100,
+      "euler_h": 0.1,
+      "total_function_evaluations": 50,
       "finite_final_state_error": 0.28305445242262334,
-      "euler_final_state_error": 0.13304542685739265
+      "euler_final_state_error": 0.28305445242262334
     },
     {
       "model": "LC",
