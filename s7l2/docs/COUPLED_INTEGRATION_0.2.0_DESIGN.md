@@ -29,7 +29,7 @@ trapezoid or for per-element stepping with stale peers.
 ## Region and timing contract
 
 Each selected memory element has one F64 state output, one F64 derivative
-input and one declared physical step `h`. A region contains selected states
+input and one resolved physical step `h`. A region contains selected states
 with the same method, outer rate and substep count connected through a
 derivative path of stateless direct-feedthrough elements. A one-way
 dependency within that configuration is included so both states see the

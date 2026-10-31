@@ -31,6 +31,10 @@ cannot solve their coupled stages. The compiler validates the eligible pure
 derivative cone and rejects cross-method feedback. See the
 [coupled integration contract](COUPLED_INTEGRATION.md) for held inputs,
 solver bounds, diagnostics, examples and performance evidence.
+Registry-created Euler, trapezoid and Gauss elements adopt their resolved
+execution-domain rate; a stored diagram `dt` is legacy metadata. C++ callers
+may construct an integrator with an explicit `dt` or `std::nullopt` to follow
+the rate.
 
 **Division.** `Divider` computes `numerator / denominator` for real floating-point types. A zero denominator throws `std::domain_error` during execution so an invalid quotient cannot silently enter the graph.
 

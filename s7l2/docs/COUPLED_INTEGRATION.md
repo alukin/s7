@@ -16,18 +16,22 @@ An ordinary Euler element keeps its current JSON shape. To request coupled
 substeps, set `"substeps": 2`, `4`, `8`, `16`, or `32` in every participating
 F64 `EulerIntegrator`'s parameters; any integer from 1 through 32 is valid.
 All states in one coupled region must have the same outer `dt` and substep
-count. `substeps=1` is the default and requires no new configuration.
+count. `substeps=1` is the default and requires no new configuration. In JSON
+schemas and Studio diagrams, the resolved execution-domain rate determines
+the outer step. A stored `dt` is a legacy display field and is ignored by
+the registry-created integrator, including the Gauss element.
 
 For Gauss–Legendre, replace each participating F64 `EulerIntegrator` with
-`GaussLegendreIntegrator` and retain its `dt` and `initial_value`. For example:
+`GaussLegendreIntegrator` and retain its `initial_value`. For example:
 
 ```json
 {"id":"x","type":"GaussLegendreIntegrator",
- "params":{"dt":0.01,"initial_value":1.0}}
+ "params":{"initial_value":1.0}}
 ```
 
 In C++, construct `GaussLegendreIntegrator(dt, initial)` or
-`EulerIntegrator(dt, initial, substeps)` in an ordinary `Schema`. `Compiler`
+`EulerIntegrator(dt, initial, substeps)` in an ordinary `Schema` to declare
+an explicit rate, or pass `std::nullopt` for a rate-following element. `Compiler`
 then identifies the region and `NodeRuntime::step()` executes it. The public
 `NodeRuntime::numerical_diagnostics()` reports accepted physical steps,
 numerical failures, base/trial derivative-vector evaluations, pure-element
@@ -43,7 +47,8 @@ The editable [oscillator](../examples/2int_osc_gauss.s7diagram),
 [RLC step](../examples/linear/rlc_step_gauss.s7diagram) diagrams use this
 actual production element. Existing Euler diagrams can be edited to set
 `substeps`; no separate research solver or hidden delay is required. The
-normal diagram discretization update recognizes the new element's `dt`.
+normal diagram discretization update sets the schema/domain rate and leaves
+legacy element `dt` fields untouched; execution follows the selected rate.
 
 ## Causal and numerical contract
 
@@ -131,21 +136,22 @@ F64 source evaluated **once per outer step** so the dissipative systems do
 not settle to a trivial zero residual; accuracy uses a constant input and
 independent exact references. Thus the timing and error columns describe
 different input traces, and short timings are directional rather than a
-throughput guarantee. Results on the Linux/GCC 16.2.1 host used for this PR:
+throughput guarantee. Results on the Linux/GCC 16.2.1 host at code revision
+`b68aeea`, after the final rebase:
 
 | Model, outer `h` | Method | Maximum state error, constant input | Median wall time/step, alternating input | Derivative vectors/step, alternating input |
 |---|---|---:|---:|---:|
-| RC charge, `.5 s` | Euler | .117879 | .039 µs | uninstrumented |
-| RC charge, `.5 s` | Euler `m=32` | .002893 | .459 µs | 32 |
+| RC charge, `.5 s` | Euler | .117879 | .094 µs | uninstrumented |
+| RC charge, `.5 s` | Euler `m=32` | .002893 | .452 µs | 32 |
 | RC charge, `.5 s` | Trapezoid | .007879 | .300 µs | uninstrumented |
-| RC charge, `.5 s` | Gauss–Legendre | 3.24105e−5 | .374 µs | 15 |
-| RLC `R=1`, `.2 s` | Euler | .279358 | .051 µs | uninstrumented |
-| RLC `R=1`, `.2 s` | Euler `m=32` | .004788 | .543 µs | 32 |
-| RLC `R=1`, `.2 s` | Trapezoid | .009451 | .333 µs | uninstrumented |
-| RLC `R=1`, `.2 s` | Gauss–Legendre | 2.58046e−5 | .755 µs | 23 |
+| RC charge, `.5 s` | Gauss–Legendre | 3.24105e−5 | .375 µs | 15 |
+| RLC `R=1`, `.2 s` | Euler | .279358 | .054 µs | uninstrumented |
+| RLC `R=1`, `.2 s` | Euler `m=32` | .004788 | .537 µs | 32 |
+| RLC `R=1`, `.2 s` | Trapezoid | .009451 | .336 µs | uninstrumented |
+| RLC `R=1`, `.2 s` | Gauss–Legendre | 2.58046e−5 | .749 µs | 23 |
 
 These correspond to about `.75 µs` of RC GL execution per simulated second
-and `3.78 µs` for RLC GL at the stated outer timesteps. The recorded GL
+and `3.75 µs` for RLC GL at the stated outer timesteps. The recorded GL
 work averaged two Newton iterations per outer step for the alternating
 source. The numerical scratch payload estimate was 320 bytes for RC and
 656 bytes for RLC; this is not peak heap use.
