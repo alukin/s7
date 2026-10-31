@@ -402,6 +402,31 @@ void registry_configuration() {
     near(gl_runtime.real_output_of("x"), pade_step(Case{Model::RC, .1, 1, 0, 1, 0})[0], 2e-13,
          "Serialized Gauss-Legendre element must select production policy");
 }
+
+void region_boundaries() {
+    s7::Schema disconnected("two_disconnected_gl_loops");
+    for (const std::string id : {"a", "b"}) {
+        disconnected.add_element(id, [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 1.); });
+        disconnected.add_element(id+"_rhs", [] { return std::make_unique<s7::Gain>(-1.); });
+        disconnected.connect(id, 0, id+"_rhs", 0);
+        disconnected.connect(id+"_rhs", 0, id, 0);
+    }
+    auto graph = s7::Compiler::compile(disconnected);
+    require(graph.coupled_regions.size() == 2, "Disconnected states need separate Newton regions");
+    s7::NodeRuntime runtime(std::move(graph));
+    runtime.step(); runtime.step();
+    near(runtime.real_output_of("a"), runtime.real_output_of("b"), 0,
+         "Independent regions have identical transitions");
+
+    s7::Schema one_way("one_way_coupled_gl");
+    one_way.add_element("a", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 1.); });
+    one_way.add_element("b", [] { return std::make_unique<s7::GaussLegendreIntegrator>(.1, 0.); });
+    one_way.add_element("negative", [] { return std::make_unique<s7::Gain>(-1.); });
+    one_way.connect("a", 0, "negative", 0); one_way.connect("negative", 0, "a", 0);
+    one_way.connect("a", 0, "b", 0);
+    require(s7::Compiler::compile(one_way).coupled_regions.size() == 1,
+            "One-way coupled states share their Runge-Kutta stages");
+}
 } // namespace
 
 int main() try {
@@ -411,6 +436,7 @@ int main() try {
     responses();
     restrictions_and_failure();
     registry_configuration();
+    region_boundaries();
     std::cout << "Coupled integration production checks passed\n";
     return 0;
 } catch (const std::exception& error) {
