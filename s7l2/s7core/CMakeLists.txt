@@ -122,6 +122,10 @@ s7_add_test_executable(s7core_nested_schema_bindings_smoke tests/nested_schema_b
 target_link_libraries(s7core_nested_schema_bindings_smoke PRIVATE s7core)
 add_test(NAME s7core_nested_schema_bindings_smoke COMMAND s7core_nested_schema_bindings_smoke)
 
+s7_add_test_executable(s7core_step_rollback_smoke tests/step_rollback_smoke.cpp)
+target_link_libraries(s7core_step_rollback_smoke PRIVATE s7core)
+add_test(NAME s7core_step_rollback_smoke COMMAND s7core_step_rollback_smoke)
+
 s7_add_test_executable(s7core_signal_types_smoke tests/signal_types_smoke.cpp)
 target_link_libraries(s7core_signal_types_smoke PRIVATE s7core)
 add_test(NAME s7core_signal_types_smoke COMMAND s7core_signal_types_smoke)

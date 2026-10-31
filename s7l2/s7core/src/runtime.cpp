@@ -71,7 +71,7 @@ void NodeRuntime::stage_trapezoids() {
                 for (const auto& stage : trapezoids_) {
                     for (auto i = stage.outputs.begin; i < stage.outputs.end; ++i) {
                         auto& output = memory_outputs_[i];
-                        std::memcpy(output.staged.data(), output.value_ptr, output.bytes);
+                        std::memcpy(output.staged[staged_index_ ^ 1].data(), output.value_ptr, output.bytes);
                     }
                 }
                 restore();
@@ -83,6 +83,26 @@ void NodeRuntime::stage_trapezoids() {
     } catch (...) {
         restore();
         throw;
+    }
+}
+
+void NodeRuntime::roll_back_step(const bool published_memory) {
+    // A direct evaluation, numerical trial or causal-memory step faulted:
+    // restore every causal output, and the memory outputs published at the
+    // start of this step, so the step is all-or-nothing instead of a mix of
+    // this step's and the previous step's outputs. Memory elements stage into
+    // the unused buffer, so the values staged by the previous step survive
+    // and a later successful step() republishes them. This covers only
+    // published outputs, not private element state (e.g. a filter's internal
+    // delay line) already advanced before the fault.
+    for (auto& output : causal_outputs_) {
+        std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
+    }
+    if (published_memory) {
+        for (auto& output : memory_outputs_) {
+            std::memcpy(output.value_ptr, output.before_publish.data(), output.bytes);
+        }
+        memory_outputs_staged_ = true;
     }
 }
 
@@ -137,13 +157,9 @@ void NodeRuntime::step() {
     stepping_thread_.store(std::this_thread::get_id());
     const bool publishing = memory_outputs_staged_;
     if (publishing) {
-        // Back up each memory output's pre-publish (previous step's) value
-        // in its MemoryOutput::snapshot, reused below only for this purpose:
-        // the per-element catch further down overwrites it fresh, after
-        // this function either returns normally or has already rethrown.
         for (auto& output : memory_outputs_) {
-            std::memcpy(output.snapshot.data(), output.value_ptr, output.bytes);
-            std::memcpy(output.value_ptr, output.staged.data(), output.bytes);
+            std::memcpy(output.before_publish.data(), output.value_ptr, output.bytes);
+            std::memcpy(output.value_ptr, output.staged[staged_index_].data(), output.bytes);
         }
         memory_outputs_staged_ = false;
     }
@@ -155,30 +171,15 @@ void NodeRuntime::step() {
         for (auto* element : graph_.causal_execution) element->step();
         stage_trapezoids();
     } catch (...) {
-        // A causal-order evaluation or numerical trial faulted: restore every
-        // causal output, and the memory outputs just published above, to
-        // their pre-step values, so the step is all-or-nothing instead of a
-        // mix of this step's and the previous step's outputs. The staged
-        // values survive (only the flag was cleared) so a later successful
-        // step() republishes the same values rather than skipping them.
-        // This covers only elements' published outputs, not any further
-        // private state (e.g. a filter's internal delay line) a causal
-        // element may have already advanced before the fault.
-        for (auto& output : causal_outputs_) {
-            std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
-        }
-        if (publishing) {
-            for (auto& output : memory_outputs_) {
-                std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
-            }
-            memory_outputs_staged_ = true;
-        }
+        roll_back_step(publishing);
         throw;
     }
 
     // Each causal-memory element computes its next output from this step's
-    // inputs; its published output is restored right away so that other
-    // causal-memory elements still read this step's values.
+    // inputs into the unused staging buffer; its published output is restored
+    // right away so that other causal-memory elements still read this step's
+    // values.
+    const auto next = staged_index_ ^ 1;
     for (std::size_t element_index = 0; element_index < graph_.memory_execution.size(); ++element_index) {
         if (implicit_memory_[element_index]) continue;
         const auto range = memory_output_ranges_[element_index];
@@ -194,16 +195,20 @@ void NodeRuntime::step() {
                 auto& output = memory_outputs_[output_index];
                 std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
             }
+            roll_back_step(publishing);
             throw;
         }
 
         for (std::size_t output_index = range.begin; output_index < range.end; ++output_index) {
             auto& output = memory_outputs_[output_index];
-            std::memcpy(output.staged.data(), output.value_ptr, output.bytes);
+            std::memcpy(output.staged[next].data(), output.value_ptr, output.bytes);
             std::memcpy(output.value_ptr, output.snapshot.data(), output.bytes);
         }
     }
-    memory_outputs_staged_ = !memory_outputs_.empty();
+    if (!memory_outputs_.empty()) {
+        staged_index_ = next;
+        memory_outputs_staged_ = true;
+    }
 
     ++step_count_;
 }

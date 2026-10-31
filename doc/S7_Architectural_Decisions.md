@@ -964,6 +964,50 @@ guide](../s7l2/docs/SPLIT_TRANSPORT.md).
 
 ------------------------------------------------------------------------
 
+# ADR-021
+
+## Title
+
+All-or-Nothing Publication of a Faulting Runtime Step
+
+## Status
+
+Accepted 2026-10-31 by the maintainer.
+
+## Context
+
+`NodeRuntime::step()` already restored every published output when a
+direct-feedthrough element or a coupled trapezoid trial threw. A fault in a
+causal-memory element restored only that element's outputs. The direct outputs
+of the failed step and the memory outputs published at its start stayed
+visible while the step count did not advance. The values staged by the memory
+elements that had already run were then discarded, so the next step repeated
+one step's state instead of continuing it.
+
+## Decision
+
+A step that throws in any phase publishes nothing. Direct outputs and the
+memory outputs published at the start of the step return to their pre-step
+values. The step count does not advance. The values staged by the previous
+successful step are kept and published by the next successful step. Memory
+elements stage into a second buffer that becomes current only after every
+memory element and coupled trial has succeeded.
+
+The guarantee covers published outputs and staged values only. Private element
+state (for example a filter's delay line or a nested schema's runtime) and
+external side effects that advanced before the fault are not rolled back.
+
+## Consequences
+
+After a fault, observers see the last completed step, and a retried step
+continues exactly where the failed one began for elements whose state is their
+published output. Each causal-memory output carries one more staging buffer;
+no extra copy is made per step. `s7core_step_rollback_smoke` checks faults in
+direct elements and in the first and last memory elements, on the first step
+and on consecutive steps, against an unfaulted run.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

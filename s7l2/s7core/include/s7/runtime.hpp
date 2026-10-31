@@ -65,11 +65,15 @@ private:
     // value; the runtime stages it and publishes it at the start of the next
     // step, so all outputs read after step() belong to the same step.
     // Raw copies of the output's storage (at most 32 bytes: CI128/C128).
+    // staged[staged_index_] holds the values to publish next; a step stages
+    // into the other buffer and switches only after every memory element and
+    // coupled trial succeeded, so a failed step keeps the earlier values.
     struct MemoryOutput {
         void* value_ptr{};
         std::size_t bytes{};
         std::array<std::byte, 32> snapshot{};
-        std::array<std::byte, 32> staged{};
+        std::array<std::byte, 32> before_publish{};
+        std::array<std::array<std::byte, 32>, 2> staged{};
     };
 
     struct MemoryOutputRange {
@@ -98,6 +102,8 @@ private:
         std::array<std::byte, 32> base{};
     };
     void stage_trapezoids();
+    // Restores every published output to its pre-step value after a failed step.
+    void roll_back_step(bool published_memory);
 
     void require_output_type(const std::string& element_id, std::size_t port, SignalType expected) const;
 
@@ -109,6 +115,7 @@ private:
     std::vector<TrialOutput> trial_outputs_;
     std::vector<bool> implicit_memory_;
     bool memory_outputs_staged_{};
+    std::size_t staged_index_{};
     std::atomic<std::thread::id> stepping_thread_{};
     std::optional<Rate> model_time_rate_;
     std::size_t step_count_{};

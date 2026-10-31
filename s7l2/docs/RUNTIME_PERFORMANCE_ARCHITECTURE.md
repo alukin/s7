@@ -31,9 +31,12 @@ The phases remain publication of previously staged causal-memory outputs,
 causal output snapshots, direct elements, coupled trapezoid trial evaluation,
 ordinary causal-memory staging, then step-count advance. The same memory-order
 index continues to select its output range and implicit-stage flag. Failed
-direct or trial evaluation restores published outputs; a failing memory step
-restores only that memory element's outputs, as before. Private state and
-external side effects have no new rollback guarantee. Existing port pointers,
+direct or trial evaluation restores published outputs; at the time a failing
+memory step restored only that memory element's outputs. Since 2026-10-31
+([ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021)) a fault in any
+phase rolls back the whole step, as described in
+[step rollback](#step-rollback-and-schema-boundary-fixes). Private state and
+external side effects have no rollback guarantee. Existing port pointers,
 signal types, plugin-created elements and nested runtimes use the same
 `Element::step()` contract. Only the dispatch reference changes.
 
@@ -272,10 +275,48 @@ unmodified parent library. That confirms the behavior it checks was unchanged.
 A mutation that kept stale bindings across recompilation was reported by
 AddressSanitizer as a heap-use-after-free in the recompilation case.
 
-Results on this host: the Release headless suite passed 46/46, including the
-saved-diagram numerical regressions (the parent revision passed the same 45).
-Clang 22.1.2 with `-fsanitize=address,undefined` passed all 24 `s7core_*` and
-`s7tests_*` tests. Studio and Windows builds were not run for this change.
+Results on this host, with the fixes below included: the Release headless
+suite passed 47/47, including the saved-diagram numerical regressions (the
+parent revision passed its 45). Clang 22.1.2 with
+`-fsanitize=address,undefined` passed all 25 `s7core_*` and `s7tests_*`
+tests. With Studio enabled, headless under Xvfb, 90 of 91 tests passed. The
+failing `s7studio_gui_workflows` checks (`toolbarPaletteChanges`,
+`runToolbarPresentation`) fail identically on unmodified `main` in that
+environment. The Windows build was not run for this change.
+
+### Step rollback and schema boundary fixes
+
+Three defects found during this work were fixed on 2026-10-31, each with its
+own regression test:
+
+- **All-or-nothing steps ([ADR-021](../../doc/S7_Architectural_Decisions.md#adr-021)).**
+  A fault in a causal-memory element used to restore only that element's
+  outputs. The failed step's direct outputs and the memory outputs published at
+  its start stayed visible while the step count stayed put. The values staged
+  by memory elements that had already run were dropped, so a ramp read
+  2, 3, 3, 4 across a fault. Now any fault restores every published output, and
+  memory elements stage into a second buffer that becomes current only when
+  the whole step succeeds. `s7core_step_rollback_smoke` faults the first and
+  last memory elements and a direct element, on the first step, on a later
+  step and on three consecutive steps. It requires unchanged outputs and step
+  count after each fault and exact equality with an unfaulted run afterwards,
+  with a coupled trapezoid oscillator in the same graph. The old runtime fails
+  its first check. Medians of seven runs of the seven original benchmark cases
+  and two further nested cases stayed within noise (from 1% slower to 5%
+  faster); each memory output carries 64 more bytes.
+- **Unbound exposed inputs.** A standalone `Schema` stepped without
+  `bind_inputs()`, or after `expose_input()` added an input, read past its
+  binding vector, which AddressSanitizer reported as a heap-buffer-overflow.
+  The schema now records the bound input count and refuses to compile its
+  runtime with `std::logic_error` until the bindings match. Schemas inside a
+  parent graph are always bound by the compiler and are unaffected.
+- **Allocating moves.** `Element` declared a virtual destructor and no move
+  operations, so moving any element, including a `Schema` marked `noexcept`,
+  copied its port and binding vectors. `Element` now has defaulted copy and
+  `noexcept` move operations. `Schema`'s move constructor is no longer
+  declared `noexcept`, because moving its `std::deque` members can allocate in
+  libstdc++. Its move assignment stays `noexcept`. A moved-from schema now has
+  no ports instead of pointing at the moved storage.
 
 Remaining nested overhead: each nested schema still runs a complete
 `NodeRuntime::step()` (step-count and thread-ID bookkeeping and rollback
