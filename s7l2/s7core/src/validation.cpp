@@ -492,8 +492,8 @@ CheckedSchema check_schema(const Schema& schema) {
             checked.trapezoid_rhs = trial_rhs(instances, parents, implicit, false, checked.errors);
 
         // Group selected F64 states by method, outer rate and substep count.
-        // Disconnected states with the same policy can share one solve; this
-        // is mathematically equivalent but the dense GL work scales with 2n.
+        // Split disconnected states later: placing them in one dense GL
+        // solve is equivalent mathematically but scales unnecessarily.
         for (const auto& spec : schema.elements()) {
             const auto* integration = dynamic_cast<const CoupledIntegration*>(instances.at(spec.id));
             if (!integration || integration->coupled_method() == CoupledMethod::None) continue;
@@ -528,6 +528,45 @@ CheckedSchema check_schema(const Schema& schema) {
             }
         }
         const auto dependencies = memory_dependencies(instances, parents);
+        // A one-way derivative dependency still belongs to the same
+        // numerical stage, but disconnected systems must not inflate one
+        // dense 2n-by-2n Newton solve.
+        std::vector<CheckedSchema::CoupledRegion> connected_regions;
+        for (const auto& group : checked.coupled_regions) {
+            const std::unordered_set<std::string> members(group.states.begin(), group.states.end());
+            std::unordered_map<std::string, std::vector<std::string>> adjacent;
+            for (const auto& id : group.states) adjacent[id];
+            for (const auto& id : group.states) {
+                for (const auto& ancestor : dependencies.at(id)) {
+                    if (ancestor == id || !members.contains(ancestor)) continue;
+                    adjacent[id].push_back(ancestor);
+                    adjacent[ancestor].push_back(id);
+                }
+            }
+            std::unordered_set<std::string> assigned;
+            for (const auto& seed : group.states) {
+                if (!assigned.insert(seed).second) continue;
+                std::vector<std::string> queue{seed};
+                for (std::size_t index = 0; index < queue.size(); ++index) {
+                    for (const auto& next : adjacent.at(queue[index]))
+                        if (assigned.insert(next).second) queue.push_back(next);
+                }
+                const std::unordered_set<std::string> component(queue.begin(), queue.end());
+                CheckedSchema::CoupledRegion region;
+                region.method = group.method;
+                region.rate = group.rate;
+                region.step_seconds = group.step_seconds;
+                region.substeps = group.substeps;
+                for (const auto& id : group.states) {
+                    if (!component.contains(id)) continue;
+                    region.states.push_back(id);
+                    for (const auto& edge : group.derivative_connections)
+                        if (edge.to_element == id) region.derivative_connections.push_back(edge);
+                }
+                connected_regions.push_back(std::move(region));
+            }
+        }
+        checked.coupled_regions = std::move(connected_regions);
         for (auto& region : checked.coupled_regions) {
             if (region.states.size() > 16)
                 checked.errors.emplace_back("Coupled integration currently supports at most 16 F64 states per region.");
