@@ -384,23 +384,25 @@ void registry_configuration() {
     const auto* euler = registry.find("EulerIntegrator");
     require(gl && euler, "Public integration metadata must be registered");
     s7::Schema schema("serialized_parameter_path");
+    schema.set_rate(s7::Rate::from_hz(10));
     schema.add_element(s7::make_element_spec("x", *euler,
-        {{"type", "F64"}, {"dt", .1}, {"initial_value", 1.}, {"substeps", 4}}));
+        {{"type", "F64"}, {"dt", .9}, {"initial_value", 1.}, {"substeps", 4}}));
     schema.add_element(s7::make_element_spec("gain", *registry.find("Gain"),
         {{"type", "F64"}, {"factor", -1.}}));
     schema.connect("x", 0, "gain", 0); schema.connect("gain", 0, "x", 0);
     s7::NodeRuntime runtime(s7::Compiler::compile(schema));
     runtime.step(); runtime.step();
     near(runtime.real_output_of("x"), std::pow(1-.1/4, 4), 2e-14,
-         "Serialized Euler substeps must select production policy");
+         "Serialized Euler substeps must follow the domain rate, not legacy dt");
     s7::Schema gl_schema("serialized_gauss_legendre");
-    gl_schema.add_element(s7::make_element_spec("x", *gl, {{"dt", .1}, {"initial_value", 1.}}));
+    gl_schema.set_rate(s7::Rate::from_hz(10));
+    gl_schema.add_element(s7::make_element_spec("x", *gl, {{"dt", .9}, {"initial_value", 1.}}));
     gl_schema.add_element("gain", [] { return std::make_unique<s7::Gain>(-1.); });
     gl_schema.connect("x", 0, "gain", 0); gl_schema.connect("gain", 0, "x", 0);
     s7::NodeRuntime gl_runtime(s7::Compiler::compile(gl_schema));
     gl_runtime.step(); gl_runtime.step();
     near(gl_runtime.real_output_of("x"), pade_step(Case{Model::RC, .1, 1, 0, 1, 0})[0], 2e-13,
-         "Serialized Gauss-Legendre element must select production policy");
+         "Serialized Gauss-Legendre element must follow the domain rate, not legacy dt");
 }
 
 void region_boundaries() {
