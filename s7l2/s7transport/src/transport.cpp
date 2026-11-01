@@ -689,6 +689,16 @@ constexpr auto kTick = std::chrono::milliseconds(1);
 constexpr auto kReconnectDelay = std::chrono::seconds(1);
 constexpr const char* kNodeHeader = "S7-Node"; // the sender's node UUID, in both handshake directions
 
+// Data and control messages are small and already batched by the stream protocol
+// (max_elements_per_packet, max_batch_latency). Nagle's algorithm would hold each small
+// segment until the previous one is acknowledged, which the peer delays (up to ~40 ms on
+// Linux), so it is turned off on every connection. A failure only loses that optimization.
+void set_no_delay(Tcp::socket& socket)
+{
+    boost::system::error_code ignored;
+    socket.set_option(boost::asio::ip::tcp::no_delay(true), ignored);
+}
+
 } // namespace
 
 struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntimeNetEndpoint::Impl> {
@@ -1233,6 +1243,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 boost::system::error_code ignored;
                 socket.close(ignored);
             } else {
+                set_no_delay(socket);
                 self->handshake_inbound(std::move(socket), listener);
             }
             self->accept(listener);
@@ -1445,6 +1456,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                     if (c_ec) {
                         return fail(c_ec, "tcp connect");
                     }
+                    set_no_delay(boost::beast::get_lowest_layer(*connection->tls).socket());
                     connection->tls->next_layer().async_handshake(ssl::stream_base::client, [connection, target, host, on_ws, fail, response](const boost::system::error_code& h_ec) {
                         if (h_ec) {
                             return fail(h_ec, "tls handshake");
@@ -1462,6 +1474,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                     if (c_ec) {
                         return fail(c_ec, "tcp connect");
                     }
+                    set_no_delay(boost::beast::get_lowest_layer(*connection->plain).socket());
                     boost::beast::get_lowest_layer(*connection->plain).expires_never();
                     connection->decorate();
                     connection->plain->async_handshake(*response, host, target, on_ws);

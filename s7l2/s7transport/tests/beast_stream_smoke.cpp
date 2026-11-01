@@ -5,6 +5,7 @@
 // directions, lossless resume across dropped TCP connections, two consumers
 // with their own mTLS identities, TLS session resumption, malformed input and
 // the inbound limit.
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -254,6 +255,48 @@ void test_both_directions()
     for (const auto& status : server.stream_statuses()) {
         expect(status.fault == stream::FaultCode::None, "no stream faults");
     }
+}
+
+// A steady stream of one-element packets, one per millisecond, reaches the consumer at once:
+// with Nagle's algorithm each small segment waits for the acknowledgement of the previous
+// one, which the receiver delays.
+void test_small_packets_are_not_delayed()
+{
+    transport::BeastRuntimeNetEndpoint server;
+    transport::BeastRuntimeNetEndpoint client;
+    const auto port = server.configure_server(0);
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port));
+    auto single = config("3d2e6b9f-0a4c-4d8e-9c5e-7b3f4e5d6c7a");
+    single.max_elements_per_packet = 1; // every element is a packet of its own
+    const auto producer = server.open_producer(single);
+    const auto consumer = client.open_consumer(single);
+    constexpr int kCount = 300;
+    using Clock = std::chrono::steady_clock;
+    std::vector<Clock::time_point> sent(kCount), arrived(kCount);
+    std::thread reader([&] {
+        for (int i = 0; i < kCount; ++i) {
+            double got = -1;
+            if (client.receive(consumer, &got, 1).fault != stream::FaultCode::None || got != i) {
+                return;
+            }
+            arrived[i] = Clock::now();
+        }
+    });
+    for (int i = 0; i < kCount; ++i) {
+        const double value = i;
+        sent[i] = Clock::now();
+        expect(server.publish(producer, &value, 1).fault == stream::FaultCode::None, "published");
+        std::this_thread::sleep_for(milliseconds(1));
+    }
+    reader.join();
+    std::vector<double> delays_ms;
+    for (int i = 50; i < kCount; ++i) { // the first packets warm the connection up
+        expect(arrived[i] != Clock::time_point{}, "every value received in order");
+        delays_ms.push_back(std::chrono::duration<double, std::milli>(arrived[i] - sent[i]).count());
+    }
+    std::sort(delays_ms.begin(), delays_ms.end());
+    const auto median = delays_ms[delays_ms.size() / 2];
+    expect(median < 5.0, "a one-element packet arrives within milliseconds: median " + std::to_string(median) + " ms");
 }
 
 void test_resume_across_dropped_connections()
@@ -852,6 +895,7 @@ void test_latency_over_websocket()
 int main()
 try {
     test_both_directions();
+    test_small_packets_are_not_delayed();
     test_resume_across_dropped_connections();
     test_two_mtls_consumers();
     test_malformed_message_closes_connection();
