@@ -12,7 +12,8 @@ start a node as its "node" member describes, then
 
 Requests from the "anonymous" peer go over TLS without a client certificate,
 those from "studio" with the Studio certificate. --skip-streams leaves out the
-steps that need the node's faulted data stream (a node without a data plane).
+steps that need the node's faulted data stream, which only the C++ fixture
+harness creates.
 """
 import argparse
 import asyncio
