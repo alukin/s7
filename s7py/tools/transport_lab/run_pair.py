@@ -75,7 +75,8 @@ def studio_fingerprint() -> str:
 def node_config(cert: Path, key: Path, port: int) -> dict:
     return {
         "name": "idle", "elements": [{"id": "idle", "type": "Constant", "params": {"value": 0}}], "connections": [],
-        "websocket": {"server": {"enabled": True, "port": port, "tls": {
+        # Loopback only: the test certificates and keys are public, in the repository.
+        "websocket": {"server": {"enabled": True, "bind_address": "127.0.0.1", "port": port, "tls": {
             "enabled": True, "cert_file": str(cert), "key_file": str(key),
             "ca_file": str(CERTS / "s7_root_ca.cert.pem"), "require_client_cert": True}}},
         "control": {"studio_key_purpose_oid": OID, "studio_certificate_sha256": studio_fingerprint()},
@@ -162,6 +163,11 @@ class Lab:
         return dict(f.split("=", 1) for f in lines[-1].split()[1:] if "=" in f) if lines else None
 
 
+def end(statuses: list[dict], role: str) -> dict | None:
+    found = [s for s in statuses if s["role"] == role]
+    return found[0] if found else None
+
+
 def wait_port(port: int, seconds: float = 10):
     deadline = time.time() + seconds
     while time.time() < deadline:
@@ -233,6 +239,17 @@ def main():
         status_c = lab.stream_status(ports["c"])
         status_a = lab.stream_status(ports["a"], java["a"])
         elapsed = time.time() - started
+        # The observer prints its watch once a second. Its echo after n steps is the consumer's
+        # error count over the first n values, so wait (bounded) until n covers every value the
+        # consumer had received when its status was read.
+        consumer_now = end(status_b, "consumer")
+        target = consumer_now["elements"] if consumer_now else 0
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            watch = lab.last_watch("c")
+            if watch and int(watch["step"]) >= target:
+                break
+            time.sleep(0.2)
     finally:
         for p in processes:
             if p.poll() is None:
@@ -243,9 +260,6 @@ def main():
             except subprocess.TimeoutExpired:
                 p.kill()
 
-    def end(statuses, role):
-        found = [s for s in statuses if s["role"] == role]
-        return found[0] if found else None
     producer, consumer = end(status_a, "producer"), end(status_b, "consumer")
     observer_in, consumer_out = end(status_c, "consumer"), end(status_b, "producer")
     proxy_log = (work / "proxy.log").read_text() if (work / "proxy.log").exists() else ""
@@ -262,7 +276,10 @@ def main():
         # watched on the consumer where it can (s7py, s7java) and always at the observer.
         "value_check": {"consumer_errors": float(watch_b["errors"]) if watch_b else None,
                         "consumer_steps": int(watch_b["step"]) if watch_b else None,
-                        "errors_at_observer": float(watch_c["echo"]) if watch_c else None},
+                        "errors_at_observer": float(watch_c["echo"]) if watch_c else None,
+                        # Values 1 .. observer_step are checked; covers_delivered: all that the consumer received.
+                        "observer_step": int(watch_c["step"]) if watch_c else None,
+                        "covers_delivered": bool(watch_c and consumer and int(watch_c["step"]) >= consumer["elements"])},
     }
     if producer and consumer:
         report["summary"] = {

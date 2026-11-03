@@ -5,13 +5,15 @@
 """A TCP proxy that drops every connection through it at a fixed period (fault injection).
 
 It forwards bytes unchanged, so TLS stays end to end between the nodes. Every `period`
-seconds it closes all open connections; the consumer reconnects and RESUMEs. SIGUSR1 stops
+seconds it resets (RST) all open connections; the consumer reconnects and RESUMEs. SIGUSR1 stops
 the drops (the proxy keeps forwarding).
 
 Usage: chaos_proxy.py <listen port> <target port> <period seconds> [log file]
 """
 import asyncio
 import signal
+import socket
+import struct
 import sys
 import time
 
@@ -62,8 +64,14 @@ async def chaos():
             for a, b in list(open_pairs):
                 for w in (a, b):
                     transport = w.transport
-                    if transport is not None:
-                        transport.abort()  # RST: the data in flight is lost
+                    if transport is None:
+                        continue
+                    sock = transport.get_extra_info("socket")
+                    if sock is not None:
+                        # Linger 0: close sends RST even when nothing is left unread or unsent,
+                        # which abort() alone does not guarantee. The data in flight is lost.
+                        sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+                    transport.abort()
 
 
 async def main():

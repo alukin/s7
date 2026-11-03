@@ -10,7 +10,7 @@ It is a manual tool, not part of the test suite: a run takes about 30 s and need
 | File | What it does |
 |---|---|
 | `run_pair.py` | Starts three nodes over mTLS on localhost, deploys the lab diagram, runs it, and prints the stream status of every end and the value check as JSON. |
-| `chaos_proxy.py` | A TCP proxy on the A → B data path that resets (RST) every open connection each `period` seconds. It forwards bytes unchanged, so TLS stays end to end. SIGUSR1 stops the drops. |
+| `chaos_proxy.py` | A TCP proxy on the A → B data path that resets every open connection each `period` seconds (linger 0, so the close is an RST and the data in flight is lost). It forwards bytes unchanged, so TLS stays end to end. SIGUSR1 stops the drops. |
 | `deploy_nodes.py` | PREPARE / COMMIT to the nodes that have a control plane, as the Studio certificate, with one activation time. `s7ctl deploy` cannot be used when a Java node takes part, because the Java node has no control plane yet. |
 
 ## The diagram and the check
@@ -49,8 +49,9 @@ python3 run_pair.py <cpp|py|java> <cpp|py|java> --build ../../../s7l2/build \
 
 Nodes A and B use the test node certificates in `s7l2/s7runtime/examples/certs`. The observer's
 certificate is issued for each run by the same test CA, in a temporary directory; no key is added
-to the repository. Each run works in a new `/tmp/s7-lab-*` directory (the node logs are kept there)
-and picks random ports from 21000–24003.
+to the repository. These keys are public, so every listener binds to `127.0.0.1` only. Each run
+works in a new `/tmp/s7-lab-*` directory (the node logs are kept there) and picks random ports from
+21000–24003.
 
 ## Reading the result
 
@@ -60,27 +61,28 @@ and picks random ports from 21000–24003.
 - `summary.replayed_packets`: packets the producer sent again after a RESUME.
 - `summary.latency_*`: from `SEND_TIME` (packet sealed) to arrival, upper bounds of log2
   histogram buckets. p99 near 1 s is the reconnect delay after a drop.
-- `value_check.errors_at_observer`: the check above. `consumer_errors` is the same value watched
-  on the consumer, where the implementation can watch (s7py, s7java).
+- `value_check.errors_at_observer`: the check above, over the values 1 to `observer_step`. The
+  observer prints its watch once a second, so the lab waits up to 10 s for one that covers every
+  value the consumer had received; `covers_delivered` says whether it did. `consumer_errors` is
+  the same value watched on the consumer, where the implementation can watch (s7py, s7java).
 
 ## Results
 
 One run per pair on 2026-11-03, on one Linux host: `--seconds 20 --dt 0.001 --drop 2` (1000
-values/s, 10 dropped connections, then 3 s without drops). C++ was built from `99b681d`, s7py and
-s7java from their data-plane changes.
+values/s, 10 dropped connections, then 3 s without drops). C++ and s7py were from `5d1ba32`, s7java
+from its data-plane change (#15).
 
 | Producer → consumer | delivered | replayed packets | duplicates discarded | faults | errors at observer | latency p50 / p99 |
 |---|---|---|---|---|---|---|
-| C++ → C++ | 22069 | 936 | 0 | none | 0 | ≤ 32.8 / ≤ 1037 ms |
-| C++ → Python | 22060 | 966 | 0 | none | 0 | ≤ 32.8 / ≤ 1049 ms |
-| C++ → Java | 21493 | 954 | 0 | none | 0 | ≤ 65.5 / ≤ 1049 ms |
-| Python → C++ | 22070 | 928 | 0 | none | 0 | ≤ 1.0 / ≤ 1010 ms |
-| Python → Python | 22078 | 923 | 0 | none | 0 | ≤ 1.0 / ≤ 1011 ms |
-| Python → Java | 21596 | 942 | 0 | none | 0 | ≤ 1.0 / ≤ 1039 ms |
-| Java → C++ | 22090 | 944 | 0 | none | 0 | ≤ 1.0 / ≤ 1025 ms |
-| Java → Python | 22079 | 943 | 0 | none | 0 | ≤ 2.0 / ≤ 1049 ms |
-| Java → Java | 21578 | 941 | 0 | none | 0 | ≤ 2.0 / ≤ 1049 ms |
+| C++ → C++ | 22083 | 914 | 0 | none | 0 | ≤ 1.0 / ≤ 1007 ms |
+| C++ → Python | 22091 | 914 | 0 | none | 0 | ≤ 1.0 / ≤ 1013 ms |
+| C++ → Java | 21584 | 931 | 0 | none | 0 | ≤ 2.0 / ≤ 1049 ms |
+| Python → C++ | 22056 | 929 | 0 | none | 0 | ≤ 1.0 / ≤ 1008 ms |
+| Python → Python | 22055 | 924 | 0 | none | 0 | ≤ 1.0 / ≤ 1012 ms |
+| Python → Java | 21544 | 929 | 0 | none | 0 | ≤ 1.0 / ≤ 1049 ms |
+| Java → C++ | 22082 | 954 | 0 | none | 0 | ≤ 1.0 / ≤ 1037 ms |
+| Java → Python | 22078 | 948 | 0 | none | 0 | ≤ 1.0 / ≤ 1049 ms |
+| Java → Java | 21659 | 940 | 0 | none | 0 | ≤ 1.0 / ≤ 1049 ms |
 
-The B → C stream had no faults in any run. The higher median with a C++ producer is Nagle's
-algorithm: that build does not set `TCP_NODELAY` (#13 sets it; with it, C++ → C++ measured
-p50 ≤ 0.26 ms and C++ → Python ≤ 0.51 ms).
+In every run the observer's check covered all the values the consumer had received
+(`covers_delivered`), and the B → C stream had no faults.
