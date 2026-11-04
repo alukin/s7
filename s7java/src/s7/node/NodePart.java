@@ -125,15 +125,42 @@ public final class NodePart {
         stepNs = diagram.get("dt") instanceof Number dt ? Math.round(dt.doubleValue() * 1e9) : null;
     }
 
+    /**
+     * The data peer of a stream's producer node, checked as the C++ node's {@code parse_runtime_nodes}:
+     * {@code data_endpoint} and {@code data_security} come together, and the URL scheme must match the
+     * security mode. This node speaks mTLS only, so the peer must be {@code wss://} with {@code mtls}.
+     */
     @SuppressWarnings("unchecked")
     private static DataPeer peerOf(Map<String, Object> diagram, String producerNode, String streamId) {
         for (Object item : (List<Object>) diagram.getOrDefault("runtime_nodes", List.of())) {
             Map<String, Object> n = (Map<String, Object>) item;
-            if (producerNode.equals(n.get("node_uuid"))) {
-                Object url = n.containsKey("data_endpoint") ? n.get("data_endpoint") : n.get("endpoint");
-                if (url instanceof String s && !s.isEmpty()) {
-                    return new DataPeer(s, producerNode);
+            if (!producerNode.equals(n.get("node_uuid"))) {
+                continue;
+            }
+            String where = "Stream " + streamId + ": producer node " + producerNode;
+            Object url;
+            if (n.containsKey("data_endpoint") || n.containsKey("data_security")) {
+                if (!(n.get("data_endpoint") instanceof String) || !(n.get("data_security") instanceof String security)) {
+                    throw new IllegalArgumentException(where + " needs both 'data_endpoint' and 'data_security' as strings.");
                 }
+                if (!security.equals("mtls") && !security.equals("trusted_plaintext")) {
+                    throw new IllegalArgumentException(where + ": data_security must be 'mtls' or 'trusted_plaintext'.");
+                }
+                url = n.get("data_endpoint");
+                if (((String) url).startsWith("wss://") != security.equals("mtls")) {
+                    throw new IllegalArgumentException(where + ": data_endpoint scheme conflicts with data_security.");
+                }
+                if (!security.equals("mtls")) {
+                    throw new IllegalArgumentException(where + ": data_security 'trusted_plaintext' is not supported by s7java (mTLS only).");
+                }
+            } else {
+                url = n.get("endpoint");
+            }
+            if (url instanceof String s && !s.isEmpty()) {
+                if (!s.startsWith("wss://")) {
+                    throw new IllegalArgumentException(where + ": endpoint " + s + " is not wss://; s7java exchanges streams over mTLS only.");
+                }
+                return new DataPeer(s, producerNode);
             }
         }
         throw new IllegalArgumentException("Stream " + streamId + ": producer node " + producerNode + " has no endpoint in 'runtime_nodes'.");

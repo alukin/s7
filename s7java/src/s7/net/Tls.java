@@ -16,9 +16,9 @@ import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,7 +29,7 @@ import javax.net.ssl.TrustManagerFactory;
 
 /** mTLS from PEM files, and a node's identity: the spiffe://s7/node/<uuid> SAN URI of its certificate. */
 public final class Tls {
-    private static final Pattern NODE_URI = Pattern.compile("spiffe://s7/node/([0-9a-fA-F-]{36})");
+    private static final String NODE_URI_PREFIX = "spiffe://s7/node/";
 
     private Tls() {
     }
@@ -84,24 +84,31 @@ public final class Tls {
         return context;
     }
 
-    /** The node UUID of exactly one spiffe://s7/node/<uuid> SAN URI, or "" (an unidentified peer). */
+    /**
+     * The node UUID of the certificate's only SAN URI that starts with spiffe://s7/node/, as the
+     * C++ node's {@code node_uuid_of}: the rest of the URI, compared exactly; "" (an unidentified
+     * peer) when there is no such URI or more than one, even if they are equal.
+     */
     public static String nodeUuid(X509Certificate certificate) {
         try {
-            List<String> found = new ArrayList<>();
-            if (certificate.getSubjectAlternativeNames() != null) {
-                for (List<?> name : certificate.getSubjectAlternativeNames()) {
-                    if ((Integer) name.get(0) == 6) { // uniformResourceIdentifier
-                        Matcher m = NODE_URI.matcher((String) name.get(1));
-                        if (m.matches() && !found.contains(m.group(1).toLowerCase(Locale.ROOT))) {
-                            found.add(m.group(1).toLowerCase(Locale.ROOT));
-                        }
-                    }
-                }
-            }
-            return found.size() == 1 ? found.get(0) : "";
+            return nodeUuidOf(certificate.getSubjectAlternativeNames());
         } catch (java.security.cert.CertificateParsingException ex) {
             return "";
         }
+    }
+
+    /** {@link #nodeUuid} over a certificate's subject alternative names ({type, value} pairs; null: none). */
+    public static String nodeUuidOf(Collection<List<?>> names) {
+        String found = null;
+        for (List<?> name : names != null ? names : List.<List<?>>of()) {
+            if ((Integer) name.get(0) == 6 && ((String) name.get(1)).startsWith(NODE_URI_PREFIX)) { // uniformResourceIdentifier
+                if (found != null) {
+                    return ""; // more than one node identity
+                }
+                found = ((String) name.get(1)).substring(NODE_URI_PREFIX.length());
+            }
+        }
+        return found != null ? found : "";
     }
 
     public static String fingerprint(X509Certificate certificate) {
