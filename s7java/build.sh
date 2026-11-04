@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 # Compiles s7java (standard library only, Java 21 or later) into build/ and, with --test,
-# checks the codec against the shared wire fixtures, the delivery rules and the node's checks.
+# checks the codec against the shared wire fixtures, the delivery rules, the node's and the JSON
+# checks, and /data connections over mTLS on loopback with the repository's test certificates.
 # Usage: ./build.sh [--test]   (JAVAC / JAVA select the tools; default: from PATH)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -17,4 +18,5 @@ if [ "${1:-}" = "--test" ]; then
   "$JAVA" -ea -cp build s7.stream.StreamProtocolCheck
   "$JAVA" -ea -cp build s7.node.NodeCheck
   "$JAVA" -ea -cp build s7.net.NetCheck
+  "$JAVA" -ea -cp build s7.net.TransportCheck ../s7l2/s7runtime/examples/certs
 fi

@@ -42,7 +42,8 @@ other hosts, see `--bind` below).
 ## Build, test, run
 
 ```bash
-./build.sh --test   # "78 of 78 fixtures pass", "stream protocol: 25 checks pass"
+./build.sh --test   # wire fixtures, delivery rules, node and JSON checks, and /data over mTLS
+                    # on loopback with the test certificates in s7l2/s7runtime/examples/certs
 java -cp build s7.node.DataNode --diagram deployed.s7diagram \
   --cert node.cert.pem --key node.key.pem --ca root_ca.cert.pem --port 9102 \
   [--bind ADDRESS] [--state-dir DIR] [--watch ELEMENT]... [--status-file FILE] [--activate-at-ns UTC_NS]
