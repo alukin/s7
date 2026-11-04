@@ -16,4 +16,5 @@ if [ "${1:-}" = "--test" ]; then
   "$JAVA" -cp build s7.wire.WireFixtureCheck ../s7l2/s7transport/tests/fixtures/wire_v1.json
   "$JAVA" -ea -cp build s7.stream.StreamProtocolCheck
   "$JAVA" -ea -cp build s7.node.NodeCheck
+  "$JAVA" -ea -cp build s7.net.NetCheck
 fi

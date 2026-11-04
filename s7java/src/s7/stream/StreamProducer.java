@@ -138,7 +138,7 @@ public final class StreamProducer {
     }
 
     private void seal() {
-        if (nextSequence >= reservedEnd) {
+        if (Long.compareUnsigned(nextSequence, reservedEnd) >= 0) {
             long end = nextSequence + Faults.SEQUENCE_RESERVATION;
             sequences.reserve(config.streamId, end); // throws if not durable: nothing is sent from the range
             reservedEnd = end;
@@ -166,10 +166,10 @@ public final class StreamProducer {
     public void resume(String consumer, long alias, long nextExpected) {
         long oldest = log.isEmpty() ? nextSequence : log.peekFirst().sequence();
         long start = nextExpected;
-        if (nextExpected < oldest) {
+        if (Long.compareUnsigned(nextExpected, oldest) < 0) {
             lostResumes++;
             start = oldest;
-        } else if (nextExpected > nextSequence) {
+        } else if (Long.compareUnsigned(nextExpected, nextSequence) > 0) {
             lostResumes++;
             fault(Faults.STREAM_STATE_LOST);
             start = nextSequence;
@@ -177,7 +177,7 @@ public final class StreamProducer {
         Consumer entry = consumers.computeIfAbsent(consumer, k -> new Consumer());
         entry.alias = alias;
         entry.nextToSend = start;
-        entry.acknowledged = Math.max(entry.acknowledged, start);
+        entry.acknowledged = Faults.maxUnsigned(entry.acknowledged, start);
         entry.attached = true;
         replayed += nextSequence - start;
         trim();
@@ -192,10 +192,10 @@ public final class StreamProducer {
 
     public void acknowledge(String consumer, long nextExpected) {
         Consumer entry = consumers.get(consumer);
-        if (entry == null || nextExpected > entry.nextToSend) {
+        if (entry == null || Long.compareUnsigned(nextExpected, entry.nextToSend) > 0) {
             return; // cannot acknowledge what was not sent
         }
-        entry.acknowledged = Math.max(entry.acknowledged, nextExpected);
+        entry.acknowledged = Faults.maxUnsigned(entry.acknowledged, nextExpected);
         trim();
     }
 
@@ -203,12 +203,12 @@ public final class StreamProducer {
         if (consumers.isEmpty()) {
             return; // nobody has the data yet
         }
-        long lowest = Long.MAX_VALUE;
+        long lowest = -1L; // the largest uint64
         for (Consumer c : consumers.values()) {
-            lowest = Math.min(lowest, c.acknowledged);
+            lowest = Faults.minUnsigned(lowest, c.acknowledged);
         }
         int dropped = 0;
-        while (!log.isEmpty() && log.peekFirst().sequence() < lowest) {
+        while (!log.isEmpty() && Long.compareUnsigned(log.peekFirst().sequence(), lowest) < 0) {
             log.pollFirst();
             dropped++;
         }
@@ -220,7 +220,7 @@ public final class StreamProducer {
     /** The next encoded packet for the consumer, or null if it is up to date. */
     public byte[] nextMessage(String consumer) {
         Consumer entry = consumers.get(consumer);
-        if (fault != null || entry == null || !entry.attached || entry.nextToSend >= nextSequence || log.isEmpty()) {
+        if (fault != null || entry == null || !entry.attached || Long.compareUnsigned(entry.nextToSend, nextSequence) >= 0 || log.isEmpty()) {
             return null;
         }
         long position = entry.nextToSend - log.peekFirst().sequence();

@@ -48,6 +48,11 @@ java -cp build s7.node.DataNode --diagram deployed.s7diagram \
   [--bind ADDRESS] [--state-dir DIR] [--watch ELEMENT]... [--status-file FILE] [--activate-at-ns UTC_NS]
 ```
 
+Producers stamp `SEND_TIME`, from which consumers measure latency, only when started with
+`-Ds7.clock.synchronized=true`: the standard library cannot tell whether the host clock is
+synchronized (the C++ and Python nodes check it, or take `clock.assume_synchronized`), and an
+unsynchronized clock would add its offset to every latency.
+
 The `/data` listener binds to `--bind`, `127.0.0.1` by default. When consumer nodes run on other
 hosts, bind to an address they can reach (for example `0.0.0.0`) and give that host in the
 diagram's `data_endpoint` for this node. Every peer must present a node certificate from `--ca`.

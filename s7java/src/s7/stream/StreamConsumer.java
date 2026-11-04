@@ -74,14 +74,14 @@ public final class StreamConsumer {
         if (restartAtNext) {
             restartAtNext = false;
             nextExpected = packet.sequence();
-            consumedUpTo = Math.max(consumedUpTo, packet.sequence());
-            ackedUpTo = Math.max(ackedUpTo, packet.sequence());
+            consumedUpTo = Faults.maxUnsigned(consumedUpTo, packet.sequence());
+            ackedUpTo = Faults.maxUnsigned(ackedUpTo, packet.sequence());
         }
-        if (packet.sequence() < nextExpected) {
+        if (Long.compareUnsigned(packet.sequence(), nextExpected) < 0) {
             duplicates++;
             return false;
         }
-        if (packet.sequence() > nextExpected) {
+        if (Long.compareUnsigned(packet.sequence(), nextExpected) > 0) {
             fault(Faults.SEQUENCE_GAP);
             return false;
         }
@@ -146,7 +146,7 @@ public final class StreamConsumer {
 
     /** An ACK when 64 packets were consumed or 50 ms passed since the last one while something new was consumed. */
     public ControlMessage ackDue(long nowNs) {
-        if (consumedUpTo <= ackedUpTo) {
+        if (Long.compareUnsigned(consumedUpTo, ackedUpTo) <= 0) {
             return null;
         }
         long last = lastAckNs != null ? lastAckNs : 0;

@@ -181,7 +181,7 @@ public final class Json {
         }
         if (peek('0')) {
             position++;
-        } else if (position < text.length() && Character.isDigit(text.charAt(position))) {
+        } else if (digitAt(position)) {
             digits();
         } else {
             throw error("bad number");
@@ -190,7 +190,7 @@ public final class Json {
         if (peek('.')) {
             integer = false;
             position++;
-            if (!(position < text.length() && Character.isDigit(text.charAt(position)))) {
+            if (!digitAt(position)) {
                 throw error("bad number");
             }
             digits();
@@ -201,7 +201,7 @@ public final class Json {
             if (peek('+') || peek('-')) {
                 position++;
             }
-            if (!(position < text.length() && Character.isDigit(text.charAt(position)))) {
+            if (!digitAt(position)) {
                 throw error("bad number");
             }
             digits();
@@ -214,8 +214,13 @@ public final class Json {
         return value.bitLength() < 64 ? (Object) value.longValue() : value;
     }
 
+    /** RFC 8259 digits are ASCII only (Character.isDigit would also take other scripts' digits). */
+    private boolean digitAt(int at) {
+        return at < text.length() && text.charAt(at) >= '0' && text.charAt(at) <= '9';
+    }
+
     private void digits() {
-        while (position < text.length() && Character.isDigit(text.charAt(position))) {
+        while (digitAt(position)) {
             position++;
         }
     }
@@ -274,7 +279,8 @@ public final class Json {
             if (d.isNaN() || d.isInfinite()) {
                 throw new IllegalArgumentException("JSON cannot hold " + d);
             }
-            out.append(d == Math.rint(d) && Math.abs(d) < 1e15 ? Long.toString(d.longValue()) + ".0" : d.toString());
+            // Integral values as "<n>.0" (still a real); -0.0 keeps its sign, which d.longValue() would drop.
+            out.append(d == Math.rint(d) && Math.abs(d) < 1e15 && !(d == 0 && 1 / d < 0) ? Long.toString(d.longValue()) + ".0" : d.toString());
         } else if (value instanceof Map<?, ?> map) {
             out.append('{');
             boolean first = true;
