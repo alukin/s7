@@ -178,6 +178,49 @@ public final class StreamProtocolCheck {
             behind.resume("ahead", 1, behind.nextSequence() + 10);
             expect(Faults.STREAM_STATE_LOST.equals(behind.faultCode()), "a resume beyond the producer is state loss");
         }
+        // a reservation that cannot be recorded: nothing is sent from it, and the next seal tries again
+        {
+            int[] attempts = {0};
+            long[] recorded = {0};
+            SequenceStore failingOnce = new SequenceStore() {
+                public long reservedEnd(byte[] streamId) {
+                    return recorded[0];
+                }
+
+                public void reserve(byte[] streamId, long end) {
+                    if (attempts[0]++ == 0) {
+                        throw new java.io.UncheckedIOException(new java.io.IOException("disk full"));
+                    }
+                    recorded[0] = end;
+                }
+            };
+            StreamProducer producer = new StreamProducer(config(f64, 1, 64), failingOnce);
+            boolean threw = false;
+            try {
+                producer.append(elements(f64, List.of(1.0)), T0, List.of());
+            } catch (java.io.UncheckedIOException ex) {
+                threw = true;
+            }
+            expect(threw && producer.packets() == 0 && producer.sendLogDepth() == 0, "a failed reservation seals no packet");
+            producer.flush(T0 + 10 * MS, true);
+            expect(attempts[0] == 2 && recorded[0] == Faults.SEQUENCE_RESERVATION && producer.packets() == 1,
+                    "the next seal reserves again before sending");
+        }
+        // one owner per state directory
+        {
+            Path state = Files.createTempDirectory("s7java-state");
+            try (java.nio.channels.FileLock held = SequenceStore.FileStore.lock(state)) {
+                boolean refused = false;
+                try {
+                    SequenceStore.FileStore.lock(state).close();
+                } catch (IllegalStateException ex) {
+                    refused = ex.getMessage().contains("in use");
+                }
+                expect(held.isValid() && refused, "a second owner of the state directory is refused");
+            }
+            SequenceStore.FileStore.lock(state).close();
+            expect(true, "the directory can be taken again once released");
+        }
         // soak: random batching and connection drops, every value exactly once and in order
         {
             Random random = new Random(12345);

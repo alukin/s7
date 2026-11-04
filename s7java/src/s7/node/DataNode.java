@@ -32,6 +32,9 @@ import s7.stream.SequenceStore;
  * deployment with activate_at_ns does on the other nodes.
  */
 public final class DataNode {
+    // Held while the node runs: the state directory has one owner (see SequenceStore.FileStore.lock).
+    private static java.nio.channels.FileLock stateLock;
+
     private static void log(String message) {
         System.out.println(message);
         System.out.flush();
@@ -68,7 +71,14 @@ public final class DataNode {
         SSLContext tls = Tls.context(cert, Path.of(options.get("--key")), Path.of(options.get("--ca")));
         Map<String, Object> diagram = (Map<String, Object>) Json.parse(Files.readString(Path.of(options.get("--diagram"))));
         NodePart part = new NodePart(diagram, node);
-        Path state = Path.of(options.getOrDefault("--state-dir", System.getProperty("java.io.tmpdir") + "/s7java-" + node));
+        // Reservations must survive a restart, so the default is under the home directory, not a temporary one.
+        Path state = Path.of(options.getOrDefault("--state-dir", Path.of(System.getProperty("user.home"), ".s7java", node).toString()));
+        try {
+            stateLock = SequenceStore.FileStore.lock(state);
+        } catch (IllegalStateException ex) {
+            System.err.println("error: " + ex.getMessage());
+            System.exit(1);
+        }
         StreamTable table = new StreamTable(new SequenceStore.FileStore(state.resolve("streams")));
         Graph graph = new Graph(part.schema, table);
         DataEndpoint endpoint = new DataEndpoint(table, node, tls, DataNode::log);
