@@ -54,6 +54,35 @@ private:
     DiagramChange change_;
 };
 
+// One side of an edit that QSchematic records with its own command: it acts
+// on redo only or on undo only.
+class CallbackCommand final : public QUndoCommand
+{
+public:
+    CallbackCommand(std::function<void()> onRedo, std::function<void()> onUndo)
+        : onRedo_(std::move(onRedo))
+        , onUndo_(std::move(onUndo))
+    {
+    }
+
+    void redo() override
+    {
+        if (onRedo_) {
+            onRedo_();
+        }
+    }
+    void undo() override
+    {
+        if (onUndo_) {
+            onUndo_();
+        }
+    }
+
+private:
+    std::function<void()> onRedo_;
+    std::function<void()> onUndo_;
+};
+
 } // namespace
 
 bool DiagramChange::empty() const
@@ -211,7 +240,13 @@ void DiagramScene::applyChange(const DiagramChange& change, const QString& text)
 void DiagramScene::apply(const DiagramChange& change, const bool revert)
 {
     const QScopedValueRollback applyingGuard(applying_, true);
-    for (const auto& edit : change.textFrames) edit.node->setParams(revert ? edit.before : edit.after);
+    // Elements added, re-sized or given other ports, and edited text frames
+    // (their text sets their size): routes may now run over them.
+    std::vector<std::shared_ptr<QSchematic::Items::Node>> changedNodes;
+    for (const auto& edit : change.textFrames) {
+        edit.node->setParams(revert ? edit.before : edit.after);
+        changedNodes.push_back(edit.node);
+    }
     std::vector<SignalWire*> forced;
     auto setUpstream = [&](const std::shared_ptr<SignalWire>& wire, const WireEnd& end) {
         if (const auto trunk = wire->upstream.wire.lock()) {
@@ -223,12 +258,14 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
     auto setElement = [&](const std::shared_ptr<ElementNode>& node, const ElementNode::Element& element, const QSize size) {
         node->setElement(element);
         node->setGridSize(size);
+        changedNodes.push_back(node);
         for (const auto& wire : wiresOf(*node)) {
             forced.push_back(wire.get());
         }
     };
     auto setSize = [&](const DiagramChange::SizeEdit& edit, const bool before) {
         edit.node->setGridSize(before ? edit.before : edit.after);
+        changedNodes.push_back(edit.node);
         for (const auto& wire : wiresOf(*edit.node)) forced.push_back(wire.get());
     };
     if (!revert) {
@@ -247,6 +284,7 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
         for (const auto& edit : change.sizes) setSize(edit, false);
         for (const auto& node : change.addedNodes) {
             addItem(node);
+            changedNodes.push_back(node);
         }
         for (const auto& wire : change.addedWires) {
             addWire(wire);
@@ -269,6 +307,7 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
         for (const auto& edit : change.sizes) setSize(edit, true);
         for (const auto& node : change.removedNodes) {
             addItem(node);
+            changedNodes.push_back(node);
         }
         for (const auto& wire : change.removedWires) {
             addWire(wire);
@@ -289,7 +328,13 @@ void DiagramScene::apply(const DiagramChange& change, const bool revert)
         attach(*wire);
     }
     std::erase_if(forced, [&](const SignalWire* wire) { return !present.contains(wire); });
-    repairRoutes(forced);
+    std::vector<QRectF> changed;
+    for (const auto& node : changedNodes) {
+        if (node->scene() == this) {
+            changed.push_back(nodeRect(*node));
+        }
+    }
+    repairRoutes(forced, {}, changed);
     rememberPositions();
     typesResolve_.reset();
     applying_ = false;
@@ -511,10 +556,11 @@ void DiagramScene::attach(SignalWire& wire)
     }
 }
 
-void DiagramScene::repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress)
+void DiagramScene::repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress,
+                                const std::optional<std::vector<QRectF>>& changed)
 {
     DiagramRouting(signalWires(), nodeRects()).repairRoutes(
-        std::move(forced), [this](SignalWire& wire) { attach(wire); }, routeProgress);
+        std::move(forced), [this](SignalWire& wire) { attach(wire); }, routeProgress, changed);
 }
 
 void DiagramScene::rememberPositions()
@@ -530,6 +576,7 @@ void DiagramScene::rememberPositions()
 void DiagramScene::checkMovedNodes()
 {
     std::vector<SignalWire*> forced;
+    std::vector<QRectF> changed;
     bool moved = false;
     for (const auto& item : items()) {
         const auto node = std::dynamic_pointer_cast<QSchematic::Items::Node>(item);
@@ -541,6 +588,7 @@ void DiagramScene::checkMovedNodes()
             continue;
         }
         moved = true;
+        changed.push_back(nodeRect(*node));
         if (const auto element = std::dynamic_pointer_cast<ElementNode>(node)) {
             for (const auto& wire : wiresOf(*element)) {
                 forced.push_back(wire.get());
@@ -548,9 +596,50 @@ void DiagramScene::checkMovedNodes()
         }
     }
     if (moved) {
-        repairRoutes(forced);
+        repairRoutes(forced, {}, changed);
         rememberPositions();
     }
+}
+
+auto DiagramScene::routeSnapshot() const -> RouteSnapshot
+{
+    RouteSnapshot snapshot;
+    for (const auto& wire : signalWires()) {
+        snapshot.wires.push_back({wire, wire->pointsAbsolute(), wire->upstream.at});
+    }
+    return snapshot;
+}
+
+void DiagramScene::applyRouteSnapshot(const RouteSnapshot& snapshot)
+{
+    const QScopedValueRollback applyingGuard(applying_, true);
+    for (const auto& entry : snapshot.wires) {
+        if (entry.wire->scene() != this) {
+            continue;
+        }
+        if (entry.wire->upstream.isJunction()) {
+            entry.wire->upstream.at = entry.junction;
+        }
+        entry.wire->setRoute(entry.route);
+    }
+    for (const auto& entry : snapshot.wires) {
+        if (entry.wire->scene() == this) {
+            attach(*entry.wire);
+        }
+    }
+    rememberPositions();
+}
+
+void DiagramScene::finishMove(const std::function<void()>& release, const RouteSnapshot& before)
+{
+    // Undo runs a macro's commands in reverse: the elements move back first,
+    // then the routes are restored; redo restores the routes last as well.
+    undoStack()->beginMacro(tr("Move"));
+    undoStack()->push(new CallbackCommand({}, [this, before] { applyRouteSnapshot(before); }));
+    release();
+    checkMovedNodes();
+    undoStack()->push(new CallbackCommand([this, after = routeSnapshot()] { applyRouteSnapshot(after); }, {}));
+    undoStack()->endMacro();
 }
 
 // Gestures

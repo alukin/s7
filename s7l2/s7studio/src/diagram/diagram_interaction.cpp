@@ -78,7 +78,10 @@ struct DiagramInteraction::Gesture {
 struct DiagramInteraction::MoveGesture {
     QPointF press;
     std::vector<std::pair<std::shared_ptr<QSchematic::Items::Item>, QPointF>> items;
-    std::vector<std::shared_ptr<SignalWire>> incidentWires;
+    // Wires on the moved elements' ports and the branches hanging off them:
+    // routed again whenever the elements reach a new grid position.
+    std::vector<std::shared_ptr<SignalWire>> wires;
+    DiagramScene::RouteSnapshot routes; // before the drag
 };
 
 DiagramInteraction::DiagramInteraction(DiagramScene& scene) : scene_(scene) {}
@@ -252,7 +255,7 @@ bool DiagramInteraction::handleKey(const int key, const Qt::KeyboardModifiers)
                 gesture_->node->setGridSize(gesture_->baseSize);
                 std::vector<SignalWire*> wires;
                 for (const auto& wire : scene_.wiresOf(*gesture_->node)) wires.push_back(wire.get());
-                scene_.repairRoutes(std::move(wires));
+                scene_.repairRoutes(std::move(wires), {}, std::vector{QRectF(gesture_->node->pos(), gesture_->node->size())});
             }
             gesture_.reset();
             markTargets(nullptr);
@@ -424,13 +427,22 @@ void DiagramInteraction::mousePressEvent(QGraphicsSceneMouseEvent* event, const 
                 if (const auto node = std::dynamic_pointer_cast<ElementNode>(item)) {
                     for (const auto& wire : scene_.wiresOf(*node)) {
                         if (seen.insert(wire.get()).second) {
-                            move->incidentWires.push_back(wire);
+                            move->wires.push_back(wire);
                         }
                     }
                 }
             }
         }
+        // A re-routed trunk takes its branches along.
+        for (std::size_t index = 0; index < move->wires.size(); ++index) {
+            for (const auto& branch : scene_.branchesOf(*move->wires[index])) {
+                if (seen.insert(branch.get()).second) {
+                    move->wires.push_back(branch);
+                }
+            }
+        }
         if (!move->items.empty()) {
+            move->routes = scene_.routeSnapshot();
             moveGesture_ = std::move(move);
         }
     }
@@ -461,7 +473,7 @@ void DiagramInteraction::mouseMoveEvent(QGraphicsSceneMouseEvent* event, const s
             gesture.node->setGridSize(wanted);
             std::vector<SignalWire*> wires;
             for (const auto& wire : scene_.wiresOf(*gesture.node)) wires.push_back(wire.get());
-            scene_.repairRoutes(std::move(wires));
+            scene_.repairRoutes(std::move(wires), {}, std::vector{QRectF(gesture.node->pos(), gesture.node->size())});
         }
         event->accept();
         return;
@@ -529,13 +541,24 @@ void DiagramInteraction::mouseMoveEvent(QGraphicsSceneMouseEvent* event, const s
     }
     if (moveGesture_ && event->buttons().testFlag(Qt::LeftButton)) {
         const QPointF delta = pos - moveGesture_->press;
+        bool moved = false;
         for (const auto& [item, initialPosition] : moveGesture_->items) {
+            const QPointF before = item->pos();
             item->setPos(initialPosition + delta);
+            moved = moved || item->pos() != before;
         }
-        // Maintain the active connection geometry without simplifying every
-        // unrelated wire on every pointer event.
-        for (const auto& wire : moveGesture_->incidentWires) {
-            wire->simplify();
+        // Positions snap to the grid, so most pointer events change nothing.
+        // Otherwise the moved elements' wires are routed again, as on a bend
+        // drag: stretching them would leave diagonals, and only one wire per
+        // port follows the port. The release settles every other wire.
+        if (moved && !moveGesture_->wires.empty()) {
+            std::vector<SignalWire*> wires;
+            for (const auto& wire : moveGesture_->wires) {
+                wires.push_back(wire.get());
+            }
+            DiagramRouting(scene_.signalWires(), scene_.nodeRects()).route(std::move(wires), [this](SignalWire& wire) {
+                scene_.attach(wire);
+            });
         }
         event->accept();
         return;
@@ -593,8 +616,13 @@ void DiagramInteraction::mouseReleaseEvent(QGraphicsSceneMouseEvent* event, cons
         scene_.resizeElement(node, after);
         return;
     }
+    const auto move = std::move(moveGesture_);
+    const bool moved = move && std::ranges::any_of(move->items, [](const auto& entry) { return entry.first->pos() != entry.second; });
+    if (moved) {
+        scene_.finishMove(base, move->routes);
+        return;
+    }
     base();
-    moveGesture_.reset();
     scene_.checkMovedNodes();
 }
 

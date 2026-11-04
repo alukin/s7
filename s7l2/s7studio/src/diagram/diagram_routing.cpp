@@ -25,6 +25,50 @@ Q_LOGGING_CATEGORY(lcDiagramRouting, "s7studio.diagram.performance")
 
 constexpr int kRouteMargin = 12; // grid steps around the content the router may use
 
+// What makes wires one net for the router: the port at the root of their
+// tree. A port may drive several trees (each its own root wire); those are
+// still one net, which may share and touch its own wires.
+auto netKey(const SignalWire& wire) -> const void*
+{
+    const SignalWire* root = NetModel::rootOf(wire);
+    if (!root) {
+        return &wire;
+    }
+    if (const auto port = root->upstream.port()) {
+        return port.get();
+    }
+    return root;
+}
+
+// Whether segment `index` of `route` touches `rect` anywhere but at the
+// route's own end (a port on the element's edge). A route stays off
+// elements, edges included: along an edge it would pass the element's ports
+// and look connected to them.
+bool segmentTouches(const QVector<QPointF>& route, const int index, const QRectF& rect)
+{
+    const QPointF a = route[index];
+    const QPointF b = route[index + 1];
+    const QRectF segment = QRectF(a, b).normalized();
+    const QRectF touched(QPointF(std::max(segment.left(), rect.left()), std::max(segment.top(), rect.top())),
+                         QPointF(std::min(segment.right(), rect.right()), std::min(segment.bottom(), rect.bottom())));
+    if (touched.left() > touched.right() + 0.5 || touched.top() > touched.bottom() + 0.5) {
+        return false;
+    }
+    const bool atEnd = touched.width() < 0.5 && touched.height() < 0.5 &&
+                       ((index == 0 && same(touched.topLeft(), a)) || (index + 2 == route.size() && same(touched.topLeft(), b)));
+    return !atEnd;
+}
+
+bool routeTouches(const QVector<QPointF>& route, const QRectF& rect)
+{
+    for (int index = 0; index + 1 < route.size(); ++index) {
+        if (segmentTouches(route, index, rect)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 DiagramRouting::DiagramRouting(std::vector<std::shared_ptr<SignalWire>> wires, std::vector<QRectF> nodeRects)
@@ -70,7 +114,9 @@ auto DiagramRouting::placeJunction(const SignalWire& branch) const -> std::optio
         const QPointF b = snap(route[index + 1]);
         const QPointF step = QPointF(b.x() > a.x() ? kGridStep : (b.x() < a.x() ? -kGridStep : 0),
                                      b.y() > a.y() ? kGridStep : (b.y() < a.y() ? -kGridStep : 0));
-        if (step.isNull()) {
+        // A diagonal (stale) segment has no grid points to offer, and a
+        // diagonal step would never reach `b`.
+        if (step.isNull() || (step.x() != 0 && step.y() != 0)) {
             continue;
         }
         for (QPointF point = a;; point += step) {
@@ -137,13 +183,10 @@ bool DiagramRouting::routeIsValid(const SignalWire& wire, const bool checkObstac
             return invalid("diagonal");
         }
         if (checkObstacles) {
-            const QRectF segment = QRectF(a, b).normalized();
             for (const auto& rect : nodeRects_) {
-                const QRectF inner = rect.adjusted(1.0, 1.0, -1.0, -1.0);
-                if (segment.right() >= inner.left() && segment.left() <= inner.right() && segment.bottom() >= inner.top() &&
-                    segment.top() <= inner.bottom()) {
+                if (segmentTouches(route, index, rect)) {
                     if (lcDiagramRouting().isDebugEnabled()) {
-                        qCDebug(lcDiagramRouting) << "route obstacle detail: segment=" << a << b << "node=" << inner;
+                        qCDebug(lcDiagramRouting) << "route obstacle detail: segment=" << a << b << "node=" << rect;
                     }
                     return invalid("obstacle");
                 }
@@ -191,10 +234,9 @@ void DiagramRouting::route(std::vector<SignalWire*> forced, const Attached& atta
     for (const auto& rect : rects) {
         router.addObstacle(QRect(toGrid(rect.topLeft()), toGrid(rect.bottomRight())));
     }
-    std::unordered_map<const SignalWire*, int> nets;
+    std::unordered_map<const void*, int> nets;
     auto netOf = [&](const SignalWire& wire) {
-        const SignalWire* root = NetModel::rootOf(wire);
-        const auto [it, inserted] = nets.emplace(root ? root : &wire, static_cast<int>(nets.size()));
+        const auto [it, inserted] = nets.emplace(netKey(wire), static_cast<int>(nets.size()));
         return it->second;
     };
     auto gridPoints = [](const QVector<QPointF>& points) {
@@ -260,7 +302,8 @@ void DiagramRouting::route(std::vector<SignalWire*> forced, const Attached& atta
     }
 }
 
-void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attached& attached, const std::function<void()>& routeProgress) const
+void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attached& attached, const std::function<void()>& routeProgress,
+                                  const std::optional<std::vector<QRectF>>& changed) const
 {
     QElapsedTimer timer;
     timer.start();
@@ -268,6 +311,19 @@ void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attache
     std::size_t checkedRoutes = 0;
     std::size_t reroutedRoutes = forced.size();
     int validationPasses = 0;
+    std::unordered_set<const SignalWire*> rerouted(forced.begin(), forced.end());
+    // With the changed elements known, a route that runs over an element is
+    // repaired only where the edit could have put it there: on a changed
+    // element. Elsewhere it is older than the edit (a cramped layout or a
+    // file's saved route the router cannot better), and routing it again on
+    // every edit would only cost time and move wires nobody touched.
+    const auto editCaused = [&](const SignalWire& wire) {
+        if (!changed || rerouted.contains(&wire) || !routeIsValid(wire, false)) {
+            return true;
+        }
+        const auto route = wire.pointsAbsolute();
+        return std::ranges::any_of(*changed, [&](const QRectF& rect) { return routeTouches(route, rect); });
+    };
     if (!forced.empty()) {
         route(std::move(forced), attached, routeProgress);
     }
@@ -285,7 +341,8 @@ void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attache
         ++validationPasses;
         checkedRoutes += candidates.size();
         for (auto* wire : candidates) {
-            if (!routeIsValid(*wire) && anchorOf(wire->downstream) && (wire->upstream.isJunction() || anchorOf(wire->upstream))) {
+            if (!routeIsValid(*wire) && anchorOf(wire->downstream) && (wire->upstream.isJunction() || anchorOf(wire->upstream)) &&
+                editCaused(*wire)) {
                 invalid.push_back(wire);
             }
         }
@@ -298,6 +355,7 @@ void DiagramRouting::repairRoutes(std::vector<SignalWire*> forced, const Attache
             before.push_back(wire->pointsAbsolute());
         }
         reroutedRoutes += invalid.size();
+        rerouted.insert(invalid.begin(), invalid.end());
         route(invalid, attached, routeProgress);
         bool changed = false;
         for (std::size_t index = 0; index < invalid.size(); ++index) {
@@ -359,16 +417,29 @@ auto DiagramRouting::previewRoute(const WireEnd& start, const QVector<QPointF>& 
     for (const auto& rect : rects) {
         router.addObstacle(QRect(toGrid(rect.topLeft()), toGrid(rect.bottomRight())));
     }
-    const SignalWire* startNet = startWire ? NetModel::rootOf(*startWire) : nullptr;
-    std::unordered_map<const SignalWire*, int> nets;
+    // The nets the new wire joins: those of a wire or an output at either end.
+    std::unordered_set<const void*> joined;
+    for (const WireEnd* end : {&start, target}) {
+        if (!end) {
+            continue;
+        }
+        if (const auto wire = end->isJunction() ? end->wire.lock() : nullptr) {
+            joined.insert(netKey(*wire));
+        } else if (end->isOutput()) {
+            if (const auto port = end->port()) {
+                joined.insert(port.get());
+            }
+        }
+    }
+    std::unordered_map<const void*, int> nets;
     for (const auto& wire : wires) {
-        const SignalWire* root = NetModel::rootOf(*wire);
-        const auto [it, inserted] = nets.emplace(root ? root : wire.get(), static_cast<int>(nets.size()) + 1);
+        const void* key = netKey(*wire);
+        const auto [it, inserted] = nets.emplace(key, static_cast<int>(nets.size()) + 1);
         QVector<QPoint> points;
         for (const auto& point : wire->pointsAbsolute()) {
             points.append(toGrid(point));
         }
-        router.addWire(points, root && root == startNet ? 0 : it->second);
+        router.addWire(points, joined.contains(key) ? 0 : it->second);
     }
     WireRouter::Request request;
     for (const auto& anchor : anchors) {
