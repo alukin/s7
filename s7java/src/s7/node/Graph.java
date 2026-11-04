@@ -26,6 +26,7 @@ public final class Graph {
     abstract static class Element {
         final String id;
         int inputs;
+        int outputs = 1;
         double output;
         boolean memory;
         double staged;
@@ -51,7 +52,11 @@ public final class Graph {
         for (Object item : (List<Object>) schema.get("elements")) {
             Map<String, Object> e = (Map<String, Object>) item;
             Map<String, Object> params = (Map<String, Object>) e.getOrDefault("params", Map.of());
-            elements.put((String) e.get("id"), create((String) e.get("id"), (String) e.get("type"), params));
+            String id = (String) e.get("id");
+            if (elements.containsKey(id)) {
+                throw new IllegalArgumentException("duplicate element id '" + id + "'");
+            }
+            elements.put(id, create(id, (String) e.get("type"), params));
         }
         for (Element element : elements.values()) {
             drivers.put(element.id, new Object[element.inputs][]);
@@ -63,9 +68,17 @@ public final class Graph {
             if (from == null || to == null) {
                 throw new IllegalArgumentException("connection " + c.get("from_element") + " -> " + c.get("to_element") + ": unknown element");
             }
-            int port = ((Long) c.getOrDefault("to_port", 0L)).intValue();
+            long fromPort = index(c.get("from_port"), "from_port");
+            if (fromPort >= from.outputs) {
+                throw new IllegalArgumentException("connection from '" + from.id + "': output port " + fromPort + " does not exist");
+            }
+            long toPort = index(c.get("to_port"), "to_port");
             Object[][] ports = drivers.get(to.id);
-            if (port >= ports.length || ports[port] != null) {
+            if (toPort >= ports.length) {
+                throw new IllegalArgumentException("connection to '" + to.id + "': input port " + toPort + " does not exist");
+            }
+            int port = (int) toPort;
+            if (ports[port] != null) {
                 throw new IllegalArgumentException("input '" + to.id + "':" + port + " missing or driven twice");
             }
             ports[port] = new Object[]{from};
@@ -148,6 +161,17 @@ public final class Graph {
         }
     }
 
+    /** A port index: omitted is 0 (as s7runtime's schema loader), otherwise a non-negative integer. */
+    private static long index(Object value, String what) {
+        if (value == null) {
+            return 0;
+        }
+        if (!(value instanceof Long n) || n < 0) {
+            throw new IllegalArgumentException(what + " must be a non-negative integer");
+        }
+        return n;
+    }
+
     private static double number(Map<String, Object> params, String name, double fallback) {
         Object value = params.getOrDefault(name, fallback);
         if (!(value instanceof Number n) || value instanceof Boolean) {
@@ -158,6 +182,14 @@ public final class Graph {
 
     @SuppressWarnings("unchecked")
     private Element create(String id, String type, Map<String, Object> params) {
+        // Every element computes in F64 here; another assigned type would change the arithmetic.
+        for (String name : new String[]{"type", "accumulator_type"}) {
+            Object assigned = params.getOrDefault(name, "F64");
+            if (!"F64".equals(assigned)) {
+                throw new IllegalArgumentException("element '" + id + "': parameter '" + name + "': type " + assigned
+                        + " is not supported (F64 only)");
+            }
+        }
         switch (type) {
             case "Constant": {
                 double value = number(params, "value", 0);
@@ -220,10 +252,13 @@ public final class Graph {
                 return e;
             }
             case "Comparator": {
-                String operation = (String) params.getOrDefault("operation", "lt");
+                Object operation = params.getOrDefault("operation", "lt");
+                if (!List.of("lt", "le", "gt", "ge", "eq", "ne").contains(operation)) {
+                    throw new IllegalArgumentException("element '" + id + "': Comparator operation must be one of lt, le, gt, ge, eq, ne.");
+                }
                 Element e = new Element(id) {
                     void step(double[] in) {
-                        boolean result = switch (operation) {
+                        boolean result = switch ((String) operation) {
                             case "lt" -> in[0] < in[1];
                             case "le" -> in[0] <= in[1];
                             case "gt" -> in[0] > in[1];
@@ -258,6 +293,7 @@ public final class Graph {
             super(id);
             this.sink = sink;
             this.inputs = sink ? 1 : 0;
+            this.outputs = sink ? 0 : 1;
             config.streamId = WireFormat.parseStreamId((String) params.get("stream_id"));
             if (!"F64".equals(params.getOrDefault("type", "F64"))) {
                 throw new IllegalArgumentException("s7java graphs carry F64 streams only");

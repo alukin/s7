@@ -122,7 +122,19 @@ public final class NodePart {
         schema.put("name", source.getOrDefault("name", "diagram") + "@" + node);
         schema.put("elements", elements);
         schema.put("connections", connections);
-        stepNs = diagram.get("dt") instanceof Number dt ? Math.round(dt.doubleValue() * 1e9) : null;
+        stepNs = diagram.containsKey("dt") ? stepNs(diagram.get("dt")) : null;
+    }
+
+    /** The model-time step in whole nanoseconds; a step that would not advance the grid is refused. */
+    private static long stepNs(Object dt) {
+        if (!(dt instanceof Number n) || dt instanceof Boolean || !Double.isFinite(n.doubleValue()) || n.doubleValue() <= 0) {
+            throw new IllegalArgumentException("The diagram's dt must be a positive finite number of seconds.");
+        }
+        long ns = Math.round(n.doubleValue() * 1e9);
+        if (ns < 1) {
+            throw new IllegalArgumentException("The diagram's dt (" + dt + " s) is shorter than one nanosecond.");
+        }
+        return ns;
     }
 
     /**
