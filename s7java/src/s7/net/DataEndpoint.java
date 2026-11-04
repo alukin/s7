@@ -481,9 +481,14 @@ public final class DataEndpoint implements AutoCloseable {
                 if (secure && tls == null) {
                     throw new IOException("data peer " + peer.url() + " needs TLS, but this node has no TLS credentials");
                 }
+                if (!secure && tls != null) {
+                    // A plaintext peer would be identified only by its S7-Node header.
+                    recordError("refused plaintext data peer " + peer.url() + ": this node uses mTLS");
+                    return;
+                }
                 if (secure && !Boolean.getBoolean("s7.tls.resume")) {
-                    // A fresh full handshake on every (re)connect: the C++ node's TLS server verifies client
-                    // certificates without a session id context, so it answers a resumption with internal_error.
+                    // A fresh full handshake on every (re)connect by default. C++ nodes accept resumption
+                    // since they set a session id context (#12), but older ones answer it with internal_error.
                     javax.net.ssl.SSLSessionContext sessions = tls.getClientSessionContext();
                     for (java.util.Enumeration<byte[]> ids = sessions.getIds(); ids.hasMoreElements(); ) {
                         javax.net.ssl.SSLSession cached = sessions.getSession(ids.nextElement());
