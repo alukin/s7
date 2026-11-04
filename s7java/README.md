@@ -14,7 +14,10 @@ languages exchange streams. Standard library only, Java 21 or later.
   `stream_protocol.cpp`: batching, the send log with backpressure, cumulative acknowledgements,
   resume and replay, per-consumer positions, gaps as faults, recovery, derived and explicit
   timestamps, latency statistics, and sequence-range reservations in the C++ node's file format
-  (`<state-dir>/streams/<stream_id>.seq`).
+  (`<state-dir>/streams/<stream_id>.seq`, fsync'ed with their directory). The state directory
+  (default `~/.s7java/<node_uuid>`) has one owner: `DataNode` holds `<state-dir>/runtime.lock`
+  while it runs and refuses to start if another Java node process holds it. That is a POSIX record
+  lock, which on Linux does not exclude the `flock` that C++ and s7py nodes take on the same file.
 - `s7.net`: the stream table with the blocking graph-side API, and the `/data` connections of
   `transport.cpp` over mTLS (`javax.net.ssl`): a consumer node connects to each producer node,
   announces itself in the `S7-Node` handshake header and RESUMEs its streams after every

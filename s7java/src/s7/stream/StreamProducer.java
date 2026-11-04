@@ -139,8 +139,9 @@ public final class StreamProducer {
 
     private void seal() {
         if (nextSequence >= reservedEnd) {
-            reservedEnd = nextSequence + Faults.SEQUENCE_RESERVATION;
-            sequences.reserve(config.streamId, reservedEnd);
+            long end = nextSequence + Faults.SEQUENCE_RESERVATION;
+            sequences.reserve(config.streamId, end); // throws if not durable: nothing is sent from the range
+            reservedEnd = end;
         }
         Logged packet = new Logged(nextSequence, stampSendTime ? utcNowNs() : null, pendingTimes,
                 WireFormat.encodeElements(config.type, pending));

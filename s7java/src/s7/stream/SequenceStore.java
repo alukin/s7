@@ -6,6 +6,8 @@ package s7.stream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -88,6 +90,35 @@ public interface SequenceStore {
             }
             try {
                 Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                // The rename is durable only once the directory is (platform::write_file_atomically in C++).
+                try (FileChannel dir = FileChannel.open(directory, StandardOpenOption.READ)) {
+                    dir.force(true);
+                }
+            } catch (IOException ex) {
+                throw new UncheckedIOException(ex);
+            }
+        }
+
+        /**
+         * Takes {@code <stateDir>/runtime.lock} for as long as the returned lock stays open, or throws
+         * IllegalStateException if another owner holds it: two processes with one state directory would
+         * read the same reservation end and send the same sequence numbers.
+         */
+        public static FileLock lock(Path stateDir) {
+            try {
+                Files.createDirectories(stateDir);
+                FileChannel channel = FileChannel.open(stateDir.resolve("runtime.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                FileLock lock;
+                try {
+                    lock = channel.tryLock();
+                } catch (OverlappingFileLockException ex) {
+                    lock = null; // held in this process
+                }
+                if (lock == null) {
+                    channel.close();
+                    throw new IllegalStateException("State directory " + stateDir + " is in use by another node process.");
+                }
+                return lock;
             } catch (IOException ex) {
                 throw new UncheckedIOException(ex);
             }
