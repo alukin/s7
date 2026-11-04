@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 import s7.json.Json;
+import s7.net.StreamTable;
 import s7.net.Tls;
+import s7.stream.SequenceStore;
 
 /**
  * The node's part of a deployed diagram and the peer identity rules: what s7java accepts and
@@ -99,9 +101,50 @@ public final class NodeCheck {
         expect(Tls.nodeUuidOf(null).isEmpty(), "no names: none");
     }
 
-    public static void main(String[] args) {
+    @SuppressWarnings("unchecked")
+    static Graph graph(String elements, String connections) {
+        Map<String, Object> schema = (Map<String, Object>) Json.parse("{\"elements\": [" + elements + "], \"connections\": [" + connections + "]}");
+        return new Graph(schema, new StreamTable(new SequenceStore.Memory()));
+    }
+
+    static final String C = "{\"id\": \"c\", \"type\": \"Constant\", \"params\": {\"value\": 2}}";
+    static final String G = "{\"id\": \"g\", \"type\": \"Gain\", \"params\": {\"factor\": 3}}";
+
+    static String wire(String from, String fromPort, String to, String toPort) {
+        return "{\"from_element\": \"" + from + "\"" + (fromPort != null ? ", \"from_port\": " + fromPort : "")
+                + ", \"to_element\": \"" + to + "\"" + (toPort != null ? ", \"to_port\": " + toPort : "") + "}";
+    }
+
+    static void graphs() throws InterruptedException {
+        Graph ok = graph(C + ", " + G, wire("c", "0", "g", null));
+        ok.step();
+        expect(ok.sample("g") == 6.0, "omitted to_port is port 0");
+
+        refused(() -> graph(C + ", " + C.replace("2}", "5}") + ", " + G, wire("c", "0", "g", "0")), "duplicate element id 'c'",
+                "two elements with one id");
+        refused(() -> graph(C + ", " + G, wire("c", "7", "g", "0")), "output port 7", "from_port beyond the outputs");
+        refused(() -> graph(C + ", " + G, wire("c", "0", "g", "4294967296")), "input port 4294967296", "to_port beyond int");
+        refused(() -> graph(C + ", " + G, wire("c", "-1", "g", "0")), "non-negative integer", "negative from_port");
+        refused(() -> graph(C + ", " + G, wire("c", "0", "g", "0.5")), "non-negative integer", "fractional to_port");
+        refused(() -> graph(C + ", " + G.replace("\"factor\": 3", "\"factor\": 3, \"type\": \"F32\""), wire("c", "0", "g", "0")),
+                "F64 only", "an element assigned F32");
+        refused(() -> graph("{\"id\": \"a\", \"type\": \"Accumulator\", \"params\": {\"accumulator_type\": \"I32\"}}, " + C,
+                wire("c", "0", "a", "0")), "F64 only", "an integer accumulator");
+        refused(() -> graph(C + ", {\"id\": \"k\", \"type\": \"Comparator\", \"params\": {\"operation\": \"lte\"}}",
+                wire("c", "0", "k", "0") + ", " + wire("c", "0", "k", "1")), "Comparator operation", "unknown Comparator operation, when built");
+
+        for (String dt : new String[]{"0", "-0.001", "1e-10", "\"0.001\"", "null"}) {
+            Map<String, Object> d = new java.util.HashMap<>(diagram(node("\"endpoint\": \"wss://127.0.0.1:1\"")));
+            d.put("dt", Json.parse(dt));
+            refused(() -> new NodePart(d, P), "dt", "dt " + dt);
+        }
+        expect(new NodePart(diagram(node("\"endpoint\": \"wss://127.0.0.1:1\"")), P).stepNs == 1_000_000L, "dt 0.001 is 1 ms");
+    }
+
+    public static void main(String[] args) throws InterruptedException {
         dataPeers();
         identities();
+        graphs();
         System.out.println("node: " + checks + " checks pass");
     }
 }

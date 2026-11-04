@@ -36,7 +36,8 @@ languages exchange streams. Standard library only, Java 21 or later.
 The control protocol: `DataNode` takes its part from a diagram file (for example the one
 `s7ctl deploy --write` or `s7ctl check --write` writes) instead of `PREPARE_DEPLOYMENT` /
 `COMMIT_DEPLOYMENT`, and writes its streams' status, in the `GET_STREAM_STATUS` form, to a file.
-Deploy the other nodes of the diagram as usual; the Java node exchanges streams with them.
+Deploy the other nodes of the diagram as usual; the Java node exchanges streams with them (on
+other hosts, see `--bind` below).
 
 ## Build, test, run
 
@@ -44,8 +45,12 @@ Deploy the other nodes of the diagram as usual; the Java node exchanges streams 
 ./build.sh --test   # "78 of 78 fixtures pass", "stream protocol: 25 checks pass"
 java -cp build s7.node.DataNode --diagram deployed.s7diagram \
   --cert node.cert.pem --key node.key.pem --ca root_ca.cert.pem --port 9102 \
-  [--state-dir DIR] [--watch ELEMENT]... [--status-file FILE] [--activate-at-ns UTC_NS]
+  [--bind ADDRESS] [--state-dir DIR] [--watch ELEMENT]... [--status-file FILE] [--activate-at-ns UTC_NS]
 ```
+
+The `/data` listener binds to `--bind`, `127.0.0.1` by default. When consumer nodes run on other
+hosts, bind to an address they can reach (for example `0.0.0.0`) and give that host in the
+diagram's `data_endpoint` for this node. Every peer must present a node certificate from `--ca`.
 
 Set `JAVAC` / `JAVA` when the tools on `PATH` are older than Java 21, for example
 `JAVAC=/usr/lib/jvm/java-25-openjdk-amd64/bin/javac ./build.sh --test`.

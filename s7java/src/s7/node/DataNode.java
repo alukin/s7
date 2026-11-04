@@ -26,7 +26,10 @@ import s7.stream.SequenceStore;
  * instead of PREPARE / COMMIT, and reports its streams' status (in the GET_STREAM_STATUS form) to a file.
  *
  * <p>Usage: java -cp build s7.node.DataNode --diagram FILE --cert PEM --key PEM --ca PEM --port N
- * [--state-dir DIR] [--watch ELEMENT]... [--status-file FILE] [--serve-seconds S] [--activate-at-ns UTC_NS]
+ * [--bind ADDRESS] [--state-dir DIR] [--watch ELEMENT]... [--status-file FILE] [--serve-seconds S] [--activate-at-ns UTC_NS]
+ *
+ * <p>The /data listener binds to --bind, 127.0.0.1 by default; consumers on other hosts need an address
+ * they can reach, such as 0.0.0.0. Every peer must present a node certificate from --ca.
  *
  * <p>The graph steps on the UTC grid activate-at + n * dt (default: from start), as a committed
  * deployment with activate_at_ns does on the other nodes.
@@ -82,9 +85,12 @@ public final class DataNode {
         StreamTable table = new StreamTable(new SequenceStore.FileStore(state.resolve("streams")));
         Graph graph = new Graph(part.schema, table);
         DataEndpoint endpoint = new DataEndpoint(table, node, tls, DataNode::log);
-        int port = endpoint.listen("127.0.0.1", Integer.parseInt(options.get("--port")));
+        // Loopback unless --bind says otherwise (for example 0.0.0.0 for consumers on other hosts).
+        String bind = options.getOrDefault("--bind", "127.0.0.1");
+        int port = endpoint.listen(bind, Integer.parseInt(options.get("--port")));
+        String host = bind.equals("0.0.0.0") || bind.equals("::") ? "127.0.0.1" : bind.contains(":") ? "[" + bind + "]" : bind;
         log("runtime.node_uuid=" + node);
-        log("runtime.data_listen_url=wss://127.0.0.1:" + port + "/data");
+        log("runtime.data_listen_url=wss://" + host + ":" + port + "/data");
         log("runtime.graph.active name=" + part.schema.get("name") + " elements=" + ((List<Object>) part.schema.get("elements")).size()
                 + " pacing=" + (part.stepNs != null ? "grid period_ns=" + part.stepNs : "none"));
         endpoint.setDataPeers(part.dataPeers);
