@@ -137,7 +137,9 @@ class Lab:
         if kind == "java":  # data plane only: its part comes from the deployed diagram file
             server = json.loads(config.read_text())["websocket"]["server"]
             tls = server["tls"]
+            # The lab's nodes all assume a synchronized clock (clock.assume_synchronized), the Java one too.
             command = [self.args.java, f"-Ds7.tls.resume={'true' if self.args.java_tls_resume else 'false'}",
+                       "-Ds7.clock.synchronized=true",
                        "-cp", str(JAVA_BUILD), "s7.node.DataNode", "--diagram", str(deployed),
                        "--cert", tls["cert_file"], "--key", tls["key_file"], "--ca", tls["ca_file"],
                        "--port", str(server["port"]), "--state-dir", str(state), "--status-file", f"{state}.status.json",
