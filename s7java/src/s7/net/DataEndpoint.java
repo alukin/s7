@@ -477,6 +477,7 @@ public final class DataEndpoint implements AutoCloseable {
                 }
             }
             path = (path.endsWith("/") ? path.substring(0, path.length() - 1) : path) + "/data";
+            Socket socket = null;
             try {
                 if (secure && tls == null) {
                     throw new IOException("data peer " + peer.url() + " needs TLS, but this node has no TLS credentials");
@@ -497,7 +498,7 @@ public final class DataEndpoint implements AutoCloseable {
                         }
                     }
                 }
-                Socket socket = secure ? tls.getSocketFactory().createSocket() : new Socket();
+                socket = secure ? tls.getSocketFactory().createSocket() : new Socket();
                 socket.setTcpNoDelay(true);
                 socket.connect(new InetSocketAddress(host, url.getPort()), 10_000);
                 socket.setSoTimeout(10_000);
@@ -524,6 +525,14 @@ public final class DataEndpoint implements AutoCloseable {
                 }
                 run(new Connection(ws, true, peer), claimed);
             } catch (IOException ex) {
+                // Not yet a connection (connect, TLS or upgrade failed): its socket is ours to close.
+                if (socket != null) {
+                    try {
+                        socket.close();
+                    } catch (IOException ignored) {
+                        // nothing left to release
+                    }
+                }
                 log.accept("runtime.transport.connect_failed url=" + peer.url() + " error=" + ex.getMessage());
                 scheduleReconnect(peer);
             }

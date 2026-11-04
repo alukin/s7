@@ -206,6 +206,25 @@ public final class StreamProtocolCheck {
             expect(attempts[0] == 2 && recorded[0] == Faults.SEQUENCE_RESERVATION && producer.packets() == 1,
                     "the next seal reserves again before sending");
         }
+        // sequence positions are uint64: the upper half of the range orders above the lower one
+        {
+            long high = Long.MIN_VALUE; // 2^63
+            StreamConsumer fresh = new StreamConsumer(config(f64, 1, 64), 1);
+            fresh.onPacket(new WireFormat.DataPacket(f64, 1, high, new byte[8]), T0, null);
+            expect(Faults.SEQUENCE_GAP.equals(fresh.faultCode()) && fresh.duplicates() == 0,
+                    "sequence 2^63 at a fresh consumer is a gap, not a duplicate");
+            SequenceStore reserved = new SequenceStore.Memory();
+            reserved.reserve(ID, high);
+            StreamProducer producer = new StreamProducer(config(f64, 1, 64), reserved);
+            producer.resume("c", 1, 0);
+            expect(producer.faultCode() == null && producer.lostResumes() == 1, "RESUME(0) below a producer at 2^63 is a lost position, not state loss");
+            producer.append(elements(f64, List.of(1.0)), T0, List.of());
+            byte[] message = producer.nextMessage("c");
+            expect(message != null && WireFormat.decodeDataPacket(message).sequence() == high
+                    && reserved.reservedEnd(ID) == high + Faults.SEQUENCE_RESERVATION, "it reserves and sends from 2^63");
+            producer.acknowledge("c", high + 1);
+            expect(producer.sendLogDepth() == 0, "an ACK above 2^63 trims the log");
+        }
         // one owner per state directory
         {
             Path state = Files.createTempDirectory("s7java-state");

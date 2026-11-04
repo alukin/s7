@@ -41,7 +41,7 @@ public final class StreamTable {
         long unauthorized;
         final ArrayDeque<Map<String, Object>> recentFaults = new ArrayDeque<>();
         String noted;
-        long lateNotedNs = Long.MIN_VALUE;
+        Long lateNotedNs; // null: no LATE noted yet
 
         Entry(long handle, String role, StreamConfig config, StreamProducer producer, StreamConsumer consumer) {
             this.handle = handle;
@@ -76,7 +76,7 @@ public final class StreamTable {
 
         void noteLate() {
             long now = System.nanoTime();
-            if (now - lateNotedNs < 1_000_000_000L) {
+            if (lateNotedNs != null && now - lateNotedNs < 1_000_000_000L) {
                 return;
             }
             lateNotedNs = now;
@@ -93,10 +93,19 @@ public final class StreamTable {
     private final Map<String, Long> producers = new HashMap<>();
     private final Map<String, Long> consumers = new HashMap<>();
     private long nextHandle = 1;
-    private boolean clockUsable = true;
+    private boolean clockUsable; // whether producers stamp SEND_TIME: see setClockUsable
     // Called with the monitor held after producer data or consumer streams changed; they only schedule work.
     Consumer<Entry> onProducerData = entry -> { };
     Consumer<Entry> onConsumerOpened = entry -> { };
+
+    /**
+     * Producers opened from now on stamp SEND_TIME only when the host clock is synchronized (C++
+     * set_clock_usable). The Java standard library cannot read the synchronization state, so the node
+     * takes it from the operator; without it consumers would mix the clock offset into their latency.
+     */
+    public synchronized void setClockUsable(boolean usable) {
+        clockUsable = usable;
+    }
 
     public StreamTable(SequenceStore sequences) {
         this.sequences = sequences;

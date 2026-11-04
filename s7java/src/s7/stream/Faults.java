@@ -25,6 +25,15 @@ public final class Faults {
     private Faults() {
     }
 
+    /** Sequence positions are uint64 on the wire: they are ordered as unsigned. */
+    public static long maxUnsigned(long a, long b) {
+        return Long.compareUnsigned(a, b) >= 0 ? a : b;
+    }
+
+    public static long minUnsigned(long a, long b) {
+        return Long.compareUnsigned(a, b) <= 0 ? a : b;
+    }
+
     /** Time of element `index` of a uniformly sampled stream from 0 ns: index / rate, toward zero, saturating. */
     public static long elementTimeNs(long[] rate, long index) {
         java.math.BigInteger ns = java.math.BigInteger.valueOf(index).multiply(java.math.BigInteger.valueOf(1_000_000_000L))
