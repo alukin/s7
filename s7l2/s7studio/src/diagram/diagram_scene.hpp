@@ -8,6 +8,7 @@
 #include <qschematic/scene.hpp>
 
 #include <QPointF>
+#include <QRectF>
 #include <QString>
 #include <QVector>
 
@@ -116,12 +117,31 @@ private:
     friend class DiagramInteraction;
 
     // Routing.
-    void repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {});
+    // `changed`: the elements an edit moved, added or resized (see DiagramRouting::repairRoutes).
+    void repairRoutes(std::vector<SignalWire*> forced, const std::function<void()>& routeProgress = {},
+                      const std::optional<std::vector<QRectF>>& changed = std::nullopt);
     [[nodiscard]] auto anchorOf(const WireEnd& end) const -> std::optional<QPointF>;
     [[nodiscard]] auto nodeRects() const -> std::vector<QRectF>;
     void attach(SignalWire& wire);
     void checkMovedNodes();
     void rememberPositions();
+
+    // Every wire's route and junction point. A drag of elements re-routes
+    // wires; undo and redo put back exactly the routes before and after it,
+    // instead of routing again (which could leave other routes than before).
+    struct RouteSnapshot {
+        struct Entry {
+            std::shared_ptr<SignalWire> wire;
+            QVector<QPointF> route;
+            QPointF junction;
+        };
+        std::vector<Entry> wires;
+    };
+    [[nodiscard]] auto routeSnapshot() const -> RouteSnapshot;
+    void applyRouteSnapshot(const RouteSnapshot& snapshot);
+    // Ends a drag that moved elements: `release` lets QSchematic push its
+    // move command; the re-route joins it in one undo step.
+    void finishMove(const std::function<void()>& release, const RouteSnapshot& before);
 
     // Topology helpers.
     [[nodiscard]] auto branchesOf(const SignalWire& wire) const -> std::vector<std::shared_ptr<SignalWire>>;

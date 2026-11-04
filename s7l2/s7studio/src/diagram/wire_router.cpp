@@ -68,6 +68,14 @@ void WireRouter::addObstacle(const QRect& cells)
 
 void WireRouter::markSegment(const QPoint from, const QPoint to, const int net)
 {
+    if (from.x() != to.x() && from.y() != to.y()) {
+        // Not orthogonal (a stale route that is about to be re-routed): mark
+        // the corner path. A diagonal step would never reach `to`.
+        const QPoint corner(to.x(), from.y());
+        markSegment(from, corner, net);
+        markSegment(corner, to, net);
+        return;
+    }
     auto mark = [net](int& slot) { slot = slot == -1 || slot == net ? net : -2; };
     const QPoint step(to.x() > from.x() ? 1 : (to.x() < from.x() ? -1 : 0), to.y() > from.y() ? 1 : (to.y() < from.y() ? -1 : 0));
     if (step.isNull()) {

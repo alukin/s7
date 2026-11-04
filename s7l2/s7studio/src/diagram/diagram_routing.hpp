@@ -30,8 +30,12 @@ public:
     // any other wires invalidated by the result.
     void route(std::vector<SignalWire*> forced, const Attached& attached,
                const std::function<void()>& progress = {}) const;
+    // Routes `forced`, then settles the wires the result leaves invalid. With
+    // `changed` (the elements an edit moved, added or resized), a route over
+    // an element is repaired only on those elements; without it, everywhere.
     void repairRoutes(std::vector<SignalWire*> forced, const Attached& attached,
-                      const std::function<void()>& progress = {}) const;
+                      const std::function<void()>& progress = {},
+                      const std::optional<std::vector<QRectF>>& changed = std::nullopt) const;
     [[nodiscard]] auto previewRoute(const WireEnd& start, const QVector<QPointF>& bends, QPointF end,
                                     const WireEnd* target) const -> QVector<QPointF>;
 

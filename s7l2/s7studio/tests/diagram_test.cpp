@@ -10,6 +10,7 @@
 #include "diagram/diagram_scene.hpp"
 #include "diagram/net_model.hpp"
 #include "diagram/wire_removal_planner.hpp"
+#include "diagram/wire_router.hpp"
 #include "element_requirements.hpp"
 #include "scene_serializer.hpp"
 
@@ -30,6 +31,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -797,6 +799,147 @@ int main(int argc, char** argv)
         drag(moveGesture, before + QPointF(60, 40), before + QPointF(60, 100));
         check(target->pos() != before, "dragging an element moves it through the interaction controller");
         checkRoutes(moveGesture, "after an element drag");
+    }
+    {
+        // A stale diagonal route (left by a drag before its re-route) must
+        // not stall the router or the junction placement.
+        WireRouter router(QRect(0, 0, 40, 40));
+        router.addWire({QPoint(2, 2), QPoint(7, 5)}, 1);
+        WireRouter::Request request;
+        request.anchors = {QPoint(1, 10), QPoint(20, 10)};
+        request.net = 2;
+        check(router.route(request).size() >= 2, "a diagonal wire does not stall the router");
+
+        DiagramScene stale;
+        const auto source = stale.addElement(element("source", "Constant"), {40, 40});
+        const auto a = stale.addElement(element("a", "Gain"), {400, 40});
+        const auto b = stale.addElement(element("b", "Gain"), {400, 240});
+        check(stale.connectEnds(out(source), in(a)).isEmpty(), "stale fixture: trunk");
+        const auto trunk = wireInto(stale, a, 0);
+        const auto route = trunk->pointsAbsolute();
+        check(stale.connectEnds(WireEnd::onWire(trunk, (route[0] + route[1]) / 2.0), in(b)).isEmpty(), "stale fixture: branch");
+        trunk->setRoute({route.front(), route.back() + QPointF(0, 3 * kGridStep)});
+        std::vector<QRectF> rects;
+        for (const auto& node : stale.elementNodes()) rects.emplace_back(node->pos(), node->size());
+        DiagramRouting(stale.signalWires(), rects).repairRoutes({wireInto(stale, b, 0).get()}, {});
+        check(true, "a branch on a diagonal trunk is placed without stalling");
+    }
+    {
+        // A port may drive several wire trees (files store them so). Dragging
+        // their element keeps every one of them on the port and orthogonal,
+        // they route as one net (no detours around each other), and undo and
+        // redo give back exactly the routes before and after the drag,
+        // including a wire of another net that the drop pushed aside.
+        DiagramScene fanOut;
+        const auto source = fanOut.addElement(element("source", "Constant"), {40, 40});
+        const auto a = fanOut.addElement(element("a", "Gain"), {400, 0});
+        const auto b = fanOut.addElement(element("b", "Gain"), {400, 200});
+        const auto far = fanOut.addElement(element("far", "Constant"), {-400, 400});
+        const auto sink = fanOut.addElement(element("sink", "Gain"), {400, 400});
+        for (const auto& target : {a, b}) {
+            auto wire = std::make_shared<SignalWire>();
+            wire->upstream = out(source);
+            wire->downstream = in(target);
+            fanOut.addWireItem(wire);
+        }
+        check(fanOut.connectEnds(out(far), in(sink)).isEmpty(), "fan-out fixture: other net");
+        fanOut.rerouteAll();
+        checkRoutes(fanOut, "fan-out trees");
+        for (const auto& wire : fanOut.signalWires()) {
+            const auto points = wire->pointsAbsolute();
+            check(revisitedGridPoints(points) == 0 && tightUTurns(points) == 0 && points.size() <= 4,
+                  "wires of one port do not detour around each other");
+        }
+        auto routes = [&] {
+            std::map<const SignalWire*, QVector<QPointF>> result;
+            for (const auto& wire : fanOut.signalWires()) result[wire.get()] = wire->pointsAbsolute();
+            return result;
+        };
+        const auto before = routes();
+        const QPointF grab = source->pos() + QPointF(60, 40);
+        const QPointF drop = grab + QPointF(0, 17 * kGridStep);
+        mouse(fanOut, QEvent::GraphicsSceneMousePress, grab);
+        mouse(fanOut, QEvent::GraphicsSceneMouseMove, grab + QPointF(0, 3 * kGridStep));
+        const QPointF port = source->port(PortDirection::Output, 0)->scenePos();
+        for (const auto& wire : fanOut.signalWires()) {
+            if (!wire->upstream.sameAs(out(source))) continue;
+            const auto points = wire->pointsAbsolute();
+            check(!points.isEmpty() && QLineF(points.front(), port).length() < 0.5, "during a drag every wire on the port follows it");
+            for (int index = 0; index + 1 < points.size(); ++index) {
+                check(std::abs(points[index].x() - points[index + 1].x()) < 0.5 || std::abs(points[index].y() - points[index + 1].y()) < 0.5,
+                      "during a drag the wires stay orthogonal");
+            }
+        }
+        mouse(fanOut, QEvent::GraphicsSceneMouseMove, drop);
+        mouse(fanOut, QEvent::GraphicsSceneMouseRelease, drop);
+        checkRoutes(fanOut, "after dropping onto another net's wire");
+        const auto after = routes();
+        check(after.at(wireInto(fanOut, sink, 0).get()) != before.at(wireInto(fanOut, sink, 0).get()), "the drop pushes the other wire aside");
+        fanOut.undoStack()->undo();
+        check(source->pos() == grab - QPointF(60, 40), "undo moves the element back");
+        check(routes() == before, "undo restores every route of before the drag");
+        fanOut.undoStack()->redo();
+        check(routes() == after, "redo restores every route of after the drag");
+    }
+    {
+        // Trees of one port are one net for the router: a tree routed after
+        // others of its port goes the direct way rather than around them.
+        DiagramScene oneNet;
+        const auto source = oneNet.addElement(element("source", "Constant"), {400, 300});
+        const auto left = oneNet.addElement(element("left", "Gain"), {0, 0});
+        const auto lower = oneNet.addElement(element("lower", "Gain"), {0, 160});
+        const auto right = oneNet.addElement(element("right", "Gain"), {800, 0});
+        for (const auto& target : {left, lower, right}) {
+            auto wire = std::make_shared<SignalWire>();
+            wire->upstream = out(source);
+            wire->downstream = in(target);
+            oneNet.addWireItem(wire);
+        }
+        oneNet.rerouteAll();
+        checkRoutes(oneNet, "trees of one port");
+        check(wireInto(oneNet, right, 0)->pointsAbsolute().size() == 4, "a later tree of a port takes the direct route");
+    }
+    {
+        // A move repairs the routes it could have broken, not older ones: a
+        // saved route over another element (kept on load) stays as it is.
+        DiagramScene older;
+        const auto from = older.addElement(element("from", "Constant"), {0, 0});
+        const auto to = older.addElement(element("to", "Gain"), {600, 0});
+        const auto under = older.addElement(element("under", "Gain"), {300, -20});
+        const auto mover = older.addElement(element("mover", "Constant"), {0, 400});
+        check(older.connectEnds(out(from), in(to)).isEmpty(), "older-route fixture connects");
+        const auto wire = wireInto(older, to, 0);
+        const QVector<QPointF> saved{wire->pointsAbsolute().front(), wire->pointsAbsolute().back()};
+        check(saved.front().y() == saved.back().y(), "older-route fixture: a straight saved route");
+        wire->setRoute(saved);
+        const QPointF grab = mover->pos() + QPointF(60, 40);
+        drag(older, grab, grab + QPointF(3 * kGridStep, 2 * kGridStep));
+        check(mover->pos() != QPointF(0, 400), "the unrelated element moves");
+        check(wire->pointsAbsolute() == saved, "moving an element leaves an older route over another element alone");
+        older.undoStack()->undo();
+        drag(older, under->pos() + QPointF(60, 40), under->pos() + QPointF(60, 40 + kGridStep));
+        check(wire->pointsAbsolute() != saved, "moving the element under a route repairs that route");
+        checkRoutes(older, "after moving the element under a route");
+    }
+    {
+        // A route along an element's edge passes its ports and looks connected
+        // to them: it is not valid (and is re-routed), unlike a route that
+        // touches elements only at its own ports.
+        DiagramScene edge;
+        const auto from = edge.addElement(element("from", "Constant"), {0, 0});
+        const auto to = edge.addElement(element("to", "Gain"), {600, 400});
+        const auto block = edge.addElement(element("block", "Gain"), {240, 100});
+        check(edge.connectEnds(out(from), in(to)).isEmpty(), "edge fixture connects");
+        const auto wire = wireInto(edge, to, 0);
+        std::vector<QRectF> rects;
+        for (const auto& node : edge.elementNodes()) rects.emplace_back(node->pos(), node->size());
+        const DiagramRouting routing(edge.signalWires(), rects);
+        check(routing.routeIsValid(*wire), "a routed wire touches elements only at its ports");
+        const QPointF start = wire->pointsAbsolute().front();
+        const QPointF end = wire->pointsAbsolute().back();
+        const double edgeX = block->pos().x() + block->size().width();
+        wire->setRoute({start, QPointF(edgeX, start.y()), QPointF(edgeX, end.y()), end});
+        check(!routing.routeIsValid(*wire), "a route along an element's edge is not valid");
     }
 
 #ifdef S7_TEST_NOISE_PLUGIN_DIR
