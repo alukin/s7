@@ -5,6 +5,9 @@ include a Linux x86-64 build and an experimental Windows x86-64 build.
 See the [release notes and known limits](docs/RELEASE_0.1.2_NOTES.md) for platform
 qualification, examples and deferred work.
 
+See [Studio screenshots](../screenshots/README.md) for three bundled examples
+with diagrams, recorded Scope results, and Live Oscilloscope views.
+
 S7 is a platform for constructing, executing, and observing distributed causal systems: a schema of elements and connections is validated, compiled into an executable graph, and stepped by a headless runtime. Studio is an optional GUI client.
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.

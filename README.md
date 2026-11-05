@@ -19,6 +19,7 @@ The implementations interoperate through the protocols in `doc/`. Their conforma
 
 ## Where to start
 
+- See Studio running three bundled examples: [screenshots and descriptions](screenshots/README.md), including Scope and Live Oscilloscope views.
 - What S7 is and why: [`doc/S7_VISION.md`](doc/S7_VISION.md), then [`doc/S7_Formal_Model.md`](doc/S7_Formal_Model.md).
 - Build and run the C++ runtime and Studio: [`s7l2/README.md`](s7l2/README.md), with its docs index in [`s7l2/docs/INDEX.md`](s7l2/docs/INDEX.md).
 - Run a Python node: [`s7py/README.md`](s7py/README.md).
