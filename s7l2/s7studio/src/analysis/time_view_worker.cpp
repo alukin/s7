@@ -21,11 +21,13 @@ void prepareTimeResult(TimeViewResult& result, const TimeViewSettings& settings)
     if (settings.fitX && !history.times.empty()) {
         result.hasXRange = true;
         if (history.trigger && history.trigger->triggered) {
-            const auto pre = static_cast<std::size_t>(history.trigger->settings.pretriggerPercent)*(history.capacity-1)/100;
-            const double post = static_cast<double>(history.capacity-1-pre);
+            // The exact pre-trigger fraction of the span, not the whole
+            // number of pre-trigger samples, so division labels are round
+            // (-5 ... 15 s rather than -4.99634 ... 15.0037 s at 25 %).
             const double span = settings.timeSpan > 0 ? settings.timeSpan : static_cast<double>(history.capacity-1)*history.dt;
-            result.xMin = -static_cast<double>(pre)/static_cast<double>(history.capacity-1)*span;
-            result.xMax = post/static_cast<double>(history.capacity-1)*span;
+            const double pre = static_cast<double>(history.trigger->settings.pretriggerPercent)/100.0;
+            result.xMin = -pre*span;
+            result.xMax = (1-pre)*span;
         } else {
             result.xMax = history.times.back();
             result.xMin = result.xMax-(settings.timeSpan > 0 ? settings.timeSpan : static_cast<double>(history.capacity-1)*history.dt);

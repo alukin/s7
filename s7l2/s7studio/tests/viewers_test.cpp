@@ -33,6 +33,7 @@
 #include <QtGraphs/QLineSeries>
 
 #include <cmath>
+#include <vector>
 #include <iostream>
 #include <stdexcept>
 
@@ -413,6 +414,26 @@ void testLinePlot()
     require(plot.fitYToVisibleData() && plot.yMin() < -10 && plot.yMax() > 4 && plot.yMax() < 10,
         "Y fit ignored the visible X window");
     require(plot.fitAll() && plot.xMin() < 0 && plot.xMax() > 2 && plot.yMax() > 10, "Fit all clipped data");
+    // Instrument Auto Y: 1-2-2.5-5 units per division on division boundaries.
+    const auto roundRange = [](double low, double high, std::pair<double, double> expected) {
+        const auto range = viewers::roundDivisionRange(low, high, 8);
+        require(std::abs(range.first - expected.first) < 1e-12 && std::abs(range.second - expected.second) < 1e-12,
+            QString("round division range [%1,%2] -> [%3,%4]").arg(low).arg(high).arg(range.first).arg(range.second).toStdString().c_str());
+    };
+    roundRange(-1, 1, {-2, 2});          // 0.5/div, centred on zero
+    roundRange(0, 1, {-0.2, 1.4});       // 0.2/div
+    roundRange(-0.9, 0.9, {-1, 1});      // 0.25/div holds the ±2 % margin
+    roundRange(19.6, 20.4, {19.2, 20.8}); // 0.1/div cannot hold the margin; 0.2/div
+    roundRange(3, 3, {2.2, 3.8});        // constant: widened by ±0.5, then 0.2/div
+    for (const auto& [low, high] : std::vector<std::pair<double, double>>{{-1e-7, 3e-7}, {1e5, 1e5 + 7}, {-1234.5, 87.25}, {0.001, 0.0011}}) {
+        const auto [first, last] = viewers::roundDivisionRange(low, high, 8);
+        const double step = (last - first) / 8, mantissa = step / std::pow(10.0, std::floor(std::log10(step) + 1e-9));
+        require(first < low && last > high && (std::abs(mantissa - 1) < 1e-9 || std::abs(mantissa - 2) < 1e-9 || std::abs(mantissa - 2.5) < 1e-9 || std::abs(mantissa - 5) < 1e-9)
+                && std::abs(first / step - std::round(first / step)) < 1e-6 && (high - low) / (last - first) > 0.15,
+            QString("round division range for [%1,%2] is [%3,%4]").arg(low).arg(high).arg(first).arg(last).toStdString().c_str());
+    }
+    const auto nonFinite = viewers::roundDivisionRange(std::nan(""), 1, 8);
+    require(nonFinite.first == 0 && nonFinite.second == 1, "Non-finite Auto Y range accepted");
     const auto legend = plot.bridge()->legend();
     require(legend.size() == 2 && legend[1].toMap().value("overlay").toBool(), "Legend entries wrong");
     plot.removeSeries(a);

@@ -771,10 +771,10 @@ void LiveOscilloscopeWindow::render(bool fit)
     if (plot_->xTitle() != xTitle) plot_->setAxisTitles(xTitle, plot_->yTitle());
     if (fit && !frame.times.empty()) {
         if (triggered) {
-            const auto pre = static_cast<std::size_t>(frame.trigger->settings.pretriggerPercent)*(frame.capacity-1)/100;
-            const double post = static_cast<double>(frame.capacity-1-pre);
+            // As in prepareTimeResult: the exact pre-trigger fraction.
             const double span = timeViewSettings(false, true).timeSpan;
-            plot_->setXRange(-static_cast<double>(pre)/static_cast<double>(frame.capacity-1)*span, post/static_cast<double>(frame.capacity-1)*span);
+            const double pre = static_cast<double>(frame.trigger->settings.pretriggerPercent)/100.0;
+            plot_->setXRange(-pre*span, (1-pre)*span);
         } else {
             const double last = frame.times.back(); plot_->setXRange(last-timeScale_->value()*10, last);
         }
@@ -821,8 +821,10 @@ void LiveOscilloscopeWindow::presentTimeResult(const analysis::TimeViewResult& r
         viewers::LinePlotView::setPoints(plot_->series()[i], static_cast<std::size_t>(i) < result.points.size() ? result.points[static_cast<std::size_t>(i)] : QList<QPointF>{});
     traceWarning_ = result.warning;
     if (autoY_->isChecked() && result.hasYRange) {
-        const double pad = result.yMax == result.yMin ? std::max(0.5, std::abs(result.yMin)*.05) : (result.yMax-result.yMin)*.04;
-        plot_->setYRange(result.yMin-pad, result.yMax+pad);
+        // Round units/div, as an instrument's autoset chooses, so the
+        // graticule and its labels are 1-2-5 values rather than data extremes.
+        const auto [low, high] = viewers::roundDivisionRange(result.yMin, result.yMax, plot_->bridge()->verticalDivisions);
+        plot_->setYRange(low, high);
     }
     const double offsetStep = (plot_->yMax()-plot_->yMin())/2000.;
     for (const auto& control : controls_) static_cast<RotaryValueControl*>(control.offset->parentWidget())->setOffsetStep(offsetStep);

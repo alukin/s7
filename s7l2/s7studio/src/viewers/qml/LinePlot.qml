@@ -167,6 +167,26 @@ Rectangle {
         return step * decade
     }
 
+    // Ordinary axes: a 1-2-2.5-5 step for about one label per `pixels`, so
+    // labels are round values. Qt Graphs' own interval for 0 is the range's
+    // decade split ten ways, which gives steps such as 0.3 for a ±1 signal.
+    function axisTickStep(span, length, pixels) {
+        return compactTickStep(span, Math.max(2, Math.floor(length / pixels)))
+    }
+
+    // Fixed decimals implied by the step (one more for 2.5), so all labels of
+    // an axis agree; scientific notation for very large or very small values.
+    function axisTickFormat(low, high, step) {
+        if (!(step > 0) || !isFinite(step) || !isFinite(low) || !isFinite(high)) return "%.6g"
+        const stepExponent = Math.floor(Math.log10(step) + 1e-9)
+        const mantissa = step / Math.pow(10, stepExponent)
+        const extra = Math.abs(mantissa - Math.round(mantissa)) > 1e-6 ? 1 : 0
+        const magnitude = Math.max(Math.abs(low), Math.abs(high))
+        if (magnitude >= 1e6 || stepExponent <= -5)
+            return "%." + Math.max(0, Math.floor(Math.log10(magnitude) + 1e-9) - stepExponent + extra) + "e"
+        return "%." + Math.max(0, extra - stepExponent) + "f"
+    }
+
     function verticalTickFormat(span, divisions) {
         const step = Math.abs(span) / divisions
         if (!(step > 0) || step < 1e-6 || step >= 1e6) return "%.4e"
@@ -175,9 +195,30 @@ Rectangle {
         return "%." + Math.max(0, 2 - Math.floor(Math.log10(step))) + "f"
     }
 
+    // Round divisions (1, 2, 2.5 or 5 times a power of ten) get the decimals
+    // the division needs; other raw divisions keep five significant digits.
     function channelTickText(value, division) {
         if (!isFinite(value)) return "—"
-        return Math.abs(value) < Math.abs(division) * 1e-8 ? "0" : value.toPrecision(5)
+        const step = Math.abs(division)
+        if (Math.abs(value) < step * 1e-8) return "0"
+        if (!(step >= 1e-6 && step < 1e6)) return value.toPrecision(5)
+        const exponent = Math.floor(Math.log10(step) + 1e-9)
+        const mantissa = step / Math.pow(10, exponent)
+        if (Math.abs(mantissa * 2 - Math.round(mantissa * 2)) > 1e-6) return value.toPrecision(5)
+        return value.toFixed(Math.min(10, Math.max(0, -exponent + (Math.abs(mantissa - Math.round(mantissa)) > 1e-6 ? 1 : 0))))
+    }
+
+    // Scatter points use these delegates (Qt Graphs sets pointColor on each
+    // instance); its default marker is a 16-pixel square with a dark border.
+    Component { id: denseDot; Rectangle { property color pointColor; width: 3; height: 3; radius: 1.5; color: pointColor } }
+    Component {
+        id: pointMarker
+        Rectangle { property color pointColor; width: 9; height: 9; radius: 4.5; color: pointColor; border.width: 1; border.color: plot.instrumentTheme ? "#141a21" : "white" }
+    }
+    function attachSeries(series) {
+        const style = plot.scatterStyle(series)
+        if (style >= 0) series.pointDelegate = style === 1 ? denseDot : pointMarker
+        view.addSeries(series)
     }
 
     // Axis titles sit outside the GraphsView so they never cover tick labels.
@@ -228,33 +269,35 @@ Rectangle {
         }
 
         axisX: ValueAxis {
+            readonly property real autoStep: root.axisTickStep(max-min, view.width-90, 80)
             min: plot.xMin
             max: plot.xMax
             titleVisible: false
-            labelFormat: plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.timeDivisions ? (max-min)/10*root.instrumentTickStride : plot.compactAxes ? root.compactTickStep(max-min, Math.min(6, Math.floor((view.width-90)/70))) : 0
+            labelFormat: plot.compactAxes || plot.timeDivisions ? (plot.compactAxes ? "%.5g" : "%.6g") : root.axisTickFormat(min, max, autoStep)
+            tickInterval: plot.timeDivisions ? (max-min)/10*root.instrumentTickStride : plot.compactAxes ? root.compactTickStep(max-min, Math.min(6, Math.floor((view.width-90)/70))) : autoStep
             tickAnchor: plot.timeDivisions ? min : 0
             subTickCount: plot.timeDivisions && root.instrumentTickStride > 1 ? root.instrumentTickStride-1 : 1
         }
         axisY: ValueAxis {
+            readonly property real autoStep: root.axisTickStep(max-min, view.height-60, 50)
             min: plot.yMin
             max: plot.yMax
             titleVisible: false
             labelsVisible: !plot.channelAxis
-            labelFormat: plot.verticalDivisions > 0 ? root.verticalTickFormat(max-min, plot.verticalDivisions) : plot.compactAxes ? "%.5g" : "%.6g"
-            tickInterval: plot.verticalDivisions > 0 ? (max-min)/plot.verticalDivisions : plot.compactAxes ? root.compactTickStep(max-min, Math.min(6, Math.floor((view.height-60)/40))) : 0
+            labelFormat: plot.verticalDivisions > 0 ? root.verticalTickFormat(max-min, plot.verticalDivisions) : plot.compactAxes ? "%.5g" : root.axisTickFormat(min, max, autoStep)
+            tickInterval: plot.verticalDivisions > 0 ? (max-min)/plot.verticalDivisions : plot.compactAxes ? root.compactTickStep(max-min, Math.min(6, Math.floor((view.height-60)/40))) : autoStep
             tickAnchor: 0
             subTickCount: 1
         }
 
         Component.onCompleted: {
             for (const series of plot.seriesObjects())
-                view.addSeries(series)
+                root.attachSeries(series)
         }
 
         Connections {
             target: plot
-            function onSeriesAdded(series) { view.addSeries(series) }
+            function onSeriesAdded(series) { root.attachSeries(series) }
             function onSeriesRemoved(series) { view.removeSeries(series) }
         }
     }

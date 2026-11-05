@@ -15,6 +15,7 @@
 #include <QSizeF>
 #include <QSet>
 #include <cstdint>
+#include <utility>
 
 class QLineSeries;
 class QQuickWidget;
@@ -25,6 +26,12 @@ namespace s7studio::viewers {
 
 class LinePlotView;
 class DensityProvider;
+
+// A range of `divisions` equal divisions holding [low, high] with a small
+// margin, each division 1, 2, 2.5 or 5 times a power of ten and the range edges
+// on division boundaries, so graticule labels are round values. A constant
+// signal gets a range around it; non-finite input returns {0, 1}.
+[[nodiscard]] auto roundDivisionRange(double low, double high, int divisions) -> std::pair<double, double>;
 
 // What LinePlot.qml binds to: axis ranges and titles, the legend, and the
 // series to show. Wheel and drag gestures come back as zoom()/pan(), so the
@@ -112,6 +119,10 @@ public:
     Q_INVOKABLE void hover(double fraction, bool inside);
     Q_INVOKABLE void hoverPoint(double xFraction, double yFraction, bool inside);
     Q_INVOKABLE QList<QObject*> seriesObjects() const;
+    // QML draws scatter points with its own delegates; Qt Graphs' default
+    // marker is a 16-pixel square with a dark border, so dense dots merged
+    // into a thick black band. 1: small dots, 0: point markers, -1: not scatter.
+    Q_INVOKABLE int scatterStyle(QObject* series) const;
     // fx, fy: the anchor as a fraction of the plot area from its left/bottom
     // edge; factor < 1 zooms in. horizontalNavigation preserves the Y range.
     Q_INVOKABLE void zoom(double fx, double fy, double factor);
@@ -166,7 +177,8 @@ public:
     ~LinePlotView() override;
 
     auto addSeries(const QString& name, const SeriesStyle& style) -> QLineSeries*;
-    auto addScatterSeries(const QString& name, QColor color) -> QScatterSeries*;
+    // dense: many small dots (raw pairs); otherwise a few point markers.
+    auto addScatterSeries(const QString& name, QColor color, bool dense = false) -> QScatterSeries*;
     static void setScatterPoints(QScatterSeries* series, const QList<QPointF>& points);
     void setLegendEntryVisible(QXYSeries* series, bool visible);
     void setDensityImage(QImage image, QRectF bounds = {});
@@ -226,6 +238,7 @@ private:
     QQuickWidget* quick_ = nullptr;
     QList<QLineSeries*> series_;
     QList<QScatterSeries*> scatterSeries_;
+    QSet<const QObject*> denseScatter_;
     QSet<QXYSeries*> hiddenLegend_;
     QImage densityImage_;
     DensityProvider* densityProvider_ = nullptr; // Owned by the QML engine.

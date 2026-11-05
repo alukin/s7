@@ -205,8 +205,11 @@ height. Its knob has a **Zero** button; double-clicking the knob also
 resets only that channel's display position to zero. There is no half-span
 setting. Changing scale, gain or position turns off
 **Auto Y**, holding the shared scale so other channels remain stationary; enable
-Auto Y again to fit all visible traces. Raw values and trigger thresholds stay
-unchanged.
+Auto Y again to fit all visible traces. Auto Y chooses a round scale of 1, 2,
+2.5 or 5 times a power of ten per division, with the divisions on round values,
+so a trace fills between about 40 % and 95 % of the height (typically two
+thirds). Raw values and
+trigger thresholds stay unchanged.
 
 Colored numbered badges at the left of the Time plot mark each visible channel's
 raw zero. Drag a badge up/down to select and move only that trace. Coincident

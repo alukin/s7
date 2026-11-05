@@ -56,6 +56,36 @@ auto paddedRange(const double lower, const double upper) -> std::pair<double, do
 
 } // namespace
 
+auto roundDivisionRange(double low, double high, const int divisions) -> std::pair<double, double>
+{
+    if (!std::isfinite(low) || !std::isfinite(high) || divisions < 1) return {0.0, 1.0};
+    if (high < low) std::swap(low, high);
+    if (high == low) {
+        const double half = std::max(0.5, std::abs(low) * 0.05);
+        low -= half; high += half;
+    }
+    const double margin = (high - low) * 0.02;
+    low -= margin; high += margin;
+    const double raw = (high - low) / divisions;
+    if (!std::isfinite(raw) || !(raw > 0)) return sanitizedRange(low, high);
+    double decade = std::pow(10.0, std::floor(std::log10(raw)));
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        for (const double mantissa : {1.0, 2.0, 2.5, 5.0}) {
+            const double step = mantissa * decade;
+            if (step < raw * (1 - 1e-12)) continue;
+            // Prefer a gridline at the centre (an even split around zero for
+            // symmetric signals), then the tightest boundary below the data.
+            const double half = divisions / 2.0;
+            for (const double first : {(std::round((low + high) / 2 / step) - half) * step, std::floor(low / step) * step}) {
+                const double last = first + divisions * step;
+                if (first <= low && last >= high) return {first, last};
+            }
+        }
+        decade *= 10;
+    }
+    return sanitizedRange(low, high);
+}
+
 LinePlotBridge::LinePlotBridge(LinePlotView& view)
     : QObject(&view)
     , view_(view)
@@ -83,6 +113,12 @@ auto LinePlotBridge::legend() const -> QVariantList
                                       {QStringLiteral("checked"), series->isVisible()}});
     }
     return entries;
+}
+
+int LinePlotBridge::scatterStyle(QObject* series) const
+{
+    if (!qobject_cast<QScatterSeries*>(series)) return -1;
+    return view_.denseScatter_.contains(series) ? 1 : 0;
 }
 
 QList<QObject*> LinePlotBridge::seriesObjects() const
@@ -221,9 +257,10 @@ auto LinePlotView::addSeries(const QString& name, const SeriesStyle& style) -> Q
     return series;
 }
 
-auto LinePlotView::addScatterSeries(const QString& name, QColor color) -> QScatterSeries*
+auto LinePlotView::addScatterSeries(const QString& name, QColor color, bool dense) -> QScatterSeries*
 {
     auto* series = new QScatterSeries(this); series->setName(name); series->setColor(color);
+    if (dense) denseScatter_.insert(series);
     scatterSeries_.push_back(series); emit bridge_->seriesAdded(series); emitLegendChanged(); return series;
 }
 void LinePlotView::setScatterPoints(QScatterSeries* series, const QList<QPointF>& points) { series->replace(points); }
@@ -269,6 +306,7 @@ void LinePlotView::clearSeries()
 {
     const auto all = std::exchange(series_, {});
     const auto scatter = std::exchange(scatterSeries_, {});
+    denseScatter_.clear();
     overlays_.clear();
     hiddenLegend_.clear();
     for (auto* series : all) retire(series);

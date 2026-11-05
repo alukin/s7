@@ -97,7 +97,7 @@ PairAnalysisView::PairAnalysisView(PairKind kind, QWidget* parent, QWidget* cont
     plot_ = new LinePlotView(this); plot_->setObjectName("pair.plot"); plot_->setLegendVisible(true); plot_->bridge()->inspectionEnabled = true; plot_->bridge()->instrumentTheme = true;
     plot_->bridge()->compactAxes = !xy;
     plot_->addSeries(xy ? "Trajectory" : "Correlation", {QColor("#54b8ff")});
-    dots_ = plot_->addScatterSeries("Raw pairs", QColor("#54b8ff"));
+    dots_ = plot_->addScatterSeries("Raw pairs", QColor("#54b8ff"), true);
     newest_ = plot_->addScatterSeries(xy ? "Newest pair" : "Peak lag", QColor("#ff7080"));
     selected_ = plot_->addScatterSeries("Inspected pair", QColor("#ffc36b"));
     plot_->setLegendEntryVisible(selected_, false);
@@ -253,12 +253,21 @@ void PairAnalysisView::render(bool fit)
                 QList<QPointF> all;
                 QList<QList<QPointF>> segments;
                 for (const auto& p : r.points) { all.push_back({p.x, p.y}); if (p.segmentStart || segments.empty()) segments.push_back({}); segments.back().push_back({p.x, p.y}); }
+                // Each dot is a scene item; draw a uniform subset that keeps
+                // the newest pair. Inspection still searches every raw pair.
+                constexpr qsizetype maxDots = 16384;
+                if (all.size() > maxDots) {
+                    QList<QPointF> shown; shown.reserve(maxDots);
+                    for (qsizetype i = 0; i < maxDots; ++i) shown.push_back(all[(all.size()-1) - (maxDots-1-i)*(all.size()-1)/(maxDots-1)]);
+                    displayWarning_ = QStringLiteral("Showing %1 of %2 raw pairs as dots; hover inspects all pairs.").arg(maxDots).arg(all.size());
+                    all = std::move(shown);
+                }
                 LinePlotView::setScatterPoints(dots_, all);
                 if (mode_->currentIndex() == 1) {
                     const auto count = std::min<qsizetype>(64, segments.size());
                     while (plot_->series().size() < count) { auto* series = plot_->addSeries("Segment", {QColor(snapshotMode_ ? "#1f77b4" : "#54b8ff")}); plot_->setLegendEntryVisible(series, false); }
                     for (qsizetype i = 0; i < count; ++i) LinePlotView::setPoints(plot_->series()[i], segments[i]);
-                    if (segments.size() > count) displayWarning_ = "Line segment cap reached; remaining raw pairs are shown as dots.";
+                    if (segments.size() > count) displayWarning_ += QString(displayWarning_.isEmpty() ? "" : " ") + "Line segment cap reached; remaining raw pairs are shown as dots.";
                 }
             }
             const auto& newest = r.points.back(); LinePlotView::setScatterPoints(newest_, {{newest.x, newest.y}});

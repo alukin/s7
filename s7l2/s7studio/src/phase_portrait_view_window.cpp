@@ -20,6 +20,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QtGraphs/QLineSeries>
+#include <QtGraphs/QScatterSeries>
 
 #include <algorithm>
 #include <cmath>
@@ -128,6 +129,7 @@ PhasePortraitViewWindow::PhasePortraitViewWindow(QString xProbeName,
     plot_ = new viewers::LinePlotView(this);
     plot_->setAxisTitles(xProbeName_ + " (unit unspecified)", yProbeName_ + " (unit unspecified)");
     curve_ = plot_->addSeries(QStringLiteral("%1 vs %2").arg(yProbeName_, xProbeName_), {kTrajectoryColor, 1.4, false});
+    newest_ = plot_->addScatterSeries(QStringLiteral("Newest pair"), QColor(QStringLiteral("#d62728")));
     rootLayout->addWidget(plot_, 1);
 
     repaintTimer_ = new QTimer(this);
@@ -215,6 +217,7 @@ void PhasePortraitViewWindow::clearBuffers()
     droppedSamples_ = 0;
     updateStatus();
     viewers::LinePlotView::setPoints(curve_, {});
+    viewers::LinePlotView::setScatterPoints(newest_, {});
     dirty_ = true;
 }
 
@@ -266,6 +269,7 @@ void PhasePortraitViewWindow::refreshPlot()
     dirty_ = false;
     lastDrawBudget_ = drawBudget(plot_);
     viewers::LinePlotView::setPoints(curve_, pointsForPlot(points_, lastDrawBudget_));
+    viewers::LinePlotView::setScatterPoints(newest_, points_.isEmpty() ? QList<QPointF>{} : QList<QPointF>{points_.back()});
 
     if (autoScaleCheck_->isChecked()) {
         static_cast<void>(plot_->fitAll());

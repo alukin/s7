@@ -16,6 +16,7 @@
 class QCheckBox;
 class QLabel;
 class QLineSeries;
+class QScatterSeries;
 class QPushButton;
 class QTimer;
 
@@ -90,6 +91,9 @@ private:
 
     viewers::LinePlotView* plot_ = nullptr;
     QLineSeries* curve_ = nullptr;
+    // The newest pair, as in the 3D trajectory: it also shows a trajectory
+    // resting at one point (an equilibrium), which a line cannot draw.
+    QScatterSeries* newest_ = nullptr;
     QCheckBox* autoScaleCheck_ = nullptr;
     QPushButton* clearButton_ = nullptr;
     QPushButton* exportButton_ = nullptr;
