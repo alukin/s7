@@ -1689,7 +1689,8 @@ private slots:
         }
         auto* pre = viewer.findChild<QSlider*>("trigger.pre.slider"); scroll->ensureWidgetVisible(pre); QTest::mouseClick(pre, Qt::LeftButton, Qt::NoModifier, QPoint(pre->width()*3/4, pre->height()/2));
         QCOMPARE(pre->value(), viewer.findChild<QSpinBox*>("trigger.pre")->value());
-        auto* falling = viewer.findChild<QToolButton*>("trigger.edge.1"); scroll->ensureWidgetVisible(falling); QTest::mouseClick(falling, Qt::LeftButton); QVERIFY(!viewer.triggerSettings().rising);
+        // Expanding a section lays it out on a later event-loop pass.
+        auto* falling = viewer.findChild<QToolButton*>("trigger.edge.1"); QTRY_VERIFY(falling->height() > 0); scroll->ensureWidgetVisible(falling); QTest::mouseClick(falling, Qt::LeftButton); QVERIFY(!viewer.triggerSettings().rising);
         auto* panel = viewer.findChild<viewers::WindowInspectionPanel*>(); QTRY_VERIFY(panel->pin());
         auto* a = panel->findChild<QSlider*>("inspection.a.slider"); auto* b = panel->findChild<QSlider*>("inspection.b.slider"); const int targetA = std::min(1000, a->maximum()); a->setValue(targetA); b->setValue(3);
         panel->findChild<QToolButton*>("inspection.active.1")->click(); QCoreApplication::processEvents(); scroll->ensureWidgetVisible(b); b->setFocus(); QTest::keyClick(b, Qt::Key_Right, Qt::AltModifier);
@@ -2116,6 +2117,134 @@ private slots:
             QTest::mouseClick(remove, Qt::LeftButton);
             QTRY_COMPARE(scope->recording().series().size(), liveCount);
         }
+    }
+    // The run each bundled example's article documents; the rate is the
+    // diagram's own 1/dt. Live-only demonstrations use a short run.
+    static double documentedSeconds(const QString& path) {
+        static const QList<std::pair<QString, double>> table{
+            {"linear/rlc_resonance", 30}, {"linear/", 10}, {"control/", 12}, {"buck/", 1}, {"pwm_pid_rlc", 1},
+            {"relay/", 1200}, {"pendulum/", 100}, {"double_pendulum", 20}, {"van_der_pol/van_der_pol_mu3", 60},
+            {"van_der_pol/", 40}, {"lorenz/lorenz_stable", 10}, {"lorenz/", 40}, {"lotka_volterra/", 40},
+            {"pll/", 6}, {"signal_measurement/iq_correlation", 8}, {"signal_measurement/", 2}, {"spectrum/", 4},
+            {"2int_osc", 10}, {"3int_helix", 10}, {"symplectic_osc_live", 10}, {"demo", 10}};
+        for (const auto& [prefix, seconds] : table) if (path.startsWith(prefix)) return seconds;
+        return 0;
+    }
+    // Empty when the plot's ranges show its data sensibly: finite, every
+    // drawn point inside the axes, and the data not squeezed into a sliver.
+    static QString plotRangeProblem(s7studio::viewers::LinePlotView* plot) {
+        if (!std::isfinite(plot->xMin()) || !std::isfinite(plot->xMax()) || !std::isfinite(plot->yMin()) || !std::isfinite(plot->yMax())
+            || !(plot->xMax() > plot->xMin()) || !(plot->yMax() > plot->yMin()))
+            return QString("degenerate axes x[%1,%2] y[%3,%4]").arg(plot->xMin()).arg(plot->xMax()).arg(plot->yMin()).arg(plot->yMax());
+        double low = std::numeric_limits<double>::infinity(), high = -low; qsizetype count = 0;
+        for (auto* series : plot->series()) {
+            if (!series->isVisible()) continue;
+            for (const auto& point : series->points()) {
+                if (point.x() < plot->xMin() || point.x() > plot->xMax() || !std::isfinite(point.y())) continue;
+                low = std::min(low, point.y()); high = std::max(high, point.y()); ++count;
+            }
+        }
+        if (!count) return {};
+        const double span = plot->yMax() - plot->yMin();
+        if (low < plot->yMin() - span * 1e-9 || high > plot->yMax() + span * 1e-9)
+            return QString("data y[%1,%2] outside axis y[%3,%4]").arg(low).arg(high).arg(plot->yMin()).arg(plot->yMax());
+        if (high > low && (high - low) < span * 0.25)
+            return QString("data y[%1,%2] fills %3% of axis y[%4,%5]").arg(low).arg(high)
+                .arg((high - low) / span * 100, 0, 'f', 1).arg(plot->yMin()).arg(plot->yMax());
+        return {};
+    }
+    // Release check, run by the s7studio_gui_examples_<shard> tests: each
+    // takes several minutes, so the ordinary workflow suite skips it.
+    // S7_GUI_EXAMPLES="<shard>/<count>" selects every count-th example.
+    void bundledExamplesRunAndRender_data() {
+        QTest::addColumn<QString>("diagram");
+        const auto shard = qEnvironmentVariable("S7_GUI_EXAMPLES").split('/');
+        const int index = shard.value(0).toInt(), count = std::max(1, shard.value(1).toInt());
+        QDirIterator files(QString(S7_GUI_EXAMPLES_DIR), {"*.s7diagram"}, QDir::Files, QDirIterator::Subdirectories);
+        QStringList all;
+        while (files.hasNext()) all << QDir(QString(S7_GUI_EXAMPLES_DIR)).relativeFilePath(files.next());
+        all.sort();
+        QVERIFY(all.size() > 50);
+        for (qsizetype i = 0; i < all.size(); ++i)
+            if (i % count == index) QTest::newRow(qPrintable(all[i])) << all[i];
+    }
+    void bundledExamplesRunAndRender() {
+        if (qEnvironmentVariableIsEmpty("S7_GUI_EXAMPLES")) QSKIP("Bundled examples run in the s7studio_gui_examples tests");
+        QFETCH(QString, diagram);
+        const double seconds = documentedSeconds(diagram);
+        QVERIFY2(seconds > 0, "every bundled example needs a documented run in documentedSeconds()");
+        const auto path = QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram;
+        QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
+        const auto json = QJsonDocument::fromJson(file.readAll()).object();
+        const double dt = json.value("dt").toDouble(); QVERIFY(dt > 0);
+        QVERIFY(fileAction("action.open", path));
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        QList<std::pair<QString, s7studio::viewers::ObservationViewer*>> viewers;
+        for (const auto& node : json.value("diagram").toObject().value("nodes").toArray()) {
+            const auto object = node.toObject();
+            if (!object.value("observer").toBool()) continue;
+            const auto type = object.value("type").toString(), id = object.value("id").toString();
+            if (type == "PhaseTrajectory3D" && !graphicsAvailable_) continue;
+            auto* viewer = manager->openObserver(type, id);
+            QVERIFY2(viewer, qPrintable(type + ' ' + id));
+            viewer->widget()->resize(1100, 650);
+            viewers.push_back({type + '-' + id, viewer});
+        }
+        QVERIFY(!viewers.isEmpty());
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        // A message box during the run is a defect of the example; report its
+        // text rather than hang in its modal loop.
+        QStringList dialogs;
+        QTimer dismiss; dismiss.setInterval(50);
+        connect(&dismiss, &QTimer::timeout, this, [&dialogs] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) {
+                const auto* box = qobject_cast<QMessageBox*>(dialog);
+                dialogs << (box ? box->windowTitle() + ": " + box->text() + ' ' + box->informativeText() : dialog->windowTitle());
+                dialog->reject();
+            }
+        });
+        QVERIFY(configure("action.run", seconds, std::round(1 / dt * 1e6) / 1e6));
+        dismiss.start();
+        // A refused run (see the Problems panel) never starts a worker.
+        QTRY_VERIFY2(runner->isRunning() || completed.count() > 0 || !dialogs.isEmpty(), "the run did not start");
+        QTRY_VERIFY_WITH_TIMEOUT(completed.count() > 0 || !dialogs.isEmpty(), 180000);
+        QVERIFY2(dialogs.isEmpty(), qPrintable(dialogs.join('\n')));
+        QVERIFY2(completed.last().at(0).toBool(), qPrintable(completed.last().value(1).toString()));
+        const auto base = QString(diagram).replace('/', '_').remove(".s7diagram");
+        QStringList problems;
+        for (const auto& [name, viewer] : viewers) {
+            if (auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)) {
+                QTRY_VERIFY(scope->source() && scope->source()->status().finished);
+                while (scope->refreshSource()) {}
+                QVERIFY(!scope->recording().series().isEmpty());
+            }
+            QTest::qWait(400);
+            auto* widget = viewer->widget();
+            widget->raise();
+            const auto checkPlots = [&](const QString& view) {
+                for (auto* plot : widget->findChildren<s7studio::viewers::LinePlotView*>())
+                    if (plot->isVisible())
+                        if (const auto problem = plotRangeProblem(plot); !problem.isEmpty())
+                            problems << QString("%1 %2 %3: %4").arg(diagram, name, view, problem);
+            };
+            auto* tabs = widget->findChild<QTabWidget*>(dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)
+                ? QStringLiteral("scope.analysisTabs") : QStringLiteral("live.views"));
+            if (auto* analyze = widget->findChild<QPushButton*>("scope.analyze"); analyze && analyze->isEnabled()) analyze->click();
+            const int pages = tabs ? tabs->count() : 1;
+            for (int page = 0; page < pages; ++page) {
+                if (tabs) tabs->setCurrentIndex(page);
+                QTest::qWait(page ? 1200 : 400);
+                const auto view = tabs ? tabs->tabText(page).replace(' ', "").replace('/', "") : QStringLiteral("view");
+                if (!dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer)) checkPlots(view);
+                capture(widget, base + '-' + name + '-' + view);
+            }
+            if (tabs) tabs->setCurrentIndex(0);
+        }
+        // The main window with its Observers dock previews.
+        capture(window_.get(), base + "-studio");
+        for (const auto& problem : problems) qWarning().noquote() << "plot range:" << problem;
+        if (qEnvironmentVariableIsEmpty("S7_EXAMPLES_REPORT_ONLY")) QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
     }
     void menuOrganizationAndTracePolicy() {
         QStringList names;

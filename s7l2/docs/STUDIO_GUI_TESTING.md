@@ -24,6 +24,18 @@ cmake --build build --target build-tests --parallel 2
 ctest --test-dir build -L gui --no-tests=error --output-on-failure -j 2
 ```
 
+The `-L gui` run includes four `s7studio_gui_examples_<n>` shards: each opens a
+quarter of the bundled `.s7diagram` files, runs it for the duration its article
+documents at the diagram's own rate, and goes through every observer window and
+analysis tab. A shard fails when a run does not start or complete, a message box
+appears, or a plot's axes put drawn data outside the range or squeeze it into
+less than a quarter of the Y axis. Each shard takes several minutes; use
+`-LE examples` to leave them out, or `-L examples -j 4` before a release. Set
+`S7_USABILITY_CAPTURE_DIR` to keep a screenshot of every window and tab, and
+`S7_EXAMPLES_REPORT_ONLY=1` to report plot-range findings without failing.
+A new example needs a duration entry in `documentedSeconds()` in
+`tests/gui/workflows_test.cpp`; the test fails without one.
+
 GUI test executables are excluded from the normal application build and included
 in `build-tests`. The option defaults ON for native Linux Studio builds and OFF
 for cross builds. Enabling it elsewhere reports that the wrapper is unsupported;
@@ -94,6 +106,7 @@ without starting a synthetic percentage for continuous execution.
 | CTest entry | Automated checks |
 |---|---|
 | `s7studio_gui_workflows` | Visible MainWindow; palette insertion; Edit undo/redo; element double-click/F4, typed and advanced JSON edits, inline error/cancel, exact uint64 and bounds; clipboard/probe undo/save-reopen; run configuration; Save As/close/Open round trip; deletion followed by Save/Discard/Cancel; Scope, Phase Portrait and 3D observer creation; start/pause/hide/reopen/resume/stop/reset/finite rerun; Scope result save/import/remove-comparison buttons and stored-sample hover; RLC unit legends and run labels; keyboard plot zoom/fit; missing-plugin feedback. |
+| `s7studio_gui_examples_0`…`_3` | Every bundled example opened, run as documented and inspected in each Scope, Live Oscilloscope, Phase Portrait and 3D window and in every analysis tab; plot ranges hold their data; no refused run or message box. |
 | `s7studio_gui_lineplot` | Production `LinePlot.qml` with the real C++ bridge and a known reference series; rendered curve pixels, titles and legend; wheel zoom and drag pan through QML pointer handlers. |
 | `s7studio_gui_trajectory` | Production `Trajectory3D.qml` with real trajectory/frame geometries; actual green trajectory pixels, wheel camera zoom and a camera preset changing the rendered image. A blank but successfully loaded View3D fails. |
 | `s7studio_gui_failure_artifacts` | Deliberately fail one Qt Test case, require a failing JUnit result plus screenshots/logs/document JSON; verify unavailable Xvfb produces exit 77 and a skipped JUnit result; deliberately block a child and require watchdog termination, a pre-termination screenshot and a failing process report. The injected failure is expected and does not fail this self-check. |

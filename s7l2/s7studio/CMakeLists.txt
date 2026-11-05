@@ -484,6 +484,20 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
             LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)
     endforeach()
     set_property(TEST s7studio_gui_trajectory APPEND PROPERTY LABELS "rendering;quick3d")
+    # Every bundled example: open, run as documented, inspect each observer
+    # window and analysis tab. Several minutes per shard; label "examples".
+    set(s7_gui_example_shards 4)
+    math(EXPR s7_gui_example_last "${s7_gui_example_shards} - 1")
+    foreach(shard RANGE ${s7_gui_example_last})
+        add_test(NAME s7studio_gui_examples_${shard}
+            COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+                --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/examples-${shard}"
+                --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 1700
+                -- $<TARGET_FILE:s7studio_gui_workflows_test> bundledExamplesRunAndRender)
+        set_tests_properties(s7studio_gui_examples_${shard} PROPERTIES
+            LABELS "gui;qt-regression;examples" SKIP_RETURN_CODE 77 TIMEOUT 1800
+            ENVIRONMENT "S7_GUI_EXAMPLES=${shard}/${s7_gui_example_shards}")
+    endforeach()
 endif()
 if(S7_BUILD_GUI_REGRESSION_TESTS)
     add_test(NAME s7studio_gui_failure_artifacts
