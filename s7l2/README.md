@@ -1,8 +1,8 @@
 # S7 (s7l2)
 
-**[0.1.1 preview downloads](https://github.com/alukin/s7/releases/tag/v0.1.1)**
-include a Fedora 44 Linux x86-64 build and an experimental Windows x86-64 build.
-See the [release notes and known limits](docs/RELEASE_0.1.1_NOTES.md) for platform
+**[0.1.2 preview downloads](https://github.com/alukin/s7/releases/tag/v0.1.2)**
+include a Linux x86-64 build and an experimental Windows x86-64 build.
+See the [release notes and known limits](docs/RELEASE_0.1.2_NOTES.md) for platform
 qualification, examples and deferred work.
 
 S7 is a platform for constructing, executing, and observing distributed causal systems: a schema of elements and connections is validated, compiled into an executable graph, and stepped by a headless runtime. Studio is an optional GUI client.

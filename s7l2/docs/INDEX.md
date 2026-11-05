@@ -10,9 +10,10 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 [bundled example descriptions](STUDIO_EXAMPLES.md) are also available offline
 inside Studio through **Help → S7 Studio Help** (F1).
 
-The [0.1.1 preview notes](RELEASE_0.1.1_NOTES.md) summarize the current
+The [0.1.2 preview notes](RELEASE_0.1.2_NOTES.md) summarize the current
 release scope, verified checks and known limits. The
-[0.1.0 checklist](RELEASE_0.1.0.md) records the previous release.
+[0.1.1 notes](RELEASE_0.1.1_NOTES.md) and [0.1.0 checklist](RELEASE_0.1.0.md)
+record the previous releases.
 
 [Studio manual-test findings for a possible 0.1.1](STUDIO_0.1.1_TRIAGE.md)
 record the maintenance backlog.
