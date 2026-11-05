@@ -273,7 +273,9 @@ private:
     ui::ElementPickerPanel* elementPickerPanel_ = nullptr;
     QDockWidget* headlessNodesDock_ = nullptr;
     ui::HeadlessNodesPanel* headlessNodesPanel_ = nullptr;
-    std::unique_ptr<s7::PluginLoader> pluginLoader_;
+    // Shared by every window of the process: loaded plugins stay registered
+    // in the process-wide ElementRegistry until exit (see ~PluginLoader).
+    std::shared_ptr<s7::PluginLoader> pluginLoader_;
     // Open observation viewers (Scope, Phase Portrait, ...) of this window.
     viewers::ViewerManager* viewers_ = nullptr;
     class QTimer* wireTypeTimer_ = nullptr;

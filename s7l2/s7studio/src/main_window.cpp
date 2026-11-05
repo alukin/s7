@@ -772,7 +772,10 @@ void MainWindow::buildUi()
     s7::register_builtin_elements(registry);
     s7::register_io_elements(registry);
     s7::register_net_elements(registry);
-    pluginLoader_ = std::make_unique<s7::PluginLoader>();
+    // One loader per process: a second loader would find the types already
+    // registered, list no plugins, and fail every diagram's plugin requirement.
+    static const auto processPluginLoader = std::make_shared<s7::PluginLoader>();
+    pluginLoader_ = processPluginLoader;
     pluginLoader_->load_plugins(registry);
     if (pluginLoader_ && !registry.find("WhiteNoiseGenerator")) {
         for (const auto& candidate : developmentPluginCandidates()) {
