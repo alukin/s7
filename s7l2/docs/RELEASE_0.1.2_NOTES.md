@@ -182,6 +182,14 @@ the C++ API:
   package notice collector recognizes the exact Fedora 45 `xcb-util-keysyms`
   source RPM after verifying its omitted `COPYING` text matches the bundled
   notice byte for byte.
+- **Windows build and packaging fixes.** Coupled integration recognizes
+  built-in arithmetic elements constructed by a C++ client across the runtime
+  DLL boundary. The bundle includes Qt 6.12's separate `QtGraphs2D`
+  implementation, SVG icon support and the offscreen platform plugin.
+  Headless Wine tests use a separate prefix and configure Qt's platform in the
+  Windows environment. Windows builds require Clang 22; Clang 23's changed
+  F128 calling convention is rejected at configuration instead of producing
+  incorrect numeric conversions.
 
 ## Python and Java implementations
 
@@ -242,24 +250,31 @@ until its receive timeout; see [open problems](OPEN_PROBLEMS.md).
 
 ## Qualification and limits
 
-The earlier pre-release record, introduced in preparation commit `61133d9`,
-reports verification on Ubuntu 26.04 with a GCC 16 development snapshot and
-Qt 6.10.2: the native Release suite passed 101/101
-tests, including the Qt GUI workflow, plot and 3D suites under Xvfb with
-software OpenGL (llvmpipe) and the four example shards, which open, run and
-inspect all 73 bundled diagrams. This is an earlier development baseline,
-not a fresh full-suite result for the final release revision.
+Release verification on the upgraded development host, Fedora 45 x86-64:
 
-The Wine test-isolation change (`024350f`) separately reports 93/93 Windows
-cross-build tests passing. Studio tests now use Qt's null RHI with no desktop
-display, and longer Wine timeouts; interactive `run_on_wine` keeps its display.
-Those tests check behavior, not viewer rendering. Gallery captures at
-`f285c23` exercised the three selected examples and live carrier FFT check on
-Fedora 45 / Qt 6.11.2 under Xvfb with software OpenGL.
+- Native Release build with GCC 16.2.1, Qt 6.11.2 and OpenSSL 4.0.3:
+  **103/103 CTests passed**, including Qt workflows, plot/3D rendering under
+  Xvfb/llvmpipe, split-node transport and all four example shards. The shards
+  open, run and inspect all 73 bundled diagrams.
+- Clang 22.1.8 / MSYS2 Qt 6.12.0 Windows Release cross-build:
+  **93/93 CTests passed under Wine**. These use Qt's null RHI with no desktop
+  display and check behavior, not viewer pixels or native Windows graphics.
+- Python node: **72 tests passed**. Java node: **78/78 wire fixtures** and
+  **33 stream, 30 node, 14 network and 8 mTLS transport checks passed**.
+- The staged Linux package passed **13/13 installed-package checks** read-only
+  in a clean Fedora 45 container without system Qt or the source checkout.
+  The staged Windows package passed **11/11 behavior checks** with an isolated
+  Wine prefix and no build-tree or sysroot DLL paths.
 
-Final 0.1.2 binaries still need separate build and installed-package
-qualification, with their exact revision and platform results recorded here
-before publication. The records above do not establish that qualification.
+The Linux binary requires **GLIBC 2.44, GLIBCXX 3.4.36 and CXXABI 1.3.15**.
+Its Fedora 45 build replaces the older Fedora 44 binary baseline; older Linux
+distributions are not qualified for this package. Extract the complete bundle
+and keep its libraries, plugins, QML modules, examples and notices together.
+
+Per-artifact source revision, build provenance, final installed-package results
+and checksums accompany the release as `BUILDINFO.json`, `VALIDATION.md` and
+`SHA256SUMS`. Gallery captures at `f285c23` used Fedora 45 / Qt 6.11.2 under
+Xvfb with software OpenGL.
 
 Windows remains experimental. Physical GPU, high-DPI, accessibility, other
 Linux distributions, larger graphs and multi-hour soaks remain outside this

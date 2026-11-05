@@ -134,7 +134,11 @@ void substep_equivalence() {
                             Case{Model::RLC, .2, 6, 1, 0, 0}}) {
         for (int m : {1, 2, 4, 8, 16, 32}) {
             auto coarse_schema = graph(test, Method::EulerSubsteps, m);
-            require(s7::Validator::validate(coarse_schema).ok(), "Coupled Euler schema validation");
+            const auto validation = s7::Validator::validate(coarse_schema);
+            if (!validation.ok()) {
+                for (const auto& error : validation.errors) std::cerr << error << '\n';
+            }
+            require(validation.ok(), "Coupled Euler schema validation");
             s7::NodeRuntime coarse(s7::Compiler::compile(coarse_schema));
             auto fine_case = test; fine_case.h /= m;
             s7::NodeRuntime fine(s7::Compiler::compile(graph(fine_case, Method::Euler)));

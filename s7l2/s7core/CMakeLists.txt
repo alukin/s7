@@ -30,6 +30,17 @@ add_library(s7core SHARED
     src/platform.cpp
 )
 
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 23)
+        message(FATAL_ERROR "Windows builds require Clang 22: Clang 23 changes the F128 calling convention and is not supported by the current ABI adapter.")
+    endif()
+    # MinGW does not merge template RTTI/vtables across an executable and DLL.
+    # Pointer-identity optimization of final-class dynamic_casts otherwise
+    # rejects client-created Gain/Adder/Multiply in coupled derivative cones.
+    set_property(SOURCE src/validation.cpp APPEND PROPERTY
+        COMPILE_OPTIONS -fno-assume-unique-vtables)
+endif()
+
 include(cmake/S7EmbedMetadata.cmake)
 s7_embed_metadata(s7core resources/element_metadata.json core_metadata)
 

@@ -46,7 +46,8 @@ cp "$BUILD/s7core/libs7core.dll" "$OUT/"
 cp "$BUILD/s7noise/libs7noise.dll" "$OUT/plugins/"
 if [ -f "$OUT/s7studio.exe" ]; then
     # Qt looks for its plugins next to the executable.
-    for plugin in platforms/qwindows.dll styles/qmodernwindowsstyle.dll; do
+    for plugin in platforms/qwindows.dll platforms/qoffscreen.dll styles/qmodernwindowsstyle.dll \
+                  iconengines/qsvgicon.dll imageformats/qsvg.dll; do
         mkdir -p "$OUT/$(dirname "$plugin")"
         cp "$SYSROOT/share/qt6/plugins/$plugin" "$OUT/$plugin"
     done
@@ -56,6 +57,11 @@ if [ -f "$OUT/s7studio.exe" ]; then
         mkdir -p "$OUT/qml"
         cp -r "$SYSROOT/share/qt6/qml/$module" "$OUT/qml/$module"
     done
+    # Qt 6.12 loads its 2D graph implementation through this separate QML
+    # module. Its plugin pulls Qt6Graphs2DImpl.dll into the dependency walk.
+    if [ -d "$SYSROOT/share/qt6/qml/QtGraphs2D" ]; then
+        cp -r "$SYSROOT/share/qt6/qml/QtGraphs2D" "$OUT/qml/QtGraphs2D"
+    fi
     # Submodules the viewers do not import (and the DLLs they would pull in).
     for unused in QtQuick/Controls QtQuick/Dialogs QtQuick/NativeStyle QtQuick/Particles QtQuick/tooling \
                   QtQuick3D/AssetUtils QtQuick3D/Effects QtQuick3D/MaterialEditor QtQuick3D/ParticleEffects \
@@ -77,7 +83,8 @@ cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/share/s7/"
 
 # The DLLs a module imports that the sysroot provides (the rest are Windows').
 imports() { "$OBJDUMP" -p "$1" | sed -n 's/^[[:space:]]*DLL Name:[[:space:]]*//p'; }
-pending=("$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll "$OUT"/platforms/*.dll "$OUT"/styles/*.dll)
+pending=("$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll "$OUT"/platforms/*.dll "$OUT"/styles/*.dll \
+         "$OUT"/iconengines/*.dll "$OUT"/imageformats/*.dll)
 if [ -d "$OUT/qml" ]; then
     while IFS= read -r -d '' module; do pending+=("$module"); done < <(find "$OUT/qml" -name '*.dll' -print0)
 fi

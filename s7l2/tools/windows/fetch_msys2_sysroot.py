@@ -35,7 +35,7 @@ PREFIX = "mingw-w64-ucrt-x86_64-"
 TOOLCHAIN = ["gcc", "gcc-libs", "crt", "headers", "winpthreads", "libwinpthread"]
 CORE = ["boost", "openssl", "zlib"]
 # Studio's observation viewers: Qt Quick (declarative), Qt Graphs, Qt Quick 3D.
-STUDIO = ["qt6-base", "qt6-declarative", "qt6-graphs", "qt6-quick3d", "fftw"]
+STUDIO = ["qt6-base", "qt6-declarative", "qt6-graphs", "qt6-quick3d", "qt6-svg", "fftw"]
 SPECTRAL = ["fftw", "pkgconf"]
 
 # Dependencies needed only to run the Windows-hosted compiler or build tools,
