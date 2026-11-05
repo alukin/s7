@@ -579,7 +579,7 @@ void write_node_uuid_file(const std::filesystem::path& path, const std::string& 
         throw std::runtime_error{message};
     }
 
-    X509_NAME* subject = X509_get_subject_name(certificate.get());
+    const X509_NAME* subject = X509_get_subject_name(certificate.get());
     if (!subject) {
         throw std::runtime_error("Certificate subject is missing in '" + certificate_path_string + "'.");
     }
@@ -589,12 +589,12 @@ void write_node_uuid_file(const std::filesystem::path& path, const std::string& 
         throw std::runtime_error("Certificate does not contain a common name: '" + certificate_path_string + "'.");
     }
 
-    X509_NAME_ENTRY* cn_entry = X509_NAME_get_entry(subject, cn_index);
+    const X509_NAME_ENTRY* cn_entry = X509_NAME_get_entry(subject, cn_index);
     if (!cn_entry) {
         throw std::runtime_error("Could not read common name from certificate: '" + certificate_path_string + "'.");
     }
 
-    ASN1_STRING* cn_string = X509_NAME_ENTRY_get_data(cn_entry);
+    const ASN1_STRING* cn_string = X509_NAME_ENTRY_get_data(cn_entry);
     if (!cn_string) {
         throw std::runtime_error("Common name entry is empty in certificate: '" + certificate_path_string + "'.");
     }

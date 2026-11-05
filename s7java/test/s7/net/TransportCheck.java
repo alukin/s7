@@ -150,9 +150,18 @@ public final class TransportCheck {
 
         void drop() throws IOException {
             for (Socket s : List.copyOf(open)) {
-                s.setSoLinger(true, 0);
-                s.close();
-                open.remove(s);
+                try (s) {
+                    try {
+                        s.setSoLinger(true, 0);
+                    } catch (IOException ex) {
+                        // A forwarding thread can close either side before this reset.
+                        if (!s.isClosed()) {
+                            throw ex;
+                        }
+                    }
+                } finally {
+                    open.remove(s);
+                }
             }
         }
 

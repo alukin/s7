@@ -177,6 +177,11 @@ the C++ API:
 - **Connection fixes.** Control and data sockets use TCP_NODELAY. TLS servers
   accept session resumption from verified peers instead of failing resumed
   client-certificate sessions; control authorization remains certificate-based.
+- **Fedora 45 build fixes.** Certificate common-name reads accept OpenSSL 4's
+  const-qualified X.509 accessors, with a runtime descriptor smoke check. The
+  package notice collector recognizes the exact Fedora 45 `xcb-util-keysyms`
+  source RPM after verifying its omitted `COPYING` text matches the bundled
+  notice byte for byte.
 
 ## Python and Java implementations
 
@@ -211,7 +216,9 @@ Both implementations add checks against the shared wire fixtures and tests
 of stream ordering, reconnect/replay and faults. Java additionally adds mTLS
 loopback tests for certificate identity, unauthorized peers, connection resets,
 underrun and send-log overflow. These tests are separate from the native C++
-CTest suite; the implementation READMEs give their commands.
+CTest suite; the implementation READMEs give their commands. Java's transport
+test proxy also tolerates sockets closed concurrently by forwarding threads
+during reset/cleanup.
 
 ## Developer and research changes
 

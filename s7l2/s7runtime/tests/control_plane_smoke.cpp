@@ -324,6 +324,13 @@ int main()
         {
             s7::RuntimeService service{definition, state_dir};
             assert(service.runtime_instance_uuid() == "11111111-2222-3333-4444-555555555555");
+            // Read the actual certificate subject through the runtime descriptor,
+            // including with OpenSSL 4's const-qualified X.509 accessors.
+            const auto info = boost::json::parse(service.handle_control_request_json({},
+                R"({"type":"GET_NODE_INFO","request_id":"identity-info","protocol_version":1})")).as_object();
+            assert(info.at("type").as_string() == "NODE_INFO");
+            assert(info.at("node").as_object().at("certificate").as_object().at("common_name").as_string()
+                == "s7-runtime-node");
 
             // A second runtime cannot share the state directory.
             bool rejected = false;

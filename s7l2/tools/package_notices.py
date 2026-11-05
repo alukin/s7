@@ -73,7 +73,9 @@ def linux_notices(output, notices):
             license_files += [Path(p) for p in files if p.startswith('/usr/share/doc/')
                               and Path(p).name.lower().startswith(('copying', 'license', 'copyright'))
                               and Path(p).is_file()]
-            if not license_files and source_rpm == 'xcb-util-keysyms-0.4.1-9.fc44.src.rpm':
+            if not license_files and source_rpm in {
+                    'xcb-util-keysyms-0.4.1-9.fc44.src.rpm',
+                    'xcb-util-keysyms-0.4.1-10.fc45.src.rpm'}:
                 fallback = Path(__file__).parent / 'linux/notices/xcb-util-keysyms-0.4.1.COPYING'
                 destination = notices / 'system/xcb-util-keysyms/COPYING'
                 destination.parent.mkdir(parents=True, exist_ok=True)
