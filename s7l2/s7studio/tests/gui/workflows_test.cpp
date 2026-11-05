@@ -1229,8 +1229,11 @@ private slots:
         QTRY_VERIFY(liveSpectrum->result() && liveSpectrum->result()->state == s7studio::analysis::SpectrumResult::State::Ready);
         QCOMPARE(liveSpectrum->result()->size, std::size_t(4096));
         QVERIFY(std::abs(liveSpectrum->result()->binSpacing-.25) < 1e-12);
-        QCOMPARE(liveSpectrum->plotView()->xMax(), 512.);
         auto* liveRange = liveSpectrum->controlPanel()->findChild<QComboBox*>("spectrum.frequencyRange"); QVERIFY(liveRange);
+        QCOMPARE(liveRange->currentIndex(), 0);
+        QVERIFY(liveSpectrum->plotView()->xMax() < 512.);
+        liveRange->setCurrentIndex(1);
+        QCOMPARE(liveSpectrum->plotView()->xMax(), 512.);
         liveRange->setCurrentIndex(0);
         if (example == "off_bin_tone") {
             QVERIFY(std::abs(liveSpectrum->result()->values[130]-1.) < 1e-9);
@@ -1419,7 +1422,9 @@ private slots:
         QVERIFY(spectrum->controlPanel()->findChild<QScrollArea*>("spectrum.readoutScroll")->height() >
                 spectrum->controlPanel()->findChild<QScrollArea*>("spectrum.statusScroll")->height()*2);
         capture(viewer, "live-spectrum-am-carrier", true);
-        viewer->findChild<QPushButton*>("live.follow")->click(); QTRY_VERIFY(spectrum->plotView()->xMax() > 150);
+        // Follow leaves the zoom and refits the significant peaks around the carrier.
+        viewer->findChild<QPushButton*>("live.follow")->click();
+        QTRY_VERIFY(spectrum->plotView()->xMin() < 50 && spectrum->plotView()->xMax() > 100 && spectrum->plotView()->xMax() != 150);
         QTest::mouseMove(tabs->tabBar(), tabs->tabBar()->tabRect(1).center());
         auto* size = spectrum->controlPanel()->findChild<QComboBox*>("spectrum.size"); QVERIFY(size); size->setCurrentIndex(size->findData(65536));
         QTRY_VERIFY(spectrum->result() && spectrum->result()->state == analysis::SpectrumResult::State::Filling);

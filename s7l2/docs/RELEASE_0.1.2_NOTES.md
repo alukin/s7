@@ -29,6 +29,14 @@ graph runtime; no separate service is needed for local runs.
   percentage of the window, so its labels are round (−5 … 15 s at 25 % and
   2 s/div rather than −4.99634 … 15.0037 s), and the trigger line sits exactly
   under the pre-trigger handle.
+- **Live Oscilloscope time base** starts at the smallest 1–2–5 scale that
+  shows a configured run shorter than 20 s whole (0.2 s/div for the 2-second
+  AM/FM examples) instead of squeezing it into the right edge of a 2 s/div
+  screen. Longer and continuous runs keep 2 s/div. **Horizontal → Fit run**
+  shows the whole run at any length, and a time base the user sets is kept for
+  later runs.
+- **Live Oscilloscope Spectrum** starts with fitted peaks, like the Scope's
+  Spectrum tab; **Full frequency band** remains one click away.
 - The translucent value box beside the pointer is back in Scope and Live
   Oscilloscope. Plot zoom uses Ctrl++, Ctrl+=, Ctrl+Shift++ and Ctrl+-, and
   Ctrl+] / Ctrl+[ zoom the time axis only.

@@ -73,7 +73,6 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
     field("Quantity", quantity_); field("Averaging", average_); field("K", count_); field("Alpha", alpha_);
     fields = group("Display", "spectrum.display", false);
     frequencyRange_ = combo("spectrum.frequencyRange", {"Fit significant peaks", "Full frequency band"});
-    frequencyRange_->setCurrentIndex(1);
     frequencyRange_->setToolTip("Fit shows the frequencies containing at least 1% of peak amplitude (or -40 dB of peak power), with margin. Full shows DC through Nyquist.");
     scale_ = combo("spectrum.scale", {"Linear", "dB re explicit reference"});
     reference_ = number("spectrum.reference", 1e-12, 1e12, 1, 12);
@@ -127,7 +126,6 @@ SpectrumView::SpectrumView(QWidget* parent, QWidget* controlsParent) : QWidget(p
 void SpectrumView::setSnapshotMode(bool snapshot)
 {
     snapshotMode_ = snapshot;
-    frequencyRange_->setCurrentIndex(snapshot ? 0 : 1);
     plot_->bridge()->instrumentTheme = !snapshot;
     plot_->series()[0]->setColor(QColor(snapshot ? "#1f77b4" : "#54b8ff"));
     plot_->series()[1]->setColor(QColor(snapshot ? "#b36b00" : "#ffc36b"));
