@@ -31,6 +31,15 @@ are explicit integrator and function/state networks.
   fourth-order method. Its two temporary stages are not diagram states.
 - `2int_osc_live.s7diagram`: the bounded live oscilloscope prototype; change
   acquisition length and inspect exact samples. See [prototype usage](LIVE_OSCILLOSCOPE_PROTOTYPE.md).
+- `2int_osc_live2.s7diagram`: the same oscillator with both states, `v` and
+  `u`, on a two-channel Live Oscilloscope; its saved run lasts 600 seconds for
+  long continuous inspection. Stop it at any time.
+- `symplectic_osc_live.s7diagram`: an Euler–Cromer oscillator showing
+  position and velocity on a two-channel Live Oscilloscope; its amplitude
+  stays bounded, while forward Euler in `2int_osc_live2` slowly grows.
+- `demo_diagram2.s7diagram`: a 2 Hz sine plus white noise from the `s7noise`
+  plugin on a Live Oscilloscope with an automatic rising-edge trigger. Run 10
+  seconds at 1 kHz and adjust the trigger level and hysteresis.
 - [2D phase portrait](../examples/2int_osc_phase_portrait.md): the same
   oscillator with X/Y state observation. Run 10 seconds at 1, 10 or 100 kHz;
   compare the almost circular orbit with its time trace.
@@ -88,6 +97,10 @@ are explicit integrator and function/state networks.
 
 ## Signal processing and measurement — experimental
 
+- [Spectrum references](../examples/spectrum/README.md): bin-centered tones,
+  a two-tone sum with DC and an off-bin tone with known FFT amplitudes. Run 4
+  seconds at 1024 Hz and compare the recording Scope's Spectrum tab with the
+  Live Oscilloscope's.
 - [Phase-locked loop](../examples/pll/README.md): ideal phase-domain PLL
   acquisition, a 20→22 Hz frequency step, a phase step, and an out-of-range
   35 Hz reference. Run 6 seconds at 1 kHz; compare phase error, tuning control
