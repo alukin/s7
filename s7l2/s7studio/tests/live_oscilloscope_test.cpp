@@ -447,6 +447,31 @@ private slots:
             QVERIFY(analysis::measurementReadout(window, 0, window.axis.size()-1).contains("not full-rate signal measurements"));
         }
     }
+    void timeBaseDefaultsToShortRunLength() {
+        const auto source = [](std::uint64_t id, double planned) {
+            auto live = std::make_shared<LiveAcquisition>(id, .001, QVector<observation::LiveChannel>{{"x", "V", "f64"}}, QJsonObject{}, 1000, 1);
+            if (planned > 0) live->setPlannedDuration(planned);
+            return live;
+        };
+        ui::LiveOscilloscopeWindow viewer("run length");
+        auto* scale = viewer.findChild<QDoubleSpinBox*>("live.timeScale"); QVERIFY(scale);
+        auto* fit = viewer.findChild<QPushButton*>("live.timeScale.fitRun"); QVERIFY(fit);
+        QVERIFY(!fit->isEnabled());
+        // A short run is shown whole at the smallest 1-2-5 scale; longer and
+        // continuous runs keep the 2 s/div default.
+        const std::pair<double, double> defaults[]{{2, .2}, {4, .5}, {12, 2}, {600, 2}, {0, 2}};
+        std::uint64_t id = 200;
+        for (const auto& [planned, expected] : defaults) {
+            viewer.attachLiveSource(source(++id, planned));
+            QCOMPARE(scale->value(), expected); QCOMPARE(fit->isEnabled(), planned > 0);
+        }
+        viewer.attachLiveSource(source(++id, 600));
+        fit->click(); QCOMPARE(scale->value(), 100.);
+        // Once chosen, the time base survives later runs of any length.
+        viewer.attachLiveSource(source(++id, 2)); QCOMPARE(scale->value(), 100.);
+        scale->setValue(.5); viewer.attachLiveSource(source(++id, 600)); QCOMPARE(scale->value(), .5);
+        fit->click(); QCOMPARE(scale->value(), 100.);
+    }
     void timeEnvelopeDoesNotBridgeGapsOrNonfiniteSamples() {
         LiveAcquisition source(90, .001, {{"x", "V", "f64"}}, {}, 1000, 1);
         const double finite[]{1}, invalid[]{std::numeric_limits<double>::quiet_NaN()};

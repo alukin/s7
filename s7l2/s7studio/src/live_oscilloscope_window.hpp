@@ -74,7 +74,9 @@ private:
     QLineEdit* seconds_;
     QCheckBox* autoY_;
     QDoubleSpinBox* timeScale_;
+    QPushButton* fitRun_;
     double effectiveTimeScale_ = 2;
+    bool timeScaleChosen_ = false;  // the user set the time base; keep it for later runs
     std::shared_ptr<const observation::LiveFrame> rawFrame_, timeFrame_;
     QComboBox *triggerMode_, *triggerChannel_;
     ChoiceButtons* triggerEdge_;

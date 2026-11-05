@@ -20,7 +20,8 @@ the presence of four tabs does not establish the ADI OSC parity milestone.
 3. Start a run. Run Configuration offers **Run continuously until stopped** and
    reports the live and full-recording channel counts.
 4. Set **Time / div (s)** to choose the visible rolling model-time interval:
-   ten divisions, initially 20 seconds total, independent of dt. Endpoint/min/max
+   ten divisions, initially 20 seconds total (or the whole run, if shorter),
+   independent of dt. **Fit run** shows the whole configured run. Endpoint/min/max
    selection bounds the Time display to at most 4096 original sample positions.
    **Analysis retention** has a separate **Raw samples / channel** field and
    duration for full-rate FFT/correlation input and sampled trigger capture.

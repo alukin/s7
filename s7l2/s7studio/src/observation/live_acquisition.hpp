@@ -97,6 +97,10 @@ public:
     void finish(const QString& error = {});
     [[nodiscard]] const QVector<LiveChannel>& channels() const { return channels_; }
     [[nodiscard]] double dt() const { return dt_; }
+    // The configured length of a bounded run, for display defaults only. The
+    // runner sets it before publishing the source; it never changes later.
+    void setPlannedDuration(double seconds) { if (seconds > 0 && seconds < std::numeric_limits<double>::infinity()) plannedDuration_ = seconds; }
+    [[nodiscard]] std::optional<double> plannedDuration() const { return plannedDuration_; }
     [[nodiscard]] std::size_t allocatedBytes() const;
 private:
     // Spare physical history allows chunked snapshots of a full logical window
@@ -107,6 +111,7 @@ private:
     const std::uint64_t rateNumerator_, rateDenominator_;
     const QVector<LiveChannel> channels_;
     const QJsonObject provenance_;
+    std::optional<double> plannedDuration_;
     mutable std::mutex mutex_;
     std::vector<std::int64_t> steps_;
     std::vector<double> times_, values_;

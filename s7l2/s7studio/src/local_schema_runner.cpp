@@ -187,6 +187,7 @@ void LocalSchemaRunner::prepareRuntime(const RunConfiguration& configuration)
         auto source = std::make_shared<observation::LiveAcquisition>(configuration.id, configuration.dt,
             std::move(liveChannels[index]), prepared.provenance,
             s7::Rate::from_seconds(configuration.dt).numerator, s7::Rate::from_seconds(configuration.dt).denominator);
+        if (configuration.ticks > 0) source->setPlannedDuration(static_cast<double>(configuration.ticks)*configuration.dt);
         liveSources_.insert(QString::fromStdString(name), source);
         liveRoutes_[index].source = source;
         liveRoutes_[index].values.resize(liveRoutes_[index].probes.size());

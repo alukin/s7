@@ -45,6 +45,15 @@
 
 namespace s7studio::ui {
 namespace {
+constexpr double defaultTimeScale = 2;
+// The smallest 1–2–5 time/div whose ten divisions hold the whole run.
+double fitRunTimeScale(double duration)
+{
+    const double division = duration/10;
+    const double decade = std::pow(10., std::floor(std::log10(division)));
+    for (const double mantissa : {1., 2., 5.}) if (mantissa*decade >= division*(1-1e-9)) return mantissa*decade;
+    return 10*decade;
+}
 class ChannelVisibilityBox : public QCheckBox {
 public:
     explicit ChannelVisibilityBox(QWidget* parent) : QCheckBox(parent) { setFixedSize(22, 24); }
@@ -258,9 +267,16 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
         if (checked) { channelPages_->setCurrentIndex(index); updateVerticalReadouts(); }
     });
     panelLayout->addWidget(new CollapsibleSection("Vertical", "live.section.channels", channelBox, true, panel));
-    auto* timeBase = new RotaryValueControl(RotaryValueControl::Mapping::LogTime, "live.timeScale", panel);
+    auto* horizontal = new QWidget(panel);
+    auto* horizontalLayout = new QVBoxLayout(horizontal); horizontalLayout->setContentsMargins(0, 0, 0, 0); horizontalLayout->setSpacing(4);
+    auto* timeBase = new RotaryValueControl(RotaryValueControl::Mapping::LogTime, "live.timeScale", horizontal);
     timeScale_ = timeBase->number();
-    panelLayout->addWidget(new CollapsibleSection("Horizontal", "live.section.timeBase", timeBase, true, panel));
+    horizontalLayout->addWidget(timeBase);
+    fitRun_ = new QPushButton(QStringLiteral("Fit run"), horizontal); fitRun_->setObjectName("live.timeScale.fitRun");
+    fitRun_->setToolTip(QStringLiteral("Choose the 1–2–5 time/div that shows the whole configured run in ten divisions."));
+    fitRun_->setEnabled(false);
+    horizontalLayout->addWidget(fitRun_, 0, Qt::AlignLeft);
+    panelLayout->addWidget(new CollapsibleSection("Horizontal", "live.section.timeBase", horizontal, true, panel));
     auto* acquisitionSection = new CollapsibleSection("Analysis retention", "live.section.acquisition", settings, false, panel);
     panelLayout->addWidget(acquisitionSection);
     panelLayout->addWidget(new CollapsibleSection("Trigger", "live.section.trigger", triggerBox, false, panel));
@@ -438,14 +454,18 @@ LiveOscilloscopeWindow::LiveOscilloscopeWindow(QString id)
             static_cast<RotaryValueControl*>(timeScale_->parentWidget())->setValueSilently(effectiveTimeScale_);
             settingsError_ = "Time scale cannot be represented at this model dt."; updateStatus(); return;
         }
-        effectiveTimeScale_ = timeScale_->value(); inspection_->clear();
+        effectiveTimeScale_ = timeScale_->value(); timeScaleChosen_ = true; inspection_->clear();
         settingsError_.clear(); render(true); cadence_.invalidate();
+    });
+    connect(fitRun_, &QPushButton::clicked, this, [this] {
+        if (const auto planned = live_ ? live_->plannedDuration() : std::nullopt) timeScale_->setValue(fitRunTimeScale(*planned));
+        render(true); cadence_.invalidate();
     });
     connect(plot_, &viewers::LinePlotView::navigated, this, [this] { freeze_->setChecked(true); });
     connect(plot_, &viewers::LinePlotView::xRangeChanged, this, [this](double lower, double upper) {
         if (!rendering_ && upper > lower) {
             static_cast<RotaryValueControl*>(timeScale_->parentWidget())->setValueSilently((upper-lower)/10);
-            effectiveTimeScale_ = timeScale_->value();
+            effectiveTimeScale_ = timeScale_->value(); timeScaleChosen_ = true;
         }
         render(false);
     });
@@ -623,9 +643,18 @@ void LiveOscilloscopeWindow::attachLiveSource(std::shared_ptr<observation::LiveA
             requestedTrigger_.channel = static_cast<std::size_t>(triggerChannel_->currentIndex());
         }
         if (!triggerController_) live_->configureTrigger(requestedTrigger_);
+        // Until the user picks a time base, show a short run whole rather
+        // than crammed into the right edge of the default 2 s/div screen.
+        if (!timeScaleChosen_) {
+            const auto planned = live_->plannedDuration();
+            const double scale = planned ? std::min(defaultTimeScale, fitRunTimeScale(*planned)) : defaultTimeScale;
+            static_cast<RotaryValueControl*>(timeScale_->parentWidget())->setValueSilently(scale);
+            effectiveTimeScale_ = scale;
+        }
         live_->setTimeSpan(timeScale_->value()*10);
         if (requestedCapacity_) live_->setCapacity(*requestedCapacity_);
         const QSignalBlocker blocker(capacity_); capacity_->setValue(static_cast<int>(live_->capacity())); }
+    fitRun_->setEnabled(live_ && live_->plannedDuration());
     updateVerticalReadouts(); cadence_.invalidate(); updateStatus();
 }
 void LiveOscilloscopeWindow::updateVerticalReadouts()

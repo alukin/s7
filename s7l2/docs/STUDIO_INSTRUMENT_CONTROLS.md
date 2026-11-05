@@ -90,8 +90,11 @@ its tooltip and pinned-window metadata.
 The Time-base knob and adjacent exact `s/div` editor use model seconds/division
 and a ten-division grid. Clockwise reduces seconds/division. Mouse navigation
 updates both the numeric value and dial, including its compact readout. Time
-defaults to 2 s/div independently of model dt, for rolling and triggered views;
-reruns preserve the selected time scale rather than deriving it from retention. A separate 4096-position
+defaults to 2 s/div independently of model dt, for rolling and triggered views,
+or to the smallest 1–2–5 scale that holds a shorter configured run in ten
+divisions. **Fit run** applies that scale to a run of any length; it is disabled
+for continuous runs. Once the user sets the time base, reruns preserve it rather
+than deriving it from the run length or retention. A separate 4096-position
 history selects original endpoints and channel extrema in bounded causal buckets;
 changing this display span does not change full-rate analysis samples or the
 simulation. Existing retained history is merged when widening. Missing history

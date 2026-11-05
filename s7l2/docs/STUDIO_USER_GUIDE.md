@@ -243,7 +243,10 @@ button as the vertical scale. Switching adjustment modes preserves the exact
 value. The knob, numeric readout and mouse-selected time range stay synchronized;
 the selected scale survives reruns and changes of model `dt`. Live preview wheel
 zoom and drag pan move only the time axis, preserving amplitude and position.
-The default **2 s/div** shows a **20 s** rolling window at every model dt. A
+The default **2 s/div** shows a **20 s** rolling window at every model dt; a
+shorter configured run starts at the smallest 1–2–5 scale that shows the whole
+run, such as 0.2 s/div for a 2-second run. **Fit run** chooses that scale for a
+run of any length. Once you set the time base, reruns keep it. A
 bounded display history preserves endpoints and channel extrema using at most
 4096 original sample positions. Changing dt therefore changes detail rather than
 the visible model-time span. Enlarging the scale merges the retained history;
