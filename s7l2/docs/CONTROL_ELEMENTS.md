@@ -136,10 +136,14 @@ validation is still required for a chosen closed loop. Controller limits and
 the 10/s tracking coefficient are editable internal block parameters. The RMS
 detector measures an exponentially filtered mean square, not a finite-window RMS.
 
-Schemas retain the existing direct-feedthrough contract; an internal integrator
-is not automatically an outer feedback boundary. Use these controllers with
-explicit causal plant states. Purely internal memory does not make every
-schema safe to close an otherwise direct outer cycle.
+Validation and compilation flatten same-node nested schemas under
+[ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024), so feedback through an
+internal causal-memory integrator is valid exactly when the inlined loop is.
+Causality is checked per path: PI/PID proportional paths remain direct
+feedthrough and still need causal plant memory on the loop, whether that memory
+is at the top level or inside a nested plant. An outer `Delay` is not required
+just to package the plant; adding one introduces one sample of latency and
+changes the model. A direct cycle bypassing all causal memory remains invalid.
 
 ## Studio: a category and editable tabs
 
@@ -169,7 +173,8 @@ library type name.
 
 Run configuration updates embedded schemas recursively. Nested explicit rates
 participate in parent rate validation, and inconsistent internal declared rates
-are rejected when a nested graph is compiled. For headless preparation, use
+are reported while validating the flattened parent graph. For headless
+preparation, use
 `s7::configure_schema_discretization(json, dt)` before
 `SchemaLibraryLoader::build_schema(json)`. It materializes registered schema
 resources, updates rate/dt fields recursively, and leaves registry definitions

@@ -114,14 +114,30 @@ void independence_and_limits() {
         require(following.real_output_of("component")==unchanged.real_output_of("component"),
                 "Nested elements follow the nested schema's rate, not a stored dt");
     }
-    // A schema remains direct feedthrough; internal memory is not silently
-    // promoted into a new outer-loop causal boundary.
+    // ADR-024 checks the flattened paths: FirstOrderLag's integrator closes
+    // this same-node loop. Seed the whole graph, including the original input
+    // constant that becomes disconnected when its wire is replaced.
     require(schema.elements().size()>0,"Schema resource materializes");
     auto feedback=model("FirstOrderLag",{2,.1});
     auto& connections=feedback.as_object().at("connections").as_array();
     connections[0].as_object()["from_element"]="component";
+    s7::configure_schema_discretization(feedback,.001);
     auto cycle=s7::SchemaLibraryLoader::build_schema(feedback);
-    require(!s7::Validator::validate(cycle).ok(),"Schema-is-element preserves existing direct-feedthrough cycle rules");
+    require(s7::Validator::validate(cycle).ok(),"Feedback through nested causal memory is valid");
+    s7::NodeRuntime closed_loop(s7::Compiler::compile(cycle));
+    for(int n=0;n<10;++n) {
+        closed_loop.step();
+        require(closed_loop.real_output_of("component")==0,"Self-fed lag retains its zero equilibrium");
+    }
+
+    auto direct=model("PhaseDifference",{4,-4});
+    direct.as_object().at("connections").as_array()[0].as_object()["from_element"]="component";
+    s7::configure_schema_discretization(direct,.001);
+    const auto direct_validation=s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(direct));
+    bool direct_cycle=false;
+    for(const auto& error : direct_validation.errors)
+        direct_cycle |= error.find("Cycle detected without causal memory.")!=std::string::npos;
+    require(direct_cycle,"A direct nested path still cannot close a feedback cycle");
 }
 }
 int main() {

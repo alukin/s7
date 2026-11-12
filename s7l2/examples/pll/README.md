@@ -36,8 +36,13 @@ gain = 10/s. The control is dimensionless.
 
 Reference and VCO phases are explicit EulerIntegrator states. `PhaseDifference`
 and `PIController` are embedded editable copies of the bundled schema elements,
-not new C++ controllers. The outer feedback cycle closes through `vco_phase`;
-the controller's internal memory is not promoted into an outer causal boundary.
+not new C++ controllers. This feedback cycle closes through `vco_phase`.
+The PI controller also has a direct proportional path, so its integral branch
+alone does not break that cycle. Under
+[ADR-024](../../../doc/S7_Architectural_Decisions.md#adr-024), the VCO integrator
+could instead be inside a nested same-node schema: flattening preserves the
+same causal path and sample behavior. Adding an outer `Delay` would introduce
+one sample of latency and change the loop.
 `PhaseWrap` maps each waveform phase into [-pi,pi), then Trig computes its sine.
 Phase integrators themselves retain unwrapped radians over this finite run.
 

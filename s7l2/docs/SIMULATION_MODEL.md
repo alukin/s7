@@ -36,9 +36,17 @@ A normal element performs one documented transition:
 Direct-feedthrough elements can use current inputs in current outputs.
 Causal-memory elements publish the state staged by the preceding step, and
 stage their next outputs from current inputs. Feedback cycles need causal
-memory; merely having private state is insufficient. A nested schema remains
-direct feedthrough under the current contract; its internal memory does not
-automatically become a new causal boundary around an outer cycle.
+memory; merely having private state is insufficient.
+
+In a same-node compiled graph, validation and compilation flatten nested schemas
+under [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024). Causality follows
+each internal path, just as if the elements were inlined. A feedback loop can
+close through a causal-memory integrator inside a nested plant without an outer
+`Delay`. A direct path that bypasses causal memory still cannot close a cycle;
+an integrator on another branch does not make that path causal memory. Adding an
+outer `Delay` introduces one sample of latency and changes the model; nesting
+alone does not require it. Flattening stays within a node and does not establish
+causality across network boundaries.
 
 For example, a controlled integrator has the local rectangle-rule transition:
 

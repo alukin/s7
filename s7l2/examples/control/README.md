@@ -50,9 +50,14 @@ y(0) = 0
 With constant inputs its exact response is
 `y(t) = u-load + (y(0)-u+load)*exp(-t/tau)`.
 The explicit Adder and EulerIntegrator realize the same dynamics as the bundled
-FirstOrderLag, with a subtractive load. The plant integrator stays visible at
-the outer feedback boundary: a nested schema remains direct feedthrough, so
-its private integrator alone would not authorize the outer cycle.
+FirstOrderLag, with a subtractive load. The plant integrator stays visible here
+to make the state equation easy to inspect. It can also be packaged inside a
+nested plant: [ADR-024](../../../doc/S7_Architectural_Decisions.md#adr-024)
+flattens same-node schemas, so the loop can close through that internal
+causal-memory integrator with the same behavior as the inlined graph. An outer
+`Delay` would add one sample of latency and change the loop. The PI/PID
+controller's proportional path remains direct feedthrough; its integral branch
+alone does not provide causal memory for that path.
 
 DC motor, ideal armature voltage `Va = 4*u` V:
 
