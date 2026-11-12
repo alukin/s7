@@ -36,6 +36,7 @@
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/websocket/ssl.hpp>
 
+#include <zlib.h>
 #include <openssl/evp.h>
 #include <openssl/objects.h>
 #include <openssl/pem.h>
@@ -220,7 +221,61 @@ namespace {
 using stream::Clock;
 using stream::FaultCode;
 
+// Frame services live under the endpoint table's mutex, like scalar services.
+// The fixed alias is derived from the stream UUID; collisions are rejected.
+struct FrameStreamState {
+    FrameStreamConfig config;
+    std::shared_ptr<frames::BufferPool> pool;
+    std::unique_ptr<frames::FrameSink> sink;
+    std::unique_ptr<frames::FrameSource> source;
+    std::shared_ptr<frames::BufferBudget> budget;
+    std::vector<std::max_align_t> pending;
+    std::size_t pending_frames{}, reserved_pending{};
+    Clock::time_point pending_since{};
+    std::uint32_t alias{};
+    std::uint64_t published{}, received{}, acked{}, initial_sequence{};
+    frames::Status fault{frames::Status::Ok};
+
+    FrameStreamState(FrameStreamConfig value, StreamRole role, stream::SequenceStore& sequences,
+                     std::shared_ptr<frames::BufferBudget> node_budget)
+        : config(std::move(value)), budget(std::move(node_budget))
+    {
+        const auto& d = config.descriptor;
+        d.validate();
+        alias = 0x80000000u | static_cast<std::uint32_t>(crc32(0, d.stream_id.data(), d.stream_id.size()));
+        pool = std::make_shared<frames::BufferPool>(d.window_packets,
+            role == StreamRole::Producer ? frames::kMaxMessageBytes : wire::kMaxPayloadBytes, budget);
+        if (role == StreamRole::Producer) {
+            sink = std::make_unique<frames::FrameSink>(d, sequences, pool, alias);
+            initial_sequence = sink->next_sequence();
+            const auto bytes = std::size_t(d.max_frames_per_packet) * d.channels.size() * signal_type_info(d.type).storage_bytes;
+            const auto slots = (bytes + sizeof(std::max_align_t) - 1) / sizeof(std::max_align_t);
+            budget->reserve(slots * sizeof(std::max_align_t));
+            try { pending.resize(slots); }
+            catch (...) { budget->release(slots * sizeof(std::max_align_t)); throw; }
+            reserved_pending = slots * sizeof(std::max_align_t);
+        } else source = std::make_unique<frames::FrameSource>(d, pool, alias);
+    }
+    ~FrameStreamState() { budget->release(reserved_pending); }
+    bool flush(bool force = false) {
+        if (!sink || !pending_frames || fault != frames::Status::Ok) return false;
+        const auto& d = config.descriptor;
+        if (!force && pending_frames < d.max_frames_per_packet && Clock::now() - pending_since < config.max_batch_latency) return false;
+        const auto result = sink->publish_copy(pending.data(), pending_frames);
+        if (result.status != frames::Status::Ok && result.status != frames::Status::Backpressure) fault = result.status;
+        if (!result.frames) return false;
+        const auto stride = d.channels.size() * signal_type_info(d.type).storage_bytes;
+        pending_frames -= result.frames;
+        if (pending_frames) std::memmove(pending.data(), reinterpret_cast<const std::uint8_t*>(pending.data()) + result.frames * stride, pending_frames * stride);
+        return true;
+    }
+    wire::ControlMessage resume() const {
+        return {wire::ControlKind::Resume, alias, source->next_expected(), config.descriptor.stream_id};
+    }
+};
+
 struct StreamEntry {
+    std::unique_ptr<FrameStreamState> frame;
     StreamHandle handle;
     StreamRole role{StreamRole::Producer};
     stream::StreamConfig config;
@@ -245,7 +300,15 @@ struct StreamEntry {
                                   " max_latency_ms=" + std::to_string(config.max_latency ? config.max_latency->count() : 0));
     }
 
-    [[nodiscard]] FaultCode fault_code() const { return producer ? producer->fault_code() : consumer->fault_code(); }
+    [[nodiscard]] FaultCode fault_code() const { if (!frame) return producer ? producer->fault_code() : consumer->fault_code();
+        const auto status = frame->fault != frames::Status::Ok ? frame->fault : frame->source ? frame->source->status() : frames::Status::Ok;
+        if (status == frames::Status::Ok || status == frames::Status::Closed) return FaultCode::None;
+        if (status == frames::Status::Backpressure) return FaultCode::SendLogOverflow;
+        if (status == frames::Status::SourceOverflow || status == frames::Status::ContinuityLost) return FaultCode::StreamStateLost;
+        if (status == frames::Status::SequenceGap) return FaultCode::SequenceGap;
+        if (status == frames::Status::SinkUnderflow) return FaultCode::Underrun;
+        if (status == frames::Status::StateLost) return FaultCode::StreamStateLost;
+        return FaultCode::MalformedPacket; }
 
     void note(const FaultCode code, std::string detail)
     {
@@ -259,7 +322,8 @@ struct StreamEntry {
     {
         const auto code = fault_code();
         if (code != FaultCode::None && code != noted) {
-            note(code, {});
+            note(code, frame ? frames::to_string(frame->fault != frames::Status::Ok ? frame->fault :
+                frame->source ? frame->source->status() : frames::Status::Ok) : std::string{});
         }
         noted = code;
     }
@@ -279,11 +343,12 @@ public:
     // After the graph took elements (lock held): an in-memory consumer acknowledges.
     std::function<void(StreamEntry&)> on_consumed;
 
-    explicit StreamTable(stream::SequenceStore& sequences) : sequences_(sequences) {}
+    explicit StreamTable(stream::SequenceStore& sequences, std::size_t frame_bytes = 64 * 1024 * 1024)
+        : sequences_(sequences), frame_budget_(std::make_shared<frames::BufferBudget>(frame_bytes)) {}
 
     // Reopening a closed stream of the same type continues it (a redeployed
     // graph takes over the stream without loss); another type starts anew.
-    StreamHandle open(const stream::StreamConfig& config, const StreamRole role)
+    StreamHandle open(const stream::StreamConfig& config, const StreamRole role, const FrameStreamConfig* frame_config = nullptr)
     {
         std::unique_lock lock(mutex);
         auto& index = role == StreamRole::Producer ? producers_ : consumers_;
@@ -292,6 +357,9 @@ public:
             if (existing.open) {
                 throw std::invalid_argument("Stream " + wire::to_string(config.stream_id) + " is already open as " +
                                             (role == StreamRole::Producer ? "producer" : "consumer") + ".");
+            }
+            if (existing.frame || frame_config) {
+                throw std::invalid_argument("Frame stream reopening requires a new stream_id and graph boundary.");
             }
             if (existing.config.type == config.type) {
                 existing.open = true;
@@ -307,10 +375,22 @@ public:
             index.erase(it);
         }
         auto entry = std::make_unique<StreamEntry>();
+        if (next_handle_ >= 0x80000000u) throw std::overflow_error("Stream handle space exhausted");
+        if (auto* other = role == StreamRole::Producer ? find_consumer(config.stream_id) : find_producer(config.stream_id)) {
+            if (bool(other->frame) != bool(frame_config)) throw std::invalid_argument("Scalar/frame stream identity conflict");
+            if (frame_config && other->frame->config.descriptor != frame_config->descriptor)
+                throw std::invalid_argument("Frame descriptor mismatch between local endpoints");
+        }
         entry->handle = StreamHandle{next_handle_++};
         entry->role = role;
         entry->config = config;
-        if (role == StreamRole::Producer) {
+        if (frame_config) {
+            entry->frame = std::make_unique<FrameStreamState>(*frame_config, role, sequences_, frame_budget_);
+            for (const auto& [_, other] : entries_) {
+                if (other->role == role && other->frame && other->frame->alias == entry->frame->alias)
+                    throw std::invalid_argument("Frame stream alias collision; use a new stream UUID");
+            }
+        } else if (role == StreamRole::Producer) {
             entry->producer = std::make_unique<stream::StreamProducer>(config, sequences_);
             entry->producer->set_stamp_send_time(clock_usable_);
         } else {
@@ -329,6 +409,79 @@ public:
         return handle;
     }
 
+    StreamHandle open_frame(const FrameStreamConfig& config, StreamRole role) {
+        config.descriptor.validate();
+        if (config.max_batch_latency.count() < 0 || config.max_block.count() < 0 || config.max_wait.count() < 0)
+            throw std::invalid_argument("Negative frame timeout");
+        stream::StreamConfig route;
+        route.stream_id = config.descriptor.stream_id; route.type = config.descriptor.type;
+        route.producer_node = config.producer_node; route.consumer_nodes = config.consumer_nodes;
+        return open(route, role, &config);
+    }
+    frames::PublishResult publish_frames(StreamHandle handle, const void* values, std::size_t count) {
+        std::unique_lock lock(mutex);
+        auto& entry = require(handle, StreamRole::Producer);
+        if (!entry.frame) throw std::invalid_argument("Not a frame producer");
+        auto& f = *entry.frame;
+        const auto stride = f.config.descriptor.channels.size() * signal_type_info(entry.config.type).storage_bytes;
+        if ((count && !values) || count > SIZE_MAX / stride)
+            throw std::invalid_argument("Invalid native frame input");
+        const auto deadline = Clock::now() + f.config.max_block;
+        std::size_t done = 0;
+        while (done < count) {
+            if (!entry.open) return {done, frames::Status::Closed};
+            if (f.fault != frames::Status::Ok) return {done, f.fault};
+            f.flush();
+            if (f.pending_frames < f.config.descriptor.max_frames_per_packet) {
+                if (!f.pending_frames) f.pending_since = Clock::now();
+                const auto take = std::min(count - done, f.config.descriptor.max_frames_per_packet - f.pending_frames);
+                std::memcpy(reinterpret_cast<std::uint8_t*>(f.pending.data()) + f.pending_frames * stride,
+                    static_cast<const std::uint8_t*>(values) + done * stride, take * stride);
+                f.pending_frames += take; done += take; f.published += take;
+                f.flush();
+                if (on_producer_data) on_producer_data(entry);
+                if (done == count) return {done, frames::Status::Ok};
+            }
+            if (changed.wait_until(lock, deadline) == std::cv_status::timeout) {
+                f.fault = frames::Status::Backpressure;
+                return {done, f.fault};
+            }
+        }
+        return {done, frames::Status::Ok};
+    }
+    frames::ReceiveResult receive_frames(StreamHandle handle, void* values, std::size_t count,
+                                         const std::function<void(StreamEntry&)>& starving = {}) {
+        std::unique_lock lock(mutex);
+        auto& entry = require(handle, StreamRole::Consumer);
+        if (!entry.frame) throw std::invalid_argument("Not a frame consumer");
+        auto& f = *entry.frame;
+        const auto deadline = Clock::now() + f.config.max_wait;
+        while (true) {
+            if (!entry.open) return {0, frames::Status::Closed, {}, {}};
+            if (f.fault != frames::Status::Ok) return {0, f.fault, {}, {}};
+            if (starving) starving(entry);
+            auto result = f.source->receive_copy(values, count);
+            f.received += result.frames;
+            if (on_consumed) on_consumed(entry);
+            if (result.frames || (result.status != frames::Status::Ok && result.status != frames::Status::Backpressure) || count == 0)
+                return result;
+            if (changed.wait_until(lock, deadline) == std::cv_status::timeout) {
+                f.source->sink_underflow();
+                return {0, frames::Status::SinkUnderflow, {}, {}};
+            }
+        }
+    }
+    void fault_frames(StreamHandle handle) {
+        std::lock_guard lock(mutex);
+        if (auto* entry = find(handle); entry && entry->frame) entry->frame->fault = frames::Status::StateLost;
+        changed.notify_all();
+    }
+    void shutdown_frames() {
+        std::lock_guard lock(mutex);
+        for (auto& [_, entry] : entries_) if (entry->frame) entry->frame->fault = frames::Status::Closed;
+        changed.notify_all();
+    }
+
     void close(const StreamHandle handle)
     {
         std::unique_lock lock(mutex);
@@ -337,6 +490,14 @@ public:
             return;
         }
         it->second->open = false;
+        if (it->second->frame) {
+            auto& f = *it->second->frame;
+            if (f.fault == frames::Status::Ok && f.source) f.fault = f.source->status();
+            it->second->note_fault();
+            if (f.fault == frames::Status::Ok) f.fault = frames::Status::Closed;
+            if (f.sink) f.sink->close();
+            if (f.source) f.source->close();
+        }
         changed.notify_all();
     }
 
@@ -345,6 +506,7 @@ public:
     {
         std::unique_lock lock(mutex);
         auto& entry = require(handle, StreamRole::Producer);
+        if (entry.frame) throw std::invalid_argument("Use publish_frames for frame streams");
         auto& producer = *entry.producer;
         const auto element_bytes = signal_type_info(entry.config.type).storage_bytes;
         const auto* bytes = static_cast<const std::uint8_t*>(elements);
@@ -389,6 +551,7 @@ public:
     {
         std::unique_lock lock(mutex);
         auto& entry = require(handle, StreamRole::Consumer);
+        if (entry.frame) throw std::invalid_argument("Use receive_frames for frame streams");
         auto& consumer = *entry.consumer;
         const auto element_bytes = signal_type_info(entry.config.type).storage_bytes;
         auto* bytes = static_cast<std::uint8_t*>(elements);
@@ -437,7 +600,15 @@ public:
             status.unauthorized = entry->unauthorized;
             entry->note_fault();
             status.recent_faults.assign(entry->recent_faults.begin(), entry->recent_faults.end());
-            if (entry->producer) {
+            if (entry->frame) {
+                auto& f = *entry->frame;
+                status.fault = entry->fault_code();
+                status.next_sequence = f.sink ? f.sink->next_sequence() : f.source->next_expected();
+                status.packets = status.next_sequence - f.initial_sequence;
+                status.elements = (f.sink ? f.published : f.received) * f.config.descriptor.channels.size();
+                status.send_log_depth = f.sink ? f.sink->log_depth() : 0;
+                status.state = !entry->open ? "closed" : status.fault != FaultCode::None ? "faulted" : "active";
+            } else if (entry->producer) {
                 const auto stats = entry->producer->stats();
                 status.fault = entry->producer->fault_code();
                 status.next_sequence = entry->producer->next_sequence();
@@ -476,6 +647,9 @@ public:
             if (const auto it = index->find(stream_key(id)); it != index->end()) {
                 auto& entry = *entries_.at(it->second);
                 entry.note_fault();
+                // A frame fault needs a coordinated new segment/identity, never
+                // the legacy restart-at-next recovery operation.
+                if (entry.frame) continue;
                 if (entry.producer) {
                     entry.producer->recover();
                 } else {
@@ -525,8 +699,13 @@ public:
     }
     StreamEntry* find_consumer_by_alias(const std::uint32_t alias)
     {
+        if (alias & 0x80000000u) {
+            for (const auto& [_, entry] : entries_)
+                if (entry->role == StreamRole::Consumer && entry->frame && entry->frame->alias == alias) return entry.get();
+            return nullptr;
+        }
         auto* entry = find(StreamHandle{alias});
-        return entry && entry->role == StreamRole::Consumer ? entry : nullptr;
+        return entry && !entry->frame && entry->role == StreamRole::Consumer ? entry : nullptr;
     }
     template <typename F>
     void for_each(F&& f)
@@ -550,6 +729,7 @@ private:
     }
 
     stream::SequenceStore& sequences_;
+    std::shared_ptr<frames::BufferBudget> frame_budget_;
     bool clock_usable_{true};
     std::uint64_t next_handle_{1};
     std::unordered_map<std::uint64_t, std::unique_ptr<StreamEntry>> entries_;
@@ -573,6 +753,19 @@ struct InMemoryRuntimeNetEndpoint::Impl {
         auto* producer = table.find_producer(id);
         auto* consumer = table.find_consumer(id);
         if (!producer || !consumer) {
+            return;
+        }
+        if (producer->frame || consumer->frame) {
+            if (!producer->frame || !consumer->frame || producer->frame->config.descriptor != consumer->frame->config.descriptor)
+                throw std::invalid_argument("Frame descriptor mismatch between local endpoints");
+            auto& tx = *producer->frame; auto& rx = *consumer->frame;
+            if (!attached.contains(stream_key(id))) {
+                tx.sink->resume("local", rx.source->next_expected());
+                attached.insert(stream_key(id));
+            }
+            while (auto message = tx.sink->next_message("local")) rx.source->on_message(message.bytes());
+            tx.sink->acknowledge("local", rx.source->consumed_up_to());
+            table.changed.notify_all();
             return;
         }
         static const std::string key = "local";
@@ -602,14 +795,15 @@ InMemoryRuntimeNetEndpoint::InMemoryRuntimeNetEndpoint() : impl_(std::make_uniqu
     auto* impl = impl_.get();
     impl->table.on_producer_data = [impl](StreamEntry& entry) {
         // Within one process there is nothing to batch for: seal at once.
-        entry.producer->flush(Clock::now(), true);
+        if (entry.frame) entry.frame->flush(true);
+        else entry.producer->flush(Clock::now(), true);
         impl->transfer(entry.config.stream_id);
     };
     impl->table.on_consumer_opened = [impl](StreamEntry& entry) { impl->transfer(entry.config.stream_id); };
     impl->table.on_consumed = [impl](StreamEntry& entry) { impl->transfer(entry.config.stream_id); };
 }
 
-InMemoryRuntimeNetEndpoint::~InMemoryRuntimeNetEndpoint() = default;
+InMemoryRuntimeNetEndpoint::~InMemoryRuntimeNetEndpoint() { impl_->table.shutdown_frames(); }
 
 auto InMemoryRuntimeNetEndpoint::backend_name() const -> std::string
 {
@@ -625,6 +819,15 @@ auto InMemoryRuntimeNetEndpoint::open_consumer(const stream::StreamConfig& confi
 {
     return impl_->table.open(config, StreamRole::Consumer);
 }
+
+auto InMemoryRuntimeNetEndpoint::open_frame_producer(const FrameStreamConfig& config) -> StreamHandle { return impl_->table.open_frame(config, StreamRole::Producer); }
+auto InMemoryRuntimeNetEndpoint::open_frame_consumer(const FrameStreamConfig& config) -> StreamHandle { return impl_->table.open_frame(config, StreamRole::Consumer); }
+auto InMemoryRuntimeNetEndpoint::publish_frames(StreamHandle handle, const void* values, std::size_t count) -> frames::PublishResult { return impl_->table.publish_frames(handle, values, count); }
+auto InMemoryRuntimeNetEndpoint::receive_frames(StreamHandle handle, void* values, std::size_t count) -> frames::ReceiveResult { return impl_->table.receive_frames(handle, values, count, [impl = impl_.get()](StreamEntry& entry) {
+        if (auto* producer = impl->table.find_producer(entry.config.stream_id); producer && producer->frame) producer->frame->flush(true);
+        impl->transfer(entry.config.stream_id);
+    }); }
+void InMemoryRuntimeNetEndpoint::fault_frames(StreamHandle handle) { impl_->table.fault_frames(handle); }
 
 void InMemoryRuntimeNetEndpoint::close_stream(const StreamHandle handle)
 {
@@ -642,7 +845,7 @@ auto InMemoryRuntimeNetEndpoint::receive(const StreamHandle handle, void* elemen
     auto* impl = impl_.get();
     return impl->table.receive(handle, elements, count, [impl](StreamEntry& entry) {
         // A waiting consumer: flush the producer's partial batch now and acknowledge.
-        if (auto* producer = impl->table.find_producer(entry.config.stream_id)) {
+        if (auto* producer = impl->table.find_producer(entry.config.stream_id); producer && producer->producer) {
             producer->producer->flush(Clock::now(), true);
         }
         impl->transfer(entry.config.stream_id);
@@ -858,7 +1061,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         , sequences(state_dir.empty() ? std::unique_ptr<stream::SequenceStore>(std::make_unique<stream::MemorySequenceStore>())
                                       : std::unique_ptr<stream::SequenceStore>(
                                             std::make_unique<stream::FileSequenceStore>(std::filesystem::path(state_dir) / "streams")))
-        , table(*sequences)
+        , table(*sequences, limits.frame_buffer_bytes)
     {
     }
 
@@ -872,7 +1075,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         };
         table.on_consumer_opened = [weak](StreamEntry& entry) {
             if (const auto self = weak.lock()) {
-                const auto resume = entry.consumer->resume_message();
+                const auto resume = entry.frame ? entry.frame->resume() : entry.consumer->resume_message();
                 boost::asio::post(self->io, [self, resume, producer_node = entry.config.producer_node] {
                     for (const auto& connection : self->connections) {
                         if (connection->is_data && !connection->closed && may_produce(*connection, producer_node)) {
@@ -905,6 +1108,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             io_thread.join();
         }
         control_pool.join();
+        table.shutdown_frames();
         table.changed.notify_all();
     }
 
@@ -947,7 +1151,20 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             if (wire::is_control_message(message)) {
                 on_stream_control(connection, wire::decode_control_message(message));
             } else {
-                on_data_packet(connection, wire::decode_data_packet(message));
+                if (message.size() >= wire::kDataHeaderBytes && (message[7] & 0x80)) {
+                    const auto alias = std::uint32_t(message[4]) | std::uint32_t(message[5]) << 8 |
+                        std::uint32_t(message[6]) << 16 | std::uint32_t(message[7]) << 24;
+                    std::lock_guard lock(table.mutex);
+                    if (auto* entry = table.find_consumer_by_alias(alias); entry && entry->frame) {
+                        if (!connection.resumed.contains(alias)) {
+                            ++entry->unauthorized;
+                            throw wire::FormatError("Frame packet from an unauthorized producer");
+                        }
+                        entry->frame->source->on_message(message);
+                        consumer_sources[entry->handle.value] = connection.weak_from_this();
+                        table.changed.notify_all();
+                    }
+                } else on_data_packet(connection, wire::decode_data_packet(message));
             }
         } catch (const wire::FormatError& ex) {
             ++malformed_messages;
@@ -963,7 +1180,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             const auto it = connection.producing.find(message.stream_alias);
             if (it != connection.producing.end()) {
                 if (auto* entry = table.find(StreamHandle{it->second})) {
-                    entry->producer->acknowledge(connection.consumer_key, message.next_expected);
+                    if (entry->frame) entry->frame->sink->acknowledge(connection.consumer_key, message.next_expected);
+                    else entry->producer->acknowledge(connection.consumer_key, message.next_expected);
                     table.changed.notify_all();
                 }
             }
@@ -1008,7 +1226,11 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             }
         }
         route = connection.weak_from_this();
-        entry.producer->resume(connection.consumer_key, alias, next);
+        if (entry.frame) {
+            if (alias != entry.frame->alias) throw wire::FormatError("Frame alias does not match stream identity");
+            try { entry.frame->sink->resume(connection.consumer_key, next); }
+            catch (const std::exception& ex) { throw wire::FormatError(ex.what()); }
+        } else entry.producer->resume(connection.consumer_key, alias, next);
         connection.producing[alias] = entry.handle.value;
         connection.producing_alias[entry.handle.value] = alias;
         table.changed.notify_all();
@@ -1086,7 +1308,12 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 if (!entry) {
                     continue;
                 }
-                if (auto message = entry->producer->next_message(connection.consumer_key)) {
+                if (entry->frame) {
+                    if (auto message = entry->frame->sink->next_message(connection.consumer_key)) {
+                        connection.send(std::make_shared<const Bytes>(message.bytes().begin(), message.bytes().end()), true);
+                        progress = true;
+                    }
+                } else if (auto message = entry->producer->next_message(connection.consumer_key)) {
                     connection.send(std::make_shared<const Bytes>(std::move(*message)), true);
                     progress = true;
                 }
@@ -1116,7 +1343,18 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         {
             std::lock_guard lock(table.mutex);
             table.for_each([&](StreamEntry& entry) {
-                if (entry.producer) {
+                if (entry.frame) {
+                    auto& f = *entry.frame;
+                    if (f.sink) flushed |= f.flush();
+                    else if (const auto consumed = f.source->consumed_up_to(); consumed != f.acked) {
+                        if (const auto it = consumer_sources.find(entry.handle.value); it != consumer_sources.end()) {
+                            if (auto connection = it->second.lock()) {
+                                acks.emplace_back(std::move(connection), to_bytes({wire::ControlKind::Ack, f.alias, consumed, {}}));
+                                f.acked = consumed;
+                            }
+                        }
+                    }
+                } else if (entry.producer) {
                     flushed |= entry.producer->flush(now);
                 } else if (const auto ack = entry.consumer->ack_due(now)) {
                     if (const auto it = consumer_sources.find(entry.handle.value); it != consumer_sources.end()) {
@@ -1147,8 +1385,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         {
             std::lock_guard lock(table.mutex);
             table.for_each([&](StreamEntry& entry) {
-                if (entry.consumer && may_produce(connection, entry.config.producer_node)) {
-                    const auto resume = entry.consumer->resume_message();
+                if (entry.role == StreamRole::Consumer && may_produce(connection, entry.config.producer_node)) {
+                    const auto resume = entry.frame ? entry.frame->resume() : entry.consumer->resume_message();
+                    if (entry.frame) entry.frame->acked = UINT64_MAX;
                     connection.resumed.insert(resume.stream_alias);
                     resumes.push_back(to_bytes(resume));
                 }
@@ -1168,7 +1407,8 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 if (route != routes.end() && route->second.lock() == connection) {
                     routes.erase(route);
                     if (auto* entry = table.find(StreamHandle{handle})) {
-                        entry->producer->detach(connection->consumer_key);
+                        if (entry->frame) entry->frame->sink->detach(connection->consumer_key);
+                        else entry->producer->detach(connection->consumer_key);
                     }
                 }
             }
@@ -1761,6 +2001,12 @@ auto BeastRuntimeNetEndpoint::open_consumer(const stream::StreamConfig& config) 
 {
     return impl_->table.open(config, StreamRole::Consumer);
 }
+
+auto BeastRuntimeNetEndpoint::open_frame_producer(const FrameStreamConfig& config) -> StreamHandle { return impl_->table.open_frame(config, StreamRole::Producer); }
+auto BeastRuntimeNetEndpoint::open_frame_consumer(const FrameStreamConfig& config) -> StreamHandle { return impl_->table.open_frame(config, StreamRole::Consumer); }
+auto BeastRuntimeNetEndpoint::publish_frames(StreamHandle handle, const void* values, std::size_t count) -> frames::PublishResult { return impl_->table.publish_frames(handle, values, count); }
+auto BeastRuntimeNetEndpoint::receive_frames(StreamHandle handle, void* values, std::size_t count) -> frames::ReceiveResult { return impl_->table.receive_frames(handle, values, count, {}); }
+void BeastRuntimeNetEndpoint::fault_frames(StreamHandle handle) { impl_->table.fault_frames(handle); }
 
 void BeastRuntimeNetEndpoint::close_stream(const StreamHandle handle)
 {

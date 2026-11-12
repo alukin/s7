@@ -514,6 +514,17 @@ class StreamConsumer:
         if (roles != self.config.timestamp_roles) if self.config.explicit_timestamps else bool(roles):
             self.fault(TIMESTAMP_PROFILE_MISMATCH)
             return False
+        # Validate before decoding/allocating values or changing a recovery position.
+        try:
+            count = wire.payload_element_count(self.config.type, len(packet.payload))
+        except wire.FormatError:
+            self.on_malformed()
+            return False
+        if (count == 0 or len(packet.payload) > wire.MAX_PAYLOAD_BYTES
+                or count > self.config.max_elements_per_packet
+                or (self.config.explicit_timestamps and count != 1)):
+            self.on_malformed()
+            return False
         if self.restart_at_next:
             self.restart_at_next = False
             self.next_expected = packet.sequence

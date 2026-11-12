@@ -127,6 +127,57 @@ void test_gap_and_type_mismatch()
     expect(typed.fault_code() == stream::FaultCode::TypeMismatch, "a packet of another type faults the stream");
 }
 
+void test_consumer_packet_limits()
+{
+    const auto now = stream::Clock::now();
+    for (const auto type : {SignalType::CI12, SignalType::CI16, SignalType::C32}) {
+        const auto c = config(type, 4, 16);
+        for (const auto count : {1u, 4u}) {
+            stream::StreamConsumer consumer(c, 1);
+            wire::DataPacket packet;
+            packet.type = type;
+            packet.payload.resize(wire::payload_bytes(type, count));
+            consumer.on_packet(wire::decode_data_packet(wire::encode_data_packet(packet)), now);
+            expect(consumer.fault_code() == stream::FaultCode::None && consumer.available() == count,
+                   "partial and exact-limit packets accepted");
+        }
+        for (const auto bytes : {std::size_t(0), std::size_t(1), wire::payload_bytes(type, 5)}) {
+            stream::StreamConsumer consumer(c, 1);
+            // Recovery must not take a malformed packet as its new position.
+            consumer.fault(stream::FaultCode::SequenceGap);
+            consumer.recover();
+            wire::DataPacket packet;
+            packet.type = type;
+            packet.sequence = 99;
+            packet.payload.resize(bytes);
+            consumer.on_packet(packet, now);
+            const auto stats = consumer.stats();
+            expect(consumer.fault_code() == stream::FaultCode::MalformedPacket && stats.malformed == 1,
+                   "invalid length/oversized packet faults before decoding");
+            expect(consumer.available() == 0 && stats.packets == 0 && stats.elements == 0 &&
+                       stats.next_expected == 0 && !consumer.ack_due(now + milliseconds(100)),
+                   "rejected data changes neither delivery nor recovery/ACK position");
+        }
+    }
+    auto c = config(SignalType::CI16, 100000, 16);
+    stream::StreamConsumer large(c, 1);
+    wire::DataPacket packet;
+    packet.type = c.type;
+    packet.payload.resize(wire::kMaxPayloadBytes + 4);
+    large.on_packet(packet, now);
+    expect(large.fault_code() == stream::FaultCode::MalformedPacket && large.available() == 0,
+           "global payload limit also enforced for direct consumers");
+
+    c = config(SignalType::CI16, 4, 16);
+    c.timestamp_roles = {wire::TimestampRole::SourceTime};
+    stream::StreamConsumer stamped(c, 1);
+    packet.payload.resize(wire::payload_bytes(c.type, 2));
+    packet.timestamps = {{wire::TimestampRole::SourceTime, 0}};
+    stamped.on_packet(packet, now);
+    expect(stamped.fault_code() == stream::FaultCode::MalformedPacket && stamped.stats().next_expected == 0,
+           "explicit timestamp profile allows one element per packet");
+}
+
 void test_reconnect_replays_without_loss()
 {
     stream::MemorySequenceStore sequences;
@@ -450,6 +501,7 @@ int main()
 try {
     test_batching_and_delivery();
     test_gap_and_type_mismatch();
+    test_consumer_packet_limits();
     test_reconnect_replays_without_loss();
     test_backpressure_and_acks();
     test_retention_and_two_consumers();

@@ -1,0 +1,123 @@
+Test project /tmp/s7-transport-resume
+      Start 31: s7transport_beast_stream_smoke
+      Start 46: s7_two_node_split_mtls
+      Start 47: s7_two_node_split_trusted_plaintext
+ 1/59 Test #47: s7_two_node_split_trusted_plaintext ............   Passed    5.11 sec
+      Start 45: s7_two_node_deployment
+ 2/59 Test #46: s7_two_node_split_mtls .........................   Passed    5.16 sec
+      Start 58: s7tests_coupled_pendulum_smoke
+ 3/59 Test #58: s7tests_coupled_pendulum_smoke .................   Passed    4.78 sec
+      Start 41: s7spectral_sdk_smoke
+ 4/59 Test #45: s7_two_node_deployment .........................   Passed    4.92 sec
+      Start 50: s7tests_nonlinear_examples_smoke
+ 5/59 Test #31: s7transport_beast_stream_smoke .................   Passed   10.24 sec
+      Start 38: s7runtime_deployment_smoke
+ 6/59 Test #50: s7tests_nonlinear_examples_smoke ...............   Passed    2.38 sec
+      Start 59: s7tests_nonlinear_pendulum_smoke
+ 7/59 Test #38: s7runtime_deployment_smoke .....................   Passed    2.38 sec
+      Start  5: s7core_robustness_smoke
+ 8/59 Test  #5: s7core_robustness_smoke ........................   Passed    1.05 sec
+      Start 49: s7tests_control_examples_smoke
+ 9/59 Test #59: s7tests_nonlinear_pendulum_smoke ...............   Passed    1.61 sec
+      Start 55: s7tests_linear_structure_research
+10/59 Test #49: s7tests_control_examples_smoke .................   Passed    1.00 sec
+      Start 34: s7net_frame_elements_smoke
+11/59 Test #55: s7tests_linear_structure_research ..............   Passed    0.92 sec
+      Start 37: s7runtime_control_smoke
+12/59 Test #41: s7spectral_sdk_smoke ...........................   Passed    5.17 sec
+      Start 56: s7tests_numerical_feedback_research
+13/59 Test #34: s7net_frame_elements_smoke .....................   Passed    0.66 sec
+      Start 51: s7tests_measurement_examples_smoke
+14/59 Test #37: s7runtime_control_smoke ........................   Passed    0.55 sec
+      Start 48: s7tests_linear_examples_smoke
+15/59 Test #56: s7tests_numerical_feedback_research ............   Passed    0.43 sec
+      Start 32: s7net_smoke
+16/59 Test #51: s7tests_measurement_examples_smoke .............   Passed    0.30 sec
+      Start 44: s7ctl_plugin_types
+17/59 Test #32: s7net_smoke ....................................   Passed    0.09 sec
+      Start 28: s7transport_frame_fixtures
+18/59 Test #28: s7transport_frame_fixtures .....................   Passed    0.08 sec
+      Start 36: s7noise_smoke
+19/59 Test #44: s7ctl_plugin_types .............................   Passed    0.13 sec
+      Start 15: s7core_pwm_smoke
+20/59 Test #36: s7noise_smoke ..................................   Passed    0.08 sec
+      Start 30: s7transport_wire_fixtures_current
+21/59 Test #15: s7core_pwm_smoke ...............................   Passed    0.07 sec
+      Start 24: s7transport_frame_smoke
+22/59 Test #48: s7tests_linear_examples_smoke ..................   Passed    0.36 sec
+      Start 19: s7core_model_time_smoke
+23/59 Test #30: s7transport_wire_fixtures_current ..............   Passed    0.05 sec
+      Start 40: s7runtime_control_fixtures_current
+24/59 Test #24: s7transport_frame_smoke ........................   Passed    0.05 sec
+      Start 16: s7core_sources_smoke
+25/59 Test #40: s7runtime_control_fixtures_current .............   Passed    0.04 sec
+      Start 25: s7transport_frame_socket_smoke
+26/59 Test #19: s7core_model_time_smoke ........................   Passed    0.05 sec
+      Start  3: s7core_nested_schema_bindings_smoke
+27/59 Test #16: s7core_sources_smoke ...........................   Passed    0.05 sec
+      Start 29: s7transport_wire_fixtures_python
+28/59 Test #25: s7transport_frame_socket_smoke .................   Passed    0.04 sec
+      Start 20: s7core_metadata_json_smoke
+29/59 Test  #3: s7core_nested_schema_bindings_smoke ............   Passed    0.03 sec
+      Start 53: s7tests_symplectic_oscillator_smoke
+30/59 Test #20: s7core_metadata_json_smoke .....................   Passed    0.02 sec
+      Start 13: s7core_trapezoid_smoke
+31/59 Test #53: s7tests_symplectic_oscillator_smoke ............   Passed    0.02 sec
+      Start 21: s7core_convolution_smoke
+32/59 Test #13: s7core_trapezoid_smoke .........................   Passed    0.02 sec
+      Start 33: s7net_diagram_deployment_smoke
+33/59 Test #29: s7transport_wire_fixtures_python ...............   Passed    0.04 sec
+      Start 26: s7transport_stream_protocol_smoke
+34/59 Test #21: s7core_convolution_smoke .......................   Passed    0.02 sec
+      Start 10: s7core_type_inference_smoke
+35/59 Test #26: s7transport_stream_protocol_smoke ..............   Passed    0.01 sec
+      Start  8: s7core_nested_flattening_smoke
+36/59 Test #33: s7net_diagram_deployment_smoke .................   Passed    0.02 sec
+      Start 23: s7io_replay_smoke
+37/59 Test  #8: s7core_nested_flattening_smoke .................   Passed    0.01 sec
+      Start 14: s7core_coupled_integration_smoke
+38/59 Test #10: s7core_type_inference_smoke ....................   Passed    0.01 sec
+      Start  1: s7core_smoke
+39/59 Test #23: s7io_replay_smoke ..............................   Passed    0.01 sec
+      Start  7: s7core_resampler_smoke
+40/59 Test  #1: s7core_smoke ...................................   Passed    0.01 sec
+      Start 54: s7tests_numerical_integration_research_smoke
+41/59 Test  #7: s7core_resampler_smoke .........................   Passed    0.01 sec
+      Start 18: s7core_schema_elements_smoke
+42/59 Test #14: s7core_coupled_integration_smoke ...............   Passed    0.02 sec
+      Start 11: s7core_rate_inference_smoke
+43/59 Test #11: s7core_rate_inference_smoke ....................   Passed    0.01 sec
+      Start 57: s7tests_diagram_harness_smoke
+44/59 Test #54: s7tests_numerical_integration_research_smoke ...   Passed    0.01 sec
+      Start 39: s7runtime_control_fixtures_smoke
+45/59 Test #18: s7core_schema_elements_smoke ...................   Passed    0.01 sec
+      Start  9: s7core_signal_types_smoke
+46/59 Test #57: s7tests_diagram_harness_smoke ..................   Passed    0.01 sec
+      Start 43: s7ctl_smoke
+47/59 Test #39: s7runtime_control_fixtures_smoke ...............   Passed    0.01 sec
+      Start  2: s7core_indexed_execution_smoke
+48/59 Test  #9: s7core_signal_types_smoke ......................   Passed    0.01 sec
+      Start 52: s7tests_linear_scalar_smoke
+49/59 Test #43: s7ctl_smoke ....................................   Passed    0.01 sec
+      Start 17: s7core_control_elements_smoke
+50/59 Test #52: s7tests_linear_scalar_smoke ....................   Passed    0.00 sec
+      Start 35: s7observe_smoke
+51/59 Test  #2: s7core_indexed_execution_smoke .................   Passed    0.01 sec
+      Start 42: s7runtime_plugin_loader_smoke
+52/59 Test #35: s7observe_smoke ................................   Passed    0.01 sec
+      Start 22: s7io_smoke
+53/59 Test #42: s7runtime_plugin_loader_smoke ..................   Passed    0.01 sec
+      Start 27: s7transport_wire_format_smoke
+54/59 Test #17: s7core_control_elements_smoke ..................   Passed    0.02 sec
+55/59 Test #22: s7io_smoke .....................................   Passed    0.00 sec
+      Start  6: s7core_design_rate_smoke
+      Start  4: s7core_step_rollback_smoke
+56/59 Test #27: s7transport_wire_format_smoke ..................   Passed    0.00 sec
+      Start 12: s7core_signal_types_strict_smoke
+57/59 Test #12: s7core_signal_types_strict_smoke ...............   Passed    0.00 sec
+58/59 Test  #6: s7core_design_rate_smoke .......................   Passed    0.01 sec
+59/59 Test  #4: s7core_step_rollback_smoke .....................   Passed    0.01 sec
+
+100% tests passed, 0 tests failed out of 59
+
+Total Test time (real) =  16.05 sec

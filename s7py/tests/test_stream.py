@@ -73,6 +73,35 @@ def take_all(consumer, type_name="F64"):
 
 
 class StreamProtocolTest(unittest.TestCase):
+    def test_consumer_packet_limits(self):
+        for name in ("CI12", "CI16", "C32"):
+            t = wire.wire_type(name)
+            for count in (1, 4):
+                consumer = stream.StreamConsumer(config(name, 4, 16), 1)
+                packet = wire.DataPacket(t, 1, 0, bytes(wire.payload_bytes(t, count)))
+                consumer.on_packet(wire.decode_data_packet(wire.encode_data_packet(packet)), T0)
+                self.assertIsNone(consumer.fault_code)
+                self.assertEqual(consumer.available(), count)
+            for size in (0, 1, wire.payload_bytes(t, 5)):
+                consumer = stream.StreamConsumer(config(name, 4, 16), 1)
+                consumer.fault(stream.SEQUENCE_GAP)
+                consumer.recover()
+                consumer.on_packet(wire.DataPacket(t, 1, 99, bytes(size)), T0)
+                self.assertEqual(consumer.fault_code, stream.MALFORMED_PACKET)
+                stats = consumer.stats()
+                self.assertEqual((consumer.available(), stats["packets"], stats["elements"],
+                                  stats["next_expected"], stats["malformed"]), (0, 0, 0, 0, 1))
+                self.assertIsNone(consumer.ack_due(T0 + 100 * MS))
+        t = wire.wire_type("CI16")
+        consumer = stream.StreamConsumer(config("CI16", 100000, 16), 1)
+        consumer.on_packet(wire.DataPacket(t, 1, 0, bytes(wire.MAX_PAYLOAD_BYTES + 4)), T0)
+        self.assertEqual(consumer.fault_code, stream.MALFORMED_PACKET)
+        self.assertEqual(consumer.available(), 0)
+        consumer = stream.StreamConsumer(config("CI16", 4, 16, timestamp_roles=[wire.SOURCE_TIME]), 1)
+        consumer.on_packet(wire.DataPacket(t, 1, 0, bytes(8), [(wire.SOURCE_TIME, 0)]), T0)
+        self.assertEqual(consumer.fault_code, stream.MALFORMED_PACKET)
+        self.assertEqual(consumer.stats()["next_expected"], 0)
+
     def test_batching_and_delivery(self):
         producer = stream.StreamProducer(config("F64", 4, 16), stream.MemorySequenceStore())
         consumer = stream.StreamConsumer(config("F64", 4, 16), 7)

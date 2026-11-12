@@ -95,7 +95,44 @@ public final class StreamProtocolCheck {
         return numbers(consumer.config.type, consumer.take((int) consumer.available(), null));
     }
 
+    static void testConsumerPacketLimits() {
+        for (WireType type : List.of(WireType.CI12, WireType.CI16, WireType.C32)) {
+            for (int count : new int[]{1, 4}) {
+                StreamConsumer consumer = new StreamConsumer(config(type, 4, 16), 1);
+                var packet = new WireFormat.DataPacket(type, 1, 0, new byte[WireFormat.payloadBytes(type, count)]);
+                consumer.onPacket(WireFormat.decodeDataPacket(WireFormat.encodeDataPacket(packet)), T0, null);
+                expect(consumer.faultCode() == null && consumer.available() == count,
+                        "partial and exact-limit packets accepted");
+            }
+            for (int size : new int[]{0, 1, WireFormat.payloadBytes(type, 5)}) {
+                StreamConsumer consumer = new StreamConsumer(config(type, 4, 16), 1);
+                consumer.fault(Faults.SEQUENCE_GAP);
+                consumer.recover();
+                consumer.onPacket(new WireFormat.DataPacket(type, 1, 99, new byte[size]), T0, null);
+                expect(Faults.MALFORMED_PACKET.equals(consumer.faultCode()) && consumer.malformed() == 1,
+                        "invalid length/oversized packet faults before decoding");
+                expect(consumer.available() == 0 && consumer.packets() == 0 && consumer.elements() == 0
+                                && consumer.nextExpected() == 0 && consumer.ackDue(T0 + 100 * MS) == null,
+                        "rejected data changes neither delivery nor recovery/ACK position");
+            }
+        }
+        StreamConsumer large = new StreamConsumer(config(WireType.CI16, 100000, 16), 1);
+        large.onPacket(new WireFormat.DataPacket(WireType.CI16, 1, 0, new byte[WireFormat.MAX_PAYLOAD_BYTES + 4]), T0, null);
+        expect(Faults.MALFORMED_PACKET.equals(large.faultCode()) && large.available() == 0,
+                "global payload limit enforced for direct consumers");
+        StreamConfig c = config(WireType.CI16, 4, 16);
+        c.timestampRoles = List.of(WireFormat.SOURCE_TIME);
+        StreamConsumer stamped = new StreamConsumer(c, 1);
+        var packet = new WireFormat.DataPacket(WireType.CI16, 1, 0, new byte[8]);
+        packet = new WireFormat.DataPacket(packet.type(), packet.streamAlias(), packet.sequence(),
+                packet.payload(), List.of(new WireFormat.TimestampRecord(WireFormat.SOURCE_TIME, 0)), null);
+        stamped.onPacket(packet, T0, null);
+        expect(Faults.MALFORMED_PACKET.equals(stamped.faultCode()) && stamped.nextExpected() == 0,
+                "explicit timestamp profile allows one element per packet");
+    }
+
     public static void main(String[] args) throws Exception {
+        testConsumerPacketLimits();
         WireType f64 = WireType.F64;
 
         // batching and delivery

@@ -282,32 +282,29 @@ ElementSpec make_element_spec(std::string id, const ElementDescriptor& descripto
     for (const auto& port : metadata.output_ports) {
         generic.output_rules.push_back(rule_of(port.type_rule, port.type));
     }
-    // The port count without creating the element: fixed, or the length of
-    // the parameter that sets it.
-    if (!metadata.variadic_inputs.enabled) {
-        generic.input_count = metadata.input_ports.size();
-    } else if (const auto& count = metadata.variadic_inputs.count_parameter; !count.empty()) {
+    // Bound metadata-sized channel counts before type inference allocates rules.
+    auto port_count = [&](const VariadicInputSpec& ports, std::size_t fixed) -> std::optional<std::size_t> {
+        if (!ports.enabled) return fixed;
+        const auto& count = ports.count_parameter;
         const boost::json::value* sizing = params.if_contains(count);
         if (!sizing) {
             const auto spec = std::find_if(metadata.parameters.begin(), metadata.parameters.end(),
-                                           [&](const ParameterSpec& parameter) { return parameter.name == count; });
+                [&](const ParameterSpec& parameter) { return parameter.name == count; });
             sizing = spec != metadata.parameters.end() ? &spec->default_value : nullptr;
         }
         std::optional<std::uint64_t> requested;
-        if (sizing && sizing->is_array()) {
-            requested = sizing->as_array().size();
-        } else if (sizing && sizing->is_int64() && sizing->get_int64() >= 0) {
-            requested = static_cast<std::uint64_t>(sizing->get_int64());
-        } else if (sizing && sizing->is_uint64()) {
-            requested = sizing->get_uint64();
-        }
-        // Type inference allocates one rule per port before the parameter checks
-        // report an oversized count, so cap the ports it sees just past the
-        // maximum: still invalid, but bounded for any untrusted count.
-        if (requested) {
-            generic.input_count = static_cast<std::size_t>(
-                std::min<std::uint64_t>(*requested, std::uint64_t{metadata.variadic_inputs.max_count} + 1));
-        }
+        if (sizing && sizing->is_array()) requested = sizing->as_array().size();
+        else if (sizing && sizing->is_int64() && sizing->as_int64() >= 0) requested = sizing->as_int64();
+        else if (sizing && sizing->is_uint64()) requested = sizing->as_uint64();
+        if (!requested) return std::nullopt;
+        return static_cast<std::size_t>(std::min<std::uint64_t>(*requested, std::uint64_t{ports.max_count} + 1));
+    };
+    generic.input_count = port_count(metadata.variadic_inputs, metadata.input_ports.size());
+    if (metadata.variadic_outputs.enabled) {
+        const auto& ports = metadata.variadic_outputs;
+        const auto count = port_count(ports, 0);
+        if (!count) throw std::invalid_argument("Element '" + id + "': invalid output channel count.");
+        generic.output_rules.assign(*count, rule_of(ports.type_rule, ports.signal_type));
     }
     generic.create = [shared, alias, id, params = std::move(params)](const std::span<const SignalType> types) {
         std::vector<SignalType> effective(types.begin(), types.end());

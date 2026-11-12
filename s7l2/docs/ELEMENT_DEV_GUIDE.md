@@ -81,6 +81,13 @@ Generic elements that work on both real and complex values are written as templa
 
 Variable input count is expressed through parameters: `Adder` takes `weights` and `Multiply` takes `factors`, and the number of input ports equals the array length. Both require 2–64 inputs; omitting the array defaults to two unit weights/factors, while explicitly supplying an empty, single-entry or oversized array is an error. The same bounds apply to direct C++ construction. `ElementMetadata::variadic_inputs` documents this for tools; set its `count_parameter` to that array parameter, so tools and type inference know the ports without creating the element. A factory runs once per compilation (validation reuses the instances), so side effects in constructors happen once.
 
+For named output channels, `ElementMetadata::variadic_outputs` uses the same
+sizing fields as `variadic_inputs`. Set `count_parameter` to the channel-name
+array and `type_rule` to the channel variable. Both inference and Studio use its
+length without creating the element. `port_name_template: "{channel}"` tells
+Studio to display those names, as NetFrameSource/NetFrameSink do. Port counts
+are bounded before inference allocates rules.
+
 ## Metadata
 
 The in-memory API is `s7core/include/s7/element_metadata.hpp`. Author complete

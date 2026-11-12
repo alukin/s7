@@ -1,0 +1,65 @@
+{
+  "validated_at_utc": "2026-11-12T11:30:18.912432+00:00",
+  "host": {
+    "system": "Linux",
+    "machine": "x86_64",
+    "compiler": "GCC 16.2.1",
+    "qt": "6.11.2",
+    "build": "Release"
+  },
+  "source_sha256": {
+    "s7core/include/s7/element.hpp": "9283e01cebb221eb04bbf292988802ae37b08f9560581483755b8831d000e92e",
+    "s7core/include/s7/element_metadata.hpp": "f9a603c4913f40c109cb37fdc322889bb15fdd9960a9de46946a26746f5ca12a",
+    "s7core/src/element_registry.cpp": "168ee3c41c40ebfa7626d6a493de11605f445baf81a0316c1a4508ed863b545d",
+    "s7core/src/element_catalog.cpp": "e80d41008a6835fa9f4518ad5f6a47908e5b3c647b6d3b8cbe436925b605c151",
+    "s7core/src/metadata_json.cpp": "f7394d7605f4ab9d9eff895fbb527d967185462433ee818d897a6fa291d956a3",
+    "s7core/src/runtime.cpp": "de4c7a15d8673f3f45728db1c3ce829172a4ea37788eacc8bf2f361a01c41745",
+    "s7core/tests/core_smoke.cpp": "053d8654f51569532cb861d717522d47780da97c5512152d56504688fac3d220",
+    "s7core/tests/metadata_json_smoke.cpp": "67e68e6bc27b078d7797a3c00ac58984da567b0c98cb8a1b6cd96974e7038791",
+    "s7net/CMakeLists.txt": "daf451317febf949717017133c48a4b40370bb70f9e16aba92c750896e780325",
+    "s7net/include/s7/net_frames.hpp": "17e4077d52b7e3abd99d41b193cfa44e508b66582e2b36d0f159353eddaab4df",
+    "s7net/src/net_frames.cpp": "d7336475f00ccdd7b8f8cd8530b98c33be6c16076ac78d8ca9ca41c1b9123a60",
+    "s7net/src/net.cpp": "1ccb51349f72705f209ebdc6f44e27a32527cf89971c83377e572abd131833a8",
+    "s7net/resources/element_metadata.json": "ee42e7d7a61a07087aa0a8b93ec1db980896170c2f96db6350b35b78a0731e68",
+    "s7net/tests/frame_elements_smoke.cpp": "55352e2220a5b84176f68f6e2b2cf1002faee64fba1c8313de791fd3a754e15b",
+    "s7transport/include/s7/transport.hpp": "0d92daf7ce1389a0f336ff9047fc8b8d406bf3a036402eba799abe63a14dcb09",
+    "s7transport/include/s7/frame_transport.hpp": "f3ad36220a1413d8d17ec6537455e91aa4c52cdd74070c9a603bcfad66805d9f",
+    "s7transport/src/transport.cpp": "40b473271d3c15be35c27ea61bc21cf19f4c0cd8f9ef2b998c0d1dd3ac97a9d1",
+    "s7transport/src/frame_transport.cpp": "819ee467e74a2f25ec29f3de963af87ffe86467a4d326062678a66507eeef260",
+    "s7runtime/src/runtime_service.cpp": "1683feabda7165e93927ab6a6440e3f58096fda0d86191c69ee733e18868e554",
+    "s7runtime/tests/control_plane_smoke.cpp": "45cb195369d2739d675fae0952b92b76d1ffea5faa742d57ae1c77b74e411ad4",
+    "s7studio/src/diagram/element_ports.cpp": "3ccf4fa2e5496e9326bcff3d7cbaf811898d9e8a652569042a864af17534c89b",
+    "s7studio/src/element_documentation.cpp": "66c5826b8c42b62bb85f75f315257c5a6829fc07ea80ba632e210a4de801b0ca",
+    "s7studio/tests/gui/workflows_test.cpp": "5090421c8107025ad9f1d521adbca0c4f3e2f6ecb61b9d0f8bac8ea668b49ba4",
+    "s7runtime/examples/schema_frame_sink.json": "5bf61dab3e17f79ee178f95e542b5a9de5ca5567a9055f111ee0d0c0e4b429f1",
+    "s7runtime/examples/schema_frame_source.json": "78a8c3a8a0acdb5a6e3ce2aa116de7d4715cf7779d423827e0009d6590ba7921"
+  },
+  "headless": {
+    "total": 59,
+    "passed": 59,
+    "log": "frame-elements-headless.txt"
+  },
+  "gui": {
+    "total_including_fixture": 4,
+    "passed": 4,
+    "workflows": [
+      "frameElementsLibraryAndPorts",
+      "elementDocumentationCoverage"
+    ],
+    "xml": "frame-elements-gui.xml",
+    "capture": "frame-elements-studio.png",
+    "log": "Command: ['build-release/s7studio/s7studio_gui_workflows_test', 'frameElementsLibraryAndPorts', 'elementDocumentationCoverage']\nDisplay: :2\n********* Start testing of Workflows *********\nConfig: Using QtTest library 6.11.2, Qt 6.11.2 (x86_64-little_endian-lp64 shared (dynamic) release build; by GCC 16.2.1 20260819 (Red Hat 16.2.1-2)), fedora 45\nQINFO  : Workflows::initTestCase() Qt 6.11.2 platform \"xcb\" display \":2\"\nPASS   : Workflows::initTestCase()\nPlugin search paths:\n  - \"/home/al/projects/s7/s7l2/build-release/s7studio/plugins\"\n  - \"/home/al/projects/s7/s7l2/build-release/s7studio/../lib/s7/plugins\"\n  - \"/home/al/projects/s7/s7l2/build-release/s7studio/../lib64/s7/plugins\"\n  - \"/home/al/.s7/plugins\"\n  - \"/opt/s7/plugins\"\n  - \"./plugins\"\nLoaded 0 plugins\n  Plugin: s7noise v1.0.0 by S7 Project (2 elements)\n  Successfully loaded 2 elements\nQDEBUG : Workflows::frameElementsLibraryAndPorts() qt.scenegraph.general: rhi texture atlas dimensions: 512x512\nPASS   : Workflows::frameElementsLibraryAndPorts()\nPlugin search paths:\n  - \"/home/al/projects/s7/s7l2/build-release/s7studio/plugins\"\n  - \"/home/al/projects/s7/s7l2/build-release/s7studio/../lib/s7/plugins\"\n  - \"/home/al/projects/s7/s7l2/build-release/s7studio/../lib64/s7/plugins\"\n  - \"/home/al/.s7/plugins\"\n  - \"/opt/s7/plugins\"\n  - \"./plugins\"\nLoaded 1 plugins\nPASS   : Workflows::elementDocumentationCoverage()\nPASS   : Workflows::cleanupTestCase()\nTotals: 4 passed, 0 failed, 0 skipped, 0 blacklisted, 621ms\n********* Finished testing of Workflows *********\n"
+  },
+  "interoperability": {
+    "checks": 789,
+    "unavailable_codec_skips": 0,
+    "log": "C++ -> C++: 46 verified frames\nC++ -> Python: 46 verified frames\nC++ -> Java: 46 verified frames\nPython -> C++: 46 verified frames\nPython -> Python: 46 verified frames\nPython -> Java: 46 verified frames\nJava -> C++: 46 verified frames\nJava -> Python: 46 verified frames\nJava -> Java: 46 verified frames\n789 frame fixture/interoperability checks passed; 0 unavailable-codec cases skipped\n"
+  },
+  "cli_startup": "Both canonical schemas compiled and started via mutual TLS with stepping disabled; graph value transfer covered separately by s7net_frame_elements_smoke",
+  "limits": [
+    "Linux validation only",
+    "Explicit preconfigured peer connections; automatic frame routing/capability negotiation and aggregate deployment admission pending",
+    "Synthetic model-time frame ports; no OS audio devices or bulk graph execution",
+    "No sustained throughput qualification"
+  ]
+}

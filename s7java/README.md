@@ -31,6 +31,18 @@ languages exchange streams. Standard library only, Java 21 or later.
   `PreviousValue`, `Comparator`, `NetSink` and `NetSource`.
 - `s7.json`: a small JSON reader and writer that keeps integers and reals apart, as Boost.JSON does.
 
+## Frame transport service
+
+The opt-in `s7.frames` package now matches C++'s frame transport: raw numeric
+frames, optional independent LZ4/Zstandard codecs, bounded immutable leases,
+consumption ACKs/replay and ordered loss faults. All 25 whole-byte numeric types
+preserve their bits. It is separate from `DataNode`'s deployed F64 graph path;
+frame capabilities are not advertised yet. Java 21 compilation remains
+standard-library-only; optional codec jars are supplied at runtime through
+`S7_FRAME_CODEC_CLASSPATH` for the tests. See the
+[cross-language guide](../doc/S7_Frame_Interoperability.md) for APIs, dependencies
+and shared conformance commands.
+
 ## Not implemented
 
 The control protocol: `DataNode` takes its part from a diagram file (for example the one

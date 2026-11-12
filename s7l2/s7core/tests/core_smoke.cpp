@@ -22,6 +22,15 @@
 
 namespace {
 
+class FailureBoundary final : public s7::Element {
+public:
+    explicit FailureBoundary(int& failures) : Element("FailureBoundary",true), failures_(failures) {}
+    void step() override {}
+    void on_step_failure() noexcept override { ++failures_; }
+private:
+    int& failures_;
+};
+
 s7::Schema make_valid_schema()
 {
     s7::Schema schema{"valid_feedback"};
@@ -884,7 +893,9 @@ int main() try
         // A causal-order element that faults (Divider's zero-denominator
         // check) must not leave an earlier causal element's published output
         // partially advanced: the whole step is reverted, not torn.
+        int failures = 0;
         s7::Schema schema{"causal_atomicity"};
+        schema.add_element("boundary", [&] { return std::make_unique<FailureBoundary>(failures); });
         schema.set_rate(s7::Rate::from_hz(1));
         schema.add_element("source", [] { return std::make_unique<s7::Constant>(1.0); });
         schema.add_element("accum", [] { return std::make_unique<s7::Accumulator>(0.0); });
@@ -906,6 +917,7 @@ int main() try
             if (!threw) {
                 throw std::runtime_error("Expected the zero-denominator Divider to fault the step.");
             }
+            assert(failures == attempt + 1); // external boundaries are notified once per failed sample
             // 'accum' runs before 'div' in causal order; its output must stay
             // at its pre-step value, not the sum it computed before the fault.
             if (runtime.real_output_of("accum") != 0.0) {

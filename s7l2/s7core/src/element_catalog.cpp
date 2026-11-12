@@ -5,9 +5,26 @@
 
 #include <algorithm>
 #include <set>
+#include <limits>
 #include <string>
 
 namespace s7 {
+
+namespace {
+int default_port_count(const ElementMetadata& metadata, const VariadicInputSpec& ports, std::size_t fixed) {
+    if (!ports.enabled) return static_cast<int>(fixed);
+    auto count = std::uint64_t(ports.min_count);
+    const auto parameter = std::ranges::find_if(metadata.parameters,
+        [&](const ParameterSpec& spec) { return spec.name == ports.count_parameter; });
+    if (parameter != metadata.parameters.end()) {
+        const auto& value = parameter->default_value;
+        if (value.is_array()) count = value.as_array().size();
+        else if (value.is_uint64()) count = value.as_uint64();
+        else if (value.is_int64() && value.as_int64() >= 0) count = value.as_int64();
+    }
+    return static_cast<int>(std::min<std::uint64_t>(count, std::min<std::uint64_t>(ports.max_count, std::numeric_limits<int>::max())));
+}
+}
 
 ElementCatalogService::ElementCatalogService(const ElementRegistry& registry)
     : registry_(registry)
@@ -27,8 +44,8 @@ void ElementCatalogService::build_entries() const
             .description = metadata.description,
             .category = metadata.category,
             .version = metadata.version,
-            .input_count = static_cast<int>(metadata.input_ports.size()),
-            .output_count = static_cast<int>(metadata.output_ports.size())
+            .input_count = default_port_count(metadata, metadata.variadic_inputs, metadata.input_ports.size()),
+            .output_count = default_port_count(metadata, metadata.variadic_outputs, metadata.output_ports.size())
         };
 
         entries_.push_back(entry);
@@ -108,8 +125,8 @@ boost::json::value ElementCatalogService::to_json() const
         element["display_name"] = metadata.display_name;
         element["description"] = metadata.description;
         element["version"] = metadata.version;
-        element["input_count"] = static_cast<int>(metadata.input_ports.size());
-        element["output_count"] = static_cast<int>(metadata.output_ports.size());
+        element["input_count"] = default_port_count(metadata, metadata.variadic_inputs, metadata.input_ports.size());
+        element["output_count"] = default_port_count(metadata, metadata.variadic_outputs, metadata.output_ports.size());
         element["schema_based"] = metadata.schema_definition.has_value();
         if (metadata.schema_definition.has_value()) {
             element["schema"] = *metadata.schema_definition;
@@ -193,10 +210,24 @@ boost::json::value ElementCatalogService::to_json() const
             variadic["max_count"] = static_cast<std::uint64_t>(metadata.variadic_inputs.max_count);
             variadic["port_name_template"] = metadata.variadic_inputs.port_name_template;
             variadic["signal_type"] = std::string(signal_type_name(metadata.variadic_inputs.signal_type));
+            variadic["type_rule"] = metadata.variadic_inputs.type_rule;
             if (!metadata.variadic_inputs.count_parameter.empty()) {
                 variadic["count_parameter"] = metadata.variadic_inputs.count_parameter;
             }
             element["variadic_inputs"] = variadic;
+        }
+        if (metadata.variadic_outputs.enabled) {
+            boost::json::object variadic;
+            variadic["enabled"] = true;
+            variadic["min_count"] = static_cast<std::uint64_t>(metadata.variadic_outputs.min_count);
+            variadic["max_count"] = static_cast<std::uint64_t>(metadata.variadic_outputs.max_count);
+            variadic["port_name_template"] = metadata.variadic_outputs.port_name_template;
+            variadic["signal_type"] = std::string(signal_type_name(metadata.variadic_outputs.signal_type));
+            variadic["type_rule"] = metadata.variadic_outputs.type_rule;
+            if (!metadata.variadic_outputs.count_parameter.empty()) {
+                variadic["count_parameter"] = metadata.variadic_outputs.count_parameter;
+            }
+            element["variadic_outputs"] = variadic;
         }
 
         auto& categoryElements = result[metadata.category];

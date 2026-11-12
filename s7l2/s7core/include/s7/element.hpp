@@ -160,6 +160,11 @@ public:
     // NodeRuntime uses that coupled stage instead of their ordinary step().
     virtual void step() = 0;
 
+    // Called when this rate domain's sample fails. External-effect boundaries
+    // can latch a fault so retry cannot silently consume/publish another sample.
+    // This notification does not roll back private state or external effects.
+    virtual void on_step_failure() noexcept {}
+
 protected:
     Element(std::string_view type_name,
             bool has_state = false,

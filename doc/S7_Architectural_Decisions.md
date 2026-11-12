@@ -1101,6 +1101,87 @@ Only a `Schema` stepped on its own, outside a compiled graph, keeps a private ru
 
 ------------------------------------------------------------------------
 
+# ADR-025
+
+## Title
+
+Sample-Frame Profile and Bounded Immutable Ownership, Preserving Causal Execution
+
+## Status
+
+**Accepted 2026-11-12 by the maintainer; C++/Python/Java frame services implemented.** Approval
+covers the transport-only contract. The maintainer subsequently authorized raw
+audio and independent lossless compression; its implemented encoding contract is
+in the [C++ service guide](../s7l2/docs/FRAME_TRANSPORT.md). Deployment/capability
+integration remains pending. Graph commit/failure/bulk execution, OS audio devices
+and perceptual codec policies remain follow-up decisions. The frame contract is
+[S7_Sample_Stream_Profile.md](S7_Sample_Stream_Profile.md).
+
+Compatible Python/Java services and shared raw/LZ4/Zstandard fixtures are now
+checked against all three implementations; see the
+[interoperability guide](S7_Frame_Interoperability.md). This does not enable
+runtime deployment or advertise frame capabilities automatically.
+
+The maintainer subsequently requested element-library and Studio integration.
+Explicit `NetFrameSource`/`NetFrameSink` scalar adapters now preserve one logical
+frame per evaluation and use bounded runtime endpoint batching. Failed domain
+samples notify their elements; these boundaries latch a fault and refuse retry
+rather than silently advancing consumption/publication. Legacy retry behavior,
+causal-memory ordering and completed rate-domain progress remain unchanged.
+See [frame elements](../s7l2/docs/FRAME_ELEMENTS.md). Bulk execution, automatic frame
+routing/capability negotiation and aggregate deployment admission remain separate.
+
+## Context
+
+Wire v1 already batches numeric values and supports ordered replay. The current
+NetSource/NetSink nevertheless call the endpoint for one value per logical step.
+Hardware streams also need simultaneous channel layout, frame positions, clock
+provenance and source/sink loss information. Faster hardware should not encounter
+an architectural limit derived from the current bench's Ethernet speed.
+
+The [initial measurements](../s7l2/docs/performance/transport-2026-11-12/README.md)
+establish only verified host transport baselines. They do not qualify device
+timing, production graph throughput or a new scheduler. An in-memory scalar-call
+comparison also changed actual packetization, demonstrating why API calls,
+packets and logical samples must remain distinct.
+
+## Decision
+
+1. Introduce an explicitly advertised `sample_frames_v1` profile using the
+   existing v1 framing and a critical SAMPLE_FRAMES extension. A frame contains
+   one value per named channel at a declared grid position. Frame rate and packet
+   sequence have separate meanings; native types and explicit resampling remain intact.
+2. Use bounded immutable owned leases and an explicit borrowed/copy API, with
+   whole-frame partial results, cancellation and byte/frame resource quotas.
+   Keep consumption ACKs/replay; defer receiver-credit messages until needed by
+   evidence. This does not promise zero-copy networking or durable sample replay.
+3. Keep strict loss behavior. Unknown source time/counts stay unknown. Use
+   an ordered terminal fault marker after the already sealed valid prefix, with
+   a reserved bounded slot, then explicit authorized recovery into a new segment.
+   This accepted new-profile fault behavior does not change legacy
+   scalar stream faults implicitly.
+4. Implement the transport service first. Recommend channel-wise scalar ports
+   at future frame boundaries. Preserve logical sample evaluation, causal-memory
+   publication and rate-domain rules. Review graph commit/failure/lease handling
+   separately before any T4 adapter or bulk execution change. A packet/block is
+   never silently substituted for a model step.
+
+## Consequences
+
+New profile combinations are admitted only when both nodes advertise support;
+unsupported nodes reject deployment. Shared C++/Python/Java fixtures precede
+interoperability claims. Metadata, counters, source timing and delivery guarantees
+remain explicit. The fault-only packet is a profile-specific exception
+to nonempty numeric payload, not a relaxation for legacy wire streams.
+
+Acceptance authorizes transport implementation of the profile document. It does
+not claim that support exists or change current runtime behavior by itself.
+Implementation and conformance checks must enforce the specified event schemas
+and resource accounting before capability advertisement. The audio/compression
+[research](S7_Audio_and_Frame_Compression_Research.md) records the follow-up scope.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

@@ -1,5 +1,13 @@
 # Wire format fixtures
 
+The separate [`frames_v1.json`](frames_v1.json) corpus covers the new opt-in
+raw/encoded frame profiles (46 valid, 42 invalid cases). All C++/Python/Java
+implementations consume it. Raw/fault encoders match canonical bytes; compressed
+encoders may produce different bytes that must decode to exactly the same frame
+positions, metadata and numeric bits. See the
+[cross-language guide](../../../../doc/S7_Frame_Interoperability.md) for generation,
+provider dependencies and checks. The scalar corpus below remains unchanged.
+
 `wire_v1.json` is the conformance data for the S7 data stream wire format,
 version 1 (`../doc/S7_Network_Wire_Protocol_v1.md`). Any implementation, in any
 language, should pass all of it:

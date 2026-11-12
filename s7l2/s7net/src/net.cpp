@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include "s7/net.hpp"
+#include "s7/net_frames.hpp"
 #include "s7/metadata_json.hpp"
 #include "net_metadata.hpp"
 
@@ -174,6 +175,7 @@ auto RuntimeNetContext::endpoint() -> transport::RuntimeNetEndpointPtr
 
 void register_net_elements(ElementRegistry& registry)
 {
+    register_net_frame_elements(registry);
     static const ElementMetadataLibrary metadata(resources::net_metadata);
     if (registry.find("NetSink") == nullptr) {
         registry.register_element(ElementDescriptor(

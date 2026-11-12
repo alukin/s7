@@ -1,0 +1,58 @@
+{
+  "name": "stereo-frame-consumer",
+  "elements": [
+    {
+      "id": "frames",
+      "type": "NetFrameSource",
+      "params": {
+        "stream_id": "197488c5-1100-4000-8000-000000000002",
+        "type": "F32",
+        "channels": [
+          "L",
+          "R"
+        ],
+        "frame_rate": [
+          48000,
+          1
+        ],
+        "encoding": "raw",
+        "max_frames_per_packet": 128,
+        "window_packets": 4,
+        "max_block_ms": 30000,
+        "max_wait_ms": 30000
+      }
+    },
+    {
+      "id": "left_gain",
+      "type": "Gain",
+      "params": {
+        "type": "F32",
+        "factor": 2
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from_element": "frames",
+      "from_port": 0,
+      "to_element": "left_gain",
+      "to_port": 0
+    }
+  ],
+  "websocket": {
+    "client": {
+      "enabled": true,
+      "url": "wss://127.0.0.1:9012",
+      "tls": {
+        "enabled": true,
+        "cert_file": "s7runtime/examples/certs/s7_runtime_node_b.cert.pem",
+        "key_file": "s7runtime/examples/certs/s7_runtime_node_b.key.pem",
+        "ca_file": "s7runtime/examples/certs/s7_root_ca.cert.pem",
+        "require_client_cert": true
+      }
+    }
+  },
+  "execution": {
+    "step_rate_hz": 48000
+  }
+}

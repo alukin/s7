@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-12",
+  "base_revision": "5214416c0f65d504da787affbdae710c58297ca9",
+  "uncommitted_work": true,
+  "source_sha256": {
+    "../s7py/s7node/frames.py": "d774ed69e3f7c2cb0876dd777e741e5be28785000ffa914e012ae47ff9a34aa4",
+    "../s7py/tests/test_frames.py": "2b10441b4d9ee229878958a2c7b9a862a22af496ce6083538f59a270003625e1",
+    "../s7py/tools/frame_interop.py": "2ef36ba4b5d56a74459b0f2a417be797c4214847ac89df8988105a0a4d58784b",
+    "../s7py/requirements-frames.txt": "cc334a0d553a12ca91f658afb6bb012fc0b4db0f8aaffdf7f0d232e43d2f73f1",
+    "../s7java/build.sh": "690e7c0c4a3dc300b8a3eea82737ce9cb9b192af92134e63f061dd94277f46cf",
+    "../s7java/src/s7/frames/FrameBuffers.java": "b94cb3db7a994130bfd7146c181508e6186e2a3ec7f6c75c6f265a68a71d99cc",
+    "../s7java/src/s7/frames/FrameFormat.java": "4771845f87bb60a9e2db617b3f21c8ca9dbc027a9b5ad324d88001aad2977085",
+    "../s7java/src/s7/frames/FrameSink.java": "4f43d097f766bec3c985e9d6ceb9b82a7a8ec9348930a0621bd7967de6a82d89",
+    "../s7java/src/s7/frames/FrameSource.java": "28b48fe865ac958a5c5f07dfbeda875d71b951e08c5e6ca0247aeb5046fcb431",
+    "../s7java/test/s7/frames/FrameInterop.java": "5a3c6f07a950f729069ba50929522dbac93020eb0bf5bb0b793a3bfa6b0a04ed",
+    "../s7java/test/s7/frames/FrameCheck.java": "ccb6e07db2a7c82b155eaad65e2c65378525171e234e2145158d117b11f6d06f",
+    "s7transport/include/s7/frame_transport.hpp": "83aeabd5aa293b74895bef97dca6c674317143fc1bf15c3c6f70fc7638a6a816",
+    "s7transport/src/frame_transport.cpp": "aaefbdef2b88de9bb0bb084ac150d5825fe547998aeff5f26377eb66f6f69b67",
+    "s7transport/tests/frame_interop.cpp": "2b886ce134850d2490b467a949224d6013c9e4291350e011a4c81de74a735be8",
+    "s7transport/tests/fixtures/frames_v1.json": "d8c37f743a88e13d455e18e9f4e15cf41b8dca2d25480b817c22135b64de9b33",
+    "s7transport/CMakeLists.txt": "be05b46e01ae5f509f439018990fce4be3d7ef0ab33d24b93f3cff079921a6e2",
+    "tools/check_frame_fixtures.py": "8a0e0e0758c8ba447c88133d6dfa20d13b9da1622796c1e2c598f2fb027a5b78",
+    "tools/gen_frame_fixtures.py": "b9f94f88640fd1e4552c255ea02761df58bcb60dff229e736891efe17682cba4"
+  },
+  "java_codec_artifacts": [
+    {
+      "path": "/tmp/s7-frame-java-codecs/lz4-java-1.14.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/at/yawk/lz4/lz4-java/1.14.0/lz4-java-1.14.0.jar",
+      "sha256": "e7d51c6ab599f88953f8f45b000da8f920eaba69fd5f24244431e0bca5b2f03b"
+    },
+    {
+      "path": "/tmp/s7-frame-java-codecs/zstd-jni-1.5.7-26.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-26/zstd-jni-1.5.7-26.jar",
+      "sha256": "2d03193dd02c4495be80b4aad571b78a9a21dd6e2cfeb63ae57451c53a9cd074"
+    }
+  ],
+  "python_optional_providers": {
+    "lz4": "4.4.5",
+    "zstandard": "0.25.0"
+  },
+  "commands": [
+    "cmake --build /tmp/s7-sdr-audit --target s7transport_frame_interop --parallel 4",
+    "ctest --test-dir /tmp/s7-sdr-audit -R '^(s7transport_|s7net_smoke)' --output-on-failure",
+    "S7_FRAME_CODEC_CLASSPATH='/tmp/s7-frame-java-codecs/*' ./build.sh --test",
+    "java -cp build s7.frames.FrameCheck",
+    "/tmp/s7-frames-venv/bin/python -m unittest discover -s tests",
+    "python3 -m unittest discover -s tests",
+    "python3 tools/check_frame_fixtures.py --require-codecs --cpp /tmp/s7-sdr-audit/s7transport/s7transport_frame_interop --python /tmp/s7-frames-venv/bin/python --java-classpath '../s7java/build:/tmp/s7-frame-java-codecs/*'"
+  ],
+  "logs": {
+    "cpp_transport_net": "Test project /tmp/s7-sdr-audit\n    Start 24: s7transport_frame_smoke\n1/9 Test #24: s7transport_frame_smoke .............   Passed    0.05 sec\n    Start 25: s7transport_frame_socket_smoke\n2/9 Test #25: s7transport_frame_socket_smoke ......   Passed    0.04 sec\n    Start 26: s7transport_stream_protocol_smoke\n3/9 Test #26: s7transport_stream_protocol_smoke ...   Passed    0.01 sec\n    Start 27: s7transport_wire_format_smoke\n4/9 Test #27: s7transport_wire_format_smoke .......   Passed    0.01 sec\n    Start 28: s7transport_frame_fixtures\n5/9 Test #28: s7transport_frame_fixtures ..........   Passed    0.06 sec\n    Start 29: s7transport_wire_fixtures_python\n6/9 Test #29: s7transport_wire_fixtures_python ....   Passed    0.03 sec\n    Start 30: s7transport_wire_fixtures_current\n7/9 Test #30: s7transport_wire_fixtures_current ...   Passed    0.03 sec\n    Start 31: s7transport_beast_stream_smoke\n8/9 Test #31: s7transport_beast_stream_smoke ......   Passed   10.31 sec\n    Start 32: s7net_smoke\n9/9 Test #32: s7net_smoke .........................   Passed    0.09 sec\n\n100% tests passed, 0 tests failed out of 9\n\nTotal Test time (real) =  10.64 sec\n",
+    "java_with_codecs": "WARNING: A restricted method in java.lang.System has been called\nWARNING: java.lang.System::loadLibrary has been called by com.github.luben.zstd.util.Native$1 in an unnamed module (file:/tmp/s7-frame-java-codecs/zstd-jni-1.5.7-26.jar)\nWARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module\nWARNING: Restricted methods will be blocked in a future release unless native access is enabled\n\n591 frame checks passed; 0 unavailable-codec fixtures skipped\n78 of 78 fixtures pass\nstream protocol: 59 checks pass\nnode: 30 checks pass\nnet: 14 checks pass\ntransport: 8 checks pass\n",
+    "java_raw_only": "511 frame checks passed; 22 unavailable-codec fixtures skipped\n",
+    "python_with_codecs": "................................................................................\n----------------------------------------------------------------------\nRan 80 tests in 3.064s\n\nOK\nok    hello\nok    node_info\nok    peer_announce\nok    peers\nok    list_idle\nok    configuration_none\nok    prepare_unauthorized\nok    prepare\nok    prepare_repeated\nok    prepare_tampered\nok    commit_activation_too_far\nok    commit\nok    commit_repeated\nok    commit_bad_token\nok    list_active\nok    configuration\nok    begin_transfer\nok    chunk\nok    chunk_out_of_order\nok    end_transfer\nok    prepare_from_transfer\nok    abort\nok    abort_repeated\nok    prepare_too_large\nskip  stream_status\nok    recover_unauthorized\nskip  recover\nskip  recover_repeated\nskip  status_after_recovery\nok    unsupported_type\nok    missing_request_id\nok    unsupported_version\nall steps passed\n",
+    "python_raw_only": "................................................................................\n----------------------------------------------------------------------\nRan 80 tests in 2.890s\n\nOK\nok    hello\nok    node_info\nok    peer_announce\nok    peers\nok    list_idle\nok    configuration_none\nok    prepare_unauthorized\nok    prepare\nok    prepare_repeated\nok    prepare_tampered\nok    commit_activation_too_far\nok    commit\nok    commit_repeated\nok    commit_bad_token\nok    list_active\nok    configuration\nok    begin_transfer\nok    chunk\nok    chunk_out_of_order\nok    end_transfer\nok    prepare_from_transfer\nok    abort\nok    abort_repeated\nok    prepare_too_large\nskip  stream_status\nok    recover_unauthorized\nskip  recover\nskip  recover_repeated\nskip  status_after_recovery\nok    unsupported_type\nok    missing_request_id\nok    unsupported_version\nall steps passed\n",
+    "interoperability": "C++ -> C++: 46 verified frames\nC++ -> Python: 46 verified frames\nC++ -> Java: 46 verified frames\nPython -> C++: 46 verified frames\nPython -> Python: 46 verified frames\nPython -> Java: 46 verified frames\nJava -> C++: 46 verified frames\nJava -> Python: 46 verified frames\nJava -> Java: 46 verified frames\n789 frame fixture/interoperability checks passed; 0 unavailable-codec cases skipped\n"
+  },
+  "qualification": {
+    "wire_pairs_verified": 9,
+    "valid_frames_per_pair": 46,
+    "shared_valid_fixtures": 46,
+    "shared_invalid_fixtures": 42,
+    "frame_conformance_checks": 789,
+    "new_runtime_capability_advertised": false,
+    "new_runtime_deployment_integrated": false,
+    "cross_host_performance_measured": false,
+    "managed_allocation_free": false
+  }
+}

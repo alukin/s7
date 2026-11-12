@@ -358,6 +358,383 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "NetFrameSink",
+      "display_name": "Net Frame Sink",
+      "description": "Publishes one simultaneous channel frame per graph step. Raw or independent lossless LZ4/Zstandard transport. Channel types, order, rate and encoding must match both ends. A failed graph sample latches the boundary; restart with a new stream UUID. Model-time grid only; hardware audio devices and automatic cross-node frame routing are separate integrations.",
+      "category": "network",
+      "version": "1.0.0",
+      "tags": [
+        "network",
+        "frames",
+        "audio",
+        "compression",
+        "transport"
+      ],
+      "input_ports": [],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Channel value type; inferred from all connected channels",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "stream_id",
+          "type": "string",
+          "description": "UUID shared by both ends. Use a new UUID after a fault or any descriptor change.",
+          "default": null,
+          "required": true,
+          "enum_values": []
+        },
+        {
+          "name": "channels",
+          "type": "array",
+          "description": "Ordered unique channel names, 1\u201364. Each graph step transfers one value on every channel.",
+          "default": [
+            "L",
+            "R"
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "frame_rate",
+          "type": "array",
+          "description": "Exact logical frames/second as [numerator, denominator]. Packet size never changes this rate.",
+          "default": [
+            48000,
+            1
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "encoding",
+          "type": "enum",
+          "description": "Independent lossless blocks; both ends must select the same encoding. Missing codec support is an error.",
+          "default": "raw",
+          "required": false,
+          "enum_values": [
+            "raw",
+            "lz4",
+            "zstd"
+          ]
+        },
+        {
+          "name": "max_frames_per_packet",
+          "type": "int",
+          "description": "Maximum frames per packet; numeric payload must fit 256 KiB.",
+          "default": 128,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 262144
+        },
+        {
+          "name": "window_packets",
+          "type": "int",
+          "description": "Bounded replay/receive packet window; pools reserve worst-case payload capacity.",
+          "default": 4,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 256
+        },
+        {
+          "name": "max_batch_latency_ms",
+          "type": "int",
+          "description": "Flush a partial packet after this interval; this is transport batching, not model time.",
+          "default": 10,
+          "required": false,
+          "enum_values": [],
+          "min": 0,
+          "max": 60000
+        },
+        {
+          "name": "max_block_ms",
+          "type": "int",
+          "description": "Maximum wait for publish capacity; failure latches the boundary.",
+          "default": 2000,
+          "required": false,
+          "enum_values": [],
+          "min": 0,
+          "max": 60000
+        },
+        {
+          "name": "max_wait_ms",
+          "type": "int",
+          "description": "Maximum wait for a complete input frame; never invents missing values.",
+          "default": 2000,
+          "required": false,
+          "enum_values": [],
+          "min": 0,
+          "max": 60000
+        },
+        {
+          "name": "producer_node",
+          "type": "string",
+          "description": "Expected producer node UUID; transport enforces this peer restriction.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "consumer_nodes",
+          "type": "array",
+          "description": "Allowed consumer node UUIDs; transport enforces these peer restrictions.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI12",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#5C6BC0",
+        "max_width": 140,
+        "max_height": 96,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": true,
+        "min_count": 1,
+        "max_count": 64,
+        "port_name_template": "{channel}",
+        "signal_type": "F64",
+        "type_rule": "T",
+        "count_parameter": "channels"
+      }
+    },
+    {
+      "type_name": "NetFrameSource",
+      "display_name": "Net Frame Source",
+      "description": "Outputs one simultaneous channel frame per graph step. Raw or independent lossless LZ4/Zstandard transport. Channel types, order, rate and encoding must match both ends. A failed graph sample latches the boundary; restart with a new stream UUID. Model-time grid only; hardware audio devices and automatic cross-node frame routing are separate integrations.",
+      "category": "network",
+      "version": "1.0.0",
+      "tags": [
+        "network",
+        "frames",
+        "audio",
+        "compression",
+        "transport"
+      ],
+      "input_ports": [],
+      "output_ports": [],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Channel value type; inferred from all connected channels",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "stream_id",
+          "type": "string",
+          "description": "UUID shared by both ends. Use a new UUID after a fault or any descriptor change.",
+          "default": null,
+          "required": true,
+          "enum_values": []
+        },
+        {
+          "name": "channels",
+          "type": "array",
+          "description": "Ordered unique channel names, 1\u201364. Each graph step transfers one value on every channel.",
+          "default": [
+            "L",
+            "R"
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "frame_rate",
+          "type": "array",
+          "description": "Exact logical frames/second as [numerator, denominator]. Packet size never changes this rate.",
+          "default": [
+            48000,
+            1
+          ],
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "encoding",
+          "type": "enum",
+          "description": "Independent lossless blocks; both ends must select the same encoding. Missing codec support is an error.",
+          "default": "raw",
+          "required": false,
+          "enum_values": [
+            "raw",
+            "lz4",
+            "zstd"
+          ]
+        },
+        {
+          "name": "max_frames_per_packet",
+          "type": "int",
+          "description": "Maximum frames per packet; numeric payload must fit 256 KiB.",
+          "default": 128,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 262144
+        },
+        {
+          "name": "window_packets",
+          "type": "int",
+          "description": "Bounded replay/receive packet window; pools reserve worst-case payload capacity.",
+          "default": 4,
+          "required": false,
+          "enum_values": [],
+          "min": 1,
+          "max": 256
+        },
+        {
+          "name": "max_batch_latency_ms",
+          "type": "int",
+          "description": "Flush a partial packet after this interval; this is transport batching, not model time.",
+          "default": 10,
+          "required": false,
+          "enum_values": [],
+          "min": 0,
+          "max": 60000
+        },
+        {
+          "name": "max_block_ms",
+          "type": "int",
+          "description": "Maximum wait for publish capacity; failure latches the boundary.",
+          "default": 2000,
+          "required": false,
+          "enum_values": [],
+          "min": 0,
+          "max": 60000
+        },
+        {
+          "name": "max_wait_ms",
+          "type": "int",
+          "description": "Maximum wait for a complete input frame; never invents missing values.",
+          "default": 2000,
+          "required": false,
+          "enum_values": [],
+          "min": 0,
+          "max": 60000
+        },
+        {
+          "name": "producer_node",
+          "type": "string",
+          "description": "Expected producer node UUID; transport enforces this peer restriction.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "consumer_nodes",
+          "type": "array",
+          "description": "Allowed consumer node UUIDs; transport enforces these peer restrictions.",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "I8",
+            "U8",
+            "I16",
+            "U16",
+            "I32",
+            "U32",
+            "I64",
+            "U64",
+            "I128",
+            "U128",
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128",
+            "CI8",
+            "CU8",
+            "CI12",
+            "CI16",
+            "CI32",
+            "CI64",
+            "CI128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#5C6BC0",
+        "max_width": 140,
+        "max_height": 96,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 1,
+        "max_count": 64,
+        "port_name_template": "{channel}",
+        "signal_type": "F64",
+        "type_rule": "T",
+        "count_parameter": "channels"
+      },
+      "variadic_outputs": {
+        "enabled": true,
+        "min_count": 1,
+        "max_count": 64,
+        "port_name_template": "{channel}",
+        "signal_type": "F64",
+        "type_rule": "T",
+        "count_parameter": "channels"
+      }
     }
   ]
 }

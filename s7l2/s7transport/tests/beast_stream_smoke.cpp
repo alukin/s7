@@ -257,6 +257,28 @@ void test_both_directions()
     }
 }
 
+// Deliberately violate the receiver descriptor through an otherwise valid wire packet.
+void test_stream_packet_limit_over_websocket()
+{
+    transport::BeastRuntimeNetEndpoint server, client;
+    const auto port = server.configure_server(0);
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port));
+    auto producer_config = config("f35a043e-6319-4232-a9c4-c8a39975f511");
+    producer_config.max_elements_per_packet = 2;
+    auto consumer_config = producer_config;
+    consumer_config.max_elements_per_packet = 1;
+    const auto producer = server.open_producer(producer_config);
+    client.open_consumer(consumer_config);
+    const double values[] = {1, 2};
+    expect(server.publish(producer, values, 2).fault == stream::FaultCode::None, "oversized test packet published");
+    expect(wait_for([&] {
+        return client.stream_statuses().front().fault == stream::FaultCode::MalformedPacket;
+    }), "stream descriptor limit enforced after real wire decoding");
+    const auto status = client.stream_statuses().front();
+    expect(status.next_sequence == 0 && status.elements == 0 && status.buffered_elements == 0 && status.malformed == 1,
+           "oversized wire packet is neither delivered nor acknowledged");
+}
+
 // A steady stream of one-element packets, one per millisecond, reaches the consumer at once:
 // with Nagle's algorithm each small segment waits for the acknowledgement of the previous
 // one, which the receiver delays.
@@ -895,6 +917,7 @@ void test_latency_over_websocket()
 int main()
 try {
     test_both_directions();
+    test_stream_packet_limit_over_websocket();
     test_small_packets_are_not_delayed();
     test_resume_across_dropped_connections();
     test_two_mtls_consumers();

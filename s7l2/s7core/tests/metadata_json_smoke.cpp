@@ -81,6 +81,20 @@ int main()
             parameter["min"] = 4; parameter["max"] = 2;
         }, "minimum exceeds maximum");
         mutation([](auto& root) { root["elements"].as_array().front().at("parameters").as_array().front().as_object()["default"] = 123; }, "must be a type name");
+        {
+            auto document = baseline;
+            auto& entry = document.at("elements").as_array().front().as_object();
+            entry["variadic_outputs"] = entry.at("variadic_inputs");
+            const s7::ElementMetadataLibrary extended(boost::json::serialize(document));
+            require(extended.at(std::string(entry.at("type_name").as_string())).variadic_outputs.count_parameter ==
+                entry.at("variadic_inputs").at("count_parameter").as_string(), "Output channel sizing metadata was lost");
+        }
+        mutation([](auto& root) {
+            auto& entry = root["elements"].as_array().front().as_object();
+            entry["variadic_outputs"] = entry["variadic_inputs"];
+            entry["variadic_outputs"].as_object()["enabled"] = true;
+            entry["variadic_outputs"].as_object()["count_parameter"] = "missing";
+        }, "count parameter");
         std::cout << "Metadata JSON: factories, defaults, constraints, type rules and malformed resources verified\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; return 1;

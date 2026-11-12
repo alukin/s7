@@ -23,6 +23,7 @@
 
 #include <s7/control_plane.hpp>
 #include <s7/net.hpp>
+#include <s7/net_frames.hpp>
 #include <s7/runtime_service.hpp>
 #include <s7/transport.hpp>
 
@@ -66,6 +67,30 @@ int main()
             catch (const std::invalid_argument&) { rejected = true; }
             assert(rejected);
         }
+    }
+    {
+        // Frame boundaries are available to a headless service through the
+        // same registry as Studio; channel count and rate survive JSON loading.
+        s7::register_builtin_elements(s7::ElementRegistry::instance());
+        s7::register_net_elements(s7::ElementRegistry::instance());
+        const auto state_dir = make_temp_state_dir("frame-library");
+        auto definition = s7::JsonSchemaLoader::load_from_json(boost::json::parse(R"({
+            "name":"frame-library", "elements":[
+                {"id":"left","type":"Constant","params":{"type":"I16","value":123}},
+                {"id":"right","type":"Constant","params":{"type":"I16","value":456}},
+                {"id":"frames","type":"NetFrameSink","params":{
+                    "stream_id":"197488c5-1100-4000-8000-000000000001","channels":["left","right"],
+                    "frame_rate":[48000,1],"max_frames_per_packet":8,"window_packets":2}}
+            ], "connections":[
+                {"from_element":"left","from_port":0,"to_element":"frames","to_port":0},
+                {"from_element":"right","from_port":0,"to_element":"frames","to_port":1}
+            ]})").as_object());
+        {
+            s7::RuntimeService service{definition, state_dir};
+            service.initialize_graph(); service.step();
+            assert(service.step_count() == 1);
+        }
+        std::filesystem::remove_all(state_dir);
     }
     {
         // A recorded source is available through the runtime schema loader,

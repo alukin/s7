@@ -12,7 +12,7 @@ Paths such as `s7l2/s7runtime/...` in these documents are relative to the reposi
 | [S7_Formal_Model.md](S7_Formal_Model.md) | Computational model: Element, Schema, Connection, State, causal memory |
 | [S7_Architecture_Overview.md](S7_Architecture_Overview.md) | Core principles and architectural invariants |
 | [S7_Terminology.md](S7_Terminology.md) | Official glossary |
-| [S7_Architectural_Decisions.md](S7_Architectural_Decisions.md) | ADR log (ADR-001 … ADR-019) |
+| [S7_Architectural_Decisions.md](S7_Architectural_Decisions.md) | Architectural decisions and explicitly proposed ADRs |
 | [S7_Runtime_Architecture.md](S7_Runtime_Architecture.md) | Runtime pipeline: validate → compile → execute → observe |
 | [S7_Observation_Architecture.md](S7_Observation_Architecture.md) | Read-only observation subsystem, probes, Studio as observation client |
 | [S7_Sample_Rate_Model.md](S7_Sample_Rate_Model.md) | Proposed design: rate/`dt` as an inferred port property, mirroring the type system (not implemented) |
@@ -24,6 +24,9 @@ Paths such as `s7l2/s7runtime/...` in these documents are relative to the reposi
 | [S7_Control_Protocol_MVP.md](S7_Control_Protocol_MVP.md) | Control protocol: discovery, node info, prepare/commit deployment |
 | [S7_Network_Wire_Protocol_v1.md](S7_Network_Wire_Protocol_v1.md) | Binary inter-node data-stream wire format |
 | [S7_Net_Element_Contract.md](S7_Net_Element_Contract.md) | `NetSink` / `NetSource` element contract |
+| [S7_Sample_Stream_Profile.md](S7_Sample_Stream_Profile.md) | Accepted sample-frame/ownership contract; C++/Python/Java services implemented, runtime integration pending |
+| [S7_Frame_Interoperability.md](S7_Frame_Interoperability.md) | C++/Python/Java frame services, optional compression providers, shared wire fixtures and interoperability checks |
+| [S7_Audio_and_Frame_Compression_Research.md](S7_Audio_and_Frame_Compression_Research.md) | Audio clocks, deadlines and compression research; links the initial C++ raw/lossless implementation |
 | [REMOTE_NODE_INFO_AND_DEPLOYMENT.md](REMOTE_NODE_INFO_AND_DEPLOYMENT.md) | Node capability descriptor, discovery/membership, deployment model, message JSON examples |
 | [IDENTITY_AND_CREDENTIAL_PROVISIONING.md](IDENTITY_AND_CREDENTIAL_PROVISIONING.md) | X.509 node identity, Studio authorization, credential lifecycle |
 | [DISTRIBUTED_ADDRESSING.md](DISTRIBUTED_ADDRESSING.md) | Node, runtime, schema-instance, and element-instance identifiers |

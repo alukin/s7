@@ -90,6 +90,7 @@ struct ElementMetadata {
 
     VisualHints visual;                     // For diagram rendering
     VariadicInputSpec variadic_inputs;      // If element supports variadic inputs
+    VariadicInputSpec variadic_outputs;     // Same sizing rules for output channels
     std::optional<boost::json::value> schema_definition; // Schema-backed element payload, if any
     std::string library;                    // Owning module or schema library; empty: unavailable
     // Conservative UI/research hint: true only when the element has no mutable

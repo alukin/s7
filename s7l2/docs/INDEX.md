@@ -98,6 +98,11 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Indexed serial runtime design and measured results; corrected FFT/FIR experiments and deferred scheduler ideas |
 | [RELEASE_0.3.0_RUNTIME_PARALLELISM.md](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) | Established facts, candidate approaches and open decisions for within-node parallel execution |
 | `S7_Transport_Architecture.md` | `s7transport` / `s7runtime` / `s7net` boundaries, security and data-plane baseline |
+| [SDR_TRANSPORT_IMPROVEMENT_PLAN.md](SDR_TRANSPORT_IMPROVEMENT_PLAN.md) | Proposed staged high-rate sample transport work: validation, benchmarks, frame/metadata contract, bounded buffers and block execution |
+| [SAMPLE_TRANSPORT_BENCHMARK.md](SAMPLE_TRANSPORT_BENCHMARK.md) | Opt-in verified codec, bulk/scalar graph, duplex and paced sample measurements; scope and reproduction commands |
+| [S7_Audio_and_Frame_Compression_Research.md](../../doc/S7_Audio_and_Frame_Compression_Research.md) | Audio device clocks/deadlines, compression source/sink candidates and proposed qualification work |
+| [FRAME_TRANSPORT.md](FRAME_TRANSPORT.md) | C++ frame source/sink service, bounded ownership, independent LZ4/Zstandard codecs and audio validation |
+| [S7_Frame_Interoperability.md](../../doc/S7_Frame_Interoperability.md) | Compatible Python/Java frame services, codec providers and shared conformance across all three languages |
 | [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) | Separate mTLS control and configurable encrypted/trusted-plaintext data listeners, configuration and cross-language contract |
 
 ## Developer guides
@@ -147,3 +152,5 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 - [Numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md): currently validated linear configurations, independent references, tolerances and bundled-example classification; distinct from the planned 0.2.0 research matrix.
 
 - [Studio visual usability audit (2026-10-21)](usability/2026-10-21/AUDIT.md): production screenshots, severity-ranked findings, incremental improvements and human-review limits.
+
+- [Frame source/sink elements](FRAME_ELEMENTS.md): named channel ports, lossless encoding, Studio configuration and explicit endpoint setup.

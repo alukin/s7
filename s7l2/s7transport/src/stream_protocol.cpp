@@ -375,6 +375,19 @@ bool StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
         fault(FaultCode::TimestampProfileMismatch);
         return false;
     }
+    // Validate before allocating decoded storage or changing a recovery position.
+    std::size_t element_count;
+    try {
+        element_count = wire::payload_element_count(config_.type, packet.payload.size());
+    } catch (const wire::FormatError&) {
+        on_malformed();
+        return false;
+    }
+    if (element_count == 0 || packet.payload.size() > wire::kMaxPayloadBytes ||
+        element_count > config_.max_elements_per_packet || (config_.explicit_timestamps() && element_count != 1)) {
+        on_malformed();
+        return false;
+    }
     if (restart_at_next_) {
         restart_at_next_ = false;
         next_expected_ = packet.sequence;
@@ -392,7 +405,7 @@ bool StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     BufferedPacket buffered;
     buffered.sequence = packet.sequence;
     buffered.timestamps = packet.timestamps;
-    buffered.elements = wire::payload_element_count(config_.type, packet.payload.size());
+    buffered.elements = element_count;
     buffered.values.resize(buffered.elements * signal_type_info(config_.type).storage_bytes);
     wire::decode_elements(config_.type, packet.payload, buffered.values.data());
     buffered_elements_ += buffered.elements;

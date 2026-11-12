@@ -96,7 +96,7 @@ ElementMetadata decode(const object& source)
     metadata.type_name = string(source, "type_name", "element");
     const auto& context = metadata.type_name;
     keys(source, {"type_name", "display_name", "description", "category", "version", "tags", "input_ports", "output_ports",
-                  "parameters", "type_variables", "visual", "variadic_inputs", "stateless"}, context);
+                  "parameters", "type_variables", "visual", "variadic_inputs", "variadic_outputs", "stateless"}, context);
     metadata.display_name = string(source, "display_name", context);
     metadata.description = string(source, "description", context);
     metadata.category = string(source, "category", context);
@@ -176,18 +176,21 @@ ElementMetadata decode(const object& source)
     const auto width = count(visual, "max_width", context), height = count(visual, "max_height", context);
     if (width > std::numeric_limits<int>::max() || height > std::numeric_limits<int>::max()) invalid(context, "visual dimensions exceed integer range");
     metadata.visual.max_width = static_cast<int>(width); metadata.visual.max_height = static_cast<int>(height);
-    const auto& v = as_object(required(source, "variadic_inputs", context), context + ".variadic_inputs");
-    keys(v, {"enabled", "min_count", "max_count", "port_name_template", "signal_type", "type_rule", "count_parameter"}, context);
-    auto& inputs = metadata.variadic_inputs;
-    inputs.enabled = boolean(v, "enabled", context);
-    inputs.min_count = count(v, "min_count", context); inputs.max_count = count(v, "max_count", context);
-    inputs.port_name_template = string(v, "port_name_template", context);
-    inputs.signal_type = parse_signal_type(string(v, "signal_type", context));
-    inputs.type_rule = string(v, "type_rule", context);
-    inputs.count_parameter = string(v, "count_parameter", context);
-    check_rule(inputs.type_rule);
-    if (inputs.enabled && (inputs.min_count > inputs.max_count || !parameter_names.contains(inputs.count_parameter)))
-        invalid(context, "invalid variadic range or undeclared count parameter");
+    auto decode_variadic = [&](const object& v, VariadicInputSpec& inputs) {
+        keys(v, {"enabled", "min_count", "max_count", "port_name_template", "signal_type", "type_rule", "count_parameter"}, context);
+        inputs.enabled = boolean(v, "enabled", context);
+        inputs.min_count = count(v, "min_count", context); inputs.max_count = count(v, "max_count", context);
+        inputs.port_name_template = string(v, "port_name_template", context);
+        inputs.signal_type = parse_signal_type(string(v, "signal_type", context));
+        inputs.type_rule = string(v, "type_rule", context);
+        inputs.count_parameter = string(v, "count_parameter", context);
+        check_rule(inputs.type_rule);
+        if (inputs.enabled && (inputs.min_count > inputs.max_count || !parameter_names.contains(inputs.count_parameter)))
+            invalid(context, "invalid variadic range or undeclared count parameter");
+    };
+    decode_variadic(as_object(required(source, "variadic_inputs", context), context), metadata.variadic_inputs);
+    if (const auto* outputs = source.if_contains("variadic_outputs"))
+        decode_variadic(as_object(*outputs, context), metadata.variadic_outputs);
     return metadata;
 }
 }

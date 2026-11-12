@@ -3,6 +3,7 @@
 
 add_library(s7net STATIC
     src/net.cpp
+    src/net_frames.cpp
     src/diagram_deployment.cpp
     src/canonical_json.cpp
     src/deployment_client.cpp
@@ -31,3 +32,10 @@ target_link_libraries(s7net_diagram_deployment_smoke PRIVATE s7net)
 target_compile_definitions(s7net_diagram_deployment_smoke PRIVATE
     S7_WIRE_FIXTURES="${PROJECT_SOURCE_DIR}/s7transport/tests/fixtures/wire_v1.json")
 add_test(NAME s7net_diagram_deployment_smoke COMMAND s7net_diagram_deployment_smoke)
+
+s7_add_test_executable(s7net_frame_elements_smoke tests/frame_elements_smoke.cpp)
+target_link_libraries(s7net_frame_elements_smoke PRIVATE s7net)
+target_compile_definitions(s7net_frame_elements_smoke PRIVATE S7_TEST_CERT_DIR="${PROJECT_SOURCE_DIR}/s7runtime/examples/certs")
+s7_enable_project_warnings(s7net_frame_elements_smoke)
+add_test(NAME s7net_frame_elements_smoke COMMAND s7net_frame_elements_smoke)
+set_tests_properties(s7net_frame_elements_smoke PROPERTIES TIMEOUT 45)

@@ -4,6 +4,7 @@
 #include "main_window.hpp"
 #include "diagram_editor.hpp"
 #include "diagram/diagram_scene.hpp"
+#include "diagram/element_ports.hpp"
 #include "element_picker_panel.hpp"
 #include "element_documentation.hpp"
 #include "library_element.hpp"
@@ -568,6 +569,37 @@ private slots:
         QVERIFY(!editor()->addLibraryElement("UnavailablePlugin"));
         QVERIFY(!editor()->addLibraryElement("Gain", QPointF(std::numeric_limits<double>::infinity(),0)));
         QCOMPARE(window_->currentDocument(), original);
+    }
+    void frameElementsLibraryAndPorts() {
+        using namespace s7studio;
+        auto* tree = window_->findChild<QTreeWidget*>("elements.tree"); QVERIFY(tree);
+        auto* search = window_->findChild<QLineEdit*>("elements.search"); QVERIFY(search); search->setText("NetFrame");
+        int index = 0;
+        for (const auto* type : {"NetFrameSink", "NetFrameSource"}) {
+            const bool sink = std::string_view(type) == "NetFrameSink";
+            QVERIFY(libraryItem(tree, type));
+            QCOMPARE(libraryItem(tree, type)->text(1), sink ? QString("2→0") : QString("0→2"));
+            QVERIFY(editor()->addLibraryElement(type, QPointF(80 + 240 * index++,80)));
+            const auto ports = diagram::elementPorts(type, {}, {});
+            const auto& names = std::string_view(type) == "NetFrameSink" ? ports.inputs : ports.outputs;
+            QCOMPARE(names.size(), std::size_t{2}); QCOMPARE(names[0], QString("L")); QCOMPARE(names[1], QString("R"));
+            const auto custom = diagram::elementPorts(type, {{"channels", boost::json::array{"front","rear","sub"}}}, {});
+            const auto& channels = std::string_view(type) == "NetFrameSink" ? custom.inputs : custom.outputs;
+            QCOMPARE(channels.size(), std::size_t{3}); QCOMPARE(channels[2], QString("sub"));
+            auto node = scene()->elementNode(sink ? "netframesink_1" : "netframesource_1"); QVERIFY(node);
+            auto configured = node->element();
+            configured.params["stream_id"] = "197488c5-1100-4000-8000-000000000003";
+            configured.params["channels"] = boost::json::array{"front","rear","sub"};
+            node->setElement(configured);
+            QCOMPARE(sink ? node->inputs().size() : node->outputs().size(), std::size_t{3});
+            const auto documentation = ui::elementDocumentation(s7::ElementRegistry::instance(), type);
+            for (const auto* field : {"frame_rate", "channels", "encoding", "lz4", "zstd", "latches"})
+                QVERIFY2(documentation.contains(field), field);
+        }
+        const auto saved = window_->currentDocument();
+        const auto loaded = diagram::DiagramDocument::fromJson(saved);
+        QVERIFY(loaded.toJson() == saved);
+        capture(window_.get(), "frame-elements-library", true);
     }
     void elementDocumentationCoverage() {
         using namespace s7studio;

@@ -96,27 +96,33 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
 
     if (const auto* descriptor = s7::ElementRegistry::instance().find(std::string(type))) {
         const auto& metadata = descriptor->metadata();
-        int inputCount = static_cast<int>(metadata.input_ports.size());
-        if (metadata.variadic_inputs.enabled && !metadata.variadic_inputs.count_parameter.empty()) {
-            const auto& parameter = metadata.variadic_inputs.count_parameter;
-            const auto* sizing = json_utils::findObjectValue(params, parameter.c_str());
-            if (sizing && sizing->is_array()) {
-                inputCount = static_cast<int>(sizing->as_array().size());
-            } else if (sizing && sizing->is_number()) {
-                inputCount = json_utils::intValue(params, parameter.c_str(), inputCount);
-            } else if (!sizing) {
+        auto names = [&](const s7::VariadicInputSpec& ports, const std::vector<s7::PortSpec>& fixed, const char* prefix) {
+            if (!ports.enabled || ports.count_parameter.empty()) return metadataNames(fixed, prefix, 0);
+            const auto* sizing = json_utils::findObjectValue(params, ports.count_parameter.c_str());
+            if (!sizing) {
                 const auto spec = std::find_if(metadata.parameters.begin(), metadata.parameters.end(),
-                                               [&](const s7::ParameterSpec& item) { return item.name == parameter; });
-                if (spec != metadata.parameters.end()) {
-                    if (spec->default_value.is_array()) {
-                        inputCount = static_cast<int>(spec->default_value.as_array().size());
-                    } else if (spec->default_value.is_number()) {
-                        inputCount = static_cast<int>(json_utils::numberValue(spec->default_value));
-                    }
-                }
+                    [&](const s7::ParameterSpec& item) { return item.name == ports.count_parameter; });
+                if (spec != metadata.parameters.end()) sizing = &spec->default_value;
             }
-        }
-        return {metadataNames(metadata.input_ports, "in", inputCount), metadataNames(metadata.output_ports, "out", 0)};
+            int count = static_cast<int>(fixed.size());
+            if (sizing && sizing->is_array()) {
+                count = static_cast<int>(std::min<std::size_t>(sizing->as_array().size(), ports.max_count));
+                if (ports.port_name_template == "{channel}") {
+                    std::vector<QString> result;
+                    for (int index = 0; index < count; ++index) {
+                        const auto& name = sizing->as_array()[index];
+                        result.push_back(name.is_string() ? QString::fromStdString(std::string(name.as_string()))
+                            : QStringLiteral("%1%2").arg(prefix).arg(index));
+                    }
+                    return result;
+                }
+            } else if (sizing && sizing->is_number()) {
+                count = static_cast<int>(std::clamp(json_utils::numberValue(*sizing), 0.0, double(ports.max_count)));
+            }
+            return metadataNames(fixed, prefix, count);
+        };
+        return {names(metadata.variadic_inputs, metadata.input_ports, "in"),
+                names(metadata.variadic_outputs, metadata.output_ports, "out")};
     }
 
     // Built-ins described here for diagrams opened before (or without) the

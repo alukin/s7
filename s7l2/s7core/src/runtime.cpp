@@ -371,6 +371,8 @@ void NodeRuntime::stage_coupled(DomainState& domain) {
 }
 
 void NodeRuntime::roll_back_step(DomainState& domain, const bool published_memory) {
+    for (auto* element : domain.causal) element->on_step_failure();
+    for (auto* element : domain.memory) element->on_step_failure();
     // A direct evaluation, numerical trial or causal-memory step faulted:
     // restore every causal output, and the memory outputs published at the
     // start of this step, so the step is all-or-nothing instead of a mix of

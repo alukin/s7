@@ -57,6 +57,11 @@ QString elementDocumentation(const s7::ElementMetadata& metadata)
             .arg(inputs.min_count).arg(inputs.max_count).arg(text(inputs.count_parameter), text(inputs.port_name_template));
     }
     ports(lines, "Outputs", metadata.output_ports);
+    if (metadata.variadic_outputs.enabled) {
+        const auto& outputs = metadata.variadic_outputs;
+        lines << QStringLiteral("  Variable output count: %1..%2, following '%3'; port template: %4.")
+            .arg(outputs.min_count).arg(outputs.max_count).arg(text(outputs.count_parameter), text(outputs.port_name_template));
+    }
     if (!metadata.type_variables.empty()) {
         lines << "" << "Signal types";
         for (const auto& variable : metadata.type_variables) {

@@ -16,6 +16,17 @@ It needs only the Python standard library (3.10+). TLS mode also needs the `cryp
 - **State directory**: holds the node UUID (taken from the certificate's `spiffe://s7/node/<uuid>` SAN in TLS mode), the peer cache, and the active deployment, which is restored on restart. The directory is locked against a second process.
 - **Clock**: synchronization is read from the kernel (`ntp_adjtime`) on Linux. Use `"clock": {"assume_synchronized": true}` elsewhere or in tests.
 
+## Frame transport service
+
+The opt-in [`s7node.frames`](s7node/frames.py) service matches the new C++ frame
+transport: raw numeric frames, optional independent LZ4/Zstandard compression,
+immutable bounded leases, consumption ACKs/replay and ordered source faults.
+All 25 whole-byte numeric types preserve their bits. This service is separate
+from the deployed F64 graph path and is not advertised in node capabilities.
+See [cross-language APIs, dependencies and conformance](../doc/S7_Frame_Interoperability.md).
+For optional compression, install `requirements-frames.txt`; raw framing and
+the existing node remain usable without those providers.
+
 ## Not implemented
 
 - A separate data listener and the `trusted_plaintext` data profile.

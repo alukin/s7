@@ -71,6 +71,19 @@ public final class StreamConsumer {
             fault(Faults.TIMESTAMP_PROFILE_MISMATCH);
             return false;
         }
+        // Validate before allocating decoded values or changing a recovery position.
+        final int count;
+        try {
+            count = WireFormat.payloadElementCount(config.type, packet.payload().length);
+        } catch (WireFormat.FormatError ex) {
+            onMalformed();
+            return false;
+        }
+        if (count == 0 || packet.payload().length > WireFormat.MAX_PAYLOAD_BYTES
+                || count > config.maxElementsPerPacket || (config.explicitTimestamps() && count != 1)) {
+            onMalformed();
+            return false;
+        }
         if (restartAtNext) {
             restartAtNext = false;
             nextExpected = packet.sequence();

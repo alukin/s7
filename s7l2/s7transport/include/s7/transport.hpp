@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "s7/stream_protocol.hpp"
+#include "s7/frame_transport.hpp"
 
 namespace s7::transport {
 
@@ -139,6 +140,15 @@ struct StreamStatus {
     std::chrono::milliseconds blocked_total{};
 };
 
+// Explicit frame boundaries use matching descriptors at both ends. Routing and
+// data authentication use the same endpoint/peer policy as scalar streams.
+struct FrameStreamConfig {
+    frames::Descriptor descriptor;
+    std::string producer_node;
+    std::vector<std::string> consumer_nodes;
+    std::chrono::milliseconds max_batch_latency{10}, max_block{2000}, max_wait{2000};
+};
+
 struct PublishResult {
     std::size_t accepted{};   // all, unless the stream faulted
     stream::FaultCode fault{stream::FaultCode::None};
@@ -152,6 +162,7 @@ struct ReceiveResult {
 };
 
 struct TransportLimits {
+    std::size_t frame_buffer_bytes{64 * 1024 * 1024}; // node-wide reserved frame capacity
     std::size_t max_inbound_connections{64}; // control + data, accepted by a server
 };
 
@@ -177,6 +188,16 @@ public:
     virtual auto open_producer(const stream::StreamConfig& config) -> StreamHandle = 0;
     virtual auto open_consumer(const stream::StreamConfig& config) -> StreamHandle = 0;
     virtual void close_stream(StreamHandle handle) = 0;
+
+    virtual auto open_frame_producer(const FrameStreamConfig&) -> StreamHandle
+        { throw std::invalid_argument("Endpoint does not support frame streams"); }
+    virtual auto open_frame_consumer(const FrameStreamConfig&) -> StreamHandle
+        { throw std::invalid_argument("Endpoint does not support frame streams"); }
+    virtual auto publish_frames(StreamHandle, const void*, std::size_t) -> frames::PublishResult
+        { throw std::invalid_argument("Endpoint does not support frame streams"); }
+    virtual auto receive_frames(StreamHandle, void*, std::size_t) -> frames::ReceiveResult
+        { throw std::invalid_argument("Endpoint does not support frame streams"); }
+    virtual void fault_frames(StreamHandle) {}
 
     // Elements are host storage of the stream's type. Blocks while the send
     // log is full; after max_block the stream faults (SEND_LOG_OVERFLOW).
@@ -216,6 +237,11 @@ public:
     [[nodiscard]] auto backend_name() const -> std::string override;
     auto open_producer(const stream::StreamConfig& config) -> StreamHandle override;
     auto open_consumer(const stream::StreamConfig& config) -> StreamHandle override;
+    auto open_frame_producer(const FrameStreamConfig&) -> StreamHandle override;
+    auto open_frame_consumer(const FrameStreamConfig&) -> StreamHandle override;
+    auto publish_frames(StreamHandle, const void*, std::size_t) -> frames::PublishResult override;
+    auto receive_frames(StreamHandle, void*, std::size_t) -> frames::ReceiveResult override;
+    void fault_frames(StreamHandle) override;
     void close_stream(StreamHandle handle) override;
     auto publish(StreamHandle handle, const void* elements, std::size_t count,
                  std::span<const wire::TimestampRecord> times = {}) -> PublishResult override;
@@ -279,6 +305,11 @@ public:
 
     auto open_producer(const stream::StreamConfig& config) -> StreamHandle override;
     auto open_consumer(const stream::StreamConfig& config) -> StreamHandle override;
+    auto open_frame_producer(const FrameStreamConfig&) -> StreamHandle override;
+    auto open_frame_consumer(const FrameStreamConfig&) -> StreamHandle override;
+    auto publish_frames(StreamHandle, const void*, std::size_t) -> frames::PublishResult override;
+    auto receive_frames(StreamHandle, void*, std::size_t) -> frames::ReceiveResult override;
+    void fault_frames(StreamHandle) override;
     void close_stream(StreamHandle handle) override;
     auto publish(StreamHandle handle, const void* elements, std::size_t count,
                  std::span<const wire::TimestampRecord> times = {}) -> PublishResult override;

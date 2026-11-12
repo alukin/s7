@@ -18,8 +18,17 @@ installed licence files of every bundled library, and an inventory
 | [Qt 6](https://www.qt.io/) | Studio | LGPL-3.0 or GPL-3.0; Qt Graphs and Qt Quick 3D GPL-3.0 | installed licence files of the bundled Qt libraries |
 | [Boost](https://www.boost.org/) (JSON, System) | all programs | BSL-1.0 | installed licence files |
 | [OpenSSL 3](https://www.openssl.org/) | runtime, transport, Studio, s7ctl | Apache-2.0 | installed licence files |
-| [zlib](https://zlib.net/) | s7core | Zlib | installed licence files |
+| [zlib](https://zlib.net/) | s7core; frame transport CRC-32 | Zlib | installed licence files |
+| [LZ4](https://github.com/lz4/lz4) library (optional) | Independent lossless frame blocks in s7transport | BSD-2-Clause | upstream library licence / installed licence files when bundled |
+| [Zstandard](https://github.com/facebook/zstd) library (optional) | Independent lossless frame compression in s7transport (static) | BSD-3-Clause (selected from the upstream dual licence) | upstream `LICENSE`, required with compressed binary distributions |
 | [FFTW 3](https://www.fftw.org/) | Studio spectrum (double precision); separate `s7spectral` plugin (single precision) | GPL-2.0-or-later | installed licence files and exact source-package inventory for the bundled Studio library |
+
+Python/Java frame compression providers are optional application dependencies,
+not checked-in or bundled binaries; tested versions are recorded in the
+[frame interoperability guide](doc/S7_Frame_Interoperability.md).
+The package collector inventories deployed shared libraries. Compressed binary
+releases also need an explicit notice/source inventory for statically linked
+Zstandard; that packaging qualification remains separate from this source update.
 
 On Fedora Linux the collector matches deployed ELF build IDs and full Qt
 paths, then looks up the RPM that owns each bundled library and copies its

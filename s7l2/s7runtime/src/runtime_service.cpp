@@ -789,7 +789,8 @@ public:
         const auto definition = JsonSchemaLoader::load_from_json(node_schema);
         const auto& data = service_.definition_.data_server;
         const bool network_graph = std::ranges::any_of(definition.elements, [](const auto& element) {
-            return element.type == "NetSink" || element.type == "NetSource";
+            return element.type == "NetSink" || element.type == "NetSource" ||
+                   element.type == "NetFrameSink" || element.type == "NetFrameSource";
         });
         if (network_graph && data.enabled && (part.data_endpoint.empty() || part.data_security != data.security)) {
             throw std::invalid_argument("Deployed node data_endpoint/data_security must match its separate data listener policy.");

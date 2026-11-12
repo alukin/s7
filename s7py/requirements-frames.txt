@@ -1,0 +1,3 @@
+# Optional frame-compression providers, verified with the shared C++/Java fixtures.
+lz4==4.4.5
+zstandard==0.25.0

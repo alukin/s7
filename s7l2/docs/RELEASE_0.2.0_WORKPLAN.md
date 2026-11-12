@@ -23,6 +23,12 @@ define a new S7 protocol or numerical rule by itself: the language-neutral
 contract, C++ reference behavior and shared fixtures must agree. Conversely,
 tests should expose a C++ defect rather than copying it into Python.
 
+The [high-rate sample transport plan](SDR_TRANSPORT_IMPROVEMENT_PLAN.md), proposed
+2026-11-12, stages descriptor validation, synthetic throughput measurement and a
+reviewed frame/metadata/buffer contract before block execution changes. It uses
+these ownership boundaries but does not itself expand the 0.2.0 release gate or
+approve the hardware-clock and scheduler decisions deferred to later work.
+
 ## Distributed goal and architecture
 
 The goal is a qualified workflow for several node processes on one host and
