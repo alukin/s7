@@ -39,11 +39,15 @@ STRIP="$(find_tool "llvm-strip${SUFFIX}" llvm-strip x86_64-w64-mingw32-strip str
 rm -rf "$OUT"
 mkdir -p "$OUT/plugins"
 
-for program in s7runtime/s7runtime s7ctl/s7ctl s7studio/s7studio; do
+for program in s7runtime/s7runtime s7runtime/s7analysis_lab s7ctl/s7ctl s7studio/s7studio; do
     [ -f "$BUILD/$program.exe" ] && cp "$BUILD/$program.exe" "$OUT/"
 done
 cp "$BUILD/s7core/libs7core.dll" "$OUT/"
 cp "$BUILD/s7noise/libs7noise.dll" "$OUT/plugins/"
+for module in s7spectral s7wavelet; do
+    plugin="$BUILD/analysis-plugins/install/lib/s7/plugins/lib$module.dll"
+    [ ! -f "$plugin" ] || cp "$plugin" "$OUT/plugins/"
+done
 if [ -f "$OUT/s7studio.exe" ]; then
     # Qt looks for its plugins next to the executable.
     for plugin in platforms/qwindows.dll platforms/qoffscreen.dll styles/qmodernwindowsstyle.dll \

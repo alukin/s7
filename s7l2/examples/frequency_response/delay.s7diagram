@@ -1,0 +1,217 @@
+{
+  "id": "impulse_delay",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "impulse_delay",
+    "elements": [
+      {
+        "id": "excitation",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 1,
+          "start_time": 0.05
+        }
+      },
+      {
+        "id": "delay0",
+        "type": "Delay",
+        "params": {}
+      },
+      {
+        "id": "delay1",
+        "type": "Delay",
+        "params": {}
+      },
+      {
+        "id": "delay2",
+        "type": "Delay",
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "excitation",
+        "from_port": 0,
+        "to_element": "delay0",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay0",
+        "from_port": 0,
+        "to_element": "delay1",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay1",
+        "from_port": 0,
+        "to_element": "delay2",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "excitation",
+        "position": [
+          4,
+          20
+        ],
+        "title": "excitation"
+      },
+      {
+        "id": "delay0",
+        "position": [
+          28,
+          20
+        ],
+        "title": "delay0"
+      },
+      {
+        "id": "delay1",
+        "position": [
+          52,
+          20
+        ],
+        "title": "delay1"
+      },
+      {
+        "id": "delay2",
+        "position": [
+          76,
+          20
+        ],
+        "title": "delay2"
+      },
+      {
+        "id": "response",
+        "position": [
+          100,
+          42
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay0",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "delay0",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "delay1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "delay2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "Impulse response: delay\nRun 2 model seconds at 1 kHz; open response, then Analyze captured impulse.\nInput has area 1 and height 1000 at sample 50. Actual pulse alignment is retained.\nSee frequency_response/README.md for references and assumptions.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

@@ -8,6 +8,9 @@
 #include "scope_view_window.hpp"
 #include "live_oscilloscope_window.hpp"
 #include "viewers/observer_presentation.hpp"
+#include "viewers/surface_window.hpp"
+#include "viewers/response_window.hpp"
+#include "viewers/time_frequency_window.hpp"
 
 #include <utility>
 #include <s7/metadata_json.hpp>
@@ -58,6 +61,10 @@ void registerBuiltinViewers(ViewerRegistry& registry)
     add(ui::LiveOscilloscopeWindow::viewerType());
     add(ui::PhasePortraitViewWindow::viewerType());
     add(ui::PhaseTrajectory3DViewWindow::viewerType());
+    add(SurfaceWindow::viewerType(false));
+    add(SurfaceWindow::viewerType(true));
+    add(ResponseWindow::viewerType());
+    add(TimeFrequencyWindow::viewerType());
 }
 
 } // namespace s7studio::viewers

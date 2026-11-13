@@ -260,3 +260,55 @@ Mouse wheel/drag remain supported; these actions only change the view. Scope
 separates display controls from result save/open/comparison controls. Clear
 display does not delete authoritative captured results. Phase/3D status occupies
 a separate wrapping row so lengthy error messages do not crowd control buttons.
+
+## Rectangular real and complex surfaces
+
+`Surface3D` and `ComplexSurface3D` observe explicit X/Y coordinates, cell index,
+columns, rows, active, and real height or Re/Im function values. `GridScan`
+emits the six coordinate/identity signals, X fastest, one cell per logical
+step. Dimensions are bounded to 513 per axis. Geometry uses only triangles
+whose vertices have finite captured values; missing cells remain holes.
+
+The full windows share `SurfacePlotView` with bounded recent-cell dock previews.
+Surface, wireframe and heatmap presentations include camera presets, numeric
+cell inspection and color legends. Complex hue encodes phase; zero is gray
+because its phase is undefined. Height can show magnitude, real/imaginary part
+or log(1+|w|). Axis scaling is automatic and independent. Clear only clears the
+presentation; reopening replays retained capture. Raw CSV includes explicit
+cell identities and source provenance.
+
+See the [real gallery](../examples/surfaces/README.md) and
+[complex gallery](../examples/complex_functions/README.md). Fixed axis/height-color ranges, contours, equal numeric aspect and versioned
+multidimensional save/open are available. See [analysis testing](STUDIO_ANALYSIS_TESTING.md).
+
+## Impulse frequency response
+
+`FrequencyResponse` observes a real input/output pair. After a complete record
+has loaded, **Analyze captured impulse** estimates the response in the shared
+analysis pool. The capture must contain exactly one nonzero input sample,
+uniform gap-free model sampling and zero initial output. The current bound is
+65,536 pairs. The actual pulse height normalizes the response, preserving direct
+feedthrough and causal delay. No Hann taper or one-sided amplitude doubling is
+applied. A finite record remains an estimate; sufficient decay and LTI behaviour
+are experiment assumptions, not properties inferred by the viewer.
+
+Bode gain/phase, Nyquist, Nichols and a frequency/Re/Im trajectory share a numeric
+frequency cursor. Bode uses the explicitly labelled coordinate log10(f / 1 Hz).
+Phase is wrapped, with curve breaks at wrapping; zero response has undefined
+phase. A positive explicit gain reference controls dB conversion. CSV export
+preserves frequency, complex values, pulse normalization and source provenance.
+The [impulse examples](../examples/frequency_response/README.md) exercise gain,
+three-sample delay and the reusable RC schema.
+
+
+## Time-frequency maps and portable results
+
+`TimeFrequency` provides STFT and Morlet CWT through the shared analysis pool,
+with explicit support masks, original-input freeze/reanalysis, follow mode,
+heatmap/3D/wireframe presentations, linked trace/slice inspection and full result
+export. Result files store the original input, complex coefficients, coordinate
+arrays, validity and transform/run metadata. Import validates before replacing
+a displayed result. A heavy-job reservation prevents concurrent large matrices;
+rendering selects at most 513×513 cells while inspection/export retains full data.
+See [time-frequency examples](../examples/time_frequency/README.md) and the
+[testing guide](STUDIO_ANALYSIS_TESTING.md) for normalization and limits.

@@ -130,3 +130,21 @@ are explicit integrator and function/state networks.
 The [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md) is the
 authoritative classification. The family articles provide filenames,
 parameters, initial conditions, observer names and interpretation details.
+
+## Mathematical surface galleries
+
+The [real surface gallery](../examples/surfaces/README.md) includes plane, bowl,
+saddle, Gaussian, wave and radial sinc diagrams. The
+[complex gallery](../examples/complex_functions/README.md) includes identity,
+square, inverse and rational functions with phase coloring. Run at 1 kHz for
+5 model seconds and open the surface observer.
+
+The [impulse frequency-response laboratory](../examples/frequency_response/README.md)
+provides gain, delay and RC experiments. Run for 2 seconds at 1 kHz, open the
+response observer and analyze the completed impulse capture to inspect linked
+Bode, Nyquist, Nichols and 3D views.
+
+The [analysis-element examples](../examples/analysis_elements/README.md) exercise
+Fourier and causal wavelet coefficients inside the graph using their optional
+plugins and explicit C64-to-Re/Im adapters. Canonical JSON versions are included
+under `s7runtime/examples/` and executed by the SDK smoke check.

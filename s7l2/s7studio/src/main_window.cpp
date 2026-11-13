@@ -1500,7 +1500,10 @@ QVector<viewers::ObserverDescriptor> MainWindow::observerDescriptors() const
         for (const auto& probe : probes) if (QString::fromStdString(probe.name).startsWith(id+"/"))
             descriptor.inputs.push_back({QString::fromStdString(probe.name), QString::fromStdString(probe.unit), QString::fromStdString(probe.element), probe.port});
         if (diagram::isAxisObserverElementType(node->element().type))
-            std::sort(descriptor.inputs.begin(), descriptor.inputs.end(), [](const auto& a, const auto& b) { return a.name < b.name; });
+            std::sort(descriptor.inputs.begin(), descriptor.inputs.end(), [id, type](const auto& a, const auto& b) {
+                const auto& roles = viewers::ViewerRegistry::instance().find(type)->inputSuffixes;
+                return roles.indexOf(a.name.mid(id.size()+1)) < roles.indexOf(b.name.mid(id.size()+1));
+            });
         result.push_back(std::move(descriptor));
     }
     std::sort(result.begin(), result.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
@@ -1534,9 +1537,9 @@ auto MainWindow::currentRunProbes() const -> std::vector<RunProbe>
             auto channelName = std::string("signal") + std::to_string(connection.to.port);
             if (const auto scope = scene->elementNode(connection.to.element)) {
                 if (diagram::isAxisObserverElementType(scope->element().type)) {
-                    static const std::array<std::string, 3> axes{"x", "y", "z"};
+                    const auto& axes = viewers::ViewerRegistry::instance().find(QString::fromStdString(scope->element().type))->inputSuffixes;
                     if (connection.to.port >= 0 && connection.to.port < static_cast<int>(axes.size())) {
-                        channelName = axes[static_cast<std::size_t>(connection.to.port)];
+                        channelName = axes[connection.to.port].toStdString();
                     }
                 }
                 const auto* names = json_utils::findObjectValue(scope->element().params, "channel_names");

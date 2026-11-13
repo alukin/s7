@@ -254,6 +254,248 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "Surface3D",
+      "display_name": "Real Surface (3D)",
+      "description": "Read-only rectangular surface from same-step coordinates, explicit GridScan identity/dimensions/active and height. Missing cells remain holes. Double-click opens surface, wireframe and heatmap presentations.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "x",
+          "description": "GridScan x",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "y",
+          "description": "GridScan y",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "index",
+          "description": "GridScan index",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "columns",
+          "description": "GridScan columns",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "rows",
+          "description": "GridScan rows",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "active",
+          "description": "GridScan active",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "z",
+          "description": "Function z",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "ComplexSurface3D",
+      "display_name": "Complex Surface (3D)",
+      "description": "Read-only rectangular surface from same-step coordinates, explicit GridScan identity/dimensions/active and real/imaginary components. Height is magnitude, phase uses cyclic colors. Double-click opens surface, wireframe and heatmap presentations.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "x",
+          "description": "GridScan x",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "y",
+          "description": "GridScan y",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "index",
+          "description": "GridScan index",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "columns",
+          "description": "GridScan columns",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "rows",
+          "description": "GridScan rows",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "active",
+          "description": "GridScan active",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "re",
+          "description": "Function re",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "im",
+          "description": "Function im",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "FrequencyResponse",
+      "display_name": "Impulse Frequency Response",
+      "description": "Estimates a finite-record LTI frequency response from paired input/output capture with one nonzero input sample and zero initial state. Linked Bode, Nyquist, Nichols and 3D presentations. Capture limit 65536 pairs. Analyze after completion.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "input",
+          "description": "Observed input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "output",
+          "description": "Observed output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "TimeFrequency",
+      "display_name": "Time\u2013Frequency / Wavelet",
+      "description": "Read-only STFT spectrogram and complex Morlet CWT scalogram of a retained interval. Bounded shared-pool analysis, heatmap/3D, explicit edge/support mask, freeze, numeric inspection and result save/open.",
+      "category": "",
+      "version": "",
+      "tags": [],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Real source channel",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [],
+      "parameters": [],
+      "type_variables": [],
+      "visual": {
+        "shape": "",
+        "color": "",
+        "max_width": 0,
+        "max_height": 0,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }

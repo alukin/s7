@@ -44,7 +44,7 @@ class TrajectoryGeometry : public QQuick3DGeometry
 public:
     explicit TrajectoryGeometry(QQuick3DObject* parent = nullptr);
 
-    void setTrajectory(const QList<TrajectoryPoint>& points, const TrajectoryBounds& bounds, qsizetype maxVertices);
+    void setTrajectory(const QList<TrajectoryPoint>& points, const TrajectoryBounds& bounds, qsizetype maxVertices, bool colorByX=false);
     [[nodiscard]] auto vertexCount() const -> qsizetype { return vertices_.size(); }
     [[nodiscard]] auto vertexAt(qsizetype index) const -> QVector3D { return vertices_.at(index); }
 

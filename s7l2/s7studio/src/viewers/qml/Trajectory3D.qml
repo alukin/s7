@@ -57,7 +57,8 @@ Item {
         Model {
             geometry: trajectoryView.trajectory
             materials: PrincipledMaterial {
-                baseColor: "#2ca02c"
+                baseColor: trajectoryView.frequencyColors ? "white" : "#2ca02c"
+                vertexColorsEnabled: trajectoryView.frequencyColors
                 lighting: PrincipledMaterial.NoLighting
                 lineWidth: 2
             }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT-0
 
 #include "s7spectral/fft_element.hpp"
+#include "s7spectral/fourier_element.hpp"
 #include "s7spectral/spectral_window.hpp"
 
 #include "s7/metadata_json.hpp"
@@ -19,7 +20,7 @@
 
 static const S7PluginInfo plugin_info{
     .api_version = S7_PLUGIN_API_VERSION,
-    .element_count = 1,
+    .element_count = 2,
     .plugin_name = "s7spectral",
     .plugin_version = "1.0.0",
     .author = "S7 Project",
@@ -32,8 +33,8 @@ static const char plugin_manifest_json[] = R"json(
   "plugin_version": "1.0.0",
   "author": "S7 Project",
   "description": "Spectral analysis elements (FFTW); reference out-of-tree plugin.",
-  "element_count": 1,
-  "elements": ["WindowedFFT"]
+  "element_count": 2,
+  "elements": ["WindowedFFT", "FourierCoefficient"]
 }
 )json";
 
@@ -73,7 +74,11 @@ void s7_register_elements(void* registry_ptr)
 {
     auto* registry = static_cast<s7::ElementRegistry*>(registry_ptr);
     static const s7::ElementMetadataLibrary metadata(s7::resources::spectral_metadata);
-    registry->register_element(s7::ElementDescriptor(
+    if (!registry->find("FourierCoefficient")) registry->register_element(s7::ElementDescriptor(
+        "FourierCoefficient", [](const s7::ElementCreationContext& ctx) {
+            return std::make_unique<s7spectral::FourierCoefficient>(ctx.get_real("frequency_hz"),ctx.get_real("window_time"),ctx.get_real("hop_time"));
+        }, metadata.at("FourierCoefficient")));
+    if (!registry->find("WindowedFFT")) registry->register_element(s7::ElementDescriptor(
         "WindowedFFT",
         [](const s7::ElementCreationContext& ctx) {
             const auto fft_size = ctx.has_param("fft_size") ? ctx.get_int("fft_size") : 1024;

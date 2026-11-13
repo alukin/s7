@@ -111,6 +111,8 @@ s7_enable_project_warnings(s7studio_results)
 find_path(S7STUDIO_FFTW_INCLUDE_DIR fftw3.h REQUIRED)
 find_library(S7STUDIO_FFTW_LIBRARY NAMES fftw3 libfftw3-3 REQUIRED)
 add_library(s7studio_analysis STATIC
+    src/analysis/result_file.cpp src/analysis/result_file.hpp
+    src/analysis/surface_grid.cpp src/analysis/surface_grid.hpp
     src/analysis/fft.cpp src/analysis/fft.hpp
     src/analysis/spectrum.cpp src/analysis/spectrum.hpp
     src/analysis/spectrum_worker.cpp src/analysis/spectrum_worker.hpp
@@ -124,6 +126,10 @@ target_link_libraries(s7studio_analysis PUBLIC s7studio_observation PRIVATE ${S7
 s7_enable_project_warnings(s7studio_analysis)
 
 add_library(s7studio_viewers STATIC
+    src/viewers/time_frequency_window.cpp src/viewers/time_frequency_window.hpp
+    src/viewers/response_window.cpp src/viewers/response_window.hpp
+    src/viewers/surface_plot.cpp src/viewers/surface_plot.hpp
+    src/viewers/surface_window.cpp src/viewers/surface_window.hpp
     src/viewers/observer_presentation.cpp src/viewers/observer_presentation.hpp
     src/viewers/trajectory_plot.cpp src/viewers/trajectory_plot.hpp
     src/instrument_controls.cpp src/instrument_controls.hpp
@@ -158,7 +164,9 @@ qt_add_resources(s7studio_viewers s7studio_viewers_qml
     FILES
         src/viewers/qml/LinePlot.qml
         src/viewers/qml/Trajectory3D.qml
+        src/viewers/qml/Surface3D.qml
 )
+target_include_directories(s7studio_viewers PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include ${PROJECT_SOURCE_DIR}/s7wavelet/include)
 target_include_directories(s7studio_viewers PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(s7studio_viewers PUBLIC
     s7core
@@ -237,6 +245,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_DESIGN.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_EXAMPLES.md
         ${PROJECT_SOURCE_DIR}/docs/SCOPE_RESULTS.md
+        ${PROJECT_SOURCE_DIR}/docs/STUDIO_ANALYSIS_TESTING.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVATION_VIEWERS.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_OBSERVERS_DOCK.md
         ${PROJECT_SOURCE_DIR}/docs/NUMERICAL_VALIDATION_MATRIX.md
@@ -484,6 +493,7 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
             LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)
     endforeach()
     set_property(TEST s7studio_gui_trajectory APPEND PROPERTY LABELS "rendering;quick3d")
+    set_tests_properties(s7studio_gui_workflows PROPERTIES RUN_SERIAL TRUE)
     # Every bundled example: open, run as documented, inspect each observer
     # window and analysis tab. Several minutes per shard; label "examples".
     set(s7_gui_example_shards 4)
@@ -653,3 +663,20 @@ if (WIN32 AND CMAKE_CROSSCOMPILING)
 		endif()
 	endforeach()
 endif()
+
+s7_add_test_executable(s7studio_surface_test tests/surface_test.cpp)
+target_link_libraries(s7studio_surface_test PRIVATE s7studio_viewers s7core s7net s7observe Boost::json)
+target_compile_definitions(s7studio_surface_test PRIVATE S7_SURFACE_EXAMPLE_DIR="${PROJECT_SOURCE_DIR}/examples")
+add_test(NAME s7studio_surface COMMAND s7studio_surface_test)
+set_tests_properties(s7studio_surface PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
+
+s7_add_test_executable(s7studio_response_test tests/response_test.cpp)
+target_link_libraries(s7studio_response_test PRIVATE s7studio_viewers s7core s7net s7observe Boost::json)
+target_compile_definitions(s7studio_response_test PRIVATE S7_RESPONSE_DIR="${PROJECT_SOURCE_DIR}/examples/frequency_response")
+add_test(NAME s7studio_response COMMAND s7studio_response_test)
+set_tests_properties(s7studio_response PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
+
+s7_add_test_executable(s7studio_time_frequency_test tests/time_frequency_test.cpp)
+target_link_libraries(s7studio_time_frequency_test PRIVATE s7studio_viewers)
+add_test(NAME s7studio_time_frequency COMMAND s7studio_time_frequency_test)
+set_tests_properties(s7studio_time_frequency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)

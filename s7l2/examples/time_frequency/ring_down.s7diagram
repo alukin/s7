@@ -1,0 +1,203 @@
+{
+  "id": "time_frequency_ring_down",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "time_frequency_ring_down",
+    "elements": [
+      {
+        "id": "excitation",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 1,
+          "start_time": 1.5
+        }
+      },
+      {
+        "id": "plant",
+        "type": "SecondOrderLowPass",
+        "params": {}
+      },
+      {
+        "id": "omega",
+        "type": "Constant",
+        "params": {
+          "value": 100.53096491487338
+        }
+      },
+      {
+        "id": "zeta",
+        "type": "Constant",
+        "params": {
+          "value": 0.2
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "excitation",
+        "from_port": 0,
+        "to_element": "plant",
+        "to_port": 0
+      },
+      {
+        "from_element": "omega",
+        "from_port": 0,
+        "to_element": "plant",
+        "to_port": 1
+      },
+      {
+        "from_element": "zeta",
+        "from_port": 0,
+        "to_element": "plant",
+        "to_port": 2
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "excitation",
+        "position": [
+          4,
+          20
+        ],
+        "title": "excitation"
+      },
+      {
+        "id": "plant",
+        "position": [
+          24,
+          20
+        ],
+        "title": "plant"
+      },
+      {
+        "id": "omega",
+        "position": [
+          44,
+          20
+        ],
+        "title": "omega"
+      },
+      {
+        "id": "zeta",
+        "position": [
+          64,
+          20
+        ],
+        "title": "zeta"
+      },
+      {
+        "id": "map",
+        "position": [
+          95,
+          42
+        ],
+        "observer": true,
+        "type": "TimeFrequency",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "plant",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "omega",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "plant",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "zeta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "plant",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "plant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "map",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "ring_down: time\u2013frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2\u2013100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

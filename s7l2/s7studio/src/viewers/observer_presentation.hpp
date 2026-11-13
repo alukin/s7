@@ -3,6 +3,7 @@
 #pragma once
 #include "observation_viewer.hpp"
 #include "trajectory_geometry.hpp"
+#include "analysis/surface_grid.hpp"
 #include <QWidget>
 #include <functional>
 #include <optional>
@@ -11,6 +12,7 @@ class QScatterSeries;
 namespace s7studio::ui { class TrajectoryPlotView; }
 namespace s7studio::viewers {
 class LinePlotView;
+class SurfacePlotView;
 struct PreviewInput { QString name, unit, element; int port = 0; bool operator==(const PreviewInput&) const = default; };
 struct ObserverDescriptor {
     QString id, type;
@@ -21,6 +23,7 @@ struct PreviewData {
     struct Trace { QString name; QList<QList<QPointF>> segments; int channel = 0; };
     QVector<Trace> traces;
     QList<TrajectoryPoint> trajectory;
+    std::shared_ptr<const analysis::SurfaceGrid> surface;
     QStringList axes, details;
     QString status, summary;
     QString timeAxis = "Model time (s; recent interval)";
@@ -66,6 +69,7 @@ private:
     QString type_;
     LinePlotView* line_ = nullptr;
     ui::TrajectoryPlotView* trajectory_ = nullptr;
+    SurfacePlotView* surface_ = nullptr;
     QList<QScatterSeries*> isolated_;
 };
 }

@@ -1,0 +1,72 @@
+// SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
+#pragma once
+#include "analysis/result_file.hpp"
+#include "observation_viewer.hpp"
+#include <QWidget>
+#include <deque>
+#include <memory>
+class QLabel;
+class QComboBox;
+class QSpinBox;
+class QDoubleSpinBox;
+class QCheckBox;
+class QScatterSeries;
+namespace s7studio::viewers {
+class SurfacePlotView;
+class LinePlotView;
+class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
+    Q_OBJECT
+  public:
+    explicit TimeFrequencyWindow(const QString &name = {}, QWidget *parent = nullptr);
+    ~TimeFrequencyWindow() override;
+    static ViewerType viewerType();
+    QWidget *widget() override { return this; }
+    void clearSamples() override;
+    void setDroppedSampleCount(std::uint64_t) override;
+    void appendObservedSample(const ObservedSample &) override;
+    bool refreshSource() override;
+    void analyze();
+    void poll();
+    bool hasResult() const { return bool(result_); }
+    const analysis::ResultFile *result() const { return result_.get(); }
+    QString error() const { return error_; }
+    void setWavelet(bool enabled);
+    void saveResult(const QString &path) const;
+    void openResult(const QString &path);
+
+  private:
+    void present();
+    void inspect(int row, int column);
+    void updateStatus();
+    struct Work;
+    std::shared_ptr<Work> work_;
+    std::shared_ptr<const analysis::ResultFile> result_;
+    struct Sample {
+        std::int64_t step;
+        double time, value;
+    };
+    std::deque<Sample> samples_;
+    std::int64_t previous_ = 0;
+    bool loaded_ = false, imported_ = false;
+    bool pending_ = false;
+    QString error_, unit_;
+    QLabel *status_;
+    QLabel *inspection_;
+    QComboBox *method_;
+    QComboBox *quantity_;
+    QSpinBox *window_;
+    QSpinBox *scales_;
+    QDoubleSpinBox *minimum_;
+    QDoubleSpinBox *maximum_;
+    QCheckBox *follow_;
+    QCheckBox *logFrequency_;
+    QSpinBox *row_;
+    QSpinBox *column_;
+    SurfacePlotView *plot_;
+    LinePlotView *trace_;
+    QScatterSeries *traceMarker_ = nullptr;
+    LinePlotView *slice_;
+    std::uint64_t lastSubmitted_ = 0;
+};
+} // namespace s7studio::viewers

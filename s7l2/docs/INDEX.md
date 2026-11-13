@@ -114,6 +114,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [CONTROL_ELEMENTS.md](CONTROL_ELEMENTS.md) | Local control/measurement primitives and the separate reusable schema resource |
 | [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
 | [STUDIO_OBSERVATION_VIEWERS.md](STUDIO_OBSERVATION_VIEWERS.md) | Studio's Scope, Phase Portrait and 3D trajectory viewers (Qt Graphs, Qt Quick 3D): read-only viewer interfaces, independent run data/authoritative capture, registry and lifecycle, adding a viewer type, tests and manual visual test plan |
+| [STUDIO_SURFACE_AND_CONTROL_ANALYSIS_PLAN.md](STUDIO_SURFACE_AND_CONTROL_ANALYSIS_PLAN.md) | Implementation plan and validation record for surfaces, control-response and time-frequency analysis |
 | [LIVE_OSCILLOSCOPE_PROTOTYPE.md](LIVE_OSCILLOSCOPE_PROTOTYPE.md) | Bounded Time/Spectrum/XY/Correlation workflow, retention, activity, freeze and remaining limits |
 | [STUDIO_SPECTRUM.md](STUDIO_SPECTRUM.md) | Live real/IQ FFT spectrum, windows, amplitude/power/PSD, referenced dB, bounded analysis and numerical verification |
 | [STUDIO_PAIR_ANALYSIS.md](STUDIO_PAIR_ANALYSIS.md) | Live same-step XY, persistence, density, linear correlation and inactive-view scheduling |
@@ -154,3 +155,5 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 - [Studio visual usability audit (2026-10-21)](usability/2026-10-21/AUDIT.md): production screenshots, severity-ranked findings, incremental improvements and human-review limits.
 
 - [Frame source/sink elements](FRAME_ELEMENTS.md): named channel ports, lossless encoding, Studio configuration and explicit endpoint setup.
+
+- [Surface and analysis testing guide](STUDIO_ANALYSIS_TESTING.md): user workflows, result files, parameter sweeps and optional analysis plugins.

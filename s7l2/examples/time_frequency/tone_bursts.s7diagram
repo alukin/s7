@@ -1,0 +1,167 @@
+{
+  "id": "time_frequency_tone_bursts",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "time_frequency_tone_bursts",
+    "elements": [
+      {
+        "id": "tone",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 32
+        }
+      },
+      {
+        "id": "gate",
+        "type": "PulseGenerator",
+        "params": {
+          "low": 0,
+          "high": 1,
+          "frequency_hz": 0.5,
+          "duty": 0.25
+        }
+      },
+      {
+        "id": "burst",
+        "type": "Multiply",
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "tone",
+        "from_port": 0,
+        "to_element": "burst",
+        "to_port": 0
+      },
+      {
+        "from_element": "gate",
+        "from_port": 0,
+        "to_element": "burst",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "tone",
+        "position": [
+          4,
+          20
+        ],
+        "title": "tone"
+      },
+      {
+        "id": "gate",
+        "position": [
+          24,
+          20
+        ],
+        "title": "gate"
+      },
+      {
+        "id": "burst",
+        "position": [
+          44,
+          20
+        ],
+        "title": "burst"
+      },
+      {
+        "id": "map",
+        "position": [
+          95,
+          42
+        ],
+        "observer": true,
+        "type": "TimeFrequency",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "tone",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "burst",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "gate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "burst",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "burst",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "map",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "tone_bursts: time\u2013frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2\u2013100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

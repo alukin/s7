@@ -3,6 +3,8 @@
 #include "observer_presentation.hpp"
 #include "line_plot_view.hpp"
 #include "trajectory_plot.hpp"
+#include "surface_plot.hpp"
+#include "surface_window.hpp"
 #include "analysis/worker_pool.hpp"
 #include <QtGraphs/QLineSeries>
 #include <QtGraphs/QScatterSeries>
@@ -38,7 +40,9 @@ PreviewData preparePreview(const PreviewRequest& request)
     PreviewData result; result.revision = request.revision;
     QVector<QVector<observation::Sample>> samples(request.descriptor.inputs.size());
     bool phase = request.descriptor.type == "PhasePortrait" || request.descriptor.type == "PhaseTrajectory3D";
+    const bool surface = request.descriptor.type == "Surface3D" || request.descriptor.type == "ComplexSurface3D";
     QVector<int> selected = request.channels;
+    if (surface) { selected.clear(); for (int i=0; i<request.descriptor.inputs.size() && i<8; ++i) selected.push_back(i); }
     if (phase) { selected.clear(); for (int i = 0; i < request.descriptor.inputs.size() && i < 3; ++i) selected.push_back(i); }
     if (selected.size() > 8) selected.resize(8);
     double origin = 0;
@@ -86,6 +90,31 @@ PreviewData preparePreview(const PreviewRequest& request)
             .arg(tail.status.finished ? (tail.status.stopped ? " • stopped" : " • run finished") : "");
         if (!tail.status.storageError.isEmpty() || !tail.status.runError.isEmpty()) result.status += " • ERROR: " + tail.status.storageError + " " + tail.status.runError;
     } else { result.status = "Waiting for this observer's prepared run source."; return result; }
+    if (surface) {
+        const bool complex = request.descriptor.type == "ComplexSurface3D";
+        const auto roles = SurfaceWindow::roles(complex);
+        std::map<std::int64_t, std::array<std::optional<double>,8>> cells;
+        for (int channel=0;channel<samples.size();++channel) {
+            const auto name=request.descriptor.inputs[channel].name;
+            const auto axis=roles.indexOf(name.mid(name.indexOf('/')+1));
+            if (axis<0) continue;
+            for(const auto& sample:samples[channel]) cells[sample.step][std::size_t(axis)]=sample.value;
+        }
+        auto grid=std::make_shared<analysis::SurfaceGrid>();
+        try {
+            for(auto& [step, values]:cells) {
+                (void)step;
+                if(!complex) values[7]=0;
+                std::array<double,8> data{}; bool complete=true;
+                for(std::size_t i=0;i<8;++i) { if(!values[i]) { complete=false; break; } data[i]=*values[i]; }
+                if(complete) grid->append(data);
+            }
+            result.surface=grid; result.vertices=grid->received;
+            result.summary=QString("%1/%2 recent grid cells").arg(grid->received).arg(grid->values.size());
+            result.status+=" • bounded recent-cell preview; full viewer replays retained grid";
+        } catch(const std::exception& e) { result.status+=" • INVALID GRID: "+QString::fromUtf8(e.what()); }
+        return result;
+    }
     std::size_t invalid = 0, gaps = 0;
     std::optional<double> firstTime, lastTime;
     QStringList unavailable;
@@ -187,13 +216,15 @@ ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent)
     setObjectName("observer.presentation"); auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
     // Dock previews need no more than 10 frames per second; full viewers keep their rate.
     constexpr int previewFrameIntervalMs = 100;
-    if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); trajectory_->bridge()->setAntialiased(false);
+    if (type == "Surface3D" || type == "ComplexSurface3D") { surface_=new SurfacePlotView(type=="ComplexSurface3D",this); root->addWidget(surface_); }
+    else if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); trajectory_->bridge()->setAntialiased(false);
         trajectory_->setMinimumFrameInterval(previewFrameIntervalMs); root->addWidget(trajectory_); }
     else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true; line_->setMinimumFrameInterval(previewFrameIntervalMs);
         line_->bridge()->horizontalNavigation = type == "LiveOscilloscope"; root->addWidget(line_);
         connect(line_, &LinePlotView::navigated, this, &ObserverPresentation::navigated); }
 }
 void ObserverPresentation::present(const PreviewData& data) {
+    if (surface_) { surface_->setGrid(data.surface); return; }
     if (trajectory_) {
         const auto bounds = TrajectoryBounds::of(data.trajectory); trajectory_->setAxisLabels(bounds, data.axes, true);
         trajectory_->bridge()->trajectoryGeometry().setTrajectory(data.trajectory, bounds, 1024);

@@ -195,7 +195,13 @@ private slots:
         QObject lifetime;
         QObject::connect(window_.get(), &QObject::destroyed, &lifetime, [&] { windowDestroyed = true; });
         QObject::connect(active, &s7studio::LocalSchemaRunner::stateChanged, &lifetime, [&](s7studio::RunState state) {
-            if (state == s7studio::RunState::Stopping) { stoppedBeforeDestruction = !windowDestroyed; gate_->releaseAll(); }
+            // A paused worker may publish Stopped before the transient
+            // Stopping notification (see replaceWhileActive below). Either
+            // notification proves retirement began before window destruction.
+            if (state == s7studio::RunState::Stopping || state == s7studio::RunState::Stopped) {
+                stoppedBeforeDestruction = !windowDestroyed;
+                gate_->releaseAll();
+            }
         }, Qt::DirectConnection);
         QPointer<QWidget> viewer(scope());
         std::thread retired([active] {

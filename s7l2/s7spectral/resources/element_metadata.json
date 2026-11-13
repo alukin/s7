@@ -104,6 +104,89 @@
         "type_rule": "",
         "count_parameter": ""
       }
+    },
+    {
+      "type_name": "FourierCoefficient",
+      "display_name": "Fourier Coefficient",
+      "description": "Rate-following rectangular-window coherent-tone coefficient, phase relative to the first window sample. Updates after window_time and every hop_time, holds between updates. C64 output uses peak amplitude normalization (2/N, DC/Nyquist 1/N). Updated is one only on transform steps. Direct feedthrough with instance-owned history; not cycle-breaking memory.",
+      "category": "spectral",
+      "version": "1.0.0",
+      "tags": [
+        "spectral",
+        "fourier",
+        "stateful"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input signal",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "coefficient",
+          "description": "Complex amplitude coefficient",
+          "type": "C64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "updated",
+          "description": "One on update, otherwise zero",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "frequency_hz",
+          "type": "real",
+          "description": "Analysis frequency, from zero through Nyquist",
+          "default": 10,
+          "required": false,
+          "min": 0,
+          "enum_values": []
+        },
+        {
+          "name": "window_time",
+          "type": "real",
+          "description": "Window seconds, exact whole samples, 2\u201365536 samples",
+          "default": 1,
+          "required": false,
+          "min": 0,
+          "enum_values": []
+        },
+        {
+          "name": "hop_time",
+          "type": "real",
+          "description": "Hop seconds, exact positive whole samples, no longer than window",
+          "default": 0.5,
+          "required": false,
+          "min": 0,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#9C27B0",
+        "max_width": 120,
+        "max_height": 50,
+        "icon_name": "waveform"
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     }
   ]
 }

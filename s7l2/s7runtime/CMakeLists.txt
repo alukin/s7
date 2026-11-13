@@ -140,3 +140,12 @@ target_compile_definitions(s7runtime_plugin_loader_smoke PRIVATE
     S7_FAILING_PLUGIN="$<TARGET_FILE:s7_test_plugin_failing>")
 add_dependencies(s7runtime_plugin_loader_smoke s7_test_plugin s7_test_plugin_failing)
 add_test(NAME s7runtime_plugin_loader_smoke COMMAND s7runtime_plugin_loader_smoke)
+
+# Explicit headless control experiment; the spectral plugin itself stays out of tree.
+add_executable(s7analysis_lab src/analysis_lab.cpp)
+target_include_directories(s7analysis_lab PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
+target_link_libraries(s7analysis_lab PRIVATE s7core Boost::json)
+s7_enable_project_warnings(s7analysis_lab)
+install(TARGETS s7analysis_lab RUNTIME DESTINATION bin)
+add_test(NAME s7analysis_damping_sweep COMMAND s7analysis_lab ${CMAKE_CURRENT_BINARY_DIR}/damping_surface.csv)
+add_dependencies(build-tests s7analysis_lab)

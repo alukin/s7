@@ -1,0 +1,228 @@
+{
+  "id": "wavelet_coefficient",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "wavelet_coefficient",
+    "dt": 0.0009765625,
+    "elements": [
+      {
+        "id": "source",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 32
+        }
+      },
+      {
+        "id": "analysis",
+        "type": "WaveletCoefficient",
+        "params": {
+          "frequency_hz": 32,
+          "cycles": 6
+        }
+      },
+      {
+        "id": "parts",
+        "type": "ComplexToReIm",
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "source",
+        "from_port": 0,
+        "to_element": "analysis",
+        "to_port": 0
+      },
+      {
+        "from_element": "analysis",
+        "from_port": 0,
+        "to_element": "parts",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "source",
+        "position": [
+          4,
+          20
+        ],
+        "title": "source"
+      },
+      {
+        "id": "analysis",
+        "position": [
+          29,
+          20
+        ],
+        "title": "analysis"
+      },
+      {
+        "id": "parts",
+        "position": [
+          54,
+          20
+        ],
+        "title": "parts"
+      },
+      {
+        "id": "scope",
+        "position": [
+          90,
+          20
+        ],
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "Real coefficient",
+            "Imaginary coefficient",
+            "Valid",
+            "Center delay (samples)"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "analysis",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "analysis",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "parts",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "parts",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "parts",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "analysis",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "analysis",
+            "out",
+            2
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "Optional WaveletCoefficient graph example\nBuild/load the corresponding analysis plugin first. Run 2 seconds at 1024 Hz, open scope.\nC64 output is split explicitly into real/imaginary channels.\nSee examples/analysis_elements/README.md for update/valid/delay conventions.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

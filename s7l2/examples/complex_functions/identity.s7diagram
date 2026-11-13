@@ -1,0 +1,279 @@
+{
+  "id": "surface_identity",
+  "dt": 0.001,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "surface_identity",
+    "elements": [
+      {
+        "id": "grid",
+        "type": "GridScan",
+        "params": {
+          "x_min": -2,
+          "x_max": 2,
+          "y_min": -2,
+          "y_max": 2,
+          "columns": 65,
+          "rows": 65
+        }
+      },
+      {
+        "id": "function",
+        "type": "SurfaceIdentity",
+        "params": {}
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "grid",
+        "from_port": 0,
+        "to_element": "function",
+        "to_port": 0
+      },
+      {
+        "from_element": "grid",
+        "from_port": 1,
+        "to_element": "function",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "grid",
+        "position": [
+          4,
+          16
+        ],
+        "title": "Coordinates and explicit cell identity"
+      },
+      {
+        "id": "function",
+        "position": [
+          46,
+          12
+        ],
+        "title": "f(z)=z"
+      },
+      {
+        "id": "surface",
+        "position": [
+          84,
+          16
+        ],
+        "observer": true,
+        "type": "ComplexSurface3D",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "function",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "function",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            2
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            3
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            4
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            4
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "grid",
+            "out",
+            5
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            5
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "function",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            6
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "function",
+            "out",
+            1
+          ]
+        },
+        "to": {
+          "port": [
+            "surface",
+            "in",
+            7
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "f(z)=z\nRun at 1 kHz for 5 s; open surface. 65 × 65 samples, X fastest.\nCoordinates are dimensionless. Gray cells are missing; complex gray also marks undefined phase at zero.\nSchema definition is editable in the standard schema library. See this folder README.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

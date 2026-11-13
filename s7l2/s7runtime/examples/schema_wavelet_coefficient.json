@@ -1,0 +1,49 @@
+{
+  "name": "wavelet_coefficient",
+  "dt": 0.0009765625,
+  "elements": [
+    {
+      "id": "source",
+      "type": "AnalogOscillator",
+      "params": {
+        "amplitude": 1,
+        "frequency_hz": 32
+      }
+    },
+    {
+      "id": "analysis",
+      "type": "WaveletCoefficient",
+      "params": {
+        "frequency_hz": 32,
+        "cycles": 6
+      }
+    },
+    {
+      "id": "parts",
+      "type": "ComplexToReIm",
+      "params": {}
+    }
+  ],
+  "connections": [
+    {
+      "from_element": "source",
+      "from_port": 0,
+      "to_element": "analysis",
+      "to_port": 0
+    },
+    {
+      "from_element": "analysis",
+      "from_port": 0,
+      "to_element": "parts",
+      "to_port": 0
+    }
+  ],
+  "execution": {
+    "step_rate_hz": 1024
+  },
+  "simulation": {
+    "periods": 1,
+    "sample_rate_hz": 1024,
+    "frequency_hz": 1
+  }
+}

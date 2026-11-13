@@ -1,0 +1,89 @@
+{
+  "id": "time_frequency_chirp",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "time_frequency_chirp",
+    "elements": [
+      {
+        "id": "excitation",
+        "type": "ChirpGenerator",
+        "params": {
+          "amplitude": 1,
+          "start_hz": 4,
+          "end_hz": 90,
+          "sweep_time": 8
+        }
+      }
+    ],
+    "connections": []
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "excitation",
+        "position": [
+          4,
+          20
+        ],
+        "title": "excitation"
+      },
+      {
+        "id": "map",
+        "position": [
+          95,
+          42
+        ],
+        "observer": true,
+        "type": "TimeFrequency",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "map",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "chirp: time\u2013frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2\u2013100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

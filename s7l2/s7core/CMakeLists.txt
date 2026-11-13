@@ -244,3 +244,7 @@ if(PkgConfig_FOUND)
         s7_enable_project_warnings(s7core_fft_convolution_benchmark)
     endif()
 endif()
+
+s7_add_test_executable(s7core_grid_scan_smoke tests/grid_scan_smoke.cpp)
+target_link_libraries(s7core_grid_scan_smoke PRIVATE s7core)
+add_test(NAME s7core_grid_scan_smoke COMMAND s7core_grid_scan_smoke)

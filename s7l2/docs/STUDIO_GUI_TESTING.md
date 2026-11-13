@@ -225,3 +225,9 @@ inline errors, missing elements, simulation state and saved comparisons. See
 production-application desktop captures, incremental comparisons, severities
 and assessment limits. Screenshots support a heuristic review; they are not
 pixel-equality gates or substitutes for human usability testing.
+
+The main GUI workflow suite runs serially in CTest so its responsiveness and
+shutdown checks do not compete with parallel software-rendered example groups.
+The example groups remain parallel. Optional analysis-element diagrams are
+explicitly skipped without their plugins; they are also exercised with the
+plugins loaded in the analysis qualification workflow.

@@ -6,6 +6,7 @@
 
 #include "s7/element.hpp"
 #include "s7/float_types.hpp"
+#include "s7/grid_scan.hpp"
 
 #include <cmath>
 #include <optional>

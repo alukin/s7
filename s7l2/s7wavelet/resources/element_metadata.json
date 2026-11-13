@@ -1,0 +1,89 @@
+{
+  "document_kind": "s7.element_metadata",
+  "format_version": 1,
+  "library": "s7wavelet",
+  "elements": [
+    {
+      "type_name": "WaveletCoefficient",
+      "display_name": "Morlet Wavelet Coefficient",
+      "description": "Rate-following DC-corrected complex Morlet FIR, discrete L2-normalized, support \u00b14 sigma, omega0=cycles. Coefficient at current sample represents center delay_samples earlier. Valid becomes one only with full support. Direct feedthrough, causal computation; private history does not break feedback cycles.",
+      "category": "wavelet",
+      "version": "1.0.0",
+      "tags": [
+        "wavelet",
+        "morlet",
+        "stateful"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input signal",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "coefficient",
+          "description": "Delayed complex Morlet coefficient",
+          "type": "C64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "valid",
+          "description": "Full-support coefficient validity",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "delay_samples",
+          "description": "Explicit center delay in samples",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "frequency_hz",
+          "type": "real",
+          "description": "Positive center frequency below Nyquist; finite support at most 65535 samples",
+          "default": 25,
+          "required": false,
+          "min": 0,
+          "enum_values": []
+        },
+        {
+          "name": "cycles",
+          "type": "real",
+          "description": "Morlet omega0; between 5 and 16",
+          "default": 6,
+          "required": false,
+          "min": 5,
+          "max": 16,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "box",
+        "color": "#9C27B0",
+        "max_width": 120,
+        "max_height": 50,
+        "icon_name": "waveform"
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    }
+  ]
+}

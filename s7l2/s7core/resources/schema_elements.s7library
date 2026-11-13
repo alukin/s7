@@ -729,6 +729,1413 @@
         ],
         "dt": 0.001
       }
+    },
+    {
+      "type_name": "SurfacePlane",
+      "display_name": "Surface: Plane",
+      "description": "x + 2y; editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfacePlane",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "sum",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                2
+              ]
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "sum",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "sum",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "z",
+            "type": "F64",
+            "element": "sum",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceBowl",
+      "display_name": "Surface: Bowl",
+      "description": "x\u00b2 + y\u00b2; editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceBowl",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "radius_squared",
+            "type": "Adder",
+            "params": {}
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "z",
+            "type": "F64",
+            "element": "radius_squared",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceSaddle",
+      "display_name": "Surface: Saddle",
+      "description": "x\u00b2 \u2212 y\u00b2; editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceSaddle",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "difference",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                -1
+              ]
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "difference",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "difference",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "z",
+            "type": "F64",
+            "element": "difference",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceGaussian",
+      "display_name": "Surface: Gaussian",
+      "description": "exp(\u2212x\u00b2\u2212y\u00b2); editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceGaussian",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "radius_squared",
+            "type": "Adder",
+            "params": {}
+          },
+          {
+            "id": "negative",
+            "type": "Gain",
+            "params": {
+              "factor": -1
+            }
+          },
+          {
+            "id": "exponential",
+            "type": "MathFunction",
+            "params": {
+              "function": "exp"
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 1
+          },
+          {
+            "from_element": "radius_squared",
+            "from_port": 0,
+            "to_element": "negative",
+            "to_port": 0
+          },
+          {
+            "from_element": "negative",
+            "from_port": 0,
+            "to_element": "exponential",
+            "to_port": 0
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "z",
+            "type": "F64",
+            "element": "exponential",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceWave",
+      "display_name": "Surface: Wave",
+      "description": "sin(x) cos(y); editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceWave",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "sin_x",
+            "type": "Trig",
+            "params": {
+              "function": "sin"
+            }
+          },
+          {
+            "id": "cos_y",
+            "type": "Trig",
+            "params": {
+              "function": "cos"
+            }
+          },
+          {
+            "id": "product",
+            "type": "Multiply",
+            "params": {}
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "sin_x",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "cos_y",
+            "to_port": 0
+          },
+          {
+            "from_element": "sin_x",
+            "from_port": 0,
+            "to_element": "product",
+            "to_port": 0
+          },
+          {
+            "from_element": "cos_y",
+            "from_port": 0,
+            "to_element": "product",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "z",
+            "type": "F64",
+            "element": "product",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceSinc",
+      "display_name": "Surface: Sinc",
+      "description": "sin(r)/r; r=\u221a(x\u00b2+y\u00b2), grid excludes r=0; editable stateless F64 schema, inputs x/y. Requires nonzero denominator; use a pole-avoiding domain.",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceSinc",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "radius_squared",
+            "type": "Adder",
+            "params": {}
+          },
+          {
+            "id": "radius",
+            "type": "MathFunction",
+            "params": {
+              "function": "sqrt"
+            }
+          },
+          {
+            "id": "sine",
+            "type": "Trig",
+            "params": {
+              "function": "sin"
+            }
+          },
+          {
+            "id": "ratio",
+            "type": "Divider",
+            "params": {}
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 1
+          },
+          {
+            "from_element": "radius_squared",
+            "from_port": 0,
+            "to_element": "radius",
+            "to_port": 0
+          },
+          {
+            "from_element": "radius",
+            "from_port": 0,
+            "to_element": "sine",
+            "to_port": 0
+          },
+          {
+            "from_element": "sine",
+            "from_port": 0,
+            "to_element": "ratio",
+            "to_port": 0
+          },
+          {
+            "from_element": "radius",
+            "from_port": 0,
+            "to_element": "ratio",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "z",
+            "type": "F64",
+            "element": "ratio",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceIdentity",
+      "display_name": "Surface: Identity",
+      "description": "f(z)=z; editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceIdentity",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          }
+        ],
+        "connections": [],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "re",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "im",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceSquare",
+      "display_name": "Surface: Square",
+      "description": "f(z)=z\u00b2; editable stateless F64 schema, inputs x/y. ",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceSquare",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "re",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                -1
+              ]
+            }
+          },
+          {
+            "id": "xy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "im",
+            "type": "Gain",
+            "params": {
+              "factor": 2
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "re",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "re",
+            "to_port": 1
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "xy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xy",
+            "from_port": 0,
+            "to_element": "im",
+            "to_port": 0
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "re",
+            "type": "F64",
+            "element": "re",
+            "port": 0
+          },
+          {
+            "name": "im",
+            "type": "F64",
+            "element": "im",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceInverse",
+      "display_name": "Surface: Inverse",
+      "description": "f(z)=1/z; grid excludes pole; editable stateless F64 schema, inputs x/y. Requires nonzero denominator; use a pole-avoiding domain.",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceInverse",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "radius_squared",
+            "type": "Adder",
+            "params": {}
+          },
+          {
+            "id": "re",
+            "type": "Divider",
+            "params": {}
+          },
+          {
+            "id": "negative_y",
+            "type": "Gain",
+            "params": {
+              "factor": -1
+            }
+          },
+          {
+            "id": "im",
+            "type": "Divider",
+            "params": {}
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "radius_squared",
+            "to_port": 1
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "re",
+            "to_port": 0
+          },
+          {
+            "from_element": "radius_squared",
+            "from_port": 0,
+            "to_element": "re",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "negative_y",
+            "to_port": 0
+          },
+          {
+            "from_element": "negative_y",
+            "from_port": 0,
+            "to_element": "im",
+            "to_port": 0
+          },
+          {
+            "from_element": "radius_squared",
+            "from_port": 0,
+            "to_element": "im",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "re",
+            "type": "F64",
+            "element": "re",
+            "port": 0
+          },
+          {
+            "name": "im",
+            "type": "F64",
+            "element": "im",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SurfaceRational",
+      "display_name": "Surface: Rational",
+      "description": "f(z)=(z\u22121)/(z+1); grid excludes pole; editable stateless F64 schema, inputs x/y. Requires nonzero denominator; use a pole-avoiding domain.",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SurfaceRational",
+        "elements": [
+          {
+            "id": "x",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "y",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "xx",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "yy",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "one",
+            "type": "Constant",
+            "params": {
+              "value": 1
+            }
+          },
+          {
+            "id": "two_x",
+            "type": "Gain",
+            "params": {
+              "factor": 2
+            }
+          },
+          {
+            "id": "r2",
+            "type": "Adder",
+            "params": {}
+          },
+          {
+            "id": "den",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                1,
+                1
+              ]
+            }
+          },
+          {
+            "id": "num",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                -1
+              ]
+            }
+          },
+          {
+            "id": "re",
+            "type": "Divider",
+            "params": {}
+          },
+          {
+            "id": "two_y",
+            "type": "Gain",
+            "params": {
+              "factor": 2
+            }
+          },
+          {
+            "id": "im",
+            "type": "Divider",
+            "params": {}
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 0
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "xx",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 0
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "yy",
+            "to_port": 1
+          },
+          {
+            "from_element": "x",
+            "from_port": 0,
+            "to_element": "two_x",
+            "to_port": 0
+          },
+          {
+            "from_element": "xx",
+            "from_port": 0,
+            "to_element": "r2",
+            "to_port": 0
+          },
+          {
+            "from_element": "yy",
+            "from_port": 0,
+            "to_element": "r2",
+            "to_port": 1
+          },
+          {
+            "from_element": "r2",
+            "from_port": 0,
+            "to_element": "den",
+            "to_port": 0
+          },
+          {
+            "from_element": "two_x",
+            "from_port": 0,
+            "to_element": "den",
+            "to_port": 1
+          },
+          {
+            "from_element": "one",
+            "from_port": 0,
+            "to_element": "den",
+            "to_port": 2
+          },
+          {
+            "from_element": "r2",
+            "from_port": 0,
+            "to_element": "num",
+            "to_port": 0
+          },
+          {
+            "from_element": "one",
+            "from_port": 0,
+            "to_element": "num",
+            "to_port": 1
+          },
+          {
+            "from_element": "num",
+            "from_port": 0,
+            "to_element": "re",
+            "to_port": 0
+          },
+          {
+            "from_element": "den",
+            "from_port": 0,
+            "to_element": "re",
+            "to_port": 1
+          },
+          {
+            "from_element": "y",
+            "from_port": 0,
+            "to_element": "two_y",
+            "to_port": 0
+          },
+          {
+            "from_element": "two_y",
+            "from_port": 0,
+            "to_element": "im",
+            "to_port": 0
+          },
+          {
+            "from_element": "den",
+            "from_port": 0,
+            "to_element": "im",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "x",
+            "type": "F64",
+            "element": "x",
+            "port": 0
+          },
+          {
+            "name": "y",
+            "type": "F64",
+            "element": "y",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "re",
+            "type": "F64",
+            "element": "re",
+            "port": 0
+          },
+          {
+            "name": "im",
+            "type": "F64",
+            "element": "im",
+            "port": 0
+          }
+        ]
+      }
+    },
+    {
+      "type_name": "SecondOrderLowPass",
+      "display_name": "Second-order Low-pass Plant",
+      "description": "Editable zero-state analog-computer graph: x double-prime = omega0\u00b2(input-x)-2*zeta*omega0*x prime. F64 input, omega0 (rad/s), damping ratio, output. Two explicit Euler integrators; resolve fastest dynamics at the run rate.",
+      "category": "schema_elements",
+      "version": "1.0.0",
+      "schema": {
+        "name": "SecondOrderLowPass",
+        "elements": [
+          {
+            "id": "omega",
+            "type": "Gain",
+            "params": {
+              "factor": 1
+            }
+          },
+          {
+            "id": "damping",
+            "type": "Gain",
+            "params": {
+              "factor": 2
+            }
+          },
+          {
+            "id": "difference",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                -1
+              ]
+            }
+          },
+          {
+            "id": "omega2",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "drive",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "loss_factor",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "loss",
+            "type": "Multiply",
+            "params": {}
+          },
+          {
+            "id": "velocity",
+            "type": "EulerIntegrator",
+            "params": {
+              "initial_value": 0
+            }
+          },
+          {
+            "id": "position",
+            "type": "EulerIntegrator",
+            "params": {
+              "initial_value": 0
+            }
+          },
+          {
+            "id": "acceleration",
+            "type": "Adder",
+            "params": {
+              "weights": [
+                1,
+                -1
+              ]
+            }
+          }
+        ],
+        "connections": [
+          {
+            "from_element": "omega",
+            "from_port": 0,
+            "to_element": "omega2",
+            "to_port": 0
+          },
+          {
+            "from_element": "omega",
+            "from_port": 0,
+            "to_element": "omega2",
+            "to_port": 1
+          },
+          {
+            "from_element": "difference",
+            "from_port": 0,
+            "to_element": "drive",
+            "to_port": 0
+          },
+          {
+            "from_element": "omega2",
+            "from_port": 0,
+            "to_element": "drive",
+            "to_port": 1
+          },
+          {
+            "from_element": "omega",
+            "from_port": 0,
+            "to_element": "loss_factor",
+            "to_port": 0
+          },
+          {
+            "from_element": "damping",
+            "from_port": 0,
+            "to_element": "loss_factor",
+            "to_port": 1
+          },
+          {
+            "from_element": "loss_factor",
+            "from_port": 0,
+            "to_element": "loss",
+            "to_port": 0
+          },
+          {
+            "from_element": "velocity",
+            "from_port": 0,
+            "to_element": "loss",
+            "to_port": 1
+          },
+          {
+            "from_element": "drive",
+            "from_port": 0,
+            "to_element": "acceleration",
+            "to_port": 0
+          },
+          {
+            "from_element": "loss",
+            "from_port": 0,
+            "to_element": "acceleration",
+            "to_port": 1
+          },
+          {
+            "from_element": "acceleration",
+            "from_port": 0,
+            "to_element": "velocity",
+            "to_port": 0
+          },
+          {
+            "from_element": "velocity",
+            "from_port": 0,
+            "to_element": "position",
+            "to_port": 0
+          },
+          {
+            "from_element": "position",
+            "from_port": 0,
+            "to_element": "difference",
+            "to_port": 1
+          }
+        ],
+        "exposed_inputs": [
+          {
+            "name": "input",
+            "type": "F64",
+            "element": "difference",
+            "port": 0
+          },
+          {
+            "name": "omega0",
+            "type": "F64",
+            "element": "omega",
+            "port": 0
+          },
+          {
+            "name": "damping_ratio",
+            "type": "F64",
+            "element": "damping",
+            "port": 0
+          }
+        ],
+        "exposed_outputs": [
+          {
+            "name": "output",
+            "type": "F64",
+            "element": "position",
+            "port": 0
+          }
+        ]
+      }
     }
   ]
 }

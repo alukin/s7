@@ -27,3 +27,16 @@ cmake -S "$SOURCE_DIR/s7spectral" -B "$WORK_DIR/build" -DCMAKE_PREFIX_PATH="$WOR
 cmake --build "$WORK_DIR/build" > /dev/null
 for PLUGIN in "$WORK_DIR"/build/libs7spectral.{so,dll}; do [ -f "$PLUGIN" ] && break; done
 "${RUN[@]}" "$SMOKE" "$PLUGIN"
+"${RUN[@]}" "$SMOKE" "$PLUGIN" "$SOURCE_DIR/s7runtime/examples/schema_fourier_coefficient.json"
+
+cmake --install "$WORK_DIR/build" --component s7sdk --prefix "$WORK_DIR/sdk" > /dev/null
+cmake -S "$SOURCE_DIR/s7wavelet" -B "$WORK_DIR/wavelet" -DCMAKE_PREFIX_PATH="$WORK_DIR/sdk" \
+    -Ds7spectral_DIR="$WORK_DIR/sdk/lib/cmake/s7spectral" -DCMAKE_CXX_COMPILER="${CXX:-c++}" "${CROSS[@]}" > /dev/null
+cmake --build "$WORK_DIR/wavelet" > /dev/null
+for WAVELET in "$WORK_DIR"/wavelet/libs7wavelet.{so,dll}; do [ -f "$WAVELET" ] && break; done
+"${RUN[@]}" "$SMOKE" "$WAVELET"
+"${RUN[@]}" "$SMOKE" "$WAVELET" "$SOURCE_DIR/s7runtime/examples/schema_wavelet_coefficient.json"
+if [ -z "${S7_RUN:-}" ]; then
+    ctest --test-dir "$WORK_DIR/build" --output-on-failure
+    ctest --test-dir "$WORK_DIR/wavelet" --output-on-failure
+fi

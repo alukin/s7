@@ -22,3 +22,28 @@ cmake --build <plugin-build>
 ```
 
 `ctest -R s7spectral_sdk_smoke` runs these steps in the build tree and checks the loaded element.
+
+## Reusable analysis and Fourier coefficient
+
+`analysis.hpp` now exposes Qt-free, bounded processors for a portable radix-2
+complex transform, single-pulse frequency-response estimation and periodic-Hann
+STFT amplitude coefficients. Complex results remain authoritative. Single-pulse
+response divides by the actual pulse height, retains delay, and applies neither
+one-sided doubling nor Hann taper. It requires zero pre-pulse output, exactly
+one nonzero input sample and a finite paired record of at most 65,536 samples.
+A finite record does not establish decay or LTI behaviour by itself.
+
+`FourierCoefficient` is a rate-following scalar-input element with C64
+`coefficient` and F64 `updated` outputs. Parameters are `frequency_hz` (10),
+`window_time` (1 second), and `hop_time` (0.5 seconds). Durations must be exact
+whole samples at the adopted graph rate. The rectangular-window coefficient
+uses peak-tone normalization: 2/N except at DC/Nyquist, where it is 1/N. Phase
+is relative to the first window sample. Results hold between updates; the
+updated flag distinguishes a new result. Use explicit complex-component
+adapters for Studio observation. This element has direct feedthrough.
+
+The processor headers install with the package and are usable without loading
+its plugin. `ctest --test-dir <plugin-build> --output-on-failure` checks an
+independent DFT, pulse gain/delay, STFT amplitude and element update timing.
+Studio uses these same processors in its impulse-response and time-frequency
+windows. See `docs/STUDIO_ANALYSIS_TESTING.md` in the main project.

@@ -19,6 +19,7 @@ class Trajectory3DBridge : public QObject
     Q_PROPERTY(bool hasHead READ hasHead NOTIFY headChanged)
     Q_PROPERTY(QVector3D viewRotation READ viewRotation NOTIFY viewRotationChanged)
     Q_PROPERTY(bool antialiased READ antialiased NOTIFY antialiasedChanged)
+    Q_PROPERTY(bool frequencyColors READ frequencyColors NOTIFY frequencyColorsChanged)
 
 public:
     explicit Trajectory3DBridge(QObject* parent);
@@ -32,6 +33,8 @@ public:
     [[nodiscard]] auto viewRotation() const -> QVector3D { return viewRotation_; }
     [[nodiscard]] auto antialiased() const -> bool { return antialiased_; }
 
+    bool frequencyColors() const {return frequencyColors_;}
+    void setFrequencyColors(bool enabled){frequencyColors_=enabled;emit frequencyColorsChanged();}
     void setLabels(QVariantList labels);
     void setHead(bool hasHead, QVector3D head);
     // Camera orbit as Euler angles (degrees); see viewPreset in the window.
@@ -44,6 +47,7 @@ signals:
     void headChanged();
     void viewRotationChanged();
     void antialiasedChanged();
+    void frequencyColorsChanged();
 
 private:
     viewers::TrajectoryGeometry trajectory_;
@@ -53,6 +57,7 @@ private:
     bool hasHead_ = false;
     QVector3D viewRotation_;
     bool antialiased_ = true;
+    bool frequencyColors_=false;
 };
 
 // Reusable plot surface; source, capture, toolbars and window state belong to its host.

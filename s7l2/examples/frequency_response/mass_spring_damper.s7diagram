@@ -1,0 +1,273 @@
+{
+  "id": "impulse_mass_spring_damper",
+  "dt": 0.0009765625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 560,
+    "height_mm": 220
+  },
+  "schema": {
+    "name": "impulse_mass_spring_damper",
+    "elements": [
+      {
+        "id": "excitation",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 1,
+          "start_time": 0.048828125
+        }
+      },
+      {
+        "id": "plant",
+        "type": "SecondOrderLowPass",
+        "params": {}
+      },
+      {
+        "id": "omega",
+        "type": "Constant",
+        "params": {
+          "value": 31.41592653589793
+        }
+      },
+      {
+        "id": "zeta",
+        "type": "Constant",
+        "params": {
+          "value": 0.3
+        }
+      },
+      {
+        "id": "force_scale",
+        "type": "Gain",
+        "params": {
+          "factor": 0.0010132118364233778
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "omega",
+        "from_port": 0,
+        "to_element": "plant",
+        "to_port": 1
+      },
+      {
+        "from_element": "zeta",
+        "from_port": 0,
+        "to_element": "plant",
+        "to_port": 2
+      },
+      {
+        "from_element": "excitation",
+        "from_port": 0,
+        "to_element": "force_scale",
+        "to_port": 0
+      },
+      {
+        "from_element": "force_scale",
+        "from_port": 0,
+        "to_element": "plant",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "input",
+      "element": "excitation",
+      "port": 0,
+      "unit": "N"
+    },
+    {
+      "name": "output",
+      "element": "plant",
+      "port": 0,
+      "unit": "m"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "excitation",
+        "position": [
+          4,
+          20
+        ],
+        "title": "excitation"
+      },
+      {
+        "id": "plant",
+        "position": [
+          52,
+          20
+        ],
+        "title": "plant"
+      },
+      {
+        "id": "omega",
+        "position": [
+          27,
+          40
+        ],
+        "title": "omega"
+      },
+      {
+        "id": "zeta",
+        "position": [
+          27,
+          56
+        ],
+        "title": "zeta"
+      },
+      {
+        "id": "force_scale",
+        "position": [
+          27,
+          20
+        ],
+        "title": "force_scale"
+      },
+      {
+        "id": "response",
+        "position": [
+          90,
+          28
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "params": {}
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "omega",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "plant",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "zeta",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "plant",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "force_scale",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "force_scale",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "plant",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "plant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          2
+        ],
+        "params": {
+          "text": "mass_spring_damper impulse response\nRun 2 seconds at 1024 Hz, open response and analyze. omega0=2\u03c0\u00b75 rad/s, damping ratio=0.3.\nReusable schema contains two explicit Euler integrators; numerical frequency response follows that discretization.\nPhysical parameters and expected response: examples/frequency_response/README.md.",
+          "width": 1900,
+          "height": 190,
+          "font_size": 10
+        }
+      }
+    ]
+  }
+}

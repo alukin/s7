@@ -1571,18 +1571,59 @@
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
-        {"name": "in", "description": "F64 derivative", "type": "F64", "optional": false, "type_rule": ""}
+        {
+          "name": "in",
+          "description": "F64 derivative",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
       ],
       "output_ports": [
-        {"name": "out", "description": "Published F64 state", "type": "F64", "optional": false, "type_rule": ""}
+        {
+          "name": "out",
+          "description": "Published F64 state",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
       ],
       "parameters": [
-        {"name": "dt", "type": "value", "description": "Legacy field, ignored: the integrator follows its domain's rate, normally the run's dt.", "default": null, "required": false, "enum_values": [], "legacy": true},
-        {"name": "initial_value", "type": "real", "description": "State published on the first step.", "default": 0, "required": false, "enum_values": []}
+        {
+          "name": "dt",
+          "type": "value",
+          "description": "Legacy field, ignored: the integrator follows its domain's rate, normally the run's dt.",
+          "default": null,
+          "required": false,
+          "enum_values": [],
+          "legacy": true
+        },
+        {
+          "name": "initial_value",
+          "type": "real",
+          "description": "State published on the first step.",
+          "default": 0,
+          "required": false,
+          "enum_values": []
+        }
       ],
       "type_variables": [],
-      "visual": {"shape": "box", "color": "#4CAF50", "max_width": 110, "max_height": 52, "icon_name": ""},
-      "variadic_inputs": {"enabled": false, "min_count": 0, "max_count": 0, "port_name_template": "", "signal_type": "F64", "type_rule": "", "count_parameter": ""}
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
     },
     {
       "type_name": "TrapezoidIntegrator",
@@ -4058,6 +4099,134 @@
       "visual": {
         "shape": "box",
         "color": "#7E57C2",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "GridScan",
+      "display_name": "Rectangular Grid Scan",
+      "description": "Finite row-major coordinate scan, X fastest. One cell per logical step; inclusive bounds. Index, dimensions and active are explicit F64 outputs with exact bounded integer values. After all cells active becomes zero and other outputs hold. Fresh runtime instances restart the scan.",
+      "category": "sources",
+      "version": "1.0.0",
+      "tags": [
+        "surface",
+        "coordinates",
+        "grid"
+      ],
+      "input_ports": [],
+      "output_ports": [
+        {
+          "name": "x",
+          "description": "X coordinate",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "y",
+          "description": "Y coordinate",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "index",
+          "description": "Zero-based row-major cell identity",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "columns",
+          "description": "Number of X coordinates",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "rows",
+          "description": "Number of Y coordinates",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        },
+        {
+          "name": "active",
+          "description": "One for a new cell, zero after completion",
+          "type": "F64",
+          "optional": false,
+          "type_rule": ""
+        }
+      ],
+      "parameters": [
+        {
+          "name": "x_min",
+          "type": "real",
+          "description": "Minimum X",
+          "default": -2,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "x_max",
+          "type": "real",
+          "description": "Maximum X, greater than minimum",
+          "default": 2,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "y_min",
+          "type": "real",
+          "description": "Minimum Y",
+          "default": -2,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "y_max",
+          "type": "real",
+          "description": "Maximum Y, greater than minimum",
+          "default": 2,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "columns",
+          "type": "int",
+          "description": "X count, between 2 and 513",
+          "default": 129,
+          "required": false,
+          "enum_values": [],
+          "min": 2,
+          "max": 513
+        },
+        {
+          "name": "rows",
+          "type": "int",
+          "description": "Y count, between 2 and 513",
+          "default": 129,
+          "required": false,
+          "enum_values": [],
+          "min": 2,
+          "max": 513
+        }
+      ],
+      "type_variables": [],
+      "visual": {
+        "shape": "circle",
+        "color": "#42A5F5",
         "max_width": 110,
         "max_height": 52,
         "icon_name": ""

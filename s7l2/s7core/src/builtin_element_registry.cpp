@@ -154,6 +154,12 @@ void register_builtin_elements(ElementRegistry& registry)
 
     static const ElementMetadataLibrary metadata(resources::core_metadata);
 
+    registry.register_element(ElementDescriptor("GridScan",
+        [](const ElementCreationContext& ctx) {
+            return std::make_unique<GridScan>(ctx.get_real("x_min"), ctx.get_real("x_max"),
+                ctx.get_real("y_min"), ctx.get_real("y_max"), ctx.get_int("columns"), ctx.get_int("rows"));
+        }, metadata.at("GridScan")));
+
     registry.register_element(ElementDescriptor(
         "Constant",
         [](const ElementCreationContext& ctx) {

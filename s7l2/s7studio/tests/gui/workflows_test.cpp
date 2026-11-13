@@ -30,6 +30,9 @@
 #include "phase_portrait_view_window.hpp"
 #include "phase_trajectory_3d_view_window.hpp"
 #include "viewers/viewer_manager.hpp"
+#include "viewers/surface_window.hpp"
+#include "viewers/response_window.hpp"
+#include "viewers/time_frequency_window.hpp"
 #include <s7/builtin_element_registry.hpp>
 #include <QtTest>
 #include <QAction>
@@ -2159,6 +2162,7 @@ private slots:
     // diagram's own 1/dt. Live-only demonstrations use a short run.
     static double documentedSeconds(const QString& path) {
         static const QList<std::pair<QString, double>> table{
+            {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
             {"linear/rlc_resonance", 30}, {"linear/", 10}, {"control/", 12}, {"buck/", 1}, {"pwm_pid_rlc", 1},
             {"relay/", 1200}, {"pendulum/", 100}, {"double_pendulum", 20}, {"van_der_pol/van_der_pol_mu3", 60},
             {"van_der_pol/", 40}, {"lorenz/lorenz_stable", 10}, {"lorenz/", 40}, {"lotka_volterra/", 40},
@@ -2213,6 +2217,7 @@ private slots:
         const auto path = QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram;
         QFile file(path); QVERIFY(file.open(QIODevice::ReadOnly));
         const auto json = QJsonDocument::fromJson(file.readAll()).object();
+        for(const auto& element:json["schema"].toObject()["elements"].toArray()){const auto type=element.toObject()["type"].toString();if((type=="FourierCoefficient"||type=="WaveletCoefficient")&&!s7::ElementRegistry::instance().find(type.toStdString()))QSKIP("Optional analysis plugin is not loaded; build/load it to run this graph example");}
         const double dt = json.value("dt").toDouble(); QVERIFY(dt > 0);
         QVERIFY(fileAction("action.open", path));
         auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
@@ -2251,13 +2256,34 @@ private slots:
         const auto base = QString(diagram).replace('/', '_').remove(".s7diagram");
         QStringList problems;
         for (const auto& [name, viewer] : viewers) {
+            if (auto* surface = dynamic_cast<s7studio::viewers::SurfaceWindow*>(viewer)) {
+                while (surface->refreshSource()) {}
+                QVERIFY2(surface->error().isEmpty(), qPrintable(surface->error()));
+                QVERIFY(surface->grid().complete());
+            }
             if (auto* scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)) {
                 QTRY_VERIFY(scope->source() && scope->source()->status().finished);
                 while (scope->refreshSource()) {}
                 QVERIFY(!scope->recording().series().isEmpty());
             }
+            if (auto* map = dynamic_cast<s7studio::viewers::TimeFrequencyWindow*>(viewer)) {
+                while (map->refreshSource()) {}
+                map->analyze();
+                QTRY_VERIFY_WITH_TIMEOUT(map->hasResult() || !map->error().isEmpty(), 30000);
+                QVERIFY2(map->hasResult(), qPrintable(map->error()));
+                map->setWavelet(true);
+                QTRY_VERIFY_WITH_TIMEOUT(map->result()->metadata["method"].toString().contains("Morlet") || !map->error().isEmpty(), 30000);
+                QVERIFY2(map->error().isEmpty(), qPrintable(map->error()));
+            }
+            if (auto* response = dynamic_cast<s7studio::viewers::ResponseWindow*>(viewer)) {
+                while (response->refreshSource()) {}
+                response->analyze();
+                QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(), 10000);
+                QVERIFY2(response->hasResult(), qPrintable(response->error()));
+            }
             QTest::qWait(400);
             auto* widget = viewer->widget();
+            if(diagram=="frequency_response/rlc.s7diagram") {auto* reference=widget->findChild<QCheckBox*>("response.referenceModel");QVERIFY(reference);reference->setChecked(true);auto* cursor=widget->findChild<QDoubleSpinBox*>("response.frequency");QVERIFY(cursor);cursor->setValue(5);}
             widget->raise();
             const auto checkPlots = [&](const QString& view) {
                 for (auto* plot : widget->findChildren<s7studio::viewers::LinePlotView*>())
@@ -2267,6 +2293,8 @@ private slots:
             };
             auto* tabs = widget->findChild<QTabWidget*>(dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer)
                 ? QStringLiteral("scope.analysisTabs") : QStringLiteral("live.views"));
+            if(!tabs)tabs=widget->findChild<QTabWidget*>("response.views");
+            if(!tabs)tabs=widget->findChild<QTabWidget*>("timeFrequency.views");
             if (auto* analyze = widget->findChild<QPushButton*>("scope.analyze"); analyze && analyze->isEnabled()) analyze->click();
             const int pages = tabs ? tabs->count() : 1;
             for (int page = 0; page < pages; ++page) {

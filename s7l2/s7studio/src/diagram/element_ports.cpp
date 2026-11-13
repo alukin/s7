@@ -60,7 +60,7 @@ auto arraySize(const boost::json::object& params, const char* key) -> int
 
 bool isAxisObserverElementType(const std::string_view type)
 {
-    return type == "PhasePortrait" || type == "PhaseTrajectory3D";
+    return type == "PhasePortrait" || type == "PhaseTrajectory3D" || type == "Surface3D" || type == "ComplexSurface3D" || type == "FrequencyResponse" || type == "TimeFrequency";
 }
 
 bool isObserverElementType(const std::string_view type)
@@ -77,11 +77,19 @@ auto elementPorts(const std::string_view type, const boost::json::object& params
         inputs.push_back(QStringLiteral("+")); // connection target that grows the observer
         return {std::move(inputs), {}};
     }
+    if (type == "TimeFrequency") return {{QStringLiteral("in")}, {}};
+    if (type == "FrequencyResponse") return {{QStringLiteral("input"), QStringLiteral("output")}, {}};
     if (type == "PhasePortrait") {
         return {{QStringLiteral("x"), QStringLiteral("y")}, {}};
     }
     if (type == "PhaseTrajectory3D") {
         return {{QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("z")}, {}};
+    }
+    if (type == "Surface3D" || type == "ComplexSurface3D") {
+        std::vector<QString> names{"x", "y", "index", "columns", "rows", "active"};
+        names.push_back(type == "Surface3D" ? "z" : "re");
+        if (type == "ComplexSurface3D") names.push_back("im");
+        return {std::move(names), {}};
     }
     if (nestedSchema.is_object()) {
         return {exposedNames(nestedSchema.as_object(), "exposed_inputs", "in"),
