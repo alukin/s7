@@ -9,6 +9,7 @@
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QMouseEvent>
 #include <QQuickWidget>
 #include <QTemporaryDir>
 #include <QThread>
@@ -96,6 +97,35 @@ void invalidGrids() {
                                                    viewers::SurfaceHeight::Magnitude);
     require(std::abs(a.redF() - b.redF()) < 1e-5 && std::abs(a.greenF() - b.greenF()) < 1e-5,
             "Cyclic phase color seam");
+}
+void heatmapHover(bool complex) {
+    viewers::SurfacePlotView plot(complex);
+    plot.setPresentation(2);
+    auto *heatmap = plot.findChild<QWidget *>("surface.heatmap");
+    require(heatmap, "Surface heatmap missing");
+    heatmap->resize(400, 300);
+    int picks = 0;
+    QObject::connect(&plot, &viewers::SurfacePlotView::cellPicked, &plot,
+                     [&](int, int) { ++picks; });
+    auto hover = [&] {
+        QMouseEvent event(QEvent::MouseMove, QPointF(200, 150), QPointF(200, 150),
+                          Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(heatmap, &event);
+    };
+    hover();
+    require(picks == 0, "Empty heatmap must not pick a cell");
+    auto grid = std::make_shared<analysis::SurfaceGrid>();
+    for (int i = 0; i < 4; ++i)
+        grid->append({double(i % 2), double(i / 2), double(i), 2, 2, 1, double(i), 0});
+    plot.setGrid(grid);
+    hover();
+    require(picks == 1, "Populated heatmap must pick a cell");
+    plot.setGrid(std::make_shared<analysis::SurfaceGrid>());
+    hover();
+    require(picks == 1, "Cleared heatmap must not pick a cell");
+    plot.setGrid({});
+    hover();
+    require(picks == 1, "Reset heatmap must not pick a cell");
 }
 void examples(bool render) {
     for (const std::string name : {"plane", "bowl", "saddle", "gaussian", "wave", "sinc", "identity",
@@ -218,6 +248,8 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     try {
         invalidGrids();
+        heatmapHover(false);
+        heatmapHover(true);
         examples(qEnvironmentVariableIsSet("S7_SURFACE_RENDER"));
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

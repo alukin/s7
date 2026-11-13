@@ -19,6 +19,7 @@ namespace {
 class Heatmap final : public QWidget {
   public:
     explicit Heatmap(QWidget *parent) : QWidget(parent) {
+        setObjectName("surface.heatmap");
         setMouseTracking(true);
         setMinimumSize(180, 150);
     }
@@ -53,8 +54,10 @@ class Heatmap final : public QWidget {
         p.restore();
     }
     void mouseMoveEvent(QMouseEvent *e) override {
+        if (!grid || grid->x.empty() || grid->y.empty())
+            return;
         const auto a = area();
-        if (grid && a.contains(e->position()) && a.width() > 0 && a.height() > 0 && select) {
+        if (a.contains(e->position()) && a.width() > 0 && a.height() > 0 && select) {
             auto nearest = [](const std::vector<double> &values, double t) {
                 auto it = std::lower_bound(values.begin(), values.end(), t);
                 auto i = std::size_t(it - values.begin());
