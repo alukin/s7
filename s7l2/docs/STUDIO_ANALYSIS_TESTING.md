@@ -28,8 +28,10 @@ captured impulse, select frequencies, and compare Bode/Nyquist/Nichols/3D views.
 The Bode horizontal coordinate is explicitly log10(f / 1 Hz). Try the dB
 reference and result save/open. Gain should be 2.5; three explicit Delays should
 have unit magnitude and frequency-dependent phase.
+The new input/output scopes show the same experiment in time. Phase defaults
+to unwrapped; the three-sample delay reaches −540° at 500 Hz.
 
-Enable the analytical second-order reference explicitly, set omega0 and damping,
+Enable the analytical second-order reference explicitly, set omega0, damping and DC gain,
 and inspect its complex-plane landscape. The imaginary-axis path and selected
 frequency link to the response plots. This is a separately declared continuous
 reference; Studio does not infer it from an arbitrary diagram.
@@ -55,6 +57,9 @@ inspection, the input trace and frequency slice. Gray edge regions are excluded
 from the trusted full-support map; their coefficients remain inspectable and
 exportable with an explicit mask. STFT amplitudes and CWT L2 coefficients have
 different normalization and must not be compared as calibrated PSD.
+The display band initially ends at 100 Hz; raise **Display up to (Hz)** to see
+higher-frequency STFT bins. This changes the map/slice only; saving retains
+all coefficients. The input envelope preserves isolated pulses and extrema.
 
 Save a result, reopen it and change transform settings to reanalyze its frozen
 original input. Follow uses the latest 65,536 retained samples and can skip
@@ -80,6 +85,9 @@ support. These stateful direct-feedthrough elements do not break feedback cycles
 The packaging scripts include these optional modules when built through that
 helper. The normal headless runtime and Studio builds do not add the out-of-tree
 plugins as main-build subdirectories.
+`./run_on_linux` also finds these plugins automatically when built for `build/`;
+`./run_on_linux --release` uses the matching `build-release/` plugins. An
+explicit `S7_PLUGIN_PATH` remains authoritative.
 
 ## Automated checks
 
@@ -96,3 +104,14 @@ checks under Wine passed 5/5. Both optional plugins built and loaded on both
 platforms. Actual Linux OpenGL example rendering was also checked. Native
 Windows GPU rendering remains a manual check; Wine/offscreen results do not
 qualify that rendering path.
+
+The subsequent educational/usability review ran all 25 analysis-gallery
+examples through production Studio windows: 27 Qt Test cases passed, with no
+failures or skips. It checked actual drawing bounds and overlaps, all surface
+presentations, both transforms, and the optional coefficient plugins. A final
+five-example rendering run passed 7 cases; the full native regression suite
+passed 112/112 in 363 seconds. After the last logarithmic-height mask correction,
+focused checks passed 3/3 in Debug, 4/4 in Release and 3/3 under Wine.
+The normal Debug launcher was also verified to load spectral, wavelet and noise
+plugins. Render captures and reports remain outside Git under
+`/tmp/s7-review-all` and `/tmp/s7-review-final-render`.

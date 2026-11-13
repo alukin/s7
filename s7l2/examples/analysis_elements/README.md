@@ -7,7 +7,9 @@ using `tools/build_analysis_plugins.sh build-release`, then launch Studio with:
 S7_PLUGIN_PATH="$PWD/build-release/analysis-plugins/install/lib/s7/plugins" ./build-release/s7studio/s7studio
 ```
 
-Run **2 seconds at 1024 Hz** and open `scope`.
+Run **2 seconds at 1024 Hz** and open `scope`. The coefficient, update/valid
+flag, and wavelet center delay have separate scopes so their different scales
+do not flatten the coefficient curves.
 
 - `fourier_coefficient.s7diagram`: a 32 Hz unit sine, a 256-sample rectangular
   Fourier window and a 128-sample hop. Real coefficient is approximately zero,

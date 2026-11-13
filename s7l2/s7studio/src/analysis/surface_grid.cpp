@@ -49,7 +49,9 @@ bool SurfaceGrid::append(const std::array<double, 8> &s) {
     return true;
 }
 bool SurfaceGrid::finite(std::size_t index) const {
-    return index < values.size() && present[index] && std::isfinite(values[index].real()) &&
+    return index < values.size() && index < present.size() && present[index] && !x.empty() &&
+           index / x.size() < y.size() && std::isfinite(x[index % x.size()]) &&
+           std::isfinite(y[index / x.size()]) && std::isfinite(values[index].real()) &&
            std::isfinite(values[index].imag());
 }
 } // namespace s7studio::analysis

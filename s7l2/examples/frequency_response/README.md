@@ -4,6 +4,9 @@ Run each diagram for **2 model seconds at 1 kHz**. Open `response`, then click
 **Analyze captured impulse** after the source has finished loading. The input
 is a one-sample pulse with area 1 (height 1000), delayed by 0.05 model seconds.
 Analysis divides the output by the actual pulse height and retains plant delay.
+Open the separate excitation and output scopes first: they show the causal
+time-domain experiment without a tall input pulse hiding the plant response.
+The RLC and mass–spring examples use **1024 Hz**, as marked on their sheets.
 
 - `gain.s7diagram`: magnitude 2.5 at every frequency and zero phase.
 - `delay.s7diagram`: unit magnitude and phase -3*2*pi*f/1000 radians (wrapped).
@@ -16,6 +19,8 @@ The Bode horizontal coordinate is explicitly log10(f / 1 Hz); DC is omitted
 there but remains available in Nyquist and inspection. The gain dB reference
 is editable and explicit. A frequency selector marks the same bin in each
 view. CSV preserves complex response, excitation normalization and run provenance.
+Phase is unwrapped by default; turn off **Unwrap phase** to compare principal
+phase and its branch cuts. The delay example reaches −540° at 500 Hz.
 
 Assumptions: LTI system, zero initial state, gap-free uniform sampling, and a
 capture long enough for the response to decay. The viewer labels the result a
@@ -41,8 +46,10 @@ omega0/damping explicitly. Orange curves show the continuous reference; they
 are not inferred from the captured graph. The Analytical landscape tab shows
 G(s)=omega0²/(s²+2*zeta*omega0*s+omega0²), with the imaginary-axis path drawn
 on the surface. The shared frequency selector marks the nearest landscape cell
-on that path. A large selected frequency can exceed the sampled landscape;
-the marker then remains at its boundary. Saved response results preserve
+on that path. A frequency outside the sampled landscape hides its marker.
+The landscape uses log(1+|G|) height so poles do not flatten the rest of the
+surface. The reference's editable DC gain scales both landscape and curves.
+Saved response results preserve
 complex values, pulse normalization, units and provenance.
 
 Additional physical second-order examples run **2 seconds at 1024 Hz**:
@@ -59,4 +66,5 @@ Additional physical second-order examples run **2 seconds at 1024 Hz**:
 Both should show a decaying oscillatory impulse response and a resonant
 frequency-response peak. Their shapes agree after scaling by stiffness;
 physical input/output units remain distinct. The continuous normalized
-reference has unit DC gain and must be scaled when comparing displacement.
+reference defaults to unit DC gain; set its DC gain to 0.001013212 when
+comparing this displacement example.

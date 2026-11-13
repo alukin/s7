@@ -45,6 +45,32 @@ QSemaphore &heavyBudget() {
     static QSemaphore budget(1);
     return budget;
 }
+std::size_t nearestIndex(const std::vector<double> &axis, double value) {
+    const auto it = std::lower_bound(axis.begin(), axis.end(), value);
+    auto index = std::min<std::size_t>(std::size_t(it - axis.begin()), axis.size() - 1);
+    if (index && value - axis[index - 1] < axis[index] - value)
+        --index;
+    return index;
+}
+double initialInspectionTime(const analysis::ResultFile &result) {
+    const auto middle = result.x[result.x.size() / 2];
+    double peak = 0;
+    for (auto value : result.input)
+        peak = std::max(peak, std::abs(value));
+    if (peak == 0)
+        return middle;
+    double energy = 0;
+    for (auto value : result.input)
+        energy += (value / peak) * (value / peak);
+    double accumulated = 0;
+    for (std::size_t i = 0; i < result.input.size(); ++i) {
+        const auto value = result.input[i] / peak;
+        accumulated += value * value;
+        if (accumulated >= energy / 2)
+            return result.metadata["origin_time"].toDouble() + double(i) / result.metadata["rate_hz"].toDouble();
+    }
+    return middle;
+}
 } // namespace
 struct TimeFrequencyWindow::Work {
     std::atomic<std::uint64_t> epoch{0};
@@ -72,30 +98,34 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     method_->addItems({"STFT spectrogram", "Morlet CWT scalogram"});
     method_->setObjectName("timeFrequency.method");
     controls->addWidget(method_);
-    window_ = new QSpinBox(this);
-    window_->setRange(8, 65536);
-    window_->setValue(256);
+    window_ = new QComboBox(this);
+    window_->setObjectName("timeFrequency.fftSize");
+    for (int n = 8; n <= 65536; n *= 2)
+        window_->addItem(QString::number(n), n);
+    window_->setCurrentIndex(window_->findData(256));
     controls->addWidget(new QLabel("FFT size", this));
     controls->addWidget(window_);
     scales_ = new QSpinBox(this);
     scales_->setRange(2, 128);
     scales_->setValue(32);
+    scales_->setEnabled(false);
     controls->addWidget(new QLabel("CWT scales", this));
     controls->addWidget(scales_);
     minimum_ = new QDoubleSpinBox(this);
-    minimum_->setDecimals(6);
-    minimum_->setRange(.000001, 1e9);
+    minimum_->setDecimals(3);
+    minimum_->setRange(.001, 1e9);
     minimum_->setValue(2);
     maximum_ = new QDoubleSpinBox(this);
-    maximum_->setDecimals(6);
-    maximum_->setRange(.000001, 1e9);
+    maximum_->setDecimals(3);
+    maximum_->setRange(.001, 1e9);
     maximum_->setValue(100);
+    minimum_->setEnabled(false);
+    maximum_->setEnabled(false);
     controls->addWidget(new QLabel("CWT Hz", this));
     controls->addWidget(minimum_);
     controls->addWidget(maximum_);
     auto *analyze = new QPushButton("Analyze / freeze", this);
     analyze->setObjectName("timeFrequency.analyze");
-    controls->addWidget(analyze);
     connect(analyze, &QPushButton::clicked, this, [this] {
         if (auto *tabs = findChild<QTabWidget *>("timeFrequency.views"))
             tabs->setCurrentIndex(0);
@@ -104,6 +134,10 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         this->analyze();
     });
     root->addLayout(controls);
+    auto *actions = new QHBoxLayout;
+    actions->addWidget(analyze);
+    follow_ = new QCheckBox("Follow latest retained interval", this);
+    actions->addWidget(follow_);
     auto *display = new QHBoxLayout;
     quantity_ = new QComboBox(this);
     quantity_->addItems(
@@ -117,12 +151,19 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     auto *view = new QComboBox(this);
     view->addItems({"Heatmap", "3D surface", "Wireframe"});
     display->addWidget(view);
-    follow_ = new QCheckBox("Follow latest retained interval", this);
-    display->addWidget(follow_);
+    displayMaximum_ = new QDoubleSpinBox(this);
+    displayMaximum_->setObjectName("timeFrequency.displayMaximum");
+    displayMaximum_->setRange(.001, 1e9);
+    displayMaximum_->setDecimals(3);
+    displayMaximum_->setValue(100);
+    displayMaximum_->setToolTip("Display band only. The saved transform and numeric inspector retain all frequencies.");
+    display->addWidget(new QLabel("Display up to (Hz)", this));
+    display->addWidget(displayMaximum_);
+    connect(displayMaximum_, &QDoubleSpinBox::valueChanged, this, [this] { present(); });
     for (int action = 0; action < 3; ++action) {
         auto *b =
             new QPushButton(QStringList{"Save result…", "Open result…", "Export map CSV…"}[action], this);
-        display->addWidget(b);
+        actions->addWidget(b);
         connect(b, &QPushButton::clicked, this, [this, action] {
             const auto path =
                 action == 1
@@ -145,6 +186,7 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
             }
         });
     }
+    root->addLayout(actions);
     root->addLayout(display);
     status_ = new QLabel(this);
     status_->setObjectName("viewer.status");
@@ -154,6 +196,8 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     auto *inspectControls = new QHBoxLayout;
     row_ = new QSpinBox(this);
     column_ = new QSpinBox(this);
+    row_->setObjectName("timeFrequency.row");
+    column_->setObjectName("timeFrequency.column");
     row_->setRange(0, 0);
     column_->setRange(0, 0);
     inspectControls->addWidget(new QLabel("Frequency row", this));
@@ -171,9 +215,11 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     plot_->setPresentation(2);
     tabs->addTab(plot_, "Time–frequency map");
     trace_ = new LinePlotView(tabs);
+    trace_->setObjectName("timeFrequency.inputTrace");
     trace_->setAxisTitles("Model time (s)", "Source value");
     tabs->addTab(trace_, "Input trace");
     slice_ = new LinePlotView(tabs);
+    slice_->setObjectName("timeFrequency.frequencySlice");
     slice_->setAxisTitles("Frequency (Hz)", "Coefficient magnitude");
     tabs->addTab(slice_, "Frequency slice");
     root->addWidget(tabs, 1);
@@ -202,18 +248,20 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         if (!result_)
             return;
         const auto nx = std::min<std::size_t>(513, result_->x.size()),
-                   ny = std::min<std::size_t>(513, result_->y.size());
-        row_->setValue(int(ny <= 1 ? 0 : std::size_t(row) * (result_->y.size() - 1) / (ny - 1)));
+                   ny = std::min<std::size_t>(513, bandRows_);
+        row_->setValue(int(ny <= 1 ? 0 : std::size_t(row) * (bandRows_ - 1) / (ny - 1)));
         column_->setValue(int(nx <= 1 ? 0 : std::size_t(column) * (result_->x.size() - 1) / (nx - 1)));
     });
     connect(trace_, &LinePlotView::pointPicked, this, [this](double time, double) {
         if (!result_)
             return;
-        const auto it = std::lower_bound(result_->x.begin(), result_->x.end(), time);
-        column_->setValue(
-            int(std::min<std::size_t>(std::size_t(it - result_->x.begin()), result_->x.size() - 1)));
+        column_->setValue(int(nearestIndex(result_->x, time)));
     });
     connect(method_, &QComboBox::currentIndexChanged, this, [this, settingsChanged](int method) {
+        window_->setEnabled(method == 0);
+        scales_->setEnabled(method == 1);
+        minimum_->setEnabled(method == 1);
+        maximum_->setEnabled(method == 1);
         if (auto *model = qobject_cast<QStandardItemModel *>(quantity_->model()))
             for (int i = 3; i < 5; ++i)
                 model->item(i)->setEnabled(method == 0);
@@ -223,7 +271,7 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         logFrequency_->setChecked(method == 1);
         settingsChanged();
     });
-    connect(window_, &QSpinBox::valueChanged, this, settingsChanged);
+    connect(window_, &QComboBox::currentIndexChanged, this, settingsChanged);
     connect(scales_, &QSpinBox::valueChanged, this, settingsChanged);
     connect(minimum_, &QDoubleSpinBox::valueChanged, this, settingsChanged);
     connect(maximum_, &QDoubleSpinBox::valueChanged, this, settingsChanged);
@@ -306,7 +354,7 @@ void TimeFrequencyWindow::analyze() {
                 error_ = "Nonuniform model-time samples";
                 return;
             }
-    const auto n = window_->value();
+    const auto n = window_->currentData().toInt();
     if (method_->currentIndex() == 0 && (n & (n - 1))) {
         error_ = "FFT size must be a power of two";
         return;
@@ -438,8 +486,12 @@ void TimeFrequencyWindow::poll() {
     {
         std::lock_guard lock(work_->mutex);
         if (work_->ready) {
+            const double time = result_ ? result_->x[std::size_t(column_->value())]
+                                        : initialInspectionTime(*work_->ready);
+            const auto frequency = result_ ? std::optional(result_->y[std::size_t(row_->value())]) : std::nullopt;
             result_ = std::move(work_->ready);
             error_.clear();
+            chooseInspection(time, frequency);
             present();
         }
         if (!work_->error.isEmpty()) {
@@ -468,15 +520,45 @@ void TimeFrequencyWindow::updateStatus() {
                          .arg(imported_ ? "Imported result; file provenance retained" : sourceStatusText())
                          .arg(error_.isEmpty() ? "" : " | " + error_));
 }
+void TimeFrequencyWindow::chooseInspection(double time, std::optional<double> frequency) {
+    const auto &r = *result_;
+    const QSignalBlocker blockRow(row_), blockColumn(column_);
+    column_->setMaximum(int(r.x.size() - 1));
+    row_->setMaximum(int(r.y.size() - 1));
+    const auto column = nearestIndex(r.x, time);
+    column_->setValue(int(column));
+    std::size_t row = 0;
+    if (frequency)
+        row = nearestIndex(r.y, *frequency);
+    else {
+        double peak = -1;
+        for (std::size_t f = 0; f < r.y.size() && r.y[f] <= displayMaximum_->value(); ++f) {
+            const auto i = f * r.x.size() + column;
+            const auto magnitude = std::abs(r.values[i]);
+            if (r.valid[i] && magnitude > peak) {
+                peak = magnitude;
+                row = f;
+            }
+        }
+    }
+    row_->setValue(int(row));
+}
 void TimeFrequencyWindow::present() {
     if (!result_)
         return;
     const auto &r = *result_;
+    {
+        const QSignalBlocker block(displayMaximum_);
+        displayMaximum_->setRange(r.y[std::min<std::size_t>(1, r.y.size() - 1)], r.y.back());
+    }
     if (!r.metadata["method"].toString().startsWith("STFT") && quantity_->currentIndex() >= 3) {
         QSignalBlocker block(quantity_);
         quantity_->setCurrentIndex(0);
     }
-    const auto nx = std::min<std::size_t>(513, r.x.size()), ny = std::min<std::size_t>(513, r.y.size());
+    bandRows_ = std::clamp<std::size_t>(
+        std::size_t(std::upper_bound(r.y.begin(), r.y.end(), displayMaximum_->value()) - r.y.begin()),
+        std::min<std::size_t>(2, r.y.size()), r.y.size());
+    const auto nx = std::min<std::size_t>(513, r.x.size()), ny = std::min<std::size_t>(513, bandRows_);
     auto grid = std::make_shared<analysis::SurfaceGrid>();
     grid->x.resize(nx);
     grid->y.resize(ny);
@@ -486,10 +568,10 @@ void TimeFrequencyWindow::present() {
     for (std::size_t t = 0; t < nx; ++t)
         grid->x[t] = r.x[nx == 1 ? 0 : t * (r.x.size() - 1) / (nx - 1)];
     for (std::size_t f = 0; f < ny; ++f)
-        grid->y[f] = r.y[ny == 1 ? 0 : f * (r.y.size() - 1) / (ny - 1)];
+        grid->y[f] = r.y[ny == 1 ? 0 : f * (bandRows_ - 1) / (ny - 1)];
     for (std::size_t f = 0; f < ny; ++f)
         for (std::size_t t = 0; t < nx; ++t) {
-            const auto tf = ny == 1 ? 0 : f * (r.y.size() - 1) / (ny - 1),
+            const auto tf = ny == 1 ? 0 : f * (bandRows_ - 1) / (ny - 1),
                        tt = nx == 1 ? 0 : t * (r.x.size() - 1) / (nx - 1), i = tf * r.x.size() + tt;
             const auto w = r.values[i];
             const double value = quantityValue(r, tf, tt, quantity_->currentIndex());
@@ -517,14 +599,19 @@ void TimeFrequencyWindow::present() {
     trace_->clearSeries();
     traceMarker_ = trace_->addScatterSeries("Selected analysis time", QColor("#d62728"));
     QList<QPointF> points;
-    const auto count = std::min<std::size_t>(2048, r.input.size());
-    for (std::size_t i = 0; i < count; ++i) {
-        const auto index = count == 1 ? 0 : i * (r.input.size() - 1) / (count - 1);
-        points.append(
-            {r.metadata["origin_time"].toDouble() + double(index) / r.metadata["rate_hz"].toDouble(),
-             r.input[index]});
+    const auto buckets = std::min<std::size_t>(1024, r.input.size());
+    for (std::size_t i = 0; i < buckets; ++i) {
+        const auto first = i * r.input.size() / buckets, last = (i + 1) * r.input.size() / buckets;
+        const auto extrema = std::minmax_element(r.input.begin() + first, r.input.begin() + last);
+        std::array<std::size_t, 4> indices{first, std::size_t(extrema.first - r.input.begin()),
+                                         std::size_t(extrema.second - r.input.begin()), last - 1};
+        std::sort(indices.begin(), indices.end());
+        const auto end = std::unique(indices.begin(), indices.end());
+        for (auto it = indices.begin(); it != end; ++it)
+            points.append({r.metadata["origin_time"].toDouble() + double(*it) / r.metadata["rate_hz"].toDouble(),
+                           r.input[*it]});
     }
-    auto *line = trace_->addSeries("Raw interval", {QColor("#1565c0")});
+    auto *line = trace_->addSeries("Input envelope (extrema retained)", {QColor("#1565c0")});
     LinePlotView::setPoints(line, points);
     (void)trace_->fitAll();
     inspect(row_->value(), column_->value());
@@ -563,9 +650,12 @@ void TimeFrequencyWindow::inspect(int row, int column) {
                                                            double(raw) / r.metadata["rate_hz"].toDouble(),
                                                        r.input[std::size_t(raw)]}});
     }
-    const auto nx = std::min<std::size_t>(513, r.x.size()), ny = std::min<std::size_t>(513, r.y.size());
-    plot_->selectCell(int(r.y.size() <= 1 ? 0 : std::size_t(row) * (ny - 1) / (r.y.size() - 1)),
-                      int(r.x.size() <= 1 ? 0 : std::size_t(column) * (nx - 1) / (r.x.size() - 1)));
+    const auto nx = std::min<std::size_t>(513, r.x.size()), ny = std::min<std::size_t>(513, bandRows_);
+    if (std::size_t(row) < bandRows_)
+        plot_->selectCell(int(bandRows_ <= 1 ? 0 : std::size_t(row) * (ny - 1) / (bandRows_ - 1)),
+                          int(r.x.size() <= 1 ? 0 : std::size_t(column) * (nx - 1) / (r.x.size() - 1)));
+    else
+        plot_->bridge()->setHead(false, {});
     slice_->clearSeries();
     slice_->setAxisTitles("Frequency (Hz)", quantity_->currentText());
     QList<QPointF> points;
@@ -579,7 +669,7 @@ void TimeFrequencyWindow::inspect(int row, int column) {
         }
         points.clear();
     };
-    for (std::size_t f = 0; f < r.y.size(); ++f) {
+    for (std::size_t f = 0; f < bandRows_; ++f) {
         const auto index = f * r.x.size() + std::size_t(column);
         if (!r.valid[index] || (quantity_->currentIndex() == 2 && std::abs(r.values[index]) <= 1e-12)) {
             flush();
@@ -635,7 +725,11 @@ void TimeFrequencyWindow::openResult(const QString &path) {
         if (auto *model = qobject_cast<QStandardItemModel *>(quantity_->model()))
             for (int i = 3; i < 5; ++i)
                 model->item(i)->setEnabled(!wavelet);
-        window_->setValue(result.metadata["window_size"].toInt(256));
+        window_->setCurrentIndex(window_->findData(result.metadata["window_size"].toInt(256)));
+        window_->setEnabled(!wavelet);
+        scales_->setEnabled(wavelet);
+        minimum_->setEnabled(wavelet);
+        maximum_->setEnabled(wavelet);
         if (wavelet) {
             scales_->setValue(int(result.y.size()));
             minimum_->setValue(result.y.front());
@@ -653,6 +747,7 @@ void TimeFrequencyWindow::openResult(const QString &path) {
     }
     pending_ = false;
     result_ = std::make_shared<const analysis::ResultFile>(std::move(result));
+    chooseInspection(initialInspectionTime(*result_));
     imported_ = true;
     follow_->setChecked(false);
     error_.clear();

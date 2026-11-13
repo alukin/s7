@@ -141,7 +141,7 @@ SurfaceWindow::SurfaceWindow(bool complex, const QString &name, QWidget *parent)
             const auto path =
                 save ? QFileDialog::getSaveFileName(this, "Save surface", "surface.s7analysis",
                                                     "S7 analysis (*.s7analysis)")
-                     : QFileDialog::getOpenFileName(this, "Open surface", {}, "S7 analysis (*.s7analysis)");
+                     : QFileDialog::getOpenFileName(this, "Open surface", {}, "S7 analysis (*.s7analysis *.csv)");
             if (path.isEmpty())
                 return;
             try {
@@ -241,13 +241,13 @@ void SurfaceWindow::refreshPlot() {
         return;
     dirty_ = false;
     auto axis = [this](int i) {
-        return roles_[i] + (units_[i].isEmpty() ? " (unit unspecified)" : " (" + units_[i] + ")");
+        return roles_[i] + (units_[i].isEmpty() ? "" : " (" + units_[i] + ")");
     };
     if (imported_) {
         auto label = [&](const char *name, const char *unit, int role) {
             const auto value = importedMetadata_.value(unit).toString(units_[role]);
-            return importedMetadata_.value(name).toString(roles_[role]) + " (" +
-                   (value.isEmpty() ? QString("unit unspecified") : value) + ")";
+            return importedMetadata_.value(name).toString(roles_[role]) +
+                   (value.isEmpty() ? QString{} : " (" + value + ")");
         };
         plot_->setAxes({label("x_label", "x_unit", 0), label("y_label", "y_unit", 1),
                         label("height_label", "height_unit", 6)});

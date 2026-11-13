@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "impulse_rlc",
@@ -83,44 +83,77 @@
       {
         "id": "excitation",
         "position": [
-          4,
-          20
+          3,
+          22
         ],
-        "title": "excitation"
+        "title": "One-sample pulse"
       },
       {
         "id": "plant",
         "position": [
-          52,
-          20
+          23,
+          22
         ],
-        "title": "plant"
+        "title": "Plant output"
       },
       {
         "id": "omega",
         "position": [
-          27,
-          40
+          3,
+          12
         ],
-        "title": "omega"
+        "title": "ω₀ = 2π·5 rad/s"
       },
       {
         "id": "zeta",
         "position": [
-          27,
-          56
+          23,
+          12
         ],
-        "title": "zeta"
+        "title": "ζ = 0.3"
       },
       {
         "id": "response",
         "position": [
-          90,
-          28
+          43,
+          22
         ],
         "observer": true,
         "type": "FrequencyResponse",
-        "params": {}
+        "params": {},
+        "title": "Frequency response"
+      },
+      {
+        "id": "input_scope",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Input Scope"
+          ]
+        },
+        "position": [
+          3,
+          36
+        ],
+        "title": "Excitation vs time"
+      },
+      {
+        "id": "output_scope",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Output Scope"
+          ]
+        },
+        "position": [
+          43,
+          36
+        ],
+        "title": "Response vs time"
       }
     ],
     "wires": [
@@ -213,6 +246,42 @@
           ]
         },
         "bends": []
+      },
+      {
+        "id": "observe_input_scope",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "observe_output_scope",
+        "from": {
+          "port": [
+            "plant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
       }
     ],
     "text_frames": [
@@ -223,10 +292,10 @@
           2
         ],
         "params": {
-          "text": "rlc impulse response\nRun 2 seconds at 1024 Hz, open response and analyze. omega0=2\u03c0\u00b75 rad/s, damping ratio=0.3.\nReusable schema contains two explicit Euler integrators; numerical frequency response follows that discretization.\nPhysical parameters and expected response: examples/frequency_response/README.md.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "RLC resonance: f₀ = 5 Hz, ζ = 0.3\nRun 2 s at 1024 Hz; open the time scopes, then Frequency response → Analyze captured impulse.\nObserve the decaying oscillation and resonant peak. Continuous reference: ω₀=2π·5, ζ=0.3, DC gain=1.\nPulse area = 1; inspect input and output separately so the pulse does not hide the response.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

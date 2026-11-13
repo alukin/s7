@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: CC0-1.0
-import json, math
+import json, math, sys
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(root/'examples'))
+from refine_analysis_examples import refine
 p=root/'s7core/resources/schema_elements.s7library';library=json.loads(p.read_text())
 nodes=[];connections=[]
 def node(id,type,params=None):nodes.append(dict(id=id,type=type,params=params or {}));return id
@@ -36,6 +38,7 @@ for name in ['tone','tone_bursts','overlapping_tones','chirp','impulse','ring_do
  for c in cs+[dict(from_element=out,from_port=0,to_element='map',to_port=0)]:wires.append(dict(id='w'+str(len(wires)),**{'from':dict(port=[c['from_element'],'out',c['from_port']]),'to':dict(port=[c['to_element'],'in',c['to_port']])},bends=[]))
  doc['diagram']['nodes']=dn;doc['diagram']['wires']=wires;doc['diagram']['text_frames'][0]['params']['text']=f'{name}: time–frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2–100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.';doc['dt']=1/1024
  (folder/(name+'.s7diagram')).write_text(json.dumps(doc,indent=2)+'\n')
+ refine(folder/(name+'.s7diagram'))
 # Add a time-frequency observer to the existing, causal PLL experiment.
 base=json.loads((root/'examples/pll/pll_frequency_step.s7diagram').read_text())
 probe=next((v for v in base.get('probes',[]) if 'error' in v['name']),base.get('probes',[{}])[0])
@@ -43,3 +46,4 @@ if probe:
  base['id']='pll_acquisition_time_frequency';base['diagram']['nodes'].append(dict(id='wavelet_map',position=[100,60],observer=True,type='TimeFrequency',params={}))
  base['diagram']['wires'].append(dict(id='wavelet_observation',**{'from':dict(port=[probe['element'],'out',probe.get('port',0)]),'to':dict(port=['wavelet_map','in',0])},bends=[]))
  (folder/'pll_acquisition.s7diagram').write_text(json.dumps(base,indent=2)+'\n')
+ refine(folder/'pll_acquisition.s7diagram')

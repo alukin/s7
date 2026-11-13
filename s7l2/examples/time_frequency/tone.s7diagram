@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "time_frequency_tone",
@@ -32,20 +32,21 @@
       {
         "id": "tone",
         "position": [
-          4,
-          20
+          3,
+          14
         ],
-        "title": "tone"
+        "title": "32 Hz, amplitude 1"
       },
       {
         "id": "map",
         "position": [
-          95,
-          42
+          43,
+          22
         ],
         "observer": true,
         "type": "TimeFrequency",
-        "params": {}
+        "params": {},
+        "title": "Time–frequency viewer"
       }
     ],
     "wires": [
@@ -76,10 +77,10 @@
           2
         ],
         "params": {
-          "text": "tone: time\u2013frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2\u2013100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Stationary tone\nRun 8 s at 1024 Hz; open Time–frequency viewer → Analyze / freeze.\nA horizontal ridge at 32 Hz. STFT magnitude at the coherent bin is 1.\nCompare STFT and Morlet CWT; gray means incomplete support, not zero energy.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "time_frequency_resonant_chirp",
@@ -72,44 +72,45 @@
       {
         "id": "excitation",
         "position": [
-          4,
-          20
+          3,
+          24
         ],
-        "title": "excitation"
+        "title": "Chirp: 4 → 90 Hz"
       },
       {
         "id": "plant",
         "position": [
-          24,
-          20
+          23,
+          24
         ],
-        "title": "plant"
+        "title": "Resonant low-pass"
       },
       {
         "id": "omega",
         "position": [
-          44,
-          20
+          3,
+          13
         ],
-        "title": "omega"
+        "title": "ω₀ = 2π·16 rad/s"
       },
       {
         "id": "zeta",
         "position": [
-          64,
-          20
+          23,
+          13
         ],
-        "title": "zeta"
+        "title": "ζ = 0.2"
       },
       {
         "id": "map",
         "position": [
-          95,
-          42
+          43,
+          22
         ],
         "observer": true,
         "type": "TimeFrequency",
-        "params": {}
+        "params": {},
+        "title": "Time–frequency viewer"
       }
     ],
     "wires": [
@@ -194,10 +195,10 @@
           2
         ],
         "params": {
-          "text": "resonant_chirp: time\u2013frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2\u2013100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Chirp through a resonance\nRun 8 s at 1024 Hz; open Time–frequency viewer → Analyze / freeze.\nFollow the rising ridge and the strongest response near the 16 Hz plant resonance.\nCompare STFT and Morlet CWT; gray means incomplete support, not zero energy.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

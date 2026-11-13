@@ -1232,7 +1232,7 @@
     {
       "type_name": "SurfaceSinc",
       "display_name": "Surface: Sinc",
-      "description": "sin(r)/r; r=\u221a(x\u00b2+y\u00b2), grid excludes r=0; editable stateless F64 schema, inputs x/y. Requires nonzero denominator; use a pole-avoiding domain.",
+      "description": "sin(r)/r; analytic extension f(0,0)=1; editable stateless F64 schema, inputs x/y. ",
       "category": "schema_elements",
       "version": "1.0.0",
       "schema": {
@@ -1282,8 +1282,25 @@
             }
           },
           {
+            "id": "one",
+            "type": "Constant",
+            "params": {
+              "value": 1
+            }
+          },
+          {
+            "id": "safe_radius",
+            "type": "Switch",
+            "params": {}
+          },
+          {
             "id": "ratio",
             "type": "Divider",
+            "params": {}
+          },
+          {
+            "id": "analytic_extension",
+            "type": "Switch",
             "params": {}
           }
         ],
@@ -1337,16 +1354,52 @@
             "to_port": 0
           },
           {
+            "from_element": "one",
+            "from_port": 0,
+            "to_element": "safe_radius",
+            "to_port": 0
+          },
+          {
+            "from_element": "radius",
+            "from_port": 0,
+            "to_element": "safe_radius",
+            "to_port": 1
+          },
+          {
+            "from_element": "radius",
+            "from_port": 0,
+            "to_element": "safe_radius",
+            "to_port": 2
+          },
+          {
             "from_element": "sine",
             "from_port": 0,
             "to_element": "ratio",
             "to_port": 0
           },
           {
-            "from_element": "radius",
+            "from_element": "safe_radius",
             "from_port": 0,
             "to_element": "ratio",
             "to_port": 1
+          },
+          {
+            "from_element": "one",
+            "from_port": 0,
+            "to_element": "analytic_extension",
+            "to_port": 0
+          },
+          {
+            "from_element": "ratio",
+            "from_port": 0,
+            "to_element": "analytic_extension",
+            "to_port": 1
+          },
+          {
+            "from_element": "radius",
+            "from_port": 0,
+            "to_element": "analytic_extension",
+            "to_port": 2
           }
         ],
         "exposed_inputs": [
@@ -1367,7 +1420,7 @@
           {
             "name": "z",
             "type": "F64",
-            "element": "ratio",
+            "element": "analytic_extension",
             "port": 0
           }
         ]

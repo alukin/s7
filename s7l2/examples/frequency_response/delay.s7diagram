@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "impulse_delay",
@@ -66,44 +66,77 @@
       {
         "id": "excitation",
         "position": [
-          4,
-          20
+          3,
+          22
         ],
-        "title": "excitation"
+        "title": "One-sample pulse"
       },
       {
         "id": "delay0",
         "position": [
-          28,
-          20
+          16,
+          22
         ],
-        "title": "delay0"
+        "title": "Delay 1"
       },
       {
         "id": "delay1",
         "position": [
-          52,
-          20
+          29,
+          22
         ],
-        "title": "delay1"
+        "title": "Delay 2"
       },
       {
         "id": "delay2",
         "position": [
-          76,
-          20
+          42,
+          22
         ],
-        "title": "delay2"
+        "title": "Delay 3"
       },
       {
         "id": "response",
         "position": [
-          100,
-          42
+          29,
+          36
         ],
         "observer": true,
         "type": "FrequencyResponse",
-        "params": {}
+        "params": {},
+        "title": "Frequency response"
+      },
+      {
+        "id": "input_scope",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Input Scope"
+          ]
+        },
+        "position": [
+          3,
+          36
+        ],
+        "title": "Excitation vs time"
+      },
+      {
+        "id": "output_scope",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Output Scope"
+          ]
+        },
+        "position": [
+          43,
+          36
+        ],
+        "title": "Response vs time"
       }
     ],
     "wires": [
@@ -196,6 +229,42 @@
           ]
         },
         "bends": []
+      },
+      {
+        "id": "observe_input_scope",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "observe_output_scope",
+        "from": {
+          "port": [
+            "delay2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
       }
     ],
     "text_frames": [
@@ -206,10 +275,10 @@
           2
         ],
         "params": {
-          "text": "Impulse response: delay\nRun 2 model seconds at 1 kHz; open response, then Analyze captured impulse.\nInput has area 1 and height 1000 at sample 50. Actual pulse alignment is retained.\nSee frequency_response/README.md for references and assumptions.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Three-sample delay\nRun 2 s at 1000 Hz; open the time scopes, then Frequency response → Analyze captured impulse.\nMagnitude stays 1; unwrapped phase falls linearly to −540° at Nyquist.\nPulse area = 1; inspect input and output separately so the pulse does not hide the response.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

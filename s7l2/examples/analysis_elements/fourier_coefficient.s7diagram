@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "fourier_coefficient",
@@ -60,43 +60,59 @@
       {
         "id": "source",
         "position": [
-          4,
-          20
+          3,
+          15
         ],
-        "title": "source"
+        "title": "32 Hz unit sine"
       },
       {
         "id": "analysis",
         "position": [
-          29,
-          20
+          19,
+          15
         ],
-        "title": "analysis"
+        "title": "Complex coefficient"
       },
       {
         "id": "parts",
         "position": [
-          54,
-          20
+          35,
+          15
         ],
-        "title": "parts"
+        "title": "Real / imaginary"
       },
       {
         "id": "scope",
         "position": [
-          90,
-          20
+          43,
+          29
         ],
         "observer": true,
         "type": "Scope",
         "params": {
-          "channel_count": 3,
+          "channel_count": 2,
           "channel_names": [
             "Real coefficient",
-            "Imaginary coefficient",
-            "Updated"
+            "Imaginary coefficient"
           ]
-        }
+        },
+        "title": "Complex coefficient"
+      },
+      {
+        "id": "validity",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Validity"
+          ]
+        },
+        "position": [
+          19,
+          29
+        ],
+        "title": "Update flag"
       }
     ],
     "wires": [
@@ -173,7 +189,7 @@
         "bends": []
       },
       {
-        "id": "w4",
+        "id": "observe_validity",
         "from": {
           "port": [
             "analysis",
@@ -183,9 +199,9 @@
         },
         "to": {
           "port": [
-            "scope",
+            "validity",
             "in",
-            2
+            0
           ]
         },
         "bends": []
@@ -199,10 +215,10 @@
           2
         ],
         "params": {
-          "text": "Optional FourierCoefficient graph example\nBuild/load the corresponding analysis plugin first. Run 2 seconds at 1024 Hz, open scope.\nC64 output is split explicitly into real/imaginary channels.\nSee examples/analysis_elements/README.md for update/valid/delay conventions.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Fourier Coefficient: computation inside the causal graph\nLoad the optional analysis plugin; run 2 s at 1024 Hz and open the scope.\nThe C64 coefficient is split explicitly. Inspect the update/valid flag before using held values.\nFourier uses peak-amplitude normalization; Morlet uses discrete L2 normalization (see README).",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

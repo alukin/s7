@@ -6,6 +6,7 @@
 #include <QWidget>
 #include <deque>
 #include <memory>
+#include <optional>
 class QLabel;
 class QComboBox;
 class QSpinBox;
@@ -38,6 +39,7 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
   private:
     void present();
     void inspect(int row, int column);
+    void chooseInspection(double time, std::optional<double> frequency = {});
     void updateStatus();
     struct Work;
     std::shared_ptr<Work> work_;
@@ -55,10 +57,11 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     QLabel *inspection_;
     QComboBox *method_;
     QComboBox *quantity_;
-    QSpinBox *window_;
+    QComboBox *window_;
     QSpinBox *scales_;
     QDoubleSpinBox *minimum_;
     QDoubleSpinBox *maximum_;
+    QDoubleSpinBox *displayMaximum_;
     QCheckBox *follow_;
     QCheckBox *logFrequency_;
     QSpinBox *row_;
@@ -68,5 +71,6 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     QScatterSeries *traceMarker_ = nullptr;
     LinePlotView *slice_;
     std::uint64_t lastSubmitted_ = 0;
+    std::size_t bandRows_ = 0;
 };
 } // namespace s7studio::viewers

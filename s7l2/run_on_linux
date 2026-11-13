@@ -4,7 +4,7 @@
 # Usage: ./run_on_linux [--release] [<program> [arguments...]]
 #   program: s7studio (default), s7runtime or s7ctl
 #   --release  the program from build-release/ instead of build/
-# The s7noise plugin of the build is found through S7_PLUGIN_PATH (unless set).
+# Finds the build's noise plugin; Studio also finds installed analysis plugins (unless S7_PLUGIN_PATH is set).
 # Example: ./run_on_linux s7runtime --schema s7runtime/examples/schema_minimal.json --serve-seconds 5
 
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
@@ -29,5 +29,13 @@ if [ ! -x "$EXE" ]; then
     echo "$EXE is not built; run ./build_for_linux$( [ "$BUILD" = "$ROOT/build" ] || echo ' --release') first." >&2
     exit 1
 fi
-export S7_PLUGIN_PATH="${S7_PLUGIN_PATH:-$BUILD/s7noise}"
+if [ -z "${S7_PLUGIN_PATH:-}" ]; then
+    S7_PLUGIN_PATH="$BUILD/s7noise"
+    if [ "$PROGRAM" = s7studio ] && [ -d "$BUILD/analysis-plugins/install/lib/s7/plugins" ]; then
+        # S7_PLUGIN_PATH is one directory, not a colon-separated path list.
+        # Studio already discovers its sibling noise build.
+        S7_PLUGIN_PATH="$BUILD/analysis-plugins/install/lib/s7/plugins"
+    fi
+fi
+export S7_PLUGIN_PATH
 exec "$EXE" "$@"

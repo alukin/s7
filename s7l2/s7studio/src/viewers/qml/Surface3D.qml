@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
-// 3D phase trajectory for the Studio viewer. The trajectory and frame
+// 3D surface for the Studio viewer. The surface, slice and frame
 // geometries, the axis labels and the camera preset come from the C++
 // Trajectory3DBridge passed in as `surfaceView`.
 import QtQuick
@@ -33,14 +33,14 @@ Item {
             id: orbit
             function applyPreset() {
                 orbit.eulerRotation = surfaceView.viewRotation
-                camera.z = 520
+                camera.z = 420
             }
             Component.onCompleted: applyPreset()
 
             PerspectiveCamera {
                 id: camera
                 objectName: "viewer.camera"
-                z: 520
+                z: 420
                 clipNear: 1
                 clipFar: 10000
             }

@@ -120,6 +120,16 @@ void heatmapHover(bool complex) {
     plot.setGrid(grid);
     hover();
     require(picks == 1, "Populated heatmap must pick a cell");
+    if (!complex) {
+        plot.setHeightMode(viewers::SurfaceHeight::LogMagnitude);
+        plot.setContours(true);
+        plot.selectCell(0, 0);
+        require(!plot.bridge()->hasHead(), "Nonpositive logarithmic height must not create a 3D marker");
+        const auto image = heatmap->grab().toImage();
+        const QPointF cell(62 + (heatmap->width() - 80) * .25, 16 + (heatmap->height() - 68) * .75);
+        require(image.pixelColor((cell * image.devicePixelRatio()).toPoint()) == QColor("#dddddd"),
+                "Heatmap must mask nonpositive logarithmic height just like the 3D surface");
+    }
     plot.setGrid(std::make_shared<analysis::SurfaceGrid>());
     hover();
     require(picks == 1, "Cleared heatmap must not pick a cell");
@@ -174,6 +184,13 @@ void examples(bool render) {
                         "Capture append");
         }
         require(source->finish(), "Capture flush");
+        if (name == "sinc") {
+            const auto x = std::find(expected.x.begin(), expected.x.end(), 0),
+                       y = std::find(expected.y.begin(), expected.y.end(), 0);
+            require(x != expected.x.end() && y != expected.y.end(), "Sinc gallery must include its center");
+            const auto i = std::size_t(y - expected.y.begin()) * expected.columns() + std::size_t(x - expected.x.begin());
+            require(expected.finite(i) && expected.values[i].real() == 1, "Sinc analytic extension at origin");
+        }
         viewers::ViewerManager manager(viewers::ViewerRegistry::instance());
         const QString type = complex ? "ComplexSurface3D" : "Surface3D";
         manager.present(source, 0, [type](const QString &) { return type; });

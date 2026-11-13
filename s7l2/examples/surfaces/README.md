@@ -15,7 +15,7 @@ are dimensionless; no physical unit is inferred from their names.
 | `saddle.s7diagram` | x²−y², [-2,2]² | Positive along X, negative along Y; zero diagonals |
 | `gaussian.s7diagram` | exp(−x²−y²), [-3,3]² | Peak 1 at origin; (1,0)=exp(-1) |
 | `wave.s7diagram` | sin(x) cos(y), [-π,π]² | Alternating peaks/valleys; zeros where either factor is zero |
-| `sinc.s7diagram` | sin(r)/r, [-10,10]², 64×64 | Circular rings, alternating lobes. Even coordinate counts exclude r=0; analytic extension there is 1 |
+| `sinc.s7diagram` | sin(r)/r, [-10,10]², 65×65 | Central peak 1 at r=0; circular rings and alternating, diminishing lobes |
 
 `GridScan` emits one cell per logical evaluation, X fastest. Its six outputs
 are X, Y, cell index, columns, rows and active. The surface observer also reads
@@ -30,6 +30,10 @@ ordinary arithmetic and function blocks. No global simulation solver is used.
 Run `python3 examples/surfaces/generate_examples.py` from the repository to
 reproduce both real/complex galleries and their schema definitions. Numerical
 references live separately in `s7studio/tests/surface_test.cpp`.
+The sinc schema explicitly selects the analytic extension at zero and a safe
+denominator before division; the central value is computed without 0/0.
+`python3 examples/refine_analysis_examples.py` reapplies the compact layouts
+and teaching notes across all five analysis galleries.
 
 Fixed ranges, equal numeric aspect, heatmap contours and result Save/Open are
 available. Fixed height ranges also fix real-value colors; values outside a

@@ -216,7 +216,7 @@ ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent)
     setObjectName("observer.presentation"); auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
     // Dock previews need no more than 10 frames per second; full viewers keep their rate.
     constexpr int previewFrameIntervalMs = 100;
-    if (type == "Surface3D" || type == "ComplexSurface3D") { surface_=new SurfacePlotView(type=="ComplexSurface3D",this); root->addWidget(surface_); }
+    if (type == "Surface3D" || type == "ComplexSurface3D") { surface_=new SurfacePlotView(type=="ComplexSurface3D",this); surface_->setCompact(true); root->addWidget(surface_); }
     else if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); trajectory_->bridge()->setAntialiased(false);
         trajectory_->setMinimumFrameInterval(previewFrameIntervalMs); root->addWidget(trajectory_); }
     else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true; line_->setMinimumFrameInterval(previewFrameIntervalMs);

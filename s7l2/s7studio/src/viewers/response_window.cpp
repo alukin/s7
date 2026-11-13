@@ -27,6 +27,21 @@
 #include <s7spectral/analysis.hpp>
 
 namespace s7studio::viewers {
+namespace {
+std::vector<double> phaseDegrees(const std::vector<std::complex<double>> &values, bool unwrap) {
+    std::vector<double> phases;
+    phases.reserve(values.size());
+    bool previous = false;
+    for (const auto value : values) {
+        double phase = std::arg(value) * 180 / std::numbers::pi;
+        if (unwrap && previous)
+            phase += 360 * std::round((phases.back() - phase) / 360);
+        phases.push_back(phase);
+        previous = std::abs(value) > 0;
+    }
+    return phases;
+}
+}
 struct ResponseWindow::Work {
     std::atomic<std::uint64_t> epoch{0};
     std::atomic<bool> running{false};
@@ -97,10 +112,12 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     referenceEnabled_->setObjectName("response.referenceModel");
     referenceControls->addWidget(referenceEnabled_);
     omega_ = new QDoubleSpinBox(this);
+    omega_->setObjectName("response.omega");
     omega_->setRange(.001, 1e6);
     omega_->setDecimals(6);
     omega_->setValue(2 * std::numbers::pi * 5);
     damping_ = new QDoubleSpinBox(this);
+    damping_->setObjectName("response.damping");
     damping_->setRange(.001, 10);
     damping_->setDecimals(4);
     damping_->setValue(.3);
@@ -108,13 +125,27 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     referenceControls->addWidget(omega_);
     referenceControls->addWidget(new QLabel("Damping ratio", this));
     referenceControls->addWidget(damping_);
+    modelGain_ = new QDoubleSpinBox(this);
+    modelGain_->setObjectName("response.modelGain");
+    modelGain_->setDecimals(9);
+    modelGain_->setRange(1e-9, 1e9);
+    modelGain_->setValue(1);
+    referenceControls->addWidget(new QLabel("DC gain", this));
+    referenceControls->addWidget(modelGain_);
     root->addLayout(referenceControls);
     root->addWidget(new QLabel("Blue: measured response; orange: continuous reference. 3D color: blue (low "
                                "frequency) → red (high frequency).",
                                this));
-    connect(referenceEnabled_, &QCheckBox::toggled, this, [this] { draw(); });
+    for (auto *control : {omega_, damping_, modelGain_})
+        control->setEnabled(false);
+    connect(referenceEnabled_, &QCheckBox::toggled, this, [this](bool enabled) {
+        for (auto *control : {omega_, damping_, modelGain_})
+            control->setEnabled(enabled);
+        draw();
+    });
     connect(omega_, &QDoubleSpinBox::valueChanged, this, [this] { draw(); });
     connect(damping_, &QDoubleSpinBox::valueChanged, this, [this] { draw(); });
+    connect(modelGain_, &QDoubleSpinBox::valueChanged, this, [this] { draw(); });
     status_->setWordWrap(true);
     status_->setTextFormat(Qt::PlainText);
     status_->setObjectName("viewer.status");
@@ -125,6 +156,11 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     frequency_->setDecimals(6);
     frequency_->setRange(0, 1e9);
     cursor->addWidget(frequency_);
+    unwrap_ = new QCheckBox("Unwrap phase", this);
+    unwrap_->setObjectName("response.unwrap");
+    unwrap_->setChecked(true);
+    cursor->addWidget(unwrap_);
+    connect(unwrap_, &QCheckBox::toggled, this, [this] { draw(); });
     inspection_->setWordWrap(true);
     cursor->addWidget(inspection_, 1);
     root->addLayout(cursor);
@@ -142,6 +178,8 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     }
     plots_[0]->setAxisTitles("log10(f / 1 Hz)", "Gain (dB, explicit reference)");
     plots_[1]->setAxisTitles("log10(f / 1 Hz)", "Phase (degrees; wrapped)");
+    plots_[0]->setObjectName("response.magnitude");
+    plots_[1]->setObjectName("response.phase");
     plots_[2]->setAxisTitles("Re(H)", "Im(H)");
     plots_[3]->setAxisTitles("Phase (degrees; wrapped)", "Gain (dB, explicit reference)");
     tabs->addTab(bode, "Bode");
@@ -149,6 +187,7 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     tabs->addTab(plots_[3], "Nichols");
     tabs->addTab(trajectory_, "3D response");
     landscape_ = new SurfacePlotView(true, tabs);
+    landscape_->setHeightMode(SurfaceHeight::LogMagnitude);
     landscape_->setAxes({"Re(s), σ (1/s)", "Im(s), ω (rad/s)", "|G(s)|"});
     landscape_->setSliceColumn(32);
     tabs->addTab(landscape_, "Analytical landscape");
@@ -302,7 +341,7 @@ void ResponseWindow::draw() {
                 const double x = -2 * omega + 4 * omega * double(col) / 64,
                              y = -2 * omega + 4 * omega * double(row) / 64;
                 const std::complex<double> s{x, y}, den = s * s + 2 * zeta * omega * s + omega * omega;
-                const auto value = omega * omega / den;
+                const auto value = modelGain_->value() * omega * omega / den;
                 grid->append({x, y, double(row * 65 + col), 65, 65, 1, value.real(), value.imag()});
             }
         landscape_->setGrid(grid);
@@ -314,6 +353,10 @@ void ResponseWindow::draw() {
         return;
     }
     const auto &r = *result_;
+    phases_ = phaseDegrees(r.values, unwrap_->isChecked());
+    const auto phaseTitle = unwrap_->isChecked() ? "Phase (degrees; unwrapped)" : "Phase (degrees; wrapped)";
+    plots_[1]->setAxisTitles("log10(f / 1 Hz)", phaseTitle);
+    plots_[3]->setAxisTitles(phaseTitle, "Gain (dB, explicit reference)");
     std::array<QList<QPointF>, 4> segments;
     std::array<int, 4> segmentCounts{};
     phaseTruncated_ = false;
@@ -333,14 +376,14 @@ void ResponseWindow::draw() {
     bool hadPhase = false;
     for (std::size_t k = 0; k < r.values.size(); ++k) {
         const auto h = r.values[k];
-        const double magnitude = std::abs(h), phase = std::arg(h) * 180 / std::numbers::pi;
+        const double magnitude = std::abs(h), phase = phases_[k];
         if (magnitude == 0) {
             for (std::size_t p = 0; p < 4; ++p)
                 flush(p);
             hadPhase = false;
             continue;
         }
-        if (hadPhase && std::abs(phase - previousPhase) > 180) {
+        if (!unwrap_->isChecked() && hadPhase && std::abs(phase - previousPhase) > 180) {
             flush(1);
             flush(3);
         }
@@ -371,10 +414,12 @@ void ResponseWindow::draw() {
         for (auto frequency : r.frequency) {
             const std::complex<double> s{0, 2 * std::numbers::pi * frequency};
             const auto omega = omega_->value();
-            const auto h = omega * omega / (s * s + 2 * damping_->value() * omega * s + omega * omega);
-            const auto phase = std::arg(h) * 180 / std::numbers::pi,
-                       db = 20 * (std::log10(std::abs(h)) - std::log10(reference_->value()));
-            if (have && std::abs(phase - previous) > 180) {
+            const auto h = modelGain_->value() * omega * omega / (s * s + 2 * damping_->value() * omega * s + omega * omega);
+            auto phase = std::arg(h) * 180 / std::numbers::pi;
+            const auto db = 20 * (std::log10(std::abs(h)) - std::log10(reference_->value()));
+            if (unwrap_->isChecked() && have)
+                phase += 360 * std::round((previous - phase) / 360);
+            if (!unwrap_->isChecked() && have && std::abs(phase - previous) > 180) {
                 flushReference(1);
                 flushReference(3);
             }
@@ -411,10 +456,13 @@ void ResponseWindow::inspect(double frequency) {
     if (referenceEnabled_->isChecked()) {
         const auto row = int(std::lround((2 * std::numbers::pi * r.frequency[k] + 2 * omega_->value()) /
                                          (4 * omega_->value()) * 64));
-        landscape_->selectCell(std::clamp(row, 0, 64), 32);
+        if (row >= 0 && row <= 64)
+            landscape_->selectCell(row, 32);
+        else
+            landscape_->bridge()->setHead(false, {});
     }
     const auto h = r.values[k];
-    const double m = std::abs(h), phase = std::arg(h) * 180 / std::numbers::pi;
+    const double m = std::abs(h), phase = phases_[k];
     const double db = m > 0 ? 20 * (std::log10(m) - std::log10(reference_->value())) : 0;
     inspection_->setText(QString("%1 Hz | H=(%2, %3) | |H|=%4 | %5 / %6%7")
                              .arg(r.frequency[k], 0, 'g', 9)
@@ -424,6 +472,8 @@ void ResponseWindow::inspect(double frequency) {
                              .arg(outputUnit_.isEmpty() ? "unspecified output unit" : outputUnit_,
                                   inputUnit_.isEmpty() ? "unspecified input unit" : inputUnit_)
                              .arg(m == 0 ? " | phase undefined" : ""));
+    if (m > 0)
+        inspection_->setText(inspection_->text() + QString(" | phase %1°").arg(phase, 0, 'g', 6));
     const std::array<QPointF, 4> points{{{r.frequency[k] > 0 ? std::log10(r.frequency[k]) : 0, db},
                                          {r.frequency[k] > 0 ? std::log10(r.frequency[k]) : 0, phase},
                                          {h.real(), h.imag()},

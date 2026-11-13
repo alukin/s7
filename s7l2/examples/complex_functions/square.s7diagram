@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "surface_square",
@@ -54,28 +54,29 @@
       {
         "id": "grid",
         "position": [
-          4,
-          16
+          3,
+          15
         ],
-        "title": "Coordinates and explicit cell identity"
+        "title": "Coordinate scan"
       },
       {
         "id": "function",
         "position": [
-          46,
-          12
+          23,
+          13
         ],
-        "title": "f(z)=z²"
+        "title": "f(z)"
       },
       {
         "id": "surface",
         "position": [
-          84,
-          16
+          43,
+          15
         ],
         "observer": true,
         "type": "ComplexSurface3D",
-        "params": {}
+        "params": {},
+        "title": "Surface viewer"
       }
     ],
     "wires": [
@@ -268,10 +269,10 @@
           2
         ],
         "params": {
-          "text": "f(z)=z²\nRun at 1 kHz for 5 s; open surface. 65 × 65 samples, X fastest.\nCoordinates are dimensionless. Gray cells are missing; complex gray also marks undefined phase at zero.\nSchema definition is editable in the standard schema library. See this folder README.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Complex square: f(z) = z²\nRun 5 s at 1000 Hz; double-click Surface viewer. Coordinates are dimensionless.\nHeight is x²+y². Walk once around zero: phase makes two full turns.\nCompare Surface, Wireframe and Heatmap; hover cells and enable contours.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

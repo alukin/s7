@@ -67,7 +67,10 @@ class ResponseWindow final : public QWidget, public ObservationViewer {
     TrajectoryBounds trajectoryBounds_;
     SurfacePlotView *landscape_;
     QCheckBox *referenceEnabled_;
+    QCheckBox *unwrap_;
     QDoubleSpinBox *omega_;
     QDoubleSpinBox *damping_;
+    QDoubleSpinBox *modelGain_;
+    std::vector<double> phases_;
 };
 } // namespace s7studio::viewers

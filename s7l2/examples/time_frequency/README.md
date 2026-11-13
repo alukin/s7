@@ -21,6 +21,11 @@ peak-tone normalization, including the distinct DC/Nyquist factors. CWT uses a
 DC-corrected complex Morlet, omega0=6, finite support ±4 sigma and discrete L2
 normalization. Its magnitudes are not calibrated tone amplitudes or PSD.
 Squared magnitude remains squared coefficient magnitude, not PSD.
+The FFT selector offers powers of two, and only the active method's settings
+are enabled. **Display up to (Hz)** initially focuses the map and slice on
+0–100 Hz (2–100 Hz for the default CWT). Raise it to inspect higher bins;
+the numeric inspector and result files always retain the entire transform.
+The chirp ridge is straight on a linear frequency axis and curved on a log axis.
 
 Gray cells are boundary affected or invalid, not zero energy. CWT shows only
 full-support coefficients in the map; numeric inspection/export retains the
@@ -30,6 +35,11 @@ maps. Frequency rows and time columns inspect the full result; the drawing
 selects at most 513×513 source cells and explicitly reports that reduction.
 
 The input trace and a frequency slice are linked to a numeric time selector.
+The initial selector is near the center of the input energy, keeping a short
+transient in view, with a strong valid frequency selected there. Switching
+methods keeps the cursor's model time and frequency, using the nearest bins.
+The bounded input envelope retains extrema and their
+timestamps, including a one-sample impulse.
 Saved `.s7analysis` results retain the original input interval, complex matrix,
 coordinates, validity, model rate, transform settings and run provenance.
 Changing transform settings while frozen reanalyzes that original interval.

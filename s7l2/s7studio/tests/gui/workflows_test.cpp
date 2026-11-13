@@ -2220,6 +2220,26 @@ private slots:
         for(const auto& element:json["schema"].toObject()["elements"].toArray()){const auto type=element.toObject()["type"].toString();if((type=="FourierCoefficient"||type=="WaveletCoefficient")&&!s7::ElementRegistry::instance().find(type.toStdString()))QSKIP("Optional analysis plugin is not loaded; build/load it to run this graph example");}
         const double dt = json.value("dt").toDouble(); QVERIFY(dt > 0);
         QVERIFY(fileAction("action.open", path));
+        const bool analysisGallery = diagram.startsWith("surfaces/") || diagram.startsWith("complex_functions/") ||
+            diagram.startsWith("frequency_response/") || diagram.startsWith("time_frequency/") || diagram.startsWith("analysis_elements/");
+        if (analysisGallery) {
+            const auto page = editor()->pageLayout();
+            const QRectF bounds(0, 0, page.widthMm * 96 / 25.4, page.heightMm * 96 / 25.4);
+            const auto nodes = scene()->elementNodes();
+            for (std::size_t i = 0; i < nodes.size(); ++i) {
+                const QRectF body(nodes[i]->pos(), QSizeF(nodes[i]->width(), nodes[i]->height()));
+                QVERIFY2(bounds.contains(body), qPrintable(diagram + ": element outside sheet: " + QString::fromStdString(nodes[i]->id())));
+                for (std::size_t j = 0; j < i; ++j) {
+                    const QRectF other(nodes[j]->pos(), QSizeF(nodes[j]->width(), nodes[j]->height()));
+                    QVERIFY2(!body.intersects(other), qPrintable(diagram + ": overlapping elements: " +
+                        QString::fromStdString(nodes[i]->id()) + " / " + QString::fromStdString(nodes[j]->id())));
+                }
+                for (const auto& frame : scene()->textFrames())
+                    QVERIFY2(!body.intersects(frame->sceneBoundingRect()), qPrintable(diagram + ": element overlaps notes"));
+            }
+            for (const auto& frame : scene()->textFrames())
+                QVERIFY2(bounds.contains(frame->sceneBoundingRect()), qPrintable(diagram + ": notes outside sheet"));
+        }
         auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
         QList<std::pair<QString, s7studio::viewers::ObservationViewer*>> viewers;
         for (const auto& node : json.value("diagram").toObject().value("nodes").toArray()) {
@@ -2271,6 +2291,7 @@ private slots:
                 map->analyze();
                 QTRY_VERIFY_WITH_TIMEOUT(map->hasResult() || !map->error().isEmpty(), 30000);
                 QVERIFY2(map->hasResult(), qPrintable(map->error()));
+                capture(map, base + '-' + name + "-STFT");
                 map->setWavelet(true);
                 QTRY_VERIFY_WITH_TIMEOUT(map->result()->metadata["method"].toString().contains("Morlet") || !map->error().isEmpty(), 30000);
                 QVERIFY2(map->error().isEmpty(), qPrintable(map->error()));
@@ -2283,7 +2304,7 @@ private slots:
             }
             QTest::qWait(400);
             auto* widget = viewer->widget();
-            if(diagram=="frequency_response/rlc.s7diagram") {auto* reference=widget->findChild<QCheckBox*>("response.referenceModel");QVERIFY(reference);reference->setChecked(true);auto* cursor=widget->findChild<QDoubleSpinBox*>("response.frequency");QVERIFY(cursor);cursor->setValue(5);}
+            if(diagram=="frequency_response/rlc.s7diagram" && dynamic_cast<s7studio::viewers::ResponseWindow*>(viewer)) {auto* reference=widget->findChild<QCheckBox*>("response.referenceModel");QVERIFY(reference);reference->setChecked(true);auto* cursor=widget->findChild<QDoubleSpinBox*>("response.frequency");QVERIFY(cursor);cursor->setValue(5);}
             widget->raise();
             const auto checkPlots = [&](const QString& view) {
                 for (auto* plot : widget->findChildren<s7studio::viewers::LinePlotView*>())
@@ -2305,6 +2326,14 @@ private slots:
                 capture(widget, base + '-' + name + '-' + view);
             }
             if (tabs) tabs->setCurrentIndex(0);
+            if (dynamic_cast<s7studio::viewers::SurfaceWindow*>(viewer)) {
+                auto* presentation = widget->findChild<QComboBox*>("surface.presentation"); QVERIFY(presentation);
+                for (int mode : {1, 2}) {
+                    presentation->setCurrentIndex(mode); QTest::qWait(150);
+                    capture(widget, base + '-' + name + (mode == 1 ? "-Wireframe" : "-Heatmap"));
+                }
+                presentation->setCurrentIndex(0);
+            }
         }
         // The main window with its Observers dock previews.
         capture(window_.get(), base + "-studio");

@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "impulse_gain",
@@ -46,28 +46,61 @@
       {
         "id": "excitation",
         "position": [
-          4,
-          20
+          3,
+          22
         ],
-        "title": "excitation"
+        "title": "One-sample pulse"
       },
       {
         "id": "plant",
         "position": [
-          28,
-          20
+          23,
+          22
         ],
-        "title": "plant"
+        "title": "Plant output"
       },
       {
         "id": "response",
         "position": [
-          100,
-          42
+          43,
+          22
         ],
         "observer": true,
         "type": "FrequencyResponse",
-        "params": {}
+        "params": {},
+        "title": "Frequency response"
+      },
+      {
+        "id": "input_scope",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Input Scope"
+          ]
+        },
+        "position": [
+          3,
+          36
+        ],
+        "title": "Excitation vs time"
+      },
+      {
+        "id": "output_scope",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "Output Scope"
+          ]
+        },
+        "position": [
+          43,
+          36
+        ],
+        "title": "Response vs time"
       }
     ],
     "wires": [
@@ -124,6 +157,42 @@
           ]
         },
         "bends": []
+      },
+      {
+        "id": "observe_input_scope",
+        "from": {
+          "port": [
+            "excitation",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "observe_output_scope",
+        "from": {
+          "port": [
+            "plant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "output_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
       }
     ],
     "text_frames": [
@@ -134,10 +203,10 @@
           2
         ],
         "params": {
-          "text": "Impulse response: gain\nRun 2 model seconds at 1 kHz; open response, then Analyze captured impulse.\nInput has area 1 and height 1000 at sample 50. Actual pulse alignment is retained.\nSee frequency_response/README.md for references and assumptions.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Constant gain 2.5\nRun 2 s at 1000 Hz; open the time scopes, then Frequency response → Analyze captured impulse.\nThe output pulse is 2.5 times the input; Bode gain is 7.96 dB and phase is 0°.\nPulse area = 1; inspect input and output separately so the pulse does not hide the response.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

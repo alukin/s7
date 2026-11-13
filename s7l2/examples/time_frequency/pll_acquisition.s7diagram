@@ -780,12 +780,13 @@
       {
         "id": "wavelet_map",
         "position": [
-          100,
-          60
+          132,
+          74
         ],
         "observer": true,
         "type": "TimeFrequency",
-        "params": {}
+        "params": {},
+        "title": "Phase-error scalogram"
       }
     ],
     "wires": [
@@ -1356,10 +1357,10 @@
           2
         ],
         "params": {
-          "text": "PLL_FREQUENCY_STEP\nIdeal phase-domain detector; reference 20 Hz, VCO 18+10*u Hz, initial phase error 0.8 rad.\nRun 6 s at 1000 Hz; open the scopes.\nEquations, experiments and limits: examples/pll/README.md.\nExperimental: manual Studio workflow has not been qualified.",
+          "text": "PLL frequency step: control-loop settling in time and frequency\nRun 6 s at 1000 Hz. Reference changes from 20 to 22 Hz at 2 s.\nOpen Phase-error scalogram, analyze, then compare STFT with Morlet CWT.\nRelate transient phase-error energy to the frequency overshoot and subsequent lock.\nIdeal phase-domain detector; inspect the existing time scopes too. Model details: examples/pll/README.md.",
           "width": 2600,
-          "height": 200,
-          "font_size": 10
+          "height": 220,
+          "font_size": 16
         }
       }
     ]

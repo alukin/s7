@@ -5,8 +5,8 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 560,
-    "height_mm": 220
+    "width_mm": 300,
+    "height_mm": 250
   },
   "schema": {
     "name": "time_frequency_chirp",
@@ -34,20 +34,21 @@
       {
         "id": "excitation",
         "position": [
-          4,
-          20
+          3,
+          24
         ],
-        "title": "excitation"
+        "title": "Chirp: 4 → 90 Hz"
       },
       {
         "id": "map",
         "position": [
-          95,
-          42
+          43,
+          22
         ],
         "observer": true,
         "type": "TimeFrequency",
-        "params": {}
+        "params": {},
+        "title": "Time–frequency viewer"
       }
     ],
     "wires": [
@@ -78,10 +79,10 @@
           2
         ],
         "params": {
-          "text": "chirp: time\u2013frequency laboratory\nRun 8 model seconds at 1024 Hz. Open map; choose STFT or Morlet CWT and Analyze/freeze.\nCWT default 2\u2013100 Hz, 32 scales. Gray map cells have incomplete support.\nSee examples/time_frequency/README.md for expected results.",
-          "width": 1900,
-          "height": 190,
-          "font_size": 10
+          "text": "Linear chirp: 4 → 90 Hz in 8 s\nRun 8 s at 1024 Hz; open Time–frequency viewer → Analyze / freeze.\nCompare the straight ridge on a linear frequency axis with its curved log-axis view.\nCompare STFT and Morlet CWT; gray means incomplete support, not zero energy.",
+          "width": 1040,
+          "height": 160,
+          "font_size": 12
         }
       }
     ]

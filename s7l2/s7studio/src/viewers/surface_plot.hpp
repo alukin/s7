@@ -53,6 +53,7 @@ class SurfacePlotView final : public QWidget {
     void setLogY(bool enabled);
     void setFixedBounds(std::optional<TrajectoryBounds> bounds);
     void setEqualAspect(bool enabled);
+    void setCompact(bool enabled);
     void setViewRotation(QVector3D rotation) { bridge_->setViewRotation(rotation); }
     void selectCell(int row, int column);
     SurfaceBridge *bridge() const { return bridge_; }
@@ -66,6 +67,7 @@ class SurfacePlotView final : public QWidget {
   private:
     void rebuild();
     bool complex_;
+    bool compact_ = false;
     bool cyclicColors_ = false;
     bool contours_ = false, logY_ = false, equalAspect_ = false;
     std::optional<TrajectoryBounds> fixed_;

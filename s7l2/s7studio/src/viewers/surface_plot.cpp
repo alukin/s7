@@ -28,6 +28,7 @@ class Heatmap final : public QWidget {
     bool logarithmicY = false;
     QStringList axes;
     std::shared_ptr<const analysis::SurfaceGrid> grid;
+    std::optional<std::pair<int, int>> selected;
     std::function<void(int, int)> select;
     QRectF area() const { return QRectF(rect()).adjusted(62, 16, -18, -52); }
     void paintEvent(QPaintEvent *) override {
@@ -35,6 +36,22 @@ class Heatmap final : public QWidget {
         p.fillRect(rect(), Qt::white);
         const auto a = area();
         p.drawImage(a, image);
+        if (selected && grid && std::size_t(selected->first) < grid->rows() &&
+            std::size_t(selected->second) < grid->columns()) {
+            const auto x = grid->x[std::size_t(selected->second)], y = grid->y[std::size_t(selected->first)];
+            if (x >= bounds.min[0] && x <= bounds.max[0] && y >= bounds.min[1] && y <= bounds.max[1]) {
+                const QPointF point(a.left() + a.width() * (x - bounds.min[0]) / (bounds.max[0] - bounds.min[0]),
+                                    a.bottom() - a.height() * (y - bounds.min[1]) / (bounds.max[1] - bounds.min[1]));
+                p.save();
+                p.setClipRect(a);
+                p.setPen(QPen(QColor(30, 30, 30, 150), 1, Qt::DashLine));
+                p.drawLine(QPointF(a.left(), point.y()), QPointF(a.right(), point.y()));
+                p.drawLine(QPointF(point.x(), a.top()), QPointF(point.x(), a.bottom()));
+                p.setPen(QPen(QColor("#d62728"), 2));
+                p.drawEllipse(point, 4, 4);
+                p.restore();
+            }
+        }
         p.setPen(QColor("#555555"));
         p.drawRect(a);
         if (grid && !grid->x.empty()) {
@@ -301,6 +318,12 @@ void SurfacePlotView::setEqualAspect(bool enabled) {
     equalAspect_ = enabled;
     rebuild();
 }
+void SurfacePlotView::setCompact(bool enabled) {
+    compact_ = enabled;
+    layout()->itemAt(layout()->count() - 1)->widget()->setVisible(!enabled);
+    bridge_->setAntialiased(!enabled);
+    rebuild();
+}
 void SurfacePlotView::setFixedBounds(std::optional<TrajectoryBounds> bounds) {
     if (bounds)
         for (std::size_t i = 0; i < 3; ++i)
@@ -311,6 +334,8 @@ void SurfacePlotView::setFixedBounds(std::optional<TrajectoryBounds> bounds) {
     rebuild();
 }
 void SurfacePlotView::setGrid(std::shared_ptr<const analysis::SurfaceGrid> grid) {
+    bridge_->setHead(false, {});
+    static_cast<Heatmap *>(heatmap_)->selected.reset();
     grid_ = std::move(grid);
     rebuild();
 }
@@ -371,6 +396,8 @@ void SurfacePlotView::rebuild() {
         labels.push_back(QVariantMap{{"position", p}, {"text", s}, {"title", title}});
     };
     for (double t : {.1, .5, .9}) {
+        if (compact_ && t != .5)
+            continue;
         const auto q = float(-100 + 200 * t);
         for (std::size_t a = 0; a < 3; ++a) {
             const auto value =
@@ -381,15 +408,15 @@ void SurfacePlotView::rebuild() {
                   QString::number(logY_ && a == 1 ? std::pow(10.0, value) : value, 'g', 4), false);
         }
     }
-    label({0, -135, 135}, axes_.value(0), true);
-    label({135, -135, 0}, axes_.value(1), true);
+    label({0, -135, 135}, compact_ ? "X" : axes_.value(0), true);
+    label({135, -135, 0}, compact_ ? "Y" : axes_.value(1), true);
     const auto title = !complex_ ? (height_ == SurfaceHeight::LogMagnitude ? "log10(" + axes_.value(2) + ")"
                                                                            : axes_.value(2))
                        : height_ == SurfaceHeight::Real         ? "Re(w)"
                        : height_ == SurfaceHeight::Imaginary    ? "Im(w)"
                        : height_ == SurfaceHeight::LogMagnitude ? "log(1 + |w|)"
                                                                 : "|w|";
-    label({-135, 112, 112}, title, true);
+    label({-135, 112, 112}, compact_ ? "Z" : title, true);
     bridge_->setLabels(labels);
     auto *heat = static_cast<Heatmap *>(heatmap_);
     heat->bounds = b;
@@ -417,7 +444,7 @@ void SurfacePlotView::rebuild() {
                     continue;
                 const auto c = nearest(g.x, x), r = nearest(g.y, y);
                 const auto i = r * g.columns() + c;
-                if (g.finite(i) &&
+                if (g.finite(i) && std::isfinite(SurfaceGeometry::height(g.values[i], complex_, height_)) &&
                     (!fixed_ || (SurfaceGeometry::height(g.values[i], complex_, height_) >= b.min[2] &&
                                  SurfaceGeometry::height(g.values[i], complex_, height_) <= b.max[2])))
                     heat->image.setPixelColor(px, py,
@@ -437,7 +464,7 @@ void SurfacePlotView::rebuild() {
                         QList<QPointF> crossings;
                         bool valid = true;
                         for (auto i : ids)
-                            valid &= g.finite(i);
+                            valid &= g.finite(i) && std::isfinite(SurfaceGeometry::height(g.values[i], complex_, height_));
                         if (!valid)
                             continue;
                         for (std::size_t edge = 0; edge < 4; ++edge) {
@@ -473,15 +500,23 @@ void SurfacePlotView::selectCell(int row, int column) {
         return;
     const auto i = std::size_t(row) * grid_->columns() + std::size_t(column);
     if (!grid_->finite(i)) {
+        static_cast<Heatmap *>(heatmap_)->selected.reset();
+        heatmap_->update();
         bridge_->setHead(false, {});
         emit inspected("Missing or nonfinite cell");
         return;
     }
     const auto w = grid_->values[i];
-    bridge_->setHead(true,
-                     position(grid_->x[std::size_t(column)],
-                              (logY_ ? std::log10(grid_->y[std::size_t(row)]) : grid_->y[std::size_t(row)]),
-                              SurfaceGeometry::height(w, complex_, height_), bridge_->geometry.bounds()));
+    static_cast<Heatmap *>(heatmap_)->selected = std::pair(row, column);
+    heatmap_->update();
+    const auto h = SurfaceGeometry::height(w, complex_, height_);
+    if (std::isfinite(h) && (!logY_ || grid_->y[std::size_t(row)] > 0))
+        bridge_->setHead(true,
+                         position(grid_->x[std::size_t(column)],
+                                  (logY_ ? std::log10(grid_->y[std::size_t(row)]) : grid_->y[std::size_t(row)]),
+                                  h, bridge_->geometry.bounds()));
+    else
+        bridge_->setHead(false, {});
     QString text = QString("row %1, column %2 | x=%3, y=%4 | ")
                        .arg(row)
                        .arg(column)

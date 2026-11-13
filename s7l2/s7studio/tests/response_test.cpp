@@ -2,8 +2,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "local_runtime_v2.hpp"
 #include "viewers/response_window.hpp"
+#include "viewers/line_plot_view.hpp"
 #include <QApplication>
 #include <QElapsedTimer>
+#include <QCheckBox>
+#include <QtGraphs/QLineSeries>
+#include <cmath>
 #include <QTemporaryDir>
 #include <QThread>
 #include <fstream>
@@ -45,6 +49,20 @@ int main(int argc, char **argv) {
             if (!viewer.hasResult())
                 throw std::runtime_error(viewer.error().isEmpty() ? "Response timeout"
                                                                   : viewer.error().toStdString());
+            if (name == "delay") {
+                auto *phase = viewer.findChild<s7studio::viewers::LinePlotView *>("response.phase");
+                auto *unwrap = viewer.findChild<QCheckBox *>("response.unwrap");
+                if (!phase || !unwrap || !unwrap->isChecked() || phase->series().size() != 1)
+                    throw std::runtime_error("Default delay phase must be one unwrapped curve");
+                for (const auto &point : phase->series().front()->points())
+                    if (std::abs(point.y() + 360 * 3 * std::pow(10.0, point.x()) / 1000) > 1e-8)
+                        throw std::runtime_error("Delay phase disagrees with independent sample-delay formula");
+                unwrap->setChecked(false);
+                for (const auto *series : phase->series())
+                    for (const auto &point : series->points())
+                        if (std::abs(point.y()) > 180 + 1e-8)
+                            throw std::runtime_error("Wrapped phase outside principal interval");
+            }
             QTemporaryDir files;
             const auto path = files.filePath("response.s7analysis");
             viewer.saveResult(path);

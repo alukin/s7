@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: CC0-1.0
-import json, math
+import json, math, sys
 from pathlib import Path
 root=Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(root/'examples'))
+from refine_analysis_examples import refine
 library_path=root/'s7core/resources/schema_elements.s7library'
 library=json.loads(library_path.read_text())
 class Graph:
@@ -37,16 +39,20 @@ def graph(name):
    elif name=='gaussian':
     neg=g.op('negative','Gain',[r2],dict(factor=-1));z=g.op('exponential','MathFunction',[neg],dict(function='exp'));outs=[('z',z)]
    elif name=='sinc':
-    radius=g.op('radius','MathFunction',[r2],dict(function='sqrt'));sine=g.op('sine','Trig',[radius],dict(function='sin'));z=g.op('ratio','Divider',[sine,radius]);outs=[('z',z)]
+    radius=g.op('radius','MathFunction',[r2],dict(function='sqrt'));sine=g.op('sine','Trig',[radius],dict(function='sin'))
+    one=g.node('one','Constant',dict(value=1))
+    safe_radius=g.op('safe_radius','Switch',[one,radius,radius])
+    ratio=g.op('ratio','Divider',[sine,safe_radius])
+    z=g.op('analytic_extension','Switch',[one,ratio,radius]);outs=[('z',z)]
    elif name=='inverse':
     re=g.op('re','Divider',[x,r2]);neg=g.op('negative_y','Gain',[y],dict(factor=-1));im=g.op('im','Divider',[neg,r2]);outs=[('re',re),('im',im)]
  return g.schema('Surface'+name.title(),outs)
 
-settings=[('plane',2,65,49,'x + 2y'),('bowl',2,65,65,'x² + y²'),('saddle',2,65,65,'x² − y²'),('gaussian',3,65,65,'exp(−x²−y²)'),('wave',math.pi,65,65,'sin(x) cos(y)'),('sinc',10,64,64,'sin(r)/r; r=√(x²+y²), grid excludes r=0'),('identity',2,65,65,'f(z)=z'),('square',2,65,65,'f(z)=z²'),('inverse',2,64,64,'f(z)=1/z; grid excludes pole'),('rational',2,64,64,'f(z)=(z−1)/(z+1); grid excludes pole')]
+settings=[('plane',2,65,49,'x + 2y'),('bowl',2,65,65,'x² + y²'),('saddle',2,65,65,'x² − y²'),('gaussian',3,65,65,'exp(−x²−y²)'),('wave',math.pi,65,65,'sin(x) cos(y)'),('sinc',10,65,65,'sin(r)/r; analytic extension f(0,0)=1'),('identity',2,65,65,'f(z)=z'),('square',2,65,65,'f(z)=z²'),('inverse',2,64,64,'f(z)=1/z; grid excludes pole'),('rational',2,64,64,'f(z)=(z−1)/(z+1); grid excludes pole')]
 for name,extent,nx,ny,formula in settings:
  complex_=name in ('identity','square','inverse','rational'); type_name='Surface'+name.title(); schema=graph(name)
  library['elements']=[e for e in library['elements'] if e['type_name']!=type_name]
- library['elements'].append(dict(type_name=type_name,display_name='Surface: '+name.title(),description=formula+'; editable stateless F64 schema, inputs x/y. '+('Requires nonzero denominator; use a pole-avoiding domain.' if name in ('sinc','inverse','rational') else ''),category='schema_elements',version='1.0.0',schema=schema))
+ library['elements'].append(dict(type_name=type_name,display_name='Surface: '+name.title(),description=formula+'; editable stateless F64 schema, inputs x/y. '+('Requires nonzero denominator; use a pole-avoiding domain.' if name in ('inverse','rational') else ''),category='schema_elements',version='1.0.0',schema=schema))
  folder=root/'examples'/('complex_functions' if complex_ else 'surfaces'); folder.mkdir(exist_ok=True)
  elements=[dict(id='grid',type='GridScan',params=dict(x_min=-extent,x_max=extent,y_min=-extent,y_max=extent,columns=nx,rows=ny)),dict(id='function',type=type_name,params={})]
  connections=[dict(from_element='grid',from_port=i,to_element='function',to_port=i) for i in (0,1)]
@@ -60,4 +66,5 @@ for name,extent,nx,ny,formula in settings:
  note=f'{formula}\nRun at 1 kHz for {math.ceil((nx*ny+1)/1000)} s; open surface. {nx} × {ny} samples, X fastest.\nCoordinates are dimensionless. Gray cells are missing; complex gray also marks undefined phase at zero.\nSchema definition is editable in the standard schema library. See this folder README.'
  doc=dict(id='surface_'+name,dt=.001,document_kind='s7.diagram',diagram_version=2,sheet=dict(orientation='landscape',width_mm=560,height_mm=220),schema=dict(name='surface_'+name,elements=elements,connections=connections),probes=[],diagram=dict(grid=dict(step=20,mm_per_step=5.291666666666667),nodes=nodes,wires=wires,text_frames=[dict(id='notes',position=[2,2],params=dict(text=note,width=1900,height=190,font_size=10))]))
  (folder/(name+'.s7diagram')).write_text(json.dumps(doc,indent=2,ensure_ascii=False)+'\n')
+ refine(folder/(name+'.s7diagram'))
 library_path.write_text(json.dumps(library,indent=2,ensure_ascii=False)+'\n')
