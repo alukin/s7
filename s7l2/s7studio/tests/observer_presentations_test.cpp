@@ -38,6 +38,31 @@ ObserverDescriptor scope(int count = 1) {
 class ObserverPresentationsTest : public QObject {
     Q_OBJECT
 private slots:
+    void completedAnalysisReadsAllPages_data() {
+        QTest::addColumn<int>("count");
+        for (const auto count : {16384, 16385, 32768, 65536})
+            QTest::newRow(qPrintable(QString::number(count))) << count;
+    }
+    void completedAnalysisReadsAllPages() {
+        QFETCH(int, count);
+        QTemporaryDir temporary;
+        QVERIFY(temporary.isValid());
+        observation::StorageOptions options;
+        options.memoryLimit = 3;
+        options.temporaryDirectory = temporary.path();
+        auto source = std::make_shared<observation::ObservationSource>(19, options);
+        source->channel("map/in");
+        for (int n = 0; n < count; ++n)
+            QVERIFY(source->append({0, n + 1, double(n + 1) / 1024, n == 1535 ? 1024. : 0.}));
+        QVERIFY(source->finish());
+        ObserverDescriptor descriptor{"map", "TimeFrequency", {{"map/in", "V", "pulse", 0}}};
+        const auto result = preparePreview({descriptor, {0}, source});
+        QVERIFY2(result.surface, qPrintable(result.status));
+        QCOMPARE(result.rawPositions, std::size_t(count));
+        QVERIFY(result.surface->x.back() > double(count - 256) / 1024);
+        QCOMPARE(source->status().samples, std::uint64_t(count));
+        QVERIFY(!source->status().incomplete());
+    }
     void analysisPreviewsUseCapturedValues() {
         auto source = std::make_shared<observation::ObservationSource>(17);
         const auto input = source->channel("map/in");
@@ -65,7 +90,7 @@ private slots:
 
         auto response = std::make_shared<observation::ObservationSource>(18);
         response->channel("response/input"); response->channel("response/output");
-        for (int n = 0; n < 1024; ++n) {
+        for (int n = 0; n < 20000; ++n) {
             const double value = n == 10 ? 1024. : 0.;
             QVERIFY(response->append({0,n+1,double(n+1)/1024,value}));
             QVERIFY(response->append({1,n+1,double(n+1)/1024,2.5*value}));
@@ -73,6 +98,7 @@ private slots:
         QVERIFY(response->finish());
         ObserverDescriptor gain{"response", "FrequencyResponse", {{"response/input", "V", "input", 0},{"response/output", "V", "gain", 0}}};
         const auto measured = preparePreview({gain,{0,1},response});
+        QCOMPARE(measured.rawPositions, std::size_t(40000));
         QVERIFY2(!measured.traces.empty(), qPrintable(measured.status));
         for (const auto& point : measured.traces.front().segments.front())
             QVERIFY(std::abs(point.y()-20*std::log10(2.5)) < 1e-10);

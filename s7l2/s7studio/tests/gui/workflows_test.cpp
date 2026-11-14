@@ -2158,17 +2158,27 @@ private slots:
             QTRY_COMPARE(scope->recording().series().size(), liveCount);
         }
     }
+    void analysisOpensWithPlotsAndCachesPreview_data() {
+        QTest::addColumn<int>("analysisRate");
+        QTest::newRow("standard") << 1024;
+        QTest::newRow("paged") << 4096;
+    }
     void analysisOpensWithPlotsAndCachesPreview() {
+        QFETCH(int, analysisRate);
         QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/time_frequency/impulse.s7diagram"));
         auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
         auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
         auto* panel = window_->findChild<s7studio::ui::ObserversPanel*>(); QVERIFY(panel);
         QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
-        QVERIFY(configure("action.run", 8, 1024));
+        QVERIFY(configure("action.run", 8, analysisRate));
         QTRY_VERIFY_WITH_TIMEOUT(!completed.empty(), 15000);
         QVERIFY(completed.last().at(0).toBool());
         auto* viewer = dynamic_cast<s7studio::viewers::TimeFrequencyWindow*>(manager->openObserver("TimeFrequency", "map"));
         QVERIFY(viewer);
+        if (analysisRate > 1024) {
+            while (viewer->refreshSource()) {}
+            viewer->analyze();
+        }
         QTRY_VERIFY_WITH_TIMEOUT(viewer->hasResult(), 10000); // No Analyze button click.
         QTRY_COMPARE(panel->activePresentations(), 1);
         auto* presentation = panel->findChild<s7studio::viewers::ObserverPresentation*>(); QVERIFY(presentation);
@@ -2177,8 +2187,33 @@ private slots:
         QTRY_VERIFY(preview->bridge()->geometry.bounds().max[2] > 1);
         QTRY_VERIFY(preview->bridge()->geometry.bounds().min[0] < 1 && preview->bridge()->geometry.bounds().max[0] > 7);
         QVERIFY(std::abs(preview->bridge()->geometry.bounds().max[2] - full->bridge()->geometry.bounds().max[2]) < 1e-10);
+        auto visibleImpulse = [&] {
+            auto *heatmap = preview->findChild<QWidget *>("surface.heatmap");
+            if (!heatmap) return false;
+            const auto image = heatmap->grab().toImage();
+            const auto area = QRectF(heatmap->rect()).adjusted(62, 16, -18, -52);
+            const auto bounds = preview->bridge()->geometry.bounds();
+            const auto x = area.left() + area.width() * (1.5 - bounds.min[0]) / (bounds.max[0] - bounds.min[0]);
+            const auto dpr = image.devicePixelRatio();
+            for (int py = int((area.top() + area.height() / 4) * dpr);
+                 py < int((area.bottom() - area.height() / 4) * dpr); ++py)
+                for (int px = int((x - 3) * dpr); px <= int((x + 3) * dpr); ++px) {
+                    const auto color = image.pixelColor(px, py);
+                    if (color.red() > color.green() + 20) return true;
+                }
+            return false;
+        };
+        QTRY_VERIFY2(visibleImpulse(), "The narrow impulse must survive heatmap downscaling in the dock");
         const auto requests = panel->submittedRequests();
         QTest::qWait(350);
+        QCOMPARE(panel->submittedRequests(), requests);
+        const auto peak = full->bridge()->geometry.bounds().max[2];
+        panel->hide(); QTRY_COMPARE(panel->activePresentations(), 0);
+        panel->show(); QTRY_COMPARE(panel->activePresentations(), 1);
+        presentation = panel->findChild<s7studio::viewers::ObserverPresentation*>(); QVERIFY(presentation);
+        preview = presentation->findChild<s7studio::viewers::SurfacePlotView*>(); QVERIFY(preview);
+        QTRY_VERIFY(std::abs(preview->bridge()->geometry.bounds().max[2] - peak) < 1e-10);
+        QTRY_VERIFY(visibleImpulse());
         QCOMPARE(panel->submittedRequests(), requests);
         capture(viewer, "analysis-automatic-impulse-map");
         capture(window_.get(), "analysis-measured-map-preview");

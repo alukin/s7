@@ -35,7 +35,14 @@ class Heatmap final : public QWidget {
         QPainter p(this);
         p.fillRect(rect(), Qt::white);
         const auto a = area();
-        p.drawImage(a, image);
+        // Area filtering on reduction keeps narrow events visible. Nearest
+        // sampling can skip an entire bright impulse column in a small dock.
+        const auto pixels = (a.size() * devicePixelRatioF()).toSize();
+        if (!image.isNull() && pixels.width() > 0 && pixels.height() > 0 &&
+            (pixels.width() < image.width() || pixels.height() < image.height()))
+            p.drawImage(a, image.scaled(pixels, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+        else
+            p.drawImage(a, image);
         if (selected && grid && std::size_t(selected->first) < grid->rows() &&
             std::size_t(selected->second) < grid->columns()) {
             const auto x = grid->x[std::size_t(selected->second)], y = grid->y[std::size_t(selected->first)];

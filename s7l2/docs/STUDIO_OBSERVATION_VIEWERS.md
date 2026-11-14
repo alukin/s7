@@ -17,10 +17,13 @@ records per channel in addition to its authoritative recording storage.
 Analysis previews are computed by the same headless spectral processors as the
 full windows. Time–frequency previews show an STFT magnitude map; response
 previews show measured impulse gain. For a completed recording of at most
-65,536 total records, a single bounded worker read preserves the entire
+65,536 total records, a bounded paginated worker scan preserves the entire
 interval, including early transients. Larger/running time–frequency captures
 use recent tails. Completed preview results are reused until their source or
-settings change; they do not reread the journal on each refresh.
+settings change, including across dock hide/show; graphics surfaces are released
+while hidden. They do not reread the journal on each refresh.
+Heatmap image reduction uses area filtering so narrow impulse columns remain
+visible at dock sizes.
 These are labeled default previews: STFT uses a periodic Hann window of up to
 256 samples and a 50% hop; the gain preview uses a dB reference of one. Full
 windows retain their independent transform and display controls.
@@ -330,5 +333,10 @@ CWT. Larger jobs stay manual; an empty-state message explains how to create the
 map. Automatic work runs on the shared pool, obeys visibility/cancellation, and
 does not recreate a display after Clear. A one-frame STFT remains visible as a
 heatmap band.
+Reanalysis preserves the last valid plot until a replacement succeeds. Analyze /
+freeze selects the latest capture, while transform-setting changes reuse the
+frozen input. Switching to Input trace cancels derived work without leaving the
+analysis action disabled. An imported result without saved input remains
+viewable, with reanalysis controls disabled; retired jobs cannot replace it.
 See [time-frequency examples](../examples/time_frequency/README.md) and the
 [testing guide](STUDIO_ANALYSIS_TESTING.md) for normalization and limits.

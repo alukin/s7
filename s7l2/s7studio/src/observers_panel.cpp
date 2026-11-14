@@ -78,7 +78,11 @@ struct ObserversPanel::Card {
         // Never synchronously destroy that surface from a nested panel tick.
         if (previous) { previous->hide(); previous->deleteLater(); }
         if (!widget) return;
-        if (!freeze->isChecked()) last.reset();
+        // Keep the bounded completed analysis data when releasing its graphics
+        // surface. Reopening the dock must not recompute the same transform.
+        const bool completedAnalysis = (type == "TimeFrequency" || type == "FrequencyResponse") &&
+            last && last->capture && last->capture->finished;
+        if (!freeze->isChecked() && !completedAnalysis) last.reset();
         placeholder->show();
     }
 };

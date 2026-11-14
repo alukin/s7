@@ -130,3 +130,20 @@ CWT check took approximately 0.63 s in Debug and 0.17 s in Release on this
 machine, including presentation; these measurements are not timing guarantees.
 Local evidence is in `/tmp/s7-auto-analysis-full-tests.log`,
 `/tmp/s7-auto-analysis-final-gui`, and the corresponding focused test logs.
+
+Preview pagination regression: run `time_frequency/impulse.s7diagram` for
+8 seconds at both 1024 and 4096 Hz. The completed preview must retain the event
+at 1.5 seconds, including after hide/show. The latter capture crosses the
+source's 16,384-record page limit. Boundary checks cover 16,384, 16,385, 32,768
+and 65,536 records, plus multi-channel response captures. Analysis lifecycle
+checks retain a valid plot through queued/failed work, recover the action on
+Input trace, freeze the latest samples, and protect input-less imports from
+retired jobs. The GUI workflow checks rendered pixels around the impulse in
+the compact map as well as data bounds and completed-result cache reuse.
+
+Pagination/lifecycle qualification (2026-11-14): full native suite passed
+112/112 in 359 seconds. After the final heatmap downscaling adjustment, focused
+Debug checks passed 3/3, Windows/Wine checks passed 2/2, and the rendered impulse
+workflow passed 4 Qt Test cases without failures or skips. Evidence is retained
+in `/tmp/s7-impulse-full-tests.log`, `/tmp/s7-impulse-final-debug-tests.log`,
+`/tmp/s7-impulse-resample-wine-tests.log` and `/tmp/s7-impulse-render-final`.

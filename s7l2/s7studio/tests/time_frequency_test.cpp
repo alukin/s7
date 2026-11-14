@@ -4,6 +4,7 @@
 #include "viewers/surface_plot.hpp"
 #include "viewers/time_frequency_window.hpp"
 #include "viewers/line_plot_view.hpp"
+#include "analysis/worker_pool.hpp"
 #include <QApplication>
 #include <QComboBox>
 #include <QElapsedTimer>
@@ -11,6 +12,10 @@
 #include <QSpinBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QScopeGuard>
+#include <QSemaphore>
+#include <QTabWidget>
+#include <QThreadPool>
 #include <QtGraphs/QLineSeries>
 #include <QFile>
 #include <QTemporaryDir>
@@ -62,6 +67,32 @@ int main(int argc, char **argv) {
             std::cout << "Automatic " << (wavelet ? "CWT" : "STFT") << " for " << count
                       << " samples: " << timer.elapsed() << " ms including presentation\n";
             require(!window.findChild<QLabel *>("timeFrequency.empty")->isVisible(), "Hide empty-state guidance after automatic analysis");
+            if (kind == 0) {
+                auto &pool = s7studio::analysis::analysisPool();
+                QSemaphore entered, release;
+                bool released = false;
+                const auto cleanup = qScopeGuard([&] {
+                    if (!released) release.release(2);
+                    pool.waitForDone(5000);
+                });
+                for (int i = 0; i < 2; ++i)
+                    pool.start([&] { entered.release(); release.acquire(); });
+                entered.acquire(2);
+                analyze->click();
+                const bool retained = window.hasResult();
+                auto *tabs = window.findChild<QTabWidget *>("timeFrequency.views");
+                tabs->setCurrentIndex(1);
+                window.poll();
+                release.release(2); released = true;
+                require(pool.waitForDone(5000), "Cancelled analysis completion");
+                window.poll();
+                std::cout << "Reanalysis retained result: " << retained
+                          << "; action recovered on input trace: " << analyze->isEnabled() << '\n';
+                require(retained, "Reanalysis must retain the last valid map while work is pending");
+                require(analyze->isEnabled(), "Input trace must allow Analyze after cancelling derived work");
+                tabs->setCurrentIndex(0);
+                window.poll();
+            }
             if (kind == 4) {
                 const auto image = window.findChild<QWidget *>("surface.heatmap")->grab().toImage();
                 int red = 0;
@@ -170,6 +201,81 @@ int main(int argc, char **argv) {
             require(!window.hasResult(), "Long recordings require explicit analysis");
             require(window.findChild<QPushButton *>("timeFrequency.analyze")->isEnabled(), "Long recording primary action enabled");
             require(window.findChild<QLabel *>("timeFrequency.empty")->isVisible(), "Explain the empty map for manual analysis");
+        }
+        {
+            auto source = std::make_shared<s7studio::observation::ObservationSource>(125);
+            source->channel("map/in");
+            auto append = [&](int first, int last) {
+                for (int n = first; n < last; ++n)
+                    require(source->append({0, n + 1, double(n + 1) / 256,
+                        std::sin(2 * std::numbers::pi * 32 * n / 256)}), "Growing capture");
+            };
+            append(0, 512);
+            s7studio::viewers::TimeFrequencyWindow window;
+            window.show();
+            window.attachSource(source, {{"in", 0}});
+            while (window.refreshSource()) {}
+            auto waitForSize = [&](std::size_t count) {
+                QElapsedTimer timer; timer.start();
+                while ((!window.hasResult() || window.result()->input.size() != count) &&
+                       window.error().isEmpty() && timer.elapsed() < 5000) {
+                    window.poll(); app.processEvents(); QThread::msleep(5);
+                }
+                require(window.hasResult() && window.result()->input.size() == count,
+                        "Analyze / freeze must use the latest capture, not the preceding frozen input");
+            };
+            window.analyze();
+            waitForSize(512);
+            append(512, 1024);
+            while (window.refreshSource()) {}
+            auto *button = window.findChild<QPushButton *>("timeFrequency.analyze");
+            button->click();
+            require(window.hasResult() && window.result()->input.size() == 512, "Retain preceding snapshot while refreshing");
+            waitForSize(1024);
+            require(window.result()->metadata["last_step"].toString() == "1024", "Fresh capture provenance");
+            require(source->finish(), "Growing capture finish");
+            auto *fft = window.findChild<QComboBox *>("timeFrequency.fftSize");
+            fft->setCurrentIndex(fft->findData(65536));
+            QElapsedTimer failedJob; failedJob.start();
+            while (window.error().isEmpty() && failedJob.elapsed() < 5000) {
+                window.poll(); app.processEvents(); QThread::msleep(5);
+            }
+            require(!window.error().isEmpty() && window.hasResult() && window.result()->input.size() == 1024,
+                    "Failed reanalysis must retain the last valid result");
+            fft->setCurrentIndex(fft->findData(512));
+            failedJob.restart();
+            while (window.result()->metadata["window_size"].toInt() != 512 && failedJob.elapsed() < 5000) {
+                window.poll(); app.processEvents(); QThread::msleep(5);
+            }
+            require(window.error().isEmpty() && window.result()->metadata["window_size"].toInt() == 512,
+                    "Valid settings must recover from a failed analysis");
+
+            auto imported = *window.result();
+            for (auto &value : imported.values) value *= 2;
+            imported.input.clear();
+            const auto path = directory.filePath("read-only.s7analysis");
+            imported.save(path);
+            auto &pool = s7studio::analysis::analysisPool();
+            QSemaphore entered, release;
+            bool released = false;
+            const auto cleanup = qScopeGuard([&] {
+                if (!released) release.release(2);
+                pool.waitForDone(5000);
+            });
+            for (int i = 0; i < 2; ++i)
+                pool.start([&] { entered.release(); release.acquire(); });
+            entered.acquire(2);
+            button->click();
+            window.openResult(path);
+            window.hide(); window.poll();
+            release.release(2); released = true;
+            require(pool.waitForDone(5000), "Retired worker after import");
+            window.show();
+            for (int i = 0; i < 20; ++i) { window.poll(); app.processEvents(); QThread::msleep(5); }
+            require(window.result()->values == imported.values && window.result()->input.empty(),
+                    "Retired work must not overwrite an imported result after hiding/showing");
+            require(!button->isEnabled() && !window.findChild<QComboBox *>("timeFrequency.method")->isEnabled(),
+                    "Imported results without input must disable reanalysis controls");
         }
         std::cout << "Time-frequency capture, workers, save/open and rollback passed\n";
     } catch (const std::exception &e) {

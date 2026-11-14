@@ -42,6 +42,7 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     void inspect(int row, int column);
     void chooseInspection(double time, std::optional<double> frequency = {});
     void updateStatus();
+    void startAnalysis(bool currentCapture);
     bool smallAutomaticJob() const;
     struct Work;
     std::shared_ptr<Work> work_;
@@ -54,6 +55,9 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     std::int64_t previous_ = 0;
     bool loaded_ = false, imported_ = false;
     bool pending_ = false;
+    bool polling_ = false;
+    bool requestActive_ = false;
+    bool currentCaptureRequested_ = false;
     bool automaticAttempted_ = false;
     std::weak_ptr<const observation::ObservationSource> automaticSource_;
     QString error_, unit_;

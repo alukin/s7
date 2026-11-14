@@ -42,16 +42,20 @@ std::optional<PreviewData> prepareAnalysisPreview(const PreviewRequest &request)
         }
         QVector<QVector<observation::Sample>> samples(count);
         // Complete small recordings preserve early transients as well as their
-        // tails. One bounded worker read; completed results are cached by the host.
+        // tails. A bounded paginated scan; completed results are cached by the host.
         const bool whole = state.finished && state.samples <= 65536;
         if (whole) {
-            const auto page = request.source->read(0, 65536);
-            if (!page.error.isEmpty() || page.next != state.samples)
-                throw std::invalid_argument("Could not read the complete analysis capture");
-            for (const auto &sample : page.samples)
-                for (int i = 0; i < ids.size(); ++i)
-                    if (sample.channel == ids[i])
-                        samples[i].push_back(sample);
+            std::uint64_t cursor = 0;
+            while (cursor < state.samples) {
+                const auto page = request.source->read(cursor, qsizetype(state.samples - cursor));
+                if (!page.error.isEmpty() || page.next <= cursor || page.next > state.samples)
+                    throw std::invalid_argument("Could not read the complete analysis capture");
+                for (const auto &sample : page.samples)
+                    for (int i = 0; i < ids.size(); ++i)
+                        if (sample.channel == ids[i])
+                            samples[i].push_back(sample);
+                cursor = page.next;
+            }
         } else {
             const auto tail = request.source->tail(ids);
             for (int i = 0; i < count; ++i)

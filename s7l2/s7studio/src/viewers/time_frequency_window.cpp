@@ -15,6 +15,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSemaphore>
+#include <QScopedValueRollback>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardItemModel>
@@ -134,9 +135,7 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         if (auto *tabs = findChild<QTabWidget *>("timeFrequency.views"))
             tabs->setCurrentIndex(0);
         follow_->setChecked(false);
-        if (!imported_)
-            result_.reset();
-        this->analyze();
+        startAnalysis(!imported_);
     });
     root->addLayout(controls);
     auto *actions = new QHBoxLayout;
@@ -254,10 +253,10 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         if (!error_.startsWith("Input gap") && !error_.startsWith("Incomplete acquisition"))
             error_.clear();
         lastSubmitted_ = 0;
-        if (work_->running)
+        if (work_->running && requestActive_)
             pending_ = true;
         else if (result_ && !follow_->isChecked())
-            this->analyze();
+            startAnalysis(pending_ && currentCaptureRequested_);
     };
     connect(plot_, &SurfacePlotView::cellPicked, this, [this](int row, int column) {
         if (!result_)
@@ -336,6 +335,8 @@ void TimeFrequencyWindow::clearSamples() {
     previous_ = 0;
     loaded_ = false;
     pending_ = false;
+    requestActive_ = false;
+    currentCaptureRequested_ = false;
     automaticAttempted_ = true; // Clearing a presentation must not immediately recreate it.
     imported_ = false;
     error_.clear();
@@ -348,15 +349,30 @@ void TimeFrequencyWindow::clearSamples() {
     updateStatus();
 }
 void TimeFrequencyWindow::analyze() {
+    startAnalysis(false);
+}
+void TimeFrequencyWindow::startAnalysis(bool currentCapture) {
     automaticAttempted_ = true;
-    if (work_->running) {
-        pending_ = true;
-        ++work_->epoch;
+    currentCaptureRequested_ = currentCapture;
+    if (imported_ && (!result_ || result_->input.empty())) {
+        pending_ = false;
+        requestActive_ = false;
+        error_ = "This imported result has no saved input to reanalyze";
+        updateStatus();
         return;
     }
+    if (work_->running) {
+        pending_ = true;
+        requestActive_ = true;
+        ++work_->epoch;
+        updateStatus();
+        return;
+    }
+    pending_ = false;
+    requestActive_ = false;
     if (!error_.isEmpty())
         return;
-    const bool frozen = result_ && !follow_->isChecked() && !result_->input.empty();
+    const bool frozen = !currentCapture && result_ && !follow_->isChecked() && !result_->input.empty();
     if (!frozen && source() && source()->status().incomplete()) {
         error_ = "Incomplete source capture: transform unavailable";
         return;
@@ -387,10 +403,18 @@ void TimeFrequencyWindow::analyze() {
     }
     if (!heavyBudget().tryAcquire()) {
         pending_ = true;
+        requestActive_ = true;
+        updateStatus();
         status_->setText("Another time–frequency job holds the shared memory reservation; retry shortly");
         return;
     }
     const auto epoch = ++work_->epoch;
+    {
+        std::lock_guard lock(work_->mutex);
+        work_->ready.reset();
+        work_->error.clear();
+    }
+    requestActive_ = true;
     work_->running = true;
     lastSubmitted_ = samples_.empty() ? 0 : std::uint64_t(samples_.back().step);
     std::vector<double> input;
@@ -497,32 +521,43 @@ void TimeFrequencyWindow::analyze() {
     updateStatus();
 }
 void TimeFrequencyWindow::poll() {
+    if (polling_)
+        return;
+    const QScopedValueRollback guard(polling_, true);
     if (!isVisible() || isMinimized() || trace_->isVisible()) {
-        if (work_->running) {
+        if (work_->running && requestActive_) {
             pending_ = true;
             ++work_->epoch;
         }
+        updateStatus();
         return;
     }
+    std::shared_ptr<const analysis::ResultFile> ready;
+    QString error;
     {
         std::lock_guard lock(work_->mutex);
-        if (work_->ready) {
-            const double time = result_ ? result_->x[std::size_t(column_->value())]
-                                        : initialInspectionTime(*work_->ready);
-            const auto frequency = result_ ? std::optional(result_->y[std::size_t(row_->value())]) : std::nullopt;
-            result_ = std::move(work_->ready);
-            error_.clear();
-            chooseInspection(time, frequency);
-            present();
-        }
-        if (!work_->error.isEmpty()) {
-            error_ = std::move(work_->error);
-            work_->error.clear();
-        }
+        ready = std::move(work_->ready);
+        error = std::move(work_->error);
+        work_->error.clear();
     }
-    if (pending_ && !work_->running) {
+    if (ready) {
+        requestActive_ = false;
+        const double time = result_ ? result_->x[std::size_t(column_->value())]
+                                    : initialInspectionTime(*ready);
+        const auto frequency = result_ ? std::optional(result_->y[std::size_t(row_->value())]) : std::nullopt;
+        result_ = std::move(ready);
+        error_.clear();
+        chooseInspection(time, frequency);
+        present();
+    }
+    if (!error.isEmpty()) {
+        requestActive_ = false;
         pending_ = false;
-        analyze();
+        error_ = std::move(error);
+    }
+    if (pending_ && requestActive_ && !work_->running) {
+        pending_ = false;
+        startAnalysis(currentCaptureRequested_);
     }
     if (follow_->isChecked() && !samples_.empty() && !work_->running &&
         std::uint64_t(samples_.back().step) >= lastSubmitted_ + 512)
@@ -553,11 +588,17 @@ void TimeFrequencyWindow::updateStatus() {
     const bool ready = error_.isEmpty() &&
         ((result_ && !result_->input.empty()) || (!imported_ && loaded_ &&
           samples_.size() >= (method_->currentIndex() == 0 ? std::size_t(window_->currentData().toInt()) : 2)));
-    analyze_->setEnabled(ready && !work_->running && !pending_);
-    analyze_->setText(work_->running ? "Analyzing…" : pending_ ? "Waiting to analyze…" : "Analyze / freeze");
+    const bool computing = work_->running && requestActive_, waiting = pending_ && requestActive_;
+    const bool canRecompute = !imported_ || (result_ && !result_->input.empty());
+    method_->setEnabled(canRecompute);
+    window_->setEnabled(canRecompute && method_->currentIndex() == 0);
+    for (auto *control : std::array<QWidget *, 3>{scales_, minimum_, maximum_})
+        control->setEnabled(canRecompute && method_->currentIndex() == 1);
+    analyze_->setEnabled(ready && !computing && (!waiting || trace_->isVisible()));
+    analyze_->setText(computing ? "Analyzing…" : waiting && !trace_->isVisible() ? "Waiting to analyze…" : "Analyze / freeze");
     empty_->setVisible(!result_);
     plot_->setVisible(bool(result_));
-    empty_->setText(work_->running || pending_ ? "Preparing the time–frequency map…"
+    empty_->setText(computing || waiting ? "Preparing the time–frequency map…"
         : !error_.isEmpty() ? "Analysis unavailable\n" + error_
         : ready ? "Ready to create the map\nChoose the blue Analyze / freeze button above."
         : loaded_ && !samples_.empty() ? "More samples needed for these settings\nChoose a smaller FFT size or capture a longer interval."
@@ -565,7 +606,8 @@ void TimeFrequencyWindow::updateStatus() {
     status_->setText(QString("%1 retained samples (limit 65536) | %2 | display ≤513×513; full-resolution "
                              "inspector/export | %3%4")
                          .arg(samples_.size())
-                         .arg(work_->running ? "computing"
+                         .arg(computing ? "computing"
+                              : waiting ? "waiting to analyze"
                               : result_      ? "frozen result; gray = edge/phase/overflow unavailable"
                                              : "choose Analyze / freeze to create the map")
                          .arg(imported_ ? "Imported result; file provenance retained" : sourceStatusText())
@@ -797,6 +839,8 @@ void TimeFrequencyWindow::openResult(const QString &path) {
         work_->error.clear();
     }
     pending_ = false;
+    requestActive_ = false;
+    currentCaptureRequested_ = false;
     result_ = std::make_shared<const analysis::ResultFile>(std::move(result));
     chooseInspection(initialInspectionTime(*result_));
     imported_ = true;
