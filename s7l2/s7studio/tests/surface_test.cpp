@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "analysis/result_file.hpp"
+#include "analysis/worker_pool.hpp"
+#include <QScopeGuard>
+#include <QSemaphore>
+#include <QThreadPool>
+#include <QTimer>
 #include "analysis/surface_grid.hpp"
 #include "local_runtime_v2.hpp"
 #include "viewers/surface_window.hpp"
@@ -29,6 +34,13 @@ namespace {
 void require(bool ok, const char *message) {
     if (!ok)
         throw std::runtime_error(message);
+}
+void waitForDisplay(viewers::SurfacePlotView &plot) {
+    QElapsedTimer timer; timer.start();
+    while (plot.isPreparing() && timer.elapsed() < 5000) {
+        QApplication::processEvents(); QThread::msleep(5);
+    }
+    require(!plot.isPreparing(), "Surface preparation timeout");
 }
 void close(double actual, double expected) {
     require(std::abs(actual - expected) < 2e-12 * (1 + std::abs(expected)), "Reference mismatch");
@@ -118,11 +130,13 @@ void heatmapHover(bool complex) {
     for (int i = 0; i < 4; ++i)
         grid->append({double(i % 2), double(i / 2), double(i), 2, 2, 1, double(i), 0});
     plot.setGrid(grid);
+    waitForDisplay(plot);
     hover();
     require(picks == 1, "Populated heatmap must pick a cell");
     if (!complex) {
         plot.setHeightMode(viewers::SurfaceHeight::LogMagnitude);
         plot.setContours(true);
+        waitForDisplay(plot);
         plot.selectCell(0, 0);
         require(!plot.bridge()->hasHead(), "Nonpositive logarithmic height must not create a 3D marker");
         const auto image = heatmap->grab().toImage();
@@ -136,6 +150,37 @@ void heatmapHover(bool complex) {
     plot.setGrid({});
     hover();
     require(picks == 1, "Reset heatmap must not pick a cell");
+}
+void asynchronousSurface() {
+    auto &pool = analysis::analysisPool();
+    require(pool.waitForDone(5000), "Previous display jobs retire");
+    viewers::SurfacePlotView plot(false);
+    plot.setPresentation(2);
+    auto grid = std::make_shared<analysis::SurfaceGrid>();
+    for (int i = 0; i < 129 * 129; ++i)
+        grid->append({double(i % 129), double(i / 129), double(i), 129, 129, 1, double(i % 17), 0});
+    plot.setGrid(grid); waitForDisplay(plot);
+    const auto oldBounds = plot.bridge()->geometry.bounds();
+    QSemaphore entered, release;
+    const auto cleanup = qScopeGuard([&] { release.release(2); pool.waitForDone(5000); });
+    for (int i = 0; i < 2; ++i) pool.start([&] { entered.release(); release.acquire(); });
+    require(entered.tryAcquire(2, 5000), "Occupy display worker pool");
+    viewers::TrajectoryBounds bounds = oldBounds;
+    bounds.min[2] = -10; bounds.max[2] = 30;
+    plot.setFixedBounds(bounds);
+    bounds.max[2] = 20; plot.setFixedBounds(bounds);
+    bool responsive = false;
+    QTimer::singleShot(0, [&] { responsive = true; });
+    QApplication::processEvents();
+    require(responsive && plot.isPreparing(), "GUI must keep processing while display work is queued");
+    require(plot.bridge()->geometry.bounds().max[2] == oldBounds.max[2], "Keep previous mesh while preparing");
+    release.release(2); waitForDisplay(plot);
+    require(plot.bridge()->geometry.bounds().max[2] == 20, "Only latest surface settings may be applied");
+    plot.setContours(true); QApplication::processEvents();
+    plot.setGrid({});
+    require(pool.waitForDone(5000), "Retire canceled surface preparation");
+    QApplication::processEvents();
+    require(plot.bridge()->geometry.triangleCount() == 0 && !plot.isPreparing(), "Clear must invalidate queued surface meshes");
 }
 void examples(bool render) {
     for (const std::string name : {"plane", "bowl", "saddle", "gaussian", "wave", "sinc", "identity",
@@ -267,6 +312,7 @@ int main(int argc, char **argv) {
         invalidGrids();
         heatmapHover(false);
         heatmapHover(true);
+        asynchronousSurface();
         examples(qEnvironmentVariableIsSet("S7_SURFACE_RENDER"));
     } catch (const std::exception &e) {
         std::cerr << e.what() << '\n';

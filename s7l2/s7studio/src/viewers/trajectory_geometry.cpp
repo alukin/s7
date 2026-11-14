@@ -5,6 +5,7 @@
 
 #include <QByteArray>
 #include <QColor>
+#include <QThread>
 
 #include <algorithm>
 #include <cmath>
@@ -80,19 +81,56 @@ TrajectoryGeometry::TrajectoryGeometry(QQuick3DObject* parent)
     upload(*this, vertices_, PrimitiveType::LineStrip);
 }
 
+TrajectoryData prepareTrajectory(const QList<TrajectoryPoint> &points, const TrajectoryBounds &bounds,
+                                 const qsizetype maxVertices, const bool colorByX,
+                                 const std::function<bool()> &canceled) {
+    TrajectoryData data;
+    data.colorByX = colorByX;
+    const auto count = points.size();
+    const auto stride = maxVertices > 0 && count > maxVertices ? (count + maxVertices - 1) / maxVertices : 1;
+    data.vertices.reserve(count / stride + 2);
+    for (qsizetype i = 0; i < count; i += stride) {
+        if (canceled && canceled())
+            return {};
+        data.vertices.push_back(toScene(points[i], bounds));
+    }
+    if (count > 0 && (count - 1) % stride != 0)
+        data.vertices.push_back(toScene(points.back(), bounds));
+    const int components = colorByX ? 7 : 3;
+    data.buffer = QByteArray(data.vertices.size() * components * qsizetype(sizeof(float)), Qt::Uninitialized);
+    auto *out = reinterpret_cast<float *>(data.buffer.data());
+    for (const auto &v : data.vertices) {
+        *out++ = v.x();
+        *out++ = v.y();
+        *out++ = v.z();
+        if (colorByX) {
+            const auto c = QColor::fromHsvF(
+                .66 * std::clamp(1.0 - (double(v.x()) / kTrajectoryHalfExtent + 1) / 2, 0.0, 1.0), .9, .85);
+            *out++ = float(c.redF());
+            *out++ = float(c.greenF());
+            *out++ = float(c.blueF());
+            *out++ = 1;
+        }
+    }
+    return data;
+}
+void TrajectoryGeometry::apply(const TrajectoryData &data) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    vertices_ = data.vertices;
+    clear();
+    setStride((data.colorByX ? 7 : 3) * sizeof(float));
+    setPrimitiveType(PrimitiveType::LineStrip);
+    addAttribute(Attribute::PositionSemantic, 0, Attribute::F32Type);
+    if (data.colorByX)
+        addAttribute(Attribute::ColorSemantic, 3 * sizeof(float), Attribute::F32Type);
+    setVertexData(data.buffer);
+    setBounds({-100, -100, -100}, {100, 100, 100});
+    update();
+}
 void TrajectoryGeometry::setTrajectory(const QList<TrajectoryPoint>& points, const TrajectoryBounds& bounds,
                                        const qsizetype maxVertices, const bool colorByX)
 {
-    vertices_.clear();
-    const qsizetype count = points.size();
-    const qsizetype stride = maxVertices > 0 && count > maxVertices ? (count + maxVertices - 1) / maxVertices : 1;
-    vertices_.reserve(count / stride + 2);
-    for (qsizetype index = 0; index < count; index += stride) vertices_.push_back(toScene(points[index], bounds));
-    if (count > 0 && (count - 1) % stride != 0) vertices_.push_back(toScene(points.back(), bounds));
-    if(!colorByX){upload(*this, vertices_, PrimitiveType::LineStrip);return;}
-    QByteArray data(vertices_.size()*7*qsizetype(sizeof(float)),Qt::Uninitialized);auto* out=reinterpret_cast<float*>(data.data());
-    for(const auto& v:vertices_){const auto c=QColor::fromHsvF(.66*std::clamp(1.0-(double(v.x())/kTrajectoryHalfExtent+1)/2,0.0,1.0),.9,.85);*out++=v.x();*out++=v.y();*out++=v.z();*out++=float(c.redF());*out++=float(c.greenF());*out++=float(c.blueF());*out++=1;}
-    clear();setStride(7*sizeof(float));setPrimitiveType(PrimitiveType::LineStrip);addAttribute(Attribute::PositionSemantic,0,Attribute::F32Type);addAttribute(Attribute::ColorSemantic,3*sizeof(float),Attribute::F32Type);setVertexData(data);setBounds({-100,-100,-100},{100,100,100});update();
+    apply(prepareTrajectory(points, bounds, maxVertices, colorByX));
 }
 
 TrajectoryFrameGeometry::TrajectoryFrameGeometry(QQuick3DObject* parent)

@@ -11,6 +11,20 @@ previews without reparenting full windows. `ViewerType::createPresentation`
 registers a preview factory. Bounded `preparePreview`/`PreviewWorker` data
 preparation is separate from these widgets. `ViewerManager` owns live trigger
 settings and applies them before production; preview creation is read-only.
+Analytic display preparation also uses the shared two-thread analysis pool:
+workers project time-frequency maps, retain input envelopes, prepare frequency
+slices and response curves, and generate surface meshes, contours and heatmap
+images. Workers receive immutable data/settings snapshots and return plain
+buffers; Qt widgets, series and Quick 3D geometry are updated on the GUI thread.
+Each display has one executing request and one replaceable pending request.
+New settings invalidate obsolete results; hiding or clearing cancels outstanding
+preparation, and destruction does not wait on the GUI thread. The last valid
+plot remains visible until a replacement is ready. Display jobs yield between
+frames at lower queue priority than transform jobs, keeping concurrency bounded
+without introducing a thread per viewer. Response and slice curve reduction
+preserves endpoints and both coordinate extrema in source order, with at most
+4,096 drawing points per continuous curve; full results remain available for
+numeric inspection and export.
 `ObservationSource::tail` projects per-channel caches rather than replaying
 the full journal when a preview opens late. The source owns at most 4,096 cached
 records per channel in addition to its authoritative recording storage.

@@ -2179,14 +2179,15 @@ private slots:
             while (viewer->refreshSource()) {}
             viewer->analyze();
         }
-        QTRY_VERIFY_WITH_TIMEOUT(viewer->hasResult(), 10000); // No Analyze button click.
+        QTRY_VERIFY_WITH_TIMEOUT(viewer->hasResult(), 10000); // Standard capture opens automatically.
+        QTRY_VERIFY_WITH_TIMEOUT(!viewer->isPreparingDisplay(), 10000);
         QTRY_COMPARE(panel->activePresentations(), 1);
         auto* presentation = panel->findChild<s7studio::viewers::ObserverPresentation*>(); QVERIFY(presentation);
         auto* preview = presentation->findChild<s7studio::viewers::SurfacePlotView*>(); QVERIFY(preview);
         auto* full = viewer->findChild<s7studio::viewers::SurfacePlotView*>(); QVERIFY(full);
         QTRY_VERIFY(preview->bridge()->geometry.bounds().max[2] > 1);
         QTRY_VERIFY(preview->bridge()->geometry.bounds().min[0] < 1 && preview->bridge()->geometry.bounds().max[0] > 7);
-        QVERIFY(std::abs(preview->bridge()->geometry.bounds().max[2] - full->bridge()->geometry.bounds().max[2]) < 1e-10);
+        QTRY_VERIFY(std::abs(preview->bridge()->geometry.bounds().max[2] - full->bridge()->geometry.bounds().max[2]) < 1e-10);
         auto visibleImpulse = [&] {
             auto *heatmap = preview->findChild<QWidget *>("surface.heatmap");
             if (!heatmap) return false;
@@ -2359,6 +2360,7 @@ private slots:
                 while (map->refreshSource()) {}
                 QTRY_VERIFY_WITH_TIMEOUT(map->hasResult() || !map->error().isEmpty(), 30000);
                 QVERIFY2(map->hasResult(), qPrintable(map->error()));
+                QTRY_VERIFY_WITH_TIMEOUT(!map->isPreparingDisplay(), 10000);
                 capture(map, base + '-' + name + "-STFT");
                 map->setWavelet(true);
                 QTRY_VERIFY_WITH_TIMEOUT(map->result()->metadata["method"].toString().contains("Morlet") || !map->error().isEmpty(), 30000);
@@ -2368,6 +2370,7 @@ private slots:
                 while (response->refreshSource()) {}
                 QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(), 10000);
                 QVERIFY2(response->hasResult(), qPrintable(response->error()));
+                QTRY_VERIFY_WITH_TIMEOUT(!response->isPreparingDisplay(), 10000);
             }
             QTest::qWait(400);
             auto* widget = viewer->widget();

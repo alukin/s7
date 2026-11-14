@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "response_window.hpp"
-#include "analysis_action.hpp"
+#include "analysis/display_curve.hpp"
+#include "analysis/display_worker.hpp"
 #include "analysis/result_file.hpp"
 #include "analysis/worker_pool.hpp"
+#include "analysis_action.hpp"
 #include "line_plot_view.hpp"
 #include "surface_plot.hpp"
 #include "trajectory_plot.hpp"
@@ -50,6 +52,21 @@ struct ResponseWindow::Work {
     std::shared_ptr<const s7spectral::Response> ready;
     QString error;
 };
+struct ResponseDisplay {
+    std::shared_ptr<const s7spectral::Response> source;
+    std::shared_ptr<const analysis::SurfaceGrid> landscape;
+    std::array<QList<QList<QPointF>>, 4> curves, references;
+    std::vector<double> phases;
+    TrajectoryBounds bounds;
+    TrajectoryData trajectory;
+    bool truncated = false, unwrapped = true;
+};
+struct ResponseWindow::DisplayWork {
+    analysis::DisplayWorker<ResponseDisplay> worker;
+    std::shared_ptr<const s7spectral::Response> displayedSource;
+    bool scheduled = false, awaiting = false, suspended = false, dirty = false;
+    QString error;
+};
 ViewerType ResponseWindow::viewerType() {
     return {"FrequencyResponse",
             {},
@@ -64,10 +81,10 @@ ViewerType ResponseWindow::viewerType() {
             }};
 }
 ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
-    : QWidget(parent, Qt::Window), work_(std::make_shared<Work>()), status_(new QLabel(this)),
-      inspection_(new QLabel(this)), analyze_(new QPushButton("Analyze captured impulse", this)),
-      reference_(new QDoubleSpinBox(this)), frequency_(new QDoubleSpinBox(this)),
-      trajectory_(new ui::TrajectoryPlotView(this)) {
+    : QWidget(parent, Qt::Window), displayWork_(std::make_unique<DisplayWork>()),
+      work_(std::make_shared<Work>()), status_(new QLabel(this)), inspection_(new QLabel(this)),
+      analyze_(new QPushButton("Analyze captured impulse", this)), reference_(new QDoubleSpinBox(this)),
+      frequency_(new QDoubleSpinBox(this)), trajectory_(new ui::TrajectoryPlotView(this)) {
     trajectory_->bridge()->setFrequencyColors(true);
     setAttribute(Qt::WA_QuitOnClose, false);
     resize(980, 800);
@@ -198,10 +215,31 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     timer->setInterval(50);
     connect(timer, &QTimer::timeout, this, &ResponseWindow::poll);
     timer->start();
+    auto *displayTimer = new QTimer(this);
+    displayTimer->setInterval(25);
+    connect(displayTimer, &QTimer::timeout, this, &ResponseWindow::applyDisplay);
+    displayTimer->start();
     updateStatus();
 }
 ResponseWindow::~ResponseWindow() { ++work_->epoch; }
 bool ResponseWindow::hasResult() const { return bool(result_); }
+bool ResponseWindow::isPreparingDisplay() const {
+    return displayWork_->scheduled || displayWork_->awaiting || displayWork_->dirty ||
+           (landscape_->isVisible() && landscape_->isPreparing());
+}
+void ResponseWindow::hideEvent(QHideEvent *event) {
+    displayWork_->suspended = true;
+    displayWork_->dirty = displayWork_->dirty || displayWork_->scheduled || displayWork_->awaiting;
+    displayWork_->worker.cancel();
+    displayWork_->awaiting = false;
+    QWidget::hideEvent(event);
+}
+void ResponseWindow::showEvent(QShowEvent *event) {
+    displayWork_->suspended = false;
+    if (displayWork_->dirty)
+        draw();
+    QWidget::showEvent(event);
+}
 void ResponseWindow::appendObservedSample(const ObservedSample &sample) {
     if (imported_ || !error_.isEmpty())
         return;
@@ -239,6 +277,7 @@ void ResponseWindow::setDroppedSampleCount(std::uint64_t count) {
         error_ = "Incomplete capture cannot produce a frequency response";
 }
 void ResponseWindow::clearSamples() {
+    displayWork_->worker.cancel();
     automaticAttempted_ = true;
     ++work_->epoch;
     {
@@ -255,6 +294,15 @@ void ResponseWindow::clearSamples() {
     loaded_ = false;
     error_.clear();
     result_.reset();
+    displayWork_->displayedSource.reset();
+    phases_.clear();
+    for (std::size_t p = 0; p < plots_.size(); ++p) {
+        plots_[p]->clearSeries();
+        markers_[p] = plots_[p]->addScatterSeries("Selected frequency", QColor("#d62728"));
+    }
+    trajectory_->bridge()->trajectoryGeometry().apply({});
+    trajectory_->bridge()->setHead(false, {});
+    landscape_->setGrid({});
     inputUnit_.clear();
     outputUnit_.clear();
     draw();
@@ -276,6 +324,10 @@ void ResponseWindow::updateStatus() {
                                              : "waiting for analysis")
                          .arg(imported_ ? "Imported response; file provenance retained" : sourceStatusText())
                          .arg(error_.isEmpty() ? "" : " | " + error_));
+    if (isPreparingDisplay())
+        status_->setText(status_->text() + " | preparing display");
+    if (!displayWork_->error.isEmpty())
+        status_->setText(status_->text() + " | Display unavailable: " + displayWork_->error);
 }
 void ResponseWindow::analyze() {
     if (!analyze_->isEnabled())
@@ -340,122 +392,182 @@ void ResponseWindow::poll() {
         analyze();
 }
 void ResponseWindow::draw() {
+    displayWork_->worker.cancel();
+    displayWork_->awaiting = false;
+    displayWork_->dirty = true;
+    if (displayWork_->suspended)
+        return;
+    if (!displayWork_->scheduled) {
+        displayWork_->scheduled = true;
+        QTimer::singleShot(0, this, [this] {
+            displayWork_->scheduled = false;
+            submitDisplay();
+        });
+    }
+}
+void ResponseWindow::submitDisplay() {
+    if (displayWork_->suspended)
+        return;
+    displayWork_->dirty = false;
+    displayWork_->awaiting = true;
+    const auto source = result_;
+    const bool referenceEnabled = referenceEnabled_->isChecked(), unwrapped = unwrap_->isChecked();
+    const double omega = omega_->value(), damping = damping_->value(), modelGain = modelGain_->value(),
+                 reference = reference_->value();
+    displayWork_->worker.submit([source, referenceEnabled, unwrapped, omega, damping, modelGain,
+                                 reference](const auto &canceled) -> ResponseDisplay {
+        ResponseDisplay frame;
+        frame.source = source;
+        frame.unwrapped = unwrapped;
+        QList<TrajectoryPoint> trajectory;
+        if (referenceEnabled) {
+            auto grid = std::make_shared<analysis::SurfaceGrid>();
+            const auto zeta = damping;
+            for (std::size_t row = 0; row < 65; ++row)
+                for (std::size_t col = 0; col < 65; ++col) {
+                    const double x = -2 * omega + 4 * omega * double(col) / 64,
+                                 y = -2 * omega + 4 * omega * double(row) / 64;
+                    const std::complex<double> s{x, y}, den = s * s + 2 * zeta * omega * s + omega * omega;
+                    const auto value = modelGain * omega * omega / den;
+                    grid->append({x, y, double(row * 65 + col), 65, 65, 1, value.real(), value.imag()});
+                }
+            frame.landscape = std::move(grid);
+        }
+        if (!source)
+            return frame;
+        const auto &r = *source;
+        frame.phases = phaseDegrees(r.values, unwrapped);
+        std::array<QList<QPointF>, 4> segments;
+        std::array<int, 4> segmentCounts{};
+        frame.truncated = false;
+        auto flush = [&](std::size_t p) {
+            if (!segments[p].isEmpty()) {
+                if (segmentCounts[p]++ >= 64) {
+                    frame.truncated = true;
+                    segments[p].clear();
+                    return;
+                }
+                frame.curves[p].append(analysis::displayCurve(segments[p]));
+                segments[p].clear();
+            }
+        };
+        double previousPhase = 0;
+        bool hadPhase = false;
+        for (std::size_t k = 0; k < r.values.size(); ++k) {
+            if ((k % 256) == 0 && canceled())
+                return {};
+            const auto h = r.values[k];
+            const double magnitude = std::abs(h), phase = frame.phases[k];
+            if (magnitude == 0) {
+                for (std::size_t p = 0; p < 4; ++p)
+                    flush(p);
+                hadPhase = false;
+                continue;
+            }
+            if (!unwrapped && hadPhase && std::abs(phase - previousPhase) > 180) {
+                flush(1);
+                flush(3);
+            }
+            previousPhase = phase;
+            hadPhase = true;
+            const auto db = 20 * (std::log10(magnitude) - std::log10(reference));
+            if (r.frequency[k] > 0) {
+                segments[0].append({std::log10(r.frequency[k]), db});
+                segments[1].append({std::log10(r.frequency[k]), phase});
+            }
+            segments[2].append({h.real(), h.imag()});
+            segments[3].append({phase, db});
+            trajectory.append({r.frequency[k], h.real(), h.imag()});
+        }
+        for (std::size_t p = 0; p < 4; ++p)
+            flush(p);
+        if (referenceEnabled) {
+            std::array<QList<QPointF>, 4> referenceSegments;
+            double previous = 0;
+            bool have = false;
+            auto flushReference = [&](std::size_t p) {
+                if (referenceSegments[p].isEmpty())
+                    return;
+                frame.references[p].append(analysis::displayCurve(referenceSegments[p]));
+                referenceSegments[p].clear();
+            };
+            for (auto frequency : r.frequency) {
+                if (canceled())
+                    return {};
+                const std::complex<double> s{0, 2 * std::numbers::pi * frequency};
+                const auto h = modelGain * omega * omega / (s * s + 2 * damping * omega * s + omega * omega);
+                auto phase = std::arg(h) * 180 / std::numbers::pi;
+                const auto db = 20 * (std::log10(std::abs(h)) - std::log10(reference));
+                if (unwrapped && have)
+                    phase += 360 * std::round((previous - phase) / 360);
+                if (!unwrapped && have && std::abs(phase - previous) > 180) {
+                    flushReference(1);
+                    flushReference(3);
+                }
+                previous = phase;
+                have = true;
+                if (frequency > 0) {
+                    referenceSegments[0].append({std::log10(frequency), db});
+                    referenceSegments[1].append({std::log10(frequency), phase});
+                }
+                referenceSegments[2].append({h.real(), h.imag()});
+                referenceSegments[3].append({phase, db});
+            }
+            for (std::size_t p = 0; p < 4; ++p)
+                flushReference(p);
+        }
+        frame.bounds = TrajectoryBounds::of(trajectory);
+        frame.trajectory = prepareTrajectory(trajectory, frame.bounds, 65536, true, canceled);
+        return frame;
+    });
+}
+void ResponseWindow::applyDisplay() {
+    auto ready = displayWork_->worker.take();
+    if (!ready)
+        return;
+    displayWork_->awaiting = false;
+    if (!ready->error.isEmpty()) {
+        displayWork_->error = ready->error;
+        updateStatus();
+        return;
+    }
+    displayWork_->error.clear();
+    const auto &frame = *ready->value;
+    if (frame.source != result_)
+        return;
+    landscape_->setGrid(frame.landscape);
     for (std::size_t p = 0; p < plots_.size(); ++p) {
         plots_[p]->clearSeries();
         markers_[p] = plots_[p]->addScatterSeries("Selected frequency", QColor("#d62728"));
+        for (const auto &points : frame.curves[p]) {
+            auto *line = plots_[p]->addSeries("Response", {QColor("#1565c0")});
+            LinePlotView::setPoints(line, points);
+        }
+        for (const auto &points : frame.references[p]) {
+            auto *line = plots_[p]->addSeries("Analytical reference", {QColor("#d97706"), 1.4, true});
+            LinePlotView::setPoints(line, points);
+        }
+        (void)plots_[p]->fitAll();
     }
-    QList<TrajectoryPoint> trajectory;
-    if (referenceEnabled_->isChecked()) {
-        auto grid = std::make_shared<analysis::SurfaceGrid>();
-        const auto omega = omega_->value(), zeta = damping_->value();
-        for (std::size_t row = 0; row < 65; ++row)
-            for (std::size_t col = 0; col < 65; ++col) {
-                const double x = -2 * omega + 4 * omega * double(col) / 64,
-                             y = -2 * omega + 4 * omega * double(row) / 64;
-                const std::complex<double> s{x, y}, den = s * s + 2 * zeta * omega * s + omega * omega;
-                const auto value = modelGain_->value() * omega * omega / den;
-                grid->append({x, y, double(row * 65 + col), 65, 65, 1, value.real(), value.imag()});
-            }
-        landscape_->setGrid(grid);
-    } else
-        landscape_->setGrid({});
-    if (!result_) {
-        trajectory_->bridge()->trajectoryGeometry().setTrajectory({}, TrajectoryBounds{}, 1);
-        trajectory_->bridge()->setHead(false, {});
-        return;
-    }
-    const auto &r = *result_;
-    phases_ = phaseDegrees(r.values, unwrap_->isChecked());
-    const auto phaseTitle = unwrap_->isChecked() ? "Phase (degrees; unwrapped)" : "Phase (degrees; wrapped)";
+    displayWork_->displayedSource = frame.source;
+    phases_ = frame.phases;
+    phaseTruncated_ = frame.truncated;
+    const auto phaseTitle = frame.unwrapped ? "Phase (degrees; unwrapped)" : "Phase (degrees; wrapped)";
     plots_[1]->setAxisTitles("log10(f / 1 Hz)", phaseTitle);
     plots_[3]->setAxisTitles(phaseTitle, "Gain (dB, explicit reference)");
-    std::array<QList<QPointF>, 4> segments;
-    std::array<int, 4> segmentCounts{};
-    phaseTruncated_ = false;
-    auto flush = [&](std::size_t p) {
-        if (!segments[p].isEmpty()) {
-            if (segmentCounts[p]++ >= 64) {
-                phaseTruncated_ = true;
-                segments[p].clear();
-                return;
-            }
-            auto *line = plots_[p]->addSeries("Response", {QColor("#1565c0")});
-            LinePlotView::setPoints(line, segments[p]);
-            segments[p].clear();
-        }
-    };
-    double previousPhase = 0;
-    bool hadPhase = false;
-    for (std::size_t k = 0; k < r.values.size(); ++k) {
-        const auto h = r.values[k];
-        const double magnitude = std::abs(h), phase = phases_[k];
-        if (magnitude == 0) {
-            for (std::size_t p = 0; p < 4; ++p)
-                flush(p);
-            hadPhase = false;
-            continue;
-        }
-        if (!unwrap_->isChecked() && hadPhase && std::abs(phase - previousPhase) > 180) {
-            flush(1);
-            flush(3);
-        }
-        previousPhase = phase;
-        hadPhase = true;
-        const auto db = 20 * (std::log10(magnitude) - std::log10(reference_->value()));
-        if (r.frequency[k] > 0) {
-            segments[0].append({std::log10(r.frequency[k]), db});
-            segments[1].append({std::log10(r.frequency[k]), phase});
-        }
-        segments[2].append({h.real(), h.imag()});
-        segments[3].append({phase, db});
-        trajectory.append({r.frequency[k], h.real(), h.imag()});
-    }
-    for (std::size_t p = 0; p < 4; ++p)
-        flush(p);
-    if (referenceEnabled_->isChecked()) {
-        std::array<QList<QPointF>, 4> reference;
-        double previous = 0;
-        bool have = false;
-        auto flushReference = [&](std::size_t p) {
-            if (reference[p].isEmpty())
-                return;
-            auto *line = plots_[p]->addSeries("Analytical reference", {QColor("#d97706"), 1.4, true});
-            LinePlotView::setPoints(line, reference[p]);
-            reference[p].clear();
-        };
-        for (auto frequency : r.frequency) {
-            const std::complex<double> s{0, 2 * std::numbers::pi * frequency};
-            const auto omega = omega_->value();
-            const auto h = modelGain_->value() * omega * omega / (s * s + 2 * damping_->value() * omega * s + omega * omega);
-            auto phase = std::arg(h) * 180 / std::numbers::pi;
-            const auto db = 20 * (std::log10(std::abs(h)) - std::log10(reference_->value()));
-            if (unwrap_->isChecked() && have)
-                phase += 360 * std::round((previous - phase) / 360);
-            if (!unwrap_->isChecked() && have && std::abs(phase - previous) > 180) {
-                flushReference(1);
-                flushReference(3);
-            }
-            previous = phase;
-            have = true;
-            if (frequency > 0) {
-                reference[0].append({std::log10(frequency), db});
-                reference[1].append({std::log10(frequency), phase});
-            }
-            reference[2].append({h.real(), h.imag()});
-            reference[3].append({phase, db});
-        }
-        for (std::size_t p = 0; p < 4; ++p)
-            flushReference(p);
-    }
-    for (auto *plot : plots_)
-        (void)plot->fitAll();
-    trajectoryBounds_ = TrajectoryBounds::of(trajectory);
-    trajectory_->setAxisLabels(trajectoryBounds_, {"Frequency (Hz)", "Re(H)", "Im(H)"});
-    trajectory_->bridge()->trajectoryGeometry().setTrajectory(trajectory, trajectoryBounds_, 65536, true);
-    frequency_->setMaximum(r.frequency.back());
-    inspect(frequency_->value());
+    trajectoryBounds_ = frame.bounds;
+    trajectory_->setAxisLabels(frame.bounds, {"Frequency (Hz)", "Re(H)", "Im(H)"});
+    trajectory_->bridge()->trajectoryGeometry().apply(frame.trajectory);
+    if (result_) {
+        frequency_->setMaximum(result_->frequency.back());
+        inspect(frequency_->value());
+    } else
+        trajectory_->bridge()->setHead(false, {});
+    updateStatus();
 }
 void ResponseWindow::inspect(double frequency) {
+    if (result_ != displayWork_->displayedSource)
+        return;
     if (!result_)
         return;
     const auto &r = *result_;

@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "time_frequency_window.hpp"
-#include "analysis_action.hpp"
+#include "analysis/display_curve.hpp"
+#include "analysis/display_worker.hpp"
 #include "analysis/worker_pool.hpp"
+#include "analysis_action.hpp"
 #include "line_plot_view.hpp"
 #include "surface_plot.hpp"
 #include <QCheckBox>
@@ -14,8 +16,8 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
-#include <QSemaphore>
 #include <QScopedValueRollback>
+#include <QSemaphore>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardItemModel>
@@ -81,6 +83,28 @@ struct TimeFrequencyWindow::Work {
     std::shared_ptr<const analysis::ResultFile> ready;
     QString error;
 };
+struct TimeFrequencyDisplay {
+    std::shared_ptr<const analysis::ResultFile> source;
+    std::shared_ptr<const analysis::SurfaceGrid> grid;
+    QList<QPointF> envelope;
+    std::size_t bandRows = 0;
+    int quantity = 0;
+    bool logarithmic = false;
+};
+struct TimeFrequencySlice {
+    std::shared_ptr<const analysis::ResultFile> source;
+    int column, quantity;
+    QList<QList<QPointF>> segments;
+};
+struct TimeFrequencyWindow::DisplayWork {
+    analysis::DisplayWorker<TimeFrequencyDisplay> worker;
+    analysis::DisplayWorker<TimeFrequencySlice> sliceWorker;
+    std::shared_ptr<const analysis::ResultFile> sliceSource;
+    int sliceColumn = -1, sliceQuantity = -1;
+    std::size_t sliceRows = 0;
+    bool scheduled = false, awaiting = false, sliceAwaiting = false, suspended = false, dirty = false;
+    QString error;
+};
 ViewerType TimeFrequencyWindow::viewerType() {
     return {
         "TimeFrequency", {}, "1→map", {}, {"in"}, [](const ViewerInstanceSpec &spec) -> ObservationViewer * {
@@ -90,7 +114,8 @@ ViewerType TimeFrequencyWindow::viewerType() {
         }};
 }
 TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
-    : QWidget(parent, Qt::Window), work_(std::make_shared<Work>()) {
+    : QWidget(parent, Qt::Window), displayWork_(std::make_unique<DisplayWork>()),
+      work_(std::make_shared<Work>()) {
     setAttribute(Qt::WA_QuitOnClose, false);
     resize(1100, 850);
     setWindowTitle("Time–frequency analysis — " + name);
@@ -293,6 +318,12 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     timer->setInterval(100);
     connect(timer, &QTimer::timeout, this, &TimeFrequencyWindow::poll);
     timer->start();
+    auto *displayTimer = new QTimer(this);
+    displayTimer->setInterval(25);
+    connect(displayTimer, &QTimer::timeout, this, &TimeFrequencyWindow::applyDisplay);
+    displayTimer->start();
+    connect(plot_, &SurfacePlotView::presentationReady, this,
+            [this] { inspect(row_->value(), column_->value()); });
     updateStatus();
 }
 TimeFrequencyWindow::~TimeFrequencyWindow() { ++work_->epoch; }
@@ -323,7 +354,35 @@ bool TimeFrequencyWindow::refreshSource() {
     loaded_ = !more && !sourceStatusText().startsWith("INCOMPLETE");
     return more;
 }
+bool TimeFrequencyWindow::isPreparingDisplay() const {
+    return displayWork_->scheduled || displayWork_->awaiting || displayWork_->dirty ||
+           (plot_->isVisible() && plot_->isPreparing()) || (slice_->isVisible() && displayWork_->sliceAwaiting);
+}
+void TimeFrequencyWindow::hideEvent(QHideEvent *event) {
+    displayWork_->suspended = true;
+    displayWork_->dirty = displayWork_->dirty || displayWork_->awaiting || displayWork_->scheduled;
+    displayWork_->worker.cancel();
+    displayWork_->sliceWorker.cancel();
+    displayWork_->sliceAwaiting = false;
+    displayWork_->sliceSource.reset();
+    displayWork_->awaiting = false;
+    QWidget::hideEvent(event);
+}
+void TimeFrequencyWindow::showEvent(QShowEvent *event) {
+    displayWork_->suspended = false;
+    if (displayWork_->dirty && result_)
+        present();
+    else if (result_)
+        inspect(row_->value(), column_->value());
+    QWidget::showEvent(event);
+}
 void TimeFrequencyWindow::clearSamples() {
+    displayWork_->worker.cancel();
+    displayWork_->sliceWorker.cancel();
+    displayWork_->sliceAwaiting = false;
+    displayWork_->sliceSource.reset();
+    displayWork_->awaiting = false;
+    displayWork_->dirty = false;
     ++work_->epoch;
     {
         std::lock_guard lock(work_->mutex);
@@ -612,6 +671,10 @@ void TimeFrequencyWindow::updateStatus() {
                                              : "choose Analyze / freeze to create the map")
                          .arg(imported_ ? "Imported result; file provenance retained" : sourceStatusText())
                          .arg(error_.isEmpty() ? "" : " | " + error_));
+    if (isPreparingDisplay())
+        status_->setText(status_->text() + " | preparing display");
+    if (!displayWork_->error.isEmpty())
+        status_->setText(status_->text() + " | Display unavailable: " + displayWork_->error);
 }
 void TimeFrequencyWindow::chooseInspection(double time, std::optional<double> frequency) {
     const auto &r = *result_;
@@ -637,43 +700,126 @@ void TimeFrequencyWindow::chooseInspection(double time, std::optional<double> fr
     row_->setValue(int(row));
 }
 void TimeFrequencyWindow::present() {
+    displayWork_->worker.cancel();
+    displayWork_->awaiting = false;
     if (!result_)
         return;
-    const auto &r = *result_;
+    displayWork_->dirty = true;
+    if (displayWork_->suspended)
+        return;
     {
         const QSignalBlocker block(displayMaximum_);
-        displayMaximum_->setRange(r.y[std::min<std::size_t>(1, r.y.size() - 1)], r.y.back());
+        displayMaximum_->setRange(result_->y[std::min<std::size_t>(1, result_->y.size() - 1)],
+                                  result_->y.back());
     }
-    if (!r.metadata["method"].toString().startsWith("STFT") && quantity_->currentIndex() >= 3) {
-        QSignalBlocker block(quantity_);
+    if (!result_->metadata["method"].toString().startsWith("STFT") && quantity_->currentIndex() >= 3) {
+        const QSignalBlocker block(quantity_);
         quantity_->setCurrentIndex(0);
     }
-    bandRows_ = std::clamp<std::size_t>(
-        std::size_t(std::upper_bound(r.y.begin(), r.y.end(), displayMaximum_->value()) - r.y.begin()),
-        std::min<std::size_t>(2, r.y.size()), r.y.size());
-    const auto nx = std::min<std::size_t>(513, r.x.size()), ny = std::min<std::size_t>(513, bandRows_);
-    auto grid = std::make_shared<analysis::SurfaceGrid>();
-    grid->x.resize(nx);
-    grid->y.resize(ny);
-    grid->values.resize(nx * ny);
-    grid->present.resize(nx * ny);
-    grid->received = nx * ny;
-    for (std::size_t t = 0; t < nx; ++t)
-        grid->x[t] = r.x[nx == 1 ? 0 : t * (r.x.size() - 1) / (nx - 1)];
-    for (std::size_t f = 0; f < ny; ++f)
-        grid->y[f] = r.y[ny == 1 ? 0 : f * (bandRows_ - 1) / (ny - 1)];
-    for (std::size_t f = 0; f < ny; ++f)
-        for (std::size_t t = 0; t < nx; ++t) {
-            const auto tf = ny == 1 ? 0 : f * (bandRows_ - 1) / (ny - 1),
-                       tt = nx == 1 ? 0 : t * (r.x.size() - 1) / (nx - 1), i = tf * r.x.size() + tt;
-            const auto w = r.values[i];
-            const double value = quantityValue(r, tf, tt, quantity_->currentIndex());
-            grid->values[f * nx + t] = {value, 0};
-            grid->present[f * nx + t] = r.valid[i] && (quantity_->currentIndex() != 2 || std::abs(w) > 1e-12);
+    if (!displayWork_->scheduled) {
+        displayWork_->scheduled = true;
+        QTimer::singleShot(0, this, [this] {
+            displayWork_->scheduled = false;
+            submitDisplay();
+        });
+    }
+}
+void TimeFrequencyWindow::submitDisplay() {
+    if (!result_ || displayWork_->suspended)
+        return;
+    displayWork_->dirty = false;
+    displayWork_->awaiting = true;
+    const auto source = result_;
+    const int quantity = quantity_->currentIndex();
+    const double maximum = displayMaximum_->value();
+    const bool logarithmicFrequency = logFrequency_->isChecked();
+    displayWork_->worker.submit([source, quantity, maximum,
+                                 logarithmicFrequency](const auto &canceled) -> TimeFrequencyDisplay {
+        TimeFrequencyDisplay frame;
+        frame.source = source;
+        frame.quantity = quantity;
+        const auto &r = *source;
+        frame.bandRows = std::clamp<std::size_t>(
+            std::size_t(std::upper_bound(r.y.begin(), r.y.end(), maximum) - r.y.begin()),
+            std::min<std::size_t>(2, r.y.size()), r.y.size());
+        const auto nx = std::min<std::size_t>(513, r.x.size()),
+                   ny = std::min<std::size_t>(513, frame.bandRows);
+        auto grid = std::make_shared<analysis::SurfaceGrid>();
+        grid->x.resize(nx);
+        grid->y.resize(ny);
+        grid->values.resize(nx * ny);
+        grid->present.resize(nx * ny);
+        grid->received = nx * ny;
+        for (std::size_t t = 0; t < nx; ++t)
+            grid->x[t] = r.x[nx == 1 ? 0 : t * (r.x.size() - 1) / (nx - 1)];
+        for (std::size_t f = 0; f < ny; ++f)
+            grid->y[f] = r.y[ny == 1 ? 0 : f * (frame.bandRows - 1) / (ny - 1)];
+        for (std::size_t f = 0; f < ny; ++f)
+            for (std::size_t t = 0; t < nx; ++t) {
+                if (canceled())
+                    return {};
+                const auto tf = ny == 1 ? 0 : f * (frame.bandRows - 1) / (ny - 1),
+                           tt = nx == 1 ? 0 : t * (r.x.size() - 1) / (nx - 1), i = tf * r.x.size() + tt;
+                const auto w = r.values[i];
+                const double value = quantityValue(r, tf, tt, quantity);
+                grid->values[f * nx + t] = {value, 0};
+                grid->present[f * nx + t] = r.valid[i] && (quantity != 2 || std::abs(w) > 1e-12);
+            }
+        const bool logarithmic = logarithmicFrequency && grid->y.front() > 0;
+        frame.logarithmic = logarithmic;
+        frame.grid = std::move(grid);
+        auto &points = frame.envelope;
+        const auto buckets = std::min<std::size_t>(1024, r.input.size());
+        for (std::size_t i = 0; i < buckets; ++i) {
+            if (canceled())
+                return {};
+            const auto first = i * r.input.size() / buckets, last = (i + 1) * r.input.size() / buckets;
+            const auto extrema = std::minmax_element(r.input.begin() + first, r.input.begin() + last);
+            std::array<std::size_t, 4> indices{first, std::size_t(extrema.first - r.input.begin()),
+                                               std::size_t(extrema.second - r.input.begin()), last - 1};
+            std::sort(indices.begin(), indices.end());
+            const auto end = std::unique(indices.begin(), indices.end());
+            for (auto it = indices.begin(); it != end; ++it)
+                points.append(
+                    {r.metadata["origin_time"].toDouble() + double(*it) / r.metadata["rate_hz"].toDouble(),
+                     r.input[*it]});
         }
-    const bool logarithmic = logFrequency_->isChecked() && grid->y.front() > 0;
-    plot_->setCyclicColors(quantity_->currentIndex() == 2);
-    plot_->setLogY(logarithmic);
+        return frame;
+    });
+}
+void TimeFrequencyWindow::applyDisplay() {
+    if (auto slice = displayWork_->sliceWorker.take()) {
+        displayWork_->sliceAwaiting = false;
+        if (!slice->error.isEmpty())
+            inspection_->setText("Slice unavailable: " + slice->error);
+        else if (slice->value->source == result_ && slice->value->column == column_->value() &&
+                 slice->value->quantity == quantity_->currentIndex()) {
+            slice_->clearSeries();
+            slice_->setAxisTitles("Frequency (Hz)", quantity_->currentText());
+            for (const auto &points : slice->value->segments) {
+                auto *line = slice_->addSeries("Selected time", {QColor("#1565c0")});
+                LinePlotView::setPoints(line, points);
+            }
+            (void)slice_->fitAll();
+        }
+    }
+    auto ready = displayWork_->worker.take();
+    if (!ready)
+        return;
+    displayWork_->awaiting = false;
+    if (!ready->error.isEmpty()) {
+        displayWork_->error = ready->error;
+        updateStatus();
+        return;
+    }
+    displayWork_->error.clear();
+    const auto &frame = *ready->value;
+    if (frame.source != result_)
+        return;
+    const auto &r = *frame.source;
+    bandRows_ = frame.bandRows;
+    plot_->setCyclicColors(frame.quantity == 2);
+    plot_->setLogY(frame.logarithmic);
     const auto unit =
         r.metadata["unit"].toString().isEmpty() ? QString("U (unspecified)") : r.metadata["unit"].toString();
     const auto valueUnit = quantity_->currentIndex() == 2                                     ? QString("rad")
@@ -681,7 +827,7 @@ void TimeFrequencyWindow::present() {
                            : quantity_->currentIndex() == 1 || quantity_->currentIndex() == 3 ? unit + "²"
                                                                                               : unit;
     plot_->setAxes({"Model time (s)", "Frequency (Hz)", quantity_->currentText() + " (" + valueUnit + ")"});
-    plot_->setGrid(grid);
+    plot_->setGrid(frame.grid);
     row_->setMaximum(int(r.y.size() - 1));
     column_->setMaximum(int(r.x.size() - 1));
     trace_->setAxisTitles("Model time (s)",
@@ -691,28 +837,16 @@ void TimeFrequencyWindow::present() {
                               ")");
     trace_->clearSeries();
     traceMarker_ = trace_->addScatterSeries("Selected analysis time", QColor("#d62728"));
-    QList<QPointF> points;
-    const auto buckets = std::min<std::size_t>(1024, r.input.size());
-    for (std::size_t i = 0; i < buckets; ++i) {
-        const auto first = i * r.input.size() / buckets, last = (i + 1) * r.input.size() / buckets;
-        const auto extrema = std::minmax_element(r.input.begin() + first, r.input.begin() + last);
-        std::array<std::size_t, 4> indices{first, std::size_t(extrema.first - r.input.begin()),
-                                         std::size_t(extrema.second - r.input.begin()), last - 1};
-        std::sort(indices.begin(), indices.end());
-        const auto end = std::unique(indices.begin(), indices.end());
-        for (auto it = indices.begin(); it != end; ++it)
-            points.append({r.metadata["origin_time"].toDouble() + double(*it) / r.metadata["rate_hz"].toDouble(),
-                           r.input[*it]});
-    }
     auto *line = trace_->addSeries("Input envelope (extrema retained)", {QColor("#1565c0")});
-    LinePlotView::setPoints(line, points);
+    LinePlotView::setPoints(line, frame.envelope);
     (void)trace_->fitAll();
     inspect(row_->value(), column_->value());
-    inspection_->setToolTip(
-        "Map drawing uses at most 513×513 selected cells. Numeric row/column inspection and export use the "
-        "full transform. Gray cells have incomplete kernel support; they are not zero energy.");
+    inspection_->setToolTip("Map drawing uses at most 513×513 selected cells. Numeric inspection and export "
+                            "retain the full transform.");
 }
 void TimeFrequencyWindow::inspect(int row, int column) {
+    if (displayWork_->awaiting || displayWork_->scheduled || displayWork_->dirty)
+        return;
     if (!result_ || row < 0 || column < 0 || std::size_t(row) >= result_->y.size() ||
         std::size_t(column) >= result_->x.size())
         return;
@@ -744,42 +878,56 @@ void TimeFrequencyWindow::inspect(int row, int column) {
                                                        r.input[std::size_t(raw)]}});
     }
     const auto nx = std::min<std::size_t>(513, r.x.size()), ny = std::min<std::size_t>(513, bandRows_);
-    if (std::size_t(row) < bandRows_)
+    if (!plot_->isPreparing() && std::size_t(row) < bandRows_)
         plot_->selectCell(int(bandRows_ <= 1 ? 0 : std::size_t(row) * (ny - 1) / (bandRows_ - 1)),
                           int(r.x.size() <= 1 ? 0 : std::size_t(column) * (nx - 1) / (r.x.size() - 1)));
     else
         plot_->bridge()->setHead(false, {});
-    slice_->clearSeries();
-    slice_->setAxisTitles("Frequency (Hz)", quantity_->currentText());
-    QList<QPointF> points;
-    int segments = 0;
-    auto flush = [&] {
-        if (points.isEmpty())
-            return;
-        if (segments++ < 64) {
-            auto *line = slice_->addSeries("Selected time", {QColor("#1565c0")});
-            LinePlotView::setPoints(line, points);
+    if (displayWork_->sliceSource == result_ && displayWork_->sliceColumn == column &&
+        displayWork_->sliceQuantity == quantity_->currentIndex() && displayWork_->sliceRows == bandRows_)
+        return;
+    displayWork_->sliceSource = result_;
+    displayWork_->sliceColumn = column;
+    displayWork_->sliceQuantity = quantity_->currentIndex();
+    displayWork_->sliceRows = bandRows_;
+    const auto source = result_;
+    const auto rows = bandRows_;
+    const int quantity = quantity_->currentIndex();
+    displayWork_->sliceAwaiting = true;
+    displayWork_->sliceWorker.submit([source, rows, quantity,
+                                      column](const auto &canceled) -> TimeFrequencySlice {
+        TimeFrequencySlice frame{source, column, quantity, {}};
+        const auto &r = *source;
+        QList<QPointF> points;
+        int segments = 0;
+        auto flush = [&] {
+            if (points.isEmpty())
+                return;
+            if (segments++ < 64) {
+                frame.segments.append(analysis::displayCurve(points));
+            }
+            points.clear();
+        };
+        for (std::size_t f = 0; f < rows; ++f) {
+            if ((f % 256) == 0 && canceled())
+                return {};
+            const auto index = f * r.x.size() + std::size_t(column);
+            if (!r.valid[index] || (quantity == 2 && std::abs(r.values[index]) <= 1e-12)) {
+                flush();
+                continue;
+            }
+            const auto value = quantityValue(r, f, std::size_t(column), quantity);
+            if (!std::isfinite(value)) {
+                flush();
+                continue;
+            }
+            if (quantity == 2 && !points.empty() && std::abs(value - points.back().y()) > std::numbers::pi)
+                flush();
+            points.append({r.y[f], value});
         }
-        points.clear();
-    };
-    for (std::size_t f = 0; f < bandRows_; ++f) {
-        const auto index = f * r.x.size() + std::size_t(column);
-        if (!r.valid[index] || (quantity_->currentIndex() == 2 && std::abs(r.values[index]) <= 1e-12)) {
-            flush();
-            continue;
-        }
-        const auto value = quantityValue(r, f, std::size_t(column), quantity_->currentIndex());
-        if (!std::isfinite(value)) {
-            flush();
-            continue;
-        }
-        if (quantity_->currentIndex() == 2 && !points.empty() &&
-            std::abs(value - points.back().y()) > std::numbers::pi)
-            flush();
-        points.append({r.y[f], value});
-    }
-    flush();
-    (void)slice_->fitAll();
+        flush();
+        return frame;
+    });
 }
 void TimeFrequencyWindow::saveResult(const QString &path) const {
     if (!result_)
@@ -841,6 +989,11 @@ void TimeFrequencyWindow::openResult(const QString &path) {
     pending_ = false;
     requestActive_ = false;
     currentCaptureRequested_ = false;
+    displayWork_->worker.cancel();
+    displayWork_->sliceWorker.cancel();
+    displayWork_->sliceAwaiting = false;
+    displayWork_->sliceSource.reset();
+    displayWork_->awaiting = false;
     result_ = std::make_shared<const analysis::ResultFile>(std::move(result));
     chooseInspection(initialInspectionTime(*result_));
     imported_ = true;

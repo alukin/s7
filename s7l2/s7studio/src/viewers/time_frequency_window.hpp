@@ -31,14 +31,23 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     void analyze();
     void poll();
     bool hasResult() const { return bool(result_); }
+    bool isPreparingDisplay() const;
     const analysis::ResultFile *result() const { return result_.get(); }
     QString error() const { return error_; }
     void setWavelet(bool enabled);
     void saveResult(const QString &path) const;
     void openResult(const QString &path);
 
+  protected:
+    void hideEvent(QHideEvent *) override;
+    void showEvent(QShowEvent *) override;
+
   private:
     void present();
+    void submitDisplay();
+    void applyDisplay();
+    struct DisplayWork;
+    std::unique_ptr<DisplayWork> displayWork_;
     void inspect(int row, int column);
     void chooseInspection(double time, std::optional<double> frequency = {});
     void updateStatus();

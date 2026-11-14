@@ -14,6 +14,12 @@
 #include <iostream>
 #include <s7/core.hpp>
 #include <stdexcept>
+void waitForDisplay(s7studio::viewers::ResponseWindow &window) {
+    QElapsedTimer timer; timer.start();
+    do { QApplication::processEvents(); QThread::msleep(5); }
+    while (window.isPreparingDisplay() && timer.elapsed() < 5000);
+    if (window.isPreparingDisplay()) throw std::runtime_error("Response display timeout");
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     try {
@@ -49,6 +55,7 @@ int main(int argc, char **argv) {
             if (!viewer.hasResult())
                 throw std::runtime_error(viewer.error().isEmpty() ? "Response timeout"
                                                                   : viewer.error().toStdString());
+            waitForDisplay(viewer);
             if (name == "delay") {
                 auto *phase = viewer.findChild<s7studio::viewers::LinePlotView *>("response.phase");
                 auto *unwrap = viewer.findChild<QCheckBox *>("response.unwrap");
@@ -58,6 +65,7 @@ int main(int argc, char **argv) {
                     if (std::abs(point.y() + 360 * 3 * std::pow(10.0, point.x()) / 1000) > 1e-8)
                         throw std::runtime_error("Delay phase disagrees with independent sample-delay formula");
                 unwrap->setChecked(false);
+                waitForDisplay(viewer);
                 for (const auto *series : phase->series())
                     for (const auto &point : series->points())
                         if (std::abs(point.y()) > 180 + 1e-8)

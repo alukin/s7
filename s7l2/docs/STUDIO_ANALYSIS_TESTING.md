@@ -147,3 +147,19 @@ Debug checks passed 3/3, Windows/Wine checks passed 2/2, and the rendered impuls
 workflow passed 4 Qt Test cases without failures or skips. Evidence is retained
 in `/tmp/s7-impulse-full-tests.log`, `/tmp/s7-impulse-final-debug-tests.log`,
 `/tmp/s7-impulse-resample-wine-tests.log` and `/tmp/s7-impulse-render-final`.
+
+Background display preparation checks: `s7studio_display_worker` verifies that
+jobs execute off the GUI thread while a UI timer continues, only the latest
+pending request is prepared, canceled/destructed jobs cannot publish results,
+errors permit recovery, and drawing reduction preserves parametric extrema.
+The surface check retains the preceding mesh while workers are occupied and
+rejects retired meshes after Clear. Time-frequency checks also resume a queued
+slice after hide/show and import a smaller matrix over queued older work.
+
+Qualification (2026-11-14): the native suite passed 113/113 in 365 seconds.
+Final focused Debug checks passed 4/4. The rendered impulse workflow passed
+4 Qt Test cases and the five-example surface/complex/response/STFT/CWT rendering
+check passed 7 cases, with no failures or skips. Local evidence is under
+`/tmp/s7-display-full-tests.log`, `/tmp/s7-display-import-debug-tests.log`,
+`/tmp/s7-display-gui` and `/tmp/s7-display-gallery`. The final import guard is
+covered by focused checks following the full-suite run.

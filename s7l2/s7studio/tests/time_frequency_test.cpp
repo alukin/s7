@@ -31,6 +31,12 @@ void require(bool ok, const char *what) {
         throw std::runtime_error(what);
 }
 } // namespace
+void waitForDisplay(s7studio::viewers::TimeFrequencyWindow &window) {
+    QElapsedTimer timer; timer.start();
+    do { QApplication::processEvents(); QThread::msleep(5); }
+    while (window.isPreparingDisplay() && timer.elapsed() < 10000);
+    require(!window.isPreparingDisplay(), "Time-frequency display preparation timeout");
+}
 int main(int argc, char **argv) {
     QApplication app(argc, argv);
     try {
@@ -64,6 +70,7 @@ int main(int argc, char **argv) {
                 QThread::msleep(5);
             }
             require(window.hasResult(), window.error().toUtf8().constData());
+            waitForDisplay(window);
             std::cout << "Automatic " << (wavelet ? "CWT" : "STFT") << " for " << count
                       << " samples: " << timer.elapsed() << " ms including presentation\n";
             require(!window.findChild<QLabel *>("timeFrequency.empty")->isVisible(), "Hide empty-state guidance after automatic analysis");
@@ -107,10 +114,12 @@ int main(int argc, char **argv) {
                 auto *quantity = window.findChild<QComboBox *>("timeFrequency.quantity");
                 require(quantity, "Quantity control");
                 quantity->setCurrentIndex(4);
+                waitForDisplay(window);
                 auto *plot = window.findChild<s7studio::viewers::SurfacePlotView *>();
                 require(plot && std::abs(plot->bridge()->geometry.bounds().max[2] - 1.0 / 3) < 1e-10,
                         "Displayed PSD normalization");
                 quantity->setCurrentIndex(0);
+                waitForDisplay(window);
             }
             if (impulse) {
                 auto *column = window.findChild<QSpinBox *>("timeFrequency.column");
@@ -125,8 +134,26 @@ int main(int argc, char **argv) {
                 auto *band = window.findChild<QDoubleSpinBox *>("timeFrequency.displayMaximum");
                 auto *plot = window.findChild<s7studio::viewers::SurfacePlotView *>();
                 band->setValue(40);
+                waitForDisplay(window);
                 require(plot->bridge()->geometry.bounds().max[1] == 40, "Displayed frequency band");
                 require(window.result()->y.back() == 512, "Display band must retain full transform");
+                auto *tabs = window.findChild<QTabWidget *>("timeFrequency.views");
+                tabs->setCurrentIndex(2); waitForDisplay(window);
+                auto &pool = s7studio::analysis::analysisPool();
+                require(pool.waitForDone(5000), "Previous slice jobs retire");
+                QSemaphore entered, release;
+                const auto cleanup = qScopeGuard([&] { release.release(2); pool.waitForDone(5000); });
+                for (int i = 0; i < 2; ++i) pool.start([&] { entered.release(); release.acquire(); });
+                require(entered.tryAcquire(2, 5000), "Queue selected slice behind workers");
+                column->setValue(column->maximum());
+                window.hide(); window.show();
+                release.release(2); waitForDisplay(window);
+                auto *slice = window.findChild<s7studio::viewers::LinePlotView *>("timeFrequency.frequencySlice");
+                require(slice && !slice->series().isEmpty(), "Restart canceled slice after reopening");
+                for (auto *series : slice->series())
+                    for (const auto &point : series->points())
+                        require(point.y() == 0, "Reopened slice must match the latest quiet time column");
+                tabs->setCurrentIndex(0); waitForDisplay(window);
             }
             const auto path = directory.filePath(wavelet ? "wavelet.s7analysis" : "stft.s7analysis");
             window.saveResult(path);
@@ -242,16 +269,21 @@ int main(int argc, char **argv) {
             }
             require(!window.error().isEmpty() && window.hasResult() && window.result()->input.size() == 1024,
                     "Failed reanalysis must retain the last valid result");
-            fft->setCurrentIndex(fft->findData(512));
-            failedJob.restart();
-            while (window.result()->metadata["window_size"].toInt() != 512 && failedJob.elapsed() < 5000) {
-                window.poll(); app.processEvents(); QThread::msleep(5);
-            }
-            require(window.error().isEmpty() && window.result()->metadata["window_size"].toInt() == 512,
-                    "Valid settings must recover from a failed analysis");
-
+            const auto waitForFft = [&](int size) {
+                fft->setCurrentIndex(fft->findData(size));
+                failedJob.restart();
+                while (window.result()->metadata["window_size"].toInt() != size && failedJob.elapsed() < 5000) {
+                    window.poll(); app.processEvents(); QThread::msleep(5);
+                }
+                require(window.error().isEmpty() && window.result()->metadata["window_size"].toInt() == size,
+                        "Valid settings must recover from a failed analysis");
+                waitForDisplay(window);
+            };
+            waitForFft(512);
+            waitForFft(8);
             auto imported = *window.result();
             for (auto &value : imported.values) value *= 2;
+            waitForFft(512); // Import a smaller result over an already displayed larger matrix.
             imported.input.clear();
             const auto path = directory.filePath("read-only.s7analysis");
             imported.save(path);
@@ -268,10 +300,13 @@ int main(int argc, char **argv) {
             button->click();
             window.openResult(path);
             window.hide(); window.poll();
+            auto *column = window.findChild<QSpinBox *>("timeFrequency.column");
+            column->setValue(column->value() ? 0 : 1); // A pending smaller import has different slice dimensions.
             release.release(2); released = true;
             require(pool.waitForDone(5000), "Retired worker after import");
             window.show();
             for (int i = 0; i < 20; ++i) { window.poll(); app.processEvents(); QThread::msleep(5); }
+            waitForDisplay(window);
             require(window.result()->values == imported.values && window.result()->input.empty(),
                     "Retired work must not overwrite an imported result after hiding/showing");
             require(!button->isEnabled() && !window.findChild<QComboBox *>("timeFrequency.method")->isEnabled(),

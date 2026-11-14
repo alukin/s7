@@ -8,6 +8,7 @@
 #include <QVector3D>
 
 #include <array>
+#include <functional>
 
 namespace s7studio::viewers {
 
@@ -34,6 +35,15 @@ inline constexpr std::array<double, 3> kTrajectoryTickFractions{0.1, 0.5, 0.9};
 // (Qt Quick 3D's Y). A right-handed data frame viewed from the front.
 [[nodiscard]] auto toScene(const TrajectoryPoint& point, const TrajectoryBounds& bounds) -> QVector3D;
 
+struct TrajectoryData {
+    QList<QVector3D> vertices;
+    QByteArray buffer;
+    bool colorByX = false;
+};
+TrajectoryData prepareTrajectory(const QList<TrajectoryPoint> &points, const TrajectoryBounds &bounds,
+                                 qsizetype maxVertices, bool colorByX = false,
+                                 const std::function<bool()> &canceled = {});
+
 // A continuous trajectory as one line strip: consecutive samples are joined
 // in time order. At most maxVertices are uploaded; longer trajectories are
 // thinned with a uniform stride that always keeps the newest point.
@@ -45,6 +55,7 @@ public:
     explicit TrajectoryGeometry(QQuick3DObject* parent = nullptr);
 
     void setTrajectory(const QList<TrajectoryPoint>& points, const TrajectoryBounds& bounds, qsizetype maxVertices, bool colorByX=false);
+    void apply(const TrajectoryData &data);
     [[nodiscard]] auto vertexCount() const -> qsizetype { return vertices_.size(); }
     [[nodiscard]] auto vertexAt(qsizetype index) const -> QVector3D { return vertices_.at(index); }
 

@@ -36,12 +36,21 @@ class ResponseWindow final : public QWidget, public ObservationViewer {
     void analyze();
     void poll();
     bool hasResult() const;
+    bool isPreparingDisplay() const;
     void saveResult(const QString &path) const;
     void openResult(const QString &path);
     QString error() const { return error_; }
 
+  protected:
+    void hideEvent(QHideEvent *) override;
+    void showEvent(QShowEvent *) override;
+
   private:
     void draw();
+    void submitDisplay();
+    void applyDisplay();
+    struct DisplayWork;
+    std::unique_ptr<DisplayWork> displayWork_;
     void inspect(double frequency);
     void exportResult();
     void updateStatus();

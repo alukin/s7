@@ -1,12 +1,15 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "surface_plot.hpp"
+#include "analysis/display_worker.hpp"
 #include "quick_support.hpp"
 #include <QHBoxLayout>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPointer>
 #include <QQuickWidget>
+#include <QThread>
+#include <QTimer>
 #include <QVariantMap>
 #include <algorithm>
 #include <cmath>
@@ -192,41 +195,47 @@ QColor SurfaceGeometry::color(std::complex<double> v, bool complex, double low, 
     t = std::clamp(t, 0.0, 1.0);
     return t < .5 ? QColor::fromRgbF(2 * t, 2 * t, 1) : QColor::fromRgbF(1, 2 * (1 - t), 2 * (1 - t));
 }
-void SurfaceGeometry::setGrid(const analysis::SurfaceGrid &g, bool complex, SurfaceHeight mode, bool wire,
-                              std::optional<TrajectoryBounds> fixed, bool cyclicColors) {
+SurfaceMesh SurfaceGeometry::prepare(const analysis::SurfaceGrid &g, bool complex, SurfaceHeight mode,
+                                     bool wire, std::optional<TrajectoryBounds> fixed, bool cyclicColors,
+                                     const std::function<bool()> &canceled) {
     if (!g.values.empty() &&
         (g.columns() == 0 || g.rows() == 0 || g.columns() > 513 || g.rows() > 513 ||
          g.values.size() != g.columns() * g.rows() || g.present.size() != g.values.size()))
         throw std::invalid_argument("Invalid surface render shape/budget");
-    clear();
-    triangles_ = 0;
+    SurfaceMesh mesh;
+    mesh.wireframe = wire;
     QList<TrajectoryPoint> points;
-    for (std::size_t i = 0; i < g.values.size(); ++i)
+    for (std::size_t i = 0; i < g.values.size(); ++i) {
+        if ((i % 513) == 0 && canceled && canceled())
+            return {};
         if (g.finite(i)) {
             const double h = height(g.values[i], complex, mode);
             if (std::isfinite(h))
                 points.push_back({g.x[i % g.columns()], g.y[i / g.columns()], h});
         }
-    bounds_ = fixed.value_or(gridBounds(g, points));
+    }
+    mesh.bounds = fixed.value_or(gridBounds(g, points));
     if (points.empty()) {
-        update();
-        return;
+        return mesh;
     }
     QByteArray vertices(qsizetype(g.values.size() * 7 * sizeof(float)), Qt::Uninitialized);
     auto *out = reinterpret_cast<float *>(vertices.data());
     std::vector<bool> valid(g.values.size(), false);
     for (std::size_t i = 0; i < g.values.size(); ++i) {
+        if ((i % 513) == 0 && canceled && canceled())
+            return {};
         const double h = height(g.values[i], complex, mode);
         valid[i] =
             g.finite(i) && std::isfinite(h) &&
-            (!fixed || (h >= bounds_.min[2] && h <= bounds_.max[2] &&
-                        g.x[i % g.columns()] >= bounds_.min[0] && g.x[i % g.columns()] <= bounds_.max[0] &&
-                        g.y[i / g.columns()] >= bounds_.min[1] && g.y[i / g.columns()] <= bounds_.max[1]));
+            (!fixed ||
+             (h >= mesh.bounds.min[2] && h <= mesh.bounds.max[2] &&
+              g.x[i % g.columns()] >= mesh.bounds.min[0] && g.x[i % g.columns()] <= mesh.bounds.max[0] &&
+              g.y[i / g.columns()] >= mesh.bounds.min[1] && g.y[i / g.columns()] <= mesh.bounds.max[1]));
         const auto p =
-            valid[i] ? position(g.x[i % g.columns()], g.y[i / g.columns()], h, bounds_) : QVector3D{};
-        const auto c = valid[i]
-                           ? color(g.values[i], complex, bounds_.min[2], bounds_.max[2], mode, cyclicColors)
-                           : QColor(Qt::gray);
+            valid[i] ? position(g.x[i % g.columns()], g.y[i / g.columns()], h, mesh.bounds) : QVector3D{};
+        const auto c =
+            valid[i] ? color(g.values[i], complex, mesh.bounds.min[2], mesh.bounds.max[2], mode, cyclicColors)
+                     : QColor(Qt::gray);
         *out++ = p.x();
         *out++ = p.y();
         *out++ = p.z();
@@ -244,32 +253,224 @@ void SurfaceGeometry::setGrid(const analysis::SurfaceGrid &g, bool complex, Surf
                              std::abs(g.values[b].real() - g.values[c].real()) > std::numbers::pi ||
                              std::abs(g.values[c].real() - g.values[a].real()) > std::numbers::pi))
             return;
-        ++triangles_;
+        ++mesh.triangles;
         if (wire)
             indices.insert(indices.end(),
                            {quint32(a), quint32(b), quint32(b), quint32(c), quint32(c), quint32(a)});
         else
             indices.insert(indices.end(), {quint32(a), quint32(b), quint32(c)});
     };
-    for (std::size_t r = 0; r + 1 < g.rows(); ++r)
+    for (std::size_t r = 0; r + 1 < g.rows(); ++r) {
+        if (canceled && canceled())
+            return {};
         for (std::size_t c = 0; c + 1 < g.columns(); ++c) {
             const auto a = r * g.columns() + c, b = a + 1, d = a + g.columns(), e = d + 1;
             triangle(a, d, b);
             triangle(b, d, e);
         }
+    }
+    mesh.vertices = std::move(vertices);
+    mesh.indices = QByteArray(reinterpret_cast<const char *>(indices.data()),
+                              qsizetype(indices.size() * sizeof(quint32)));
+    return mesh;
+}
+void SurfaceGeometry::apply(const SurfaceMesh &mesh) {
+    Q_ASSERT(QThread::currentThread() == thread());
+    clear();
+    bounds_ = mesh.bounds;
+    triangles_ = mesh.triangles;
     setStride(7 * sizeof(float));
-    setPrimitiveType(wire ? PrimitiveType::Lines : PrimitiveType::Triangles);
+    setPrimitiveType(mesh.wireframe ? PrimitiveType::Lines : PrimitiveType::Triangles);
     addAttribute(Attribute::PositionSemantic, 0, Attribute::F32Type);
     addAttribute(Attribute::ColorSemantic, 3 * sizeof(float), Attribute::F32Type);
     addAttribute(Attribute::IndexSemantic, 0, Attribute::U32Type);
-    setVertexData(vertices);
-    setIndexData(QByteArray(reinterpret_cast<const char *>(indices.data()),
-                            qsizetype(indices.size() * sizeof(quint32))));
+    setVertexData(mesh.vertices);
+    setIndexData(mesh.indices);
     setBounds({-100, -100, -100}, {100, 100, 100});
     update();
 }
+void SurfaceGeometry::setGrid(const analysis::SurfaceGrid &g, bool complex, SurfaceHeight mode, bool wire,
+                              std::optional<TrajectoryBounds> fixed, bool cyclicColors) {
+    apply(prepare(g, complex, mode, wire, fixed, cyclicColors));
+}
+struct SurfaceRequest {
+    std::shared_ptr<const analysis::SurfaceGrid> grid;
+    bool complex, compact, cyclicColors, contours, logY, equalAspect;
+    std::optional<TrajectoryBounds> fixed;
+    std::optional<std::size_t> sliceColumn;
+    SurfaceHeight height;
+    int presentation;
+    QStringList axes;
+};
+struct SurfaceFrame {
+    SurfaceRequest request{};
+    std::shared_ptr<const analysis::SurfaceGrid> display;
+    SurfaceMesh mesh;
+    TrajectoryData slice;
+    QVariantList labels;
+    QImage image;
+    QString title;
+};
+struct SurfacePlotView::Work {
+    analysis::DisplayWorker<SurfaceFrame> worker;
+    std::shared_ptr<const SurfaceFrame> displayed;
+    std::optional<std::pair<int, int>> selection;
+    bool scheduled = false, dirty = false, suspended = false, awaiting = false;
+};
+static SurfaceFrame prepareSurface(const SurfaceRequest &request, const std::function<bool()> &canceled) {
+    SurfaceFrame frame;
+    frame.request = request;
+    const analysis::SurfaceGrid empty;
+    auto display = request.grid ? std::make_shared<analysis::SurfaceGrid>(*request.grid)
+                                : std::make_shared<analysis::SurfaceGrid>(empty);
+    if (request.logY)
+        for (auto &value : display->y)
+            value = value > 0 ? std::log10(value) : std::numeric_limits<double>::quiet_NaN();
+    const auto &g = *display;
+    auto bounds = request.fixed;
+    if (request.equalAspect && !bounds) {
+        QList<TrajectoryPoint> points;
+        for (std::size_t i = 0; i < g.values.size(); ++i)
+            if (g.finite(i))
+                points.append({g.x[i % g.columns()], g.y[i / g.columns()],
+                               SurfaceGeometry::height(g.values[i], request.complex, request.height)});
+        auto b = gridBounds(g, points);
+        double span = 0;
+        for (std::size_t a = 0; a < 3; ++a)
+            span = std::max(span, b.max[a] - b.min[a]);
+        for (std::size_t a = 0; a < 3; ++a) {
+            const auto middle = b.min[a] / 2 + b.max[a] / 2;
+            b.min[a] = middle - span / 2;
+            b.max[a] = middle + span / 2;
+        }
+        bounds = b;
+    }
+    if (canceled())
+        return {};
+    frame.mesh = SurfaceGeometry::prepare(g, request.complex, request.height, request.presentation == 1,
+                                          bounds, request.cyclicColors, canceled);
+    const auto &b = frame.mesh.bounds;
+    QList<TrajectoryPoint> slice;
+    if (request.sliceColumn && *request.sliceColumn < g.columns())
+        for (std::size_t r = 0; r < g.rows(); ++r) {
+            const auto i = r * g.columns() + *request.sliceColumn;
+            if (g.finite(i))
+                slice.append({g.x[*request.sliceColumn], g.y[r],
+                              SurfaceGeometry::height(g.values[i], request.complex, request.height)});
+        }
+    frame.slice = prepareTrajectory(slice, b, 513);
+    QVariantList labels;
+    auto label = [&](QVector3D p, QString s, bool title) {
+        labels.push_back(QVariantMap{{"position", p}, {"text", s}, {"title", title}});
+    };
+    for (double t : {.1, .5, .9}) {
+        if (request.compact && t != .5)
+            continue;
+        const auto q = float(-100 + 200 * t);
+        for (std::size_t a = 0; a < 3; ++a) {
+            const auto value =
+                double((1 - static_cast<long double>(t)) * b.min[a] + static_cast<long double>(t) * b.max[a]);
+            label(a == 0   ? QVector3D(q, -112, 112)
+                  : a == 1 ? QVector3D(112, -112, -q)
+                           : QVector3D(-112, q, 112),
+                  QString::number(request.logY && a == 1 ? std::pow(10.0, value) : value, 'g', 4), false);
+        }
+    }
+    label({0, -135, 135}, request.compact ? "X" : request.axes.value(0), true);
+    label({135, -135, 0}, request.compact ? "Y" : request.axes.value(1), true);
+    const auto title = !request.complex ? (request.height == SurfaceHeight::LogMagnitude
+                                               ? "log10(" + request.axes.value(2) + ")"
+                                               : request.axes.value(2))
+                       : request.height == SurfaceHeight::Real         ? "Re(w)"
+                       : request.height == SurfaceHeight::Imaginary    ? "Im(w)"
+                       : request.height == SurfaceHeight::LogMagnitude ? "log(1 + |w|)"
+                                                                       : "|w|";
+    label({-135, 112, 112}, request.compact ? "Z" : title, true);
+    frame.labels = std::move(labels);
+    frame.display = display;
+    frame.image = QImage(513, 513, QImage::Format_ARGB32);
+    frame.image.fill(QColor("#dddddd"));
+    if (!g.x.empty() && !g.y.empty() && std::isfinite(g.x.front()) && std::isfinite(g.x.back()) &&
+        std::isfinite(g.y.front()) && std::isfinite(g.y.back())) {
+        auto nearest = [](const std::vector<double> &axis, double value) {
+            auto it = std::lower_bound(axis.begin(), axis.end(), value);
+            auto i = std::size_t(it - axis.begin());
+            if (i == axis.size())
+                --i;
+            if (i && value - axis[i - 1] < axis[i] - value)
+                --i;
+            return i;
+        };
+        for (int py = 0; py < 513; ++py) {
+            if (canceled())
+                return {};
+            for (int px = 0; px < 513; ++px) {
+                const auto x = b.min[0] + (b.max[0] - b.min[0]) * px / 512,
+                           y = b.max[1] - (b.max[1] - b.min[1]) * py / 512;
+                if ((g.columns() > 1 && (x < g.x.front() || x > g.x.back())) ||
+                    (g.rows() > 1 && (y < g.y.front() || y > g.y.back())))
+                    continue;
+                const auto c = nearest(g.x, x), r = nearest(g.y, y);
+                const auto i = r * g.columns() + c;
+                if (g.finite(i) &&
+                    std::isfinite(SurfaceGeometry::height(g.values[i], request.complex, request.height)) &&
+                    (!request.fixed ||
+                     (SurfaceGeometry::height(g.values[i], request.complex, request.height) >= b.min[2] &&
+                      SurfaceGeometry::height(g.values[i], request.complex, request.height) <= b.max[2])))
+                    frame.image.setPixelColor(px, py,
+                                              SurfaceGeometry::color(g.values[i], request.complex, b.min[2],
+                                                                     b.max[2], request.height,
+                                                                     request.cyclicColors));
+            }
+        }
+        if (request.contours) {
+            QPainter painter(&frame.image);
+            painter.setPen(QPen(QColor(30, 30, 30, 160), .8));
+            for (int level = 1; level < 9; ++level) {
+                if (canceled())
+                    return {};
+                const double h = b.min[2] + (b.max[2] - b.min[2]) * level / 9;
+                for (std::size_t r = 0; r + 1 < g.rows(); ++r) {
+                    if (canceled())
+                        return {};
+                    for (std::size_t c = 0; c + 1 < g.columns(); ++c) {
+                        std::array<std::size_t, 4> ids{r * g.columns() + c, r * g.columns() + c + 1,
+                                                       (r + 1) * g.columns() + c + 1,
+                                                       (r + 1) * g.columns() + c};
+                        QList<QPointF> crossings;
+                        bool valid = true;
+                        for (auto i : ids)
+                            valid &= g.finite(i) && std::isfinite(SurfaceGeometry::height(
+                                                        g.values[i], request.complex, request.height));
+                        if (!valid)
+                            continue;
+                        for (std::size_t edge = 0; edge < 4; ++edge) {
+                            const auto i = ids[edge], j = ids[(edge + 1) % 4];
+                            const auto a = SurfaceGeometry::height(g.values[i], request.complex,
+                                                                   request.height),
+                                       z = SurfaceGeometry::height(g.values[j], request.complex,
+                                                                   request.height);
+                            if ((a < h) == (z < h))
+                                continue;
+                            const auto t = (h - a) / (z - a);
+                            const auto x = (1 - t) * g.x[i % g.columns()] + t * g.x[j % g.columns()],
+                                       y = (1 - t) * g.y[i / g.columns()] + t * g.y[j / g.columns()];
+                            crossings.append({512 * (x - b.min[0]) / (b.max[0] - b.min[0]),
+                                              512 * (b.max[1] - y) / (b.max[1] - b.min[1])});
+                        }
+                        for (qsizetype i = 0; i + 1 < crossings.size(); i += 2)
+                            painter.drawLine(crossings[i], crossings[i + 1]);
+                    }
+                }
+            }
+        }
+    }
+    frame.title = title;
+    return frame;
+}
 SurfacePlotView::SurfacePlotView(bool complex, QWidget *parent)
-    : QWidget(parent), complex_(complex), bridge_(new SurfaceBridge(this)), heatmap_(new Heatmap(this)) {
+    : QWidget(parent), work_(std::make_unique<Work>()), complex_(complex), bridge_(new SurfaceBridge(this)),
+      heatmap_(new Heatmap(this)) {
     setObjectName("viewer.surfacePresentation");
     setMinimumSize(180, 150);
     auto *root = new QHBoxLayout(this);
@@ -284,9 +485,18 @@ SurfacePlotView::SurfacePlotView(bool complex, QWidget *parent)
         emit cellPicked(r, c);
     };
     bridge_->setViewRotation({-30, 35, 0});
+    auto *timer = new QTimer(this);
+    timer->setInterval(25);
+    connect(timer, &QTimer::timeout, this, &SurfacePlotView::applyPrepared);
+    timer->start();
 }
-SurfacePlotView::~SurfacePlotView() { unloadQuickScene(quick_); }
+SurfacePlotView::~SurfacePlotView() {
+    work_->worker.cancel();
+    unloadQuickScene(quick_);
+}
 void SurfacePlotView::showEvent(QShowEvent *event) {
+    work_->suspended = false;
+    submitPreparation();
     const QPointer<SurfacePlotView> alive(this);
     if (!quick_) {
         auto *created = createQuickWidget();
@@ -343,6 +553,7 @@ void SurfacePlotView::setFixedBounds(std::optional<TrajectoryBounds> bounds) {
 void SurfacePlotView::setGrid(std::shared_ptr<const analysis::SurfaceGrid> grid) {
     bridge_->setHead(false, {});
     static_cast<Heatmap *>(heatmap_)->selected.reset();
+    work_->selection.reset();
     grid_ = std::move(grid);
     rebuild();
 }
@@ -362,175 +573,114 @@ void SurfacePlotView::setPresentation(int mode) {
     rebuild();
 }
 void SurfacePlotView::rebuild() {
-    const analysis::SurfaceGrid empty;
-    auto display = grid_ ? std::make_shared<analysis::SurfaceGrid>(*grid_)
-                         : std::make_shared<analysis::SurfaceGrid>(empty);
-    if (logY_)
-        for (auto &value : display->y)
-            value = value > 0 ? std::log10(value) : std::numeric_limits<double>::quiet_NaN();
-    const auto &g = *display;
-    auto bounds = fixed_;
-    if (equalAspect_ && !bounds) {
-        QList<TrajectoryPoint> points;
-        for (std::size_t i = 0; i < g.values.size(); ++i)
-            if (g.finite(i))
-                points.append({g.x[i % g.columns()], g.y[i / g.columns()],
-                               SurfaceGeometry::height(g.values[i], complex_, height_)});
-        auto b = gridBounds(g, points);
-        double span = 0;
-        for (std::size_t a = 0; a < 3; ++a)
-            span = std::max(span, b.max[a] - b.min[a]);
-        for (std::size_t a = 0; a < 3; ++a) {
-            const auto middle = b.min[a] / 2 + b.max[a] / 2;
-            b.min[a] = middle - span / 2;
-            b.max[a] = middle + span / 2;
-        }
-        bounds = b;
+    work_->worker.cancel();
+    work_->awaiting = false;
+    work_->dirty = true;
+    if (!grid_ || grid_->values.empty()) {
+        work_->dirty = false;
+        work_->displayed.reset();
+        bridge_->geometry.apply({});
+        bridge_->trajectoryGeometry().apply({});
+        auto *heat = static_cast<Heatmap *>(heatmap_);
+        heat->grid.reset();
+        heat->image = {};
+        heat->selected.reset();
+        heat->update();
+        return;
     }
-    bridge_->geometry.setGrid(g, complex_, height_, presentation_ == 1, bounds, cyclicColors_);
-    const auto &b = bridge_->geometry.bounds();
-    QList<TrajectoryPoint> slice;
-    if (sliceColumn_ && *sliceColumn_ < g.columns())
-        for (std::size_t r = 0; r < g.rows(); ++r) {
-            const auto i = r * g.columns() + *sliceColumn_;
-            if (g.finite(i))
-                slice.append(
-                    {g.x[*sliceColumn_], g.y[r], SurfaceGeometry::height(g.values[i], complex_, height_)});
-        }
-    bridge_->trajectoryGeometry().setTrajectory(slice, b, 513);
-    QVariantList labels;
-    auto label = [&](QVector3D p, QString s, bool title) {
-        labels.push_back(QVariantMap{{"position", p}, {"text", s}, {"title", title}});
-    };
-    for (double t : {.1, .5, .9}) {
-        if (compact_ && t != .5)
-            continue;
-        const auto q = float(-100 + 200 * t);
-        for (std::size_t a = 0; a < 3; ++a) {
-            const auto value =
-                double((1 - static_cast<long double>(t)) * b.min[a] + static_cast<long double>(t) * b.max[a]);
-            label(a == 0   ? QVector3D(q, -112, 112)
-                  : a == 1 ? QVector3D(112, -112, -q)
-                           : QVector3D(-112, q, 112),
-                  QString::number(logY_ && a == 1 ? std::pow(10.0, value) : value, 'g', 4), false);
-        }
+    if (!work_->scheduled) {
+        work_->scheduled = true;
+        QTimer::singleShot(0, this, [this] {
+            work_->scheduled = false;
+            submitPreparation();
+        });
     }
-    label({0, -135, 135}, compact_ ? "X" : axes_.value(0), true);
-    label({135, -135, 0}, compact_ ? "Y" : axes_.value(1), true);
-    const auto title = !complex_ ? (height_ == SurfaceHeight::LogMagnitude ? "log10(" + axes_.value(2) + ")"
-                                                                           : axes_.value(2))
-                       : height_ == SurfaceHeight::Real         ? "Re(w)"
-                       : height_ == SurfaceHeight::Imaginary    ? "Im(w)"
-                       : height_ == SurfaceHeight::LogMagnitude ? "log(1 + |w|)"
-                                                                : "|w|";
-    label({-135, 112, 112}, compact_ ? "Z" : title, true);
-    bridge_->setLabels(labels);
+}
+void SurfacePlotView::submitPreparation() {
+    if (!work_->dirty || work_->suspended)
+        return;
+    work_->dirty = false;
+    work_->awaiting = true;
+    const SurfaceRequest request{grid_,        complex_, compact_,     cyclicColors_, contours_,     logY_,
+                                 equalAspect_, fixed_,   sliceColumn_, height_,       presentation_, axes_};
+    work_->worker.submit([request](const auto &canceled) { return prepareSurface(request, canceled); });
+}
+bool SurfacePlotView::isPreparing() const { return work_->dirty || work_->scheduled || work_->awaiting; }
+void SurfacePlotView::applyPrepared() {
+    auto ready = work_->worker.take();
+    if (!ready)
+        return;
+    work_->awaiting = false;
+    if (!ready->error.isEmpty()) {
+        emit inspected("Display unavailable: " + ready->error);
+        return;
+    }
+    work_->displayed = std::move(ready->value);
+    const auto &frame = *work_->displayed;
+    bridge_->geometry.apply(frame.mesh);
+    bridge_->trajectoryGeometry().apply(frame.slice);
+    bridge_->setLabels(frame.labels);
     auto *heat = static_cast<Heatmap *>(heatmap_);
-    heat->bounds = b;
-    heat->grid = display;
-    heat->axes = axes_;
-    heat->logarithmicY = logY_;
-    heat->image = QImage(513, 513, QImage::Format_ARGB32);
-    heat->image.fill(QColor("#dddddd"));
-    if (!g.x.empty() && !g.y.empty() && std::isfinite(g.x.front()) && std::isfinite(g.x.back()) &&
-        std::isfinite(g.y.front()) && std::isfinite(g.y.back())) {
-        auto nearest = [](const std::vector<double> &axis, double value) {
-            auto it = std::lower_bound(axis.begin(), axis.end(), value);
-            auto i = std::size_t(it - axis.begin());
-            if (i == axis.size())
-                --i;
-            if (i && value - axis[i - 1] < axis[i] - value)
-                --i;
-            return i;
-        };
-        for (int py = 0; py < 513; ++py)
-            for (int px = 0; px < 513; ++px) {
-                const auto x = b.min[0] + (b.max[0] - b.min[0]) * px / 512,
-                           y = b.max[1] - (b.max[1] - b.min[1]) * py / 512;
-                if ((g.columns() > 1 && (x < g.x.front() || x > g.x.back())) ||
-                    (g.rows() > 1 && (y < g.y.front() || y > g.y.back())))
-                    continue;
-                const auto c = nearest(g.x, x), r = nearest(g.y, y);
-                const auto i = r * g.columns() + c;
-                if (g.finite(i) && std::isfinite(SurfaceGeometry::height(g.values[i], complex_, height_)) &&
-                    (!fixed_ || (SurfaceGeometry::height(g.values[i], complex_, height_) >= b.min[2] &&
-                                 SurfaceGeometry::height(g.values[i], complex_, height_) <= b.max[2])))
-                    heat->image.setPixelColor(px, py,
-                                              SurfaceGeometry::color(g.values[i], complex_, b.min[2],
-                                                                     b.max[2], height_, cyclicColors_));
-            }
-        if (contours_) {
-            QPainter painter(&heat->image);
-            painter.setPen(QPen(QColor(30, 30, 30, 160), .8));
-            for (int level = 1; level < 9; ++level) {
-                const double h = b.min[2] + (b.max[2] - b.min[2]) * level / 9;
-                for (std::size_t r = 0; r + 1 < g.rows(); ++r)
-                    for (std::size_t c = 0; c + 1 < g.columns(); ++c) {
-                        std::array<std::size_t, 4> ids{r * g.columns() + c, r * g.columns() + c + 1,
-                                                       (r + 1) * g.columns() + c + 1,
-                                                       (r + 1) * g.columns() + c};
-                        QList<QPointF> crossings;
-                        bool valid = true;
-                        for (auto i : ids)
-                            valid &= g.finite(i) && std::isfinite(SurfaceGeometry::height(g.values[i], complex_, height_));
-                        if (!valid)
-                            continue;
-                        for (std::size_t edge = 0; edge < 4; ++edge) {
-                            const auto i = ids[edge], j = ids[(edge + 1) % 4];
-                            const auto a = SurfaceGeometry::height(g.values[i], complex_, height_),
-                                       z = SurfaceGeometry::height(g.values[j], complex_, height_);
-                            if ((a < h) == (z < h))
-                                continue;
-                            const auto t = (h - a) / (z - a);
-                            const auto x = (1 - t) * g.x[i % g.columns()] + t * g.x[j % g.columns()],
-                                       y = (1 - t) * g.y[i / g.columns()] + t * g.y[j / g.columns()];
-                            crossings.append({512 * (x - b.min[0]) / (b.max[0] - b.min[0]),
-                                              512 * (b.max[1] - y) / (b.max[1] - b.min[1])});
-                        }
-                        for (qsizetype i = 0; i + 1 < crossings.size(); i += 2)
-                            painter.drawLine(crossings[i], crossings[i + 1]);
-                    }
-            }
-        }
-    }
+    heat->bounds = frame.mesh.bounds;
+    heat->grid = frame.display;
+    heat->axes = frame.request.axes;
+    heat->logarithmicY = frame.request.logY;
+    heat->image = frame.image;
+    heat->selected.reset();
     heat->update();
     auto *bar = static_cast<Legend *>(layout()->itemAt(layout()->count() - 1)->widget());
-    bar->complex = complex_ || cyclicColors_;
-    bar->title = bar->complex ? QString("Phase (rad)") : title;
-    bar->low = b.min[2];
-    bar->high = b.max[2];
-    bar->mode = height_;
+    bar->complex = frame.request.complex || frame.request.cyclicColors;
+    bar->title = bar->complex ? QString("Phase (rad)") : frame.title;
+    bar->low = frame.mesh.bounds.min[2];
+    bar->high = frame.mesh.bounds.max[2];
+    bar->mode = frame.request.height;
     bar->update();
+    if (work_->selection)
+        selectCell(work_->selection->first, work_->selection->second);
+    emit presentationReady();
+}
+void SurfacePlotView::hideEvent(QHideEvent *event) {
+    const bool pending = isPreparing();
+    work_->suspended = true;
+    work_->worker.cancel();
+    work_->awaiting = false;
+    work_->dirty = pending && grid_ && !grid_->values.empty();
+    QWidget::hideEvent(event);
 }
 void SurfacePlotView::selectCell(int row, int column) {
-    if (!grid_ || row < 0 || column < 0 || std::size_t(row) >= grid_->rows() ||
-        std::size_t(column) >= grid_->columns())
+    work_->selection = std::pair(row, column);
+    if (!work_->displayed)
         return;
-    const auto i = std::size_t(row) * grid_->columns() + std::size_t(column);
-    if (!grid_->finite(i)) {
+    const auto &request = work_->displayed->request;
+    const auto &grid = request.grid;
+    if (!grid || row < 0 || column < 0 || std::size_t(row) >= grid->rows() ||
+        std::size_t(column) >= grid->columns())
+        return;
+    const auto i = std::size_t(row) * grid->columns() + std::size_t(column);
+    if (!grid->finite(i)) {
         static_cast<Heatmap *>(heatmap_)->selected.reset();
         heatmap_->update();
         bridge_->setHead(false, {});
         emit inspected("Missing or nonfinite cell");
         return;
     }
-    const auto w = grid_->values[i];
+    const auto w = grid->values[i];
     static_cast<Heatmap *>(heatmap_)->selected = std::pair(row, column);
     heatmap_->update();
-    const auto h = SurfaceGeometry::height(w, complex_, height_);
-    if (std::isfinite(h) && (!logY_ || grid_->y[std::size_t(row)] > 0))
-        bridge_->setHead(true,
-                         position(grid_->x[std::size_t(column)],
-                                  (logY_ ? std::log10(grid_->y[std::size_t(row)]) : grid_->y[std::size_t(row)]),
-                                  h, bridge_->geometry.bounds()));
+    const auto h = SurfaceGeometry::height(w, request.complex, request.height);
+    if (std::isfinite(h) && (!request.logY || grid->y[std::size_t(row)] > 0))
+        bridge_->setHead(
+            true, position(grid->x[std::size_t(column)],
+                           (request.logY ? std::log10(grid->y[std::size_t(row)]) : grid->y[std::size_t(row)]),
+                           h, bridge_->geometry.bounds()));
     else
         bridge_->setHead(false, {});
     QString text = QString("row %1, column %2 | x=%3, y=%4 | ")
                        .arg(row)
                        .arg(column)
-                       .arg(grid_->x[std::size_t(column)], 0, 'g', 12)
-                       .arg(grid_->y[std::size_t(row)], 0, 'g', 12);
-    text += complex_
+                       .arg(grid->x[std::size_t(column)], 0, 'g', 12)
+                       .arg(grid->y[std::size_t(row)], 0, 'g', 12);
+    text += request.complex
                 ? QString("w=(%1, %2), |w|=%3, phase=%4")
                       .arg(w.real(), 0, 'g', 12)
                       .arg(w.imag(), 0, 'g', 12)

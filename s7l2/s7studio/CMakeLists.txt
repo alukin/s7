@@ -682,3 +682,9 @@ s7_add_test_executable(s7studio_time_frequency_test tests/time_frequency_test.cp
 target_link_libraries(s7studio_time_frequency_test PRIVATE s7studio_viewers)
 add_test(NAME s7studio_time_frequency COMMAND s7studio_time_frequency_test)
 set_tests_properties(s7studio_time_frequency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
+s7_add_test_executable(s7studio_display_worker_test tests/display_worker_test.cpp)
+target_link_libraries(s7studio_display_worker_test PRIVATE s7studio_analysis Qt6::Test)
+set_target_properties(s7studio_display_worker_test PROPERTIES AUTOMOC ON)
+add_test(NAME s7studio_display_worker COMMAND s7studio_display_worker_test)
+set_tests_properties(s7studio_display_worker PROPERTIES TIMEOUT 30)

@@ -6,18 +6,29 @@
 #include <QColor>
 #include <QImage>
 #include <QWidget>
+#include <functional>
 #include <memory>
 #include <optional>
 
 class QQuickWidget;
 namespace s7studio::viewers {
 enum class SurfaceHeight { Magnitude, Real, Imaginary, LogMagnitude };
+struct SurfaceMesh {
+    QByteArray vertices, indices;
+    TrajectoryBounds bounds;
+    std::size_t triangles = 0;
+    bool wireframe = false;
+};
 class SurfaceGeometry final : public QQuick3DGeometry {
     Q_OBJECT
   public:
     explicit SurfaceGeometry(QQuick3DObject *parent = nullptr) : QQuick3DGeometry(parent) {}
     void setGrid(const analysis::SurfaceGrid &grid, bool complex, SurfaceHeight mode, bool wireframe,
                  std::optional<TrajectoryBounds> fixed = {}, bool cyclicColors = false);
+    static SurfaceMesh prepare(const analysis::SurfaceGrid &grid, bool complex, SurfaceHeight mode,
+                               bool wireframe, std::optional<TrajectoryBounds> fixed = {},
+                               bool cyclicColors = false, const std::function<bool()> &canceled = {});
+    void apply(const SurfaceMesh &mesh);
     std::size_t triangleCount() const { return triangles_; }
     const TrajectoryBounds &bounds() const { return bounds_; }
     static double height(std::complex<double> value, bool complex, SurfaceHeight mode);
@@ -57,15 +68,22 @@ class SurfacePlotView final : public QWidget {
     void setViewRotation(QVector3D rotation) { bridge_->setViewRotation(rotation); }
     void selectCell(int row, int column);
     SurfaceBridge *bridge() const { return bridge_; }
+    bool isPreparing() const;
   signals:
     void inspected(const QString &text);
     void cellPicked(int row, int column);
+    void presentationReady();
 
   protected:
     void showEvent(QShowEvent *) override;
+    void hideEvent(QHideEvent *) override;
 
   private:
     void rebuild();
+    void submitPreparation();
+    void applyPrepared();
+    struct Work;
+    std::unique_ptr<Work> work_;
     bool complex_;
     bool compact_ = false;
     bool cyclicColors_ = false;
