@@ -14,6 +14,16 @@ settings and applies them before production; preview creation is read-only.
 `ObservationSource::tail` projects per-channel caches rather than replaying
 the full journal when a preview opens late. The source owns at most 4,096 cached
 records per channel in addition to its authoritative recording storage.
+Analysis previews are computed by the same headless spectral processors as the
+full windows. Time–frequency previews show an STFT magnitude map; response
+previews show measured impulse gain. For a completed recording of at most
+65,536 total records, a single bounded worker read preserves the entire
+interval, including early transients. Larger/running time–frequency captures
+use recent tails. Completed preview results are reused until their source or
+settings change; they do not reread the journal on each refresh.
+These are labeled default previews: STFT uses a periodic Hann window of up to
+256 samples and a 50% hop; the gain preview uses a dB reference of one. Full
+windows retain their independent transform and display controls.
 
 The separate [live oscilloscope prototype](LIVE_OSCILLOSCOPE_PROTOTYPE.md) uses a
 bounded acquisition source and does not journal live-only channels. The data-flow
@@ -284,8 +294,10 @@ multidimensional save/open are available. See [analysis testing](STUDIO_ANALYSIS
 ## Impulse frequency response
 
 `FrequencyResponse` observes a real input/output pair. After a complete record
-has loaded, **Analyze captured impulse** estimates the response in the shared
-analysis pool. The capture must contain exactly one nonzero input sample,
+has loaded, the highlighted **Analyze captured impulse** estimates the response
+in the shared analysis pool. Completed records of up to 8,192 pairs are analyzed
+automatically when their visible window is opened or their capture finishes.
+The capture must contain exactly one nonzero input sample,
 uniform gap-free model sampling and zero initial output. The current bound is
 65,536 pairs. The actual pulse height normalizes the response, preserving direct
 feedthrough and causal delay. No Hann taper or one-sided amplitude doubling is
@@ -294,7 +306,8 @@ are experiment assumptions, not properties inferred by the viewer.
 
 Bode gain/phase, Nyquist, Nichols and a frequency/Re/Im trajectory share a numeric
 frequency cursor. Bode uses the explicitly labelled coordinate log10(f / 1 Hz).
-Phase is wrapped, with curve breaks at wrapping; zero response has undefined
+Phase is unwrapped by default; disabling **Unwrap phase** shows principal phase
+with curve breaks at wrapping. Zero response has undefined
 phase. A positive explicit gain reference controls dB conversion. CSV export
 preserves frequency, complex values, pulse normalization and source provenance.
 The [impulse examples](../examples/frequency_response/README.md) exercise gain,
@@ -310,5 +323,12 @@ export. Result files store the original input, complex coefficients, coordinate
 arrays, validity and transform/run metadata. Import validates before replacing
 a displayed result. A heavy-job reservation prevents concurrent large matrices;
 rendering selects at most 513×513 cells while inspection/export retains full data.
+The blue **Analyze / freeze** action is the primary manual operation. Small
+completed captures (up to 8,192 samples) are analyzed automatically once their
+source history has loaded, using a conservative additional workload bound for
+CWT. Larger jobs stay manual; an empty-state message explains how to create the
+map. Automatic work runs on the shared pool, obeys visibility/cancellation, and
+does not recreate a display after Clear. A one-frame STFT remains visible as a
+heatmap band.
 See [time-frequency examples](../examples/time_frequency/README.md) and the
 [testing guide](STUDIO_ANALYSIS_TESTING.md) for normalization and limits.

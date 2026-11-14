@@ -1,7 +1,11 @@
 # Time–frequency laboratory
 
 Run **8 model seconds at 1024 Hz**, open `map` and select STFT or Morlet CWT.
-Use **Analyze / freeze** after capture completes, or Follow for rolling results.
+Small completed captures are analyzed automatically when the window opens (or
+the run finishes). Use the blue **Analyze / freeze** button for larger records
+or a new snapshot, or Follow for rolling results. The dock preview displays an
+actual STFT magnitude map; opening its full window adds transform controls and
+numeric inspection.
 CWT defaults to 32 logarithmically spaced frequencies over 2–100 Hz. The PLL
 example retains its original rate and **6-second** experiment; open `wavelet_map`.
 

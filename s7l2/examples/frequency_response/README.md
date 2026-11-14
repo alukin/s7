@@ -1,7 +1,9 @@
 # Impulse frequency-response laboratory
 
-Run each diagram for **2 model seconds at 1 kHz**. Open `response`, then click
-**Analyze captured impulse** after the source has finished loading. The input
+Run each diagram for **2 model seconds at 1 kHz**. Open `response`; these small
+completed records are analyzed automatically. The blue **Analyze captured impulse**
+button remains available for explicit analysis. The dock preview shows measured
+gain from the same impulse capture. The input
 is a one-sample pulse with area 1 (height 1000), delayed by 0.05 model seconds.
 Analysis divides the output by the actual pulse height and retains plant delay.
 Open the separate excitation and output scopes first: they show the causal

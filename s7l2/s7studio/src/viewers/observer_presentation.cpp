@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "observer_presentation.hpp"
+#include "analysis_preview.hpp"
 #include "line_plot_view.hpp"
 #include "trajectory_plot.hpp"
 #include "surface_plot.hpp"
@@ -37,6 +38,8 @@ QList<QPointF> reduce(const QList<QPointF>& points, int maximum) {
 }
 PreviewData preparePreview(const PreviewRequest& request)
 {
+    if (auto analysis = prepareAnalysisPreview(request))
+        return std::move(*analysis);
     PreviewData result; result.revision = request.revision;
     QVector<QVector<observation::Sample>> samples(request.descriptor.inputs.size());
     bool phase = request.descriptor.type == "PhasePortrait" || request.descriptor.type == "PhaseTrajectory3D";
@@ -216,7 +219,7 @@ ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent)
     setObjectName("observer.presentation"); auto* root = new QVBoxLayout(this); root->setContentsMargins(0, 0, 0, 0);
     // Dock previews need no more than 10 frames per second; full viewers keep their rate.
     constexpr int previewFrameIntervalMs = 100;
-    if (type == "Surface3D" || type == "ComplexSurface3D") { surface_=new SurfacePlotView(type=="ComplexSurface3D",this); surface_->setCompact(true); root->addWidget(surface_); }
+    if (type == "Surface3D" || type == "ComplexSurface3D" || type == "TimeFrequency") { surface_=new SurfacePlotView(type=="ComplexSurface3D",this); surface_->setCompact(true); if(type=="TimeFrequency")surface_->setPresentation(2); root->addWidget(surface_); }
     else if (type == "PhaseTrajectory3D") { trajectory_ = new ui::TrajectoryPlotView(this); trajectory_->bridge()->setAntialiased(false);
         trajectory_->setMinimumFrameInterval(previewFrameIntervalMs); root->addWidget(trajectory_); }
     else { line_ = new LinePlotView(this); line_->setLegendVisible(false); line_->bridge()->compactAxes = true; line_->setMinimumFrameInterval(previewFrameIntervalMs);
@@ -224,7 +227,7 @@ ObserverPresentation::ObserverPresentation(const QString& type, QWidget* parent)
         connect(line_, &LinePlotView::navigated, this, &ObserverPresentation::navigated); }
 }
 void ObserverPresentation::present(const PreviewData& data) {
-    if (surface_) { surface_->setGrid(data.surface); return; }
+    if (surface_) { if(!data.axes.empty())surface_->setAxes(data.axes); surface_->setGrid(data.surface); return; }
     if (trajectory_) {
         const auto bounds = TrajectoryBounds::of(data.trajectory); trajectory_->setAxisLabels(bounds, data.axes, true);
         trajectory_->bridge()->trajectoryGeometry().setTrajectory(data.trajectory, bounds, 1024);
@@ -247,7 +250,7 @@ void ObserverPresentation::present(const PreviewData& data) {
     }
     for (; i < line_->series().size(); ++i) LinePlotView::setPoints(line_->series()[i], {});
     for (; channel < isolated_.size(); ++channel) LinePlotView::setScatterPoints(isolated_[channel], {});
-    line_->setAxisTitles(type_ == "PhasePortrait" ? data.axes.value(0) : data.timeAxis, type_ == "PhasePortrait" ? data.axes.value(1) : "Value (supplied units)");
+    line_->setAxisTitles(type_ == "PhasePortrait" ? data.axes.value(0) : data.timeAxis, type_ == "PhasePortrait" || type_ == "FrequencyResponse" ? data.axes.value(1) : "Value (supplied units)");
     static_cast<void>(line_->fitAll());
     if (data.timeRange) line_->setXRange(data.timeRange->first, data.timeRange->second);
 }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "time_frequency_window.hpp"
+#include "analysis_action.hpp"
 #include "analysis/worker_pool.hpp"
 #include "line_plot_view.hpp"
 #include "surface_plot.hpp"
@@ -124,18 +125,22 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     controls->addWidget(new QLabel("CWT Hz", this));
     controls->addWidget(minimum_);
     controls->addWidget(maximum_);
-    auto *analyze = new QPushButton("Analyze / freeze", this);
-    analyze->setObjectName("timeFrequency.analyze");
-    connect(analyze, &QPushButton::clicked, this, [this] {
+    analyze_ = new QPushButton("Analyze / freeze", this);
+    analyze_->setObjectName("timeFrequency.analyze");
+    emphasizeAnalysisAction(*analyze_);
+    analyze_->setToolTip("Compute and freeze a time–frequency map from the captured samples.");
+    connect(analyze_, &QPushButton::clicked, this, [this] {
+        automaticAttempted_ = true;
         if (auto *tabs = findChild<QTabWidget *>("timeFrequency.views"))
             tabs->setCurrentIndex(0);
         follow_->setChecked(false);
-        result_.reset();
+        if (!imported_)
+            result_.reset();
         this->analyze();
     });
     root->addLayout(controls);
     auto *actions = new QHBoxLayout;
-    actions->addWidget(analyze);
+    actions->addWidget(analyze_);
     follow_ = new QCheckBox("Follow latest retained interval", this);
     actions->addWidget(follow_);
     auto *display = new QHBoxLayout;
@@ -211,9 +216,19 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     root->addLayout(inspectControls);
     auto *tabs = new QTabWidget(this);
     tabs->setObjectName("timeFrequency.views");
-    plot_ = new SurfacePlotView(false, tabs);
+    auto *mapPage = new QWidget(tabs);
+    auto *mapLayout = new QVBoxLayout(mapPage);
+    mapLayout->setContentsMargins(0, 0, 0, 0);
+    empty_ = new QLabel(mapPage);
+    empty_->setObjectName("timeFrequency.empty");
+    empty_->setAlignment(Qt::AlignCenter);
+    empty_->setWordWrap(true);
+    mapLayout->addWidget(empty_, 1);
+    plot_ = new SurfacePlotView(false, mapPage);
     plot_->setPresentation(2);
-    tabs->addTab(plot_, "Time–frequency map");
+    plot_->hide();
+    mapLayout->addWidget(plot_, 1);
+    tabs->addTab(mapPage, "Time–frequency map");
     trace_ = new LinePlotView(tabs);
     trace_->setObjectName("timeFrequency.inputTrace");
     trace_->setAxisTitles("Model time (s)", "Source value");
@@ -301,8 +316,12 @@ void TimeFrequencyWindow::setDroppedSampleCount(std::uint64_t count) {
 bool TimeFrequencyWindow::refreshSource() {
     if (imported_)
         return false;
+    if (automaticSource_.lock() != source()) {
+        automaticSource_ = source();
+        automaticAttempted_ = false;
+    }
     const auto more = ObservationViewer::refreshSource();
-    loaded_ = !more;
+    loaded_ = !more && !sourceStatusText().startsWith("INCOMPLETE");
     return more;
 }
 void TimeFrequencyWindow::clearSamples() {
@@ -317,6 +336,7 @@ void TimeFrequencyWindow::clearSamples() {
     previous_ = 0;
     loaded_ = false;
     pending_ = false;
+    automaticAttempted_ = true; // Clearing a presentation must not immediately recreate it.
     imported_ = false;
     error_.clear();
     result_.reset();
@@ -328,6 +348,7 @@ void TimeFrequencyWindow::clearSamples() {
     updateStatus();
 }
 void TimeFrequencyWindow::analyze() {
+    automaticAttempted_ = true;
     if (work_->running) {
         pending_ = true;
         ++work_->epoch;
@@ -506,17 +527,47 @@ void TimeFrequencyWindow::poll() {
     if (follow_->isChecked() && !samples_.empty() && !work_->running &&
         std::uint64_t(samples_.back().step) >= lastSubmitted_ + 512)
         analyze();
+    if (!automaticAttempted_ && !result_ && !work_->running && !pending_ && !imported_ &&
+        !follow_->isChecked() && error_.isEmpty() && loaded_ && source() &&
+        source()->status().finished && !source()->status().incomplete() && smallAutomaticJob())
+        analyze();
     updateStatus();
+}
+bool TimeFrequencyWindow::smallAutomaticJob() const {
+    if (samples_.size() < 2 || samples_.size() > 8192)
+        return false;
+    if (method_->currentIndex() == 0)
+        return samples_.size() >= std::size_t(window_->currentData().toInt());
+    const double dt = (samples_.back().time - samples_.front().time) / double(samples_.size() - 1);
+    const auto low = minimum_->value(), high = maximum_->value();
+    if (!(dt > 0) || !std::isfinite(dt) || !(low < high) || high >= .5 / dt || scales_->value() > 32)
+        return false;
+    // Keep automatic CWT jobs within the default 8k-sample / 16k-FFT workload.
+    const double half = std::ceil(24 / (2 * std::numbers::pi * low * dt));
+    return std::isfinite(half) && half < double(samples_.size()) / 2 &&
+           double(samples_.size()) + 2 * half <= 16384;
 }
 void TimeFrequencyWindow::updateStatus() {
     if (!status_)
         return;
+    const bool ready = error_.isEmpty() &&
+        ((result_ && !result_->input.empty()) || (!imported_ && loaded_ &&
+          samples_.size() >= (method_->currentIndex() == 0 ? std::size_t(window_->currentData().toInt()) : 2)));
+    analyze_->setEnabled(ready && !work_->running && !pending_);
+    analyze_->setText(work_->running ? "Analyzing…" : pending_ ? "Waiting to analyze…" : "Analyze / freeze");
+    empty_->setVisible(!result_);
+    plot_->setVisible(bool(result_));
+    empty_->setText(work_->running || pending_ ? "Preparing the time–frequency map…"
+        : !error_.isEmpty() ? "Analysis unavailable\n" + error_
+        : ready ? "Ready to create the map\nChoose the blue Analyze / freeze button above."
+        : loaded_ && !samples_.empty() ? "More samples needed for these settings\nChoose a smaller FFT size or capture a longer interval."
+                : "No captured data yet\nRun or open a recording. Small completed captures are analyzed automatically.");
     status_->setText(QString("%1 retained samples (limit 65536) | %2 | display ≤513×513; full-resolution "
                              "inspector/export | %3%4")
                          .arg(samples_.size())
                          .arg(work_->running ? "computing"
                               : result_      ? "frozen result; gray = edge/phase/overflow unavailable"
-                                             : "select method and analyze")
+                                             : "choose Analyze / freeze to create the map")
                          .arg(imported_ ? "Imported result; file provenance retained" : sourceStatusText())
                          .arg(error_.isEmpty() ? "" : " | " + error_));
 }

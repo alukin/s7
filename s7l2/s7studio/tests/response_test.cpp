@@ -35,10 +35,10 @@ int main(int argc, char **argv) {
             if (!source->finish())
                 throw std::runtime_error("Capture flush");
             s7studio::viewers::ResponseWindow viewer;
+            viewer.show();
             viewer.attachSource(source, {{"input", 0}, {"output", 1}});
             while (viewer.refreshSource()) {
             }
-            viewer.analyze();
             QElapsedTimer timer;
             timer.start();
             while (!viewer.hasResult() && viewer.error().isEmpty() && timer.elapsed() < 5000) {

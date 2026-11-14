@@ -2158,6 +2158,40 @@ private slots:
             QTRY_COMPARE(scope->recording().series().size(), liveCount);
         }
     }
+    void analysisOpensWithPlotsAndCachesPreview() {
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + "/time_frequency/impulse.s7diagram"));
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        auto* panel = window_->findChild<s7studio::ui::ObserversPanel*>(); QVERIFY(panel);
+        QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+        QVERIFY(configure("action.run", 8, 1024));
+        QTRY_VERIFY_WITH_TIMEOUT(!completed.empty(), 15000);
+        QVERIFY(completed.last().at(0).toBool());
+        auto* viewer = dynamic_cast<s7studio::viewers::TimeFrequencyWindow*>(manager->openObserver("TimeFrequency", "map"));
+        QVERIFY(viewer);
+        QTRY_VERIFY_WITH_TIMEOUT(viewer->hasResult(), 10000); // No Analyze button click.
+        QTRY_COMPARE(panel->activePresentations(), 1);
+        auto* presentation = panel->findChild<s7studio::viewers::ObserverPresentation*>(); QVERIFY(presentation);
+        auto* preview = presentation->findChild<s7studio::viewers::SurfacePlotView*>(); QVERIFY(preview);
+        auto* full = viewer->findChild<s7studio::viewers::SurfacePlotView*>(); QVERIFY(full);
+        QTRY_VERIFY(preview->bridge()->geometry.bounds().max[2] > 1);
+        QTRY_VERIFY(preview->bridge()->geometry.bounds().min[0] < 1 && preview->bridge()->geometry.bounds().max[0] > 7);
+        QVERIFY(std::abs(preview->bridge()->geometry.bounds().max[2] - full->bridge()->geometry.bounds().max[2]) < 1e-10);
+        const auto requests = panel->submittedRequests();
+        QTest::qWait(350);
+        QCOMPARE(panel->submittedRequests(), requests);
+        capture(viewer, "analysis-automatic-impulse-map");
+        capture(window_.get(), "analysis-measured-map-preview");
+        const auto previous = QApplication::palette();
+        const auto restore = qScopeGuard([previous] { QApplication::setPalette(previous); });
+        auto palette = previous;
+        palette.setColor(QPalette::Window, QColor("#eeeeee"));
+        palette.setColor(QPalette::WindowText, Qt::black);
+        palette.setColor(QPalette::Button, QColor("#eeeeee"));
+        palette.setColor(QPalette::ButtonText, Qt::black);
+        QApplication::setPalette(palette);
+        capture(viewer, "analysis-primary-action-light");
+    }
     // The run each bundled example's article documents; the rate is the
     // diagram's own 1/dt. Live-only demonstrations use a short run.
     static double documentedSeconds(const QString& path) {
@@ -2288,7 +2322,6 @@ private slots:
             }
             if (auto* map = dynamic_cast<s7studio::viewers::TimeFrequencyWindow*>(viewer)) {
                 while (map->refreshSource()) {}
-                map->analyze();
                 QTRY_VERIFY_WITH_TIMEOUT(map->hasResult() || !map->error().isEmpty(), 30000);
                 QVERIFY2(map->hasResult(), qPrintable(map->error()));
                 capture(map, base + '-' + name + "-STFT");
@@ -2298,7 +2331,6 @@ private slots:
             }
             if (auto* response = dynamic_cast<s7studio::viewers::ResponseWindow*>(viewer)) {
                 while (response->refreshSource()) {}
-                response->analyze();
                 QTRY_VERIFY_WITH_TIMEOUT(response->hasResult() || !response->error().isEmpty(), 10000);
                 QVERIFY2(response->hasResult(), qPrintable(response->error()));
             }

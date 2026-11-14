@@ -23,8 +23,9 @@ remain holes; zero complex values have undefined phase and gray color.
 ## Impulse responses and parameter surfaces
 
 Open `examples/frequency_response/gain.s7diagram`, `delay.s7diagram`, or
-`rc.s7diagram`. Run **2 seconds at 1 kHz** and open `response`. Click Analyze
-captured impulse, select frequencies, and compare Bode/Nyquist/Nichols/3D views.
+`rc.s7diagram`. Run **2 seconds at 1 kHz** and open `response`. Its small completed
+capture is analyzed automatically. Select frequencies and compare
+Bode/Nyquist/Nichols/3D views; the blue analysis button also permits explicit analysis.
 The Bode horizontal coordinate is explicitly log10(f / 1 Hz). Try the dB
 reference and result save/open. Gain should be 2.5; three explicit Delays should
 have unit magnitude and frequency-dependent phase.
@@ -51,6 +52,11 @@ in the metadata. X is frequency, Y is damping ratio and height is gain.
 Open `examples/time_frequency/tone.s7diagram`, `chirp.s7diagram`, or another
 laboratory example. Run **8 seconds at 1024 Hz**, open `map`, and analyze with
 STFT or Morlet CWT. The PLL copy retains its original rate and 6-second run.
+These small completed captures auto-analyze on opening or completion. Larger
+records show an explanation and a prominent blue **Analyze / freeze** action.
+Time–frequency previews display computed STFT maps, rather than raw input
+traces; response previews display measured gain. Completed small previews keep
+the whole interval, so the impulse example remains visible at 1.5 seconds.
 
 Try magnitude/squared magnitude/phase, STFT power/PSD, log frequency, 3D/wireframe, numeric
 inspection, the input trace and frequency slice. Gray edge regions are excluded
@@ -115,3 +121,12 @@ focused checks passed 3/3 in Debug, 4/4 in Release and 3/3 under Wine.
 The normal Debug launcher was also verified to load spectral, wavelet and noise
 plugins. Render captures and reports remain outside Git under
 `/tmp/s7-review-all` and `/tmp/s7-review-final-render`.
+
+Automatic-analysis/preview qualification (2026-11-14): full native suite
+112/112 passed; final focused Debug and Release checks each passed 3/3, and
+Windows/Wine viewer checks passed 2/2. The rendered late-open/preview-cache,
+chirp and RLC workflows passed 5 Qt Test cases without skips. The 8,192-sample
+CWT check took approximately 0.63 s in Debug and 0.17 s in Release on this
+machine, including presentation; these measurements are not timing guarantees.
+Local evidence is in `/tmp/s7-auto-analysis-full-tests.log`,
+`/tmp/s7-auto-analysis-final-gui`, and the corresponding focused test logs.

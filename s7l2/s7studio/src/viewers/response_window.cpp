@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 #include "response_window.hpp"
+#include "analysis_action.hpp"
 #include "analysis/result_file.hpp"
 #include "analysis/worker_pool.hpp"
 #include "line_plot_view.hpp"
@@ -74,6 +75,7 @@ ResponseWindow::ResponseWindow(const QString &name, QWidget *parent)
     auto *root = new QVBoxLayout(this);
     auto *controls = new QHBoxLayout;
     analyze_->setObjectName("response.analyze");
+    emphasizeAnalysisAction(*analyze_);
     controls->addWidget(analyze_);
     connect(analyze_, &QPushButton::clicked, this, &ResponseWindow::analyze);
     reference_->setDecimals(9);
@@ -223,8 +225,12 @@ void ResponseWindow::appendObservedSample(const ObservedSample &sample) {
 bool ResponseWindow::refreshSource() {
     if (imported_)
         return false;
+    if (automaticSource_.lock() != source()) {
+        automaticSource_ = source();
+        automaticAttempted_ = false;
+    }
     const bool more = ObservationViewer::refreshSource();
-    loaded_ = !more;
+    loaded_ = !more && !sourceStatusText().startsWith("INCOMPLETE");
     updateStatus();
     return more;
 }
@@ -233,6 +239,7 @@ void ResponseWindow::setDroppedSampleCount(std::uint64_t count) {
         error_ = "Incomplete capture cannot produce a frequency response";
 }
 void ResponseWindow::clearSamples() {
+    automaticAttempted_ = true;
     ++work_->epoch;
     {
         std::lock_guard lock(work_->mutex);
@@ -260,6 +267,7 @@ void ResponseWindow::updateStatus() {
         inspection_->setToolTip(
             "Display capped at 64 continuous segments; inspection/export retains all bins");
     analyze_->setEnabled(complete && error_.isEmpty() && samples_.size() > 1 && !work_->running);
+    analyze_->setText(work_->running ? "Analyzing…" : "Analyze captured impulse");
     status_->setText(QString("%1 paired samples | %2 | Assumes LTI, zero initial state and a sufficiently "
                              "decayed impulse tail. %3%4")
                          .arg(samples_.size())
@@ -272,6 +280,7 @@ void ResponseWindow::updateStatus() {
 void ResponseWindow::analyze() {
     if (!analyze_->isEnabled())
         return;
+    automaticAttempted_ = true;
     const double dt = (samples_.back()[2] - samples_.front()[2]) / double(samples_.size() - 1);
     if (!std::isfinite(dt) || dt <= 0) {
         error_ = "Invalid model-time sampling interval";
@@ -326,6 +335,9 @@ void ResponseWindow::poll() {
     if (!error.isEmpty())
         error_ = error;
     updateStatus();
+    if (!automaticAttempted_ && !result_ && isVisible() && !isMinimized() &&
+        samples_.size() <= 8192 && analyze_->isEnabled())
+        analyze();
 }
 void ResponseWindow::draw() {
     for (std::size_t p = 0; p < plots_.size(); ++p) {

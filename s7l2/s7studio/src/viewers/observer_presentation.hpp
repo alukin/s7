@@ -24,6 +24,8 @@ struct PreviewData {
     QVector<Trace> traces;
     QList<TrajectoryPoint> trajectory;
     std::shared_ptr<const analysis::SurfaceGrid> surface;
+    std::optional<observation::SourceStatus> capture;
+    std::weak_ptr<const observation::ObservationSource> captureSource;
     QStringList axes, details;
     QString status, summary;
     QString timeAxis = "Model time (s; recent interval)";

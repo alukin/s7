@@ -271,6 +271,16 @@ void ObserversPanel::refresh()
             if (card->details->isVisible()) card->details->setPlainText(card->last->status+"\n"+card->last->details.join('\n'));
         }
         if (card->freeze->isChecked()) continue;
+        if (card->last && card->last->capture && card->last->capture->finished &&
+            card->last->revision == card->revision && manager_->source() &&
+            card->last->captureSource.lock() == manager_->source() &&
+            card->last->run == manager_->source()->runId()) {
+            const auto state = manager_->source()->status();
+            const auto &old = *card->last->capture;
+            if (state.finished && state.samples == old.samples && state.captureDropped == old.captureDropped &&
+                state.stopped == old.stopped && state.storageError == old.storageError && state.runError == old.runError)
+                continue;
+        }
         PreviewRequest request{*binding, selectedChannels(card->selection, static_cast<int>(binding->inputs.size())), manager_->source(), manager_->liveSource(card->id), manager_->observerTrigger(card->id), card->revision};
         card->worker.submit(std::move(request)); ++submitted_;
     }

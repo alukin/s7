@@ -13,6 +13,7 @@ class QSpinBox;
 class QDoubleSpinBox;
 class QCheckBox;
 class QScatterSeries;
+class QPushButton;
 namespace s7studio::viewers {
 class SurfacePlotView;
 class LinePlotView;
@@ -41,6 +42,7 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     void inspect(int row, int column);
     void chooseInspection(double time, std::optional<double> frequency = {});
     void updateStatus();
+    bool smallAutomaticJob() const;
     struct Work;
     std::shared_ptr<Work> work_;
     std::shared_ptr<const analysis::ResultFile> result_;
@@ -52,9 +54,13 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     std::int64_t previous_ = 0;
     bool loaded_ = false, imported_ = false;
     bool pending_ = false;
+    bool automaticAttempted_ = false;
+    std::weak_ptr<const observation::ObservationSource> automaticSource_;
     QString error_, unit_;
     QLabel *status_;
     QLabel *inspection_;
+    QLabel *empty_;
+    QPushButton *analyze_;
     QComboBox *method_;
     QComboBox *quantity_;
     QComboBox *window_;

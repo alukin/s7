@@ -440,7 +440,8 @@ void SurfacePlotView::rebuild() {
             for (int px = 0; px < 513; ++px) {
                 const auto x = b.min[0] + (b.max[0] - b.min[0]) * px / 512,
                            y = b.max[1] - (b.max[1] - b.min[1]) * py / 512;
-                if (x < g.x.front() || x > g.x.back() || y < g.y.front() || y > g.y.back())
+                if ((g.columns() > 1 && (x < g.x.front() || x > g.x.back())) ||
+                    (g.rows() > 1 && (y < g.y.front() || y > g.y.back())))
                     continue;
                 const auto c = nearest(g.x, x), r = nearest(g.y, y);
                 const auto i = r * g.columns() + c;

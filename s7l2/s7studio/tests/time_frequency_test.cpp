@@ -9,6 +9,8 @@
 #include <QElapsedTimer>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
+#include <QLabel>
+#include <QPushButton>
 #include <QtGraphs/QLineSeries>
 #include <QFile>
 #include <QTemporaryDir>
@@ -29,9 +31,10 @@ int main(int argc, char **argv) {
     try {
         QTemporaryDir directory;
         require(directory.isValid(), "Temporary directory");
-        for (int kind = 0; kind < 3; ++kind) {
-            const bool wavelet = kind == 1, impulse = kind == 2;
-            const int rate = impulse ? 1024 : 256, count = impulse ? 8192 : 2048;
+        for (int kind = 0; kind < 5; ++kind) {
+            const bool wavelet = kind == 1 || kind == 3, impulse = kind == 2;
+            const int rate = kind == 2 || kind == 3 ? 1024 : 256,
+                      count = kind == 4 ? 256 : kind >= 2 ? 8192 : 2048;
             auto source = std::make_shared<s7studio::observation::ObservationSource>(123);
             source->channel("map/in");
             for (int n = 0; n < count; ++n)
@@ -46,7 +49,8 @@ int main(int argc, char **argv) {
             window.attachSource(source, {{"in", 0}});
             while (window.refreshSource()) {
             }
-            window.analyze();
+            auto *analyze = window.findChild<QPushButton *>("timeFrequency.analyze");
+            require(analyze && analyze->styleSheet().contains("#1565c0"), "Prominent analysis action");
             QElapsedTimer timer;
             timer.start();
             while (!window.hasResult() && window.error().isEmpty() && timer.elapsed() < 10000) {
@@ -55,6 +59,19 @@ int main(int argc, char **argv) {
                 QThread::msleep(5);
             }
             require(window.hasResult(), window.error().toUtf8().constData());
+            std::cout << "Automatic " << (wavelet ? "CWT" : "STFT") << " for " << count
+                      << " samples: " << timer.elapsed() << " ms including presentation\n";
+            require(!window.findChild<QLabel *>("timeFrequency.empty")->isVisible(), "Hide empty-state guidance after automatic analysis");
+            if (kind == 4) {
+                const auto image = window.findChild<QWidget *>("surface.heatmap")->grab().toImage();
+                int red = 0;
+                for (int y = 0; y < image.height(); ++y)
+                    for (int x = 0; x < image.width(); ++x) {
+                        const auto color = image.pixelColor(x, y);
+                        red += color.red() > 200 && color.green() < 100 && color.blue() < 100;
+                    }
+                require(red > 1000, "A single FFT frame must display its real coefficients as a heatmap band");
+            }
             if (!wavelet && !impulse) {
                 auto *quantity = window.findChild<QComboBox *>("timeFrequency.quantity");
                 require(quantity, "Quantity control");
@@ -100,6 +117,8 @@ int main(int argc, char **argv) {
             require(csv.values == saved.values && csv.valid == saved.valid, "Coefficient CSV round-trip");
             window.clearSamples();
             require(!window.hasResult(), "Clear result");
+            window.poll();
+            require(!window.hasResult(), "Clear must not immediately restart automatic analysis");
             window.openResult(path);
             require(window.hasResult(), "Open result");
             QFile bad(directory.filePath("bad.s7analysis"));
@@ -136,6 +155,21 @@ int main(int argc, char **argv) {
             }
             saved.csv(directory.filePath("map.csv"));
             require(QFile::exists(directory.filePath("map.csv")), "CSV export");
+        }
+        {
+            auto source = std::make_shared<s7studio::observation::ObservationSource>(124);
+            source->channel("map/in");
+            for (int n = 0; n < 8193; ++n)
+                require(source->append({0, n + 1, double(n + 1) / 1024, std::sin(.1 * n)}), "Long capture");
+            require(source->finish(), "Long capture finish");
+            s7studio::viewers::TimeFrequencyWindow window;
+            window.show();
+            window.attachSource(source, {{"in", 0}});
+            while (window.refreshSource()) {}
+            window.poll();
+            require(!window.hasResult(), "Long recordings require explicit analysis");
+            require(window.findChild<QPushButton *>("timeFrequency.analyze")->isEnabled(), "Long recording primary action enabled");
+            require(window.findChild<QLabel *>("timeFrequency.empty")->isVisible(), "Explain the empty map for manual analysis");
         }
         std::cout << "Time-frequency capture, workers, save/open and rollback passed\n";
     } catch (const std::exception &e) {

@@ -4,6 +4,7 @@
 #include "viewers/viewer_manager.hpp"
 #include "viewers/viewer_registry.hpp"
 #include "viewers/line_plot_view.hpp"
+#include "viewers/surface_plot.hpp"
 #include "live_oscilloscope_window.hpp"
 #include "analysis/worker_pool.hpp"
 #include "diagram/diagram_scene.hpp"
@@ -37,6 +38,48 @@ ObserverDescriptor scope(int count = 1) {
 class ObserverPresentationsTest : public QObject {
     Q_OBJECT
 private slots:
+    void analysisPreviewsUseCapturedValues() {
+        auto source = std::make_shared<observation::ObservationSource>(17);
+        const auto input = source->channel("map/in");
+        for (int n = 0; n < 8192; ++n)
+            QVERIFY(source->append({input, n + 1, double(n + 1) / 1024, n == 1535 ? 1024. : 0.}));
+        QVERIFY(source->finish());
+        ObserverDescriptor descriptor{"map", "TimeFrequency", {{"map/in", "V", "pulse", 0}}};
+        const auto result = preparePreview({descriptor, {0}, source});
+        QVERIFY2(result.surface, qPrintable(result.status));
+        QCOMPARE(result.rawPositions, std::size_t(8192));
+        QVERIFY(result.summary.startsWith("STFT magnitude"));
+        QVERIFY(result.surface->x.front() < 1.5 && result.surface->x.back() > 1.5);
+        double peak = 0, time = 0;
+        for (std::size_t i = 0; i < result.surface->values.size(); ++i)
+            if (result.surface->values[i].real() > peak) {
+                peak = result.surface->values[i].real();
+                time = result.surface->x[i % result.surface->columns()];
+            }
+        QVERIFY(peak > 0);
+        QVERIFY(std::abs(time - 1.5) < .125);
+        ObserverPresentation presentation("TimeFrequency"); presentation.present(result);
+        QVERIFY(presentation.findChild<SurfacePlotView*>());
+        QVERIFY(!presentation.linePlot());
+        QCOMPARE(source->status().samples, std::uint64_t(8192));
+
+        auto response = std::make_shared<observation::ObservationSource>(18);
+        response->channel("response/input"); response->channel("response/output");
+        for (int n = 0; n < 1024; ++n) {
+            const double value = n == 10 ? 1024. : 0.;
+            QVERIFY(response->append({0,n+1,double(n+1)/1024,value}));
+            QVERIFY(response->append({1,n+1,double(n+1)/1024,2.5*value}));
+        }
+        QVERIFY(response->finish());
+        ObserverDescriptor gain{"response", "FrequencyResponse", {{"response/input", "V", "input", 0},{"response/output", "V", "gain", 0}}};
+        const auto measured = preparePreview({gain,{0,1},response});
+        QVERIFY2(!measured.traces.empty(), qPrintable(measured.status));
+        for (const auto& point : measured.traces.front().segments.front())
+            QVERIFY(std::abs(point.y()-20*std::log10(2.5)) < 1e-10);
+        std::reverse(gain.inputs.begin(), gain.inputs.end());
+        const auto reordered = preparePreview({gain,{0,1},response});
+        QCOMPARE(reordered.traces.front().segments, measured.traces.front().segments);
+    }
     void sparseTailsDoNotReadTheJournal() {
         QTemporaryDir temporary; QVERIFY(temporary.isValid()); CountedBuffer* storage = nullptr;
         observation::StorageOptions options{3, temporary.path(), [&] { auto buffer = std::make_unique<CountedBuffer>(); storage = buffer.get(); buffer->open(QIODevice::ReadWrite); return buffer; }, {}};

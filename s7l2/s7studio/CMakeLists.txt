@@ -126,6 +126,8 @@ target_link_libraries(s7studio_analysis PUBLIC s7studio_observation PRIVATE ${S7
 s7_enable_project_warnings(s7studio_analysis)
 
 add_library(s7studio_viewers STATIC
+    src/viewers/analysis_action.hpp
+    src/viewers/analysis_preview.cpp src/viewers/analysis_preview.hpp
     src/viewers/time_frequency_window.cpp src/viewers/time_frequency_window.hpp
     src/viewers/response_window.cpp src/viewers/response_window.hpp
     src/viewers/surface_plot.cpp src/viewers/surface_plot.hpp

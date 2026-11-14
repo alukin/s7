@@ -53,6 +53,8 @@ class ResponseWindow final : public QWidget, public ObservationViewer {
     std::int64_t previousStep_ = 0;
     bool loaded_ = false;
     bool imported_ = false;
+    bool automaticAttempted_ = false;
+    std::weak_ptr<const observation::ObservationSource> automaticSource_;
     QJsonObject importedMetadata_;
     bool phaseTruncated_ = false;
     QString error_, inputUnit_, outputUnit_;
