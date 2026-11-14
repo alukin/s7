@@ -476,8 +476,11 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
     set_target_properties(s7studio_gui_quick_test PROPERTIES AUTOMOC ON)
     foreach(suite workflows lineplot trajectory)
         set(gui_args)
+        set(gui_timeout 120)
         if(suite STREQUAL "workflows")
             set(gui_target s7studio_gui_workflows_test)
+            # Includes the viewer open/close/quit and unchanged-run matrix.
+            set(gui_timeout 150)
         else()
             set(gui_target s7studio_gui_quick_test)
             list(APPEND gui_args -input "${CMAKE_CURRENT_SOURCE_DIR}/tests/gui/qml/tst_${suite}.qml")
@@ -489,7 +492,7 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
         add_test(NAME s7studio_gui_${suite}
             COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
                 --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/${suite}"
-                --capture $<TARGET_FILE:s7studio_gui_capture> ${graphics_args}
+                --capture $<TARGET_FILE:s7studio_gui_capture> --timeout ${gui_timeout} ${graphics_args}
                 -- $<TARGET_FILE:${gui_target}> ${gui_args})
         set_tests_properties(s7studio_gui_${suite} PROPERTIES
             LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)

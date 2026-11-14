@@ -2018,6 +2018,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     runtimeSecondsSpin->setSingleStep(0.1);
     runtimeSecondsSpin->setSpecialValueText(QStringLiteral("-1 (continuous)"));
     runtimeSecondsSpin->setValue(std::clamp(document_.runtimeSeconds(), -1.0, 604800.0));
+    const double initialDisplayedDuration = runtimeSecondsSpin->value();
 
     auto* continuous = new QCheckBox(QStringLiteral("Run continuously until stopped"), &dialog);
     continuous->setObjectName(QStringLiteral("run.continuous"));
@@ -2047,6 +2048,7 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
     frequencySpin->setRange(0.001, 1'000'000.0);
     frequencySpin->setSingleStep(10.0);
     frequencySpin->setValue(std::max(0.001, document_.frequencyHz()));
+    const double initialDisplayedFrequency = frequencySpin->value();
     frequencySpin->setSuffix(QStringLiteral(" Hz"));
 
     auto* dtLabel = new QLabel(&dialog);
@@ -2105,14 +2107,19 @@ auto MainWindow::configureRun(const bool launchAfterAccept) -> bool
         return false;
     }
 
-    document_.setRuntimeSeconds(runtimeSecondsSpin->value());
+    // Merely accepting the dialog must preserve the saved values, including
+    // precision beyond the spin boxes, and must not materialize library schemas
+    // into the editable graph. Runtime preparation configures its own snapshot.
+    if (runtimeSecondsSpin->value() != initialDisplayedDuration)
+        document_.setRuntimeSeconds(runtimeSecondsSpin->value());
     document_.setClearScopesBeforeRun(!clearSamplesCheck->isChecked());
     if (overlayScopeTracesAction_ && overlayScopeTracesAction_->isChecked() == document_.clearScopesBeforeRun()) {
         const QSignalBlocker blocker(overlayScopeTracesAction_);
         overlayScopeTracesAction_->setChecked(!document_.clearScopesBeforeRun());
     }
 
-    applyDiscretizationFrequency(frequencySpin->value());
+    if (frequencySpin->value() != initialDisplayedFrequency)
+        applyDiscretizationFrequency(frequencySpin->value());
     setWindowModified(documentModified());
 
     if (launchAfterAccept) {
@@ -2180,7 +2187,7 @@ void MainWindow::launchRunWithCurrentConfiguration()
 
 void MainWindow::applyDiscretizationFrequency(const double frequencyHz)
 {
-    if (frequencyHz <= 0.0) {
+    if (frequencyHz <= 0.0 || frequencyHz == document_.frequencyHz()) {
         return;
     }
 

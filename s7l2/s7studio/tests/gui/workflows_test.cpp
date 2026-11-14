@@ -2782,6 +2782,100 @@ private slots:
         action("action.undo")->trigger();
         QVERIFY(scene()->elementNode("state")->element().type == "SymplecticIntegrator");
     }
+    void analysisViewerDoesNotModifyDiagram_data() {
+        QTest::addColumn<QString>("diagram");
+        QTest::addColumn<QString>("type");
+        QTest::addColumn<QString>("id");
+        QTest::addColumn<bool>("doubleClick");
+        QTest::addColumn<bool>("runFirst");
+        for (bool run : {false, true}) for (bool click : {false, true}) {
+            const auto suffix = QString(click ? "-double-click" : "-open") + (run ? "-after-run" : "");
+            QTest::newRow(qPrintable(QString("time-frequency") + suffix)) << "time_frequency/impulse.s7diagram" << "TimeFrequency" << "map" << click << run;
+            QTest::newRow(qPrintable(QString("response") + suffix)) << "frequency_response/rlc.s7diagram" << "FrequencyResponse" << "response" << click << run;
+            QTest::newRow(qPrintable(QString("surface") + suffix)) << "surfaces/saddle.s7diagram" << "Surface3D" << "surface" << click << run;
+            QTest::newRow(qPrintable(QString("complex") + suffix)) << "complex_functions/inverse.s7diagram" << "ComplexSurface3D" << "surface" << click << run;
+            QTest::newRow(qPrintable(QString("scope") + suffix)) << "2int_osc.s7diagram" << "Scope" << "scope_1" << click << run;
+            QTest::newRow(qPrintable(QString("live") + suffix)) << "2int_osc_live.s7diagram" << "LiveOscilloscope" << "live_1" << click << run;
+        }
+    }
+    void analysisViewerDoesNotModifyDiagram() {
+        QFETCH(QString, diagram); QFETCH(QString, type); QFETCH(QString, id); QFETCH(bool, doubleClick); QFETCH(bool, runFirst);
+        QVERIFY(fileAction("action.open", QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram));
+        QVERIFY(!window_->documentModified());
+        const auto original = window_->currentDocument();
+        if (runFirst) {
+            auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+            QSignalSpy completed(runner, &s7studio::LocalSchemaRunner::runCompleted);
+            QVERIFY(dialogAction("action.run", [](QDialog* dialog) {
+                auto* buttons = dialog->findChild<QDialogButtonBox*>();
+                if (!buttons) return false;
+                buttons->button(QDialogButtonBox::Ok)->click(); return true;
+            }));
+            QTRY_VERIFY_WITH_TIMEOUT(!completed.empty(), 15000);
+            QVERIFY(completed.last().at(0).toBool());
+        }
+        auto* manager = window_->findChild<s7studio::viewers::ViewerManager*>(); QVERIFY(manager);
+        if (doubleClick) {
+            action("action.fitDiagram")->trigger();
+            auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+            const auto node = scene()->elementNode(id.toStdString()); QVERIFY(node);
+            QTest::mouseDClick(view->viewport(), Qt::LeftButton, {}, view->mapFromScene(node->sceneBoundingRect().center()));
+        } else manager->openObserver(type, id);
+        auto* viewer = manager->find(type, id); QVERIFY(viewer);
+        QTRY_VERIFY(viewer->widget()->isVisible());
+        viewer->widget()->close();
+        QTRY_VERIFY(!viewer->widget()->isVisible());
+        QTest::qWait(200);
+        if (window_->currentDocument() != original) {
+            QFile baseline(artifacts_ + '/' + QString::fromLatin1(QTest::currentDataTag()) + "-before.json");
+            QVERIFY(baseline.open(QIODevice::WriteOnly));
+            baseline.write(QByteArray::fromStdString(boost::json::serialize(original)));
+        }
+        QCOMPARE(window_->currentDocument(), original);
+        QVERIFY(!window_->documentModified());
+        bool prompted = false;
+        QTimer dismiss;
+        dismiss.setInterval(10);
+        connect(&dismiss, &QTimer::timeout, this, [&] {
+            if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+                prompted = true; box->done(QMessageBox::Cancel);
+            }
+        });
+        dismiss.start();
+        const bool closed = window_->close();
+        dismiss.stop();
+        QVERIFY(!prompted); QVERIFY(closed); QVERIFY(!window_->isVisible());
+    }
+    void unchangedRunConfigurationPreservesPrecision() {
+        QFile source(QString(S7_GUI_EXAMPLES_DIR) + "/time_frequency/impulse.s7diagram");
+        QVERIFY(source.open(QIODevice::ReadOnly));
+        auto document = boost::json::parse(source.readAll().toStdString()).as_object();
+        document["dt"] = .00003;
+        document["studio_run"] = boost::json::object{{"runtime_seconds", .123456789123}, {"clear_scope_traces", true}};
+        const auto path = temporary_.filePath("precise-run.s7diagram");
+        QFile file(path); QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QByteArray::fromStdString(boost::json::serialize(document))); file.close();
+        QVERIFY(fileAction("action.open", path));
+        const auto original = window_->currentDocument();
+        QVERIFY(!window_->documentModified());
+        const auto accept = [](QDialog* dialog) {
+            auto* buttons = dialog->findChild<QDialogButtonBox*>();
+            if (!buttons) return false;
+            buttons->button(QDialogButtonBox::Ok)->click(); return true;
+        };
+        QVERIFY(dialogAction("action.runConfiguration", accept));
+        QCOMPARE(window_->currentDocument(), original);
+        QVERIFY(!window_->documentModified());
+        QVERIFY(dialogAction("action.runConfiguration", [](QDialog* dialog) {
+            dialog->findChild<QDoubleSpinBox*>("run.frequency")->setValue(2000);
+            dialog->findChild<QDoubleSpinBox*>("run.duration")->setValue(.25);
+            dialog->findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok)->click(); return true;
+        }));
+        QVERIFY(window_->documentModified());
+        const auto edited = window_->currentDocument().as_object();
+        QCOMPARE(edited.at("dt").to_number<double>(), .0005);
+        QCOMPARE(edited.at("studio_run").at("runtime_seconds").to_number<double>(), .25);
+    }
     void unsavedCloseChoices_data() {
         QTest::addColumn<int>("choice");
         QTest::newRow("save") << int(QMessageBox::Save);
