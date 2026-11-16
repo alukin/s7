@@ -5,7 +5,7 @@
   "diagram_version": 2,
   "sheet": {
     "orientation": "landscape",
-    "width_mm": 297.0,
+    "width_mm": 490.0,
     "height_mm": 210.0
   },
   "schema": {
@@ -176,7 +176,7 @@
       {
         "id": "theta1",
         "position": [
-          35,
+          49,
           7
         ],
         "title": "Angle 1 (rad)"
@@ -184,7 +184,7 @@
       {
         "id": "omega1",
         "position": [
-          49,
+          63,
           7
         ],
         "title": "Angular velocity 1 (rad/s)"
@@ -192,7 +192,7 @@
       {
         "id": "theta2",
         "position": [
-          35,
+          49,
           25
         ],
         "title": "Angle 2 (rad)"
@@ -200,7 +200,7 @@
       {
         "id": "omega2",
         "position": [
-          49,
+          63,
           25
         ],
         "title": "Angular velocity 2 (rad/s)"
@@ -211,7 +211,7 @@
           7,
           12
         ],
-        "title": "-2g \u00d7 \u03b81"
+        "title": "-2g × θ1"
       },
       {
         "id": "theta1_accel_from_theta2",
@@ -219,7 +219,7 @@
           21,
           12
         ],
-        "title": "g \u00d7 \u03b82"
+        "title": "g × θ2"
       },
       {
         "id": "theta1_acceleration",
@@ -227,7 +227,7 @@
           35,
           12
         ],
-        "title": "\u03b81 acceleration"
+        "title": "θ1 acceleration"
       },
       {
         "id": "theta2_accel_from_theta1",
@@ -235,7 +235,7 @@
           7,
           29
         ],
-        "title": "2g \u00d7 \u03b81"
+        "title": "2g × θ1"
       },
       {
         "id": "theta2_accel_from_theta2",
@@ -243,7 +243,7 @@
           21,
           29
         ],
-        "title": "-2g \u00d7 \u03b82"
+        "title": "-2g × θ2"
       },
       {
         "id": "theta2_acceleration",
@@ -251,12 +251,12 @@
           35,
           29
         ],
-        "title": "\u03b82 acceleration"
+        "title": "θ2 acceleration"
       },
       {
         "id": "scope_angles",
         "position": [
-          64,
+          76,
           16
         ],
         "observer": true,
@@ -532,7 +532,7 @@
           2
         ],
         "params": {
-          "text": "SMALL-ANGLE DOUBLE PENDULUM (m1=m2=l1=l2=1, g=9.81)\nLinearized equations: \u03b81\u2033 = -2g\u00b7\u03b81 + g\u00b7\u03b82; \u03b82\u2033 = 2g\u00b7\u03b81 - 2g\u00b7\u03b82.\nEuler step: 1 ms. Initial angles: \u03b81=0.2 rad, \u03b82=0.1 rad. Scope plots both angles.\nThis is the small-angle linear model; the full nonlinear equations require signal division.",
+          "text": "SMALL-ANGLE DOUBLE PENDULUM (m1=m2=l1=l2=1, g=9.81)\nLinearized equations: θ1″ = -2g·θ1 + g·θ2; θ2″ = 2g·θ1 - 2g·θ2.\nEuler step: 1 ms. Initial angles: θ1=0.2 rad, θ2=0.1 rad. Scope plots both angles.\nThis is the small-angle linear model; the full nonlinear equations require signal division.",
           "text_color": "#202020",
           "line_color": "#58738a",
           "fill_color": "#eef6fb",

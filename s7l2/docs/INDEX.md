@@ -9,6 +9,8 @@ The language-neutral documentation (vision, formal model, architecture, terminol
 [Studio user guide](STUDIO_USER_GUIDE.md) and
 [bundled example descriptions](STUDIO_EXAMPLES.md) are also available offline
 inside Studio through **Help → S7 Studio Help** (F1).
+The [complete examples index](../examples/README.md) links all bundled diagrams
+and their experiment guides.
 
 The [0.1.2 preview notes](RELEASE_0.1.2_NOTES.md) summarize the current
 release scope, verified checks and known limits. The

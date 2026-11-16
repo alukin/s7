@@ -1,5 +1,8 @@
 # Bundled examples
 
+For direct links to every diagram, see the
+[complete examples index](../examples/README.md).
+
 Choose a model below with **File → Example Diagrams…**, or open a saved
 `.s7diagram` with **File → Open Diagram…**. Set Run
 Configuration as described in its article, and double-click the named observer
@@ -52,9 +55,10 @@ are explicit integrator and function/state networks.
 
 ## Reference and integrator laboratories
 
-- [Linear response](../examples/linear/README.md): ten diagrams comparing Euler
-  and Euler–Cromer blocks for RC charge/discharge, RLC step/resonance and a
-  mass–spring–damper release. Default parameters are qualified at 1 and 2 kHz;
+- [Linear response](../examples/linear/README.md): thirteen diagrams comparing
+  Euler, Euler–Cromer and selected Gauss blocks for RC charge/discharge, RLC
+  step/resonance and a mass–spring–damper release. Default parameters are
+  qualified at 1 and 2 kHz;
   run 10 seconds, or 30 seconds for resonance. Watch settling, overshoot and
   timestep refinement against analytical solutions.
 - [Nonlinear single pendulum](../examples/pendulum/README.md): three methods
@@ -140,9 +144,15 @@ square, inverse and rational functions with phase coloring. Run at 1 kHz for
 5 model seconds and open the surface observer.
 
 The [impulse frequency-response laboratory](../examples/frequency_response/README.md)
-provides gain, delay and RC experiments. Run for 2 seconds at 1 kHz, open the
-response observer and analyze the completed impulse capture to inspect linked
+provides gain, delay, RC, RLC and mass–spring–damper experiments. Run for 2
+seconds at the diagram's saved rate, open the response observer and analyze the
+completed impulse capture to inspect linked
 Bode, Nyquist, Nichols and 3D views.
+
+The [time–frequency laboratory](../examples/time_frequency/README.md) has eight
+STFT/Morlet CWT diagrams for tones, transients, resonance and PLL acquisition.
+Open the map observer and analyze a completed capture or follow a bounded live
+window; the family guide gives rates and expected ridges.
 
 The [analysis-element examples](../examples/analysis_elements/README.md) exercise
 Fourier and causal wavelet coefficients inside the graph using their optional
