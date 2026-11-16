@@ -6,6 +6,28 @@ Evolving architecture proposal. The data plane (wire format v1, lossless streams
 
 This document defines module boundaries and runtime transport responsibilities for distributed S7 execution.
 
+## Implemented control admission and identity
+
+The Beast endpoint admits one queued or executing control handler per inbound
+connection. Pipelining another request while its handler is busy closes the
+connection. `TransportLimits` defaults to 64 pending handlers globally and
+16 MiB each for pending request bytes and queued response bytes. Each message
+also obeys the 4 MiB control-message limit. Overload closes the connection;
+queued work belonging to a disconnected peer is discarded. Shutdown drains
+handlers while the I/O loop remains available for their completion.
+
+Outbound requests are serialized. A request timeout retires its connection
+before allowing reuse, and the connection is re-established with backoff.
+The deployment requester binds its expected node UUID to the connection and
+checks the certificate identity on every TLS handshake, including reconnects.
+
+The runtime peer directory defaults to 256 entries, with a maximum configurable
+capacity of 1024 through `ControlPlaneOptions`. Discovery hints expire after
+24 hours by default; configured seeds retain their slots. Endpoint and metadata
+strings are limited to 1 KiB each and an announcement's `self` object to 8 KiB.
+A full directory rejects new hints with `RESOURCE_LIMIT`. Persisted hints carry
+their expiry, and directory loading enforces the same capacity and size bounds.
+
 ---
 
 ## Goals

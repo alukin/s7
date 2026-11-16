@@ -5,6 +5,7 @@
 
 #include "diagram/diagram_scene.hpp"
 #include "diagram/element_ports.hpp"
+#include "diagram/diagram_geometry.hpp"
 #include "diagram/net_model.hpp"
 #include "json_utils.hpp"
 
@@ -46,8 +47,10 @@ auto gridPoint(const boost::json::value& value, const std::string& what) -> QPoi
     if (!value.is_array() || value.as_array().size() != 2 || !value.as_array()[0].is_number() || !value.as_array()[1].is_number()) {
         throw error(what + " must be [x, y] in grid steps");
     }
-    return {static_cast<int>(std::lround(json_utils::numberValue(value.as_array()[0]))),
-            static_cast<int>(std::lround(json_utils::numberValue(value.as_array()[1])))};
+    const double x = json_utils::numberValue(value.as_array()[0]), y = json_utils::numberValue(value.as_array()[1]);
+    if (!std::isfinite(x) || !std::isfinite(y) || std::abs(x) > kMaxDiagramGridCoordinate || std::abs(y) > kMaxDiagramGridCoordinate)
+        throw error(what + " exceeds the supported diagram grid extent");
+    return {static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y))};
 }
 
 auto scenePoint(const QPoint grid) -> QPointF

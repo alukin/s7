@@ -48,6 +48,28 @@ std::filesystem::path make_temp_state_dir(const std::string& label)
 int main()
 {
     {
+        const auto dir = make_temp_state_dir("bounded-peers");
+        s7::ControlPlaneOptions options; options.storage_dir = dir; options.max_peers = 2;
+        options.peer_hint_ttl = std::chrono::seconds(1);
+        s7::ControlPlane plane({}, options);
+        plane.add_seed_peer("ws://seed:9000");
+        auto announce = [&](const std::string& endpoint) {
+            return boost::json::parse(plane.handle_request_json({}, boost::json::serialize(boost::json::object{
+                {"type", "PEER_ANNOUNCE"}, {"request_id", "bounded-announce"}, {"protocol_version", 1}, {"self", {{"endpoint", endpoint}}}}))).as_object();
+        };
+        assert(announce("ws://hint:9000").at("type") == "PEER_ANNOUNCE_OK");
+        const auto bytes = std::filesystem::file_size(dir / "peers.json");
+        for (int i = 0; i < 10; ++i) assert(announce("ws://excess" + std::to_string(i) + ":9000").at("code") == "RESOURCE_LIMIT");
+        assert(std::filesystem::file_size(dir / "peers.json") == bytes);
+        assert(announce("ws://" + std::string(1025, 'x')).at("code") == "INVALID_REQUEST");
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        assert(announce("ws://replacement:9000").at("type") == "PEER_ANNOUNCE_OK");
+        const auto peers = boost::json::parse(plane.handle_request_json({}, R"({"type":"GET_PEERS","request_id":"bounded-peers","protocol_version":1})")).as_object().at("peers").as_array();
+        assert(peers.size() == 2);
+        assert(std::ranges::any_of(peers, [](const auto& p) { return p.as_object().at("endpoint") == "ws://seed:9000"; }));
+        std::filesystem::remove_all(dir);
+    }
+    {
         auto config = boost::json::parse(R"({"name":"split","dt":1,"elements":[],"connections":[],
             "websocket":{"server":{"enabled":true,"port":9002,"tls":{"enabled":true}},
                          "data_server":{"enabled":true,"port":9003,"security":"trusted_plaintext"}}})").as_object();

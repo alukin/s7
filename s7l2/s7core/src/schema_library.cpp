@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 #include <fstream>
+#include <memory>
+#include <type_traits>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -49,7 +51,8 @@ auto read_file_contents(const std::filesystem::path& file_path) -> std::string
     }
 
     const auto path_string = file_path.string();
-    gzFile file = gzopen(path_string.c_str(), "rb");
+    std::unique_ptr<std::remove_pointer_t<gzFile>, decltype(&gzclose)> file(
+        gzopen(path_string.c_str(), "rb"), &gzclose);
     if (!file) {
         throw std::runtime_error("Could not open compressed element library file: '" + file_path.string() + "'.");
     }
@@ -57,7 +60,7 @@ auto read_file_contents(const std::filesystem::path& file_path) -> std::string
     std::string output;
     char chunk[8192];
     while (true) {
-        const int bytes_read = gzread(file, chunk, static_cast<unsigned int>(sizeof(chunk)));
+        const int bytes_read = gzread(file.get(), chunk, static_cast<unsigned int>(sizeof(chunk)));
         if (bytes_read > 0) {
             output.append(chunk, static_cast<std::size_t>(bytes_read));
             continue;
@@ -67,14 +70,15 @@ auto read_file_contents(const std::filesystem::path& file_path) -> std::string
         }
 
         int error_code = Z_OK;
-        const char* error_message = gzerror(file, &error_code);
-        gzclose(file);
+        const char* error_message = gzerror(file.get(), &error_code);
         throw std::runtime_error(
             std::string{"Could not read compressed element library file '"} + file_path.string() + "': " +
             (error_message ? error_message : "unknown zlib error"));
     }
 
-    gzclose(file);
+    if (gzclose(file.release()) != Z_OK) {
+        throw std::runtime_error("Could not close compressed element library: " + file_path.string());
+    }
     return output;
 }
 

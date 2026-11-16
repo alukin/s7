@@ -6,8 +6,10 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <cstdint>
 #include <limits>
 #include <queue>
+#include <stdexcept>
 #include <tuple>
 
 namespace s7studio::diagram {
@@ -29,16 +31,28 @@ auto opposite(const int dir) -> int
     return dir ^ 1; // East<->West, North<->South
 }
 
+QRect checkedBounds(QRect bounds)
+{
+    constexpr std::int64_t maxCells = 1'000'000;
+    constexpr int maxCoordinate = 20'000;
+    if (bounds.width() <= 0 || bounds.height() <= 0 ||
+        bounds.left() < -maxCoordinate || bounds.top() < -maxCoordinate ||
+        bounds.right() > maxCoordinate || bounds.bottom() > maxCoordinate ||
+        std::int64_t(bounds.width()) * bounds.height() > maxCells)
+        throw std::invalid_argument("Diagram routing exceeds the supported coordinate or 1,000,000-cell budget");
+    return bounds;
+}
+
 } // namespace
 
 WireRouter::WireRouter(const QRect bounds)
-    : bounds_(bounds)
-    , width_(std::max(1, bounds.width()))
-    , height_(std::max(1, bounds.height()))
-    , node_(static_cast<std::size_t>(width_ * height_), 0)
-    , hNet_(static_cast<std::size_t>(width_ * height_), -1)
-    , vNet_(static_cast<std::size_t>(width_ * height_), -1)
-    , vertexNet_(static_cast<std::size_t>(width_ * height_), -1)
+    : bounds_(checkedBounds(bounds))
+    , width_(bounds_.width())
+    , height_(bounds_.height())
+    , node_((static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_)), 0)
+    , hNet_((static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_)), -1)
+    , vNet_((static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_)), -1)
+    , vertexNet_((static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_)), -1)
 {
 }
 
@@ -133,7 +147,7 @@ auto WireRouter::leg(const QPoint start, const QPoint goal, const Dir startDir, 
     }
     const auto foreign = [net](const int other) { return other != -1 && other != net; };
 
-    const std::size_t states = static_cast<std::size_t>(width_ * height_) * 5;
+    const std::size_t states = (static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_)) * 5;
     std::vector<int> cost(states, std::numeric_limits<int>::max());
     std::vector<int> parent(states, -1);
     using Entry = std::tuple<int, int, int>; // f, g, state

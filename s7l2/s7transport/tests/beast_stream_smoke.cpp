@@ -912,10 +912,98 @@ void test_latency_over_websocket()
            "late packets are reported without stopping the stream");
 }
 
+void test_control_timeout_isolation()
+{
+    transport::BeastRuntimeNetEndpoint server, client;
+    server.set_control_request_handler([](const auto&, const std::string& request) {
+        if (request == "first") std::this_thread::sleep_for(milliseconds(200));
+        return request;
+    });
+    const auto port = server.configure_server(0);
+    client.configure_client("ws://127.0.0.1:" + std::to_string(port), {}, false);
+    bool timed_out = false;
+    try { (void)client.request_control_json("first", milliseconds(20)); }
+    catch (const std::runtime_error&) { timed_out = true; }
+    expect(timed_out, "slow request times out");
+    expect(wait_for([&] {
+        try { return client.request_control_json("second") == "second"; }
+        catch (const std::runtime_error&) { return false; }
+    }), "late first response cannot satisfy the second request after reconnect");
+}
+
+void test_control_identity_reconnect()
+{
+    constexpr const char* expected = "11111111-2222-3333-4444-555555555555";
+    auto server = std::make_unique<transport::BeastRuntimeNetEndpoint>();
+    server->set_control_request_handler([](const auto&, const auto&) { return std::string("A"); });
+    const auto port = server->configure_server(0, tls_for("s7_runtime_node"), "127.0.0.1");
+    transport::BeastRuntimeNetEndpoint client;
+    client.configure_client("wss://127.0.0.1:" + std::to_string(port), tls_for("s7_studio"), false, expected);
+    expect(client.request_control_json("test") == "A", "intended TLS node accepts requests");
+    server.reset();
+    std::atomic<int> requests{0};
+    transport::BeastRuntimeNetEndpoint replacement;
+    replacement.set_control_request_handler([&](const auto&, const auto&) { ++requests; return std::string("B"); });
+    replacement.configure_server(port, tls_for("s7_runtime_node_b"), "127.0.0.1");
+    expect(wait_for([&] {
+        const auto errors = client.take_transport_errors();
+        return std::ranges::any_of(errors, [](const auto& error) { return error.find("identity mismatch") != std::string::npos; });
+    }), "reconnect checks expected node identity");
+    bool rejected = false;
+    try { (void)client.request_control_json("test"); } catch (const std::runtime_error&) { rejected = true; }
+    expect(rejected && requests == 0, "wrong node receives no control request");
+}
+
+void test_control_backlog_limits()
+{
+    std::atomic<bool> release{false}, started{false};
+    std::atomic<int> queued_calls{0};
+    transport::BeastRuntimeNetEndpoint server({.max_pending_control_requests = 2, .max_pending_control_bytes = 128});
+    // Release a blocked handler even when a check throws before normal cleanup.
+    struct Release { std::atomic<bool>& flag; ~Release() { flag = true; } } guard{release};
+    server.set_control_request_handler([&](const auto&, const std::string& text) {
+        if (text == "blocked") { started = true; while (!release) std::this_thread::sleep_for(milliseconds(1)); }
+        if (text == "queued") ++queued_calls;
+        return text;
+    });
+    const auto port = server.configure_server(0);
+    RawClient first(port, "/control"); first.ws.write(boost::asio::buffer(std::string("blocked")));
+    expect(wait_for([&] { return started.load(); }), "handler is blocked");
+    RawClient queued(port, "/control"); queued.ws.write(boost::asio::buffer(std::string("queued")));
+    expect(wait_for([&] { return server.stats().messages_received == 2; }), "second peer queued");
+    RawClient excess(port, "/control"); excess.ws.write(boost::asio::buffer(std::string("excess")));
+    boost::beast::flat_buffer buffer; boost::system::error_code ec;
+    excess.ws.read(buffer, ec); expect(bool(ec), "global pending request limit closes overload");
+    queued.ws.next_layer().close();
+    first.ws.write(boost::asio::buffer(std::string("pipeline")));
+    first.ws.read(buffer, ec); expect(bool(ec), "one peer cannot pipeline unbounded handler work");
+    expect(wait_for([&] { return server.stats().control_connections == 0; }), "disconnected queued peer is noticed");
+    release = true;
+    transport::BeastRuntimeNetEndpoint healthy;
+    healthy.configure_client("ws://127.0.0.1:" + std::to_string(port), {}, false);
+    expect(wait_for([&] { try { return healthy.request_control_json("healthy") == "healthy"; } catch (...) { return false; } }),
+           "control service recovers for another peer after overload");
+    expect(queued_calls == 0, "disconnected queued handler is discarded");
+    transport::BeastRuntimeNetEndpoint tiny({.max_pending_control_requests = 2, .max_pending_control_bytes = 4});
+    std::atomic<int> calls{0};
+    tiny.set_control_request_handler([&](const auto&, const auto&) { ++calls; return std::string(5, 'x'); });
+    const auto tiny_port = tiny.configure_server(0);
+    RawClient too_big(tiny_port, "/control"); too_big.ws.write(boost::asio::buffer(std::string(5, 'x')));
+    too_big.ws.read(buffer, ec); expect(bool(ec) && calls == 0, "pending byte budget rejects input before queueing");
+    transport::BeastRuntimeNetEndpoint reply_client;
+    reply_client.configure_client("ws://127.0.0.1:" + std::to_string(tiny_port), {}, false);
+    bool reply_rejected = false;
+    try { (void)reply_client.request_control_json("ok"); } catch (const std::runtime_error&) { reply_rejected = true; }
+    expect(reply_rejected && calls == 1, "response byte budget closes oversized reply");
+}
+
 } // namespace
 
 int main()
 try {
+    test_control_timeout_isolation();
+    test_control_identity_reconnect();
+    test_control_backlog_limits();
     test_both_directions();
     test_stream_packet_limit_over_websocket();
     test_small_packets_are_not_delayed();

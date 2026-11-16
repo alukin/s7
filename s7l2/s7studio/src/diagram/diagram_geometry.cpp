@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 namespace s7studio::diagram {
 
@@ -21,7 +22,10 @@ auto snap(const QPointF point) -> QPointF
 
 auto toGrid(const QPointF point) -> QPoint
 {
-    return {static_cast<int>(std::lround(point.x() / kGridStep)), static_cast<int>(std::lround(point.y() / kGridStep))};
+    const double x = point.x() / kGridStep, y = point.y() / kGridStep;
+    if (!std::isfinite(x) || !std::isfinite(y) || std::abs(x) > kMaxDiagramGridCoordinate || std::abs(y) > kMaxDiagramGridCoordinate)
+        throw std::invalid_argument("Diagram coordinates exceed the supported grid extent");
+    return {static_cast<int>(std::lround(x)), static_cast<int>(std::lround(y))};
 }
 
 auto fromGrid(const QPoint point) -> QPointF

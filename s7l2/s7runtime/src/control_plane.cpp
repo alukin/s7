@@ -81,6 +81,24 @@ auto node_part(const boost::json::object& diagram, const std::string& uuid) -> N
     return std::string(it->value().as_string().c_str());
 }
 
+bool valid_peer_fields(const boost::json::object& object, std::size_t max_bytes = 8192)
+{
+    if (boost::json::serialize(object).size() > max_bytes) return false;
+    const auto bounded = [](const boost::json::object& fields) {
+        for (const auto& entry : fields)
+            if (entry.value().is_string() && (entry.value().as_string().size() > 1024 ||
+                entry.value().as_string().find('\0') != boost::json::string::npos)) return false;
+        return true;
+    };
+    if (!bounded(object)) return false;
+    for (const auto& entry : object)
+        if (entry.value().is_object() && !bounded(entry.value().as_object())) return false;
+    const auto endpoint = as_string(object, "endpoint");
+    if (!endpoint || endpoint->empty()) return false;
+    try { static_cast<void>(transport::parse_ws_url(*endpoint)); } catch (...) { return false; }
+    return true;
+}
+
 [[nodiscard]] auto compare_versions(const std::string& left, const std::string& right) -> int
 {
     auto parse = [](const std::string& value) {
@@ -242,6 +260,9 @@ ControlPlane::ControlPlane(ControlNodeDescriptor descriptor, ControlPlaneOptions
     : descriptor_(std::move(descriptor))
     , options_(std::move(options))
 {
+    if (!options_.max_peers || options_.max_peers > 1024 || options_.peer_hint_ttl <= std::chrono::seconds::zero() ||
+        options_.peer_hint_ttl > std::chrono::hours(24 * 365))
+        throw std::invalid_argument("Peer directory requires 1–1024 entries and a hint TTL of at most one year");
     if (!options_.storage_dir.empty()) {
         std::filesystem::create_directories(options_.storage_dir);
         load_peers_from_disk();
@@ -254,8 +275,17 @@ void ControlPlane::add_seed_peer(const std::string& endpoint)
         return;
     }
 
+    if (!valid_peer_fields({{"endpoint", endpoint}})) throw std::invalid_argument("Invalid or oversized seed endpoint");
     std::lock_guard<std::mutex> lock(mutex_);
+    expire_peers_locked();
+    if (!peers_.contains(endpoint) && peers_.size() >= options_.max_peers) {
+        const auto hint = std::ranges::find_if(peers_, [](const auto& entry) { return !entry.second.configured_seed; });
+        if (hint == peers_.end()) throw std::length_error("Configured seed peer limit exceeded");
+        peers_.erase(hint);
+    }
     auto& peer = peers_[endpoint];
+    peer.configured_seed = true;
+    peer.expires_at.clear();
     peer.endpoint = endpoint;
     if (peer.trust_state.empty()) {
         peer.trust_state = "unverified";
@@ -884,7 +914,7 @@ auto ControlPlane::handle_get_node_info(const boost::json::object& request) cons
     return out;
 }
 
-auto ControlPlane::handle_get_peers(const boost::json::object& request) const -> boost::json::object
+auto ControlPlane::handle_get_peers(const boost::json::object& request) -> boost::json::object
 {
     const auto request_id = as_string(request, "request_id").value_or("");
     bool include_unverified = true;
@@ -911,6 +941,7 @@ auto ControlPlane::handle_get_peers(const boost::json::object& request) const ->
 
     boost::json::array peers_array;
     std::lock_guard<std::mutex> lock(mutex_);
+    expire_peers_locked();
     std::size_t emitted = 0;
     for (const auto& [_, peer] : peers_) {
         if (!include_unverified && peer.trust_state != "verified") {
@@ -965,10 +996,16 @@ auto ControlPlane::handle_peer_announce(const boost::json::object& request) -> b
         return make_error_response(request_id, "INVALID_REQUEST", "PEER_ANNOUNCE self.endpoint must be a non-empty string.");
     }
 
+    if (!valid_peer_fields(self))
+        return make_error_response(request_id, "INVALID_REQUEST", "Invalid peer endpoint or oversized peer metadata (1 KiB fields, 8 KiB total)");
     const auto certificate = read_certificate_info(self);
 
     std::lock_guard<std::mutex> lock(mutex_);
+    expire_peers_locked();
+    if (!peers_.contains(*endpoint) && peers_.size() >= options_.max_peers)
+        return make_error_response(request_id, "RESOURCE_LIMIT", "Peer directory is full");
     auto& peer = peers_[*endpoint];
+    if (!peer.configured_seed) peer.expires_at = plus_seconds_iso8601(options_.peer_hint_ttl);
     peer.endpoint = *endpoint;
     peer.node_uuid = as_string(self, "node_uuid");
     peer.node_name = as_string(self, "node_name");
@@ -1555,6 +1592,14 @@ auto ControlPlane::handle_recover_stream(const boost::json::object& request) -> 
     return out;
 }
 
+void ControlPlane::expire_peers_locked()
+{
+    const auto now = now_utc_iso8601();
+    std::erase_if(peers_, [&](const auto& entry) {
+        return !entry.second.configured_seed && entry.second.expires_at <= now;
+    });
+}
+
 void ControlPlane::load_peers_from_disk()
 {
     const auto path = options_.storage_dir / "peers.json";
@@ -1562,6 +1607,7 @@ void ControlPlane::load_peers_from_disk()
         return;
     }
 
+    if (std::filesystem::file_size(path) > options_.max_peers * 16 * 1024) return;
     std::ifstream in(path);
     if (!in) {
         return;
@@ -1580,10 +1626,13 @@ void ControlPlane::load_peers_from_disk()
             continue;
         }
         const auto endpoint = as_string(item.as_object(), "endpoint");
-        if (!endpoint || endpoint->empty()) {
-            continue;
-        }
+        if (!valid_peer_fields(item.as_object(), 16 * 1024) || peers_.size() >= options_.max_peers) continue;
+        const auto expires = as_string(item.as_object(), "expires_at").value_or("");
+        // Configured seeds are re-added from node configuration on startup.
+        // Persisted hints without an expiry are not retained indefinitely.
+        if (expires.empty() || expires <= now_utc_iso8601()) continue;
         auto& peer = peers_[*endpoint];
+        peer.expires_at = expires;
         peer.endpoint = *endpoint;
         peer.node_uuid = as_string(item.as_object(), "node_uuid");
         peer.node_name = as_string(item.as_object(), "node_name");
@@ -1607,6 +1656,7 @@ void ControlPlane::persist_peers_to_disk() const
     for (const auto& [_, peer] : peers_) {
         boost::json::object item;
         item["endpoint"] = peer.endpoint;
+        item["expires_at"] = peer.configured_seed ? plus_seconds_iso8601(options_.peer_hint_ttl) : peer.expires_at;
         item["node_uuid"] = peer.node_uuid ? boost::json::value(*peer.node_uuid) : boost::json::value(nullptr);
         item["node_name"] = peer.node_name ? boost::json::value(*peer.node_name) : boost::json::value(nullptr);
         item["certificate"] = certificate_object(peer.identity_certificate_common_name,

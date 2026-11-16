@@ -931,6 +931,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         std::deque<std::pair<std::shared_ptr<const Bytes>, bool>> writes; // bytes, binary
         bool writing{false};
         bool closed{false};
+        std::atomic<bool> cancelled{false};
+        bool control_busy{false};
+        std::size_t queued_control_bytes{};
         // Producer side: streams this peer consumes, alias (theirs) -> local handle.
         std::unordered_map<std::uint32_t, std::uint64_t> producing;
         std::unordered_map<std::uint64_t, std::uint32_t> producing_alias;
@@ -1005,6 +1008,15 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             if (closed) {
                 return;
             }
+            if (!is_data && (bytes->size() > kMaxControlMessageBytes || writes.size() >= kMaxQueuedWrites ||
+                             bytes->size() > impl.limits.max_pending_control_bytes - impl.pending_control_write_bytes)) {
+                close();
+                return;
+            }
+            if (!is_data) {
+                queued_control_bytes += bytes->size();
+                impl.pending_control_write_bytes += bytes->size();
+            }
             writes.emplace_back(std::move(bytes), binary);
             if (!writing) {
                 write_next();
@@ -1022,9 +1034,13 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             with_ws([self = shared_from_this(), bytes, binary](auto& ws) {
                 ws.binary(binary);
                 ws.async_write(boost::asio::buffer(*bytes), [self, bytes](const boost::system::error_code& ec, std::size_t) {
-                    if (ec) {
+                    if (ec || self->closed) {
                         self->close();
                         return;
+                    }
+                    if (!self->is_data) {
+                        self->queued_control_bytes -= bytes->size();
+                        self->impl.pending_control_write_bytes -= bytes->size();
                     }
                     ++self->impl.messages_sent;
                     self->writes.pop_front();
@@ -1042,6 +1058,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                 return;
             }
             closed = true;
+            cancelled.store(true);
+            impl.pending_control_write_bytes -= queued_control_bytes;
+            queued_control_bytes = 0;
             boost::system::error_code ignored;
             if (tls) {
                 boost::beast::get_lowest_layer(*tls).socket().close(ignored);
@@ -1092,7 +1111,7 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
 
     void stop()
     {
-        boost::asio::post(io, [self = shared_from_this()] {
+        run_on_io([self = shared_from_this()] {
             self->stopping = true;
             boost::system::error_code ignored;
             for (const auto& listener : self->listeners) {
@@ -1102,12 +1121,12 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             for (const auto& connection : std::vector<ConnectionPtr>(self->connections.begin(), self->connections.end())) {
                 connection->close();
             }
-            self->work.reset();
         });
-        if (io_thread.joinable()) {
-            io_thread.join();
-        }
+        // Keep I/O alive while queued handlers drain and release their budgets.
+        // A handler may itself need run_on_io(), and posts its final reply here.
         control_pool.join();
+        run_on_io([this] { work.reset(); });
+        if (io_thread.joinable()) io_thread.join();
         table.shutdown_frames();
         table.changed.notify_all();
     }
@@ -1431,6 +1450,14 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
             }
             return;
         }
+        if (connection.control_busy || pending_control_requests >= limits.max_pending_control_requests ||
+            text.size() > limits.max_pending_control_bytes - pending_control_bytes) {
+            connection.close();
+            return;
+        }
+        connection.control_busy = true;
+        ++pending_control_requests;
+        pending_control_bytes += text.size();
         ControlRequestHandler handler;
         {
             std::lock_guard lock(handler_mutex);
@@ -1438,14 +1465,21 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
         }
         boost::asio::post(control_pool, [self = shared_from_this(), connection = connection.shared_from_this(), handler,
                                          text = std::move(text)] {
+            const auto request_bytes = text.size();
             std::string response;
             try {
-                response = handler ? handler(connection->peer, text)
-                                   : R"({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})";
+                if (!connection->cancelled.load()) {
+                    response = handler ? handler(connection->peer, text)
+                                       : R"({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"No control handler registered"})";
+                }
             } catch (...) {
                 response = R"({"type":"ERROR","protocol_version":1,"code":"INTERNAL_ERROR","message":"Control handler failed"})";
             }
-            boost::asio::post(self->io, [connection, response = std::move(response)] {
+            boost::asio::post(self->io, [self, connection, request_bytes, response = std::move(response)] {
+                --self->pending_control_requests;
+                self->pending_control_bytes -= request_bytes;
+                if (connection->closed) return;
+                connection->control_busy = false;
                 const auto* begin = reinterpret_cast<const std::uint8_t*>(response.data());
                 connection->send(std::make_shared<const Bytes>(begin, begin + response.size()), false);
             });
@@ -1678,8 +1712,12 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
                     connection->peer = ControlPeer{true, verified_peer_certificate(connection->tls->next_layer().native_handle())};
                     if (!link->expected_node_uuid.empty() &&
                         check_node_identity(connection->peer.certificate, link->expected_node_uuid) != NodeIdentity::Verified) {
-                        const auto error = "data peer " + link->url.host + ":" + link->url.port + " is not node " +
-                                           link->expected_node_uuid + " (certificate identity mismatch)";
+                        const auto presented = connection->peer.certificate
+                            ? node_uuid_of(*connection->peer.certificate) : std::nullopt;
+                        const auto error = std::string(connection->is_data ? "data peer " : "control peer ") +
+                            link->url.host + ":" + link->url.port + " is " +
+                            (presented ? "node " + *presented : "not a node certificate") + ", not node " +
+                            link->expected_node_uuid + " (certificate identity mismatch)";
                         self->record_error(error);
                         connection->close();
                         return complete(std::make_exception_ptr(std::runtime_error(error)));
@@ -1760,6 +1798,9 @@ struct BeastRuntimeNetEndpoint::Impl : std::enable_shared_from_this<BeastRuntime
     }
 
     TransportLimits limits;
+    std::size_t pending_control_requests{}; // I/O thread only, includes queued and executing handlers
+    std::size_t pending_control_bytes{};
+    std::size_t pending_control_write_bytes{};
     boost::asio::io_context io;
     std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work{io.get_executor()};
     boost::asio::thread_pool control_pool{1};
@@ -1887,10 +1928,11 @@ auto make_client_tls(const ParsedWebSocketUrl& url, const TlsConfig& tls) -> std
 
 } // namespace
 
-void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls, const bool connect_data)
+void BeastRuntimeNetEndpoint::configure_client(const std::string& url, const TlsConfig& tls, const bool connect_data, std::string expected_node_uuid)
 {
     auto link = std::make_shared<Impl::Link>();
     link->key = Impl::kClientLink;
+    link->expected_node_uuid = std::move(expected_node_uuid);
     link->url = parse_ws_url(url);
     link->tls = make_client_tls(link->url, tls);
     link->control = true;
@@ -1970,8 +2012,10 @@ void BeastRuntimeNetEndpoint::set_control_request_handler(ControlRequestHandler 
     impl_->control_handler = std::move(handler);
 }
 
-auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_json) -> std::string
+auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_json, const std::chrono::milliseconds timeout) -> std::string
 {
+    if (timeout <= std::chrono::milliseconds::zero() || request_json.size() > kMaxControlMessageBytes)
+        throw std::invalid_argument("Control request exceeds its size limit or has a nonpositive timeout");
     std::lock_guard serialize(impl_->request_mutex);
     auto response = std::make_shared<std::promise<std::string>>();
     auto future = response->get_future();
@@ -1986,7 +2030,13 @@ auto BeastRuntimeNetEndpoint::request_control_json(const std::string& request_js
         }
         response->set_exception(std::make_exception_ptr(std::runtime_error("control channel is not connected")));
     });
-    if (future.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+    if (future.wait_for(timeout) != std::future_status::ready) {
+        // Retire the entire connection before another request can acquire the
+        // mutex. A late reply must never satisfy a subsequent request.
+        impl_->run_on_io([&] {
+            for (const auto& connection : std::vector<Impl::ConnectionPtr>(impl_->connections.begin(), impl_->connections.end()))
+                if (connection->pending_response == response) connection->close();
+        });
         throw std::runtime_error("control request timed out");
     }
     return future.get();

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: MIT-0
 #include <iostream>
+#include <s7spectral/fft_element.hpp>
 #include <limits>
 #include <s7/core.hpp>
 #include <s7spectral/analysis.hpp>
@@ -24,6 +25,20 @@ template <class F> void rejects(F f) {
 }
 } // namespace
 int main() try {
+    for (double rate : {1024., 2048.}) {
+        s7::Schema mismatch("mismatched-fft"); mismatch.set_rate(s7::Rate::from_hz(rate));
+        mismatch.add_element("source", [rate] { return std::make_unique<s7::AnalogOscillator>(1, 32, rate); });
+        mismatch.add_element("fft", [] { return std::make_unique<s7spectral::WindowedFFT>(64, 64, 44100); });
+        mismatch.connect("source", 0, "fft", 0);
+        rejects([&] { (void)s7::Compiler::compile(mismatch); });
+        for (const auto window : {s7spectral::WindowType::RECTANGULAR, s7spectral::WindowType::HANN}) {
+            s7spectral::WindowedFFT fft(64, 64, rate, window);
+            double value = 0; const s7::InputBinding binding = &value; fft.bind_inputs({&binding, 1});
+            for (int n = 0; n < 64; ++n) { value = n % 2 ? -1 : 1; fft.step(); }
+            near(*static_cast<const double*>(fft.outputs()[0]), rate / 2);
+            near(*static_cast<const double*>(fft.outputs()[1]), 1., 1e-6);
+        }
+    }
     for (const std::size_t n : {2, 8, 32}) {
         std::vector<s7spectral::Complex> signal(n), result;
         for (std::size_t i = 0; i < n; ++i)

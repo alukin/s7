@@ -163,6 +163,8 @@ struct ReceiveResult {
 
 struct TransportLimits {
     std::size_t frame_buffer_bytes{64 * 1024 * 1024}; // node-wide reserved frame capacity
+    std::size_t max_pending_control_requests{64}; // queued + executing handlers across all peers
+    std::size_t max_pending_control_bytes{16 * 1024 * 1024}; // separate request and response budgets
     std::size_t max_inbound_connections{64}; // control + data, accepted by a server
 };
 
@@ -286,8 +288,9 @@ public:
     // previous ones) and keeps them connected: a dropped connection is
     // re-established with backoff and its streams resume. Throws if the first
     // connection attempt fails. Set connect_data=false for control-only
-    // clients and when data uses a separate endpoint.
-    void configure_client(const std::string& url, const TlsConfig& tls = {}, bool connect_data = true);
+    // clients and when data uses a separate endpoint. An expected node UUID
+    // is checked on every TLS handshake, including automatic reconnections.
+    void configure_client(const std::string& url, const TlsConfig& tls = {}, bool connect_data = true, std::string expected_node_uuid = {});
     // Keeps a /data connection to each of these peers (in addition to the
     // client connection), connecting new ones and closing those no longer
     // listed. A peer that cannot be reached is retried with backoff; this
@@ -301,7 +304,11 @@ public:
     [[nodiscard]] auto server_certificate() const -> std::optional<PeerCertificate>;
 
     void set_control_request_handler(ControlRequestHandler handler);
-    [[nodiscard]] auto request_control_json(const std::string& request_json) -> std::string;
+    // One serialized request at a time. A timeout retires the connection so
+    // a late reply cannot be returned for a later request. Inbound peers may
+    // have one executing/queued handler each; pipelining closes the connection.
+    [[nodiscard]] auto request_control_json(const std::string& request_json,
+                                             std::chrono::milliseconds timeout = std::chrono::seconds(10)) -> std::string;
 
     auto open_producer(const stream::StreamConfig& config) -> StreamHandle override;
     auto open_consumer(const stream::StreamConfig& config) -> StreamHandle override;

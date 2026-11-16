@@ -115,7 +115,13 @@ template <SignalType To, typename F>
         return typename Range::component{};
     }
     auto value = static_cast<W>(input);
-    value = options.rounding == ConvertRounding::HalfEven ? math::nearbyint(value) : math::trunc(value);
+    const auto whole = math::trunc(value);
+    if (options.rounding == ConvertRounding::HalfEven && !math::isinf(value)) {
+        const auto fraction = math::abs(value - whole);
+        value = whole;
+        if (fraction > W(.5) || (fraction == W(.5) && math::fmod(math::abs(whole), W(2)) != W(0)))
+            value += math::copysign(W(1), static_cast<W>(input));
+    } else value = whole;
     // The bounds 2^k are exact and finite in W, so infinities fail the check.
     const auto upper = math::ldexp(W(1), static_cast<int>(Range::is_signed ? Range::bits - 1 : Range::bits)); // max + 1
     const auto lower = Range::is_signed ? -upper : W(0);
@@ -126,7 +132,8 @@ template <SignalType To, typename F>
         return value < lower ? Range::min : Range::max;
     }
     if (value < W(0)) {
-        return static_cast<typename Range::component>(-static_cast<int128_t>(static_cast<uint128_t>(-value)));
+        const auto magnitude = static_cast<uint128_t>(-value);
+        return static_cast<typename Range::component>(-static_cast<int128_t>(magnitude - 1) - 1);
     }
     return static_cast<typename Range::component>(static_cast<uint128_t>(value));
 }

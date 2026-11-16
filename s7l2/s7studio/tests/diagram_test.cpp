@@ -983,6 +983,20 @@ int main(int argc, char** argv)
     }
 #endif
 
+    for (const auto bounds : {QRect(0, 0, 65536, 65536), QRect(0, 0, 2000, 2000), QRect(0, 0, 0, 1)}) {
+        bool rejected = false;
+        try { s7studio::diagram::WireRouter router(bounds); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        check(rejected, "Oversized routing grids fail before allocation");
+    }
+    {
+        auto document = s7studio::diagram::DiagramDocument::fromJson(boost::json::parse(R"({"schema":{"name":"large","elements":[{"id":"c","type":"Constant"}],"connections":[]},"diagram":{"nodes":[{"id":"c","position":[1e100,0]}]}})"));
+        s7studio::diagram::DiagramScene staging;
+        bool rejected = false;
+        try { s7studio::diagram::SceneSerializer{}.deserialize(document, staging); }
+        catch (const std::exception&) { rejected = true; }
+        check(rejected, "Extreme saved coordinates fail without numeric conversion overflow");
+    }
     std::cout << (failures == 0 ? "diagram test: OK\n" : "diagram test: FAILED\n");
     return failures == 0 ? 0 : 1;
 }

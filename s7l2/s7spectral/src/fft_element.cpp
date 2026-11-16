@@ -26,7 +26,7 @@ WindowedFFT::WindowedFFT(const std::uint32_t fft_size,
     if (hop_size == 0 || hop_size > fft_size) {
         throw std::invalid_argument("WindowedFFT hop_size must be in [1, fft_size].");
     }
-    if (!(sample_rate_hz > 0.0)) {
+    if (!(sample_rate_hz > 0.0) || !std::isfinite(sample_rate_hz)) {
         throw std::invalid_argument("WindowedFFT sample_rate_hz must be positive.");
     }
 
@@ -100,7 +100,7 @@ void WindowedFFT::compute_fft()
     peak_frequency_hz_ = (static_cast<double>(peak) + offset) * sample_rate_hz_ / fft_size_;
     // A sine of amplitude A gives |X| ~ A * sum(w) / 2 at its bin (less the
     // window's scalloping loss when it falls between bins).
-    peak_amplitude_ = 2.0 * magnitude(peak) / window_sum_;
+    peak_amplitude_ = (peak == fft_size_ / 2 ? 1.0 : 2.0) * magnitude(peak) / window_sum_;
 }
 
 } // namespace s7spectral

@@ -3,11 +3,31 @@
 
 #include <s7/core.hpp>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
+#include <zlib.h>
 #include <iostream>
 #include <stdexcept>
 
 namespace {
 void require(bool ok,const char* message) {if(!ok) throw std::runtime_error(message);}
+void corrupt_gzip_library() {
+    const auto path = std::filesystem::temp_directory_path() / ("s7-corrupt-library-" +
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".gz");
+    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::filesystem::remove(path); } } cleanup{path};
+    auto file = gzopen(path.string().c_str(), "wb");
+    require(file != nullptr, "Create compressed fixture");
+    require(gzwrite(file, "{}", 2) == 2, "Write compressed fixture");
+    require(gzclose(file) == Z_OK, "Close compressed fixture");
+    std::fstream bytes(path, std::ios::in | std::ios::out | std::ios::binary);
+    bytes.seekg(-8, std::ios::end); char crc{}; bytes.get(crc);
+    bytes.seekp(-8, std::ios::end); bytes.put(crc ^ 0xff); bytes.close();
+    bool rejected = false;
+    try { (void)s7::SchemaLibraryLoader::load_from_file(path); }
+    catch (const std::runtime_error& error) { rejected = std::string(error.what()).find("compressed element library") != std::string::npos; }
+    require(rejected, "Corrupt gzip reports a valid error without reading freed zlib storage");
+}
 boost::json::object constant(const char* id,double value) {
     return {{"id",id},{"type","Constant"},{"params",{{"value",value}}}};
 }
@@ -145,6 +165,7 @@ int main() {
         auto& registry=s7::ElementRegistry::instance();s7::register_builtin_elements(registry);
         const auto count=registry.element_count();s7::register_builtin_elements(registry);
         require(registry.element_count()==count,"Core and bundled resource registration is idempotent");
+        corrupt_gzip_library();
         references();controller_transients();independence_and_limits();
         std::cout<<"Schema resource: PI/PID, lag, RMS, phase difference, independent instances and nested rates passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}

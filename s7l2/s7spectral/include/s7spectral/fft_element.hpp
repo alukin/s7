@@ -32,6 +32,9 @@ public:
     WindowedFFT& operator=(const WindowedFFT&) = delete;
 
     void step() override;
+    [[nodiscard]] std::optional<s7::Rate> declared_rate() const override {
+        return s7::Rate::from_hz(sample_rate_hz_);
+    }
 
 private:
     void compute_fft();

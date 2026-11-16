@@ -36,9 +36,9 @@ install(DIRECTORY include/ DESTINATION include COMPONENT s7sdk)
 
 include(CTest)
 if(BUILD_TESTING)
-    add_executable(spectral_analysis_smoke tests/analysis_smoke.cpp)
+    add_executable(spectral_analysis_smoke tests/analysis_smoke.cpp src/fft_element.cpp src/spectral_window.cpp)
     target_include_directories(spectral_analysis_smoke PRIVATE include)
-    target_link_libraries(spectral_analysis_smoke PRIVATE s7::s7core)
+    target_link_libraries(spectral_analysis_smoke PRIVATE s7::s7core PkgConfig::FFTW3F)
     add_test(NAME spectral_analysis_smoke COMMAND spectral_analysis_smoke)
 endif()
 

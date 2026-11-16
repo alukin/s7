@@ -130,6 +130,8 @@ struct ControlPlaneOptions {
     std::int64_t max_clock_error_ns{250'000'000};
     // Actual bound/advertised listener addresses, including ephemeral ports.
     std::function<boost::json::object()> network_info;
+    std::size_t max_peers{256}; // configured seeds plus unverified discovery hints (at most 1024)
+    std::chrono::seconds peer_hint_ttl{std::chrono::hours(24)};
 };
 
 class ControlPlane {
@@ -152,6 +154,8 @@ public:
 private:
     struct PeerEntry {
         std::string endpoint;
+        bool configured_seed{};
+        std::string expires_at;
         std::optional<std::string> node_uuid;
         std::optional<std::string> node_name;
         std::optional<std::string> identity_certificate_common_name;
@@ -224,7 +228,7 @@ private:
     [[nodiscard]] auto state_name_locked() const -> std::string;
     [[nodiscard]] auto handle_hello(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_get_node_info(const boost::json::object& request) const -> boost::json::object;
-    [[nodiscard]] auto handle_get_peers(const boost::json::object& request) const -> boost::json::object;
+    [[nodiscard]] auto handle_get_peers(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_peer_announce(const boost::json::object& request) -> boost::json::object;
     [[nodiscard]] auto handle_list_deployments(const boost::json::object& request) const -> boost::json::object;
     [[nodiscard]] auto handle_prepare_deployment(const boost::json::object& request) -> boost::json::object;
@@ -238,6 +242,7 @@ private:
     [[nodiscard]] auto handle_end_transfer(const boost::json::object& request) -> boost::json::object;
     void expire_transfers_locked(std::chrono::steady_clock::time_point now);
 
+    void expire_peers_locked();
     void load_peers_from_disk();
     void persist_peers_to_disk() const;
 

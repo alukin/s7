@@ -495,6 +495,19 @@ void test_latency()
     expect(!wire::decode_data_packet(*unsynced.next_message("k")).send_time_ns, "no SEND_TIME from an unsynchronized clock");
 }
 
+void test_extreme_send_times()
+{
+    for (auto [sent, received] : {std::pair{INT64_MIN, INT64_C(1)}, {INT64_MAX, INT64_C(-2)}}) {
+        auto c = config(SignalType::F64, 1, 4);
+        stream::StreamConsumer consumer(c, 1);
+        wire::DataPacket packet; packet.type = c.type; packet.sequence = 0; packet.send_time_ns = sent;
+        double value = 1; wire::encode_elements(c.type, &value, 1, packet.payload);
+        consumer.on_packet(packet, stream::Clock::now(), received);
+        expect(consumer.fault_code() == stream::FaultCode::MalformedPacket, "unrepresentable latency rejected");
+        expect(consumer.stats().buffered_elements == 0, "invalid timestamp publishes no data");
+    }
+}
+
 } // namespace
 
 int main()
@@ -510,6 +523,7 @@ try {
     test_explicit_timestamps();
     test_derived_timestamps();
     test_latency();
+    test_extreme_send_times();
     return 0;
 } catch (const std::exception& ex) {
     std::cerr << "s7transport stream protocol smoke: " << ex.what() << '\n';

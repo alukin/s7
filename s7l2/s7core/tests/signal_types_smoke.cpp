@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 #include <complex>
+#include <cfenv>
+#include <s7/convert.hpp>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -31,6 +33,28 @@ static_assert(s7::IntegerRange<SignalType::CI12>::min == -2048 && s7::IntegerRan
 static_assert(s7::component_signal_type(SignalType::CI12) == SignalType::I12);
 static_assert(s7::integer_add<SignalType::I8>(100, 100, Overflow::Saturate) == 127);
 static_assert(s7::kInt128Min < 0 && s7::kInt128Max > 0 && s7::kInt128Min + s7::kInt128Max == -1);
+
+void test_conversion_boundaries()
+{
+    const int saved = std::fegetround();
+    struct Restore { int mode; ~Restore() { std::fesetround(mode); } } restore{saved};
+    for (int mode : {FE_TONEAREST, FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO}) {
+        expect(std::fesetround(mode) == 0, "set floating environment");
+        for (auto [input, expected] : {std::pair{2.5, 2}, {3.5, 4}, {-2.5, -2}, {-3.5, -4},
+                {std::nextafter(2.5, 0.), 2}, {std::nextafter(2.5, 3.), 3}}) {
+            expect(s7::convert_value<SignalType::F64, SignalType::I32>(input, {}) == expected,
+                   "half_even is independent of floating environment");
+        }
+    }
+    std::fesetround(FE_TONEAREST);
+    expect(s7::convert_value<SignalType::F64, SignalType::I128>(-0x1p127, {}) == s7::kInt128Min, "F64 I128 minimum");
+    expect(s7::convert_value<SignalType::F128, SignalType::I128>(s7::float128_t(-0x1p127), {}) == s7::kInt128Min, "F128 I128 minimum");
+    s7::ConvertOptions normalized; normalized.mode = s7::ConvertMode::Normalized;
+    expect(s7::convert_value<SignalType::F64, SignalType::I128>(-1., normalized) == s7::kInt128Min, "normalized I128 minimum");
+    const auto complex = s7::convert_value<SignalType::C128, SignalType::CI128>(
+        {s7::float128_t(-1), s7::float128_t(-1)}, normalized);
+    expect(complex.re == s7::kInt128Min && complex.im == s7::kInt128Min, "normalized CI128 minima");
+}
 
 void test_catalog()
 {
@@ -173,6 +197,7 @@ void test_extended_floats()
 
 int main()
 try {
+    test_conversion_boundaries();
     test_catalog();
     test_integer_rules();
     test_complex_integer_rules();

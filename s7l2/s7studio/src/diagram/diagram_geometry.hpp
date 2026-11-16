@@ -9,6 +9,7 @@
 
 namespace s7studio::diagram {
 
+constexpr int kMaxDiagramGridCoordinate = 10'000;
 constexpr double kWireHandleHit = 6.0;
 
 [[nodiscard]] auto snap(QPointF point) -> QPointF;

@@ -388,6 +388,15 @@ bool StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
         on_malformed();
         return false;
     }
+    std::optional<std::int64_t> latency;
+    if (packet.send_time_ns) {
+        const auto delta = static_cast<int128_t>(received_utc_ns.value_or(clock::utc_now_ns())) - *packet.send_time_ns;
+        if (delta < std::numeric_limits<std::int64_t>::min() || delta > std::numeric_limits<std::int64_t>::max()) {
+            on_malformed();
+            return false;
+        }
+        latency = static_cast<std::int64_t>(delta);
+    }
     if (restart_at_next_) {
         restart_at_next_ = false;
         next_expected_ = packet.sequence;
@@ -415,9 +424,7 @@ bool StreamConsumer::on_packet(const wire::DataPacket& packet, const Clock::time
     if (last_ack_ == Clock::time_point{}) {
         last_ack_ = now;
     }
-    if (packet.send_time_ns) {
-        return latency_.add(received_utc_ns.value_or(clock::utc_now_ns()) - *packet.send_time_ns, config_.max_latency);
-    }
+    if (latency) return latency_.add(*latency, config_.max_latency);
     return false;
 }
 

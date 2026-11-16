@@ -10,6 +10,11 @@ The reference **third-party plugin**: it is built out of tree against the instal
 
 Every `hop_size` samples, once `fft_size` samples are buffered, `WindowedFFT` transforms the latest window (FFTW, single precision) and outputs the dominant frequency, refined by parabolic interpolation between bins, and the amplitude at the peak bin. The amplitude is subject to the window's scalloping loss (up to about 15% for HANN when the frequency falls between bins). Outputs that carry the whole spectrum wait for block/frame signal types in the runtime.
 
+`sample_rate_hz` pins the element's graph rate. A connected source with a
+different rate is a validation error; set the FFT rate to the experiment's
+rate or insert an explicit Resampler. Real interior FFT bins use a factor of
+two for peak amplitude; Nyquist uses a factor of one.
+
 ## Build
 
 Requires FFTW3 single precision (`libfftw3-dev`, pkg-config module `fftw3f`).
