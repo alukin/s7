@@ -295,7 +295,9 @@ Examples:
 - EulerIntegrator
 - TrapezoidIntegrator in its default implicit mode
 
-Keeping State does not make an Element causal memory. An Accumulator (y[n] = y[n-1] + x[n]), a TrapezoidIntegrator in sampled mode or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit causal-memory Element. A forward-Euler integrator (EulerIntegrator, y[n+1] = y[n] + dt·x[n]) is causal memory.
+Keeping State does not make an Element causal memory. An Accumulator (y[n] = y[n-1] + x[n]), a local BackwardEulerIntegrator, a TrapezoidIntegrator in sampled mode or an FIR/IIR filter whose output uses the current input has direct feedthrough: it is a Stateful Element evaluated in causal order together with stateless Elements, and its output is visible downstream in the same step. A feedback loop through such Elements needs an explicit causal-memory Element. A forward-Euler integrator (EulerIntegrator, y[n+1] = y[n] + dt·x[n]) is causal memory.
+
+The local BackwardEulerIntegrator preserves the prescribed initial output on its first call, then applies y[n] = y[n-1] + dt·x[n]. It does not solve an algebraic feedback loop. Linear implicit feedback equations can instead be reduced explicitly to delay/gain/adder realizations; inserting a delay at a different location changes the method. See [the integrator guide and s/z maps](../s7l2/docs/INTEGRATORS.md).
 
 The default implicit TrapezoidIntegrator publishes its current state and stages the next state for the following step, like EulerIntegrator. Coupled implicit integrators compute their next states together by reevaluating only stateless derivative dependencies; this does not permit direct-feedthrough cycles. Sampled mode instead integrates a supplied sequence and uses the current input. See [the TrapezoidIntegrator numerical contract](../s7l2/docs/TRAPEZOID_INTEGRATION.md).
 

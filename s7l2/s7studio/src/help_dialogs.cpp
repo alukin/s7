@@ -26,6 +26,10 @@ constexpr Topic licensing{"Licensing", "qrc:/s7studio/legal/LICENSING.md"};
 constexpr Topic thirdPartyNotices{"Third-party notices", "qrc:/s7studio/legal/THIRD_PARTY_NOTICES.md"};
 constexpr Topic topics[] = {
     {"Getting started", "qrc:/s7studio/help/docs/STUDIO_USER_GUIDE.md"},
+    {"Integrators, delays, and s/z mappings", "qrc:/s7studio/help/docs/INTEGRATORS.md"},
+    {"Integrator references: Siebert and MIT", "qrc:/s7studio/help/docs/INTEGRATOR_REFERENCES.md"},
+    {"Trapezoid implementation", "qrc:/s7studio/help/docs/TRAPEZOID_INTEGRATION.md"},
+    {"Coupled integration implementation", "qrc:/s7studio/help/docs/COUPLED_INTEGRATION.md"},
     {"Live oscilloscope prototype", "qrc:/s7studio/help/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md"},
     {"Live FFT spectrum", "qrc:/s7studio/help/docs/STUDIO_SPECTRUM.md"},
     {"Live constellation and correlation", "qrc:/s7studio/help/docs/STUDIO_PAIR_ANALYSIS.md"},

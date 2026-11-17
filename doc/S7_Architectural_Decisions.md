@@ -1182,6 +1182,57 @@ and resource accounting before capability advertisement. The audio/compression
 
 ------------------------------------------------------------------------
 
+# ADR-026
+
+## Explicit hardware boundaries and independent providers
+
+**Status:** Accepted design direction, 2026-11-16. Initial implementation has
+mock-backed verification and limited opt-in hardware evidence; broader
+device/performance qualification remains pending.
+
+## Context
+
+S7 needs sound and SDR sources/sinks without coupling graph evaluation to a
+device callback, changing causal semantics, or requiring access to a private
+radio library. Exact nominal rate equality does not qualify independent clocks.
+
+## Decision
+
+1. Keep public sound implementation independent, with both PortAudio and native
+   Linux PipeWire providers. Public SDR elements support optional SoapySDR and
+   external private/future providers through an installed hardware SDK.
+2. Keep private AD936x implementation/dependencies outside public S7. Never
+   fetch, copy or bundle them in public builds/packages. Device profiles must
+   distinguish stock Pluto connectors from modified Pluto/LibreSDR channel use.
+3. Preparation and activation belong to an explicit run owner. Metadata, schema
+   loading, compilation and offline validation never open hardware. A block of
+   N simultaneous frames remains N ordinary scalar graph evaluations.
+4. Preserve exact model rates, explicit formats/conversions, instance-owned
+   resources, bounded handoff and whole-frame partial results. Unknown timing,
+   native-format, identity and continuity evidence remains unknown.
+5. Observed loss faults the boundary; existing failed-domain notifications latch
+   irreversible I/O so ordinary retry cannot consume/emit replacement samples.
+   Recovery requires a new explicit segment. Output acceptance is not DAC
+   presentation; emergency callback output is counted separately.
+
+## Initial scope and consequences
+
+The first run owner admits one hardware boundary and one rate domain. Capture
+availability/playback capacity pace scalar execution without another timer.
+It rejects multi-boundary/duplex clocks before preparation. Copy transfers ship
+first; no buffer-loan API is advertised. Audio playback prefills its admitted
+queue; SDR playback prefills one block. Stop/completion abort pending output.
+Broader hardware qualification, graceful drain, shared-session duplex, independent-clock matching,
+timing anchors and Studio/network-service activation are separate qualifications.
+These restrictions add no new wire/deployment semantics.
+
+The [hardware contract](S7_Hardware_IO_Contract.md) specifies the broader target;
+the [implementation guide](../s7l2/docs/HARDWARE_IO.md) records actual support.
+The [live test report](../s7l2/docs/HARDWARE_IO_LIVE_TESTS.md) records the first
+audio/radio experiments and failure-path fixes without changing these semantics.
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

@@ -1,5 +1,9 @@
 # TrapezoidIntegrator numerical contract
 
+For the teaching derivation, initial-condition terms, s/z plane maps and
+MIT terminology, see [Integrators, delays, and the s and z planes](INTEGRATORS.md)
+and its [primary references](INTEGRATOR_REFERENCES.md).
+
 Implemented 2026-10-19. The default `mode="implicit"` solves the trapezoidal
 ODE step for coupled graph states:
 
@@ -51,8 +55,12 @@ error: one block cannot solve an unknown coupled derivative graph by itself.
 
 The first implementation uses simultaneous fixed-point correction, at most
 64 iterations per step. Each state tests the change in its native real or
-complex component precision against `8*epsilon*(1+abs(candidate))`; F128 is
-not reduced to double. Non-finite candidates and nonconvergence produce
+complex component precision against `8*epsilon*scale`, where `scale` is the
+largest magnitude of the base, current and candidate native real component,
+with real and imaginary components checked separately and a minimum
+threshold of one native subnormal quantum. The former `1+abs(candidate)`
+absolute floor was removed on 2026-11-16 because it accepted inaccurate
+small-signal solutions. F128 is not reduced to double. Non-finite candidates and nonconvergence produce
 explicit runtime errors. Reduce `dt` when fixed-point iteration is not
 contractive. This solver is not a Newton solver and does not establish stiff
 problem support: an implicit equation can have a valid solution even when

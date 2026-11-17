@@ -56,13 +56,17 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 
 declare -a EXECUTABLES=()
-for program in s7runtime/s7runtime s7runtime/s7analysis_lab s7ctl/s7ctl s7studio/s7studio; do
+for program in s7runtime/s7runtime s7runtime/s7analysis_lab s7ctl/s7ctl s7studio/s7studio s7hw; do
     [ -f "$BUILD/$program" ] && EXECUTABLES+=(--executable "$BUILD/$program")
 done
 [ ${#EXECUTABLES[@]} -gt 0 ] || { echo "error: no programs found under $BUILD" >&2; exit 1; }
 
 declare -a LIBRARIES=()
 [ -f "$BUILD/s7noise/libs7noise.so" ] && LIBRARIES+=(--library "$BUILD/s7noise/libs7noise.so")
+for module in s7audio s7sdr; do
+    plugin="$BUILD/$module/lib$module-elements.so"
+    [ ! -f "$plugin" ] || LIBRARIES+=(--library "$plugin")
+done
 for module in s7spectral s7wavelet; do
     plugin="$BUILD/analysis-plugins/install/lib/s7/plugins/lib$module.so"
     [ ! -f "$plugin" ] || LIBRARIES+=(--library "$plugin")
@@ -116,7 +120,7 @@ while IFS= read -r -d '' binary; do
 done < <(find "$OUT" -type f \( -name '*.so*' -o -perm -u+x \) -print0)
 
 # Project plugins are executable-relative, separate from Qt's own plugins.
-for module in s7spectral s7wavelet; do
+for module in s7spectral s7wavelet s7audio-elements s7sdr-elements; do
     if [ -f "$OUT/usr/lib/lib$module.so" ]; then
         mkdir -p "$OUT/usr/lib/s7/plugins"
         cp "$OUT/usr/lib/lib$module.so" "$OUT/usr/lib/s7/plugins/"
@@ -127,7 +131,7 @@ if [ -f "$OUT/usr/lib/libs7noise.so" ]; then
     cp "$OUT/usr/lib/libs7noise.so" "$OUT/usr/lib/s7/plugins/libs7noise.so"
 fi
 
-for program in s7runtime s7ctl s7studio; do
+for program in s7runtime s7ctl s7studio s7hw; do
     [ -f "$OUT/usr/bin/$program" ] && ln -sf "usr/bin/$program" "$OUT/$program"
 done
 mkdir -p "$OUT/usr/share/s7/runtime" "$OUT/usr/share/s7"

@@ -330,6 +330,17 @@ void register_builtin_elements(ElementRegistry& registry)
         metadata.at("EulerIntegrator")));
 
     registry.register_element(ElementDescriptor(
+        "BackwardEulerIntegrator",
+        [](const ElementCreationContext& ctx) {
+            return visit_signal_type(ctx.type(), [&]<SignalType T>() -> std::unique_ptr<Element> {
+                if constexpr (signal_type_info(T).is_floating())
+                    return std::make_unique<BackwardEulerIntegratorT<T>>(std::nullopt, param_value<T>(ctx, "initial_value", {}));
+                else return unsupported_type(ctx);
+            });
+        },
+        metadata.at("BackwardEulerIntegrator")));
+
+    registry.register_element(ElementDescriptor(
         "GaussLegendreIntegrator",
         [](const ElementCreationContext& ctx) -> std::unique_ptr<Element> {
             return std::make_unique<GaussLegendreIntegrator>(

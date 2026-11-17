@@ -469,6 +469,39 @@ using ComplexDelay = DelayT<SignalType::C64>;
 template <SignalType Type>
 using component_storage_t = signal_storage_t<component_signal_type(Type)>;
 
+namespace detail {
+template <class V> bool integrator_finite(const V& value) {
+    if constexpr (requires { value.real(); value.imag(); })
+        return integrator_finite(value.real()) && integrator_finite(value.imag());
+    else return !math::isnan(value) && !math::isinf(value);
+}
+template <class R> void integrator_step_size(const R value) {
+    if (!integrator_finite(value) || !(value > R(0)))
+        throw std::invalid_argument("Integrator dt must be finite, positive and representable.");
+}
+template <class V> void integrator_initial(const V& value) {
+    if (!integrator_finite(value)) throw std::invalid_argument("Integrator initial state must be finite.");
+}
+template <class V> V integrator_result(const V& value) {
+    if (!integrator_finite(value)) throw std::runtime_error("Integrator produced a non-finite value.");
+    return value;
+}
+template <class V, class R> V trapezoid_increment(const V& a, const V& b, R half_dt) {
+    if constexpr (requires { a.real(); a.imag(); })
+        return V(trapezoid_increment(a.real(),b.real(),half_dt),
+                 trapezoid_increment(a.imag(),b.imag(),half_dt));
+    else {
+        // Test before adding: even a discarded overflow can trap when the
+        // application enables floating-point exceptions. Keep an ordinary
+        // endpoint sum when safe, preserving subnormal endpoint information.
+        const bool same_sign=(a>V(0) && b>V(0)) || (a<V(0) && b<V(0));
+        if (same_sign && math::abs(a)>=std::numeric_limits<V>::max()-math::abs(b))
+            return a*half_dt+b*half_dt;
+        return (a+b)*half_dt;
+    }
+}
+}
+
 /// Accumulator: running sum y[n] = y[n-1] + x[n], without a time step (an
 /// accumulator), in the accumulator type Acc (default: the input type).
 /// Arithmetic types. For numerical integration over time use
@@ -518,6 +551,8 @@ public:
         , output_value_(initial_value)
         , substeps_(substeps)
     {
+        if (dt) detail::integrator_step_size(*dt);
+        detail::integrator_initial(initial_value);
         if (substeps_ < 1 || substeps_ > 32)
             throw std::invalid_argument("EulerIntegrator substeps must be between 1 and 32.");
         if constexpr (Type != SignalType::F64) {
@@ -533,7 +568,8 @@ public:
     {
         if (substeps_ != 1)
             throw std::logic_error("EulerIntegrator substeps require NodeRuntime's coupled numerical region.");
-        output_value_ = output_value_ + read_input<value_type>(0) * dt_;
+        detail::integrator_step_size(dt_);
+        output_value_ = detail::integrator_result(output_value_ + read_input<value_type>(0) * dt_);
     }
 
     [[nodiscard]] std::optional<Rate> declared_rate() const override
@@ -543,7 +579,11 @@ public:
     }
     void adopt_rate(const Rate& rate) override
     {
-        if (follows_rate_) dt_ = detail::rate_period<step_type>(rate);
+        if (follows_rate_) {
+            const auto dt = detail::rate_period<step_type>(rate);
+            detail::integrator_step_size(dt);
+            dt_ = dt;
+        }
     }
     [[nodiscard]] CoupledMethod coupled_method() const override
     {
@@ -557,6 +597,47 @@ private:
     step_type dt_;
     value_type output_value_;
     int substeps_;
+};
+
+/// Local right-endpoint quadrature. The first call publishes y[0] unchanged;
+/// later calls compute y[n]=y[n-1]+dt*x[n]. Current input has direct
+/// feedthrough. Feedback must be explicitly reduced to a causal realization;
+/// this element never asks the runtime to solve an algebraic loop.
+template <SignalType Type>
+class BackwardEulerIntegratorT final : public Element {
+public:
+    using value_type = signal_storage_t<Type>;
+    using step_type = component_storage_t<Type>;
+    explicit BackwardEulerIntegratorT(std::optional<step_type> dt = step_type(1), value_type initial_value = {})
+        : Element("BackwardEulerIntegrator", true), follows_rate_(!dt)
+        , dt_(dt ? *dt : std::numeric_limits<step_type>::quiet_NaN()), output_value_(initial_value) {
+        if (dt) detail::integrator_step_size(*dt);
+        detail::integrator_initial(initial_value);
+        register_input(0, port_names::in, Type, nullptr);
+        register_output(0, port_names::out, Type, &output_value_);
+    }
+    void step() override {
+        detail::integrator_step_size(dt_);
+        const auto input = detail::integrator_result(read_input<value_type>(0));
+        if (started_) output_value_ = detail::integrator_result(output_value_ + input*dt_);
+        started_ = true;
+    }
+    [[nodiscard]] std::optional<Rate> declared_rate() const override {
+        if (follows_rate_) return std::nullopt;
+        return Rate::from_seconds(static_cast<double>(dt_));
+    }
+    void adopt_rate(const Rate& rate) override {
+        if (follows_rate_) {
+            const auto dt = detail::rate_period<step_type>(rate);
+            detail::integrator_step_size(dt);
+            dt_ = dt;
+        }
+    }
+private:
+    bool follows_rate_;
+    step_type dt_;
+    value_type output_value_;
+    bool started_{};
 };
 
 // Fourth-order, two-stage implicit Gauss-Legendre state. NodeRuntime solves
@@ -619,6 +700,8 @@ public:
         , output_value_(initial_value)
         , sampled_(mode == TrapezoidMode::Sampled)
     {
+        if (dt) { detail::integrator_step_size(*dt); detail::integrator_step_size(half_dt_); }
+        detail::integrator_initial(initial_value);
         register_input(0, port_names::in, Type, nullptr);
         register_output(0, port_names::out, Type, &output_value_);
     }
@@ -628,9 +711,10 @@ public:
         if (!sampled_) {
             throw std::logic_error("Implicit TrapezoidIntegrator requires NodeRuntime's coupled numerical stage.");
         }
-        const auto x = read_input<value_type>(0);
+        detail::integrator_step_size(half_dt_);
+        const auto x = detail::integrator_result(read_input<value_type>(0));
         if (has_previous_) {
-            output_value_ = output_value_ + (x + previous_input_) * half_dt_;
+            output_value_ = detail::integrator_result(output_value_ + detail::trapezoid_increment(x, previous_input_, half_dt_));
         }
         previous_input_ = x;
         has_previous_ = true;
@@ -640,25 +724,35 @@ public:
 
     void prepare_trapezoid_step() override
     {
+        detail::integrator_step_size(half_dt_);
         base_value_ = output_value_;
-        base_input_ = read_input<value_type>(0);
-        candidate_ = base_value_ + base_input_ * (half_dt_ * step_type(2));
+        base_input_ = detail::integrator_result(read_input<value_type>(0));
+        candidate_ = detail::integrator_result(base_value_ + base_input_ * (half_dt_ * step_type(2)));
     }
 
     [[nodiscard]] bool prepare_trapezoid_correction() override
     {
-        candidate_ = base_value_ + (base_input_ + read_input<value_type>(0)) * half_dt_;
-        const auto magnitude = math::abs(candidate_);
-        const auto difference = math::abs(candidate_ - output_value_);
-        if (math::isnan(magnitude) || math::isinf(magnitude) || math::isnan(difference) || math::isinf(difference)) {
-            throw std::runtime_error("TrapezoidIntegrator produced a non-finite candidate.");
-        }
+        candidate_ = base_value_ + detail::trapezoid_increment(base_input_,
+            detail::integrator_result(read_input<value_type>(0)), half_dt_);
+        detail::integrator_result(candidate_);
         // Do not reduce F128 or complex components to double for convergence.
         constexpr auto component = component_signal_type(Type);
         constexpr int digits = component == SignalType::F16 ? 11 : component == SignalType::F32 ? 24 :
                                component == SignalType::F64 ? 53 : 113;
-        const step_type tolerance = math::ldexp(step_type(1), 4 - digits); // 8 * machine epsilon
-        return difference <= tolerance * (step_type(1) + magnitude);
+        const step_type relative = math::ldexp(step_type(1), 4 - digits); // 8 * machine epsilon
+        const auto converged=[relative](step_type candidate, step_type current, step_type base) {
+            const step_type scale=std::max({math::abs(candidate),math::abs(current),math::abs(base)});
+            const step_type tolerance=std::max(std::numeric_limits<step_type>::denorm_min(),step_type(relative*scale));
+            // Normalize first when comparing states of opposite signs, so
+            // their difference cannot itself overflow. All states are finite.
+            if (scale==step_type(0)) return true;
+            if (scale>step_type(1)) return math::abs(candidate/scale-current/scale)<=relative;
+            return math::abs(candidate-current)<=tolerance;
+        };
+        if constexpr (is_complex_signal_type(Type))
+            return converged(candidate_.real(),output_value_.real(),base_value_.real()) &&
+                   converged(candidate_.imag(),output_value_.imag(),base_value_.imag());
+        else return converged(candidate_,output_value_,base_value_);
     }
 
     void publish_trapezoid_candidate() override { output_value_ = candidate_; }
@@ -670,7 +764,11 @@ public:
     }
     void adopt_rate(const Rate& rate) override
     {
-        if (follows_rate_) half_dt_ = detail::rate_period<step_type>(rate) / step_type(2);
+        if (follows_rate_) {
+            const auto half_dt = detail::rate_period<step_type>(rate) / step_type(2);
+            detail::integrator_step_size(half_dt);
+            half_dt_ = half_dt;
+        }
     }
 
 private:
@@ -714,6 +812,8 @@ public:
         , position_(initial_position)
         , velocity_(initial_velocity)
     {
+        if (dt) detail::integrator_step_size(*dt);
+        detail::integrator_initial(initial_position); detail::integrator_initial(initial_velocity);
         register_input(0, "acceleration", Type, nullptr);
         register_output(0, "position", Type, &position_);
         register_output(1, "velocity", Type, &velocity_);
@@ -722,8 +822,11 @@ public:
     // Writes the next step's outputs; NodeRuntime publishes them after the step.
     void step() override
     {
-        velocity_ = velocity_ + read_input<value_type>(0) * dt_;
-        position_ = position_ + velocity_ * dt_;
+        detail::integrator_step_size(dt_);
+        const auto velocity = detail::integrator_result(velocity_ + read_input<value_type>(0) * dt_);
+        const auto position = detail::integrator_result(position_ + velocity * dt_);
+        velocity_ = velocity;
+        position_ = position;
     }
 
     [[nodiscard]] std::optional<Rate> declared_rate() const override
@@ -1118,6 +1221,7 @@ using MinMax = MinMaxT<SignalType::F64>;
 using Sign = SignT<SignalType::F64>;
 using Comparator = ComparatorT<SignalType::F64>;
 using EulerIntegrator = EulerIntegratorT<SignalType::F64>;
+using BackwardEulerIntegrator = BackwardEulerIntegratorT<SignalType::F64>;
 using TrapezoidIntegrator = TrapezoidIntegratorT<SignalType::F64>;
 using SymplecticIntegrator = SymplecticIntegratorT<SignalType::F64>;
 using FirFilter = FirFilterT<SignalType::F64>;

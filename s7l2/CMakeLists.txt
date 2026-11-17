@@ -124,6 +124,33 @@ if (S7_BUILD_STUDIO)
 	add_dependencies(build-tests qschematic-tests qschematic-wiresystem-tests)
 endif()
 add_subdirectory(s7core)
+add_subdirectory(s7hardware)
+add_subdirectory(s7audio)
+add_subdirectory(s7sdr)
+add_executable(s7hw s7hardware/tools/s7hw.cpp)
+target_link_libraries(s7hw PRIVATE s7audio s7sdr)
+s7_enable_project_warnings(s7hw)
+set_target_properties(s7hw PROPERTIES INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS s7hw RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Laboratory tool: never built/run by normal CTest or packaged by default.
+add_executable(s7hardware_probe EXCLUDE_FROM_ALL s7hardware/tests/live_probe.cpp)
+target_link_libraries(s7hardware_probe PRIVATE s7audio s7sdr)
+target_compile_options(s7hardware_probe PRIVATE -O2)
+s7_enable_project_warnings(s7hardware_probe)
+foreach(example audio_capture audio_playback sdr_receive)
+    add_test(NAME s7hardware_offline_${example} COMMAND s7hw --check ${PROJECT_SOURCE_DIR}/examples/hardware/${example}.json)
+endforeach()
+s7_add_test_executable(s7hardware_plugin_smoke s7hardware/tests/plugin_smoke.cpp s7runtime/src/plugin_loader.cpp)
+target_include_directories(s7hardware_plugin_smoke PRIVATE s7runtime/include)
+target_link_libraries(s7hardware_plugin_smoke PRIVATE s7hardware)
+add_dependencies(s7hardware_plugin_smoke s7audio_plugin s7sdr_plugin)
+add_test(NAME s7hardware_plugin_smoke COMMAND s7hardware_plugin_smoke $<TARGET_FILE:s7audio_plugin> $<TARGET_FILE:s7sdr_plugin>)
+if(UNIX AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME s7hardware_sdk_smoke COMMAND ${CMAKE_COMMAND}
+        -DS7_BUILD=${CMAKE_BINARY_DIR} -DS7_SOURCE=${PROJECT_SOURCE_DIR}
+        -DS7_TEST_ROOT=${CMAKE_BINARY_DIR}/s7hardware-sdk-test -DS7_CXX=${CMAKE_CXX_COMPILER}
+        -P ${PROJECT_SOURCE_DIR}/s7hardware/tests/sdk_smoke.cmake)
+endif()
 add_subdirectory(s7io)
 add_subdirectory(s7transport)
 add_subdirectory(s7net)
@@ -163,6 +190,12 @@ s7_enable_project_warnings(s7spectral)
 
 set(S7_ALL_TARGETS
 	s7core
+	s7hardware
+	s7audio
+	s7audio_plugin
+	s7sdr
+	s7sdr_plugin
+	s7hw
 	s7io
 	s7transport
 	s7net

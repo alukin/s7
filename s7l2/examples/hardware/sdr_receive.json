@@ -1,0 +1,12 @@
+{
+  "name": "soapy_receive_explicit_conversion",
+  "elements": [
+    {"id": "receive", "type": "SdrSource", "params": {
+      "type": "C32", "backend": "soapy", "device": "driver=replace-me,serial=replace-me",
+      "channels": ["0"], "frame_rate": [2400000, 1],
+      "block_frames": 2048, "queue_frames": 32768,
+      "options": "{\"frequency_hz\":\"100000000\",\"bandwidth_hz\":\"2000000\"}"
+    }}
+  ],
+  "connections": []
+}

@@ -24,6 +24,9 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 |---|---|
 | `s7core/` | Element model, built-in elements, schema (incl. nested schemas with exposed ports), validation, compiler, `NodeRuntime`, element registry and metadata, schema-library loader |
 | `s7io/` | File source/sink elements (compact binary, gnuplot text) |
+| `s7hardware/` | Public hardware I/O SDK, explicit device-paced run owner, external providers and `s7hw` runner |
+| `s7audio/` | Independent PortAudio and native PipeWire sound sources/sinks |
+| `s7sdr/` | Common SDR sources/sinks and optional public SoapySDR provider |
 | `s7transport/` | Transport abstraction: in-memory backend and Boost.Beast WebSocket/TLS backend, wire format v1 and lossless stream protocol |
 | `s7net/` | `NetSink` / `NetSource` elements bound to the runtime transport endpoint |
 | `s7observe/` | Read-only output sampling (`ObservationService`) |
@@ -58,6 +61,9 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 Simulation follows an **analog-computer approach**: explicit networks of local
 integrators and function/state blocks. Independent RK4 and other solvers are
 allowed as test references. See [simulation semantics](docs/SIMULATION_MODEL.md).
+The [integrator guide](docs/INTEGRATORS.md) explains separate forward/backward
+Euler blocks, trapezoidal integration, explicit delay realizations and s/z plane
+mappings, with [Siebert and MIT references](docs/INTEGRATOR_REFERENCES.md).
 
 ## Build
 
@@ -74,6 +80,14 @@ ctest --test-dir build --output-on-failure
 
 The normal build excludes test binaries. Build `build-tests` before running CTest,
 or build an individual test with `cmake --build build --target <test-target>`.
+
+Sound and SDR integration has a separate [hardware I/O guide](docs/HARDWARE_IO.md).
+Backend switches `S7_PORTAUDIO`, `S7_PIPEWIRE`, `S7_SOAPYSDR` accept `AUTO` (default),
+`ON` (required), or `OFF` (no dependency). `build_for_linux` explicitly enables
+all three; use `--no-hardware` for a simulation-only build. Loading element
+plugins and checking schemas never activates hardware. Initial device-paced
+runs use `s7hw` or the C++ SDK, with one hardware boundary and one rate domain;
+Studio and the network deployment service do not yet own hardware runs.
 
 Or use the scripts in the project root (`--help` on each): `./build_for_linux [--release] [--no-studio] [--test]` and `./run_on_linux [<program> [args...]]` (program `s7studio`, `s7runtime` or `s7ctl`).
 

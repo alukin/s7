@@ -104,6 +104,9 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [SAMPLE_TRANSPORT_BENCHMARK.md](SAMPLE_TRANSPORT_BENCHMARK.md) | Opt-in verified codec, bulk/scalar graph, duplex and paced sample measurements; scope and reproduction commands |
 | [S7_Audio_and_Frame_Compression_Research.md](../../doc/S7_Audio_and_Frame_Compression_Research.md) | Audio device clocks/deadlines, compression source/sink candidates and proposed qualification work |
 | [FRAME_TRANSPORT.md](FRAME_TRANSPORT.md) | C++ frame source/sink service, bounded ownership, independent LZ4/Zstandard codecs and audio validation |
+| [S7_Hardware_IO_Contract.md](../../doc/S7_Hardware_IO_Contract.md) | Accepted hardware I/O direction and initial implementation scope: independent sound, public/private SDR providers, ownership, clocks and faults |
+| [HARDWARE_IO.md](HARDWARE_IO.md) | Building and using the sound/SDR SDK, plugins and opt-in device-paced runner; qualification limits |
+| [HARDWARE_IO_LIVE_TESTS.md](HARDWARE_IO_LIVE_TESTS.md) | Initial two-host audio, USB input and radio experiments, failure fixes and measured limits |
 | [S7_Frame_Interoperability.md](../../doc/S7_Frame_Interoperability.md) | Compatible Python/Java frame services, codec providers and shared conformance across all three languages |
 | [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) | Separate mTLS control and configurable encrypted/trusted-plaintext data listeners, configuration and cross-language contract |
 
@@ -115,6 +118,9 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [CONVOLUTION.md](CONVOLUTION.md) | FIR and FFT complex frame convolution processors, independent/continuous modes and graph-port limit |
 | [CONTROL_ELEMENTS.md](CONTROL_ELEMENTS.md) | Local control/measurement primitives and the separate reusable schema resource |
 | [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
+| [INTEGRATORS.md](INTEGRATORS.md) | Forward/backward Euler, trapezoidal rule, explicit delay realizations, startup, s/z maps and MIT Leapfrog terminology |
+| [INTEGRATOR_REFERENCES.md](INTEGRATOR_REFERENCES.md) | Siebert and MIT primary sources, exact sections/pages and visual reading record |
+| [INTEGRATOR_REVIEW_2026-11-17.md](INTEGRATOR_REVIEW_2026-11-17.md) | Integrator findings/fixes, independent numerical evidence, GUI help checks and remaining limits |
 | [STUDIO_OBSERVATION_VIEWERS.md](STUDIO_OBSERVATION_VIEWERS.md) | Studio's Scope, Phase Portrait and 3D trajectory viewers (Qt Graphs, Qt Quick 3D): read-only viewer interfaces, independent run data/authoritative capture, registry and lifecycle, adding a viewer type, tests and manual visual test plan |
 | [STUDIO_SURFACE_AND_CONTROL_ANALYSIS_PLAN.md](STUDIO_SURFACE_AND_CONTROL_ANALYSIS_PLAN.md) | Implementation plan and validation record for surfaces, control-response and time-frequency analysis |
 | [LIVE_OSCILLOSCOPE_PROTOTYPE.md](LIVE_OSCILLOSCOPE_PROTOTYPE.md) | Bounded Time/Spectrum/XY/Correlation workflow, retention, activity, freeze and remaining limits |

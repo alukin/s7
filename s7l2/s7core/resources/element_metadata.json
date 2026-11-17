@@ -1469,7 +1469,7 @@
     },
     {
       "type_name": "EulerIntegrator",
-      "display_name": "Euler Integrator",
+      "display_name": "Forward Euler Integrator",
       "description": "Integrates the input with forward Euler. Optional F64 substeps advance all connected selected integrators together at dt/substeps while publishing only outer-step states. The default one-substep behavior is unchanged.",
       "category": "filters",
       "version": "1.0.0",
@@ -1526,6 +1526,88 @@
           "required": false,
           "min": 1,
           "max": 32,
+          "enum_values": []
+        }
+      ],
+      "type_variables": [
+        {
+          "name": "T",
+          "allowed": [
+            "F16",
+            "F32",
+            "F64",
+            "F128",
+            "C16",
+            "C32",
+            "C64",
+            "C128"
+          ],
+          "pin_parameter": "type",
+          "defaults_to": ""
+        }
+      ],
+      "visual": {
+        "shape": "box",
+        "color": "#4CAF50",
+        "max_width": 110,
+        "max_height": 52,
+        "icon_name": ""
+      },
+      "variadic_inputs": {
+        "enabled": false,
+        "min_count": 0,
+        "max_count": 0,
+        "port_name_template": "",
+        "signal_type": "F64",
+        "type_rule": "",
+        "count_parameter": ""
+      }
+    },
+    {
+      "type_name": "BackwardEulerIntegrator",
+      "display_name": "Backward Euler Integrator",
+      "description": "Local right-endpoint integration: y[n]=y[n-1]+dt*input[n]. The first call publishes initial_value as y[0] without integrating. Direct feedthrough; use explicit Delay/Gain/Adder feedback realizations, not an algebraic loop. No coupled solver is invoked.",
+      "category": "filters",
+      "version": "1.0.0",
+      "tags": [
+        "integration",
+        "backward Euler",
+        "right endpoint",
+        "direct feedthrough"
+      ],
+      "input_ports": [
+        {
+          "name": "in",
+          "description": "Input",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "output_ports": [
+        {
+          "name": "out",
+          "description": "Output",
+          "type": "F64",
+          "optional": false,
+          "type_rule": "T"
+        }
+      ],
+      "parameters": [
+        {
+          "name": "type",
+          "type": "type",
+          "description": "Pins the element's type (otherwise inferred from connections)",
+          "default": null,
+          "required": false,
+          "enum_values": []
+        },
+        {
+          "name": "initial_value",
+          "type": "value",
+          "description": "y[0]",
+          "default": 0,
+          "required": false,
           "enum_values": []
         }
       ],

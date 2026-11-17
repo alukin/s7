@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Builds S7 for Linux (GCC 15+ or Clang 22+) in build/ (build-release/ with --release).
 #
-# Usage: ./build_for_linux [--release] [--no-studio] [--test]
-#   --release    optimized build in build-release/ (tests that use assert() check nothing there)
+# Usage: ./build_for_linux [--release] [--no-studio] [--no-hardware] [--test]
+#   --release    optimized build in build-release/
 #   --no-studio  skip s7studio (no Qt needed)
+#   --no-hardware build without audio/SoapySDR dependencies
 #   --test       run the tests after building
 # Set S7_BUILD_JOBS to override the conservative default of 2 compile jobs.
 # Dependencies: tools/install_deps_ubuntu.sh. Compiler: set CXX (e.g. CXX=clang++-22) on the first build.
@@ -16,16 +17,19 @@ cd "$(dirname "$0")"
 
 BUILD=build
 ARGS=(-DS7_BUILD_STUDIO=ON)
+HARDWARE=ON
 TEST=0
 for arg in "$@"; do
     case "$arg" in
         --release) BUILD=build-release; ARGS+=(-DCMAKE_BUILD_TYPE=Release) ;;
         --no-studio) ARGS+=(-DS7_BUILD_STUDIO=OFF) ;;
+        --no-hardware) HARDWARE=OFF ;;
         --test) TEST=1 ;;
         -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
         *) echo "Unknown option: $arg (see --help)" >&2; exit 2 ;;
     esac
 done
+ARGS+=(-DS7_PORTAUDIO="$HARDWARE" -DS7_PIPEWIRE="$HARDWARE" -DS7_SOAPYSDR="$HARDWARE")
 
 JOBS="${S7_BUILD_JOBS:-2}"
 if [[ ! "$JOBS" =~ ^[1-9][0-9]*$ ]]; then

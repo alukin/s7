@@ -155,6 +155,16 @@ is to be retroactively attributed to a specific book example by inference.
 
 ## Existing numerical-stage implementation
 
+The 2026-11-16 [integrator guide](INTEGRATORS.md) and
+[primary-source reading record](INTEGRATOR_REFERENCES.md) add direct study of
+MIT-hosted Siebert chapters 7/8 and the supplied MIT 6.003 notes, including
+visual inspection of equations and block/pole diagrams. Siebert's full book
+has still not been read. The maintainer reaffirmed the local-block approach:
+forward and backward Euler remain separate teaching elements; backward Euler
+uses a local supplied-sample rule, and feedback examples use explicit
+algebraically reduced delay/gain/adder realizations. It adds no implicit
+graph-wide solve. The guide includes the s/z maps and initial-condition terms.
+
 The existing implicit `TrapezoidIntegrator` includes a coupled numerical stage,
 documented in [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md). Its graph
 reevaluation is an existing architectural exception requiring separate review

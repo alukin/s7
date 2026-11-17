@@ -1,0 +1,240 @@
+# Sound and SDR I/O
+
+The public implementation consists of `s7hardware` (contract, scalar boundary
+and device-paced run owner), `s7audio` (independent PortAudio and native
+PipeWire implementations), and `s7sdr` (common SDR elements and optional
+SoapySDR provider). The private AD936x provider is maintained and built outside
+this repository against the installed SDK. Public builds never fetch or bundle
+that provider or its dependency. No GNU Radio or private audio implementation
+was copied into these modules.
+
+The [hardware contract](../../doc/S7_Hardware_IO_Contract.md) and ADR-026 describe
+the direction. This guide identifies the implemented first profile and its
+qualification limits. The [live test report](HARDWARE_IO_LIVE_TESTS.md) records
+the first opt-in audio and radio experiments and their measured limits.
+
+## Build and installation
+
+```sh
+tools/install_deps_fedora.sh --no-studio
+# Ubuntu: tools/install_deps_ubuntu.sh --no-studio
+cmake -S . -B build-hardware -DS7_BUILD_STUDIO=OFF \
+  -DS7_PORTAUDIO=ON -DS7_PIPEWIRE=ON -DS7_SOAPYSDR=ON
+cmake --build build-hardware --parallel 2
+cmake --build build-hardware --target build-tests --parallel 2
+ctest --test-dir build-hardware -R 's7(hardware|audio|sdr)' --output-on-failure
+cmake --install build-hardware --prefix /path/to/install
+```
+
+Each backend accepts `AUTO` (build when its development package is found),
+`ON` (fail configuration if unavailable), or `OFF` (do not discover/link it).
+PipeWire is Linux-only. A simulation-only build sets all three to `OFF`; its
+SDK, elements and offline graph checks remain available. `build_for_linux`
+requires all three unless `--no-hardware` is given. Linux dependency scripts
+offer the same opt-out. These scripts install public dependencies only.
+
+The SDK component is `s7sdk`; CMake consumers use
+`find_package(s7hardware 0.1 CONFIG REQUIRED)` and link `s7::s7hardware`,
+`s7::s7audio` and/or `s7::s7sdr`. Headers live under `include/s7/`.
+Element plugins `libs7audio-elements.so` and `libs7sdr-elements.so` install under
+`${libdir}/s7/plugins`. Their metadata/factories perform no hardware I/O.
+Load them through the usual runtime/Studio plugin discovery for editing and
+validation. Their `step()` refuses execution without an explicit hardware owner.
+
+## Explicit activation and pacing
+
+```sh
+build-hardware/s7hw --check examples/hardware/audio_capture.json
+build-hardware/s7hw --check examples/hardware/audio_playback.json
+build-hardware/s7hw --check examples/hardware/sdr_receive.json
+
+# Opt-in hardware operations:
+build-hardware/s7hw --devices portaudio
+build-hardware/s7hw --run examples/hardware/audio_capture.json --frames 480000
+build-hardware/s7hw --run examples/hardware/audio_playback.json --frames 480000
+```
+
+`--check` compiles and validates the initial execution profile without resolving
+providers or opening hardware. It cannot qualify device-specific capabilities.
+`--devices` explicitly invokes provider discovery. PipeWire currently reports
+only its policy-selected `default` target; obtain other node names/object.serial
+selectors with `pw-dump`. PortAudio discovery reports host API, device name and
+unstable enumeration index. Soapy requires an explicit driver/device selector;
+there is no default-first-radio selection.
+
+`--run` explicitly prepares and activates capture, playback or RF transmission,
+according to the element direction. Preparation can open devices and change
+stopped RF controls; changes are not transactional. SIGINT/SIGTERM request
+cancellation. Transfers have a one-second deadline in this runner; driver
+shutdown is not a hard real-time guarantee. The final report separates graph
+frames, accepted/delivered frames, terminal status and emergency output frames.
+
+Only **one hardware boundary and one exact rate domain** are admitted initially.
+Any number of ordinary graph elements can precede/follow that boundary. Capture
+waits for a block then performs one ordinary graph step per received frame.
+Playback stages scalar graph frames into bounded blocks and waits for device
+queue capacity. No graph code runs in an audio callback and no timer also paces
+the graph. Existing `Delay`, publication and failed-domain behavior remain intact.
+
+Audio playback prefills its configured `queue_frames` before activation; SDR
+providers prefill one block. A queue bound not divisible by `block_frames` uses
+a shortened final prefill block. A finite run shorter than prefill activates
+with its shorter available prefix. **Completion aborts** pending output; it
+does not drain the DAC or guarantee presentation of the final accepted tail.
+With very short playback runs this may also expose an underflow before stop.
+There is no silent zero padding counted as graph output. Future graceful drain
+needs separate, bounded backend qualification.
+
+Runs and streams are single-use. A fault, cancellation or completed run requires
+a new graph/run/stream segment before resuming. A graph failure cannot roll back
+already captured or emitted hardware samples. The boundary latches the existing
+`on_step_failure()` notification so ordinary graph retry cannot consume/emit
+replacement samples. Copying/moving a live boundary is disabled.
+
+## Elements and formats
+
+`AudioSource`, `AudioSink`, `SdrSource`, and `SdrSink` use the common parameters:
+
+| Parameter | Meaning |
+| --- | --- |
+| `type` | Explicit application S7 type (or normal graph type inference) |
+| `backend`, `device` | Explicit provider and backend-scoped selector; no fallback |
+| `channels` | Ordered unique channel IDs; one scalar port per channel |
+| `frame_rate` | Reduced exact nominal rate `[numerator, denominator]` |
+| `block_frames` | Maximum transfer block; default 256, limit 1,048,576 |
+| `queue_frames` | Application handoff/prefill bound; default 4096, limit 16,777,216 |
+| `options` | JSON object encoded as a string, with string-valued backend options |
+
+Frames contain one complete real/complex value per selected channel. I/Q are
+components of a complex channel, not separately scheduled ports. Channel count
+is limited to 64 and a single admitted application queue to 256 MiB; backend/OS
+queues are separate and may be unobservable. Option and selector sizes are also
+bounded. The initial API offers caller-owned **copy transfers** only. It does
+not lend device/callback storage or expose immutable block leases.
+
+Audio supports `F32` normalized application PCM (nominal [-1,1]), signed `I16`
+and signed `I32` full-scale PCM. Channel IDs must initially be contiguous
+zero-based positions (`["0"]`, `["0","1"]`, ...); arbitrary audio channel
+remapping is rejected. Rates are integer nominal rates up to 768 kHz, subject
+to backend support. Packed PCM24 is unsupported. Physical converter resolution,
+OS conversion and server resampling are unknown unless independently qualified;
+the adapters make no strict-native PCM guarantee. PortAudio uses its callback
+status flags; PipeWire checks negotiated application parameters, buffer/chunk
+bounds, discontinuity/corruption flags and stream disconnection.
+
+Native PipeWire capture accepts string-valued `options.capture_sink="true"`
+to explicitly capture a sink monitor (`"false"` or omission selects ordinary
+capture). It is rejected on playback. Explicit targets disable policy fallback;
+streams disable movement and reconnection. Neutral `GAP`/`EMPTY` buffers become
+zero-filled capture frames, while corrupted data and later discontinuities fault.
+
+Soapy accepts `C32` as explicit `CF32` driver conversion. `CI12` and `CI16`
+require driver-reported native `CS16` plus respectively full-scale 2048 or
+32768 for every selected channel; a container-width name alone is insufficient.
+CI12 values are range-checked. Driver channels use canonical zero-based integer
+IDs; they do not establish that RF connectors exist. Supported stopped options
+are `frequency_hz`, `bandwidth_hz`, `gain_db` and `antenna`, applied to all selected
+channels with exact readback checks. Unknown options or rounded requested controls
+fail. Software/library support for a channel does not qualify its physical wiring.
+
+`Descriptor` records the accepted request, randomized session ID, segment and
+configuration/timing revisions, startup prefill, amplitude interpretation and
+available native/readback details. Conversion, resampling and timestamp support
+use supported/unsupported/unknown values. Physical clock identity stays unknown.
+Transfer frame positions are software-delivered/accepted positions, never hardware
+counters. Soapy `HAS_TIME` carries driver-local time with unspecified epoch;
+audio sample timestamps are not exposed by this first implementation. No arrival
+timestamp is labeled as acquisition time or UTC.
+
+## C++ ownership and private extensions
+
+Build a schema with `s7::audio::Source/Sink`, `s7::sdr::Source/Sink`, or registered
+element factories. Compile normally, then construct
+`s7::hardware::Run(graph, provider_resolver)` and explicitly call
+`execute(frame_count, transfer_timeout, stop_token)`. The resolver returns a
+provider instance; `Run` owns it and its prepared stream. `Run::cancel()` may
+be called concurrently; lifecycle and transfer operations otherwise have one
+owner. Stop/join any controller before destroying the run. Graph observation
+still follows `NodeRuntime`'s stepping-thread rules.
+
+An external provider links only the installed public SDK and its own dependency.
+It exports `extern "C" s7::hardware::Provider*
+s7_hardware_provider_v1(const char* backend)`, returning null for an unknown
+backend. This is a C-named factory with the matching C++ SDK/compiler ABI,
+not a compiler-independent C ABI. `ProviderModule` retains library code until
+the last returned provider/stream is destroyed, and forwards cancellation.
+Use `s7hw --provider-library /absolute/path/to/provider.so ...` to load one.
+Loading calls no device factory until the explicitly selected operation needs it.
+
+On Linux, base stream start/read/write/stop hooks run inside `BackendCallGuard`
+from `<s7/hardware_backend.hpp>`. It handles socket SIGPIPE without replacing
+the process signal disposition, preserves the caller's mask/pending signal and
+errno, and lets normal native errors reach the stream contract. Backend-owned
+threads created within the scope inherit the blocked mask. Provider authors
+must also guard socket-using preparation, discovery, cancellation and destruction
+outside these hooks. The guard is a no-op elsewhere; other platforms need
+separate qualification.
+
+Public CI builds an external fake provider against an installed SDK. The private
+AD936x implementation, its build instructions and device profiles remain outside
+this repository. It uses generic public `SdrSource/SdrSink` elements, so private
+element metadata is unnecessary in public packages.
+
+## Verification and current limits
+
+Automated tests exercise partial prefixes/writes, variable block sizes, scalar
+Delay equivalence, graph failures, cancellation, overflow, underflow, emergency
+silence, SPSC wrap/concurrency, offline/plugin loading and installed-SDK extension
+lifetime. A registered fake Soapy driver exercises the actual Soapy adapter's
+planar/interleaved mapping, timestamp validity, native-width evidence, error
+latching and cleanup. No normal test discovers/opens physical devices.
+Separate fake PortAudio and PipeWire C APIs exercise the production audio
+adapters' negotiation, callbacks, status mapping, native buffer bounds and
+cleanup without linking the real audio libraries. The terminal-prefix race
+is covered by concurrent capture/drain stress. Native backend error codes are
+retained when supplied; zero means unavailable or not applicable.
+
+The initial modules have no duplex/shared-session execution, multiple hardware
+boundaries, independent-clock matching, adaptive resampling, hardware timestamp
+mapping, direct/borrowed buffer API, hot reconfiguration, drain/presentation
+confirmation, queue telemetry UI, or Studio/network-service activation integration.
+Those remain explicit extensions of the contract. Initial PortAudio/native
+PipeWire and radio experiments are recorded separately; untested device/channel
+combinations, full-rate continuity and physical coherence remain unqualified.
+
+## Implementation verification, 2026-11-16
+
+Observed host: Fedora 45, GCC 16.2.1, PortAudio v19 (Fedora 19.7.0-4),
+PipeWire 1.6.11, SoapySDR 0.8.1. PortAudio development headers were installed
+locally for this build. Automated tests used fake APIs/providers. Separately
+authorized live experiments opened audio endpoints and radios; see the
+[live report](HARDWARE_IO_LIVE_TESTS.md).
+
+| Configuration | Result |
+| --- | --- |
+| Debug headless, all three backends explicitly ON, complete normal build | Passed |
+| Hardware/audio/SDR, offline examples, plugin and installed-SDK checks plus existing rollback/rate-inference checks | 14/14 passed |
+| ASan + UBSan + leak detection for the new modules and seven module/API/fake-driver tests | 7/7 passed; existing s7core linked from the installed SDK, not sanitizer-instrumented in this pass |
+| Release with all three backends OFF and `PKG_CONFIG_EXECUTABLE=/bin/false` | Built; 7/7 profile/contract/SDK checks passed |
+| Required PipeWire ON with pkg-config unavailable | Configuration failed with the expected missing-dependency diagnostic |
+| Explicit PipeWire selection in the backend-disabled runner | Failed with the expected unavailable-backend diagnostic |
+| Shell syntax and whitespace checks | Passed |
+
+The normal build/check commands used the `/tmp/s7-hardware-build` build tree:
+
+```sh
+cmake -S . -B /tmp/s7-hardware-build -DS7_BUILD_STUDIO=OFF \
+  -DS7_PORTAUDIO=ON -DS7_PIPEWIRE=ON -DS7_SOAPYSDR=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build /tmp/s7-hardware-build --parallel 3
+cmake --build /tmp/s7-hardware-build --target \
+  s7hardware_smoke s7hardware_backend_signal_smoke s7hardware_plugin_smoke s7audio_smoke \
+  s7audio_portaudio_smoke s7audio_pipewire_smoke s7sdr_smoke s7sdr_soapy_smoke \
+  s7core_step_rollback_smoke s7core_rate_inference_smoke --parallel 3
+ctest --test-dir /tmp/s7-hardware-build \
+  -R 's7(hardware|audio|sdr)|s7core_(step_rollback|rate_inference)_smoke' --output-on-failure
+cmake --install /tmp/s7-hardware-build --prefix /tmp/s7-hardware-sdk --component s7sdk
+```
+
+Native Windows/macOS execution and the updated AppDir packaging path remain
+unqualified by this pass. Live measurements supplement automated checks without
+extending their guarantees to all devices or full nominal-rate RF capture.

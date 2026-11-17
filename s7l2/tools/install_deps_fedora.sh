@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Install development dependencies for s7l2 on Fedora (tested on Fedora 44).
 #
-# Usage: tools/install_deps_fedora.sh [--no-studio] [--no-spectral] [--no-extras] [--dry-run]
+# Usage: tools/install_deps_fedora.sh [--no-studio] [--no-spectral] [--no-hardware] [--no-extras] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
 #   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
+#   --no-hardware skip public PortAudio, PipeWire and SoapySDR development packages
 #   --no-extras    skip optional tools (ninja, gnuplot)
 #   --dry-run      print the dnf command instead of running it
 # Windows binaries are cross-built on Ubuntu (tools/install_deps_ubuntu.sh --windows).
@@ -16,6 +17,7 @@ set -euo pipefail
 WITH_STUDIO=1
 WITH_SPECTRAL=1
 WITH_EXTRAS=1
+WITH_HARDWARE=1
 DRY_RUN=0
 
 for arg in "$@"; do
@@ -23,6 +25,7 @@ for arg in "$@"; do
     --no-studio) WITH_STUDIO=0 ;;
     --no-spectral) WITH_SPECTRAL=0 ;;
     --no-extras) WITH_EXTRAS=0 ;;
+    --no-hardware) WITH_HARDWARE=0 ;;
     --windows)
       echo "Windows cross builds are set up on Ubuntu: tools/install_deps_ubuntu.sh --windows (docs/WINDOWS_BUILD.md)." >&2
       exit 2 ;;
@@ -57,6 +60,11 @@ PACKAGES+=(
   openssl          # CLI used by tools/generate_test_runtime_certs.sh
   zlib-ng-compat-devel
 )
+
+# Public hardware providers; private AD936x dependencies are never fetched here.
+if (( WITH_HARDWARE )); then
+  PACKAGES+=(portaudio-devel pipewire-devel SoapySDR-devel)
+fi
 
 # s7studio: Qt6 Core, Gui, Widgets (+ OpenGL headers required by Qt6Gui); the
 # observation viewers' Qt Quick, Qt Graphs and Qt Quick 3D (Qt >= 6.9). Their

@@ -2,7 +2,7 @@
 # Runs an S7 program built by ./build_for_linux.
 #
 # Usage: ./run_on_linux [--release] [<program> [arguments...]]
-#   program: s7studio (default), s7runtime or s7ctl
+#   program: s7studio (default), s7runtime, s7ctl or s7hw
 #   --release  the program from build-release/ instead of build/
 # Finds the build's noise plugin; Studio also finds installed analysis plugins (unless S7_PLUGIN_PATH is set).
 # Example: ./run_on_linux s7runtime --schema s7runtime/examples/schema_minimal.json --serve-seconds 5
@@ -20,11 +20,12 @@ if [ "${1:-}" = --release ]; then
 fi
 case "${1:-s7studio}" in
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
-    s7studio|s7runtime|s7ctl) PROGRAM="${1:-s7studio}"; shift || true ;;
-    *) echo "Unknown program: $1 (s7studio, s7runtime or s7ctl)" >&2; exit 2 ;;
+    s7studio|s7runtime|s7ctl|s7hw) PROGRAM="${1:-s7studio}"; shift || true ;;
+    *) echo "Unknown program: $1 (s7studio, s7runtime, s7ctl or s7hw)" >&2; exit 2 ;;
 esac
 
 EXE="$BUILD/$PROGRAM/$PROGRAM"
+if [ "$PROGRAM" = s7hw ]; then EXE="$BUILD/s7hw"; fi
 if [ ! -x "$EXE" ]; then
     echo "$EXE is not built; run ./build_for_linux$( [ "$BUILD" = "$ROOT/build" ] || echo ' --release') first." >&2
     exit 1

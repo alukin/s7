@@ -22,6 +22,9 @@ installed licence files of every bundled library, and an inventory
 | [LZ4](https://github.com/lz4/lz4) library (optional) | Independent lossless frame blocks in s7transport | BSD-2-Clause | upstream library licence / installed licence files when bundled |
 | [Zstandard](https://github.com/facebook/zstd) library (optional) | Independent lossless frame compression in s7transport (static) | BSD-3-Clause (selected from the upstream dual licence) | upstream `LICENSE`, required with compressed binary distributions |
 | [FFTW 3](https://www.fftw.org/) | Studio spectrum (double precision); separate `s7spectral` plugin (single precision) | GPL-2.0-or-later | installed licence files and exact source-package inventory for the bundled Studio library |
+| [PortAudio](https://portaudio.com/) (optional) | Public independent sound capture/playback | MIT | installed licence files when bundled |
+| [PipeWire](https://pipewire.org/) (optional, Linux) | Native public sound capture/playback | MIT | installed licence files when bundled |
+| [SoapySDR](https://github.com/pothosware/SoapySDR) (optional) | Public SDR provider | BSL-1.0 | installed licence files when bundled; device modules have separate licences |
 
 Python/Java frame compression providers are optional application dependencies,
 not checked-in or bundled binaries; tested versions are recorded in the

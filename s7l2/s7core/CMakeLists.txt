@@ -182,6 +182,10 @@ s7_add_test_executable(s7core_trapezoid_smoke tests/trapezoid_smoke.cpp)
 target_link_libraries(s7core_trapezoid_smoke PRIVATE s7core)
 add_test(NAME s7core_trapezoid_smoke COMMAND s7core_trapezoid_smoke)
 
+s7_add_test_executable(s7core_integrators_smoke tests/integrators_smoke.cpp)
+target_link_libraries(s7core_integrators_smoke PRIVATE s7core)
+add_test(NAME s7core_integrators_smoke COMMAND s7core_integrators_smoke)
+
 s7_add_test_executable(s7core_coupled_integration_smoke tests/coupled_integration_smoke.cpp)
 target_link_libraries(s7core_coupled_integration_smoke PRIVATE s7core)
 add_test(NAME s7core_coupled_integration_smoke COMMAND s7core_coupled_integration_smoke)

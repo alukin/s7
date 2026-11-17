@@ -9,7 +9,7 @@ copy of the GNU GPL version 3.
 
 | Part | Licence | Why |
 |---|---|---|
-| Runtime and plugin SDK: `s7l2/s7core`, `s7io`, `s7observe`, `s7net`, `s7transport`, `s7runtime`, `s7noise`, and the build files `s7l2/CMakeLists.txt`, `s7l2/cmake/` | [LGPL-3.0-or-later](LICENSES/LGPL-3.0-or-later.txt) | Element plugins under any licence can link `s7core`, and applications can embed the runtime. Changes to these libraries themselves stay free. |
+| Runtime and plugin SDK: `s7l2/s7core`, `s7io`, `s7observe`, `s7net`, `s7transport`, `s7runtime`, `s7noise`, `s7hardware`, `s7audio`, `s7sdr`, and the build files `s7l2/CMakeLists.txt`, `s7l2/cmake/` | [LGPL-3.0-or-later](LICENSES/LGPL-3.0-or-later.txt) | Element plugins under any licence can link `s7core`, and applications can embed the runtime. Changes to these libraries themselves stay free. |
 | S7 Studio (`s7l2/s7studio`) and `s7ctl` (`s7l2/s7ctl`) | [GPL-3.0-or-later](LICENSES/GPL-3.0-or-later.txt) with the [S7 plugin permission](LICENSES/LicenseRef-S7-plugin-permission.txt) | Studio is a complete application; the permission allows it to load element plugins under any licence. |
 | Everything else that is code: tests, tools and scripts, CI, the Python node `s7py` | [GPL-3.0-or-later](LICENSES/GPL-3.0-or-later.txt) | |
 | Documentation: `doc/`, `s7l2/docs/`, READMEs and other Markdown | [CC-BY-4.0](LICENSES/CC-BY-4.0.txt) | Anyone may reuse and adapt it, with attribution. The protocol specifications may be implemented by anyone. |

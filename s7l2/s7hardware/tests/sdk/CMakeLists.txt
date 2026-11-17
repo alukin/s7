@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+cmake_minimum_required(VERSION 3.25)
+project(s7hardware_sdk_test LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 26)
+find_package(s7hardware 0.1 CONFIG REQUIRED)
+add_library(test_provider MODULE provider.cpp)
+target_link_libraries(test_provider PRIVATE s7::s7hardware)
+add_executable(sdk_consumer consumer.cpp)
+target_link_libraries(sdk_consumer PRIVATE s7::s7hardware s7::s7audio s7::s7sdr)
+target_compile_options(sdk_consumer PRIVATE -UNDEBUG)
+enable_testing()
+add_test(NAME sdk_consumer COMMAND sdk_consumer $<TARGET_FILE:test_provider>)

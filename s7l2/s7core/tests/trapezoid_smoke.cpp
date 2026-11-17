@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cfenv>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -41,6 +42,57 @@ void scalar_convergence() {
     }
 }
 
+void amplitude_scaling() {
+    // The same linear equation has the same relative error at every scale.
+    // An absolute convergence floor used to accept the first tiny correction.
+    for (const double initial : {1e-100, -1e-100, 1.0, 1e100}) {
+        s7::Schema schema("scaled_decay");
+        schema.add_element("x", [=] { return std::make_unique<s7::TrapezoidIntegrator>(.125, initial); });
+        schema.add_element("f", [] { return std::make_unique<s7::Gain>(-1.0); });
+        schema.connect("x", 0, "f", 0); schema.connect("f", 0, "x", 0);
+        s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+        for (int n = 0; n <= 10; ++n) {
+            runtime.step();
+            const double expected = std::pow(15.0/17.0, n);
+            require(std::abs(runtime.real_output_of("x")/initial-expected) < 5e-14,
+                    "Trapezoid relative accuracy must not depend on signal amplitude");
+        }
+    }
+}
+
+void sampled_large_finite_input() {
+    s7::Schema schema("large_quadrature");
+    schema.add_element("input", [] { return std::make_unique<s7::Constant>(1e308); });
+    schema.add_element("area", [] {
+        return std::make_unique<s7::TrapezoidIntegrator>(.001, 0., s7::TrapezoidMode::Sampled);
+    });
+    schema.connect("input", 0, "area", 0);
+    s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+    runtime.step();
+    std::feclearexcept(FE_OVERFLOW);
+    runtime.step();
+    require(std::isfinite(runtime.real_output_of("area")) &&
+            std::abs(runtime.real_output_of("area")/1e305-1) < 1e-14,
+            "Finite trapezoid area must not overflow while adding endpoint samples");
+    require(!std::fetestexcept(FE_OVERFLOW), "A finite trapezoid area must not raise intermediate overflow");
+}
+
+void finite_complex_components() {
+    // The norm can overflow even though both components and their endpoint
+    // updates are representable. Convergence belongs to native components.
+    const std::complex<double> initial{1.5e308,1.5e308};
+    s7::Schema schema("large_complex_decay");
+    schema.add_element("x",[=]{return std::make_unique<s7::TrapezoidIntegratorT<s7::SignalType::C64>>(.125,initial);});
+    schema.add_element("f",[]{return std::make_unique<s7::ComplexGain>(std::complex<double>{-1,0});});
+    schema.connect("x",0,"f",0);schema.connect("f",0,"x",0);
+    s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+    runtime.step();runtime.step();
+    const auto value=runtime.complex_output_of("x");
+    require(std::abs(value.real()/initial.real()-15./17.)<1e-14 &&
+            std::abs(value.imag()/initial.imag()-15./17.)<1e-14,
+            "Representable complex components must not fail an overflowing norm test");
+}
+
 template <s7::SignalType Type> void typed_step() {
     using V = s7::signal_storage_t<Type>;
     using R = s7::component_storage_t<Type>;
@@ -64,6 +116,26 @@ template <s7::SignalType Type> void typed_step() {
                            component == s7::SignalType::F64 ? 53 : 113;
     require(s7::math::abs(runtime.output_of<Type>("x")-expected) < s7::math::ldexp(R(1), 6-digits),
             "Typed implicit trapezoid step");
+}
+
+template <s7::SignalType Type> void typed_small_signal() {
+    using V=s7::signal_storage_t<Type>; using R=s7::component_storage_t<Type>;
+    constexpr auto component=s7::component_signal_type(Type);
+    constexpr int exponent=component==s7::SignalType::F16 ? -8 : component==s7::SignalType::F32 ? -40 :
+                           component==s7::SignalType::F64 ? -200 : -2000;
+    constexpr int digits=component==s7::SignalType::F16 ? 11 : component==s7::SignalType::F32 ? 24 :
+                         component==s7::SignalType::F64 ? 53 : 113;
+    const R scale=s7::math::ldexp(R(1),exponent);
+    const V initial=[&]{if constexpr(s7::is_complex_signal_type(Type)) return V(scale,scale/R(2));else return V(scale);}();
+    s7::Schema schema("typed_small_trapezoid");
+    schema.add_element("x",[=]{return std::make_unique<s7::TrapezoidIntegratorT<Type>>(R(.125),initial);});
+    schema.add_element("f",[]{return std::make_unique<s7::GainT<Type>>(V(-1));});
+    schema.connect("x",0,"f",0);schema.connect("f",0,"x",0);
+    s7::NodeRuntime runtime(s7::Compiler::compile(schema));
+    runtime.step();runtime.step();
+    const V expected=initial*(R(15)/R(17));
+    require(s7::math::abs((runtime.output_of<Type>("x")-expected)/scale)<s7::math::ldexp(R(1),6-digits),
+            "Small-signal trapezoid convergence must retain native real/complex precision");
 }
 
 void oscillator(bool reverse) {
@@ -218,10 +290,15 @@ void rollback() {
 
 int main() try {
     scalar_convergence();
+    amplitude_scaling(); sampled_large_finite_input(); finite_complex_components();
     typed_step<s7::SignalType::F16>(); typed_step<s7::SignalType::F32>();
     typed_step<s7::SignalType::F64>(); typed_step<s7::SignalType::F128>();
     typed_step<s7::SignalType::C16>(); typed_step<s7::SignalType::C32>();
     typed_step<s7::SignalType::C64>(); typed_step<s7::SignalType::C128>();
+    typed_small_signal<s7::SignalType::F16>(); typed_small_signal<s7::SignalType::F32>();
+    typed_small_signal<s7::SignalType::F64>(); typed_small_signal<s7::SignalType::F128>();
+    typed_small_signal<s7::SignalType::C16>(); typed_small_signal<s7::SignalType::C32>();
+    typed_small_signal<s7::SignalType::C64>(); typed_small_signal<s7::SignalType::C128>();
     oscillator(false); oscillator(true); nonlinear(); validation(); held_source(); rollback();
     std::cout << "Implicit trapezoid: typed states, second-order scalar/nonlinear convergence, coupled energy, validation and rollback passed\n";
     return 0;

@@ -20,6 +20,7 @@
 #include "viewers/window_inspection_panel.hpp"
 #include "analysis/worker_pool.hpp"
 #include <QElapsedTimer>
+#include <QImage>
 #include <QSemaphore>
 #include <QThreadPool>
 #include <QJsonDocument>
@@ -322,6 +323,28 @@ private slots:
         search->setText("no-help-topic-matches-this-string");
         for (int i = 0; i < contents->count(); ++i) QVERIFY(contents->item(i)->isHidden());
         search->clear();
+        search->setText("Siebert");
+        matches = 0;
+        for (int i = 0; i < contents->count(); ++i) matches += !contents->item(i)->isHidden();
+        QVERIFY(matches >= 2);
+        search->clear();
+        browser->setSource(QUrl("qrc:/s7studio/help/docs/INTEGRATORS.md"), QTextDocument::MarkdownResource);
+        QVERIFY(browser->toPlainText().contains("BackwardEulerIntegrator"));
+        QVERIFY2(browser->toPlainText().contains("frequency warping", Qt::CaseInsensitive),
+                 qPrintable(browser->toPlainText().right(4000)));
+        capture(help, "integrators", true);
+        const auto mapping = browser->document()->find("Exact sampling and numerical s-to-z maps");
+        QVERIFY(!mapping.isNull());
+        browser->setTextCursor(mapping);
+        browser->ensureCursorVisible();
+        capture(help, "integrator-mappings", true);
+        QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
+            Q_ARG(QUrl, QUrl("INTEGRATOR_REFERENCES.md"))));
+        QVERIFY(browser->toPlainText().contains("Problem 8.7"));
+        for (const auto* name : {"euler_delay_realizations", "integrator_mappings", "integrator_oscillators"}) {
+            QImage image(QStringLiteral(":/s7studio/help/docs/images/%1.png").arg(QString::fromUtf8(name)));
+            QVERIFY2(!image.isNull(), name);
+        }
         browser->setSource(QUrl("qrc:/s7studio/help/docs/STUDIO_USER_GUIDE.md"), QTextDocument::MarkdownResource);
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/SCOPE_RESULTS.md"))));

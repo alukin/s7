@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Install development dependencies for s7l2 on Ubuntu (tested on 26.04 LTS).
 #
-# Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-spectral] [--no-extras] [--windows] [--dry-run]
+# Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-spectral] [--no-hardware] [--no-extras] [--windows] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
 #   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
+#   --no-hardware skip public PortAudio, PipeWire and SoapySDR development packages
 #   --no-extras    skip optional tools (ninja, gnuplot)
 #   --windows      also the Windows cross toolchain: Clang/LLVM 22, Wine (docs/WINDOWS_BUILD.md)
 #   --dry-run      print the apt command instead of running it
@@ -16,6 +17,7 @@ set -euo pipefail
 WITH_STUDIO=1
 WITH_SPECTRAL=1
 WITH_EXTRAS=1
+WITH_HARDWARE=1
 WITH_WINDOWS=0
 DRY_RUN=0
 
@@ -24,6 +26,7 @@ for arg in "$@"; do
     --no-studio) WITH_STUDIO=0 ;;
     --no-spectral) WITH_SPECTRAL=0 ;;
     --no-extras) WITH_EXTRAS=0 ;;
+    --no-hardware) WITH_HARDWARE=0 ;;
     --windows) WITH_WINDOWS=1 ;;
     --dry-run) DRY_RUN=1 ;;
     -h|--help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -57,6 +60,11 @@ PACKAGES+=(
   openssl          # CLI used by tools/generate_test_runtime_certs.sh
   zlib1g-dev
 )
+
+# Public hardware providers; private AD936x dependencies are never fetched here.
+if (( WITH_HARDWARE )); then
+  PACKAGES+=(portaudio19-dev libpipewire-0.3-dev libspa-0.2-dev libsoapysdr-dev)
+fi
 
 # s7studio: Qt6 Core, Gui, Widgets (+ OpenGL headers required by Qt6Gui); the
 # observation viewers' Qt Quick, Qt Graphs and Qt Quick 3D (Qt >= 6.9) and the

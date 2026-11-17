@@ -28,6 +28,9 @@ path = [
     "s7l2/s7transport/**",
     "s7l2/s7runtime/**",
     "s7l2/s7noise/**",
+    "s7l2/s7hardware/**",
+    "s7l2/s7audio/**",
+    "s7l2/s7sdr/**",
 ]
 precedence = "closest"
 SPDX-FileCopyrightText = "Oleksiy Lukin and S7 contributors"
