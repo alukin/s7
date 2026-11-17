@@ -18,6 +18,13 @@ package `xdotool`) to send XTest mouse events to the wrapper's private Xvfb
 display. Those gesture cases explicitly skip when it is unavailable. The MIME
 rejection checks still run. No drag events are sent to the user's desktop.
 
+For the [published screenshot tour](../../screenshots/README.md), the selected
+example workflows accept `S7_README_SCREENSHOTS=1`. This enlarges windows,
+frames the diagram/camera, retains 32,768 live samples per channel and selects
+the AM carrier for Spectrum. It changes capture presentation, not the model
+or its rate. Recorded phase history is fully loaded before capture in either
+mode. The screenshot guide contains the reproducible command and provenance.
+
 ```bash
 cmake -S . -B build -DS7_BUILD_STUDIO=ON -DS7_BUILD_GUI_REGRESSION_TESTS=ON
 cmake --build build --target build-tests --parallel 2

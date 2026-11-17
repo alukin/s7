@@ -2,6 +2,20 @@
 
 S7 is a platform for building, running and observing distributed causal systems: signal processing, software-defined radio, distributed sensing, simulation of dynamic systems. A system is a schema of elements and connections. It is validated, compiled into an executable graph and stepped by headless runtime nodes, which may sit on different machines and exchange typed data streams. Studio is an optional GUI for drawing diagrams, deploying them to nodes and watching them run.
 
+Studio models dynamics as explicit networks of integrators, gains, summing
+junctions and delays, following the analog-computer approach that inspired S7.
+Forward and backward Euler are separate educational elements; the built-in
+help explains their recurrences, initial conditions, trapezoidal integration
+and the relation between the s and z planes, with MIT and Siebert references.
+
+[![Buck converter model in S7 Studio, using gain triangles, signed summing circles and integrator method labels.](screenshots/02-buck-diagram.png)](screenshots/README.md)
+
+See [the screenshot tour](screenshots/README.md) for actual runs of a Lorenz
+attractor, a controlled buck converter and an AM detector. Public sound/SDR
+modules provide independent PortAudio, native PipeWire and SoapySDR backends;
+their current execution profile is documented in the
+[hardware I/O guide](s7l2/docs/HARDWARE_IO.md).
+
 Causality comes before clock time: the result of a schema is defined by its graph, not by the timing of the machines that run it. Network boundaries are explicit elements, and nodes trust each other through X.509 identities over mutual TLS.
 
 The project is in pre-MVP development. APIs, file formats and protocols may still change without backward compatibility.
@@ -20,6 +34,8 @@ The implementations interoperate through the protocols in `doc/`. Their conforma
 ## Where to start
 
 - See Studio running three bundled examples: [screenshots and descriptions](screenshots/README.md), including Scope and Live Oscilloscope views.
+- Build on Ubuntu 26.04/26.10 or Fedora 45: [dependency installers and options](s7l2/docs/BUILD_DEPENDENCIES.md).
+- Study the mathematical blocks: [symbol notation](s7l2/docs/DIAGRAM_SYMBOLS.md) and [integrators, delays and s/z maps](s7l2/docs/INTEGRATORS.md).
 - What S7 is and why: [`doc/S7_VISION.md`](doc/S7_VISION.md), then [`doc/S7_Formal_Model.md`](doc/S7_Formal_Model.md).
 - Build and run the C++ runtime and Studio: [`s7l2/README.md`](s7l2/README.md), with its docs index in [`s7l2/docs/INDEX.md`](s7l2/docs/INDEX.md).
 - Run a Python node: [`s7py/README.md`](s7py/README.md).

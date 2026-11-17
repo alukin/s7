@@ -10,6 +10,11 @@ and their experiment guides. See [Studio screenshots](../screenshots/README.md)
 for three bundled examples with diagrams, recorded Scope results, and Live
 Oscilloscope views.
 
+The current source includes [mathematical block symbols](docs/DIAGRAM_SYMBOLS.md),
+separate forward/backward Euler elements and expanded offline integrator help.
+The screenshots show the current source; the linked 0.1.2 release archives
+describe an earlier preview and have their own validation record.
+
 S7 is a platform for constructing, executing, and observing distributed causal systems: a schema of elements and connections is validated, compiled into an executable graph, and stepped by a headless runtime. Studio is an optional GUI client.
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
@@ -49,7 +54,7 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 - Lossless typed data streams between nodes (`../doc/S7_Network_Wire_Protocol_v1.md`): exactly once and in order while both processes run, backpressure, faults reported and recoverable, each stream bound to its producer and consumer nodes, timestamp profiles.
 - Diagrams deployed across nodes: elements placed on nodes, streams assigned between them, each node running its part (Studio Run > Deploy to Nodes, `s7ctl deploy`).
 - Conformance data for other implementations of both protocols (`s7transport/tests/fixtures/`, `s7runtime/tests/fixtures/`), with a second wire decoder in Python.
-- Studio diagram editing, element library, parameter dialogs, local runs with Scope plots, diagram/schema/library files, headless node discovery with certificate-based trust.
+- Studio diagram editing with mathematical primitive symbols, element library, parameter dialogs, local runs with recorded Scope, Live Oscilloscope, Phase Portrait and 3D trajectory views, diagram/schema/library files, headless node discovery with certificate-based trust.
 
 ## Not implemented yet
 
@@ -117,4 +122,4 @@ Runtime state (node identity, peer cache, active deployment) is stored in the di
 
 ## License
 
-The runtime and the plugin SDK (`s7core`, `s7io`, `s7observe`, `s7net`, `s7transport`, `s7runtime`, `s7noise`) are LGPL-3.0-or-later; Studio and `s7ctl` are GPL-3.0-or-later with a permission to load plugins under any licence; tests and tools are GPL-3.0-or-later. Examples are CC0-1.0, `s7spectral` is MIT-0, and documentation is CC-BY-4.0. See [`../LICENSING.md`](../LICENSING.md).
+The runtime and the plugin SDK (`s7core`, `s7io`, `s7observe`, `s7net`, `s7transport`, `s7runtime`, `s7noise`, `s7hardware`, `s7audio`, `s7sdr`) are LGPL-3.0-or-later; Studio and `s7ctl` are GPL-3.0-or-later with a permission to load plugins under any licence; tests and tools are GPL-3.0-or-later. Examples are CC0-1.0, `s7spectral` is MIT-0, and documentation is CC-BY-4.0. See [`../LICENSING.md`](../LICENSING.md).

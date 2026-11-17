@@ -261,7 +261,7 @@ private slots:
     void init() {
         QSettings{}.clear();
         window_ = std::make_unique<TestWindow>();
-        window_->resize(1100, 750);
+        window_->resize(qEnvironmentVariableIsSet("S7_README_SCREENSHOTS") ? QSize(2048, 1152) : QSize(1100, 750));
         window_->show();
         QVERIFY(QTest::qWaitForWindowExposed(window_.get()));
     }
@@ -328,15 +328,20 @@ private slots:
         for (int i = 0; i < contents->count(); ++i) matches += !contents->item(i)->isHidden();
         QVERIFY(matches >= 2);
         search->clear();
+        for (int i = 0; i < contents->count(); ++i)
+            if (contents->item(i)->text().startsWith("Integrators, delays")) contents->setCurrentRow(i);
         browser->setSource(QUrl("qrc:/s7studio/help/docs/INTEGRATORS.md"), QTextDocument::MarkdownResource);
+        if (qEnvironmentVariableIsSet("S7_README_SCREENSHOTS")) help->resize(1120, 1100);
         QVERIFY(browser->toPlainText().contains("BackwardEulerIntegrator"));
         QVERIFY2(browser->toPlainText().contains("frequency warping", Qt::CaseInsensitive),
                  qPrintable(browser->toPlainText().right(4000)));
         capture(help, "integrators", true);
         const auto mapping = browser->document()->find("Exact sampling and numerical s-to-z maps");
         QVERIFY(!mapping.isNull());
-        browser->setTextCursor(mapping);
+        auto position = mapping; position.clearSelection();
+        browser->setTextCursor(position);
         browser->ensureCursorVisible();
+        browser->verticalScrollBar()->setValue(browser->verticalScrollBar()->value() + browser->cursorRect().top() - 12);
         capture(help, "integrator-mappings", true);
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("INTEGRATOR_REFERENCES.md"))));
@@ -346,6 +351,8 @@ private slots:
             QImage image(QStringLiteral(":/s7studio/help/docs/images/%1.png").arg(QString::fromUtf8(name)));
             QVERIFY2(!image.isNull(), name);
         }
+        for (int i = 0; i < contents->count(); ++i)
+            if (contents->item(i)->text() == "Basic block symbols") contents->setCurrentRow(i);
         browser->setSource(QUrl("qrc:/s7studio/help/docs/DIAGRAM_SYMBOLS.md"), QTextDocument::MarkdownResource);
         QVERIFY(browser->toPlainText().contains("current input"));
         QVERIFY(browser->toPlainText().contains("R/(1−R)"));
@@ -2311,6 +2318,7 @@ private slots:
     void bundledExamplesRunAndRender() {
         if (qEnvironmentVariableIsEmpty("S7_GUI_EXAMPLES")) QSKIP("Bundled examples run in the s7studio_gui_examples tests");
         QFETCH(QString, diagram);
+        const bool publication = qEnvironmentVariableIsSet("S7_README_SCREENSHOTS");
         const double seconds = documentedSeconds(diagram);
         QVERIFY2(seconds > 0, "every bundled example needs a documented run in documentedSeconds()");
         const auto path = QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram;
@@ -2348,7 +2356,10 @@ private slots:
             if (type == "PhaseTrajectory3D" && !graphicsAvailable_) continue;
             auto* viewer = manager->openObserver(type, id);
             QVERIFY2(viewer, qPrintable(type + ' ' + id));
-            viewer->widget()->resize(1100, 650);
+            viewer->widget()->resize(publication ? QSize(1320, 820) : QSize(1100, 650));
+            if (publication) {
+                if (auto* retention = viewer->widget()->findChild<QSpinBox*>("live.samples")) retention->setValue(32768);
+            }
             viewers.push_back({type + '-' + id, viewer});
         }
         QVERIFY(!viewers.isEmpty());
@@ -2375,6 +2386,16 @@ private slots:
         const auto base = QString(diagram).replace('/', '_').remove(".s7diagram");
         QStringList problems;
         for (const auto& [name, viewer] : viewers) {
+            if (publication && viewer->source()) {
+                const auto status = viewer->source()->status();
+                QVERIFY2(!status.incomplete(), qPrintable(status.storageError + ' ' + status.runError));
+                QCOMPARE(status.captureDropped, std::uint64_t(0));
+            }
+            if (dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer) ||
+                dynamic_cast<s7studio::ui::PhasePortraitViewWindow*>(viewer)) {
+                QTRY_VERIFY(viewer->source() && viewer->source()->status().finished);
+                while (viewer->refreshSource()) {}
+            }
             if (auto* surface = dynamic_cast<s7studio::viewers::SurfaceWindow*>(viewer)) {
                 while (surface->refreshSource()) {}
                 QVERIFY2(surface->error().isEmpty(), qPrintable(surface->error()));
@@ -2403,6 +2424,15 @@ private slots:
             }
             QTest::qWait(400);
             auto* widget = viewer->widget();
+            if (publication) {
+                if (auto* trajectory = dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer)) {
+                    trajectory->setViewPreset(s7studio::ui::PhaseTrajectory3DViewWindow::ViewPreset::Perspective);
+                    auto* quick = widget->findChild<QQuickWidget*>(); QVERIFY(quick && quick->rootObject());
+                    auto* camera = quick->rootObject()->findChild<QObject*>("viewer.camera"); QVERIFY(camera);
+                    QVERIFY(camera->setProperty("z", 370.));
+                }
+                if (auto* fit = widget->findChild<QPushButton*>("live.timeScale.fitRun")) fit->click();
+            }
             if(diagram=="frequency_response/rlc.s7diagram" && dynamic_cast<s7studio::viewers::ResponseWindow*>(viewer)) {auto* reference=widget->findChild<QCheckBox*>("response.referenceModel");QVERIFY(reference);reference->setChecked(true);auto* cursor=widget->findChild<QDoubleSpinBox*>("response.frequency");QVERIFY(cursor);cursor->setValue(5);}
             widget->raise();
             const auto checkPlots = [&](const QString& view) {
@@ -2419,6 +2449,12 @@ private slots:
             const int pages = tabs ? tabs->count() : 1;
             for (int page = 0; page < pages; ++page) {
                 if (tabs) tabs->setCurrentIndex(page);
+                if (publication && diagram == "signal_measurement/am_coherent_detection_live.s7diagram" &&
+                    name.endsWith("carrier_scope") && tabs && tabs->tabText(page) == "Spectrum") {
+                    auto* channel = widget->findChild<QComboBox*>("spectrum.channel"); QVERIFY(channel);
+                    const auto index = channel->findText("carrier_scope/carrier", Qt::MatchStartsWith);
+                    QVERIFY(index >= 0); channel->setCurrentIndex(index);
+                }
                 QTest::qWait(page ? 1200 : 400);
                 const auto view = tabs ? tabs->tabText(page).replace(' ', "").replace('/', "") : QStringLiteral("view");
                 if (!dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer)) checkPlots(view);
@@ -2434,7 +2470,12 @@ private slots:
                 presentation->setCurrentIndex(0);
             }
         }
-        // The main window with its Observers dock previews.
+        // Normal captures include observer previews; publication captures fit
+        // the complete graph in the larger window.
+        if (publication) {
+            for (auto* dock : window_->findChildren<QDockWidget*>()) dock->hide();
+            action("action.fitDiagram")->trigger();
+        }
         capture(window_.get(), base + "-studio");
         for (const auto& problem : problems) qWarning().noquote() << "plot range:" << problem;
         if (qEnvironmentVariableIsEmpty("S7_EXAMPLES_REPORT_ONLY")) QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
