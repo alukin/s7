@@ -341,10 +341,16 @@ private slots:
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("INTEGRATOR_REFERENCES.md"))));
         QVERIFY(browser->toPlainText().contains("Problem 8.7"));
-        for (const auto* name : {"euler_delay_realizations", "integrator_mappings", "integrator_oscillators"}) {
+        for (const auto* name : {"euler_delay_realizations", "integrator_mappings", "integrator_oscillators",
+                                 "basic_symbols", "basic_symbols_compact"}) {
             QImage image(QStringLiteral(":/s7studio/help/docs/images/%1.png").arg(QString::fromUtf8(name)));
             QVERIFY2(!image.isNull(), name);
         }
+        browser->setSource(QUrl("qrc:/s7studio/help/docs/DIAGRAM_SYMBOLS.md"), QTextDocument::MarkdownResource);
+        QVERIFY(browser->toPlainText().contains("current input"));
+        QVERIFY(browser->toPlainText().contains("R/(1−R)"));
+        QVERIFY(browser->toPlainText().contains("Editing the blocks"));
+        capture(help, "basic-symbols", true);
         browser->setSource(QUrl("qrc:/s7studio/help/docs/STUDIO_USER_GUIDE.md"), QTextDocument::MarkdownResource);
         QVERIFY(QMetaObject::invokeMethod(browser, "anchorClicked", Qt::DirectConnection,
             Q_ARG(QUrl, QUrl("qrc:/s7studio/help/docs/SCOPE_RESULTS.md"))));

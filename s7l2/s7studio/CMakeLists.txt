@@ -239,6 +239,7 @@ qt_add_resources(s7studio_app s7studio_help
     PREFIX /s7studio/help BASE ${PROJECT_SOURCE_DIR}
     FILES
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_USER_GUIDE.md
+        ${PROJECT_SOURCE_DIR}/docs/DIAGRAM_SYMBOLS.md
         ${PROJECT_SOURCE_DIR}/docs/INTEGRATORS.md
         ${PROJECT_SOURCE_DIR}/docs/INTEGRATOR_REFERENCES.md
         ${PROJECT_SOURCE_DIR}/docs/TRAPEZOID_INTEGRATION.md
@@ -246,6 +247,8 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/images/euler_delay_realizations.png
         ${PROJECT_SOURCE_DIR}/docs/images/integrator_mappings.png
         ${PROJECT_SOURCE_DIR}/docs/images/integrator_oscillators.png
+        ${PROJECT_SOURCE_DIR}/docs/images/basic_symbols.png
+        ${PROJECT_SOURCE_DIR}/docs/images/basic_symbols_compact.png
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_SPECTRUM.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_PAIR_ANALYSIS.md

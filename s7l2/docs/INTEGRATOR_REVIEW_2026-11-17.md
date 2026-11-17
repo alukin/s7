@@ -122,3 +122,48 @@ iteration and are tested as such.
 Native Windows/macOS execution and a full interactive simulation usability
 matrix were not qualified by this pass. Higher precision, a small residual,
 or bounded energy alone is not a physical-model accuracy guarantee.
+
+## Diagram symbol follow-up
+
+After the integrator checkpoint was committed and pushed, Studio gained
+mathematical block shapes. [Basic block symbols](DIAGRAM_SYMBOLS.md) records
+the equations and sources. In particular, Siebert's illustrated accumulator
+uses earlier inputs, whereas S7's existing accumulator includes the current
+input. The shape change preserves S7's recurrence and labels that distinction.
+Rounded binary64 coefficient previews carry `≈`; only exact unit weights
+become `+` or `−`. Product input factors are shown, and integrator method codes
+remain visible at minimum size. The velocity-first two-state update is marked
+`SE`, with position and velocity outputs.
+
+The rendering/geometry and metadata CTests passed (2/2), as did the existing
+Studio edit and bundled-demo checks (2/2). Six selected Xvfb GUI workflows passed
+without skips (8 QtTest cases including initialization and cleanup). These cover
+Help/resources, library/ports, parameter editing, save/reopen, typed keyboard
+editing, edit integrity and nested clipboard/bends. The complete headless suite
+and sanitizer results above belong to the preceding integrator checkpoint;
+this follow-up changes presentation and metadata, not runtime execution.
+
+```
+cmake --build build-release --target s7studio_diagram_test \
+  s7studio_gui_workflows_test s7studio s7core_metadata_json_smoke --parallel 2
+ctest --test-dir build-release \
+  -R '^(s7studio_diagram|s7core_metadata_json_smoke)$' --output-on-failure
+ctest --test-dir build-release \
+  -R '^(s7studio_edit_check|s7studio_bundled_demo)$' --output-on-failure
+python3 tools/run_gui_test.py --artifacts /tmp/s7-integrator-review/symbols-final-gui \
+  --capture build-release/s7studio/s7studio_gui_capture --timeout 150 \
+  -- build-release/s7studio/s7studio_gui_workflows_test helpAndAbout \
+  frameElementsLibraryAndPorts editParametersSaveOpen typedParametersAndKeyboard \
+  editingIntegrity clipboardNestedAndBends
+```
+
+The actual node renderer produced both original gallery images embedded in
+Help; normal and minimum sizes and the Help screenshot were visually inspected.
+To regenerate the galleries after a symbol change:
+
+```
+S7_SYMBOL_GALLERY=/tmp/basic_symbols.png QT_QPA_PLATFORM=offscreen \
+  build-release/s7studio/s7studio_diagram_test
+```
+
+The compact gallery is written to `/tmp/basic_symbols.png.compact.png`.

@@ -119,6 +119,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [CONTROL_ELEMENTS.md](CONTROL_ELEMENTS.md) | Local control/measurement primitives and the separate reusable schema resource |
 | [TRAPEZOID_INTEGRATION.md](TRAPEZOID_INTEGRATION.md) | Implicit coupled trapezoidal integration, sampled quadrature mode, causality, solver limits and verification |
 | [INTEGRATORS.md](INTEGRATORS.md) | Forward/backward Euler, trapezoidal rule, explicit delay realizations, startup, s/z maps and MIT Leapfrog terminology |
+| [DIAGRAM_SYMBOLS.md](DIAGRAM_SYMBOLS.md) | MIT-style basic block symbols, coefficients, delay notation and compact numerical-method labels |
 | [INTEGRATOR_REFERENCES.md](INTEGRATOR_REFERENCES.md) | Siebert and MIT primary sources, exact sections/pages and visual reading record |
 | [INTEGRATOR_REVIEW_2026-11-17.md](INTEGRATOR_REVIEW_2026-11-17.md) | Integrator findings/fixes, independent numerical evidence, GUI help checks and remaining limits |
 | [STUDIO_OBSERVATION_VIEWERS.md](STUDIO_OBSERVATION_VIEWERS.md) | Studio's Scope, Phase Portrait and 3D trajectory viewers (Qt Graphs, Qt Quick 3D): read-only viewer interfaces, independent run data/authoritative capture, registry and lifecycle, adding a viewer type, tests and manual visual test plan |

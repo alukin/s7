@@ -183,7 +183,7 @@
         }
       ],
       "visual": {
-        "shape": "box",
+        "shape": "triangle",
         "color": "#4CAF50",
         "max_width": 110,
         "max_height": 52,
@@ -954,7 +954,7 @@
         }
       ],
       "visual": {
-        "shape": "box",
+        "shape": "circle",
         "color": "#4CAF50",
         "max_width": 110,
         "max_height": 52,
@@ -1112,7 +1112,7 @@
         }
       ],
       "visual": {
-        "shape": "box",
+        "shape": "circle",
         "color": "#4CAF50",
         "max_width": 110,
         "max_height": 52,

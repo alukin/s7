@@ -366,22 +366,58 @@ int main(int argc, char** argv)
         const auto framedImage = render(framed);
         ElementNode filter(element("filter", "Delay"));
         const auto filterImage = render(filter);
-        check(plainImage.pixelColor(5, 50) != framedImage.pixelColor(5, 50),
+        ElementNode generic(element("generic", "FirFilter"));
+        const auto genericImage = render(generic);
+        check(framedImage.pixelColor(5,50) != framedImage.pixelColor(8,50) &&
+              genericImage.pixelColor(5,50) == genericImage.pixelColor(8,50),
               "nested schema paints a second frame inside the body");
-        check(plainImage.pixelColor(90, 70) != filterImage.pixelColor(90, 70) &&
-              plainImage.pixelColor(90, 70) != framedImage.pixelColor(90, 70),
+        check(plainImage.pixelColor(60,50) != filterImage.pixelColor(60,50) &&
+              plainImage.pixelColor(60,50) != framedImage.pixelColor(60,50),
               "element families and nested schemas use distinct soft fills");
-        check(plainImage.pixelColor(90, 70) == plainImage.pixelColor(90, 85) &&
-              framedImage.pixelColor(90, 70) == framedImage.pixelColor(90, 85),
-              "element bodies remain text-only without a central pictogram");
+        check(plainImage.pixelColor(150,20) == QColor(Qt::white) &&
+              plainImage.pixelColor(60,50) != QColor(Qt::white),
+              "gain is a triangle instead of a rectangular body");
+        ElementNode sum(element("sum","Adder",{{"weights",boost::json::array{1,-1}}}));
+        const std::vector<QPointF> sumAnchors{sum.inputs()[0]->pos(),sum.inputs()[1]->pos(),sum.outputs()[0]->pos()};
+        const auto sumImage=render(sum);
+        check(sum.inputs()[0]->pos()==sumAnchors[0] && sum.inputs()[1]->pos()==sumAnchors[1] &&
+              sum.outputs()[0]->pos()==sumAnchors[2],"painting mathematical symbols does not move ports");
+        check(sumImage.pixelColor(55,20)==QColor(Qt::white) && sumImage.pixelColor(90,20)!=QColor(Qt::white),
+              "adder has a circular summing body");
+        auto positive=sum.element();positive.params["weights"]=boost::json::array{1,1};
+        sum.setElement(positive);
+        const auto positiveImage=render(sum);
+        check(positiveImage!=sumImage,"summing input signs reflect the actual weights");
+        positive.params["weights"]=boost::json::array{1,1.0000001};sum.setElement(positive);
+        check(render(sum)!=positiveImage,"a rounded near-unit weight is not presented as an exact plus sign");
+        auto scaled=normal.element();scaled.params["factor"]=3.;normal.setElement(scaled);
+        check(render(normal)!=plainImage,"gain coefficient is visible inside its triangle");
+        scaled.params["factor"]=1.0000001;normal.setElement(scaled);
+        check(render(normal)!=plainImage,"a rounded gain is marked approximate instead of displaying exact unity");
+        ElementNode product(element("product","Multiply"));
+        const auto productImage=render(product);
+        auto weightedProduct=product.element();weightedProduct.params["factors"]=boost::json::array{2,-3};
+        product.setElement(weightedProduct);
+        check(render(product)!=productImage,"product input scale factors are visible");
+        ElementNode accumulator(element("acc","Accumulator"));
+        check(accumulator.toolTip().contains("y[−1] = initial_value"),
+              "accumulator notation identifies the S7 prehistory convention");
+        accumulator.setProblem("invalid connection");
+        check(accumulator.toolTip()=="invalid connection","validation problems take tooltip priority");
+        accumulator.setProblem({});
+        check(accumulator.toolTip().contains("y[n−1] + x[n]"),"clearing a problem restores the block equation");
+        check(QLineF(sum.inputs()[0]->pos(),QPointF(0,20)).length()<1e-3 &&
+              QLineF(sum.inputs()[1]->pos(),QPointF(0,60)).length()<1e-3 &&
+              QLineF(sum.outputs()[0]->pos(),QPointF(180,40)).length()<1e-3,
+              "mathematical symbols keep existing grid port anchors");
         bool coloredText = false;
-        for (int y = 8; y < 37; ++y) {
-            for (int x = 12; x < 100; ++x) {
+        for (int y = 68; y < 98; ++y) {
+            for (int x = 12; x < 140; ++x) {
                 const auto pixel = plainImage.pixelColor(x, y);
                 coloredText = coloredText || (pixel.value() < 170 && pixel.green() > pixel.red() + 5);
             }
         }
-        check(coloredText, "element name/type use a readable family-colored ink");
+        check(coloredText, "symbol captions use a readable family-colored ink");
         const auto footerHasInk = [](const QImage& image) {
             for (int y = 76; y < 92; ++y) {
                 for (int x = 12; x < 100; ++x) {
@@ -390,8 +426,35 @@ int main(int argc, char** argv)
             }
             return false;
         };
-        check(footerHasInk(plainImage) && !footerHasInk(filterImage),
-              "stateless elements have a text marker while stateful filters do not");
+        check(footerHasInk(plainImage) && footerHasInk(filterImage),
+              "primitive symbols retain identifying captions");
+        if (const auto path=qEnvironmentVariable("S7_SYMBOL_GALLERY");!path.isEmpty()) {
+            const std::vector<std::pair<std::string,boost::json::object>> symbols{
+                {"Gain",{{"factor",.5}}},{"Adder",{{"weights",boost::json::array{1,-1}}}},
+                {"Multiply",{{"factors",boost::json::array{2,-3}}}},{"Delay",{}},{"Accumulator",{}},{"EulerIntegrator",{}},
+                {"BackwardEulerIntegrator",{}},{"TrapezoidIntegrator",{{"mode","sampled"}}},
+                {"TrapezoidIntegrator",{}},{"SymplecticIntegrator",{}}};
+            const std::vector<std::string> names{"gain","sum","product","delay","running_sum","forward","backward","sampled","implicit","velocity_first"};
+            QImage gallery(660,600,QImage::Format_ARGB32_Premultiplied);gallery.fill(Qt::white);
+            QPainter painter(&gallery);
+            for(std::size_t i=0;i<symbols.size();++i) {
+                ElementNode item(element(names[i],symbols[i].first,symbols[i].second));
+                painter.save();painter.translate(20+(i%3)*220,10+(i/3)*150);item.paint(&painter,nullptr);
+                for(const auto* ports:{&item.inputs(),&item.outputs()}) for(const auto& port:*ports) {
+                    painter.save();painter.translate(port->pos());port->paint(&painter,nullptr);painter.restore();
+                }
+                painter.restore();
+            }
+            painter.end();check(gallery.save(path),"save mathematical symbol gallery for visual review");
+            QImage compact(600,90,QImage::Format_ARGB32_Premultiplied);compact.fill(Qt::white);
+            QPainter smallPainter(&compact);
+            const std::vector<std::string> smallTypes{"Gain","Adder","Delay","EulerIntegrator","BackwardEulerIntegrator","TrapezoidIntegrator"};
+            for(std::size_t i=0;i<smallTypes.size();++i) {
+                ElementNode item(element("b"+std::to_string(i),smallTypes[i]));item.setGridSize(QSize(2,2));
+                smallPainter.save();smallPainter.translate(15+i*100,5);item.paint(&smallPainter,nullptr);smallPainter.restore();
+            }
+            smallPainter.end();check(compact.save(path+QStringLiteral(".compact.png")),"save minimum-size symbol gallery");
+        }
     }
     {
         DiagramScene annotations;

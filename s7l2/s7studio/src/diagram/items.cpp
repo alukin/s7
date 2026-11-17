@@ -114,6 +114,218 @@ ElementColors elementColors(const ElementNode::Element& element)
     return {fill, accent, title, mix(title, QColor(0x3f, 0x4b, 0x56), 0.25)};
 }
 
+enum class BasicSymbol { None, Gain, Sum, Product, Delay, Accumulator, Integral };
+
+BasicSymbol basicSymbol(const ElementNode::Element& element)
+{
+    if (isSchemaBacked(element)) return BasicSymbol::None;
+    const auto& type = element.type;
+    if (type == "Gain") return BasicSymbol::Gain;
+    if (type == "Adder") return BasicSymbol::Sum;
+    if (type == "Multiply") return BasicSymbol::Product;
+    if (type == "Delay" || type == "PreviousValue") return BasicSymbol::Delay;
+    if (type == "Accumulator") return BasicSymbol::Accumulator;
+    if (type == "EulerIntegrator" || type == "BackwardEulerIntegrator" || type == "TrapezoidIntegrator" ||
+        type == "GaussLegendreIntegrator" || type == "SymplecticIntegrator" || type == "ControlledIntegrator")
+        return BasicSymbol::Integral;
+    return BasicSymbol::None;
+}
+
+QString symbolNumber(const boost::json::value& value, const QString& symbolic = QStringLiteral("K"))
+{
+    if (value.is_double()) {
+        const auto text = QString::number(value.as_double(), 'g', 5);
+        return text.toDouble() == value.as_double() ? text : QStringLiteral("≈") + text;
+    }
+    if (value.is_int64()) return QString::number(value.as_int64());
+    if (value.is_uint64()) return QString::number(value.as_uint64());
+    if (value.is_string()) return QString::fromStdString(std::string(value.as_string()));
+    // Complex coefficients need a mathematical name rather than truncated JSON.
+    return symbolic;
+}
+
+bool exactUnit(const boost::json::value& value, const int sign)
+{
+    return (value.is_double() && value.as_double() == sign) ||
+           (value.is_int64() && value.as_int64() == sign) ||
+           (sign == 1 && value.is_uint64() && value.as_uint64() == 1);
+}
+
+QString symbolQualifier(const ElementNode::Element& element)
+{
+    const auto& type = element.type;
+    if (type == "EulerIntegrator") return QStringLiteral("Forward Euler");
+    if (type == "BackwardEulerIntegrator") return QStringLiteral("Backward Euler");
+    if (type == "GaussLegendreIntegrator") return QStringLiteral("Gauss–Legendre");
+    if (type == "SymplecticIntegrator") return QStringLiteral("Symplectic (v first)");
+    if (type == "ControlledIntegrator") return QStringLiteral("Controlled integral");
+    if (type == "Accumulator") return QStringLiteral("Accumulator · current input");
+    if (type == "TrapezoidIntegrator") {
+        const auto* mode = element.params.if_contains("mode");
+        return mode && mode->is_string() && mode->as_string() == "sampled"
+            ? QStringLiteral("Trapezoid · sampled") : QStringLiteral("Trapezoid · implicit");
+    }
+    if (type == "Delay" || type == "PreviousValue") return QString::fromStdString(type) + QStringLiteral(" · z⁻¹");
+    auto text = QString::fromStdString(type);
+    const auto* descriptor = s7::ElementRegistry::instance().find(type);
+    if (descriptor && descriptor->metadata().stateless) text += QStringLiteral(" · stateless");
+    return text;
+}
+
+QString integralCode(const ElementNode::Element& element)
+{
+    if (element.type == "EulerIntegrator") return QStringLiteral("FE");
+    if (element.type == "BackwardEulerIntegrator") return QStringLiteral("BE");
+    if (element.type == "GaussLegendreIntegrator") return QStringLiteral("GL");
+    if (element.type == "SymplecticIntegrator") return QStringLiteral("SE");
+    if (element.type == "ControlledIntegrator") return QStringLiteral("CE");
+    const auto* mode=element.params.if_contains("mode");
+    return mode && mode->is_string() && mode->as_string()=="sampled" ? QStringLiteral("TS") : QStringLiteral("TI");
+}
+
+QString symbolDescription(const ElementNode::Element& element)
+{
+    QString equation;
+    switch (basicSymbol(element)) {
+    case BasicSymbol::Gain: equation = QStringLiteral("y[n] = K x[n]"); break;
+    case BasicSymbol::Sum: equation = QStringLiteral("y[n] = Σᵢ wᵢ xᵢ[n]"); break;
+    case BasicSymbol::Product: equation = QStringLiteral("y[n] = Πᵢ (kᵢ xᵢ[n])"); break;
+    case BasicSymbol::Delay: equation = QStringLiteral("y[n] = x[n−1], n ≥ 1; y[0] = initial_value"); break;
+    case BasicSymbol::Accumulator: equation = QStringLiteral("y[n] = y[n−1] + x[n]; y[−1] = initial_value"); break;
+    case BasicSymbol::Integral:
+        if (element.type == "EulerIntegrator") {
+            const auto* substeps = element.params.if_contains("substeps");
+            equation = substeps && !exactUnit(*substeps,1)
+                ? QStringLiteral("Coupled forward Euler substeps; see the integrator help")
+                : QStringLiteral("y[n+1] = y[n] + h x[n]; y[0] = initial_value");
+        } else if (element.type == "BackwardEulerIntegrator")
+            equation = QStringLiteral("y[n] = y[n−1] + h x[n], n ≥ 1; y[0] = initial_value");
+        else if (element.type == "TrapezoidIntegrator") {
+            const auto* mode = element.params.if_contains("mode");
+            equation = mode && mode->is_string() && mode->as_string() == "sampled"
+                ? QStringLiteral("y[n] = y[n−1] + h/2 (x[n−1]+x[n]), n ≥ 1; y[0] = initial_value")
+                : QStringLiteral("y[n+1] = y[n] + h/2 (f[n]+f[n+1]); coupled implicit endpoint stage");
+        } else if (element.type == "SymplecticIntegrator")
+            equation = QStringLiteral("v[n+1] = v[n] + h a[n]\nx[n+1] = x[n] + h v[n+1]");
+        else if (element.type == "GaussLegendreIntegrator")
+            equation = QStringLiteral("Two-stage, fourth-order coupled Gauss–Legendre integration");
+        else equation = QStringLiteral("Causal rectangle-rule state with enable, reset and limits; see the integrator help");
+        break;
+    case BasicSymbol::None: return {};
+    }
+    return symbolQualifier(element) + QStringLiteral("\n") + equation +
+        QStringLiteral("\nParameters: ") + QString::fromStdString(boost::json::serialize(element.params));
+}
+
+// A symbol is drawn inside the existing node footprint. Short local leads
+// connect it to the original grid ports; no saved anchor or router geometry
+// changes when a diagram is opened with the mathematical presentation.
+bool paintBasicSymbol(const ElementNode& node, QPainter* painter, const QRectF& footprint, const ElementColors& colors)
+{
+    const auto kind = basicSymbol(node.element());
+    if (kind == BasicSymbol::None) return false;
+    if (kind == BasicSymbol::Gain && (node.inputs().size() != 1 || node.outputs().size() != 1)) return false;
+    const double captionHeight = std::min(34.0, footprint.height() * .34);
+    double cy = footprint.center().y();
+    const auto& reference = node.outputs().empty() ? node.inputs() : node.outputs();
+    if (!reference.empty()) cy = (reference.front()->pos().y() + reference.back()->pos().y()) / 2;
+    const double radius = std::max(4.0, std::min({cy-4.0, footprint.height()-captionHeight-cy,
+                                                (footprint.width()-12.0)/2}));
+    const bool circular = kind == BasicSymbol::Sum || kind == BasicSymbol::Product;
+    const double halfWidth = circular ? radius : std::min((footprint.width()-12.0)/2,
+        radius * (kind == BasicSymbol::Gain ? 1.5 : 1.3));
+    const QRectF body(footprint.center().x()-halfWidth, cy-radius, 2*halfWidth, 2*radius);
+    QPainterPath outline;
+    if (kind == BasicSymbol::Gain) {
+        outline.moveTo(body.topLeft()); outline.lineTo(body.right(),cy); outline.lineTo(body.bottomLeft()); outline.closeSubpath();
+    } else if (circular) outline.addEllipse(body);
+    else outline.addRect(body);
+    painter->drawPath(outline);
+
+    const auto terminal = [&](const bool input, const std::size_t index, const std::size_t count) {
+        const double dy = count < 2 ? 0 : radius * 1.6 * (double(index)/double(count-1)-.5);
+        if (circular) return QPointF(body.center().x() + (input ? -1 : 1) * std::sqrt(radius*radius-dy*dy),cy+dy);
+        return QPointF(input ? body.left() : body.right(),cy+dy);
+    };
+    painter->save();
+    painter->setPen(QPen(kWire, 1.1));
+    for (const auto* ports : {&node.inputs(), &node.outputs()}) {
+        const bool input = ports == &node.inputs();
+        for (std::size_t i=0; i<ports->size(); ++i)
+            painter->drawLine((*ports)[i]->pos(), terminal(input,i,ports->size()));
+    }
+    painter->restore();
+
+    QString glyph;
+    switch (kind) {
+    case BasicSymbol::Gain:
+        glyph = node.element().params.if_contains("factor") ? symbolNumber(node.element().params.at("factor")) : QStringLiteral("1"); break;
+    case BasicSymbol::Sum: glyph = QStringLiteral("+"); break;
+    case BasicSymbol::Product: glyph = QStringLiteral("×"); break;
+    case BasicSymbol::Delay: glyph = QStringLiteral("R"); break;
+    case BasicSymbol::Accumulator: glyph = QStringLiteral("Σ"); break;
+    case BasicSymbol::Integral:
+        glyph = radius < 12 || node.element().type == "SymplecticIntegrator"
+            ? integralCode(node.element()) : QStringLiteral("∫"); break;
+    case BasicSymbol::None: break;
+    }
+    painter->save();
+    QFont glyphFont = painter->font(); glyphFont.setBold(false);
+    glyphFont.setPointSizeF(std::clamp(radius*.65,6.,22.)); painter->setFont(glyphFont);
+    painter->setPen(colors.title);
+    QRectF glyphRect = body.adjusted(3,2,-3,-2);
+    if (kind == BasicSymbol::Gain) glyphRect.setRight(body.left()+body.width()*.7);
+    painter->drawText(glyphRect, Qt::AlignCenter, QFontMetricsF(glyphFont).elidedText(glyph,Qt::ElideRight,glyphRect.width()));
+    if (kind == BasicSymbol::Integral && radius >= 12 && node.element().type != "SymplecticIntegrator") {
+        QFont methodFont = glyphFont; methodFont.setPointSizeF(7.); painter->setFont(methodFont);
+        painter->drawText(body.adjusted(2,2,-3,-2), Qt::AlignBottom | Qt::AlignRight, integralCode(node.element()));
+    }
+    if (kind == BasicSymbol::Sum || kind == BasicSymbol::Product) {
+        const bool sum = kind == BasicSymbol::Sum;
+        const auto* weights = node.element().params.if_contains(sum ? "weights" : "factors");
+        QFont signFont = glyphFont; signFont.setPointSizeF(std::clamp(radius*.3,6.,9.)); painter->setFont(signFont);
+        for (std::size_t i=0; i<node.inputs().size(); ++i) {
+            QString weight = sum ? QStringLiteral("+") : QString();
+            if (weights && weights->is_array() && i<weights->as_array().size()) {
+                const auto& value = weights->as_array()[i];
+                if (exactUnit(value,1)) weight = sum ? QStringLiteral("+") : QString();
+                else if (sum && exactUnit(value,-1)) weight = QStringLiteral("−");
+                else weight = symbolNumber(value, QStringLiteral("%1%2").arg(sum ? "w" : "k").arg(i));
+            }
+            const auto end = terminal(true,i,node.inputs().size());
+            const auto start = node.inputs()[i]->pos();
+            const auto middle = (start+end)/2;
+            const double width = std::max(8.,std::min(end.x()-start.x()-2.,QFontMetricsF(signFont).horizontalAdvance(weight)+4.));
+            const QRectF label(middle.x()-width/2,middle.y()-QFontMetricsF(signFont).height()-1,width,QFontMetricsF(signFont).height());
+            painter->drawText(label,Qt::AlignCenter,QFontMetricsF(signFont).elidedText(weight,Qt::ElideRight,label.width()));
+        }
+    }
+    if (node.element().type == "SymplecticIntegrator") {
+        QFont stateFont = glyphFont; stateFont.setPointSizeF(8.); painter->setFont(stateFont);
+        for (std::size_t i=0; i<node.outputs().size() && i<2; ++i) {
+            const auto end = terminal(false,i,node.outputs().size());
+            const auto start = node.outputs()[i]->pos();
+            painter->drawText(QRectF(end.x()+2,end.y()-15,start.x()-end.x()-4,14),
+                              Qt::AlignLeft, i == 0 ? QStringLiteral("x") : QStringLiteral("v"));
+        }
+    }
+    const double captionTop = footprint.height()-captionHeight+1;
+    QFont titleFont = painter->font(); titleFont.setBold(true);
+    titleFont.setPointSizeF(std::clamp(footprint.height()*.085,6.,10.)); painter->setFont(titleFont);
+    const QFontMetricsF titleMetrics(titleFont);
+    const QRectF titleRect(2,captionTop,footprint.width()-4,titleMetrics.height());
+    if (titleRect.bottom() <= footprint.bottom())
+        painter->drawText(titleRect,Qt::AlignCenter,titleMetrics.elidedText(node.title(),Qt::ElideRight,titleRect.width()));
+    QFont typeFont = titleFont; typeFont.setBold(false); typeFont.setPointSizeF(std::max(6.,titleFont.pointSizeF()*.85));
+    painter->setFont(typeFont);painter->setPen(colors.type);
+    const QFontMetricsF typeMetrics(typeFont);
+    const QRectF typeRect(2,titleRect.bottom()+1,footprint.width()-4,typeMetrics.height());
+    if (typeRect.bottom() <= footprint.bottom())
+        painter->drawText(typeRect,Qt::AlignCenter,typeMetrics.elidedText(symbolQualifier(node.element()),Qt::ElideRight,typeRect.width()));
+    painter->restore();
+    return true;
+}
+
 // Grid rows of an element `rows` high holding `count` ports: two rows apart
 // where they fit, centred.
 auto portRow(const int rows, const int count, const int index) -> int
@@ -211,6 +423,7 @@ ElementNode::ElementNode(Element element)
     setHighlightEnabled(false);
     setAcceptHoverEvents(true);
     rebuildPorts();
+    setToolTip(symbolDescription(element_));
 }
 
 QSize ElementNode::gridSize() const
@@ -249,6 +462,7 @@ void ElementNode::setElement(Element element)
 {
     element_ = std::move(element);
     rebuildPorts();
+    setToolTip(problem_.isEmpty() ? symbolDescription(element_) : problem_);
     update();
 }
 
@@ -349,7 +563,7 @@ void ElementNode::setProblem(const QString& problem)
 {
     if (problem != problem_) {
         problem_ = problem;
-        setToolTip(problem_);
+        setToolTip(problem_.isEmpty() ? symbolDescription(element_) : problem_);
         update();
     }
 }
@@ -382,6 +596,17 @@ void ElementNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QWid
     const QColor border = !problem_.isEmpty() ? kProblem : (isSelected() ? kSelected : colors.border);
     painter->setPen(QPen(border, isSelected() || !problem_.isEmpty() ? 2.0 : 1.2));
     painter->setBrush(colors.fill);
+    if (paintBasicSymbol(*this,painter,sizeRect(),colors)) {
+        if (isSelected()) {
+            painter->setBrush(Qt::NoBrush);
+            painter->setPen(QPen(kSelected,1.,Qt::DashLine));
+            painter->drawRect(sizeRect());
+            const QRectF handle(width()-15.,height()-15.,12.,12.);
+            painter->setBrush(colors.fill);painter->setPen(QPen(kSelected,1.5));painter->drawRect(handle);
+            painter->drawLine(handle.topLeft()+QPointF(3,9),handle.topLeft()+QPointF(9,3));
+        }
+        return;
+    }
     painter->drawRoundedRect(sizeRect(), 6.0, 6.0);
     // Below the full-text size the text, its margins and the inner frame
     // shrink with the element, down to a legible limit (the two-step minimum
