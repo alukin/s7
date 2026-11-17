@@ -9,9 +9,9 @@ launched from a desktop session. They do not operate on the user's desktop.
 
 Requirements: the normal Studio dependencies (Qt 6.9+), Qt Test, Qt Quick Test,
 the `QtTest` QML module, Python 3, Xvfb, Mesa OpenGL and a working xcb platform
-plugin. Fedora: `sudo dnf install xorg-x11-server-Xvfb mesa-dri-drivers
-qt6-qtbase-devel qt6-qtdeclarative-devel`. Ubuntu additionally needs
-`qml6-module-qttest`; install the normal Studio dependencies first.
+plugin. The [Ubuntu and Fedora dependency installers](BUILD_DEPENDENCIES.md)
+include these tools by default; `--no-gui-tests` omits the suite's prerequisites
+and prints the corresponding CMake switch. `--no-extras` retains GUI test tools.
 
 Native library drag/drop checks additionally use `xdotool` (Fedora/Ubuntu
 package `xdotool`) to send XTest mouse events to the wrapper's private Xvfb

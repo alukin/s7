@@ -67,14 +67,20 @@ mappings, with [Siebert and MIT references](docs/INTEGRATOR_REFERENCES.md).
 
 ## Build
 
-Install dependencies: `tools/install_deps_ubuntu.sh` (Ubuntu 26.04) or `tools/install_deps_fedora.sh` (Fedora 44); `--no-studio` for headless only. Windows binaries are cross-built on Ubuntu ([docs/WINDOWS_BUILD.md](docs/WINDOWS_BUILD.md)).
+Install dependencies with `tools/install_deps_ubuntu.sh` (Ubuntu 26.04 LTS or
+26.10) or `tools/install_deps_fedora.sh` (Fedora 45). The default includes Studio,
+its GUI test tools, audio/SoapySDR providers, FFTW and frame-compression libraries.
+Use `--no-studio` for headless development; see the
+[dependency guide](docs/BUILD_DEPENDENCIES.md) for other options and validation.
+Windows binaries are cross-built on Ubuntu
+([Windows build guide](docs/WINDOWS_BUILD.md)).
 
 ```bash
 cmake -S . -B build                       # add -DS7_BUILD_STUDIO=OFF to skip Qt
-cmake --build build --parallel
+cmake --build build --parallel 2
 
 # Optional: build and run tests
-cmake --build build --target build-tests --parallel
+cmake --build build --target build-tests --parallel 2
 ctest --test-dir build --output-on-failure
 ```
 
@@ -89,7 +95,7 @@ plugins and checking schemas never activates hardware. Initial device-paced
 runs use `s7hw` or the C++ SDK, with one hardware boundary and one rate domain;
 Studio and the network deployment service do not yet own hardware runs.
 
-Or use the scripts in the project root (`--help` on each): `./build_for_linux [--release] [--no-studio] [--test]` and `./run_on_linux [<program> [args...]]` (program `s7studio`, `s7runtime` or `s7ctl`).
+Or use the scripts in the project root (`--help` on each): `./build_for_linux [--release] [--no-studio] [--no-hardware] [--test]` and `./run_on_linux [<program> [args...]]` (program `s7studio`, `s7runtime` or `s7ctl`).
 
 Windows binaries are cross-built on Linux with Clang and tested under Wine: `./build_for_windows [--test] [--package]` and `./run_on_wine [<program> [args...]]`; details in `docs/WINDOWS_BUILD.md`.
 

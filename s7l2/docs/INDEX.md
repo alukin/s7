@@ -139,6 +139,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | `STUDIO_DIAGRAM_EDITOR.md` | Current local simulation/Scope behavior, diagram editor internals, diagram file format, QSchematic notes |
 | `STUDIO_DIAGRAM_WIRING_DESIGN.md` | Design record of the diagram wiring: QSchematic subclasses, format v2, connection rules, router (implemented) |
 | `LOCAL_HEADLESS_NODES_DEMO.md` | Run two local headless runtimes and discover them in Studio |
+| [BUILD_DEPENDENCIES.md](BUILD_DEPENDENCIES.md) | Ubuntu 26.04/26.10 and Fedora 45 dependency installers, options and container qualification |
 | `WINDOWS_BUILD.md` | Cross-building Windows binaries on Linux (Clang, MSYS2 sysroot), testing under Wine, packaging |
 
 Module READMEs: `../s7transport/README.md`, `../s7noise/README.md`, `../s7spectral/README.md`.
