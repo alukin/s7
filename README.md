@@ -1,24 +1,163 @@
-# S7
+# S7 — Signals and systems for research and engineering
 
-S7 is a platform for building, running and observing distributed causal systems: signal processing, software-defined radio, distributed sensing, simulation of dynamic systems. A system is a schema of elements and connections. It is validated, compiled into an executable graph and stepped by headless runtime nodes, which may sit on different machines and exchange typed data streams. Studio is an optional GUI for drawing diagrams, deploying them to nodes and watching them run.
+> “… everything simple is true and everything complicated is untrue.”
+>
+> — Ukrainian philosopher **Hryhorii Skovoroda** (Григорій Сковорода),
+> quoted in William McC. Siebert's *Circuits, Signals, and Systems*,
+> [p. v](https://books.google.com/books?id=zBTUiIrb2WIC&pg=PR5) (excerpt).
 
-Studio models dynamics as explicit networks of integrators, gains, summing
-junctions and delays, following the analog-computer approach that inspired S7.
-Forward and backward Euler are separate educational elements; the built-in
-help explains their recurrences, initial conditions, trapezoidal integration
-and the relation between the s and z planes, with MIT and Siebert references.
+S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
+[*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
+understanding a system through its signals, interconnected blocks, state and
+feedback. S7 turns that way of thinking into an open-source tool for
+**researchers, scientists and engineers** to build models, run experiments and
+inspect their results.
 
-[![Buck converter model in S7 Studio, using gain triangles, signed summing circles and integrator method labels.](screenshots/02-buck-diagram.png)](screenshots/README.md)
+The project grows out of long practical experience with signal processing,
+software-defined radio, distributed sensing and dynamic-system modeling.
+Its aim is to make the path from an idea to an experiment visible: express the
+model, choose its parameters and initial conditions, run it, and compare its
+behavior with theory and measurements.
+
+Models are explicit networks of sources, integrators, gains, summing junctions,
+filters, delays and other local computation and state elements. The same
+approach supports studying a physical system, testing a controller or exploring
+a signal-processing chain. Reusable plants and controllers are graphs
+themselves, so their internal assumptions and connections remain inspectable.
+
+Studio provides a visual workbench for drawing these networks and observing
+their behavior. The runtime also works headlessly for scripted experiments,
+automated checks and execution on other machines.
+
+[![The Lorenz system in S7 Studio: its causal block diagram, a three-dimensional butterfly attractor and a Scope showing the x, y and z state signals.](screenshots/07-lorenz-overview.png)](screenshots/07-lorenz-overview.png)
+
+*Exploring the Lorenz system in S7: an explicit causal model, its
+three-dimensional attractor and recorded state signals.*
 
 See [the screenshot tour](screenshots/README.md) for actual runs of a Lorenz
-attractor, a controlled buck converter and an AM detector. Public sound/SDR
-modules provide independent PortAudio, native PipeWire and SoapySDR backends;
-their current execution profile is documented in the
-[hardware I/O guide](s7l2/docs/HARDWARE_IO.md).
+attractor, a controlled buck converter and an AM detector, with their diagrams,
+recorded Scope results and Live Oscilloscope views.
 
-Causality comes before clock time: the result of a schema is defined by its graph, not by the timing of the machines that run it. Network boundaries are explicit elements, and nodes trust each other through X.509 identities over mutual TLS.
+## What you can explore
 
-The project is in pre-MVP development. APIs, file formats and protocols may still change without backward compatibility.
+- **Dynamics and feedback:** construct oscillator, nonlinear-system and control
+  models from explicit state and function blocks. Inspect initial conditions,
+  discretization choices and the effect of changing the model's sample rate.
+- **Signals and measurements:** generate and replay signals, build filtering
+  chains, and inspect time traces, spectra, correlations and phase trajectories.
+- **Sound and radio experiments:** connect computation to PortAudio, native
+  PipeWire and SoapySDR through the explicit device-paced runner or SDK. See
+  the [hardware I/O guide](s7l2/docs/HARDWARE_IO.md) for supported workflows.
+- **Distributed computation:** place parts of a graph on separate nodes and
+  exchange typed streams across explicit network boundaries. The
+  [causal-schedule guide](s7l2/docs/DISTRIBUTED_CAUSAL_SCHEDULE.md) records the
+  implemented single-rate scope and its limits.
+
+The bundled [examples and experiment guides](s7l2/examples/README.md) are a
+starting point for changing a model and checking what follows. Numerical guides
+state the equations and initialization conventions; tests use independent
+recurrences, analytic solutions or reference solvers where appropriate.
+
+## How S7 works
+
+A model is a schema of elements and typed connections. S7 **validates the
+schema, compiles an executable graph, executes it and exposes observations**.
+Simulation follows the analog-computer approach: dynamics arise from the
+connected local blocks and their explicit state transitions.
+
+**Causality comes before clock time.** Dependencies and causal memory determine
+which values a computation may use. Machine speed and packet arrival time do
+not supply missing model state. Model time, device clocks and execution pacing
+have explicit roles; distribution keeps network boundaries visible. Nodes use
+X.509 identities and authenticated control over mutual TLS.
+
+Start with the [vision](doc/S7_VISION.md), [formal model](doc/S7_Formal_Model.md)
+and [simulation semantics](s7l2/docs/SIMULATION_MODEL.md) for the reasoning behind
+these choices.
+
+## Start an experiment
+
+1. Build the [C++ runtime and Studio](s7l2/README.md), or try the
+   [0.1.2 preview downloads](https://github.com/alukin/s7/releases/tag/v0.1.2).
+   The [release notes](s7l2/docs/RELEASE_0.1.2_NOTES.md) describe those archives;
+   current source contains later work.
+2. In Studio, choose **File → Example Diagrams…** and open a bundled model.
+   Follow its experiment guide, select a rate and duration, and run it locally.
+   Studio includes its runtime; a separate service is unnecessary for local runs.
+3. Inspect a recorded Scope or open a live observer, then change a parameter,
+   initial condition or connection and compare the results.
+
+For scripted work, use the headless runtime and command-line tools. Build on
+Linux with the [Fedora and Ubuntu dependency installers](s7l2/docs/BUILD_DEPENDENCIES.md).
+[Native RPM/DEB packaging](s7l2/docs/NATIVE_LINUX_PACKAGES.md) and the
+[Windows cross-build](s7l2/docs/WINDOWS_BUILD.md) have separate guides.
+
+S7 is in **pre-MVP development**. APIs, file formats and protocols may change.
+The [0.2.0 work plan](s7l2/docs/RELEASE_0.2.0_WORKPLAN.md) distinguishes delivered
+work, experiments and remaining qualification. For example, the
+[Full HD video experiment](s7l2/docs/VIDEO_IO_FULL_HD.md) is research evidence;
+production video adapters are still being designed. Open questions are recorded
+in [the problem list](s7l2/docs/OPEN_PROBLEMS.md).
+
+## Scientific foundations and thanks
+
+We are grateful to **William McC. Siebert** for the book that inspired S7, and
+to the MIT educators who have carried this signals-and-systems teaching
+tradition forward. In particular, we thank **Dennis Freeman and Sanjoy Mahajan**
+for their explanations of difference equations, operators, feedback and
+discrete approximations, and **Alan V. Oppenheim, Alan S. Willsky and
+S. Hamid Nawab** for their signals-and-systems textbook. We also thank
+**Nancy Lynch** for her teaching on reasoning about distributed systems.
+
+Beyond MIT, the work of **Edward A. Lee, Sanjit A. Seshia, David G. Messerschmitt,
+Thomas M. Parks and the Ptolemy researchers**, together with **Leslie Lamport's**
+work on causality, informs our study of dataflow, bounded execution and
+distributed computation. The original publications and teaching materials are:
+
+- **William McC. Siebert**, *Circuits, Signals, and Systems*. MIT Press, 1985.
+  [Publisher and editions](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)
+  (paperback ISBN 978-0-262-69095-9),
+  [book DOI](https://doi.org/10.7551/mitpress/1839.001.0001).
+  The epigraph excerpt above is on p. v; chapters 7–8 inform our treatment of
+  discrete-time block networks and integrator realizations.
+- **Sanjoy Mahajan and Dennis Freeman**, *Discrete-time Signals and Systems:
+  An Operator Approach* (2009 notes), used in
+  [MIT 6.003, Fall 2011](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/pages/readings/).
+  The [complete original notes](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/7b3f66736bb503468103ce8a55fe16e0_MIT6_003F11_notes.pdf)
+  develop block diagrams and operators in chapter 3 and discrete integration
+  through an oscillator in chapter 6.
+- **Alan V. Oppenheim, Alan S. Willsky and S. Hamid Nawab**,
+  [*Signals and Systems*, second edition](https://www.pearson.com/en-us/subject-catalog/p/signals-and-systems/P200000003155?view=educator).
+  Prentice Hall, 1997 (published 1996), ISBN 978-0-13-814757-0.
+  This is also the textbook listed for MIT 6.003.
+- **Nancy A. Lynch**, [*Distributed Algorithms*](https://groups.csail.mit.edu/tds/distalgs.html).
+  Morgan Kaufmann, 1996, ISBN 978-1-55860-348-6. Her
+  [MIT 6.852J course](https://ocw.mit.edu/courses/6-852j-distributed-algorithms-fall-2009/pages/lecture-notes/)
+  supplied teaching material for our causality and deadlock investigation.
+- **Edward A. Lee and Sanjit A. Seshia**,
+  [*Introduction to Embedded Systems: A Cyber-Physical Systems Approach*](https://ptolemy.berkeley.edu/books/leeseshia/).
+  Second edition, MIT Press, 2017, ISBN 978-0-262-53381-2; especially §6.3
+  on dataflow and initialized feedback.
+- **Edward A. Lee and David G. Messerschmitt**,
+  [“Synchronous Data Flow”](https://ptolemy.berkeley.edu/publications/papers/87/synchdataflow/).
+  *Proceedings of the IEEE* 75(9), 1235–1245, 1987,
+  [DOI](https://doi.org/10.1109/PROC.1987.13876); and **Thomas M. Parks**,
+  [*Bounded Scheduling of Process Networks*](https://ptolemy.berkeley.edu/publications/papers/95/parksThesis/),
+  PhD dissertation, UC Berkeley, 1995.
+- **Leslie Lamport**,
+  [“Time, Clocks, and the Ordering of Events in a Distributed System”](https://lamport.org/pubs/time-clocks.pdf).
+  *Communications of the ACM* 21(7), 558–565, 1978,
+  [DOI](https://doi.org/10.1145/359545.359563).
+
+The [integrator reading record](s7l2/docs/INTEGRATOR_REFERENCES.md) and
+[dataflow/causality research record](s7l2/docs/CROSS_NODE_CAUSALITY_RESEARCH.md)
+identify the sections consulted, what we learned from them and the limits of
+their applicability to S7. These acknowledgments recognize intellectual
+influences, rather than institutional affiliation or endorsement.
+
+We also thank the researchers, engineers and maintainers of the free software
+on which S7 depends. Their work makes an inspectable, extensible research tool
+possible; [licensing and third-party credits](LICENSING.md) identify the components.
 
 ## Repository
 
@@ -31,15 +170,9 @@ The project is in pre-MVP development. APIs, file formats and protocols may stil
 
 The implementations interoperate through the protocols in `doc/`. Their conformance data lives in `s7l2/s7runtime/tests/fixtures/` (control protocol) and `s7l2/s7transport/tests/fixtures/` (wire format). For example, Studio or `s7ctl` can deploy a diagram to a Python node.
 
-## Where to start
-
-- See Studio running three bundled examples: [screenshots and descriptions](screenshots/README.md), including Scope and Live Oscilloscope views.
-- Build on Ubuntu 26.04/26.10 or Fedora 45: [dependency installers and options](s7l2/docs/BUILD_DEPENDENCIES.md).
-- Study the mathematical blocks: [symbol notation](s7l2/docs/DIAGRAM_SYMBOLS.md) and [integrators, delays and s/z maps](s7l2/docs/INTEGRATORS.md).
-- What S7 is and why: [`doc/S7_VISION.md`](doc/S7_VISION.md), then [`doc/S7_Formal_Model.md`](doc/S7_Formal_Model.md).
-- Build and run the C++ runtime and Studio: [`s7l2/README.md`](s7l2/README.md), with its docs index in [`s7l2/docs/INDEX.md`](s7l2/docs/INDEX.md).
-- Run a Python node: [`s7py/README.md`](s7py/README.md).
-- Write another implementation: [`doc/S7_Control_Protocol_MVP.md`](doc/S7_Control_Protocol_MVP.md) and [`doc/S7_Network_Wire_Protocol_v1.md`](doc/S7_Network_Wire_Protocol_v1.md).
+The [documentation index](s7l2/docs/INDEX.md) links the implementation guides,
+mathematical help, research reports and release plans. For another language's
+node, start with its README and the protocol specifications in `doc/`.
 
 ## License
 

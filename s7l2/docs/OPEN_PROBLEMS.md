@@ -1,5 +1,20 @@
 # S7 Open Problems
 
+## README screenshot layout — follow-up
+
+2026-11-18: the maintainer approved the README's research/engineering positioning
+but does **not** approve the current Lorenz screenshot layout. Keep
+[`07-lorenz-overview.png`](../../screenshots/07-lorenz-overview.png) as a
+provisional image and revisit its composition with the maintainer later.
+
+The replacement should still show a real Studio session with the Lorenz model,
+3D Phase Trajectory and three-channel Scope. Improve diagram legibility at
+README display size, balance the observer windows and avoid clipped content.
+Review the new layout before treating the image as final. Preserve the actual
+run data and capture provenance; no numerical/runtime change is requested.
+The [capture guide](../../screenshots/README.md#readme-overview-the-lorenz-model-and-its-observers)
+records the current image and reproduction command.
+
 ## Mixed observer/full-viewer load — 0.1.1 qualification
 
 The original synthetic published-source check with 12 selected observers, four

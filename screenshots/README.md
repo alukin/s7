@@ -1,6 +1,6 @@
 # S7 Studio in action
 
-Six screenshots from the current S7 source: three bundled examples covering
+Seven screenshots from the current S7 source: three bundled examples covering
 nonlinear dynamics, feedback control and signal processing, plus the integrated
 mathematical help. These are actual Studio windows and runs using its bundled
 causal graph runtime; no separate runtime service is needed. The 0.1.2 release
@@ -12,6 +12,62 @@ in the diagram to open its window. **Scope** displays recorded signals;
 **Live Oscilloscope** provides bounded live acquisition with Time, Spectrum,
 Constellation / XY, and Correlation views. A finished run remains available
 for inspection.
+
+## README overview: the Lorenz model and its observers
+
+**Layout provisional, 2026-11-18:** the maintainer requested a later layout
+revision. The current image is retained for now; the
+[open follow-up](../s7l2/docs/OPEN_PROBLEMS.md#readme-screenshot-layout--follow-up)
+records the requested improvements.
+
+![The Lorenz causal block diagram above a 3D phase trajectory and a three-channel Scope, all in one actual Studio session.](07-lorenz-overview.png)
+
+The main README shows **one captured Studio desktop**: the diagram viewport
+focuses on the `base` network, the **3D Phase Trajectory** displays its butterfly
+attractor, and **Scope** shows `base_x`, `base_y` and `base_z` over model time
+20–40. The bundled example also computes the nearby-initial-condition network;
+the viewport focus does not remove it from the model. The windows were arranged
+before capture; the image is not a montage of separate plots.
+
+This is the bundled `lorenz/lorenz_attractor.s7diagram` after a successful
+**40-model-second run at 4 kHz**, with sigma=10, rho=28, beta=8/3 and base initial
+state (1,1,1). The capture verifies 160,000 trajectory points, three Scope
+channels and no source capture loss/storage failure. The observers display the
+completed recording. Notices about skipped preview updates concern screen
+refresh, not dropped recorded samples. The linked
+[model guide](../s7l2/examples/lorenz/README.md) gives the equations, independent
+numerical checks and limits; the screenshot illustrates the workflow.
+
+The system comes from Edward N. Lorenz,
+[“Deterministic Nonperiodic Flow”](https://journals.ametsoc.org/view/journals/atsc/20/2/1520-0469_1963_020_0130_dnf_2_0_co_2.xml),
+*Journal of the Atmospheric Sciences* 20(2), 130–141 (1963).
+
+### Overview capture provenance and reproduction
+
+Captured 2026-11-18 from runtime revision `4cc4ef8` plus the publication-only
+layout changes in `s7studio/tests/gui/workflows_test.cpp`. No runtime, numerical
+or viewer implementation was changed for the image. It uses a private
+2400×1500 Xvfb display, Qt 6.11.2 and Mesa llvmpipe. The dedicated Lorenz row
+passed with no failures or skips. Source logs and the original PNG are retained
+in `/tmp/s7-lorenz-readme-artifacts3/` and `/tmp/s7-lorenz-readme-captures3/` for
+this working session.
+
+From `s7l2/`, reproduce the overview with:
+
+```sh
+cmake --build build-release --target s7studio_gui_workflows_test s7studio_gui_capture --parallel 2
+S7_README_SCREENSHOTS=1 S7_GUI_EXAMPLES=0/1 \
+S7_USABILITY_CAPTURE_DIR=/tmp/s7-lorenz-readme-captures3 \
+python3 -B tools/run_gui_test.py --artifacts /tmp/s7-lorenz-readme-artifacts3 \
+  --capture build-release/s7studio/s7studio_gui_capture --graphics \
+  --screen-size 2400x1500 --timeout 240 \
+  -- build-release/s7studio/s7studio_gui_workflows_test \
+  bundledExamplesRunAndRender:lorenz/lorenz_attractor.s7diagram
+```
+
+Inspect `lorenz-overview.png` before copying it to `07-lorenz-overview.png`.
+The publication mode selects the recorded Time view and arranges real windows;
+ordinary example tests keep their existing analysis and layout checks.
 
 ## 1. Lorenz attractor: a trajectory in three dimensions
 
@@ -112,7 +168,7 @@ frequency warping, with MIT/Siebert references. Press **F1**, then choose
 [Integrator guide](../s7l2/docs/INTEGRATORS.md)
 · [Block notation and equations](../s7l2/docs/DIAGRAM_SYMBOLS.md).
 
-## Capture provenance and reproduction
+## Original six captures: provenance and reproduction
 
 Captured on 2026-11-17 from runtime/UI revision `ec6117b` on Fedora 45 with
 Qt 6.11.2 and Mesa llvmpipe, using a private virtual display. Capture-only
@@ -132,7 +188,7 @@ S7_README_SCREENSHOTS=1 S7_GUI_EXAMPLES=0/1 \
 S7_USABILITY_CAPTURE_DIR=/tmp/s7-readme-captures \
 python3 tools/run_gui_test.py --artifacts /tmp/s7-readme-artifacts \
   --capture build-release/s7studio/s7studio_gui_capture --graphics \
-  --screen-size 2200x1400 --timeout 240 \
+  --screen-size 2400x1500 --timeout 240 \
   -- build-release/s7studio/s7studio_gui_workflows_test \
   bundledExamplesRunAndRender:lorenz/lorenz_attractor.s7diagram \
   bundledExamplesRunAndRender:buck/buck_pid_load_step.s7diagram \

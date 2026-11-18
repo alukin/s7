@@ -79,6 +79,7 @@
 #include <QTextBrowser>
 #include <QListWidget>
 #include <QScrollBar>
+#include <QScreen>
 #include <QSplitter>
 #include <QContextMenuEvent>
 #include <QDragEnterEvent>
@@ -2319,6 +2320,7 @@ private slots:
         if (qEnvironmentVariableIsEmpty("S7_GUI_EXAMPLES")) QSKIP("Bundled examples run in the s7studio_gui_examples tests");
         QFETCH(QString, diagram);
         const bool publication = qEnvironmentVariableIsSet("S7_README_SCREENSHOTS");
+        const bool lorenzOverview = publication && diagram == "lorenz/lorenz_attractor.s7diagram";
         const double seconds = documentedSeconds(diagram);
         QVERIFY2(seconds > 0, "every bundled example needs a documented run in documentedSeconds()");
         const auto path = QString(S7_GUI_EXAMPLES_DIR) + '/' + diagram;
@@ -2445,8 +2447,8 @@ private slots:
                 ? QStringLiteral("scope.analysisTabs") : QStringLiteral("live.views"));
             if(!tabs)tabs=widget->findChild<QTabWidget*>("response.views");
             if(!tabs)tabs=widget->findChild<QTabWidget*>("timeFrequency.views");
-            if (auto* analyze = widget->findChild<QPushButton*>("scope.analyze"); analyze && analyze->isEnabled()) analyze->click();
-            const int pages = tabs ? tabs->count() : 1;
+            if (auto* analyze = widget->findChild<QPushButton*>("scope.analyze"); analyze && analyze->isEnabled() && !lorenzOverview) analyze->click();
+            const int pages = lorenzOverview ? 1 : (tabs ? tabs->count() : 1);
             for (int page = 0; page < pages; ++page) {
                 if (tabs) tabs->setCurrentIndex(page);
                 if (publication && diagram == "signal_measurement/am_coherent_detection_live.s7diagram" &&
@@ -2477,6 +2479,52 @@ private slots:
             action("action.fitDiagram")->trigger();
         }
         capture(window_.get(), base + "-studio");
+        if (lorenzOverview) {
+            // Capture one actual desktop with the model and both observers;
+            // do not assemble separate window images or alter recorded data.
+            s7studio::ui::ScopeViewWindow* scope = nullptr;
+            s7studio::ui::PhaseTrajectory3DViewWindow* trajectory = nullptr;
+            for (const auto& [name, viewer] : viewers) {
+                viewer->widget()->hide();
+                if (name == "Scope-base_scope") scope = dynamic_cast<s7studio::ui::ScopeViewWindow*>(viewer);
+                if (name == "PhaseTrajectory3D-base_trajectory") trajectory = dynamic_cast<s7studio::ui::PhaseTrajectory3DViewWindow*>(viewer);
+            }
+            QVERIFY(scope && trajectory);
+            QCOMPARE(trajectory->points().size(), qsizetype(160000));
+            QCOMPARE(scope->recording().series().size(), std::size_t(3));
+            auto* screen = QGuiApplication::primaryScreen(); QVERIFY(screen);
+            QVERIFY2(screen->size().width() >= 2400 && screen->size().height() >= 1500,
+                     "Lorenz overview needs a 2400x1500 or larger private display");
+            window_->setGeometry(0, 0, 2400, 620);
+            trajectory->setGeometry(0, 620, 1200, 880);
+            scope->setGeometry(1200, 620, 1200, 880);
+            scope->show(); trajectory->show();
+            QTest::qWait(500);
+            auto* view = editor()->findChild<QGraphicsView*>(); QVERIFY(view);
+            QRectF modelBounds;
+            for (const auto& node : scene()->elementNodes()) {
+                if (QString::fromStdString(node->id()).startsWith("base_"))
+                    modelBounds = modelBounds.united(QRectF(node->pos(), QSizeF(node->width(), node->height())));
+            }
+            QVERIFY(!modelBounds.isEmpty());
+            view->resetTransform();
+            view->fitInView(modelBounds.adjusted(-100, -40, 100, 40), Qt::KeepAspectRatio);
+            view->centerOn(modelBounds.center());
+            trajectory->setViewPreset(s7studio::ui::PhaseTrajectory3DViewWindow::ViewPreset::Perspective);
+            auto* quick = trajectory->findChild<QQuickWidget*>(); QVERIFY(quick && quick->rootObject());
+            auto* camera = quick->rootObject()->findChild<QObject*>("viewer.camera"); QVERIFY(camera);
+            QVERIFY(camera->setProperty("z", 370.));
+            for (auto* check : scope->findChildren<QCheckBox*>())
+                if (check->text() == "Fit full run") check->setChecked(false);
+            scope->plotView()->setXRange(20, 40);
+            auto* visibleRange = scope->findChild<QPushButton*>("scope.visibleAnalysisRange"); QVERIFY(visibleRange);
+            visibleRange->click();
+            window_->raise(); scope->raise(); trajectory->raise();
+            QTest::qWait(1500);
+            const auto directory = qEnvironmentVariable("S7_USABILITY_CAPTURE_DIR");
+            QVERIFY(!directory.isEmpty());
+            QVERIFY(screen->grabWindow(0, 0, 0, 2400, 1500).save(directory + "/lorenz-overview.png"));
+        }
         for (const auto& problem : problems) qWarning().noquote() << "plot range:" << problem;
         if (qEnvironmentVariableIsEmpty("S7_EXAMPLES_REPORT_ONLY")) QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
     }

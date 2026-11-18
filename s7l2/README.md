@@ -1,5 +1,13 @@
 # S7 (s7l2)
 
+S7 is an open-source tool for researchers, scientists and engineers working
+with signals, dynamic systems and distributed computation. It grows out of long
+practical engineering experience and is inspired by MIT Professor William McC.
+Siebert's *Circuits, Signals, and Systems*. The
+[project introduction](../README.md) presents that inspiration, Skovoroda's
+epigraph and acknowledgments with original book and paper references.
+This page covers the C++ reference implementation, building and running it.
+
 **[0.1.2 preview downloads](https://github.com/alukin/s7/releases/tag/v0.1.2)**
 include a Linux x86-64 build and an experimental Windows x86-64 build.
 See the [release notes and known limits](docs/RELEASE_0.1.2_NOTES.md) for platform
@@ -19,7 +27,12 @@ S7 is a platform for constructing, executing, and observing distributed causal s
 
 The project is in pre-MVP development. Backward compatibility of APIs, file formats, and protocols is not maintained yet.
 
-This release focuses on **dependable local simulation in `s7studio` with its bundled runtime**: correct numerical results and model time, reliable plots and recording, and predictable run controls. Local runs use Studio's in-process runtime and require no separately running service. Acceptance criteria and deferred work are in the [development plan](docs/DEVELOPMENT_PLAN.md); the existing distributed capabilities remain part of S7's longer-term direction.
+Local experiments use **Studio's bundled runtime**: draw a model, choose initial
+conditions and a rate, run it, and inspect plots or recordings. A separate
+service is unnecessary for local runs. Headless execution, device-paced sound
+and SDR workflows, and distributed graphs have their own explicit owners and
+qualification records. The [0.2.0 work plan](docs/RELEASE_0.2.0_WORKPLAN.md)
+distinguishes implemented capabilities, research results and remaining work.
 
 Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, architecture, protocols) is in `../doc/README.md`. Unsolved problems and open design decisions: `docs/OPEN_PROBLEMS.md`.
 
@@ -59,7 +72,7 @@ Documentation map: `docs/INDEX.md`; the language-neutral documentation (model, a
 ## Not implemented yet
 
 - Snapshots/restore, dynamic probe subscriptions, remote observation streams.
-- `NetRuntime`, distributed scheduling, coherence domains.
+- `NetRuntime`, general dynamic/multi-rate distributed scheduling, coherence domains.
 - `SOURCE_TIME` on streams (needs source elements that know their acquisition time), relaying streams through other nodes.
 - Recovering stream data across a process crash (a crash faults the stream; recovery continues without the lost data).
 
@@ -69,6 +82,8 @@ allowed as test references. See [simulation semantics](docs/SIMULATION_MODEL.md)
 The [integrator guide](docs/INTEGRATORS.md) explains separate forward/backward
 Euler blocks, trapezoidal integration, explicit delay realizations and s/z plane
 mappings, with [Siebert and MIT references](docs/INTEGRATOR_REFERENCES.md).
+Initial single-rate distributed static scheduling is implemented; see its
+[contract, verification and limits](docs/DISTRIBUTED_CAUSAL_SCHEDULE.md).
 
 ## Build
 

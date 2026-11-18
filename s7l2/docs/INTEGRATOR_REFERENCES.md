@@ -12,6 +12,20 @@ The maintainer identifies this book as the inspiration behind S7: systems
 constructed from interconnected local blocks, with explicit state and causality.
 [Publisher/DOI and contents](https://doi.org/10.7551/mitpress/1839.001.0001).
 
+Original book reference: MIT Press's
+[edition record](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)
+lists the 1985 publication, paperback ISBN 978-0-262-69095-9 and hardcover
+ISBN 978-0-262-19229-3. The
+[book preview, p. v](https://books.google.com/books?id=zBTUiIrb2WIC&pg=PR5)
+is the source of the short English epigraph excerpt in the
+[project README](../../README.md), attributed there to Ukrainian philosopher
+Hryhorii Skovoroda (Григорій Сковорода). The preview catalogue labels its printing
+1986; the publisher dates the original publication 1985. The excerpt preserves
+the English wording reproduced in Siebert, rather than supplying a new
+translation of a Ukrainian original. Its wording and printed page number were
+checked against Google Books' indexed book passage; the complete front matter
+was not available for inspection.
+
 Readable chapter scans are hosted by MIT's control course:
 
 - [Chapter 7: Discrete-Time Signals and Linear Difference Equations](https://introcontrol.mit.edu/_static/spring25/extras/siebert7.pdf).
