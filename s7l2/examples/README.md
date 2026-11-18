@@ -10,6 +10,13 @@ diagrams. The [Studio examples guide](../docs/STUDIO_EXAMPLES.md) gives a shorte
 guided path through the collection. Reference status and numerical limits are
 given by each family guide and the [numerical validation matrix](../docs/NUMERICAL_VALIDATION_MATRIX.md).
 
+For a course-oriented route through these canonical diagrams, see the
+[MIT-aligned education curriculum](../education/README.md),
+[48-exercise topic map](../education/COURSE_MAP.md) and
+[lab qualification standard](../education/LAB_STANDARD.md).
+These are **planned original S7 teaching exercises**, not a claim
+that 48 MIT examples are implemented, verified or officially endorsed.
+
 ## Starter and standalone experiments
 
 | Diagram | Guide |

@@ -44,19 +44,27 @@ verification are recorded in the 0.1.1 plan. The simulation guide records
 Siebert's book as the maintainer's stated design inspiration, with reading
 status and attribution rules for planned example adaptations.
 
-The [0.2.0 goals](RELEASE_0.2.0.md) include indexed serial runtime execution,
-P1 numerical integration and feedback-settling research with a published report,
-qualified multi-node operation on local and remote hosts, remote node
-control/configuration/restart and Trusted Networks settings, certificate viewing
-and node certificate creation, Studio printing of diagrams and observation
-graphs, and a software signal-generator element inspired by the UNI-T UTG932E.
-The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) contains the single
+The [revised 0.2.0 goals](RELEASE_0.2.0.md) emphasize
+independently verified local numerical results, a useful two-host
+engineering experiment, predictable distributed faults and
+Studio/package qualification. A new
+[MIT-aligned S7 education curriculum](../education/README.md)
+maps **48 proposed exercises** across foundations, signal processing,
+control and advanced inference. Its
+[24 named initial 0.2.0 core labs](../education/IMPLEMENTATION_PLAN.md)
+are qualification **targets**, not completed tests. See the
+[course map](../education/COURSE_MAP.md),
+[Fall 2026 lecture crosswalk](../education/LECTURE_ALIGNMENT.md),
+[source review](../education/SOURCES.md) and
+[lab quality standard](../education/LAB_STANDARD.md).
+
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) remains the single
 [status and acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix),
-reconciled on 2026-11-17, plus ownership and detailed delivery steps. It records
-the delivered N0–N4 research, implemented baseline capabilities, open distributed
-and Studio gates, and the Linux portable/RPM/DEB and sound-only Windows ZIP
-distribution profiles. Experimental results remain separate from the production
-integration contract.
+with the delivered N0–N4 research, existing runtime baseline,
+owners and remaining qualification tasks. Older remote administration,
+certificate GUI, printing, signal generator and production video tasks
+moved to the [0.3.0 candidate backlog](RELEASE_0.3.0.md).
+Those historical assignments remain in Git history.
 Within-node parallel scheduling and its unresolved design choices are recorded
 for [0.3.0 planning](RELEASE_0.3.0_RUNTIME_PARALLELISM.md).
 The [0.3.0 release goals](RELEASE_0.3.0.md) include the maintainer-assigned
@@ -65,7 +73,7 @@ GStreamer adapters alongside the FFmpeg-oriented video path.
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
 3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
-4. [VISUAL_NUMERICAL_TESTS_PLAN.md](VISUAL_NUMERICAL_TESTS_PLAN.md) — the diagram-based numerical-validation methodology (companion to the [language-neutral test plan](../../doc/S7_Numerical_Modeling_Test_Plan.md)). The [0.2.0 research record](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-reports-delivered) links the original assignment and delivered reports.
+4. [VISUAL_NUMERICAL_TESTS_PLAN.md](VISUAL_NUMERICAL_TESTS_PLAN.md) — the diagram-based numerical-validation methodology (companion to the [language-neutral test plan](../../doc/S7_Numerical_Modeling_Test_Plan.md)). The [0.2.0 research record](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned) links the original assignment and delivered reports.
 
 Local simulation quality was the 0.1.x target. The 0.2.0 goals and work plan now
 define the next release direction; open problems and the visual numerical plan
@@ -180,7 +188,7 @@ Conformance data for other implementations: `../s7transport/tests/fixtures/READM
 
 - [Numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md): currently validated linear configurations, independent references, tolerances and bundled-example classification; distinct from the planned 0.2.0 research matrix.
 
-- [Studio visual usability audit (2026-10-21)](usability/2026-10-21/AUDIT.md): production screenshots, severity-ranked findings, incremental improvements and human-review limits.
+- The 2026-10-21 Studio visual usability audit was a historical local artifact and is not present in the public tree; the [Studio triage record](STUDIO_0.1.1_TRIAGE.md) and [current window inspection notes](STUDIO_WINDOW_INSPECTION.md) contain checked-in follow-up information.
 
 - [Frame source/sink elements](FRAME_ELEMENTS.md): named channel ports, lossless encoding, Studio configuration and explicit endpoint setup.
 

@@ -20,7 +20,10 @@ purpose of the demonstration. The existing numerical, runtime, transport
 and Studio capabilities supply the foundation. Multi-host feedback loops
 remain valuable scheduler tests, **not** a pre-MVP showcase or release
 blocker. Remaining work is qualification and necessary fixes for the
-four release gates.
+four release gates. The maintainer also approved a substantial
+**MIT-aligned educational laboratory** workstream for signals, systems and
+control. This increases the educational ambition without silently expanding
+the runtime/hardware feature set.
 
 The [work plan](RELEASE_0.2.0_WORKPLAN.md) is the authoritative live
 [status/acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix).
@@ -61,6 +64,39 @@ A release example must not require hardware adapters, new video providers,
 specialized actuators or private credentials. The current hardware and frame
 services remain available in their separately documented bounded profiles.
 
+## MIT-aligned educational laboratory collection
+
+Develop **original S7 teaching labs** aligned by topic with MIT 6.3000,
+6.3100, historical 6.003 and 6.3010/6.011. The
+[education overview](../education/README.md),
+[48-exercise curriculum map](../education/COURSE_MAP.md),
+[primary-source record](../education/SOURCES.md),
+[verification standard](../education/LAB_STANDARD.md) and
+[Codex implementation plan](../education/IMPLEMENTATION_PLAN.md)
+define the syllabus and execution requirements.
+
+The initial **0.2.0 qualification target is 24 specifically named core
+labs** in foundations, signal processing and control. The other 24
+proposed labs are later/stretch candidates. Reuse canonical existing
+`examples/` diagrams before creating new ones. No listed lab is
+automatically qualified by its existence in the repository.
+
+An accepted educational lab must have precise source/topic attribution,
+student instructions and model conventions, exact saved-diagram headless
+execution, an independent analytical or numerical reference, a deliberate
+failure/limitation case, tested Studio open/run/observe/edit/rerun and
+release-package access. If a target is blocked, report it explicitly;
+the maintainer may revise the named target rather than claiming false passes.
+
+SP06, a three-tap FIR lab, is the preferred candidate for the practical
+G2 two-host engineering demo **after** its local numerical reference passes.
+Advanced image processing, physical hardware and inference research do not
+implicitly become 0.2.0 feature gates.
+
+S7 is an independent MIT-aligned resource, **not** an official MIT course
+resource or MIT-endorsed product. Avoid reproducing copyrighted textbook
+problems, diagrams and solution keys.
+
 ## Acceptance gates
 
 All four gates are mandatory on the **same final source revision and candidate
@@ -85,6 +121,10 @@ applies. Required pass/fail criteria and evidence owners are in the
    methods merely by being tested.
 4. Demonstrate repeatable recorded observations that identify the run,
    channels and model steps without modifying execution.
+5. Qualify the approved educational core against **actual saved diagrams**
+   and independent reference calculations, explicit initial/sample
+   conventions and negative teaching cases. Historical examples and
+   screenshots do not establish educational acceptance.
 
 The [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md),
 [simulation semantics](SIMULATION_MODEL.md), and
@@ -95,8 +135,9 @@ and evidence. Historic test counts are not the release-candidate result.
 
 1. Demonstrate a practical, **headless two-host signal-processing or
    simulation chain** with deterministic input, meaningful processing/model
-   computation and a recorded numeric result. A suitable example is a
-   modulated signal → filter/demodulator → measurement. Hardware acquisition
+   computation and a recorded numeric result. Prefer the independently
+   qualified educational SP06 (three-tap FIR) source → filter → measurement
+   lab, or approve a comparably useful existing chain. Hardware acquisition
    may be shown additionally but cannot be required.
 2. Validate the result against an **independent analytical or numerical
    reference**, not only a second S7 execution. Compare with an equivalent
@@ -168,9 +209,12 @@ behavior, not completed acceptance.
    timing/resource data, process/link failure behavior and explicit
    limitations. Keep private credentials and device identities out of Git.
    Do not require a new remote-observation API to produce the evidence.
-4. Publish release notes with supported operating systems, tested graph and
+4. Verify educational diagrams, guides and course navigation in
+   supported installed/relocated artifacts. Record Studio evidence
+   separately from headless numerical passes.
+5. Publish release notes with supported operating systems, tested graph and
    rate envelopes, known regressions, unsupported features and reproducible
-   test/benchmark provenance.
+   test/benchmark provenance, including the qualified education index.
 
 See [native Linux packages](NATIVE_LINUX_PACKAGES.md),
 [Windows build evidence](WINDOWS_BUILD.md), and

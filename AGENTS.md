@@ -14,6 +14,10 @@ The project is evolving. Do not assume that an architectural aspiration is alrea
 2. Locate and read the relevant formal-model, architecture, protocol, and architectural-decision documents under `doc/` (or their current locations).
 3. Inspect the affected implementation and tests before proposing a change. Follow the actual repository structure; do not invent paths or APIs.
 4. Check the working tree (`git status`) and preserve unrelated user changes.
+5. For educational example work, read `s7l2/education/README.md`,
+   `COURSE_MAP.md`, `SOURCES.md`, `LAB_STANDARD.md` and
+   `IMPLEMENTATION_PLAN.md`. A planned lab or existing diagram is not
+   evidence of a qualified teaching exercise.
 
 If documents disagree with code, report the discrepancy. Do not silently treat the implementation as a new specification or rewrite the specification to justify existing behavior.
 
@@ -53,6 +57,7 @@ Ask for an architectural decision before changing causal semantics, state-transi
 - Graph validation: type errors, missing connections, illegal cycles, self-loops, and nested schemas where supported.
 - Causal execution: publication/evaluation/commit order, independent element state, and scheduling-order independence where guaranteed.
 - Numerical behavior: reference solutions, convergence with step size, long-run invariant or energy drift, and meaningful tolerances rather than plots alone.
+- Teaching labs: execute the exact saved diagram headlessly, check against an independent oracle, verify source attribution and a negative/failure case, and record the intended Studio interaction under the educational lab-status contract.
 - Distributed behavior: sequencing, reconnect/replay, backpressure, node failure, revision transitions, and recovery according to the documented contract.
 - Cross-language behavior: shared fixtures and conformance between C++ and Python implementations for their supported common subset.
 - Build and memory safety: run existing CI-equivalent checks and sanitizers when practical; never claim a test passed without executing it.

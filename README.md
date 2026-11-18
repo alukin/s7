@@ -54,7 +54,12 @@ recorded Scope results and Live Oscilloscope views.
   implemented single-rate scope and its limits.
 
 The bundled [examples and experiment guides](s7l2/examples/README.md) are a
-starting point for changing a model and checking what follows. Numerical guides
+starting point for changing a model and checking what follows. The
+[MIT-aligned teaching curriculum](s7l2/education/README.md)
+proposes original S7 laboratories aligned with topics in contemporary
+signals, systems and control education. This collection is still in
+development and is **not an official or endorsed MIT resource**.
+Numerical guides
 state the equations and initialization conventions; tests use independent
 recurrences, analytic solutions or reference solvers where appropriate.
 

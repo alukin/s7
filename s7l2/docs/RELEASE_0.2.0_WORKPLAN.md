@@ -7,6 +7,10 @@ independent numeric validation and observation — not a cross-host feedback
 stress test. Feedback loops remain automatic scheduler regressions; physical
 cross-host feedback is optional. The source still identifies as 0.1.2 and
 previous experiments are not final candidate qualification.
+The maintainer also approved an MIT-aligned education workstream:
+[48 proposed exercises](../education/COURSE_MAP.md), with
+[24 named 0.2.0 core labs](../education/IMPLEMENTATION_PLAN.md)
+to be independently qualified, not counted as completed by declaration.
 
 This file is the **single live status and acceptance record** for 0.2.0.
 Keep detailed algorithm derivations, research data, architectural discussions
@@ -26,6 +30,7 @@ must not be reported as final-candidate tests.
 | Item / release gate | Status at scope revision | Existing evidence | Required remaining acceptance | Lead |
 | --- | --- | --- | --- | --- |
 | **G1 — Local numerical and semantic regressions** | Implemented baseline; final gate open | [Numerical matrix](NUMERICAL_VALIDATION_MATRIX.md), [integrator review](INTEGRATOR_REVIEW_2026-11-17.md), [0.1.2 notes](RELEASE_0.1.2_NOTES.md) | Complete final-candidate numerical/causality/type/rate/rollback/reference tests, including supported coupled methods; preserve recorded envelopes | Maintainer/Codex |
+| **G1 / EDU — MIT-aligned teaching laboratories** | Curriculum proposed; per-lab qualification open | [course map](../education/COURSE_MAP.md), [existing examples](../examples/README.md), [lab standard](../education/LAB_STANDARD.md) | Audit/reuse existing canonical diagrams; qualify the agreed 24 named core labs with independent oracles, failure/limitation cases, source attribution, Studio workflows and release-package checks; list blocked cases explicitly | Maintainer/Codex |
 | **G2 — Practical two-host engineering workflow** | Headless transport and static scheduler implemented in bounded profiles; end-to-end demo open | [ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027), [schedule contract](DISTRIBUTED_CAUSAL_SCHEDULE.md), [Phase 4](CROSS_NODE_CAUSALITY_PHASE4.md) | Two physical hosts, useful deterministic input → processing → recorded/observed output, independent reference and resource metrics; separate multiprocess feedback/invalid-cycle regressions | Maintainer/Codex, coordinated with teren_ukr |
 | **G3 / D0 — Common distributed contract and test matrix** | Partial | C++/Python existing control and F64 data streams; shared fixtures; [transport lab](../../s7py/tools/transport_lab/README.md) | Freeze supported topology, security/transport profiles, host and resource envelopes; record expected pass/fail matrix; make cross-language checks required CI | teren_ukr |
 | **G3 / D1 — Python data-profile parity** | Partial | Python F64 mTLS graph streams, ACK/RESUME and fault handling | Explicit split data listener and trusted-plaintext policy plus negative cases with C++; no implied Python cross-node static-feedback scheduling | teren_ukr |
@@ -46,7 +51,8 @@ backlog, not an automatic commitment to deliver everything in that release.
 ## Ownership and coordination
 
 - **Maintainer/Codex:** S7 formal semantics, local numerical regressions,
-  compiled causal schedule, the two-host engineering example, Studio and
+  educational lab development and verification, compiled causal schedule,
+  the two-host engineering example, Studio and
   final packaging/release decision. Preserve serial execution and the
   existing production numerical contracts.
 - **teren_ukr:** D0 common-subset definition, D1 Python split-profile parity
@@ -65,6 +71,36 @@ the transport and control boundary. Studio is a client of headless services,
 not a second simulation/control implementation.
 
 ## Remaining work, in dependency order
+
+### Education phase — prepare and qualify the curriculum
+
+The [education implementation plan](../education/IMPLEMENTATION_PLAN.md)
+owns the detailed Codex handoff. The education track may progress in
+parallel with the D0–D2 distributed workstream:
+
+1. Audit the actual diagrams, generators and tests; map each planned
+   core lab to reusable, adaptable or missing canonical diagrams. Do
+   not infer readiness from filenames or screenshots.
+2. Verify primary-source topic alignment and any exact book references;
+   write original S7 exercises, not copied MIT problems/answer keys.
+3. Implement the **FN01–FN06, SP01/SP03/SP05–SP11/SP14 and
+   CT01–CT08** core in reviewable lab-family PRs. Each requires
+   an independent numeric oracle, tested saved diagram, clear
+   initial-state/sample conventions, and one meaningful negative case.
+4. Verify Studio open → run → observe → edit → rerun and installed
+   package access; record which checks were automated or genuinely
+   performed interactively. Preserve headless-runtime semantics.
+5. Once locally verified, reuse SP06 as the preferred G2 two-host
+   signal-processing demonstration if its supported transport and
+   recorded-output path qualify.
+6. Maintain an evidence-backed lab-status matrix, including exact
+   candidate SHA, reference/test paths, commands, platform, rate
+   envelope and blocked reasons. Change the named core only after
+   explicit maintainer approval.
+
+**Exit:** agreed educational core meets
+[LAB_STANDARD.md](../education/LAB_STANDARD.md), with actual
+test and Studio/package evidence on the release candidate.
 
 ### Step 1 — Freeze D0 and the candidate qualification matrix
 
@@ -153,19 +189,22 @@ failure semantics, not continuous operation through every fault.
    oscillators/control examples, nonlinear validation, nested/rollback/rate
    checks and supported opt-in coupled integration. Preserve model
    initial-state, sample-time and comparison conventions.
-2. Run Studio diagram/edit, viewer/analysis, lifecycle and distributed
+2. Run the agreed education suite, reconciling the canonical lab
+   diagrams, independent reference tests, source mappings, teaching
+   guides and supported Studio interaction evidence.
+3. Run Studio diagram/edit, viewer/analysis, lifecycle and distributed
    preflight regressions. Retain screenshots or recorded UI artifacts where
    a visual property matters. No new printing/instrument UI is required.
-3. Build the final source/version into Linux portable x86-64, Fedora 45 RPM,
+4. Build the final source/version into Linux portable x86-64, Fedora 45 RPM,
    Ubuntu 26.04 DEB and Windows portable ZIP artifacts in their documented
    profiles. Check installed/relocated operation, dependencies, notices,
    licensing and SHA-256 checksums.
-4. Run full applicable Linux and Wine suites, cross-language fixtures and
+5. Run full applicable Linux and Wine suites, cross-language fixtures and
    relevant sanitizers on the candidate. Record unsupported tests as
    exclusions with reasons; **never count unfinished or skipped tests as
    passes**. Native Windows camera/audio/device evidence is distinct from
    Wine regression evidence.
-5. Publish the practical two-host example — signal/model goal, diagram,
+6. Publish the practical two-host example — signal/model goal, diagram,
    independent result reference, observation or recording workflow —
    alongside the separate scheduler regressions and release notes. Record
    candidate SHA, platform, measurement provenance, limits and exact
@@ -181,6 +220,7 @@ Before tagging 0.2.0, gather:
 | Artifact | Minimum contents |
 | --- | --- |
 | Numerical regression summary | Test command, candidate SHA, pass/fail/skip, independent reference and numerical envelopes |
+| Educational qualification matrix | Core lab IDs; course/source status; canonical diagrams, independent oracles, negative tests, Studio evidence, package checks, tested candidate SHA and blocked/excluded reasons |
 | Two-host engineering demonstration | Public signal/model diagram, independent reference and captured outputs, supported observation/recording workflow, host inventory, commands and performance results |
 | Failure/recovery report | Scenario, injected fault, active revision, expected/actual stream status, output prefix, gap/recovery behavior and limits |
 | Interoperability matrix | Supported C++/Python combinations, control/data profiles, fixtures and negative security cases; Java boundary explicit |
@@ -189,7 +229,8 @@ Before tagging 0.2.0, gather:
 
 A headline test count without the exact candidate and test selection is not
 sufficient evidence. Release criteria take priority over attractive additions
-or further optimization experiments.
+or further optimization experiments. A proposed educational lab is not
+release-qualified without checked evidence.
 
 <a id="numerical-research-milestones--p1-planned"></a>
 
