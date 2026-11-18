@@ -1,0 +1,345 @@
+{
+  "schema": "s7_cross_node_spikes_summary_v1",
+  "date_utc": "2026-11-17",
+  "status": "research_only_no_production_decision",
+  "source_revision": "c88b1fd060e3a686493b3ed24616c2ccfd0fe52c",
+  "working_tree_dirty": true,
+  "source_sha256": {
+    "tools/cross_node_scheduling_spike.py": "1bcceb62ea124ac781cc46dce3280817764f11d5a21b7ca229970b2a918b7d52",
+    "tools/cross_node_tcp_spike.py": "e08e55770576d032e7c8e1e4eff104597f4b680fd9d04985ced6b55b5abfa1ff",
+    "tools/run_cross_node_tcp_spikes.py": "7a4edc1dd478208cf4edc4256f40089ae056f64cf770be3b3f7697e060acc027",
+    "s7tests/cross_node_scheduling_spike.cpp": "5142a696b745f5681ac818f66976746978767c80086090c41b6314fe6a244557",
+    "s7tests/CMakeLists.txt": "c62d38d1057831fb91bd70b7a393e86664a81f3218592cddf239f0005b159b98",
+    "s7core/src/compiler.cpp": "0faba97308171524d35317aefb23ce9c9d9048be1c3b9ffbc30fade5bc1c4521",
+    "s7core/src/runtime.cpp": "de4c7a15d8673f3f45728db1c3ce829172a4ea37788eacc8bf2f361a01c41745",
+    "s7net/include/s7/net.hpp": "b8a25c22964b4c42acd1e6f7440a28ac9bd004e716b165c9dd4be027a5fc49ee",
+    "s7transport/src/transport.cpp": "bef281f1588c5744187146b919284c569064c3c94dc9c3372edff3aa7464730b",
+    "s7transport/src/stream_protocol.cpp": "32374b67296f9e583a4221788b700a3250e2751e4dfc3c8eda4fda15d5a9477d"
+  },
+  "runtime_binary_sha256": "0ddfeb3376bed41d82314f94acd8b1ed7e61b3b495b7c438aa8147705fd71fa4",
+  "runtime_core_library_sha256": "8045bd7b85fc026dc3ec25f3a3347bf0eca1dfea68ca13de8587e1377a52fe80",
+  "compiler": "c++ (GCC) 16.2.1 20261029 (Red Hat 16.2.1-3)",
+  "logical_model": {
+    "runs_per_host": 1080,
+    "total_runs": 3240,
+    "steps": 120,
+    "capacities": [
+      1,
+      2,
+      8
+    ],
+    "slow_node_opportunity_periods": [
+      1,
+      3,
+      7
+    ],
+    "insertion_permutations": 4,
+    "identical_detailed_results_across_hosts": true,
+    "hosts": {
+      "development": {
+        "platform": "Linux-7.3.3-300.fc45.x86_64-x86_64-with-glibc2.44",
+        "python": "3.15.2"
+      },
+      "win": {
+        "platform": "Linux-7.3.3-300.fc45.x86_64-x86_64-with-glibc2.44",
+        "python": "3.15.2"
+      },
+      "mail": {
+        "platform": "Linux-6.18.60-current-rockchip64-aarch64-with-glibc2.41",
+        "python": "3.13.5"
+      }
+    },
+    "outcomes_per_host": {
+      "fixed": {
+        "completed": 72,
+        "deadlock": 288
+      },
+      "projected": {
+        "completed": 252,
+        "rejected_cycle": 108
+      },
+      "ready": {
+        "completed": 252,
+        "deadlock": 108
+      }
+    }
+  },
+  "production_runtime_spike": {
+    "transport": "existing in-memory endpoint; no sockets",
+    "steps": 32,
+    "configurations": 30,
+    "original_28_configuration_repeat_equivalent": true,
+    "delay_free_reference_rejected": true,
+    "groups": [
+      {
+        "approach": "fixed",
+        "send_log_packets": 1,
+        "node_b_delay_ms": 0,
+        "configurations": 4,
+        "completed": 0,
+        "completed_steps_by_node": [
+          [
+            0,
+            0
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 1,
+        "node_b_delay_ms": 0,
+        "configurations": 4,
+        "completed": 0,
+        "completed_steps_by_node": [
+          [
+            2,
+            2
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 1,
+        "node_b_delay_ms": 1,
+        "configurations": 4,
+        "completed": 0,
+        "completed_steps_by_node": [
+          [
+            2,
+            2
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 8,
+        "node_b_delay_ms": 0,
+        "configurations": 4,
+        "completed": 0,
+        "completed_steps_by_node": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 8,
+        "node_b_delay_ms": 1,
+        "configurations": 4,
+        "completed": 0,
+        "completed_steps_by_node": [
+          [
+            9,
+            9
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 64,
+        "node_b_delay_ms": 0,
+        "configurations": 4,
+        "completed": 4,
+        "completed_steps_by_node": [
+          [
+            32,
+            32
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 64,
+        "node_b_delay_ms": 1,
+        "configurations": 4,
+        "completed": 4,
+        "completed_steps_by_node": [
+          [
+            32,
+            32
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 1,
+        "node_b_delay_ms": 55,
+        "configurations": 1,
+        "completed": 1,
+        "completed_steps_by_node": [
+          [
+            32,
+            32
+          ]
+        ]
+      },
+      {
+        "approach": "projected",
+        "send_log_packets": 8,
+        "node_b_delay_ms": 55,
+        "configurations": 1,
+        "completed": 1,
+        "completed_steps_by_node": [
+          [
+            32,
+            32
+          ]
+        ]
+      }
+    ],
+    "graph_free_credit_probes": [
+      {
+        "paced": false,
+        "ack_interval_ms": 50,
+        "records": [
+          {
+            "value": 1,
+            "producer_log_after_consumption": 0,
+            "elapsed_us": 22
+          },
+          {
+            "value": 2,
+            "producer_log_after_consumption": 1,
+            "elapsed_us": 39
+          },
+          {
+            "value": 3,
+            "publish_fault": "SEND_LOG_OVERFLOW"
+          }
+        ]
+      },
+      {
+        "paced": true,
+        "ack_interval_ms": 50,
+        "records": [
+          {
+            "value": 1,
+            "producer_log_after_consumption": 0,
+            "elapsed_us": 26
+          },
+          {
+            "value": 2,
+            "producer_log_after_consumption": 0,
+            "elapsed_us": 55469
+          },
+          {
+            "value": 3,
+            "producer_log_after_consumption": 0,
+            "elapsed_us": 110582
+          }
+        ]
+      }
+    ]
+  },
+  "three_physical_hosts": {
+    "transport": "TCP/JSON scalar fixture through SSH, not S7 wire protocol",
+    "route": "A->B; B->controller relay->C; C->A; loopback TCP through SSH",
+    "configurations": 24,
+    "node_runs": 72,
+    "steps_per_successful_node": 32,
+    "topologies": [
+      "explicit_delay_feedback_ring",
+      "independent_stream_ring"
+    ],
+    "windows": [
+      1,
+      8
+    ],
+    "slow_node_c_ms": [
+      0,
+      5
+    ],
+    "hosts": {
+      "A": {
+        "alias": "development",
+        "platform": "Linux-7.3.3-300.fc45.x86_64-x86_64-with-glibc2.44",
+        "python": "3.15.2"
+      },
+      "B": {
+        "alias": "win",
+        "platform": "Linux-7.3.3-300.fc45.x86_64-x86_64-with-glibc2.44",
+        "python": "3.15.2"
+      },
+      "C": {
+        "alias": "mail",
+        "platform": "Linux-6.18.60-current-rockchip64-aarch64-with-glibc2.41",
+        "python": "3.13.5"
+      }
+    },
+    "outcomes": {
+      "fixed": {
+        "configurations": 8,
+        "completed_node_runs": 0,
+        "node_runs": 24,
+        "max_receive_queue": 0,
+        "max_unacknowledged": 0
+      },
+      "projected": {
+        "configurations": 8,
+        "completed_node_runs": 24,
+        "node_runs": 24,
+        "max_receive_queue": 3,
+        "max_unacknowledged": 3
+      },
+      "ready": {
+        "configurations": 8,
+        "completed_node_runs": 24,
+        "node_runs": 24,
+        "max_receive_queue": 3,
+        "max_unacknowledged": 4
+      }
+    }
+  },
+  "verification": {
+    "focused_regressions": "3/3 passed; see regressions.log",
+    "cpp_build": "Release; opt-in target; no default-build/CTest registration"
+  },
+  "raw_artifacts": {
+    "model-local.json": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/model-local.json",
+      "sha256": "51d140fdafad2404aa6e7723531cbe9e6e8a9d4fb556d134c2ef9a527163d79f"
+    },
+    "model-win.json": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/model-win.json",
+      "sha256": "c63f55da51bc6e733a383913fb1b5c87668aefb2d18eb009452e733a5b4db914"
+    },
+    "model-mail.json": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/model-mail.json",
+      "sha256": "30b8bbe78edf16934628d84e0256e1f07e13eba9d89a2281fa9c3521248f8c6e"
+    },
+    "runtime.json": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/runtime.json",
+      "sha256": "5a84ea49f18a7ebb4331a9d42822bda59fc4699ec491f7e5f2a07e898b2a0472"
+    },
+    "runtime-repeat-original-matrix.json": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/runtime-repeat-original-matrix.json",
+      "sha256": "f3326ee50aea06031bff6dd04a03a5406b086ce02b3a117855bf1efc5e0ffc99"
+    },
+    "three-host.json": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/three-host.json",
+      "sha256": "fbb86a4eb7234d4b8319ba1ad1173e529485b59cbbe63c9fc51de69608972c8c"
+    },
+    "three-host.log": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/three-host.log",
+      "sha256": "73c30524c56fde6d72d7b298302848f1ae8c559ac78f3850d2084d4627d1842b"
+    },
+    "runtime-build.log": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/runtime-build.log",
+      "sha256": "b43e25d746da85ee7cdab72bf6eb5e7baed77097ccc0a46c3eabdbad6ef3658b"
+    },
+    "regressions.log": {
+      "path": "/tmp/s7-cross-node-spikes-20261117/regressions.log",
+      "sha256": "fd70a2559c5c6c019a90a27e1b04939d36b276dac26ba1e85931c4eec9b20ce1"
+    }
+  },
+  "limits": [
+    "No S7 multi-host wire/TLS/deployment qualification.",
+    "Readiness scheduling is not implemented in NodeRuntime.",
+    "Single-rate F64 pure actors and explicit Delay only.",
+    "No crash/replay/recovery, device I/O or general side-effect guarantees.",
+    "No performance ranking; SSH route includes a controller relay.",
+    "Tight-window in-memory ACK stall remains unfixed in production."
+  ]
+}

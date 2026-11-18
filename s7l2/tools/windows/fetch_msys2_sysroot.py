@@ -33,7 +33,8 @@ PREFIX = "mingw-w64-ucrt-x86_64-"
 
 # Compiler support: libstdc++ headers and libraries live in the gcc package.
 TOOLCHAIN = ["gcc", "gcc-libs", "crt", "headers", "winpthreads", "libwinpthread"]
-CORE = ["boost", "openssl", "zlib"]
+CORE = ["boost", "openssl", "zlib", "lz4", "zstd"]
+SOUND = ["portaudio"]
 # Studio's observation viewers: Qt Quick (declarative), Qt Graphs, Qt Quick 3D.
 STUDIO = ["qt6-base", "qt6-declarative", "qt6-graphs", "qt6-quick3d", "qt6-svg", "fftw"]
 SPECTRAL = ["fftw", "pkgconf"]
@@ -105,7 +106,7 @@ def main() -> None:
     if shutil.which("zstd") is None:
         sys.exit("error: the zstd command is required (apt install zstd)")
 
-    wanted = TOOLCHAIN + CORE + ([] if args.no_studio else STUDIO) + ([] if args.no_spectral else SPECTRAL)
+    wanted = TOOLCHAIN + CORE + SOUND + ([] if args.no_studio else STUDIO) + ([] if args.no_spectral else SPECTRAL)
     print(f"Reading {args.mirror}/ucrt64.db")
     packages = parse_db(fetch(f"{args.mirror}/ucrt64.db"))
     closure = resolve(packages, wanted)

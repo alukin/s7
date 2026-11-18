@@ -149,7 +149,8 @@ int check(const Arguments& args)
         throw std::invalid_argument("check needs one diagram file.");
     }
     auto diagram = read_json_file(args.positional[0]);
-    const auto errors = s7::deployment::assign_streams(diagram, s7::deployment::infer_output_types(diagram));
+    auto errors = s7::deployment::assign_streams(diagram, s7::deployment::infer_output_types(diagram));
+    if (errors.empty()) errors = s7::deployment::plan_causal_schedule(diagram);
     for (const auto& error : errors) {
         std::cerr << "error: " << error << '\n';
     }

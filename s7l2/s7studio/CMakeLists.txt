@@ -353,6 +353,12 @@ target_link_libraries(s7studio_network_service_test PRIVATE s7studio_app)
 target_compile_definitions(s7studio_network_service_test PRIVATE S7_TEST_CERT_DIR="${PROJECT_SOURCE_DIR}/s7runtime/examples/certs")
 s7_enable_project_warnings(s7studio_network_service_test)
 add_test(NAME s7studio_network_service COMMAND s7studio_network_service_test)
+if(WIN32 AND CMAKE_CROSSCOMPILING)
+    # Avoid overlapping these short control tests with GUI processes in the
+    # shared Wine prefix: the parallel qualification stalled, isolated runs did not.
+    set_tests_properties(s7studio_node_discovery s7studio_network_service
+        PROPERTIES RUN_SERIAL TRUE TIMEOUT 90)
+endif()
 
 foreach(layout_case wire_types_ok layout_loops)
     add_test(NAME s7studio_layout_${layout_case}

@@ -34,6 +34,11 @@ switches as `OFF`; otherwise they are `ON`, so configuration verifies that all
 three public providers are available. The scripts install no private provider
 and do not discover or activate hardware.
 
+For distribution-native RPM/DEB builds, add `--native-packages`. This installs
+the package generator's tools independently of `--no-extras`; see
+[native Linux packages](NATIVE_LINUX_PACKAGES.md) for the build and installed
+verification workflow.
+
 Ubuntu supplies the static Zstandard archive in `libzstd-dev`. Fedora requires
 both `libzstd-devel` and `libzstd-static`; the frame codec uses the static-only
 workspace API. Installing only the headers can silently omit this codec.

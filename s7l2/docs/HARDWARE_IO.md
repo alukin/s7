@@ -33,6 +33,12 @@ SDK, elements and offline graph checks remain available. `build_for_linux`
 requires all three unless `--no-hardware` is given. Linux dependency scripts
 offer the same opt-out. These scripts install public dependencies only.
 
+`S7_BUILD_SDR=OFF` excludes the complete SDR module and its element plugin while
+keeping sound and the shared hardware contract. It defaults to OFF on Windows
+and ON elsewhere. The Windows wrapper requires PortAudio and disables both
+PipeWire and SDR; see [Windows builds](WINDOWS_BUILD.md). The examples
+`portaudio_capture.json` and `portaudio_playback.json` use this portable backend.
+
 The SDK component is `s7sdk`; CMake consumers use
 `find_package(s7hardware 0.1 CONFIG REQUIRED)` and link `s7::s7hardware`,
 `s7::s7audio` and/or `s7::s7sdr`. Headers live under `include/s7/`.

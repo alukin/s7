@@ -707,6 +707,7 @@ void test_deploy_client()
     for (const auto type : s7::kAllSignalTypes) {
         all_types.emplace_back(s7::signal_type_name(type));
     }
+    expect(info.at("causal_schedule_versions") == json::array{1}, "static schedule capability advertised");
     expect(info.at("data_protocol") == json::object{{"packet_versions", json::array{1}},
                                                     {"extensions", json::array{"0x0002", "0x8001"}},
                                                     {"signal_types", all_types}},
@@ -746,6 +747,8 @@ void test_deploy_client()
         expect(host_b->prepared == prepared_before, "nothing prepared");
     };
     refuse_with([](json::object& response) { response.erase("data_protocol"); }, again.diagram, "does not advertise its data protocol");
+    refuse_with([](json::object& response) { response.erase("causal_schedule_versions"); }, again.diagram, "does not support causal schedule v1");
+    refuse_with([](json::object& response) { response["causal_schedule_versions"] = json::array{2}; }, again.diagram, "does not support causal schedule v1");
     refuse_with(
         [](json::object& response) {
             response["clock_domains"].as_array()[1].as_object()["id"] = std::string("node:") + kOther + ":utc";

@@ -144,7 +144,7 @@ def windows_notices(output, notices, sysroot):
         if not binary.is_file() or binary.suffix.lower() not in ('.exe', '.dll'):
             continue
         relative = binary.relative_to(output).as_posix()
-        if binary.name in ('s7studio.exe', 's7runtime.exe', 's7ctl.exe') or binary.name.startswith('libs7'):
+        if binary.name in ('s7studio.exe', 's7runtime.exe', 's7ctl.exe', 's7hw.exe', 's7analysis_lab.exe') or binary.name.startswith('libs7'):
             inventory.append({'binary': relative, 'sha256': digest(binary), 'notices': ['S7/LICENSING.md']})
             continue
         if binary.parent == output:
@@ -185,6 +185,16 @@ def windows_notices(output, notices, sysroot):
                     shutil.copy2(fallback / source, destination)
                     paths.append(destination.relative_to(notices).as_posix())
                 package['notice_provenance'] = 'MSYS2/fftw/README.md'
+            if (not paths and name == 'mingw-w64-ucrt-x86_64-lz4' and package['version'] == '1.11.1-2'
+                    and package['archive_sha256'] == 'b8cbe52b573a301cc03770d1521b0ba0ee554f276683c2f2cb61ca9ebecf09fb'):
+                directory = notices / 'MSYS2/lz4'
+                directory.mkdir(exist_ok=True)
+                fallback = Path(__file__).parent / 'windows/notices'
+                for source, filename in [('lz4-1.11.1.LICENSE', 'LICENSE'), ('README.md', 'README.md')]:
+                    destination = directory / filename
+                    shutil.copy2(fallback / source, destination)
+                    paths.append(destination.relative_to(notices).as_posix())
+                package['notice_provenance'] = 'MSYS2/lz4/README.md'
             if not paths:
                 raise RuntimeError(f'No MSYS2 notices for {name} ({relative})')
             package['notices'] = paths

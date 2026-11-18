@@ -34,12 +34,12 @@ set_target_properties(s7noise PROPERTIES
 
 # Installation
 install(TARGETS s7noise
-    LIBRARY DESTINATION lib/s7/plugins
-    PUBLIC_HEADER DESTINATION include/s7noise
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/s7/plugins COMPONENT s7runtime
+    PUBLIC_HEADER DESTINATION include/s7noise COMPONENT s7sdk
 )
 
 install(FILES include/s7noise/noise_elements.hpp
-    DESTINATION include/s7noise
+    DESTINATION include/s7noise COMPONENT s7sdk
 )
 
 

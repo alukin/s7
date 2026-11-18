@@ -50,6 +50,24 @@ add_test(NAME s7tests_symplectic_oscillator_smoke COMMAND s7tests_symplectic_osc
 add_executable(s7tests_numerical_research_baseline EXCLUDE_FROM_ALL numerical_research_baseline.cpp)
 target_link_libraries(s7tests_numerical_research_baseline PRIVATE s7core)
 
+# Opt-in scheduling research; never changes Compiler/NodeRuntime or joins CTest.
+add_executable(s7tests_cross_node_scheduling_spike EXCLUDE_FROM_ALL cross_node_scheduling_spike.cpp)
+target_link_libraries(s7tests_cross_node_scheduling_spike PRIVATE s7net Threads::Threads)
+s7_enable_project_warnings(s7tests_cross_node_scheduling_spike)
+
+add_executable(s7tests_cross_node_s7_node EXCLUDE_FROM_ALL cross_node_s7_node.cpp)
+target_link_libraries(s7tests_cross_node_s7_node PRIVATE s7net)
+s7_enable_project_warnings(s7tests_cross_node_s7_node)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    s7_add_test_executable(s7tests_video_stream_spike video_stream_spike.cpp)
+    target_link_libraries(s7tests_video_stream_spike PRIVATE s7net)
+    s7_enable_project_warnings(s7tests_video_stream_spike)
+    add_executable(s7tests_cross_node_phase4 EXCLUDE_FROM_ALL cross_node_phase4.cpp)
+    target_link_libraries(s7tests_cross_node_phase4 PRIVATE s7net)
+    s7_enable_project_warnings(s7tests_cross_node_phase4)
+endif()
+
 # Phase 3: compiled real-element graph experiments. The long matrix/CSV runner
 # remains opt-in; the focused publication, solver and reference checks run in CTest.
 s7_add_test_executable(s7tests_numerical_integration_research_smoke numerical_integration_research_smoke.cpp)
@@ -63,6 +81,12 @@ target_link_libraries(s7tests_numerical_integration_research PRIVATE s7core)
 if (NOT CMAKE_CROSSCOMPILING)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if (Python3_Interpreter_FOUND)
+        if (TARGET s7tests_video_stream_spike)
+            add_test(NAME s7tests_video_stream_spike
+                COMMAND ${Python3_EXECUTABLE} -B ${PROJECT_SOURCE_DIR}/tools/test_video_stream_spike.py
+                    $<TARGET_FILE:s7tests_video_stream_spike>)
+            set_tests_properties(s7tests_video_stream_spike PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77 LABELS "video;integration")
+        endif()
         execute_process(COMMAND ${Python3_EXECUTABLE} -c "import numpy, scipy"
             RESULT_VARIABLE S7_RESEARCH_PYTHON_READY OUTPUT_QUIET ERROR_QUIET)
         if (S7_RESEARCH_PYTHON_READY EQUAL 0)

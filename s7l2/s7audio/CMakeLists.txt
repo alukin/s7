@@ -26,9 +26,10 @@ s7_enable_project_warnings(s7audio)
 add_library(s7audio_plugin MODULE src/plugin.cpp)
 target_link_libraries(s7audio_plugin PRIVATE s7audio)
 set_target_properties(s7audio_plugin PROPERTIES OUTPUT_NAME s7audio-elements INSTALL_RPATH "$ORIGIN/../..")
-install(TARGETS s7audio_plugin LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/s7/plugins)
-install(TARGETS s7audio EXPORT s7hardwareTargets RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT s7sdk
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk)
+install(TARGETS s7audio_plugin LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/s7/plugins COMPONENT s7hardware)
+install(TARGETS s7audio EXPORT s7hardwareTargets RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT ${S7_HARDWARE_INSTALL_COMPONENT}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT ${S7_HARDWARE_INSTALL_COMPONENT} NAMELINK_COMPONENT s7sdk
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk)
 install(DIRECTORY include/s7 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT s7sdk)
 s7_add_test_executable(s7audio_smoke tests/audio_smoke.cpp)
 target_link_libraries(s7audio_smoke PRIVATE s7audio)

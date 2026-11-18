@@ -153,6 +153,9 @@ std::vector<std::filesystem::path> PluginLoader::get_plugin_search_paths() const
     if (const auto directory = platform::executable_directory()) {
         paths.push_back(*directory / "plugins");
 #if !defined(_WIN32)
+#if defined(S7_INSTALL_PLUGIN_SUBDIR)
+        paths.push_back(*directory / ".." / S7_INSTALL_PLUGIN_SUBDIR);
+#endif
         paths.push_back(*directory / ".." / "lib" / "s7" / "plugins");
         paths.push_back(*directory / ".." / "lib64" / "s7" / "plugins");
 #endif

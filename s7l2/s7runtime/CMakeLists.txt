@@ -126,6 +126,12 @@ set_tests_properties(s7spectral_sdk_smoke PROPERTIES
 # Transactional plugin registration.
 add_library(s7_test_plugin MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
 target_link_libraries(s7_test_plugin PRIVATE s7core)
+if(WIN32)
+    add_library(s7_test_dependency SHARED EXCLUDE_FROM_ALL tests/test_plugin_dependency.cpp)
+    add_library(s7_test_nested_plugin MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
+    target_link_libraries(s7_test_nested_plugin PRIVATE s7core s7_test_dependency)
+    target_compile_definitions(s7_test_nested_plugin PRIVATE S7_TEST_PLUGIN_DEPENDENCY)
+endif()
 add_library(s7_test_plugin_failing MODULE EXCLUDE_FROM_ALL tests/test_plugin.cpp)
 target_link_libraries(s7_test_plugin_failing PRIVATE s7core)
 target_compile_definitions(s7_test_plugin_failing PRIVATE S7_TEST_PLUGIN_FAIL)
@@ -139,6 +145,11 @@ target_compile_definitions(s7runtime_plugin_loader_smoke PRIVATE
     S7_TEST_PLUGIN="$<TARGET_FILE:s7_test_plugin>"
     S7_FAILING_PLUGIN="$<TARGET_FILE:s7_test_plugin_failing>")
 add_dependencies(s7runtime_plugin_loader_smoke s7_test_plugin s7_test_plugin_failing)
+if(WIN32)
+    add_dependencies(s7runtime_plugin_loader_smoke s7_test_nested_plugin)
+    target_compile_definitions(s7runtime_plugin_loader_smoke PRIVATE
+        S7_NESTED_PLUGIN="$<TARGET_FILE:s7_test_nested_plugin>")
+endif()
 add_test(NAME s7runtime_plugin_loader_smoke COMMAND s7runtime_plugin_loader_smoke)
 
 # Explicit headless control experiment; the spectral plugin itself stays out of tree.
@@ -146,6 +157,6 @@ add_executable(s7analysis_lab src/analysis_lab.cpp)
 target_include_directories(s7analysis_lab PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
 target_link_libraries(s7analysis_lab PRIVATE s7core Boost::json)
 s7_enable_project_warnings(s7analysis_lab)
-install(TARGETS s7analysis_lab RUNTIME DESTINATION bin)
+install(TARGETS s7analysis_lab RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT s7runtime)
 add_test(NAME s7analysis_damping_sweep COMMAND s7analysis_lab ${CMAKE_CURRENT_BINARY_DIR}/damping_surface.csv)
 add_dependencies(build-tests s7analysis_lab)

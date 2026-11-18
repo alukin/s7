@@ -7,6 +7,14 @@
 # bin/ are on WINEPATH. The Wine prefix lives in the build directory.
 S7_WINE_DEFAULT_PREFIX="@S7_WINE_PREFIX@"
 if [ -n "${S7_WINE_HEADLESS:-}" ]; then
+    # Qt's offscreen font database needs a font directory even when Wine's
+    # native Windows font registration is present.
+    for font_directory in /usr/share/fonts/dejavu-sans-fonts /usr/share/fonts/truetype/dejavu; do
+        if [ -z "${S7_WINE_FONT_DIR:-}" ] && [ -f "$font_directory/DejaVuSans.ttf" ]; then
+            S7_WINE_FONT_DIR="$font_directory"
+        fi
+    done
+    export S7_WINE_FONT_DIR="${S7_WINE_FONT_DIR:-}"
     S7_WINE_DEFAULT_PREFIX="${S7_WINE_DEFAULT_PREFIX}-headless"
     unset DISPLAY WAYLAND_DISPLAY
 fi
@@ -30,6 +38,13 @@ if [ -n "${S7_WINE_HEADLESS:-}" ]; then
                 exit 1
             fi
             touch "$WINEPREFIX/.s7-offscreen-platform"
+        fi
+        if [ -n "$S7_WINE_FONT_DIR" ] && [ -d "$S7_WINE_FONT_DIR" ] &&
+           [ "$(cat "$WINEPREFIX/.s7-font-directory" 2>/dev/null || true)" != "$S7_WINE_FONT_DIR" ]; then
+            font_directory_windows=$(winepath -w "$S7_WINE_FONT_DIR")
+            wine reg add "HKCU\Environment" /v QT_QPA_FONTDIR /t REG_SZ /d "$font_directory_windows" /f \
+                >>"$WINEPREFIX/.s7-headless-settings.log" 2>&1
+            printf "%s" "$S7_WINE_FONT_DIR" > "$WINEPREFIX/.s7-font-directory"
         fi
     '
 fi

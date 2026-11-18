@@ -115,8 +115,9 @@ auto home_directory() -> std::optional<std::filesystem::path>
 
 void* open_library(const std::filesystem::path& path, std::string& error)
 {
-    // The plugin's own directory is searched for the DLLs it depends on.
-    const HMODULE library = ::LoadLibraryExW(std::filesystem::absolute(path).c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+    // Search both the plugin directory and the application's DLL directory.
+    const HMODULE library = ::LoadLibraryExW(std::filesystem::absolute(path).c_str(), nullptr,
+        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
     if (!library) {
         error = std::system_category().message(static_cast<int>(::GetLastError()));
     }

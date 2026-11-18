@@ -6,6 +6,8 @@
 #include <atomic>
 #include <filesystem>
 #include <stdexcept>
+#include <s7/core.hpp>
+#include <s7/net.hpp>
 
 int main()
 {
@@ -23,6 +25,12 @@ int main()
     const s7::deployment::RuntimeNode node{"node-a", {}, "wss://node-a"};
     const auto fetched = service->fetchDeployedDiagram(node, {}, cancelled);
     if (!fetched.found || fetched.revision != 7 || !fetched.diagram.is_object() || requests != 1) return 1;
+
+    s7::register_builtin_elements(s7::ElementRegistry::instance());
+    s7::register_net_elements(s7::ElementRegistry::instance());
+    auto invalid = boost::json::parse(R"({"dt":0.001,"runtime_nodes":[{"node_uuid":"a","endpoint":"wss://a"},{"node_uuid":"b","endpoint":"wss://b"}],"schema":{"name":"invalid_loop","elements":[{"id":"first","type":"Gain","node":"a"},{"id":"second","type":"Gain","node":"b"}],"connections":[{"from_element":"first","from_port":0,"to_element":"second","to_port":0},{"from_element":"second","from_port":0,"to_element":"first","to_port":0}]}})").as_object();
+    const auto rejected = service->deploy(invalid, s7::deployment::infer_output_types(invalid), {}, cancelled);
+    if (rejected.committed || rejected.errors.empty() || rejected.errors.front().find("Cycle detected without causal memory") == std::string::npos || requests != 1) return 6;
 
     cancelled.store(true);
     try {

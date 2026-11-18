@@ -50,6 +50,31 @@ function(s7_suppress_target_warnings target_name)
 endfunction()
 
 option(S7_BUILD_STUDIO "Build the s7studio runtime client" ON)
+set(S7_BUILD_SDR_DEFAULT ON)
+if(WIN32)
+    set(S7_BUILD_SDR_DEFAULT OFF)
+endif()
+option(S7_BUILD_SDR "Build SDR elements, providers and tools" ${S7_BUILD_SDR_DEFAULT})
+if(NOT S7_BUILD_SDR)
+    if(S7_SOAPYSDR STREQUAL "ON")
+        message(FATAL_ERROR "S7_SOAPYSDR=ON requires S7_BUILD_SDR=ON")
+    endif()
+    set(S7_SOAPYSDR OFF CACHE STRING "SoapySDR provider (disabled with SDR elements)" FORCE)
+endif()
+option(S7_NATIVE_PACKAGES "Configure distribution-native Linux RPM/DEB packages" OFF)
+include(GNUInstallDirs)
+# Keep the standalone SDK installation complete in ordinary development builds.
+# Native packages separate versioned libraries from development symlinks/headers.
+set(S7_CORE_INSTALL_COMPONENT s7sdk)
+set(S7_HARDWARE_INSTALL_COMPONENT s7sdk)
+if(S7_NATIVE_PACKAGES)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_CROSSCOMPILING)
+        message(FATAL_ERROR "Native packages require a native Linux build")
+    endif()
+    set(S7_CORE_INSTALL_COMPONENT s7libs)
+    set(S7_HARDWARE_INSTALL_COMPONENT s7hardware)
+endif()
+add_compile_definitions(S7_INSTALL_PLUGIN_SUBDIR="${CMAKE_INSTALL_LIBDIR}/s7/plugins")
 
 if (WIN32)
 	# One Boost.JSON for the host and every plugin DLL (the static one would be
@@ -126,31 +151,68 @@ endif()
 add_subdirectory(s7core)
 add_subdirectory(s7hardware)
 add_subdirectory(s7audio)
-add_subdirectory(s7sdr)
+if(S7_BUILD_SDR)
+    add_subdirectory(s7sdr)
+endif()
 add_executable(s7hw s7hardware/tools/s7hw.cpp)
-target_link_libraries(s7hw PRIVATE s7audio s7sdr)
+target_link_libraries(s7hw PRIVATE s7audio)
+if(S7_BUILD_SDR)
+    target_link_libraries(s7hw PRIVATE s7sdr)
+    target_compile_definitions(s7hw PRIVATE S7_WITH_SDR=1)
+endif()
 s7_enable_project_warnings(s7hw)
 set_target_properties(s7hw PROPERTIES INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
-install(TARGETS s7hw RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS s7hw RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT s7hardware)
 # Laboratory tool: never built/run by normal CTest or packaged by default.
-add_executable(s7hardware_probe EXCLUDE_FROM_ALL s7hardware/tests/live_probe.cpp)
-target_link_libraries(s7hardware_probe PRIVATE s7audio s7sdr)
-target_compile_options(s7hardware_probe PRIVATE -O2)
-s7_enable_project_warnings(s7hardware_probe)
-foreach(example audio_capture audio_playback sdr_receive)
+if(S7_BUILD_SDR)
+    add_executable(s7hardware_probe EXCLUDE_FROM_ALL s7hardware/tests/live_probe.cpp)
+    target_link_libraries(s7hardware_probe PRIVATE s7audio s7sdr)
+    target_compile_options(s7hardware_probe PRIVATE -O2)
+    s7_enable_project_warnings(s7hardware_probe)
+endif()
+set(S7_HARDWARE_EXAMPLES audio_capture audio_playback)
+if(WIN32)
+    set(S7_HARDWARE_EXAMPLES portaudio_capture portaudio_playback)
+endif()
+if(S7_BUILD_SDR)
+    list(APPEND S7_HARDWARE_EXAMPLES sdr_receive)
+endif()
+foreach(example IN LISTS S7_HARDWARE_EXAMPLES)
     add_test(NAME s7hardware_offline_${example} COMMAND s7hw --check ${PROJECT_SOURCE_DIR}/examples/hardware/${example}.json)
 endforeach()
 s7_add_test_executable(s7hardware_plugin_smoke s7hardware/tests/plugin_smoke.cpp s7runtime/src/plugin_loader.cpp)
 target_include_directories(s7hardware_plugin_smoke PRIVATE s7runtime/include)
 target_link_libraries(s7hardware_plugin_smoke PRIVATE s7hardware)
-add_dependencies(s7hardware_plugin_smoke s7audio_plugin s7sdr_plugin)
-add_test(NAME s7hardware_plugin_smoke COMMAND s7hardware_plugin_smoke $<TARGET_FILE:s7audio_plugin> $<TARGET_FILE:s7sdr_plugin>)
-if(UNIX AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING)
+add_dependencies(s7hardware_plugin_smoke s7audio_plugin)
+set(S7_HARDWARE_TEST_PLUGINS $<TARGET_FILE:s7audio_plugin>)
+if(S7_BUILD_SDR)
+    add_dependencies(s7hardware_plugin_smoke s7sdr_plugin)
+    list(APPEND S7_HARDWARE_TEST_PLUGINS $<TARGET_FILE:s7sdr_plugin>)
+endif()
+add_test(NAME s7hardware_plugin_smoke COMMAND s7hardware_plugin_smoke ${S7_HARDWARE_TEST_PLUGINS})
+get_property(S7_TEST_PORTAUDIO GLOBAL PROPERTY S7_HAVE_PORTAUDIO)
+if(WIN32 AND CMAKE_CROSSCOMPILING)
+    # The standalone build-directory plugin needs its external DLL beside it,
+    # just as an independently distributed plugin does with the native loader.
+    add_custom_target(s7hardware_plugin_test_dependencies
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:s7hardware>"
+            "$<TARGET_FILE_DIR:s7audio_plugin>/$<TARGET_FILE_NAME:s7hardware>")
+    if(S7_TEST_PORTAUDIO)
+        add_custom_command(TARGET s7hardware_plugin_test_dependencies POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SYSROOT}/bin/libportaudio.dll"
+                "$<TARGET_FILE_DIR:s7audio_plugin>/libportaudio.dll")
+    endif()
+    add_dependencies(s7hardware_plugin_test_dependencies s7hardware s7audio_plugin)
+    add_dependencies(s7hardware_plugin_smoke s7hardware_plugin_test_dependencies)
+endif()
+if((UNIX AND NOT APPLE AND NOT CMAKE_CROSSCOMPILING) OR (WIN32 AND CMAKE_CROSSCOMPILING))
     add_test(NAME s7hardware_sdk_smoke COMMAND ${CMAKE_COMMAND}
         -DS7_BUILD=${CMAKE_BINARY_DIR} -DS7_SOURCE=${PROJECT_SOURCE_DIR}
         -DS7_TEST_ROOT=${CMAKE_BINARY_DIR}/s7hardware-sdk-test -DS7_CXX=${CMAKE_CXX_COMPILER}
+        -DS7_TOOLCHAIN_FILE=${CMAKE_TOOLCHAIN_FILE} -DS7_EMULATOR=${CMAKE_CROSSCOMPILING_EMULATOR}
         -P ${PROJECT_SOURCE_DIR}/s7hardware/tests/sdk_smoke.cmake)
 endif()
+
 add_subdirectory(s7io)
 add_subdirectory(s7transport)
 add_subdirectory(s7net)
@@ -193,8 +255,6 @@ set(S7_ALL_TARGETS
 	s7hardware
 	s7audio
 	s7audio_plugin
-	s7sdr
-	s7sdr_plugin
 	s7hw
 	s7io
 	s7transport
@@ -204,6 +264,9 @@ set(S7_ALL_TARGETS
 	s7runtime
 	s7ctl
 )
+if(S7_BUILD_SDR)
+    list(APPEND S7_ALL_TARGETS s7sdr s7sdr_plugin)
+endif()
 
 if (TARGET s7spectral)
 	list(APPEND S7_ALL_TARGETS s7spectral)
@@ -219,10 +282,19 @@ add_dependencies(build-tests ${S7_ALL_TARGETS})
 
 if (WIN32 AND CMAKE_CROSSCOMPILING)
 	# WINEPATH: the directories of this build's DLLs, then the sysroot's.
-	set(S7_WINE_DLL_PATH "$<TARGET_FILE_DIR:s7core>;$<TARGET_FILE_DIR:s7noise>;${CMAKE_SYSROOT}/bin")
+	set(S7_WINE_DLL_PATH "$<TARGET_FILE_DIR:s7core>;$<TARGET_FILE_DIR:s7noise>;$<TARGET_FILE_DIR:s7hardware>;$<TARGET_FILE_DIR:s7audio>")
+    if(S7_BUILD_SDR)
+        string(APPEND S7_WINE_DLL_PATH ";$<TARGET_FILE_DIR:s7sdr>")
+    endif()
+    string(APPEND S7_WINE_DLL_PATH ";${CMAKE_SYSROOT}/bin")
 	file(READ ${PROJECT_SOURCE_DIR}/tools/windows/wine-run.sh.in S7_WINE_RUN)
 	string(REPLACE "@S7_WINE_DLL_PATH@" "${S7_WINE_DLL_PATH}" S7_WINE_RUN "${S7_WINE_RUN}")
 	string(REPLACE "@S7_WINE_PREFIX@" "${CMAKE_BINARY_DIR}/wine-prefix" S7_WINE_RUN "${S7_WINE_RUN}")
 	file(GENERATE OUTPUT ${CMAKE_BINARY_DIR}/wine-run.sh CONTENT "${S7_WINE_RUN}"
 		FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()
+
+include(cmake/LinuxInstall.cmake)
+if(S7_NATIVE_PACKAGES)
+    include(cmake/NativePackages.cmake)
 endif()

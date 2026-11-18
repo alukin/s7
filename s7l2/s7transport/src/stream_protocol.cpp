@@ -474,10 +474,15 @@ std::size_t StreamConsumer::take(void* out, const std::size_t max_count, std::ve
 
 std::optional<wire::ControlMessage> StreamConsumer::ack_due(const Clock::time_point now)
 {
-    if (consumed_up_to_ <= acked_up_to_) {
+    if (consumed_since_ack_ < kAckEveryPackets && now - last_ack_ < kAckInterval) {
         return std::nullopt;
     }
-    if (consumed_since_ack_ < kAckEveryPackets && now - last_ack_ < kAckInterval) {
+    return ack_now(now);
+}
+
+std::optional<wire::ControlMessage> StreamConsumer::ack_now(const Clock::time_point now)
+{
+    if (consumed_up_to_ <= acked_up_to_) {
         return std::nullopt;
     }
     acked_up_to_ = consumed_up_to_;

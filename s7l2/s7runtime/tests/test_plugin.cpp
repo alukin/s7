@@ -9,6 +9,9 @@
 #include <s7/element_plugin.hpp>
 #include <s7/element_registry.hpp>
 #include <s7/elements.hpp>
+#if defined(S7_TEST_PLUGIN_DEPENDENCY)
+extern "C" __declspec(dllimport) double s7_test_dependency_value();
+#endif
 
 namespace {
 
@@ -37,7 +40,13 @@ void s7_register_elements(void* registry_ptr)
     metadata.category = "test";
     metadata.output_ports = {{"out", "the constant", s7::SignalType::F64, false}};
     registry->register_element(s7::ElementDescriptor(
-        "TestPluginConstant", [](const s7::ElementCreationContext&) { return std::make_unique<s7::Constant>(42.0); }, metadata));
+        "TestPluginConstant", [](const s7::ElementCreationContext&) {
+#if defined(S7_TEST_PLUGIN_DEPENDENCY)
+            return std::make_unique<s7::Constant>(s7_test_dependency_value());
+#else
+            return std::make_unique<s7::Constant>(42.0);
+#endif
+        }, metadata));
 #ifdef S7_TEST_PLUGIN_FAIL
     registry->register_element(s7::ElementDescriptor(
         "Constant", [](const s7::ElementCreationContext&) { return std::make_unique<s7::Constant>(0.0); }, metadata));

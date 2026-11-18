@@ -67,6 +67,12 @@ public:
     [[nodiscard]] const std::vector<ElementSpec>& elements() const;
     [[nodiscard]] const std::vector<Connection>& connections() const;
 
+    // Optional complete order of real direct-feedthrough elements, using
+    // flattened path IDs. Compiler checks membership and every dependency;
+    // causal-memory publication/staging stays owned by NodeRuntime.
+    void set_causal_order(std::vector<std::string> order);
+    [[nodiscard]] const std::optional<std::vector<std::string>>& causal_order() const { return causal_order_; }
+
     // An exposed port: its name and type, and the internal element port it
     // feeds (inputs) or is fed by (outputs).
     struct ExposedPort {
@@ -104,6 +110,7 @@ private:
     std::optional<Rate> rate_;
     std::vector<ElementSpec> elements_;
     std::vector<Connection> connections_;
+    std::optional<std::vector<std::string>> causal_order_;
     std::deque<ExposedPort> exposed_inputs_;
     std::deque<ExposedPort> exposed_outputs_;
     std::vector<std::shared_ptr<void>> exposed_input_states_;

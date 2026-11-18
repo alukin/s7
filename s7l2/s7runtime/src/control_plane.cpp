@@ -832,6 +832,7 @@ auto ControlPlane::handle_get_node_info(const boost::json::object& request) cons
     out["data_protocol"] = boost::json::object{{"packet_versions", std::move(packet_versions)},
                                                {"extensions", std::move(extensions)},
                                                {"signal_types", std::move(signal_types)}};
+    out["causal_schedule_versions"] = boost::json::array{1};
     // Its UTC clock is the shared "utc" domain only while it is synchronized
     // within the bound; otherwise it is this node's own domain.
     const auto sync = options_.clock_sync ? options_.clock_sync() : clock::read_kernel_sync();

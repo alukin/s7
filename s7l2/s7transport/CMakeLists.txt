@@ -68,6 +68,9 @@ set_tests_properties(s7transport_frame_socket_smoke PROPERTIES TIMEOUT 45)
 add_executable(s7transport_audio_benchmark EXCLUDE_FROM_ALL benchmarks/audio_frames.cpp)
 target_link_libraries(s7transport_audio_benchmark PRIVATE s7transport)
 s7_enable_project_warnings(s7transport_audio_benchmark)
+add_executable(s7transport_ack_policy_spike EXCLUDE_FROM_ALL benchmarks/ack_policy.cpp)
+target_link_libraries(s7transport_ack_policy_spike PRIVATE s7transport)
+s7_enable_project_warnings(s7transport_ack_policy_spike)
 add_executable(s7transport_sample_benchmark EXCLUDE_FROM_ALL benchmarks/sample_stream.cpp)
 target_link_libraries(s7transport_sample_benchmark PRIVATE s7transport s7net)
 target_compile_definitions(s7transport_sample_benchmark PRIVATE S7_BENCH_BUILD_TYPE="$<CONFIG>")
@@ -86,6 +89,12 @@ target_link_libraries(s7transport_stream_protocol_smoke PRIVATE s7transport)
 
 add_test(NAME s7transport_stream_protocol_smoke COMMAND s7transport_stream_protocol_smoke)
 add_test(NAME s7transport_wire_format_smoke COMMAND s7transport_wire_format_smoke)
+
+s7_add_test_executable(s7transport_in_memory_credit_smoke tests/in_memory_credit_smoke.cpp)
+target_link_libraries(s7transport_in_memory_credit_smoke PRIVATE s7transport)
+s7_enable_project_warnings(s7transport_in_memory_credit_smoke)
+add_test(NAME s7transport_in_memory_credit_smoke COMMAND s7transport_in_memory_credit_smoke)
+set_tests_properties(s7transport_in_memory_credit_smoke PROPERTIES TIMEOUT 10)
 
 # The shared wire fixtures: a second, Python decoder passes all of them, and
 # they are what the generator writes.

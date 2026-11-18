@@ -1,6 +1,17 @@
 # Building S7 for Windows
 
-S7 builds 64-bit Windows binaries on Linux (Ubuntu 26.04): Clang 22 cross-compiles for MinGW-w64 (UCRT) against libstdc++ and the dependencies from MSYS2's UCRT64 packages, and the tests run under Wine. No Windows machine is needed to build or test; the result runs on Windows 10 and later.
+The Windows release profile includes PortAudio sound elements and excludes SDR
+elements/providers (`S7_BUILD_SDR=OFF`, `S7_PORTAUDIO=ON`, `S7_PIPEWIRE=OFF`,
+`S7_SOAPYSDR=OFF`). Linux retains sound and SDR. The Windows artifact remains a
+portable folder/ZIP built by the existing cross-build workflow. The earlier
+[hardware research](WINDOWS_HARDWARE_RESEARCH.md) records broader feasibility;
+the release profile selects sound only.
+
+S7 builds 64-bit Windows binaries on Linux (Ubuntu 26.04 or Fedora 45): Clang 22
+cross-compiles for MinGW-w64 (UCRT) against libstdc++ and MSYS2 UCRT64 dependencies.
+Regression tests run under Wine; the target is Windows 10 or later. Cross-builds
+and Wine tests need no Windows machine; native device/desktop qualification uses
+Windows.
 
 In short, from the project root: `./build_for_windows --test` (fetches the sysroot on the first run, builds in `build-win/`, runs the tests), `./run_on_wine s7studio`, and `./build_for_windows --package` for `dist/s7-windows/`. The rest of this page is what these scripts do.
 
@@ -13,10 +24,17 @@ tools/windows/fetch_msys2_sysroot.py        # ~150 MB into ~/.cache/s7/msys2-ucr
 
 The fetch script downloads the MSYS2 UCRT64 packages S7 needs (mingw-w64 CRT and headers, GCC's libstdc++ and runtime DLLs, Boost, OpenSSL, zlib, Qt6 with Qt Quick, Qt Graphs and Qt Quick 3D, FFTW) and everything they depend on, checks their SHA-256 sums against the repository database and unpacks them into one sysroot. Studio uses double-precision FFTW for spectrum analysis; the separate `s7spectral` plugin uses single precision. `--no-studio` skips Qt; FFTW is skipped only when both `--no-studio` and `--no-spectral` are selected. Another directory can be given as an argument (then pass `-DS7_MINGW_SYSROOT=<dir>` to CMake). MSYS2 is a rolling distribution: rerunning the script updates the sysroot to the packages it ships now.
 
+The sysroot now also includes PortAudio, LZ4 and Zstandard. The wrapper refreshes
+an existing sysroot when required sound/compression development files are absent.
+On Fedora 45, `sudo dnf install clang22 llvm22 lld22 wine zstd` supplies the
+versioned tools alongside Clang 23. The wrapper uses Fedora's host Qt tools
+under `/usr/lib64/qt6`; native Studio development dependencies supply those tools.
+
 ## Build and test
 
 ```bash
-cmake -S . -B build-win -G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake
+cmake -S . -B build-win -G Ninja --toolchain cmake/toolchains/x86_64-w64-mingw32-clang.cmake \
+  -DS7_BUILD_SDR=OFF -DS7_PORTAUDIO=ON -DS7_PIPEWIRE=OFF
 cmake --build build-win
 
 # Optional: build and run tests under Wine
@@ -30,6 +48,12 @@ Release builds retain assertions in test executables through the project's `s7_a
 
 ctest runs every test program under Wine through `build-win/wine-run.sh`, which puts the build's DLL directories and the sysroot's `bin/` on `WINEPATH`. The Wine prefix is `build-win/wine-prefix`, created on the first run. The shell-script tests get the runner as `S7_RUN` (see `S7_SCRIPT_TEST_ENV` in `CMakeLists.txt`). To run a program by hand: `build-win/wine-run.sh build-win/s7runtime/s7runtime.exe --help`.
 
+The wrapper defaults to two compile/test jobs; change this with `S7_BUILD_JOBS`.
+`./run_on_wine --release s7hw --check examples/hardware/portaudio_playback.json`
+checks the sound graph without opening a device. `--package` also builds the
+separate spectral/wavelet plugins against the installed SDK. These numerical
+analysis plugins are independent of SDR device support and remain included.
+
 ## Package
 
 ```bash
@@ -37,6 +61,20 @@ tools/windows/package.sh build-win-release dist/s7-windows
 ```
 
 The directory holds `s7runtime.exe`, `s7ctl.exe`, `s7studio.exe`, `libs7core.dll`, `plugins/libs7noise.dll`, Qt's `platforms/` and `styles/` plugins, the QML modules Studio's viewers import (`qml/`: QtQml, QtQuick, QtGraphs, QtQuick3D, without the submodules they do not use) with a `qt.conf` pointing Qt at them, `examples/`, and every DLL these import from the sysroot (found with `llvm-objdump`); the build's own modules are stripped. Copy or zip it to a Windows machine. Start the programs in that directory (Explorer does for `s7studio.exe`), so that they find `./plugins`.
+
+The bundle also contains `s7hw.exe`, `libs7hardware.dll`, `libs7audio.dll`,
+`libportaudio.dll`, `plugins/libs7audio-elements.dll`, analysis plugins and
+PortAudio examples under `share/s7/examples/hardware`. SDR libraries/plugins
+and the SDR receive example are omitted. `build-profile.json` records provider
+options. For a relocated check with no build/sysroot DLL search path:
+
+```sh
+python3 tools/windows/smoke_package.py dist/s7-windows /tmp/s7-windows-installed-check
+```
+
+The check uses an isolated Wine prefix and verifies sound-element discovery,
+SDR rejection, offline sound graphs and existing Studio/analysis workflows.
+It does not open a sound device or qualify native Windows audio/desktop rendering.
 
 On Windows:
 
@@ -59,6 +97,35 @@ Why each piece of the toolchain is as it is:
 - **Qt.** MSYS2's Qt is a native Windows build: its moc, uic and rcc are Windows programs. `CMakeLists.txt` points the `Qt6::moc`/`uic`/`rcc` targets at the host Qt's tools (Ubuntu's Qt 6.10 generates code for MSYS2's Qt 6.11; `QT_NO_PACKAGE_VERSION_CHECK`). Studio's QML scenes are plain Qt resources (rcc), so no other host Qt tool is needed. Under Wine the Studio tests use the offscreen platform and Qt's null RHI (`QSG_RHI_BACKEND=null`) with no display: Qt Quick, Qt Graphs and Qt Quick 3D otherwise render through Direct3D 11 in wined3d, which opens real windows that can hang on a desktop and crashes under Xvfb. They check behavior, not pixels; check the viewers' rendering on Windows itself.
 - **Wine.** `wine-run.sh` disables `winedbg`, so a crashing test fails instead of waiting in the debugger. Windows programs write `\r\n` to stdout; the shell-script tests strip the `\r` before matching lines.
 - **Headless Wine environment.** Headless tests use a separate `wine-prefix-headless` by default. Fedora 45 Wine filters `QT_*` variables from the Unix environment, so the wrapper sets `QT_QPA_PLATFORM=offscreen` inside that test prefix's Windows environment. Interactive runs keep their own prefix. The Windows bundle includes Qt's offscreen platform plugin for installed-package checks as well as the normal Windows platform plugin.
+- **Offscreen fonts.** Qt's offscreen font database uses an explicit DejaVu font directory. The headless wrapper and installed-package check configure `QT_QPA_FONTDIR` inside their isolated Wine prefixes using the host's Fedora/Ubuntu DejaVu directory. This keeps coefficients and summing signs visible in rendering regressions. Normal Windows desktop runs use their Windows fonts.
 - **Compiler ABI.** Windows builds require Clang 22. Clang 23 changes the F128 calling convention and cannot use the current Clang 22/libgcc adapter; configuration rejects it. Build third-party Windows plugins with the same compiler as the installed SDK.
 - **Portable viewer dependencies.** The bundle includes Qt's SVG icon plugins and, when present, Qt 6.12's `QtGraphs2D` implementation module. Its plugin and `Qt6Graphs2DImpl.dll` are required by the 2D viewers even though the application imports `QtGraphs`.
 - **Third-party plugins.** `s7spectral_sdk_smoke` builds s7spectral against the installed SDK with the same toolchain file; a plugin built out of tree for Windows does the same (`--toolchain ... -Ds7core_DIR=<sdk>/lib/cmake/s7core`, since a cross build finds packages only inside the sysroot).
+
+## Sound-only build verification, 2026-11-17
+
+Observed host: Fedora 45, Clang 22.1.8 and Wine 11.21. The exact MSYS2 package
+inventory is included in the portable bundle's `build-profile.json`; deployed
+binary hashes and dependency archive identities are under `licenses/`.
+
+| Check | Result |
+| --- | --- |
+| Release Studio/runtime/CLI/sound build; PortAudio ON, SDR/PipeWire/SoapySDR OFF | Passed |
+| Complete configured Windows CTest suite under Wine | 112/112 passed |
+| Relocated portable bundle with no build/sysroot DLL search path | 21/21 checks passed |
+| Windows installed hardware SDK and external fake provider | Passed within CTest |
+| Linux focused core/hardware/plugin/SDK regressions, SDR retained | 17/17 passed |
+| Windows ZIP binary hashes versus the tested portable folder | All 101 PE files matched |
+
+The DLL loader searches the plugin's directory and the application's default
+DLL directories. A dedicated regression loads a nested plugin whose additional
+dependency is beside the executable. Build-directory test fixtures stage their
+external dependencies beside the plugin. The relocated check confirms that
+AudioSource is available in Studio and that SdrSource is rejected.
+
+Wine's offscreen Qt tests use DejaVu fonts. The two short Studio control tests
+run separately from GUI tests in their shared Wine prefix. These are test-host
+settings; the portable application uses the normal Windows platform plugin and
+Windows fonts. No physical sound stream was opened, and native Windows audio
+or desktop/GPU qualification is not claimed. The local preview retains the
+current project version; it does not publish the next release.

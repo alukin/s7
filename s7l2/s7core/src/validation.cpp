@@ -380,7 +380,11 @@ public:
             const bool cyclic =
                 component.size() > 1 || (component.size() == 1 && GraphAlgorithms::has_self_loop(component.front(), adjacency));
             if (cyclic) {
-                errors.emplace_back("Cycle detected without causal memory.");
+                auto ids = component;
+                std::ranges::sort(ids);
+                std::string message = "Cycle detected without causal memory. Elements:";
+                for (const auto& id : ids) message += " '" + id + "'";
+                errors.push_back(std::move(message));
             }
         }
     }
@@ -390,7 +394,7 @@ public:
 
 namespace detail {
 
-CheckedSchema check_schema(const Schema& nested_schema) {
+static CheckedSchema check_schema_impl(const Schema& nested_schema, bool resolve_timing) {
     CheckedSchema checked;
     // Nested schemas are inlined first (ADR-024): every check below sees the
     // flattened graph, so a nested schema behaves exactly like its contents.
@@ -443,6 +447,7 @@ CheckedSchema check_schema(const Schema& nested_schema) {
     if (checked.errors.empty()) {
         CycleRulesValidator::validate(schema, prototypes, checked.errors);
     }
+    if (!resolve_timing) return checked;
     if (checked.errors.empty()) {
         auto rates = RateResolver::resolve(schema, instances, seeds);
         if (!rates.ok()) {
@@ -720,6 +725,9 @@ CheckedSchema check_schema(const Schema& nested_schema) {
     }
     return checked;
 }
+
+CheckedSchema check_schema(const Schema& schema) { return check_schema_impl(schema, true); }
+CheckedSchema check_schema_structure(const Schema& schema) { return check_schema_impl(schema, false); }
 
 } // namespace detail
 

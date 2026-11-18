@@ -569,7 +569,11 @@ public:
             }
             if (starving) {
                 starving(entry);
+                const auto before_retry = taken;
                 taken += consumer.take(bytes + taken * element_bytes, count - taken, taken == 0 ? &first_times : nullptr);
+                if (taken > before_retry && on_consumed) {
+                    on_consumed(entry);
+                }
                 if (taken == count) {
                     break;
                 }
@@ -781,7 +785,7 @@ struct InMemoryRuntimeNetEndpoint::Impl {
             }
         }
         // The local consumer acknowledges whatever the graph has taken.
-        if (const auto ack = consumer->consumer->ack_due(now + stream::kAckInterval)) {
+        if (const auto ack = consumer->consumer->ack_now(now)) {
             producer->producer->acknowledge(key, ack->next_expected);
         }
         table.changed.notify_all();

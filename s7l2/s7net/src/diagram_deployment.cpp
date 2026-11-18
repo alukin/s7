@@ -5,12 +5,16 @@
 
 #include <algorithm>
 #include <numeric>
+#include <queue>
 #include <cmath>
 #include <map>
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include "s7/schema_library.hpp"
+#include "s7/validation.hpp"
+#include "s7/resampler.hpp"
 
 namespace s7::deployment {
 
@@ -154,6 +158,58 @@ auto timestamps_param(const StreamDescriptor& stream) -> json::array
         roles.emplace_back(wire::to_string(declaration.role));
     }
     return roles;
+}
+
+// Each node can check the distributed serial-order/stream wait graph without
+// loading plugins that exist only on other nodes. Its compiler separately
+// verifies membership and real local dependencies.
+void validate_schedule(const json::object& diagram)
+{
+    const auto& schedule = diagram.at("causal_schedule");
+    if (!schedule.is_object()) throw std::invalid_argument("causal_schedule must be an object.");
+    const auto& fields = schedule.as_object();
+    const auto* version = fields.if_contains("version");
+    if (!version || !(version->is_int64() || version->is_uint64()) || version->to_number<std::int64_t>() != 1)
+        throw std::invalid_argument("Unsupported causal_schedule version.");
+    const auto* nodes = fields.if_contains("nodes");
+    if (!nodes || !nodes->is_object()) throw std::invalid_argument("causal_schedule.nodes must be an object.");
+    const auto placed = placed_nodes(diagram);
+    if (nodes->as_object().size() != placed.size()) throw std::invalid_argument("causal_schedule node membership mismatch.");
+    using Key = std::pair<std::string, std::string>;
+    std::map<Key, std::size_t> indexes;
+    std::vector<std::vector<std::size_t>> next;
+    std::vector<std::size_t> degree;
+    const auto add_edge = [&](const Key& from, const Key& to) {
+        if (!indexes.contains(from) || !indexes.contains(to)) throw std::invalid_argument("causal_schedule is missing a stream endpoint.");
+        next[indexes.at(from)].push_back(indexes.at(to)); ++degree[indexes.at(to)];
+    };
+    for (const auto& node : placed) {
+        const auto* order = nodes->as_object().if_contains(node);
+        if (!order || !order->is_array()) throw std::invalid_argument("causal_schedule has no order for node " + node);
+        std::optional<Key> previous;
+        for (const auto& id : order->as_array()) {
+            if (!id.is_string()) throw std::invalid_argument("causal_schedule element IDs must be strings.");
+            Key key{node, std::string(id.as_string())};
+            if (!indexes.emplace(key, indexes.size()).second) throw std::invalid_argument("Duplicate causal_schedule element: " + key.second);
+            next.emplace_back(); degree.push_back(0);
+            if (previous) add_edge(*previous, key);
+            previous = std::move(key);
+        }
+    }
+    for (const auto& stream : parse_streams(diagram)) {
+        std::set<std::string> consumers;
+        for (const auto& c : stream.consumers) consumers.insert(c.node_uuid);
+        for (const auto& node : consumers)
+            add_edge({stream.producer.node_uuid, stream_element_id(stream, "out")}, {node, stream_element_id(stream, "in")});
+    }
+    std::queue<std::size_t> ready;
+    for (std::size_t i = 0; i < degree.size(); ++i) if (!degree[i]) ready.push(i);
+    std::size_t count = 0;
+    while (!ready.empty()) {
+        const auto n = ready.front(); ready.pop(); ++count;
+        for (const auto child : next[n]) if (--degree[child] == 0) ready.push(child);
+    }
+    if (count != degree.size()) throw std::invalid_argument("causal_schedule introduces a cross-node wait cycle.");
 }
 
 } // namespace
@@ -542,7 +598,123 @@ auto extract_node_schema(const json::object& diagram, const std::string_view nod
     }
     fragment["elements"] = std::move(elements);
     fragment["connections"] = std::move(connections);
+    if (const auto* schedule = diagram.if_contains("causal_schedule")) {
+        validate_schedule(diagram);
+        const auto& fields = schedule->as_object();
+        const auto* nodes = fields.if_contains("nodes");
+        if (!nodes || !nodes->is_object()) throw std::invalid_argument("causal_schedule.nodes must be an object.");
+        const auto* order = nodes->as_object().if_contains(node_uuid);
+        if (!order || !order->is_array()) throw std::invalid_argument("causal_schedule has no element order for node " + std::string(node_uuid));
+        for (const auto& id : order->as_array())
+            if (!id.is_string()) throw std::invalid_argument("causal_schedule element IDs must be strings.");
+        fragment["causal_order"] = *order;
+    }
     return fragment;
+}
+
+auto plan_causal_schedule(json::object& diagram, const ElementRegistry& registry) -> std::vector<std::string>
+{
+    try {
+        auto candidate = diagram;
+        candidate.erase("causal_schedule"); // derive afresh, never trust a stale caller-supplied plan
+        auto definition = diagram_schema(candidate);
+        if (!definition.contains("connections")) definition["connections"] = json::array{};
+        auto schema = SchemaLibraryLoader::build_schema(definition, registry);
+        const auto rate = model_time_rate(candidate);
+        if (rate) schema.set_rate(*rate);
+        auto whole = rate ? detail::check_schema(schema) : detail::check_schema_structure(schema);
+        const auto streams = parse_streams(candidate);
+        if (!whole.errors.empty()) {
+            std::string context;
+            for (const auto& stream : streams) context += (context.empty() ? " Cross-node streams: " : ", ") + wire::to_string(stream.stream_id);
+            auto errors = whole.errors;
+            for (auto& error : errors) error = "Diagram validation: " + error + context;
+            return errors;
+        }
+        if (streams.empty()) {
+            diagram = std::move(candidate);
+            return {};
+        }
+        if (whole.domain_rates.size() > 1 || !whole.coupled_regions.empty())
+            return {"Distributed static schedules currently require one rate domain and no coupled numerical regions."};
+        std::optional<Rate> declared_rate;
+        for (const auto& element : whole.elements) {
+            const auto pinned = element->declared_rate();
+            const auto* coupled = dynamic_cast<const CoupledIntegration*>(element.get());
+            if ((pinned && declared_rate && *pinned != *declared_rate) ||
+                dynamic_cast<const RateChangingElement*>(element.get()) || (coupled && coupled->coupled_method() != CoupledMethod::None))
+                return {"Distributed static schedules currently require one rate domain and no coupled numerical regions."};
+            if (pinned) declared_rate = pinned;
+        }
+
+        struct Task {
+            std::string node, id;
+            int priority{1};
+            bool port{};
+            std::size_t degree{};
+            std::vector<std::size_t> followers;
+        };
+        std::vector<Task> tasks;
+        std::map<std::pair<std::string, std::string>, std::size_t> indices;
+        std::map<std::string, detail::CheckedSchema> parts;
+        for (const auto& node : placed_nodes(candidate)) {
+            auto part = SchemaLibraryLoader::build_schema(extract_node_schema(candidate, node), registry);
+            if (rate) part.set_rate(*rate);
+            auto checked = rate ? detail::check_schema(part) : detail::check_schema_structure(part);
+            if (!checked.errors.empty()) return {"Node " + node + ": " + checked.errors.front()};
+            for (std::size_t i = 0; i < checked.elements.size(); ++i) {
+                const auto& element = checked.elements[i];
+                if (element->has_causal_memory()) continue; // published at step entry; committed by NodeRuntime
+                const auto& id = checked.flat->elements()[i].id;
+                const auto type = element->type_name();
+                const auto priority = type == "NetSink" || type == "NetFrameSink" ? 0 :
+                                      type == "NetSource" || type == "NetFrameSource" ? 2 : 1;
+                indices.emplace(std::pair{node, id}, tasks.size());
+                tasks.push_back(Task{node, id, priority, dynamic_cast<const detail::SchemaPort*>(element.get()) != nullptr, 0, {}});
+            }
+            parts.emplace(node, std::move(checked));
+        }
+        const auto edge = [&](const std::pair<std::string, std::string>& from, const std::pair<std::string, std::string>& to) {
+            const auto a = indices.find(from), b = indices.find(to);
+            if (a != indices.end() && b != indices.end()) {
+                tasks[a->second].followers.push_back(b->second);
+                ++tasks[b->second].degree;
+            }
+        };
+        for (const auto& [node, part] : parts)
+            for (const auto& c : part.flat->connections()) edge({node, c.from_element}, {node, c.to_element});
+        for (const auto& stream : streams) {
+            std::set<std::string> consumers;
+            for (const auto& consumer : stream.consumers) consumers.insert(consumer.node_uuid);
+            for (const auto& consumer : consumers) {
+                const auto from = std::pair{stream.producer.node_uuid, stream_element_id(stream, "out")};
+                const auto to = std::pair{consumer, stream_element_id(stream, "in")};
+                if (!indices.contains(from) || !indices.contains(to)) throw std::invalid_argument("Stream endpoints missing from causal plan.");
+                edge(from, to);
+            }
+        }
+        const auto later = [&tasks](std::size_t a, std::size_t b) {
+            return std::tie(tasks[a].priority, tasks[a].node, tasks[a].id) > std::tie(tasks[b].priority, tasks[b].node, tasks[b].id);
+        };
+        std::priority_queue<std::size_t, std::vector<std::size_t>, decltype(later)> ready(later);
+        for (std::size_t i = 0; i < tasks.size(); ++i) if (tasks[i].degree == 0) ready.push(i);
+        json::object orders;
+        for (const auto& [node, part] : parts) { static_cast<void>(part); orders[node] = json::array{}; }
+        std::size_t visited = 0;
+        while (!ready.empty()) {
+            const auto i = ready.top(); ready.pop(); ++visited;
+            const auto& task = tasks[i];
+            if (!task.port) orders.at(task.node).as_array().emplace_back(task.id);
+            for (const auto child : task.followers) if (--tasks[child].degree == 0) ready.push(child);
+        }
+        if (visited != tasks.size()) return {"Cross-node stream precedence contains a direct-feedthrough cycle."};
+        candidate["causal_schedule"] = json::object{{"version", 1}, {"nodes", std::move(orders)}};
+        validate_schedule(candidate);
+        diagram = std::move(candidate);
+        return {};
+    } catch (const std::exception& ex) {
+        return {std::string("Cannot plan diagram: ") + ex.what()};
+    }
 }
 
 auto producer_endpoints(const json::object& diagram, const std::string_view node_uuid) -> std::vector<transport::DataPeer>

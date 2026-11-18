@@ -228,6 +228,16 @@ Implementations SHOULD reject unsupported types and extensions explicitly rather
 
 ### 12.1 Resolutions
 
+**Causal scheduling (ADR-027, 2026-11-17).** Streams remain direct boundaries:
+transmission latency and buffering do not supply an initial model sample.
+The C++ deployment client checks the complete flattened graph and derives
+outgoing-first static node schedules before PREPARE. The committed diagram's
+`causal_schedule` (version 1, node UUID to flattened causal-element order)
+is covered by its configuration digest. Nodes advertise
+`causal_schedule_versions: [1]`, verify the combined serial/stream wait graph,
+and check local dependencies. Packet bytes, ACK/RESUME and explicit memory
+semantics are unchanged. See the [implementation and qualification guide](../s7l2/docs/DISTRIBUTED_CAUSAL_SCHEDULE.md).
+
 All items were decided on 2026-10-05 (items 1, 3 and 4 as proposed).
 
 **1. Stream descriptor (decided 2026-10-05).** Each stream is a JSON object in the deployed diagram's `streams` array, so it is covered by the configuration digest and versioned with the deployment revision. It is derived from a connection between elements placed on different nodes (Section 12.1, item 6), and Studio stores its `stream_id` in the diagram so that it survives redeployments:

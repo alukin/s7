@@ -445,7 +445,8 @@ int runDeploymentDiagram(int argc, char** argv)
         s7studio::diagram::updatePlacementLabels(*editor.scene(), names);
         renderScene(*editor.scene(), QString::fromLocal8Bit(png));
     }
-    const auto errors = s7::deployment::assign_streams(diagram, s7studio::diagram::studioOutputTypes(diagram));
+    auto errors = s7::deployment::assign_streams(diagram, s7studio::diagram::studioOutputTypes(diagram));
+    if (errors.empty()) errors = s7::deployment::plan_causal_schedule(diagram);
     for (const auto& error : errors) {
         std::cout << "error: " << error << '\n';
     }

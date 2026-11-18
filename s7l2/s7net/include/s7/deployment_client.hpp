@@ -87,7 +87,8 @@ struct DeployResult {
 [[nodiscard]] auto deploy_diagram(boost::json::object diagram,
                                   const OutputTypeLookup& output_types,
                                   const ControlRequester& request,
-                                  const DeployOptions& options = {}) -> DeployResult;
+                                  const DeployOptions& options = {},
+                                  const ElementRegistry& registry = ElementRegistry::instance()) -> DeployResult;
 
 } // namespace s7::deployment
 

@@ -181,6 +181,15 @@ auto build_schema_from_object(const boost::json::object& root, const ElementRegi
 {
     const auto name = string_value(root, "name", "schema");
     Schema schema{name};
+    if (const auto* order = root.if_contains("causal_order")) {
+        if (!order->is_array()) throw std::invalid_argument("'causal_order' must be an array of element IDs.");
+        std::vector<std::string> ids;
+        for (const auto& id : order->as_array()) {
+            if (!id.is_string()) throw std::invalid_argument("'causal_order' must contain only element IDs.");
+            ids.emplace_back(id.as_string());
+        }
+        schema.set_causal_order(std::move(ids));
+    }
     // "dt": 0.001 seeds every element with no rate of its own
     // (doc/S7_Sample_Rate_Model.md), the same field name/meaning as the
     // runtime's own schema JSON (s7runtime/src/runtime_service.cpp).

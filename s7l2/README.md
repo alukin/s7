@@ -77,8 +77,17 @@ Install dependencies with `tools/install_deps_ubuntu.sh` (Ubuntu 26.04 LTS or
 its GUI test tools, audio/SoapySDR providers, FFTW and frame-compression libraries.
 Use `--no-studio` for headless development; see the
 [dependency guide](docs/BUILD_DEPENDENCIES.md) for other options and validation.
-Windows binaries are cross-built on Ubuntu
+Windows binaries are cross-built on Linux
 ([Windows build guide](docs/WINDOWS_BUILD.md)).
+
+The Windows portable build includes PortAudio sound elements and excludes SDR;
+Linux retains sound and SDR. The next release's
+[artifact plan](tools/release/README.md) includes the Linux portable tarball,
+native Fedora/Ubuntu packages and the Windows portable ZIP.
+
+For native Fedora RPMs and Ubuntu DEBs, see the
+[native Linux packaging guide](docs/NATIVE_LINUX_PACKAGES.md). Runtime, hardware,
+Studio, analysis plugins and the development SDK are separate packages.
 
 ```bash
 cmake -S . -B build                       # add -DS7_BUILD_STUDIO=OFF to skip Qt

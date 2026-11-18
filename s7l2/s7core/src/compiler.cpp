@@ -229,6 +229,27 @@ ExecutableGraph Compiler::compile(const Schema& nested_schema,
     // Dropping the ports keeps a valid order: each port's consumers already
     // come after its source.
     std::erase_if(executable_graph.causal_order, [&](const std::string& id) { return schema_ports.contains(id); });
+    if (const auto& requested = nested_schema.causal_order()) {
+        if (requested->size() != executable_graph.causal_order.size()) {
+            throw std::invalid_argument("causal_order must contain every flattened direct-feedthrough element exactly once.");
+        }
+        std::unordered_map<std::string, std::size_t> rank;
+        for (std::size_t i = 0; i < requested->size(); ++i) {
+            const auto& id = (*requested)[i];
+            const auto found = executable_graph.elements.find(id);
+            if (found == executable_graph.elements.end() || found->second->has_causal_memory() || !rank.emplace(id, i).second) {
+                throw std::invalid_argument("causal_order contains an unknown, memory or duplicate element: '" + id + "'.");
+            }
+        }
+        for (const auto& connection : schema.connections()) {
+            if (schema_ports.contains(connection.to_element) || prototypes.at(connection.to_element).has_causal_memory) continue;
+            const auto from = source_of({connection.from_element, connection.from_port}).first;
+            if (!prototypes.at(from).has_causal_memory && rank.at(from) >= rank.at(connection.to_element)) {
+                throw std::invalid_argument("causal_order violates dependency '" + from + "' -> '" + connection.to_element + "'.");
+            }
+        }
+        executable_graph.causal_order = *requested;
+    }
     const std::unordered_set<std::string> trapezoid_rhs(checked.trapezoid_rhs.begin(), checked.trapezoid_rhs.end());
     for (const auto& id : executable_graph.causal_order) {
         if (trapezoid_rhs.contains(id)) executable_graph.trapezoid_rhs.push_back(id);

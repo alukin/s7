@@ -81,6 +81,12 @@ Schema::~Schema() = default;
 Schema::Schema(Schema&&) = default;
 Schema& Schema::operator=(Schema&&) noexcept = default;
 
+void Schema::set_causal_order(std::vector<std::string> order)
+{
+    causal_order_ = std::move(order);
+    invalidate_compiled_runtime();
+}
+
 void Schema::bind_inputs(std::span<const InputBinding> bindings)
 {
     Element::bind_inputs(bindings);
@@ -263,6 +269,13 @@ void Schema::ensure_compiled_runtime()
         inputStates.push_back(std::move(state));
     }
 
+    if (causal_order_) {
+        std::vector<std::string> order;
+        for (std::size_t index = 0; index < exposed_inputs_.size(); ++index)
+            order.push_back("__schema_input_" + std::to_string(index));
+        order.insert(order.end(), causal_order_->begin(), causal_order_->end());
+        executable.set_causal_order(std::move(order));
+    }
     auto graph = Compiler::compile(executable, random_uuid_string(), random_uuid_string());
     // The nested runtime steps once per parent step, so every internal rate
     // must equal this schema's own rate or, without one, the parent's.

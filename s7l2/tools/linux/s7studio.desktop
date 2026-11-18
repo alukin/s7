@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Type=Application
+Name=S7 Studio
+Comment=Build, simulate and observe causal graphs
+Exec=s7studio
+Icon=s7studio
+Terminal=false
+Categories=Development;Engineering;Science;
+StartupNotify=true

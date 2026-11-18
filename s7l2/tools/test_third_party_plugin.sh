@@ -21,10 +21,16 @@ if ! pkg-config --exists fftw3f; then
 fi
 
 rm -rf "$WORK_DIR"
-cmake --install "$BUILD_DIR" --component s7sdk --prefix "$WORK_DIR/sdk" > /dev/null
+for component in s7libs s7hardware s7sdk; do
+    cmake --install "$BUILD_DIR" --component "$component" --prefix "$WORK_DIR/sdk" > /dev/null
+done
 cmake -S "$SOURCE_DIR/s7spectral" -B "$WORK_DIR/build" -DCMAKE_PREFIX_PATH="$WORK_DIR/sdk" \
     -DCMAKE_CXX_COMPILER="${CXX:-c++}" "${CROSS[@]}" > /dev/null
 cmake --build "$WORK_DIR/build" > /dev/null
+if [ -n "${S7_RUN:-}" ]; then
+    SYSROOT="$(sed -n 's/^S7_MINGW_SYSROOT:PATH=//p' "$BUILD_DIR/CMakeCache.txt")"
+    cp "$SYSROOT/bin/libfftw3f-3.dll" "$WORK_DIR/build/"
+fi
 for PLUGIN in "$WORK_DIR"/build/libs7spectral.{so,dll}; do [ -f "$PLUGIN" ] && break; done
 "${RUN[@]}" "$SMOKE" "$PLUGIN"
 "${RUN[@]}" "$SMOKE" "$PLUGIN" "$SOURCE_DIR/s7runtime/examples/schema_fourier_coefficient.json"

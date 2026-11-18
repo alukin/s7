@@ -81,7 +81,7 @@ endif()
 
 # --- SDK: headers, library and CMake package for out-of-tree plugins --------
 include(GNUInstallDirs)
-install(FILES resources/schema_elements.s7library DESTINATION ${CMAKE_INSTALL_DATADIR}/s7 COMPONENT s7sdk)
+install(FILES resources/schema_elements.s7library DESTINATION ${CMAKE_INSTALL_DATADIR}/s7 COMPONENT ${S7_CORE_INSTALL_COMPONENT})
 # The SDK is LGPL-3.0-or-later, which is a set of permissions on top of the GPL.
 install(FILES
     ${PROJECT_SOURCE_DIR}/../LICENSING.md
@@ -93,8 +93,8 @@ install(FILES
 include(CMakePackageConfigHelpers)
 
 install(TARGETS ${S7CORE_SDK_TARGETS} EXPORT s7coreTargets
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT s7sdk
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT ${S7_CORE_INSTALL_COMPONENT}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT ${S7_CORE_INSTALL_COMPONENT} NAMELINK_COMPONENT s7sdk
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT s7sdk
 )
 install(DIRECTORY include/s7 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT s7sdk)
@@ -138,6 +138,10 @@ add_test(NAME s7core_nested_schema_bindings_smoke COMMAND s7core_nested_schema_b
 s7_add_test_executable(s7core_step_rollback_smoke tests/step_rollback_smoke.cpp)
 target_link_libraries(s7core_step_rollback_smoke PRIVATE s7core)
 add_test(NAME s7core_step_rollback_smoke COMMAND s7core_step_rollback_smoke)
+
+s7_add_test_executable(s7core_causal_order_smoke tests/causal_order_smoke.cpp)
+target_link_libraries(s7core_causal_order_smoke PRIVATE s7core)
+add_test(NAME s7core_causal_order_smoke COMMAND s7core_causal_order_smoke)
 
 s7_add_test_executable(s7core_robustness_smoke tests/robustness_smoke.cpp)
 target_link_libraries(s7core_robustness_smoke PRIVATE s7core Threads::Threads)

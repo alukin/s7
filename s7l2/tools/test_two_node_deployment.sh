@@ -15,8 +15,8 @@ RUN=()
 [ -n "${S7_RUN:-}" ] && RUN=("$S7_RUN")
 run() { if [ -n "${S7_RUN:-}" ]; then "$S7_RUN" "$@" | tr -d '\r'; else "$@"; fi; }
 
-BUILD="$1"
-SRC="$2"
+BUILD="$(cd "$1" && pwd)"
+SRC="$(cd "$2" && pwd)"
 DATA_SECURITY="${3:-shared}"
 CERTS="$SRC/s7runtime/examples/certs"
 RUNTIME="$BUILD/s7runtime/s7runtime${S7_EXE_SUFFIX:-}"
@@ -43,6 +43,7 @@ print(hashlib.sha256(ssl.PEM_cert_to_DER_cert(Path(sys.argv[1]).read_text())).he
 PY
 )"
 TLS=(--cert "$CERTS/s7_studio.cert.pem" --key "$CERTS/s7_studio.key.pem" --ca "$CERTS/s7_root_ca.cert.pem")
+cd "$WORK" # recordings and any relative graph I/O stay in the test directory
 
 # node_config <cert name> <port>: a node's startup schema (an idle graph).
 node_config() {
@@ -260,4 +261,73 @@ json_check "$WORK/streams-b4.json" \
   "r['streams'][0]['fault']=='NONE' and r['streams'][0]['elements']>$GAP_ELEMENTS and r['streams'][0]['recent_faults'][-1]['code']=='SEQUENCE_GAP'" \
   || fail "the stream resumes after recovery and the gap stays reported: $(cat "$WORK/streams-b4.json")"
 
-echo "two-node deployment: OK (stream $STREAM_ID)"
+# 4) Deploy an actual feedback graph through Studio/s7ctl's shared planner.
+# Nested memory on A closes the loop; recordings independently verify values.
+python3 - "$WORK" "$NODE_A" "$NODE_B" <<'PY'
+import copy, json, sys
+from pathlib import Path
+work, a, b = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+d = json.loads((work / 'deployed.json').read_text())
+def element(id, type, node, params=None, **extra):
+    return dict(id=id, type=type, node=node, params=params or {}, **extra)
+def wire(src, dst, port=0):
+    return dict(from_element=src, from_port=0, to_element=dst, to_port=port)
+d['schema'] = dict(name='nested_feedback', elements=[
+    element('state', 'Schema', a, schema=dict(name='memory',
+        elements=[dict(id='hold', type='Delay', params=dict(initial_value=0))], connections=[],
+        exposed_inputs=[dict(name='u', type='F64', element='hold', port=0)],
+        exposed_outputs=[dict(name='y', type='F64', element='hold', port=0)])),
+    element('first', 'Gain', a, dict(factor=1)),
+    element('one', 'Constant', b, dict(value=1)), element('sum', 'Adder', b),
+    element('record_a', 'RecordingSink', a, dict(file_path='feedback-a.gnuplot', sample_rate_hz=50, format='gnuplot-text')),
+    element('record_b', 'RecordingSink', b, dict(file_path='feedback-b.gnuplot', sample_rate_hz=50, format='gnuplot-text'))],
+    connections=[wire('state','first'),wire('first','sum'),wire('one','sum',1),
+        wire('sum','state'),wire('first','record_a'),wire('sum','record_b')])
+(work / 'feedback.json').write_text(json.dumps(d))
+bad = copy.deepcopy(d)
+bad['schema']['elements'][0]['schema']['elements'][0] = dict(id='hold', type='Gain', params=dict(factor=1))
+(work / 'invalid-loop.json').write_text(json.dumps(bad))
+PY
+for command in check deploy; do
+  if run "$CTL" "$command" "$WORK/invalid-loop.json" "${TLS[@]}" > "$WORK/invalid-$command.log" 2>&1; then fail "$command accepted an uninitialized loop"; fi
+  grep -q 'Cycle detected without causal memory.*state/hold' "$WORK/invalid-$command.log" || fail "missing nested cycle diagnostic: $(cat "$WORK/invalid-$command.log")"
+done
+run "$CTL" config "wss://127.0.0.1:$PORT_A" "${TLS[@]}" > "$WORK/config-unchanged.json"
+json_check "$WORK/config-unchanged.json" "r['revision']==2" || fail "invalid loop changed the active revision"
+run "$CTL" check "$WORK/feedback.json" --write "$WORK/feedback-planned.json" > "$WORK/check-feedback.log" || fail "feedback preflight"
+python3 - "$WORK/feedback-planned.json" <<'PY'
+import json, sys
+from pathlib import Path
+p=Path(sys.argv[1]);d=json.loads(p.read_text())
+assert d['causal_schedule']['version']==1
+for stream in d['streams']:
+    stream['max_elements_per_packet']=1
+    stream['send_log']['max_packets']=64
+p.write_text(json.dumps(d))
+PY
+run "$CTL" deploy "$WORK/feedback-planned.json" "${TLS[@]}" > "$WORK/deploy-feedback.log" || fail "feedback deployment"
+sleep 1.5
+for role in a b; do
+  if [ "$role" = a ]; then port="$PORT_A"; else port="$PORT_B"; fi
+  run "$CTL" streams "wss://127.0.0.1:$port" "${TLS[@]}" > "$WORK/feedback-streams-$role.json"
+  python3 - "$WORK/feedback-planned.json" "$WORK/feedback-streams-$role.json" <<'PY' || fail "feedback did not progress without faults"
+import json, sys
+d, status = (json.load(open(p)) for p in sys.argv[1:])
+ids={s['stream_id'] for s in d['streams']}
+active=[s for s in status['streams'] if s['stream_id'] in ids]
+assert len(active)==2 and all(s['fault']=='NONE' and s['elements']>=20 for s in active),active
+PY
+done
+# Finish both processes so buffered recording tails are flushed. Accepted
+# prefixes need not have equal lengths: a network step is not globally atomic.
+for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+wait 2>/dev/null || true
+python3 - "$WORK" <<'PY' || fail "feedback values differ from the independent recurrence"
+from pathlib import Path
+import sys
+for name, offset in [('a',0),('b',1)]:
+    rows=[line.split() for line in (Path(sys.argv[1])/f'feedback-{name}.gnuplot').read_text().splitlines() if line and not line.startswith('#')]
+    assert len(rows)>=20,(name,len(rows))
+    assert all(int(index)==n and float(value)==n+offset for n,(index,value) in enumerate(rows)),(name,rows[:10])
+PY
+echo "two-node deployment: OK (stream $STREAM_ID; nested feedback checked)"

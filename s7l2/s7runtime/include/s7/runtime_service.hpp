@@ -115,6 +115,7 @@ struct RuntimeSchemaDefinition {
     // Node settings, not deployable: "control": { "studio_key_purpose_oid": "...",
     // "studio_certificate_sha256": "<hex>" } names the authorized Studio.
     ControlAuthorization control;
+    std::optional<std::vector<std::string>> causal_order;
 };
 
 // How the active graph is stepped while the node serves (RuntimeService::serve).

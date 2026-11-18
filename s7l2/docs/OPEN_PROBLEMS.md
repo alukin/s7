@@ -314,6 +314,32 @@ claims about an implemented settling method:
   regression review? The maintainer must decide explicitly; inconclusive or
   negative research can still satisfy the 0.2.0 research deliverable.
 
+## Video capture/output — plan added 2026-11-18
+
+The maintainer subsequently clarified the [frame-oriented direction](VIDEO_IO_FRAME_DESIGN.md):
+whole-frame processing, specialized video transfer and explicit numeric bridges,
+including receiver-side transformations. Per-pixel execution below is V0
+evidence, not the production constraint. Frame ownership/publication and media
+session/transport contracts need design and qualification.
+
+The [VideoSource/VideoSink plan](VIDEO_IO_PLAN.md) proposes existing numeric
+pixel streams, native PipeWire capture/output, a two-host webcam/viewer first
+milestone, screen capture, Windows Media Foundation and user-tunable compression.
+Open gates are actual pixel-graph throughput, routing/display availability,
+bounded image assembly and queues, video geometry agreement, JPEG/H.264 codec
+framing/negotiation, failure/segment behavior and native Windows qualification.
+No new image port type, automatic deployment support or live-video performance
+is established by this planning record. Maintainer/Codex own this work; D0/D1/D2
+remain teren_ukr's area.
+
+The [V0 report](VIDEO_IO_SPIKE.md) now supplies 16 passing two-host experiments,
+including live webcam capture, a receiver virtual-display window, all existing
+lossless codec selections and a 60-second 160×120/30 paced check. It identifies
+per-pixel endpoint calls as an expensive path and tests an explicit batched
+owner with every scalar evaluation retained. This does not ship a native video
+provider or qualify arbitrary feedback equivalence, higher-resolution real-time
+rates, sensor continuity or a physical/native Windows display.
+
 ## P2 — Code structure and maintainability
 
 - **Large multi-responsibility translation units** (measured 2026-10-14): `s7studio/src/main_window.cpp` (2412 lines), `s7transport/src/transport.cpp` (1772), `s7runtime/src/control_plane.cpp` (1605), `s7studio/src/diagram/diagram_scene.cpp` (1477), `s7runtime/src/runtime_service.cpp` (1387). File size alone is not a correctness problem, but reviewing changes, isolating tests, and reasoning about ownership/concurrency in these files is already difficult and will get harder. (Suggested split boundaries are in `docs/DEVELOPMENT_PLAN.md`, Phase 3.)
@@ -321,7 +347,7 @@ claims about an implemented settling method:
 
 ## Nested schemas — flattened (ADR-024); one limit recorded 2026-10-31
 
-- **Open: feedback loops across nodes are not validated as a whole.** Deployment resolves types over the whole diagram, but each node validates only its own part, in which `NetSource` and `NetSink` are direct-feedthrough stream ends. A loop that leaves a node through one stream and returns through another is therefore never checked for causal memory, and without memory on its path the nodes wait on each other until `max_wait_ms` expires. This predates ADR-024 and does not depend on nesting. A fix would check cycles over the whole diagram before `PREPARE_DEPLOYMENT`, treating each stream as a wire, and would need a decision on whether a stream may ever count as causal memory. **Scheduled for 0.2.0** (2026-10-31): [work plan](RELEASE_0.2.0_WORKPLAN.md#feedback-loops-across-nodes--020-task), steps X1–X3.
+- **Initial cross-node feedback implementation (2026-11-17):** [ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027) keeps streams direct and requires explicit memory. The shared Studio/s7ctl planner validates the whole flattened graph before contacting nodes, derives outgoing-first static orders and distributes checked node projections. Receivers reject incompatible/cyclic plans and the compiler verifies local membership/dependencies. Automated nested/two-/three-node and socket checks are implemented. **Still open:** real-loop qualification, broader fan-out, bounded-resource/revision/failure behavior, multi-rate distributed graphs and coupled numerical regions. See the [implementation/test guide](DISTRIBUTED_CAUSAL_SCHEDULE.md) and [work plan](RELEASE_0.2.0_WORKPLAN.md#feedback-loops-across-nodes--020-task).
 
 ## P3 — Deferred architecture capabilities (documented MVP limits, not defects)
 

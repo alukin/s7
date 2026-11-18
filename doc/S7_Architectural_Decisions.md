@@ -1233,6 +1233,71 @@ audio/radio experiments and failure-path fixes without changing these semantics.
 
 ------------------------------------------------------------------------
 
+# ADR-027
+
+## Explicit stream causality and outgoing-first static deployment schedules
+
+**Status:** Accepted, 2026-11-17. Initial C++ implementation; real-plant loop
+qualification remains pending.
+
+## Context
+
+A stream carries values; transport latency does not initialize model state.
+A valid flattened graph can nevertheless stall when each serial node reads an
+unrelated incoming stream before publishing ready outgoing work. The
+[research record](../s7l2/docs/CROSS_NODE_CAUSALITY_RESEARCH.md) cites Lee–Seshia
+§6.3 and Ptolemy Dataflow §3.1.2 for initialized feedback, Pino/Bhattacharyya/Lee
+§5 for partitioning, and MIT/Stanford teaching material for causal and resource
+waits. The [fourth spike](../s7l2/docs/CROSS_NODE_CAUSALITY_PHASE4.md) found that
+an outgoing-first static order recovered independent-stream throughput while
+retaining less dispatch/wakeup cost than the tested incremental queues.
+
+## Decision
+
+1. A stream is a direct communication boundary, never implicit causal memory.
+   Every direct-feedthrough cycle requires explicit memory (`Delay`,
+   `PreviousValue`, or an element declaring `Feedthrough::None`), including
+   paths through nested schemas. Stateful direct feedthrough is not memory.
+2. Before any deployment request, the shared Studio/s7ctl client validates the
+   complete flattened graph using registered element factories. It then builds
+   a global precedence graph from the actual node fragments, adding each
+   generated send-before-receive edge. Eligible sends precede ordinary work;
+   receives follow ordinary ready work. Node UUID/flattened element ID resolve
+   ties. Each node receives its projection as versioned configuration metadata.
+3. Each receiving node checks that the combined serial orders and stream edges
+   are acyclic, without loading remote-only plugins. Its compiler checks that
+   its requested order contains every real causal element exactly once and
+   respects actual local dependencies after nested-port aliases are resolved.
+   Unknown, duplicate, missing, memory or misordered entries fail preparation.
+4. `NodeRuntime` remains serial. Publication, memory staging, numerical phases,
+   model time, clock admission, ACK policy and failure handling do not change.
+   No per-step readiness polling, queue or global barrier is introduced.
+5. Nodes advertise `causal_schedule_versions: [1]`; absence means unsupported.
+   The client refuses a scheduled network deployment to an unsupported node
+   before any PREPARE. Configuration digests include the schedule. Existing
+   verified-certificate/key-purpose/pin control authorization remains required;
+   schedule fields never authorize a mutation.
+
+## Scope and consequences
+
+The initial distributed planner supports one rate domain, with no rate-changing
+elements or coupled numerical regions. Rate/type validation stays strict at
+node compilation. Where a diagram omits its model rate, structural preflight
+checks factories, wiring, types and cycles without inventing a rate; unresolved
+timing remains a preparation error. Ordinary local graphs retain their default
+compiler order. Explicit schema `causal_order` metadata is an optional checked
+compiler input, expressed in real flattened IDs, excluding memory and virtual
+schema ports.
+
+This is not a proof of arbitrary bounded-channel liveness, a process-crash
+recovery protocol, or global step atomicity. Early network effects remain
+outside local rollback (ADR-021). Multi-rate distributed execution, new queue
+wakeup/suspension APIs, broader fan-out and real-device timing qualification
+remain separate work. See the
+[implementation and loop-test guide](../s7l2/docs/DISTRIBUTED_CAUSAL_SCHEDULE.md).
+
+------------------------------------------------------------------------
+
 # Summary
 
 The current S7 architecture is based on the following accepted principles:

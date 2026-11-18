@@ -50,17 +50,22 @@ qualified multi-node operation on local and remote hosts, remote node
 control/configuration/restart and Trusted Networks settings, certificate viewing
 and node certificate creation, Studio printing of diagrams and observation
 graphs, and a software signal-generator element inspired by the UNI-T UTG932E.
-The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) records ownership, distributed
-architecture and implementation steps, numerical research milestones N0–N4,
-PR review gates and the concurrent Studio workstream. Experimental results do
-not imply a production integrator or settling algorithm for 0.2.0.
+The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) contains the single
+[status and acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix),
+reconciled on 2026-11-17, plus ownership and detailed delivery steps. It records
+the delivered N0–N4 research, implemented baseline capabilities, open distributed
+and Studio gates, and the Linux portable/RPM/DEB and sound-only Windows ZIP
+distribution profiles. Experimental results remain separate from the production
+integration contract.
 Within-node parallel scheduling and its unresolved design choices are recorded
 for [0.3.0 planning](RELEASE_0.3.0_RUNTIME_PARALLELISM.md).
+The [0.3.0 release goals](RELEASE_0.3.0.md) include the maintainer-assigned
+GStreamer adapters alongside the FFmpeg-oriented video path.
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
 3. [OPEN_PROBLEMS.md](OPEN_PROBLEMS.md) — remaining local-simulation gaps and broader open design decisions.
-4. [VISUAL_NUMERICAL_TESTS_PLAN.md](VISUAL_NUMERICAL_TESTS_PLAN.md) — the diagram-based numerical-validation methodology (companion to the [language-neutral test plan](../../doc/S7_Numerical_Modeling_Test_Plan.md)). The [0.2.0 research matrix](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-planned) assigns the next experiments.
+4. [VISUAL_NUMERICAL_TESTS_PLAN.md](VISUAL_NUMERICAL_TESTS_PLAN.md) — the diagram-based numerical-validation methodology (companion to the [language-neutral test plan](../../doc/S7_Numerical_Modeling_Test_Plan.md)). The [0.2.0 research record](RELEASE_0.2.0.md#numerical-integration-and-feedback-settling-research--p1-reports-delivered) links the original assignment and delivered reports.
 
 Local simulation quality was the 0.1.x target. The 0.2.0 goals and work plan now
 define the next release direction; open problems and the visual numerical plan
@@ -99,6 +104,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 |---|---|
 | [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Indexed serial runtime design and measured results; corrected FFT/FIR experiments and deferred scheduler ideas |
 | [RELEASE_0.3.0_RUNTIME_PARALLELISM.md](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) | Established facts, candidate approaches and open decisions for within-node parallel execution |
+| [RELEASE_0.3.0.md](RELEASE_0.3.0.md) | Release goals, including optional production GStreamer video adapters |
 | `S7_Transport_Architecture.md` | `s7transport` / `s7runtime` / `s7net` boundaries, security and data-plane baseline |
 | [SDR_TRANSPORT_IMPROVEMENT_PLAN.md](SDR_TRANSPORT_IMPROVEMENT_PLAN.md) | Proposed staged high-rate sample transport work: validation, benchmarks, frame/metadata contract, bounded buffers and block execution |
 | [SAMPLE_TRANSPORT_BENCHMARK.md](SAMPLE_TRANSPORT_BENCHMARK.md) | Opt-in verified codec, bulk/scalar graph, duplex and paced sample measurements; scope and reproduction commands |
@@ -106,9 +112,20 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | [FRAME_TRANSPORT.md](FRAME_TRANSPORT.md) | C++ frame source/sink service, bounded ownership, independent LZ4/Zstandard codecs and audio validation |
 | [S7_Hardware_IO_Contract.md](../../doc/S7_Hardware_IO_Contract.md) | Accepted hardware I/O direction and initial implementation scope: independent sound, public/private SDR providers, ownership, clocks and faults |
 | [HARDWARE_IO.md](HARDWARE_IO.md) | Building and using the sound/SDR SDK, plugins and opt-in device-paced runner; qualification limits |
+| [VIDEO_IO_PLAN.md](VIDEO_IO_PLAN.md) | Proposed numeric video source/sink plan: two-host PipeWire webcam/viewing spike, screen capture, Windows Media Foundation and user-tunable compression |
+| [VIDEO_IO_SPIKE.md](VIDEO_IO_SPIKE.md) | Opt-in two-host numeric-video driver, scalar/batched/bulk comparison, raw/LZ4/Zstd, PipeWire adapters and bounded receiver-viewer checks |
+| [VIDEO_IO_FRAME_DESIGN.md](VIDEO_IO_FRAME_DESIGN.md) | Revised whole-frame video direction: receiver processing/numeric results, owned buffers, native/GPU paths and established media transport candidates |
+| [VIDEO_IO_FULL_HD.md](VIDEO_IO_FULL_HD.md) | FFmpeg whole-frame Full HD experiment: native synthetic 1080p/30, upscaled webcam, receiver grayscale and qualification limits |
 | [HARDWARE_IO_LIVE_TESTS.md](HARDWARE_IO_LIVE_TESTS.md) | Initial two-host audio, USB input and radio experiments, failure fixes and measured limits |
+| [WINDOWS_HARDWARE_RESEARCH.md](WINDOWS_HARDWARE_RESEARCH.md) | Windows hardware feasibility, upstream dependencies, build/packaging gaps and proposed qualification sequence |
 | [S7_Frame_Interoperability.md](../../doc/S7_Frame_Interoperability.md) | Compatible Python/Java frame services, codec providers and shared conformance across all three languages |
 | [SPLIT_TRANSPORT.md](SPLIT_TRANSPORT.md) | Separate mTLS control and configurable encrypted/trusted-plaintext data listeners, configuration and cross-language contract |
+| [CROSS_NODE_CAUSALITY_RESEARCH.md](CROSS_NODE_CAUSALITY_RESEARCH.md) | Literature used before X1 design: dataflow/feedback, bounded scheduling, and MIT/Stanford teaching material, with applicability limits |
+| [CROSS_NODE_CAUSALITY_DESIGN.md](CROSS_NODE_CAUSALITY_DESIGN.md) | Opt-in fixed/projected/readiness scheduling spikes, actual-runtime and three-host evidence, credit-progress findings and open decisions |
+| [CROSS_NODE_CAUSALITY_PHASE2.md](CROSS_NODE_CAUSALITY_PHASE2.md) | ACK-progress regression/correction, controlled ACK-policy comparison and 51 three-host S7 WebSocket/mTLS cases including reconnect and identity rejection |
+| [CROSS_NODE_CAUSALITY_PHASE3.md](CROSS_NODE_CAUSALITY_PHASE3.md) | Derived single-rate research schedules, planning/dispatch scaling and repeated three-host throughput, latency and CPU measurements |
+| [CROSS_NODE_CAUSALITY_PHASE4.md](CROSS_NODE_CAUSALITY_PHASE4.md) | Outgoing-first static versus incremental readiness, 184 transport cases, C++ runtime CPU/rollback checks and polling/adapter cost controls |
+| [DISTRIBUTED_CAUSAL_SCHEDULE.md](DISTRIBUTED_CAUSAL_SCHEDULE.md) | Implemented static distributed planning, schedule/capability checks, initial limits and real-loop test guide (ADR-027) |
 
 ## Developer guides
 
@@ -140,6 +157,7 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 | `STUDIO_DIAGRAM_WIRING_DESIGN.md` | Design record of the diagram wiring: QSchematic subclasses, format v2, connection rules, router (implemented) |
 | `LOCAL_HEADLESS_NODES_DEMO.md` | Run two local headless runtimes and discover them in Studio |
 | [BUILD_DEPENDENCIES.md](BUILD_DEPENDENCIES.md) | Ubuntu 26.04/26.10 and Fedora 45 dependency installers, options and container qualification |
+| [NATIVE_LINUX_PACKAGES.md](NATIVE_LINUX_PACKAGES.md) | Native Fedora RPM and Ubuntu DEB builds, component packages, installed checks and qualification |
 | `WINDOWS_BUILD.md` | Cross-building Windows binaries on Linux (Clang, MSYS2 sysroot), testing under Wine, packaging |
 
 Module READMEs: `../s7transport/README.md`, `../s7noise/README.md`, `../s7spectral/README.md`.

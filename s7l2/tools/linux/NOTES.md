@@ -71,7 +71,8 @@ Tabler. For the Fedora-built 0.1.0 preview it also matches each deployed ELF's
 build ID against the host library, collects RPM licence files (including
 common subpackages from the same source RPM), and writes per-binary and exact
 source-package inventories. A missing identity or notice fails packaging.
-The qualified backend is RPM; dpkg-built binary releases remain deferred.
+The qualified AppDir notice-collection backend is RPM. Native system-library
+RPM/DEB packages use a separate [packaging workflow](../../docs/NATIVE_LINUX_PACKAGES.md).
 Source RPM identities are metadata only: Qt/dependency source archives are
 not included in the binary bundle. GUI-test dependencies are not bundled.
 

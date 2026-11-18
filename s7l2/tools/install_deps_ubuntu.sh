@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install development dependencies for s7l2 on Ubuntu 26.04 LTS and 26.10.
 #
-# Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-gui-tests] [--no-spectral] [--no-hardware] [--no-extras] [--windows] [--dry-run]
+# Usage: tools/install_deps_ubuntu.sh [--no-studio] [--no-gui-tests] [--no-spectral] [--no-hardware] [--no-extras] [--native-packages] [--windows] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
 #   --no-gui-tests skip Xvfb/Mesa/drag tools and disable the native GUI regression suite
 #   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
@@ -9,6 +9,7 @@
 #   --no-extras    skip optional build, plotting and AppDir packaging tools
 #   --windows      also the Windows cross toolchain: Clang/LLVM 22, Wine (docs/WINDOWS_BUILD.md)
 #   --dry-run      print the apt command instead of running it
+#   --native-packages add DEB build tools (independent of --no-extras)
 
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 # SPDX-License-Identifier: GPL-3.0-or-later
@@ -21,6 +22,7 @@ WITH_EXTRAS=1
 WITH_HARDWARE=1
 WITH_GUI_TESTS=1
 WITH_WINDOWS=0
+WITH_NATIVE_PACKAGES=0
 DRY_RUN=0
 
 for arg in "$@"; do
@@ -32,6 +34,7 @@ for arg in "$@"; do
     --no-hardware) WITH_HARDWARE=0 ;;
     --windows) WITH_WINDOWS=1 ;;
     --dry-run) DRY_RUN=1 ;;
+    --native-packages) WITH_NATIVE_PACKAGES=1 ;;
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -115,6 +118,9 @@ if (( WITH_EXTRAS )); then
     patchelf
     binutils
   )
+fi
+if (( WITH_NATIVE_PACKAGES )); then
+  PACKAGES+=(dpkg-dev file ninja-build)
 fi
 
 # Windows cross build: Clang targeting MinGW, lld and the LLVM binutils, Wine

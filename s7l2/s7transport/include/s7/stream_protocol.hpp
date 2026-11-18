@@ -293,6 +293,11 @@ public:
     // while something new was consumed.
     [[nodiscard]] std::optional<wire::ControlMessage> ack_due(Clock::time_point now);
 
+    // Immediate consumption ACK, for a local endpoint without an ACK timer.
+    // Never acknowledges receipt or a partially consumed packet. Uses actual
+    // monotonic time so later timed ACK decisions do not inherit a future clock.
+    [[nodiscard]] std::optional<wire::ControlMessage> ack_now(Clock::time_point now);
+
     void fault(FaultCode code);
     // RECOVER_STREAM: clears the fault and accepts the next packet received as
     // the new start (the data lost in the fault stays lost and reported).

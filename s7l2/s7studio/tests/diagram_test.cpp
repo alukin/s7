@@ -429,6 +429,11 @@ int main(int argc, char** argv)
         check(footerHasInk(plainImage) && footerHasInk(filterImage),
               "primitive symbols retain identifying captions");
         if (const auto path=qEnvironmentVariable("S7_SYMBOL_GALLERY");!path.isEmpty()) {
+            plainImage.save(path+QStringLiteral(".gain-default.png"));
+            ElementNode gainThree(element("plain", "Gain", {{"factor", 3.}}));
+            render(gainThree).save(path+QStringLiteral(".gain-three.png"));
+            sumImage.save(path+QStringLiteral(".sum-negative.png"));
+            positiveImage.save(path+QStringLiteral(".sum-positive.png"));
             const std::vector<std::pair<std::string,boost::json::object>> symbols{
                 {"Gain",{{"factor",.5}}},{"Adder",{{"weights",boost::json::array{1,-1}}}},
                 {"Multiply",{{"factors",boost::json::array{2,-3}}}},{"Delay",{}},{"Accumulator",{}},{"EulerIntegrator",{}},

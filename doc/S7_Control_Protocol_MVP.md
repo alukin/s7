@@ -88,6 +88,11 @@ Checks reachability and protocol compatibility. The response includes `node_uuid
 
 ### 5.2 `GET_NODE_INFO` → `NODE_INFO`
 
+Nodes supporting static distributed schedules advertise the optional root
+field `causal_schedule_versions: [1]`. Absence means unsupported. The shared
+deployment client requires version 1 at every target of a scheduled network
+diagram before PREPARE. This capability field never grants control authority.
+
 Returns the node descriptor: identity, platform, network endpoints, runtime state, supported protocol versions, available libraries/elements, and hardware capabilities. The capability structure is specified in [REMOTE_NODE_INFO_AND_DEPLOYMENT.md](REMOTE_NODE_INFO_AND_DEPLOYMENT.md); that document remains the detailed source for descriptor fields.
 
 The data plane and the node's clock are described by these top-level members (wire draft section 12.1, items 1 and 4):

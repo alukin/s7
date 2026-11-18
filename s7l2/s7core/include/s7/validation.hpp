@@ -123,6 +123,10 @@ struct CheckedSchema {
     std::vector<CoupledRegion> coupled_regions;
 };
 [[nodiscard]] CheckedSchema check_schema(const Schema& schema);
+// Placement/causality preflight when a diagram has not supplied a model rate.
+// Checks factories, types, wiring and memory cycles; never invents a rate or
+// prepares numerical stages. Compilation still uses strict check_schema().
+[[nodiscard]] CheckedSchema check_schema_structure(const Schema& schema);
 
 } // namespace detail
 

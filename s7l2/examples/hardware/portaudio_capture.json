@@ -1,0 +1,11 @@
+{
+  "name": "portaudio_capture",
+  "elements": [
+    {"id": "capture", "type": "AudioSource", "params": {
+      "type": "F32", "backend": "portaudio", "device": "default",
+      "channels": ["0", "1"], "frame_rate": [48000, 1],
+      "block_frames": 256, "queue_frames": 4096
+    }}
+  ],
+  "connections": []
+}

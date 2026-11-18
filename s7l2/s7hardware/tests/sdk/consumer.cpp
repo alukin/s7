@@ -2,12 +2,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include <s7/hardware_plugin.hpp>
 #include <s7/audio.hpp>
+#if defined(S7_WITH_SDR)
 #include <s7/sdr.hpp>
+#endif
 #include <cassert>
 #include <thread>
 int main(int argc,char** argv) {
     assert(argc==2); namespace hw=s7::hardware;
-    s7::audio::register_elements(s7::ElementRegistry::instance());s7::sdr::register_elements(s7::ElementRegistry::instance());
+    s7::audio::register_elements(s7::ElementRegistry::instance());
+#if defined(S7_WITH_SDR)
+    s7::sdr::register_elements(s7::ElementRegistry::instance());
+#endif
     std::unique_ptr<hw::Stream> stream;
     {
         hw::ProviderModule module(argv[1]);assert(!module.create("unknown"));

@@ -18,8 +18,11 @@ if [ $# -ne 2 ]; then
     sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
-BUILD="$1" OUT="$2"
+BUILD="$(realpath "$1")" OUT="$(realpath -m "$2")"
 SOURCE="$(cd "$(dirname "$0")/../.." && pwd)"
+case "$SOURCE/" in "$OUT/"*) echo "error: output contains the source directory" >&2; exit 2;; esac
+case "$BUILD/" in "$OUT/"*) echo "error: output contains the build directory" >&2; exit 2;; esac
+[ "$OUT" != "$HOME" ] || { echo "error: output cannot be the home directory" >&2; exit 2; }
 SYSROOT="$(sed -n 's/^S7_MINGW_SYSROOT:PATH=//p' "$BUILD/CMakeCache.txt")"
 SUFFIX="$(sed -n 's/^S7_LLVM_SUFFIX:STRING=//p' "$BUILD/CMakeCache.txt")"
 find_tool() {
@@ -39,10 +42,18 @@ STRIP="$(find_tool "llvm-strip${SUFFIX}" llvm-strip x86_64-w64-mingw32-strip str
 rm -rf "$OUT"
 mkdir -p "$OUT/plugins"
 
-for program in s7runtime/s7runtime s7runtime/s7analysis_lab s7ctl/s7ctl s7studio/s7studio; do
+for program in s7runtime/s7runtime s7runtime/s7analysis_lab s7ctl/s7ctl s7studio/s7studio s7hw; do
     [ -f "$BUILD/$program.exe" ] && cp "$BUILD/$program.exe" "$OUT/"
 done
 cp "$BUILD/s7core/libs7core.dll" "$OUT/"
+for module in s7hardware s7audio; do
+    cp "$BUILD/$module/lib$module.dll" "$OUT/"
+done
+cp "$BUILD/s7audio/libs7audio-elements.dll" "$OUT/plugins/"
+if grep -q '^S7_BUILD_SDR:BOOL=ON$' "$BUILD/CMakeCache.txt"; then
+    cp "$BUILD/s7sdr/libs7sdr.dll" "$OUT/"
+    cp "$BUILD/s7sdr/libs7sdr-elements.dll" "$OUT/plugins/"
+fi
 cp "$BUILD/s7noise/libs7noise.dll" "$OUT/plugins/"
 for module in s7spectral s7wavelet; do
     plugin="$BUILD/analysis-plugins/install/lib/s7/plugins/lib$module.dll"
@@ -81,6 +92,12 @@ mkdir -p "$OUT/share/s7"
 cp -r "$SOURCE/examples" "$OUT/share/s7/examples"
 cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/share/s7/"
 cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/share/s7/"
+cp "$SOURCE/tools/windows/BUNDLE_README.md" "$OUT/README.md"
+if grep -q '^S7_BUILD_SDR:BOOL=OFF$' "$BUILD/CMakeCache.txt"; then
+    rm -f "$OUT/share/s7/examples/hardware/sdr_receive.json"
+fi
+# These Linux-specific examples explicitly select PipeWire; Windows uses PortAudio.
+rm -f "$OUT/share/s7/examples/hardware/audio_capture.json" "$OUT/share/s7/examples/hardware/audio_playback.json"
 
 # Symbol tables are no use without the build tree (the sysroot's DLLs are stripped).
 "$STRIP" --strip-all "$OUT"/*.exe "$OUT"/*.dll "$OUT"/plugins/*.dll
@@ -105,5 +122,20 @@ while [ ${#pending[@]} -gt 0 ]; do
 done
 
 python3 "$SOURCE/tools/package_notices.py" "$SOURCE" "$BUILD" "$OUT" --sysroot "$SYSROOT"
+python3 - "$BUILD/CMakeCache.txt" "$OUT/build-profile.json" "$SOURCE" "$SYSROOT" <<'PY'
+import json
+from pathlib import Path
+import sys
+import subprocess
+cache = dict(line.split('=', 1) for line in Path(sys.argv[1]).read_text().splitlines()
+             if line.startswith(('S7_BUILD_SDR:', 'S7_PORTAUDIO:', 'S7_PIPEWIRE:', 'S7_SOAPYSDR:')))
+revision = subprocess.run(['git', '-C', sys.argv[3], 'rev-parse', 'HEAD'], capture_output=True, text=True)
+dirty = subprocess.run(['git', '-C', sys.argv[3], 'diff', '--quiet', 'HEAD', '--', '.'])
+Path(sys.argv[2]).write_text(json.dumps({'platform': 'windows-x86_64', 'build_options': cache,
+    'source_revision': revision.stdout.strip() if revision.returncode == 0 else 'unknown',
+    'source_modified': dirty.returncode != 0 if revision.returncode == 0 else None,
+    'sysroot_packages': (Path(sys.argv[4]) / '.s7-packages').read_text().splitlines(),
+    'binary_inventory': 'licenses/inventory.json'}, indent=2) + '\n')
+PY
 
 echo "Packaged $(find "$OUT" -name '*.exe' | wc -l) programs and $(find "$OUT" -name '*.dll' | wc -l) DLLs into $OUT ($(du -sh "$OUT" | cut -f1))"

@@ -39,3 +39,9 @@ target_compile_definitions(s7net_frame_elements_smoke PRIVATE S7_TEST_CERT_DIR="
 s7_enable_project_warnings(s7net_frame_elements_smoke)
 add_test(NAME s7net_frame_elements_smoke COMMAND s7net_frame_elements_smoke)
 set_tests_properties(s7net_frame_elements_smoke PROPERTIES TIMEOUT 45)
+
+s7_add_test_executable(s7net_causal_schedule_smoke tests/causal_schedule_smoke.cpp)
+target_link_libraries(s7net_causal_schedule_smoke PRIVATE s7net Threads::Threads)
+s7_enable_project_warnings(s7net_causal_schedule_smoke)
+add_test(NAME s7net_causal_schedule_smoke COMMAND s7net_causal_schedule_smoke)
+set_tests_properties(s7net_causal_schedule_smoke PROPERTIES TIMEOUT 20)

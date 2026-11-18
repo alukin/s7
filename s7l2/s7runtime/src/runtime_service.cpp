@@ -207,6 +207,14 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
 
     RuntimeSchemaDefinition definition;
     definition.name = expect_string(root, "name");
+    if (const auto* order = root.if_contains("causal_order")) {
+        if (!order->is_array()) throw std::invalid_argument("'causal_order' must be an array of element IDs.");
+        definition.causal_order.emplace();
+        for (const auto& id : order->as_array()) {
+            if (!id.is_string()) throw std::invalid_argument("'causal_order' must contain only element IDs.");
+            definition.causal_order->emplace_back(id.as_string());
+        }
+    }
     if (const auto* dt = root.if_contains("dt")) {
         if (!dt->is_number()) {
             throw std::invalid_argument("'dt' must be a positive number of seconds.");
@@ -367,6 +375,7 @@ RuntimeSchemaDefinition parse_schema_definition(const boost::json::value& json_v
 auto build_schema_from_definition(const RuntimeSchemaDefinition& definition) -> std::unique_ptr<s7::Schema>
 {
     auto schema = std::make_unique<s7::Schema>(definition.name);
+    if (definition.causal_order) schema->set_causal_order(*definition.causal_order);
     auto& registry = s7::ElementRegistry::instance();
     s7::register_io_elements(registry);
 
@@ -804,6 +813,11 @@ public:
                 throw std::invalid_argument("Plaintext data endpoints require explicit trusted_plaintext policy.");
             }
         }
+        const bool generated_streams = std::ranges::any_of(definition.elements, [](const auto& element) {
+            return element.id.starts_with("__stream_") && (element.type == "NetSource" || element.type == "NetSink");
+        });
+        if (generated_streams && !definition.causal_order)
+            throw std::invalid_argument("A deployed network graph requires a validated causal schedule; deploy it with the current Studio or s7ctl.");
         const auto schema = build_schema_from_definition(definition);
         // The diagram's model-time rate (doc/S7_Sample_Rate_Model.md): seeds
         // every element on this node with no rate of its own and is the

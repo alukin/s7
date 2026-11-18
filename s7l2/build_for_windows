@@ -9,6 +9,8 @@
 #   --test       run the tests under Wine after building
 #   --package    collect the programs and their DLLs into dist/s7-windows/ (implies --release)
 # Set S7_QT_HOST_PATH when the host Qt tools are outside /usr (e.g. Fedora).
+# Sound uses PortAudio; SDR elements/providers and Linux PipeWire are excluded.
+# Set S7_BUILD_JOBS to override the default of 2 compile/test jobs.
 # Dependencies: tools/install_deps_ubuntu.sh --windows.
 
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
@@ -18,7 +20,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 BUILD=build-win
-ARGS=(-DS7_BUILD_STUDIO=ON)
+ARGS=(-DS7_BUILD_STUDIO=ON -DS7_BUILD_SDR=OFF -DS7_PORTAUDIO=ON -DS7_PIPEWIRE=OFF -DS7_SOAPYSDR=OFF)
 FETCH=()
 FRESH=()
 TEST=0
@@ -43,9 +45,11 @@ if [[ -n "$HOST_QT_PATH" ]]; then
 fi
 
 SYSROOT="${S7_MINGW_SYSROOT:-$HOME/.cache/s7/msys2-ucrt64}"
-if [ ! -d "$SYSROOT/include/c++" ]; then
+if [ ! -d "$SYSROOT/include/c++" ] || [ ! -f "$SYSROOT/include/portaudio.h" ] || [ ! -f "$SYSROOT/lib/pkgconfig/liblz4.pc" ]; then
     tools/windows/fetch_msys2_sysroot.py "$SYSROOT" "${FETCH[@]}"
 fi
+JOBS="${S7_BUILD_JOBS:-2}"
+[[ "$JOBS" =~ ^[1-9][0-9]*$ ]] || { echo "S7_BUILD_JOBS must be a positive integer" >&2; exit 2; }
 
 RECONFIGURE=0
 if [ -f "$BUILD/CMakeCache.txt" ]; then
@@ -75,12 +79,15 @@ if (( RECONFIGURE )); then
     fi
 fi
 cmake "${FRESH[@]}" -S . -B "$BUILD" "${ARGS[@]}"
-cmake --build "$BUILD" --parallel
+cmake --build "$BUILD" --parallel "$JOBS"
+mkdir -p "$BUILD/plugins"
+cp "$BUILD/s7noise/libs7noise.dll" "$BUILD/s7audio/libs7audio-elements.dll" "$BUILD/plugins/"
 if (( TEST )); then
-    cmake --build "$BUILD" --target build-tests --parallel "$(nproc)"
-    ctest --test-dir "$BUILD" --output-on-failure --parallel "$(nproc)"
+    cmake --build "$BUILD" --target build-tests --parallel "$JOBS"
+    ctest --test-dir "$BUILD" --output-on-failure --parallel "$JOBS"
 fi
 if (( PACKAGE )); then
+    S7_BUILD_JOBS="$JOBS" tools/build_analysis_plugins.sh "$BUILD"
     tools/windows/package.sh "$BUILD" dist/s7-windows
 fi
 echo "Built in $BUILD/. Run programs with ./run_on_wine$( [ "$BUILD" = build-win ] || echo ' --release') <program>."

@@ -8,13 +8,21 @@ The maintainer subsequently assigned remote node control/restart, Trusted
 Networks, runtime node configuration editing and other networking work to
 0.2.0, excluding them from the 0.1.1 maintenance release.
 Implementation of these release goals belongs to 0.2.0.
-The [0.1.1 preview notes](RELEASE_0.1.1_NOTES.md) record the current released
-baseline. The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) assigns distributed
-delivery, simulation and Studio work, with
-development steps and PR review gates.
+The [0.1.2 preview notes](RELEASE_0.1.2_NOTES.md) record the released baseline;
+some work originally assigned to 0.2.0 shipped there. Current source also
+contains later hardware and packaging work. The project version is still
+0.1.2; development artifacts do not constitute a 0.2.0 release.
+
+Status reconciled 2026-11-17. This document retains the detailed release
+requirements. The [work plan's status and acceptance
+matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix) is the single
+release-status record, with evidence, owners and remaining gates. Implemented
+baseline capabilities remain regression requirements; they are not pending
+feature implementations. Existing measurements qualify only their recorded
+source, platform and workload, not the final 0.2.0 candidate.
 
 Scope update (2026-10-30): numerical integration and feedback-settling research
-is a P1 0.2.0 workstream, conducted on a separate research branch. This
+was assigned as a P1 0.2.0 workstream on a separate research branch. This
 supersedes the 2026-10-25 *release assignment* while preserving its requirement
 for review before production integration. Research results, including negative
 results, are a release deliverable; a new production algorithm is conditional.
@@ -50,7 +58,26 @@ plugin concurrency and serial/parallel selection are open decisions. The
 evidence, candidate ideas and unresolved contracts. It does not commit a
 particular scheduler or guarantee parallel execution in 0.3.0.
 
-## Numerical Integration and Feedback-Settling Research — P1 planned
+<a id="numerical-integration-and-feedback-settling-research--p1-planned"></a>
+
+## Numerical integration and feedback-settling research — P1 reports delivered
+
+N0–N4 now have experimental specifications, implementations, measured results
+and conclusions: [Phase 1 feedback research](NUMERICAL_FEEDBACK_RESEARCH_REPORT.md),
+[Phase 2 pole/zero and equal-work analysis](NUMERICAL_FEEDBACK_RESEARCH_PHASE2_REPORT.md)
+and [Phase 3 real-graph integration](NUMERICAL_INTEGRATION_PHASE3_REPORT.md).
+Phase 2 corrects the provenance and evaluation-cost ambiguity in the historical
+Phase 1 results. The requirements below describe the research assignment;
+actual coverage and exclusions are defined by the N0 contract and reports.
+The generic TPT/algebraic-loop candidate was not specified or qualified; that
+is an explicit research limit, not an implemented general loop solver.
+
+Production integration is no longer just a proposed PR. Opt-in F64 Euler
+substeps and coupled two-stage Gauss–Legendre are implemented under the separate
+[production contract](COUPLED_INTEGRATION.md). The [integrator guide](INTEGRATORS.md)
+also documents the current forward/backward Euler elements and their limits.
+These implementations do not turn the experimental feedback prototype into a
+production feature or expand the reports' numerical envelopes.
 
 Compare existing and experimental integration methods, investigate within-step
 feedback settling and zero-delay approaches, and measure numerical accuracy,
@@ -70,13 +97,13 @@ intended to reduce artificial delay. A zero-delay loop may have no solution or
 multiple solutions; simple iteration may diverge even when a solution exists.
 No convergence or general loop support is assumed.
 
-The planned validation matrix below reuses committed models where possible.
-N0 in the [work plan](RELEASE_0.2.0_WORKPLAN.md) freezes equations, parameters,
+The original validation assignment below reuses committed models where possible.
+The [N0 contract](NUMERICAL_FEEDBACK_RESEARCH_N0.md) freezes equations, parameters,
 initial states, timestep grids, duration, method settings, reference provenance
 and metric tolerances before comparison. Existing tests cover only their stated
-envelopes in the [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md)
-and example READMEs; the additional method/settling comparisons are planned,
-not validated.
+envelopes in the [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md),
+example READMEs and research reports. Do not read the assignment as evidence
+that every candidate applies to every model.
 
 | Model and starting configuration | Independent reference | Measures |
 | --- | --- | --- |
@@ -116,17 +143,19 @@ but experiments must preserve its current semantics. Any proposed change to
 causal ordering, publication or loop resolution needs separate architectural
 review.
 
-The **0.2.0 research deliverable** is complete only when a dedicated research
-branch contains experimental implementations, reproducible tests/benchmarks
+The **0.2.0 research acceptance requirement** was a dedicated research
+branch containing experimental implementations, reproducible tests/benchmarks
 and documented independent references, with comparative accuracy, convergence,
 stability and performance results, known limits and failed experiments, and a
-published technical report with recommendations. This plan alone does not
-complete the milestone. Inconclusive or negative findings are valid outcomes.
-Production integration is optional and requires a demonstrated advantage on
+published technical report with recommendations. The linked reports and
+artifacts supply this deliverable within their stated limits; the plan alone
+is not evidence. Inconclusive or negative findings are valid outcomes.
+Production integration was conditional and requires a demonstrated advantage on
 appropriate models, numerical and causal-semantic review, preserved existing
 behavior unless an explicit new mode is introduced, compatibility/regression
-tests and an explicit maintainer decision. No new integrator or settling method
-is required in the production runtime for 0.2.0.
+tests and an explicit maintainer decision. The separately implemented methods
+remain subject to final release regression; no additional integrator or
+general feedback-settling mechanism is required for 0.2.0.
 
 ## Multiple nodes on local and remote hosts
 
@@ -151,11 +180,38 @@ Existing crash-durability limits remain explicit unless separately implemented.
 Test the supported common protocol subset with Python nodes and provide reusable
 conformance checks for further language implementations.
 
+Current evidence is partial: Python already carries F64 graph streams over
+mTLS, and the [three-process transport lab](../../s7py/tools/transport_lab/README.md)
+records mixed-language chain/reconnect checks. Python still lacks separate
+data listeners and trusted-plaintext data. [C++/Python/Java frame
+conformance](performance/transport-2026-11-12/FRAME_CONFORMANCE.md) qualifies
+the frame-service/wire subset, not automatic deployed-frame negotiation or
+the complete D0–D5 lifecycle. Whole-diagram feedback validation remains X1–X3
+in the work plan. Java evidence does not add Java control-plane parity to the
+0.2.0 requirements.
+
+Cross-node feedback now has an initial C++ implementation following
+[ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027) and the maintainer's
+2026-11-17 approval of the strongest researched candidate. The shared
+Studio/s7ctl path validates the whole flattened graph before deployment,
+derives outgoing-first static orders, and checks node capabilities. Receivers
+check the distributed wait graph and local compiler dependencies. The runtime
+stays serial and feedback keeps explicit memory. The
+[implementation/test guide](DISTRIBUTED_CAUSAL_SCHEDULE.md) records the initial
+single-rate scope and pending real-loop qualification. The
+[literature](CROSS_NODE_CAUSALITY_RESEARCH.md) and
+[fourth research report](CROSS_NODE_CAUSALITY_PHASE4.md) retain performance and
+applicability evidence; broader distributed release acceptance remains open.
+
 Publish measured CPU, memory, throughput and latency for representative workloads
 and both data security profiles. Qualify constrained hardware such as Raspberry
 Pi separately when available; desktop results do not establish its performance.
 
 ## Remote node administration and Trusted Networks
+
+Status (2026-11-17): open; the reviewed administration contract and headless
+implementation are still required. Existing deployment/discovery operations
+are a baseline, not evidence of node-settings apply or process restart.
 
 The [Studio design boundaries](STUDIO_DESIGN_0_2.md) map document, discovery,
 request lifecycle, viewer and headless runtime ownership for this work.
@@ -204,6 +260,9 @@ Define supported remote hosts, supervision backends and packaged workflows durin
 0.2.0 planning; source inspection alone does not qualify remote administration.
 
 ## Certificate viewer and node certificate creation
+
+Status (2026-11-17): open; test credential scripts and existing identity
+summaries do not close the provisioning/viewer acceptance below.
 
 Provide a certificate viewer and a node certificate creation program as part
 of the networking workflow. Both are explicit 0.2.0 goals, outside the tentative
@@ -258,8 +317,9 @@ CA or revocation distribution) require separate scope decisions.
 
 ## Studio element resizing
 
-Requested by the maintainer on 2026-10-25 for 0.2.0; presentation scope
-corrected on 2026-10-31:
+Status (2026-11-17): resizing and schema double frames are implemented.
+Printing qualification remains open. The following records the original
+presentation scope requested on 2026-10-25 and corrected on 2026-10-31:
 
 - Make element shapes resizable in the diagram editor. Define resize handles,
   grid behavior and minimum dimensions that keep ports and labels usable.
@@ -271,10 +331,17 @@ corrected on 2026-10-31:
   Mark elements explicitly declared stateless with a small text label; leave
   elements whose statefulness is unknown unmarked.
 
+Current source differs from the original text-only presentation: basic elements
+now use [mathematical block symbols](DIAGRAM_SYMBOLS.md), with instance/type or
+method labels where space permits. That guide describes current rendering;
+this refresh records the difference rather than reinstating the historical
+text-only requirement. The user checked desktop rendering on 2026-11-16 and
+reported that it looked fine. This does not qualify printed output.
+
 These presentation changes must not change element identity, port semantics
 or the executing causal graph. Check narrow/large shapes, zoom/display scaling
 and color/grayscale readability. Carry resized geometry and double frames into
-diagram printing below. Element pictograms are outside the 0.2.0 release scope.
+diagram printing below. No additional pictogram redesign is assigned here.
 
 Implementation (2026-10-31): Studio now uses a selected element's bottom-right
 handle for grid-snapped resizing, with port/wire updates, one undo step and
@@ -290,6 +357,10 @@ below 7 × 5 steps and lower text lines dropped when they do not fit. Saved
 diagrams with elements below 7 × 5 steps do not open in earlier 0.2.0 builds.
 
 ## Studio diagram and observation-graph printing
+
+Status (2026-11-17): open; workflow/output decisions, implementation and
+qualification remain. Acceptance must include the current mathematical block
+symbols as well as saved sizes, labels and schema double frames.
 
 The maintainer reaffirmed diagram and plot printing on 2026-10-25 alongside
 resizable shapes. Printed diagrams must include saved element sizes and double
@@ -336,6 +407,9 @@ gain GUI dependencies.
 
 ## Software signal-generator element
 
+Status (2026-11-17): open; the design and schema-backed implementation below
+remain future work.
+
 Added at the maintainer's request on 2026-10-25. Plan a reusable signal-generator
 schema element for 0.2.0, using the UNI-T UTG932E function/arbitrary waveform
 generator as the interaction reference. Its [manufacturer user manual](https://storage.googleapis.com/uni-tdocuments/Library/UTG900E_Series_User_Manual_REV2a_HQ.pdf)
@@ -371,12 +445,14 @@ example, a Studio UI-only change (plot shortcuts, element painting, dialogs)
 should not need the expensive numerical runs such as the double/coupled
 pendulum tests.
 
-Current state: CTest labels exist only for a few Studio GUI tests (`gui`,
-`qt-regression`, `rendering`, `quick3d`); everything else runs unlabelled. A
-full `ctest -R s7studio -j16` (42 tests) takes about 3 min 15 s on the 7940HS
-dev host, almost all of it in `s7studio_coupled_pendulum` (~194 s),
+Status (2026-11-17): area/cost grouping and documented selections remain open.
+CTest labels are concentrated in Studio GUI tests (`gui`, `qt-regression`,
+`rendering`, `quick3d`, `examples`); the proposed taxonomy is not implemented.
+Historical measurement (2026-10-31): `ctest -R s7studio -j16` (42 tests) took
+about 3 min 15 s on the 7940HS dev host, almost all of it in
+`s7studio_coupled_pendulum` (~194 s),
 `s7studio_gui_workflows` (~77 s) and `s7studio_nonlinear_pendulum` (~39 s);
-most other tests take seconds. User machines are several times slower.
+most other tests took seconds. These are not current-suite timings.
 
 Proposed scope for review:
 
@@ -391,17 +467,88 @@ Proposed scope for review:
   code. Selection must narrow local runs, not reduce release coverage.
 - Check whether the slow tests can be shortened (fewer steps, smaller cases)
   without losing what they verify; record the tolerances they keep.
-- Fix timing-dependent tests found while measuring: in
+- Verify timing-dependent tests found while measuring: in
   `s7studio_window_lifecycle`, `closeAndDestruct(close-paused)` and
   `closeAndDestruct(destruct-paused)` sometimes miss the `Stopping` state
   before the window goes (`stoppedBeforeDestruction`). On 2026-10-31 it failed
   68 of 160 runs with 16 copies in parallel on the dev host, and occasionally
-  in `ctest -j16`; it passes when run alone.
+  in `ctest -j16`. Current `closeAndDestruct` accepts either `Stopping` or
+  `Stopped` before destruction, and `replaceWhileActive` explicitly releases
+  its reused gate. The recorded missing-transient-state issue has a code
+  correction; the old failure count is historical. This planning refresh does
+  not claim a fresh repeat of the 160-run stress experiment.
+
+## Video source/sink — planned addition, 2026-11-18
+
+The maintainer requested `VideoSource` and `VideoSink` using native PipeWire,
+with a webcam captured on one host and viewed on another as the first milestone.
+Screen/window capture follows. Video remains a causal stream of numeric values;
+the initial proposal uses existing U8 pixel-channel streams and explicit raster
+geometry/rates rather than adding an image type to the core.
+
+That initial per-pixel proposal is now a measured baseline. The maintainer's
+subsequent clarification favors [whole-frame video processing and specialized
+media transfer](VIDEO_IO_FRAME_DESIGN.md), with receiver-side transformations
+and explicit numeric computation/result bridges. The final frame ownership,
+execution and transport contracts remain proposed.
+
+Compression is a **user-selectable, tunable per-stream option**: raw baseline,
+existing LZ4/Zstandard lossless transport, then JPEG and H.264 image codecs with
+explicit settings and receiver capability checks. New codec framing/descriptor
+semantics require review; current numeric lossless formats are not relabeled.
+
+The [implementation plan](VIDEO_IO_PLAN.md) records the phases, performance
+requirements, first-host inventory, Windows Media Foundation recommendation and
+successful compile/link-only capture API probe. The [V0 report](VIDEO_IO_SPIKE.md)
+now records 16 two-host experiments, live PipeWire webcam/output/viewing through
+GStreamer adapters, lossless codec choices and a 60-second paced check. These
+bounded results do not ship native video providers or qualify physical desktop,
+higher-resolution real-time or native Windows camera support. This work belongs to the
+maintainer/Codex; D0 and D1/D2 remain assigned to teren_ukr. Final release inclusion
+depends on the delivered and qualified subset, not the existence of this plan.
+
+## Hardware and release distribution
+
+Status (2026-11-17): the public hardware modules and distribution tooling are
+implemented, with bounded verification. The [hardware guide](HARDWARE_IO.md)
+defines the initial profile: one hardware boundary, one exact rate domain,
+explicit activation through `s7hw` or an SDK owner. Studio can edit/validate
+the plugin elements; ordinary Studio Run and runtime-service deployment do
+not yet own hardware activation. Integrating those owners is not silently
+added as a release requirement by this refresh.
+
+The [live hardware report](HARDWARE_IO_LIVE_TESTS.md) records Linux audio and
+radio experiments and their limits. Its two-host audio leg used SSH raw PCM,
+not S7 transport; it cannot close the distributed acceptance matrix. Independent
+hardware-clock alignment, drift correction and adaptive resampling remain
+later research.
+
+The maintainer's agreed distribution matrix is:
+
+| Artifact | Initial target/profile | Existing evidence and remaining acceptance |
+| --- | --- | --- |
+| Existing Linux portable tarball | Linux x86-64; sound and SDR | Earlier portable-package evidence exists. Rebuild and verify a relocated candidate with the current hardware profile and final 0.2.0 source/version. |
+| Native Fedora RPMs | Fedora 45 x86-64; sound and SDR | Six packages built; 17/17 focused regressions, 5/5 headless and 23/23 full installed checks passed. Final-version rebuild and upgrade qualification remain. |
+| Native Ubuntu DEBs | Ubuntu 26.04 amd64; sound and SDR | Six packages built with the same 17/5/23 check results. Ubuntu 26.10 has no native package qualification; final-version rebuild and upgrade qualification remain. |
+| Existing Windows portable ZIP | Windows x86-64; PortAudio sound, SDR excluded | 112/112 configured Wine CTests and 21/21 relocated checks passed. Native Windows sound/device and desktop/GPU qualification remain open; Wine results do not establish them. |
+
+See [native package verification](NATIVE_LINUX_PACKAGES.md),
+[Windows verification](WINDOWS_BUILD.md#sound-only-build-verification-2026-11-17)
+and the [release collection workflow](../tools/release/README.md).
+Analysis plugins remain available in both platform profiles. The packages
+must not contain private providers or development fixture credentials.
+
+All artifacts must come from the intended release source and version, with
+dependency/profile provenance, notices, checksums and matching validation
+records. Current local artifacts are 0.1.2 development builds, not 0.2.0
+release candidates. Final full regressions and package checks belong to Q1
+in the work plan; test selection must not narrow that release gate.
 
 ## Planning and release boundary
 
-Establish the distributed contract and conformance baseline; then the Python
-data plane and multi-node work can advance. Within-node parallel scheduling and
+Reconcile the existing distributed implementations with the D0 contract and
+conformance baseline; then close split-profile parity and the remaining
+multi-node lifecycle gates. Within-node parallel scheduling and
 its plugin/thread-safety contract belong to 0.3.0 planning. Shared headless
 tests and protocol fixtures should cover their integration. Studio
 remains an optional client; improvements to it should support these workflows
@@ -412,9 +559,14 @@ Plan certificate viewing/creation and remote node administration alongside
 multi-node setup, so networking acceptance uses the provisioning and
 configuration/restart workflows as well as protocol fixtures.
 
-Additional integration methods are experimental under the numerical research
-workstream; production adoption needs the review above. Implicit multi-rate
+Historical numerical experiments remain research; the separately implemented
+production methods follow their documented contract and regression envelope.
+Additional numerical or loop-resolution methods need a separate review.
+Implicit multi-rate
 conversion, durable stream journals and a new remote-observation API are not
 implied by these goals. Their scope requires separate decisions. Concrete graph
-sizes, node counts, platform targets and performance thresholds remain to be
-chosen from measured baselines.
+sizes, node counts, remote host/supervisor targets and performance thresholds
+remain to be chosen from measured baselines. The initial package targets above
+are recorded evidence, not a promise of every distribution or native Windows
+hardware capability. The work plan's matrix records the remaining decisions;
+this refresh does not drop any agreed release feature.

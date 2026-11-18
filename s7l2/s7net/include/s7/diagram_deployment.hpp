@@ -45,6 +45,7 @@
 #include <boost/json.hpp>
 
 #include "s7/rate.hpp"
+#include "s7/element_registry.hpp"
 #include "s7/signal_types.hpp"
 #include "s7/stream_protocol.hpp"
 #include "s7/transport.hpp"
@@ -130,6 +131,14 @@ using OutputTypeLookup = std::function<std::optional<SignalType>(const std::stri
 // a new random id.
 // Returns the problems found (the diagram is unchanged if any).
 [[nodiscard]] auto assign_streams(boost::json::object& diagram, const OutputTypeLookup& output_type) -> std::vector<std::string>;
+
+// Validate the complete flattened graph, then derive outgoing-first static
+// orders over all node fragments and send-before-receive stream edges. Runs
+// before any deployment request. Writes versioned causal_schedule metadata
+// only on success; local diagrams retain their existing compiler scheduling.
+// Initial distributed scope: one rate domain, no coupled numerical regions.
+[[nodiscard]] auto plan_causal_schedule(boost::json::object& diagram,
+    const ElementRegistry& registry = ElementRegistry::instance()) -> std::vector<std::string>;
 
 // A node: its part of the diagram as a runtime schema. Elements placed on
 // the node and the connections between them are kept; each stream the node

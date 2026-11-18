@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors -->
+  <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+  <rect x="4" y="4" width="120" height="120" rx="24" fill="#17364d"/>
+  <path d="M29 91V37h70v54H29m0-27h70" fill="none" stroke="#64c8c8" stroke-width="6"/>
+  <g fill="#f4c66b"><circle cx="29" cy="37" r="10"/><circle cx="99" cy="64" r="10"/><circle cx="29" cy="91" r="10"/></g>
+</svg>

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Install development dependencies for s7l2 on Fedora 45.
 #
-# Usage: tools/install_deps_fedora.sh [--no-studio] [--no-gui-tests] [--no-spectral] [--no-hardware] [--no-extras] [--dry-run]
+# Usage: tools/install_deps_fedora.sh [--no-studio] [--no-gui-tests] [--no-spectral] [--no-hardware] [--no-extras] [--native-packages] [--dry-run]
 #   --no-studio    skip Qt6 packages (for headless builds with -DS7_BUILD_STUDIO=OFF)
 #   --no-gui-tests skip Xvfb/Mesa/drag tools and disable the native GUI regression suite
 #   --no-spectral  skip plugin prerequisites; Studio still requires FFTW
 #   --no-hardware skip public PortAudio, PipeWire and SoapySDR development packages
 #   --no-extras    skip optional build, plotting and AppDir packaging tools
 #   --dry-run      print the dnf command instead of running it
+#   --native-packages add RPM build tools (independent of --no-extras)
 # Windows binaries are cross-built on Ubuntu (tools/install_deps_ubuntu.sh --windows).
 
 # SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
@@ -21,6 +22,7 @@ WITH_EXTRAS=1
 WITH_HARDWARE=1
 WITH_GUI_TESTS=1
 DRY_RUN=0
+WITH_NATIVE_PACKAGES=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -33,6 +35,7 @@ for arg in "$@"; do
       echo "Windows cross builds are set up on Ubuntu: tools/install_deps_ubuntu.sh --windows (docs/WINDOWS_BUILD.md)." >&2
       exit 2 ;;
     --dry-run) DRY_RUN=1 ;;
+    --native-packages) WITH_NATIVE_PACKAGES=1 ;;
     -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
     *) echo "Unknown option: $arg" >&2; exit 2 ;;
   esac
@@ -109,6 +112,9 @@ if (( WITH_EXTRAS )); then
     patchelf
     binutils
   )
+fi
+if (( WITH_NATIVE_PACKAGES )); then
+  PACKAGES+=(rpm-build file ninja-build)
 fi
 
 SUDO=()

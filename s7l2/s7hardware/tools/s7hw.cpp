@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Oleksiy Lukin and S7 contributors
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include <s7/audio.hpp>
+#if defined(S7_WITH_SDR)
 #include <s7/sdr.hpp>
+#endif
 #include <s7/hardware_plugin.hpp>
 #include <s7/builtin_element_registry.hpp>
 #include <s7/compiler.hpp>
@@ -30,7 +32,11 @@ int main(int argc,char** argv) {
             if (arg=="--help") {
                 std::cout<<"s7hw --check <schema.json>\ns7hw --run <schema.json> --frames <n> [--provider-library <path>]...\n"
                     <<"s7hw --devices <backend> [--provider-library <path>]...\n"
-                    <<"--run explicitly activates capture/playback/RF TX. One hardware boundary and rate domain.\n"
+                    <<"--run explicitly activates capture/playback"
+#if defined(S7_WITH_SDR)
+                    <<"/RF TX"
+#endif
+                    <<". One hardware boundary and rate domain.\n"
                     <<"Completion aborts the stream; playback counts mean accepted frames, not DAC presentation.\n"; return 0;
             } else if (arg=="--check" || arg=="--run" || arg=="--devices") {
                 if (!mode.empty()) throw std::invalid_argument("choose one mode");
@@ -42,7 +48,10 @@ int main(int argc,char** argv) {
         }
         if (mode.empty() || (mode=="--run" && !frames) || (mode!="--run" && frames)) throw std::invalid_argument("see s7hw --help");
         auto& registry=s7::ElementRegistry::instance();
-        s7::register_builtin_elements(registry); s7::audio::register_elements(registry); s7::sdr::register_elements(registry);
+        s7::register_builtin_elements(registry); s7::audio::register_elements(registry);
+#if defined(S7_WITH_SDR)
+        s7::sdr::register_elements(registry);
+#endif
         std::optional<s7::ExecutableGraph> graph;
         if (mode!="--devices") {
             std::ifstream input(file,std::ios::binary); if (!input) throw std::invalid_argument("cannot read schema: "+file);
@@ -61,7 +70,9 @@ int main(int argc,char** argv) {
         for (const auto& path:paths) modules.emplace_back(path);
         auto resolve=[&](std::string_view name)->std::unique_ptr<s7::hardware::Provider> {
             for (const auto& b:s7::audio::backends()) if (b==name) return s7::audio::provider(name);
+#if defined(S7_WITH_SDR)
             for (const auto& b:s7::sdr::backends()) if (b==name) return s7::sdr::provider(name);
+#endif
             for (const auto& module:modules) if (auto p=module.create(name)) return p;
             throw std::invalid_argument("hardware backend unavailable: "+std::string(name));
         };

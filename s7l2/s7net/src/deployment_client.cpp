@@ -225,13 +225,15 @@ auto BeastControlRequester::operator()(const RuntimeNode& node, const json::obje
 }
 
 auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, const ControlRequester& request,
-                    const DeployOptions& options) -> DeployResult
+                    const DeployOptions& options, const ElementRegistry& registry) -> DeployResult
 {
     DeployResult result;
     result.errors = assign_streams(diagram, output_types);
     if (!result.errors.empty()) {
         return result;
     }
+    result.errors = plan_causal_schedule(diagram, registry);
+    if (!result.errors.empty()) return result;
     result.diagram = diagram;
 
     std::unordered_map<std::string, RuntimeNode> known;
@@ -273,6 +275,14 @@ auto deploy_diagram(json::object diagram, const OutputTypeLookup& output_types, 
             const auto info = request(targets[i], request_object("GET_NODE_INFO", "info-" + std::to_string(i)));
             round_trips += std::chrono::steady_clock::now() - asked;
             limits[i] = control_limits_of(info);
+            if (diagram.contains("causal_schedule")) {
+                const auto* versions = info.if_contains("causal_schedule_versions");
+                const bool supported = versions && versions->is_array() && std::ranges::any_of(versions->as_array(), [](const auto& v) {
+                    return (v.is_int64() || v.is_uint64()) && v.template to_number<std::int64_t>() == 1;
+                });
+                if (!supported) result.errors.push_back("Node " + targets[i].node_uuid +
+                    " does not support causal schedule v1; update its runtime before deploying this network graph.");
+            }
             // Deployed nodes compare times in the shared "utc" domain: each must
             // report its clock synchronized within its bound.
             if (!has_utc_domain(info)) {
