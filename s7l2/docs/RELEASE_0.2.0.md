@@ -13,10 +13,14 @@ The single release objective is:
 > distributed nodes, with numerical validation, explicit execution semantics,
 > and integrated observation.**
 
-**Distributed causal execution is the centerpiece of 0.2.0.** The numerical,
-runtime, transport and Studio work already present in source supplies the
-foundation. Remaining work is bounded qualification and fixes required to meet
-the four release gates, not another broad round of feature development.
+**A useful engineering example is the centerpiece of 0.2.0.** Build a
+signal-processing or simulation diagram, run parts on two physical headless
+hosts, and inspect reproducible results. Distribution is a means, not the
+purpose of the demonstration. The existing numerical, runtime, transport
+and Studio capabilities supply the foundation. Multi-host feedback loops
+remain valuable scheduler tests, **not** a pre-MVP showcase or release
+blocker. Remaining work is qualification and necessary fixes for the
+four release gates.
 
 The [work plan](RELEASE_0.2.0_WORKPLAN.md) is the authoritative live
 [status/acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix).
@@ -87,30 +91,38 @@ The [numerical validation matrix](NUMERICAL_VALIDATION_MATRIX.md),
 [integrator review](INTEGRATOR_REVIEW_2026-11-17.md) supply existing contracts
 and evidence. Historic test counts are not the release-candidate result.
 
-### G2 — Correct distributed causality on two physical hosts
+### G2 — Useful two-host execution and causal correctness
 
-1. Demonstrate a real C++ two-host feedback diagram containing initialized
-   causal memory. Include memory on either host and within a reusable nested
-   schema; check the resulting sample sequences against an independent
-   recurrence, not a second execution of the same S7 graph.
-2. Exercise valid alternate placements, cross-node forward paths and fan-out
-   within the supported static-schedule profile. Verify local and distributed
-   sequences agree where the same inputs, initial states and successful steps
-   make comparison meaningful.
-3. Reject a direct-feedthrough cycle, missing causal memory, invalid/stale
-   order and unsupported schedule capability **before committing a deployment**.
-   Check that invalid whole-diagram cycles fail before PREPARE.
-4. Record the exact host, compiler, graph, security profile, sample rate,
-   expected/observed values, throughput, latency, CPU, memory and queue
-   occupancy. State any batching settings necessary to make a one-token
-   feedback loop progress.
+1. Demonstrate a practical, **headless two-host signal-processing or
+   simulation chain** with deterministic input, meaningful processing/model
+   computation and a recorded numeric result. A suitable example is a
+   modulated signal → filter/demodulator → measurement. Hardware acquisition
+   may be shown additionally but cannot be required.
+2. Validate the result against an **independent analytical or numerical
+   reference**, not only a second S7 execution. Compare with an equivalent
+   local chain where meaningful. Record sample rate/count, signal ordering,
+   measured values and known tolerances.
+3. Preserve tests for static causal scheduling, including initialized-memory
+   cross-node feedback, nested memory, direct-feedthrough cycle rejection,
+   stale/invalid order, missing capability and explicit packet/batch
+   semantics. Local independent headless processes are enough for required
+   scheduler regressions. A cross-host feedback experiment is **recommended
+   extra evidence**, not a release gate. Neither three hosts nor four
+   processes are required for the flagship example.
+4. Record operating-system and hardware profiles, graph and input provenance,
+   security mode, measured outputs, throughput, lag, CPU, memory and queue
+   occupancy. Distinguish model-time equivalence from wall-clock performance.
 
-The first release profile is **single-rate, serial per node**; it excludes
-rate changers and coupled numerical regions in distributed schedules.
-Cross-node scheduling research and initial implementation are documented in
-[the research record](CROSS_NODE_CAUSALITY_PHASE4.md) and
-[the implementation guide](DISTRIBUTED_CAUSAL_SCHEDULE.md). Successful local
-socket tests do not substitute for physical-host acceptance.
+The initial supported distributed profile remains single-rate and serial
+per node. Use existing observation or recorded-output paths: **a new remote
+observation protocol is not a 0.2.0 prerequisite**. If Studio cannot inspect
+remote data live, document the existing recording/inspection workflow and
+the limitation rather than claiming live observation.
+
+The [cross-node scheduling research](CROSS_NODE_CAUSALITY_PHASE4.md) and
+[implementation guide](DISTRIBUTED_CAUSAL_SCHEDULE.md) remain normative
+for that component's supported behavior. Automated feedback correctness
+is distinct from the practical two-host product demonstration.
 
 ### G3 — Observable network lifecycle and failure behavior
 
@@ -150,11 +162,12 @@ behavior, not completed acceptance.
    and the Windows x86-64 ZIP in its documented sound-only profile.
    Relocation/package tests, licensing/notices and checksums are mandatory.
    Wine qualification must not be described as native Windows hardware testing.
-3. Publish one **reproducible two-host feedback experiment**: schema and
-   deployment instructions, host/security setup, expected reference sequence,
-   validation commands, timing/resource results, injected failure cases and
-   exact limitations. Keep private keys and private device identities out of
-   the repository.
+3. Publish one **reproducible two-host engineering demonstration**: diagram
+   and application goal, input and processing stages, independent reference,
+   headless deployment and observation/recording commands, measured output,
+   timing/resource data, process/link failure behavior and explicit
+   limitations. Keep private credentials and device identities out of Git.
+   Do not require a new remote-observation API to produce the evidence.
 4. Publish release notes with supported operating systems, tested graph and
    rate envelopes, known regressions, unsupported features and reproducible
    test/benchmark provenance.
@@ -220,4 +233,5 @@ and original instrument-style requirements have moved to
 changes this contract and publishes the resulting exclusions. Do not postpone
 a qualified release for unrelated new features. Do not interpret a research
 result, a single platform check or an attractive Studio demonstration as proof
-of distributed reliability.
+of distributed reliability. Large cross-host feedback loops are
+additional scheduler evidence, not pre-MVP product milestones.
