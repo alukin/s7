@@ -29,6 +29,7 @@ through **File → Example Diagrams… → education** and set its stated run pr
 | SP09: change the window, preserve the units | [sp09_window_normalization.s7diagram](sp09_window_normalization.s7diagram) | 2 s at 128 Hz | [Student lab](../../education/labs/SP09-window-normalization/README.md) |
 | SP10: where does the tail go? | [sp10_circular_convolution.s7diagram](sp10_circular_convolution.s7diagram) | 2 s at 8 Hz | [Student lab](../../education/labs/SP10-circular-convolution/README.md) |
 | SP11: when did that frequency happen? | [sp11_short_time_fourier.s7diagram](sp11_short_time_fourier.s7diagram) | 4 s at 128 Hz | [Student lab](../../education/labs/SP11-short-time-fourier/README.md) |
+| SP14: coherent AM detection | [sp14_coherent_am.s7diagram](sp14_coherent_am.s7diagram) | 4 s at 256 Hz | [Student lab](../../education/labs/SP14-coherent-am/README.md) |
 
 ## First time with S7? Start here
 
@@ -47,6 +48,7 @@ through **File → Example Diagrams… → education** and set its stated run pr
 13. **CT04/CT05:** compare controller/load errors, then inspect hidden integral windup.
 14. **CT06/CT07:** connect sampled pole motion with measured open-loop stability margins.
 15. **CT08:** compare matched DC gain, transient settling and control effort.
+16. **SP14:** predict AM sidebands, detect coherently and explain finite-filter/phase errors.
 
 Each file saves the run configuration in the table. FN01–FN03 use
 **2 s / 10 Hz**. Click Run and keep the saved settings; the short-run notice is intentional. Double-click
@@ -194,3 +196,9 @@ plants. The independent pulse path measures the lead open loop. Its primary
 zero edit becomes P16, not the P4 baseline. Build `s7tests_education_compensator`
 and `s7core_schema_elements_smoke`; regenerate with
 `python3 -B examples/education/generate_compensator_lab.py`.
+
+SP14 uses separate V and dimensionless Scopes. Select **From 2.002 s to 4 s**
+for its steady 512-sample spectra (Rectangular, no mean removal). The recovered
+message has the actual two-state filter gain/phase; quadrature does not erase
+all finite-filter images. Build `s7tests_education_am`; regenerate with
+`python3 -B examples/education/generate_am_lab.py`.

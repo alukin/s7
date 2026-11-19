@@ -86,6 +86,13 @@ target_compile_definitions(s7tests_education_compensator PRIVATE S7_CT08_DIAGRAM
 add_test(NAME s7tests_education_compensator COMMAND s7tests_education_compensator)
 set_tests_properties(s7tests_education_compensator PROPERTIES TIMEOUT 30)
 
+s7_add_test_executable(s7tests_education_am education_am_smoke.cpp)
+target_link_libraries(s7tests_education_am PRIVATE s7core s7observe)
+target_include_directories(s7tests_education_am PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
+target_compile_definitions(s7tests_education_am PRIVATE S7_SP14_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/sp14_coherent_am.s7diagram")
+add_test(NAME s7tests_education_am COMMAND s7tests_education_am)
+set_tests_properties(s7tests_education_am PROPERTIES TIMEOUT 30)
+
 s7_add_test_executable(s7tests_linear_examples_smoke linear_examples_smoke.cpp)
 target_link_libraries(s7tests_linear_examples_smoke PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_linear_examples_smoke PRIVATE

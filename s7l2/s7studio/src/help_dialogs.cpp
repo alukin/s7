@@ -58,6 +58,7 @@ constexpr Topic topics[] = {
     {"Education: SP03 sampling and aliasing", "qrc:/s7studio/help/education/labs/SP03-aliasing/README.md"},
     {"Education: SP05 shifted impulse responses", "qrc:/s7studio/help/education/labs/SP05-convolution/README.md"},
     {"Education: SP10 circular versus linear convolution", "qrc:/s7studio/help/education/labs/SP10-circular-convolution/README.md"},
+    {"Education: SP14 AM and coherent detection", "qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md"},
     {"Education: SP11 short-time Fourier transform", "qrc:/s7studio/help/education/labs/SP11-short-time-fourier/README.md"},
     {"FIR and FFT convolution implementation", "qrc:/s7studio/help/docs/CONVOLUTION.md"},
     {"Education: SP07 filter transfer functions", "qrc:/s7studio/help/education/labs/SP07-filter-transfer/README.md"},

@@ -107,19 +107,23 @@ overwriting of earlier established research conclusions.
 
 ## Development progress — 2026-11-19
 
-Twenty-three core lessons now have new graphs and student guides: FN01–FN06,
-CT01–CT08, SP01, SP03 and SP05–SP11. The [manifest](CORE_MANIFEST.md) and
-[executed evidence](EVIDENCE.md) distinguish these development checks
-from final release qualification. The next implementation batch is
-**SP14**. CT08 now compares a reusable schema lead/lag network and P
-control, with matched DC gain, effort and cancellation checks. CT06/CT07 now connect analytic closed-loop
-poles with measured open-loop Bode/Nyquist curves and stability margins. CT04/CT05 compare actual discrete
-controller/plant states, load rejection, saturation and saved nested edits. SP11 verifies STFT
-coefficients, window/hop coordinates and the actual map/slice displays. SP10 uses explicit scalar word builders/FIRs and separately checks
-recorded sequences through both production frame processors; no frame-port
-contract or causal semantics were changed. The closing viewer-audit reminder
-above remains open.
-Package navigation, native Windows and the named release-candidate checks remain open.
+Twenty-four core lessons now have new graphs and student guides: FN01–FN06,
+CT01–CT08, SP01, SP03, SP05–SP11 and SP14. The [manifest](CORE_MANIFEST.md) and
+[executed evidence](EVIDENCE.md) distinguish development checks from final
+release qualification. The named core implementation set is complete.
+
+The latest batches verify controller/plant states, windup and saved nested
+edits (CT04/CT05), sampled poles and measured Bode/Nyquist curves (CT06/CT07),
+a reusable lead/lag network with matched DC gain and control effort (CT08),
+and coherent AM phase, finite-filter states and selected spectra (SP14).
+Earlier signal-processing lessons independently check runtime sequences and
+production convolution/spectral processors without changing causal semantics.
+
+Next: integration, installed/relocated package navigation and the named
+release-candidate checks. The closing collection-wide viewer-audit reminder
+above remains open; native Windows and human review are not inferred from
+Linux development tests. The additional 24 non-core curriculum items remain
+outside the accepted 0.2.0 implementation set.
 
 ## Phase 1 — Classical foundations and discrete modeling (FN)
 
@@ -174,7 +178,8 @@ graph, independent complex STFT checks and actual map/slice rendering checks.
 CT04/CT05 now add independently checked controller/windup comparisons.
 CT06/CT07 now add sampled poles and independently checked stability margins.
 CT08 now adds a reusable schema compensator with independent state/response checks.
-The remaining named core implementation is SP14.
+SP14 completes the named core implementation set. Next: integration/package
+checks and the final collection-wide viewer review.
 
 **SP06 reference contract, proposed first engineering flagship:**
 

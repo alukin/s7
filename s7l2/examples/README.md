@@ -46,6 +46,7 @@ New diagrams designed specifically for teaching; see the
 | SP09 — Change the window, preserve the units | [New teaching graph](education/sp09_window_normalization.s7diagram) |
 | SP10 — Where does the tail go? | [New teaching graph](education/sp10_circular_convolution.s7diagram) |
 | SP11 — When did that frequency happen? | [New teaching graph](education/sp11_short_time_fourier.s7diagram) |
+| SP14 — AM and coherent detection | [New teaching graph](education/sp14_coherent_am.s7diagram) |
 | SP06 — Three-tap FIR | [Three-tap moving average](education/sp06_three_tap_fir.s7diagram) |
 
 ## Starter and standalone experiments

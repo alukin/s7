@@ -264,3 +264,13 @@ PDF pages 2–3, were inspected for topic alignment. The notes describe
 continuous-time pole/zero shaping; CT08 explicitly defines a different
 original sampled recurrence, a matched-DC comparison and its control effort.
 No worked problem, figure, assignment or solution is copied or bundled.
+
+## SP14 — synthetic AM and finite coherent detector, 2026-11-19
+
+[MIT 6.003, Fall 2011, Lecture 23](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/08c6a7bc7e56eda548248c354886dc37_MIT6_003F11_lec23.pdf),
+PDF pages 13–18 and 25–28, and [MIT RES.6-007, Spring 2011, Lecture 13](https://ocw.mit.edu/courses/res-6-007-signals-and-systems-spring-2011/a774c49855ba6bfe7266943eb8b5bc41_MITRES_6_007S11_lec13.pdf),
+PDF pages 1–2, 7–8 and 10, were inspected for modulation, synchronous mixing
+and carrier-phase alignment. SP14 uses original synthetic frequencies,
+schedules, numerical references and a declared two-state forward-Euler filter,
+not the notes' ideal continuous low-pass or a copied assignment/solution.
+No handout, figure, audio or external dataset is bundled.

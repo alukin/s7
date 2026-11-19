@@ -11,6 +11,7 @@
 #include "education_control_reference.hpp"
 #include "education_loop_reference.hpp"
 #include "education_compensator_reference.hpp"
+#include "education_am_reference.hpp"
 #include <tuple>
 #include "diagram_editor.hpp"
 #include "diagram/diagram_scene.hpp"
@@ -3124,6 +3125,61 @@ private slots:
         const auto copy=temporary_.filePath(file+"-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));
         openViewers();run();QVERIFY(!QTest::currentTestFailed());checkViewers(true);QVERIFY(!QTest::currentTestFailed());
     }
+    void educationAm() {
+        using namespace s7tests::education;
+        QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/sp14_coherent_am.s7diagram"));openTeachingGuide("SP14","SP14-coherent-am");QVERIFY(!QTest::currentTestFailed());
+        const TeachingBindings bindings{{"rf_scope/rf",{"transmit",0,"V"}},{"baseband_scope/target",{"envelope",0,"V"}},
+            {"baseband_scope/recovered",{"recovered",0,"V"}},{"mixer_scope/mixed",{"mixed",0,"V"}},
+            {"carrier_scope/carrier",{"carrier",0,"1"}},{"carrier_scope/local",{"local",0,"1"}}};
+        for(bool edited:{false,true}) {
+            const double phase=edited ? std::numbers::pi/3:0;
+            if(edited) {editTeachingNumber("local","phase",phase);QVERIFY(!QTest::currentTestFailed());const auto copy=temporary_.filePath("SP14-edited.s7diagram");QVERIFY(fileAction("action.saveAs",copy));QVERIFY(fileAction("action.open",copy));}
+            TeachingScopes scopes;openTeachingScopes({"rf_scope","baseband_scope","mixer_scope","carrier_scope"},scopes);
+            runTeachingProfile(4,256);QVERIFY(!QTest::currentTestFailed());const auto trace=am_reference(phase);const QString stem=edited ? "SP14-edited":"SP14-baseline";
+            checkTeachingCapture(bindings,[&](const std::string& id,std::size_t port,int n) {return trace[std::size_t(n)].at(control_key(id,port));},1024,256,scopes,stem,.25);QVERIFY(!QTest::currentTestFailed());
+            auto* runner=window_->findChild<s7studio::LocalSchemaRunner*>();QVERIFY(runner);
+            for(const auto& id:QStringList{"rf_scope","baseband_scope","mixer_scope"}) {
+                auto* scope=scopes[id].data();QVERIFY(scope);scope->show();
+                auto* start=scope->findChild<QDoubleSpinBox*>("scope.analysisStart");auto* end=scope->findChild<QDoubleSpinBox*>("scope.analysisEnd");
+                auto* analyze=scope->findChild<QPushButton*>("scope.analyze");auto* tabs=scope->findChild<QTabWidget*>("scope.analysisTabs");
+                auto* spectrum=scope->findChild<s7studio::viewers::SpectrumView*>();QVERIFY(start && end && analyze && tabs && spectrum);
+                auto* panel=spectrum->controlPanel();auto* window=panel->findChild<QComboBox*>("spectrum.window");auto* quantity=panel->findChild<QComboBox*>("spectrum.quantity");
+                auto* scale=panel->findChild<QComboBox*>("spectrum.scale");auto* range=panel->findChild<QComboBox*>("spectrum.frequencyRange");
+                auto* all=panel->findChild<QCheckBox*>("spectrum.allInputs");auto* remove=panel->findChild<QCheckBox*>("spectrum.removeMean");
+                auto* size=panel->findChild<QComboBox*>("spectrum.size");QVERIFY(window && quantity && scale && range && all && remove && size);
+                window->setCurrentIndex(0);scale->setCurrentIndex(0);range->setCurrentIndex(1);all->setChecked(true);remove->setChecked(false);
+                start->setValue(2.002);end->setValue(4);analyze->click();tabs->setCurrentIndex(1);size->setCurrentIndex(size->findData(512));
+                for(int q=0;q<3;++q) {
+                    quantity->setCurrentIndex(q);
+                    QTRY_VERIFY_WITH_TIMEOUT(spectrum->result() && spectrum->result()->state==s7studio::analysis::SpectrumResult::State::Ready && spectrum->result()->size==512 && int(spectrum->result()->settings.quantity)==q,10000);
+                    const auto& r=*spectrum->result();QCOMPARE(r.runId,runner->recordedSource()->runId());QCOMPARE(r.firstStep,std::int64_t(513));QCOMPARE(r.lastStep,std::int64_t(1024));
+                    QCOMPARE(r.sampleRate,256.);QCOMPARE(r.binSpacing,.5);QCOMPARE(r.coherentGain,1.);QVERIFY(r.frame);QCOMPARE(r.frame->steps.size(),qsizetype(512));
+                    QCOMPARE(r.traces.size(),std::size_t(id=="baseband_scope" ? 2:1));
+                    for(const auto& t:r.traces) {
+                        QCOMPARE(t.unit,QString("V"));const auto name=r.frame->channels[qsizetype(t.channel)].name;const auto key=id+"/"+name;QVERIFY(bindings.contains(key));
+                        const auto& [element,port,unit]=bindings[key];(void)unit;std::vector<double> values;
+                        for(int n=0;n<512;++n) {
+                            const auto value=trace[std::size_t(n+512)].at(control_key(element,port));values.push_back(value);
+                            QVERIFY(std::abs(r.frame->values[qsizetype(n*r.frame->channels.size()+qsizetype(t.channel))]-value)<1e-10);
+                        }
+                        const QString plottedUnit=q==0 ? "V":q==1 ? "V²":"V²/Hz";QLineSeries* line=nullptr;
+                        for(auto* candidate:spectrum->plotView()->series()) if(candidate->name()==name+" ["+plottedUnit+"]") line=candidate;
+                        QVERIFY(line && line->isVisible());QCOMPARE(line->points().size(),qsizetype(257));double integrated=0,meanSquare=0;for(double value:values) meanSquare+=value*value/512;
+                        for(std::size_t k=0;k<257;++k) {
+                            const auto direct=am_bin(values,k);const double fold=k==0 || k==256 ? 1:2;
+                            const auto value=q==0 ? fold*std::abs(direct):fold*std::norm(direct)/(q==2 ? .5:1);
+                            QCOMPARE(r.frequencies[k],k*.5);QVERIFY(std::abs(t.values[k]-value)<1e-9);QCOMPARE(line->points()[qsizetype(k)].x(),k*.5);
+                            QVERIFY(std::abs(line->points()[qsizetype(k)].y()-value)<1e-9);if(q>0) integrated+=value*(q==2 ? .5:1);
+                        }if(q>0) QVERIFY(std::abs(integrated-meanSquare)<1e-10);
+                    }
+                    QCOMPARE(spectrum->plotView()->xTitle(),QString("Frequency (Hz)"));QCOMPARE(spectrum->plotView()->yTitle(),q==0 ? QString("Peak amplitude (V)"):q==1 ? QString("Power / bin (V²)"):QString("PSD (V²/Hz)"));
+                    QCOMPARE(spectrum->plotView()->xMin(),0.);QCOMPARE(spectrum->plotView()->xMax(),128.);
+                    if(q!=1) capture(scope,stem+"-"+id+QString("-spectrum-q%1").arg(q),true);
+                }
+                tabs->setCurrentIndex(0);scope->hide();
+            }
+        }
+    }
     void educationCompensator() {
         using namespace s7tests::education;
         QVERIFY(fileAction("action.open",QString(S7_GUI_EXAMPLES_DIR)+"/education/ct08_lead_lag.s7diagram"));openTeachingGuide("CT08","CT08-lead-lag");QVERIFY(!QTest::currentTestFailed());
@@ -4104,7 +4160,7 @@ private slots:
     static double documentedSeconds(const QString& path) {
         static const QList<std::pair<QString, double>> table{
             {"education/fn04_", 10}, {"education/fn05_", 6}, {"education/fn06_", 30},
-            {"education/ct01_", 5}, {"education/ct02_", 8}, {"education/ct03_", 10}, {"education/fn", 2}, {"education/sp01_", 2}, {"education/sp03_", 2}, {"education/sp05_", 2}, {"education/sp07_", 64}, {"education/sp08_", 2}, {"education/sp09_", 2}, {"education/sp10_", 2}, {"education/ct08_", 64}, {"education/ct06_", 32}, {"education/ct07_", 64}, {"education/ct04_", 16}, {"education/ct05_", 12}, {"education/sp11_", 4}, {"education/sp06_", 4}, {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
+            {"education/ct01_", 5}, {"education/ct02_", 8}, {"education/ct03_", 10}, {"education/fn", 2}, {"education/sp01_", 2}, {"education/sp03_", 2}, {"education/sp05_", 2}, {"education/sp07_", 64}, {"education/sp08_", 2}, {"education/sp09_", 2}, {"education/sp10_", 2}, {"education/ct08_", 64}, {"education/ct06_", 32}, {"education/ct07_", 64}, {"education/ct04_", 16}, {"education/ct05_", 12}, {"education/sp14_", 4}, {"education/sp11_", 4}, {"education/sp06_", 4}, {"surfaces/", 5}, {"complex_functions/", 5}, {"frequency_response/", 2}, {"time_frequency/pll_acquisition", 6}, {"time_frequency/", 8}, {"analysis_elements/", 2},
             {"linear/rlc_resonance", 30}, {"linear/", 10}, {"control/", 12}, {"buck/", 1}, {"pwm_pid_rlc", 1},
             {"relay/", 1200}, {"pendulum/", 100}, {"double_pendulum", 20}, {"van_der_pol/van_der_pol_mu3", 60},
             {"van_der_pol/", 40}, {"lorenz/lorenz_stable", 10}, {"lorenz/", 40}, {"lotka_volterra/", 40},

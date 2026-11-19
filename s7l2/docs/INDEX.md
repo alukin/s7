@@ -83,6 +83,8 @@ add checked feedback states, actuator limits and saved anti-windup edits.
 connect mode powers with measured Bode/Nyquist responses.
 [CT08 — lead/lag compensation](../education/labs/CT08-lead-lag/README.md)
 adds a reusable schema controller, matched-DC comparison and control effort.
+[SP14 — coherent AM](../education/labs/SP14-coherent-am/README.md)
+checks sidebands, phase error, finite-filter states and calibrated spectra.
 [Development evidence](../education/EVIDENCE.md)
 is separate from release qualification. Description frames link to offline
 guides and original MIT online teaching materials.

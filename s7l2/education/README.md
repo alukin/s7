@@ -63,6 +63,11 @@ actual Bode/Nyquist displays.
 [CT08](labs/CT08-lead-lag/README.md) adds an original reusable lead/lag
 comparison with matched DC gain, explicit control effort and cancellation.
 
+[SP14](labs/SP14-coherent-am/README.md) completes the named 24-lab core
+implementation set with independently checked AM sidebands, coherent phase
+error and finite-filter spectra. Release/package and final viewer qualification
+remain separate from these development checks.
+
 The first implemented signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
 predict a filter's response, run and inspect it, then remove one tap and explain
 the changed result. The diagram's description links to the offline S7 guide

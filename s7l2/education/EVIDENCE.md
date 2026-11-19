@@ -1477,3 +1477,99 @@ e7223e63e7354d0047297b394848c9aa973135fe6e5c83b3ccfcc2ae9b912657 s7tests/educati
 01a0b61969e89b89bb04645530f99e0f1d8c56e340395aba4b8ba631b189be88 s7tests/education_compensator_smoke.cpp
 829767fd33165d5de3904d23ef0b638f1612a40ce7aef87dfca23fb7748fdb19 s7studio/tests/gui/workflows_test.cpp
 ```
+
+## SP14 — AM sidebands and a finite coherent detector, 2026-11-19
+
+Baseline: `2095223`. The final named core graph is original and synthetic:
+4 s/256 Hz, message .6 cos(2π4n/Fs) V, 1 V carrier bias, dimensionless 32 Hz
+sine carrier and amplitude-2 local sine. RF is envelope×carrier; mixed is
+RF×local; two independent zero-initialized FirstOrderLag schema instances
+with tau=.02 s recover the envelope. Carrier/local unit 1 is kept in a
+separate Scope from the RF/baseband V channels. No external audio, image,
+MIT handout, runtime plugin or global solver is used.
+
+### Frozen signal and filter contract
+
+RF peak phasors at 28/32/36 Hz are −.3i/−i/−.3i V. The raw mixer is
+(1+.6cos(2π4n/Fs))×(cosφ−cos(2π64n/Fs+φ)). The primary local-phase edit
+0→π/3 therefore halves DC/message, leaves RF unchanged and changes image
+phase rather than halving every spectral component. Quadrature φ=π/2 is a
+limit case: the baseband is suppressed while finite-filter image ripple
+survives. At Fs=256, beta=25/128 and p=103/128; each old-state lag has
+transfer beta/(z−p), and the cascade is its square. Initial recovered samples
+n=0,1,2 are zero; n=3 equals beta²×mixed[1]. Sample n is observed after step
+n+1 at model time (n+1)/Fs, with integer-nanosecond time checked separately.
+
+The independent oracle uses closed-form sinusoids and finite convolution
+with separately derived kernels beta p^(k−1) and beta²(k−1)p^(k−2), not the
+runtime integrator or another S7 graph. Every source, envelope, RF/local/mixer
+value and both nested filter states is checked through the production loader,
+validator/compiler and read-only coherent snapshots. Baseline, π/3 and π/2
+are executed at 256 Hz; an extra baseline is executed at 512 Hz. Fresh baseline
+runs repeat within this process/build. All scalar/complex budgets are 1e−10 V;
+model-time coordinates use 1e−12 s plus nanosecond checks. No cross-platform
+bitwise guarantee or ideal-low-pass reconstruction claim is made.
+
+The steady source-index interval [2Fs,4Fs) is independently direct-DFT checked
+at every bin against the production transform and exact harmonic phasors,
+including DC/Nyquist, image phase, the sampled-filter transfer and one-sided
+Parseval. At 256 Hz, max source/state residual is **1.00808e−13 V** and max
+harmonic residual **3.77503e−14 V**. At 512 Hz these are **7.50511e−13 V** and
+**3.39425e−13 V**. Recovered 4 Hz amplitude is **.498691 V**, 64 Hz image
+**.0231542 V**. Complex 4 Hz error against the intended continuous two-RC
+filter decreases by a factor **2.03048** when the sample period halves;
+recurrence conformance and physical discretization error are kept distinct.
+
+### Studio measurement path
+
+The six literal recorded probe bindings are checked for names, ports and
+units (6,144 journal values/run). Every recording value, every drawn Time
+point and preserved extrema is checked against the independent reference;
+Time plots are zoomed to the first .25 s after full-record checks. The local
+phase F4 edit is saved/reopened/rerun. Actual selected Spectrum interval is
+From 2.002 s to 4 s: exactly 512 source samples n=512…1023, observed steps
+513…1024 at 2.00390625…4 s. This explicitly excludes the sample stamped 2 s.
+
+RF, baseband and mixer spectra use Rectangular, no mean removal, N=512,
+linear full band 0…128 Hz, delta f=.5 Hz. Every frozen input sample, every
+result/plot bin, names/units, model rate and run/step provenance is checked
+against independent direct DFTs for peak amplitude, power/bin and PSD;
+Parseval is checked for the power quantities. Display budgets are 1e−9 in
+the corresponding quantity units, not arbitrary perceptual color tolerance.
+Guides distinguish carrier/local normalization, startup from steady spectra,
+DC from one-sided tone scaling and finite image rejection from ideal textbook
+low-pass assumptions. Original graph/guide, baseline/edited Time plots and
+amplitude/PSD captures are visually reviewed under Xvfb/Mesa.
+
+The focused selection passed **6/6 CTest entries**, **10.43 s**; dedicated
+SP14 GUI **3 passed, 0 failed, 0 skipped**. Log: `/tmp/s7-am-focused.log`;
+artifacts: `build-release/s7studio/gui-artifacts/education-am/`.
+Native Windows, installed/relocated qualification, full bundled-example
+release-render matrix and the collection-wide human viewer review remain open.
+
+### Cumulative core development check
+
+After rebuilding `build-tests` with `--parallel 2`, the combined core/runtime,
+education and Studio selection passed **47/47 CTest entries**, **332.87 s**.
+The ordinary GUI workflow reported **121 passed, 0 failed, 122 skipped**;
+the skipped cases belong to the separate full bundled-example render matrix.
+All twelve dedicated education GUI selections ran without skips. Full output:
+`/tmp/s7-education-core-final-regression.log`. Selection:
+
+```bash
+ctest --test-dir build-release \
+  -R '^(s7tests_education_(sp06|foundations|linear|signals|lti|spectral|convolution|stft|control|loop|compensator|am)|s7core_(smoke|convolution_smoke|integrators_smoke|model_time_smoke|schema_elements_smoke)|s7tests_(linear|control|measurement)_examples_smoke|s7studio_(diagram|model_time|scope_view|spectrum|pair_analysis|response|live_spectrum|time_frequency|surface|viewers|window_lifecycle|live_oscilloscope|display_worker|observer_presentations|gui_workflows|gui_education_(sp06|foundations|linear|signals|lti|spectral|convolution|stft|control|loop|compensator|am)))$' \
+  --output-on-failure -V
+```
+
+All 24 education graphs reproduce byte-for-byte from their twelve generators.
+Static checks cover 122 bundled diagrams and 212 resolved relative links in
+the top-level README and core lab guides. This source-tree link check does
+not qualify installed assets. SP14 SHA-256 provenance:
+
+```text
+06db8987cd9c76ad25bb0f56ede5ac98a4092e33ac074193d6a91867b1a5b57b  examples/education/sp14_coherent_am.s7diagram
+5bb5ccd8474c070ac5f42aa00fef4236dd95b2381a6bffbc68e4a0b769cd5c7f  education/labs/SP14-coherent-am/README.md
+b3dd71fe8b166aee10f535d1bca8e420374a9534d1a6ee057ab6d3c14c4faccf  s7tests/education_am_reference.hpp
+8ed7f1be0be7120ebac3638157583722932757b10f36062c7c3302ff62d16829  s7tests/education_am_smoke.cpp
+```

@@ -25,7 +25,8 @@ source inventory to 110 diagrams. SP05/SP07 add two more, for
 114 diagrams. SP10 adds one, then SP11 adds one, for **116 diagrams**,
 including 18 education labs. CT04/CT05 add two, for **118 diagrams**
 and 20 education labs. CT06/CT07 add two, for **120 diagrams** and
-22 education labs. CT08 adds one, for **121 diagrams** and **23 education labs**.
+22 education labs. CT08 adds one, for 121 diagrams and 23 education labs. SP14 adds the last named core
+graph, bringing the source inventory to **122 diagrams / 24 education labs**.
 Development checks are recorded in EVIDENCE.md;
 final release qualification remains open.
 
@@ -77,15 +78,17 @@ frequency-response/filtering topics. Its equations are independently derived;
 no assignment, figure or solution key is copied. FN01–FN03 illustrate
 MIT 6.003 difference equations, block diagrams and modularity; their new
 contracts and source ledger are recorded in their guides. FN04–FN06 and CT01–CT03 add scalar transfer/pole-map and physical-mode
-contracts, with independent formulas and public MIT topic links. Other labs remain
-`proposed` until their individual source/model contracts are frozen.
+contracts, with independent formulas and public MIT topic links. The other
+24 non-core curriculum items remain proposed until their individual contracts
+are frozen and their implementation is explicitly promoted.
 
 ## The 24 core labs
 
 All paths in the reference column are under `examples/` and are **references,
 not delivered lab diagrams**. Every row needs a new graph and student guide.
-FN01–FN06, CT01–CT08, SP01, SP03 and SP05–SP11 now have new saved graphs and guides. Other entries
-describe planned work, not existing educational files.
+All 24 named core IDs (FN01–FN06, CT01–CT08, SP01/SP03, SP05–SP11 and SP14)
+now have new saved graphs and guides. Their development checks do not imply
+final candidate, package or platform qualification.
 
 | ID | Engineering references inspected | New educational graph and reference work | Development status |
 | --- | --- | --- | --- |
@@ -104,7 +107,7 @@ describe planned work, not existing educational files.
 | SP09 | Spectrum references and `spectrum_test.cpp` | [New graph](../examples/education/sp09_window_normalization.s7diagram), [guide](labs/SP09-window-normalization/README.md); independent complex DFT/window sums and actual viewer normalization | diagram-ready; development checks recorded separately |
 | SP10 | `s7core/tests/convolution_smoke.cpp` | [New scalar graph](../examples/education/sp10_circular_convolution.s7diagram), [guide](labs/SP10-circular-convolution/README.md); direct/DFT sums plus recorded-input FIR/FFT and stream-tail checks | diagram-ready; development checks recorded separately |
 | SP11 | `time_frequency/chirp.s7diagram`, `tone_bursts.s7diagram` | [New burst/chirp graph](../examples/education/sp11_short_time_fourier.s7diagram), [guide](labs/SP11-short-time-fourier/README.md); independent complex STFT, window/hop coordinates, applied map/slice and import checks | diagram-ready; development checks recorded separately |
-| SP14 | `signal_measurement/am_coherent_detection.s7diagram` | New AM/detector graph; sideband formula, discrete filter reference and transient failure case | proposed |
+| SP14 | `signal_measurement/am_coherent_detection.s7diagram` | [New coherent-AM graph](../examples/education/sp14_coherent_am.s7diagram), [guide](labs/SP14-coherent-am/README.md); independent sidebands/phase, finite-convolution states, calibrated spectra and quadrature/refinement cases | diagram-ready; development checks recorded separately |
 | CT01 | `linear/rc_charge_euler.s7diagram`, `control/first_order_open_loop.s7diagram` | [New graph](../examples/education/ct01_first_order.s7diagram), [guide](labs/CT01-first-order/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
 | CT02 | `linear/rlc_step_euler.s7diagram`, `mass_spring_damper_euler.s7diagram` | [New graph](../examples/education/ct02_damped_modes.s7diagram), [guide](labs/CT02-damped-modes/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
 | CT03 | Linear/integrator references | [New graph](../examples/education/ct03_sample_time.s7diagram), [guide](labs/CT03-sample-time/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
@@ -137,6 +140,6 @@ CT08 now checks the compensator, nested plants and actual open-/closed-loop path
    own negative cases. Coordinate G2 only after local SP06 acceptance.
 
 Each batch needs focused tests, student instructions, Studio evidence and
-eventual installed-package checks. The remaining core lab (SP14), source-specific
-reviews, package navigation and final-candidate qualification are open;
+eventual installed-package checks. The named core implementation set is complete with development checks.
+Source/candidate review, package navigation and final-candidate qualification are open;
 no core ID was removed or replaced.

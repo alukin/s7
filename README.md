@@ -60,7 +60,7 @@ recurrences, analytic solutions or reference solvers where appropriate.
 
 ## Learn with S7
 
-The current development tree includes **twenty-three original teaching labs**, with
+The current development tree includes **twenty-four original teaching labs**, with
 new diagrams designed for students. Each guide starts with a question and
 predictions, explains the units and initial state, and gives a small experiment
 to change and explain. Description-frame links open offline student guides
@@ -82,6 +82,7 @@ and original MIT online teaching materials; web links open in the external brows
 | [SP09](s7l2/education/labs/SP09-window-normalization/README.md) | Periodic windows, coherent gain, bandwidth and calibrated spectrum units |
 | [SP10](s7l2/education/labs/SP10-circular-convolution/README.md) | Circular wrap-around, zero-padding and independent verification of FIR/FFT convolution |
 | [SP11](s7l2/education/labs/SP11-short-time-fourier/README.md) | Bursts and chirps, independently checked STFT coefficients, window/hop settings and time–frequency displays |
+| [SP14](s7l2/education/labs/SP14-coherent-am/README.md) | AM sidebands, coherent phase error, finite-filter settling and calibrated recovered spectra |
 | [SP06](s7l2/education/labs/SP06-three-tap-fir/README.md) | A three-tap FIR filter built from explicit delays, gains and a summer |
 
 Start with the [student learning route](s7l2/examples/education/README.md).
@@ -99,7 +100,7 @@ tested numerical envelope. The [verification record](s7l2/education/EVIDENCE.md)
 states the checks, tolerances and remaining qualification.
 
 The [MIT-aligned curriculum](s7l2/education/README.md) plans a broader collection;
-these twenty-three labs have passing development checks, while release/package and
+these twenty-four labs have passing development checks, while release/package and
 platform qualification remain open. They are original S7 exercises with
 links to supporting readings, **not an official or endorsed MIT resource**.
 
