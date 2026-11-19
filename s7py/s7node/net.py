@@ -7,7 +7,8 @@ import time
 
 from s7core.element import Element
 from s7core.errors import SchemaError
-from s7core.params import GENERIC, _integer
+from s7core.params import _integer
+from s7core.spec import GENERIC, Param, Port, T
 
 
 class NetContext:
@@ -18,10 +19,22 @@ class NetContext:
 
 
 NET = NetContext()
-NET_PARAMS = GENERIC + ("stream_id", "max_elements_per_packet", "max_batch_latency_ms", "send_log_max_packets",
-                        "max_block_ms", "max_wait_ms", "producer_node", "consumer_nodes", "max_latency_ms",
-                        "sample_rate", "timestamps")
 _INT64_MAX = 2**63 - 1
+# The stream of a stream end, read by _net_config; an omitted count takes the stream contract's
+# default (stream.StreamConfig).
+NET_PARAMETERS = GENERIC + (
+    Param("stream_id", "string", None, "Stream UUID", required=True),
+    Param("max_elements_per_packet", "int", None, "Values per DATA packet at most", 1, _INT64_MAX),
+    Param("max_batch_latency_ms", "int", None, "Longest wait to fill a packet, ms", 0, _INT64_MAX),
+    Param("send_log_max_packets", "int", None, "Unacknowledged packets kept for replay at most", 1, _INT64_MAX),
+    Param("max_block_ms", "int", None, "Longest wait for room in the send log, ms", 0, _INT64_MAX),
+    Param("max_wait_ms", "int", None, "Longest wait for the next value, ms", 0, _INT64_MAX),
+    Param("producer_node", "string", None, "UUID of the producer node"),
+    Param("consumer_nodes", "object", None, "UUIDs of the consumer nodes"),
+    Param("max_latency_ms", "int", None, "End-to-end latency budget, ms", -_INT64_MAX - 1, _INT64_MAX),
+    Param("sample_rate", "object", None, "Stream sample rate [numerator, denominator]"),
+    Param("timestamps", "object", None, "Timestamp roles carried with the values"))
+NET_PARAMS = tuple(p.name for p in NET_PARAMETERS)
 
 
 def _net_config(params: dict, type_name: str):
@@ -85,7 +98,9 @@ class NetStreamElement(Element):
     """A stream end. Opens its stream on the first step and closes it with the graph; a redeployed
     graph reopens it and continues it. A stream fault makes the step raise."""
 
-    params = NET_PARAMS
+    category = "network"
+    type_variables = (T,)
+    parameters = NET_PARAMETERS
     stateful = True
     role = ""
 
@@ -117,9 +132,10 @@ class NetStreamElement(Element):
 class NetSink(NetStreamElement):
     """Publishes its input to the stream. Without a sample rate it stamps PROCESSING_TIME (UTC)."""
 
+    description = "Publishes its input to a data stream to other nodes (added by the node, not drawn)"
+    input_ports = (Port("in", "Input", type_rule="T"),)
+    output_ports = ()
     role = "producer"
-    input_count = 1
-    output_count = 0
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
@@ -145,6 +161,8 @@ class NetSink(NetStreamElement):
 class NetSource(NetStreamElement):
     """Outputs the next value of the stream, waiting for it (up to max_wait_ms)."""
 
+    description = "Outputs the next value of a data stream from another node (added by the node, not drawn)"
+    output_ports = (Port("out", "Output", type_rule="T"),)
     role = "consumer"
 
     def __init__(self, element_id, params):

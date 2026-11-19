@@ -14,8 +14,8 @@ def _number(params: dict, name: str, default: float) -> float:
     return float(value)
 
 
-def _numbers(params: dict, name: str) -> list[float]:
-    values = params.get(name, [1, 1])
+def _numbers(params: dict, name: str, default=(1, 1)) -> list[float]:
+    values = params.get(name, list(default))
     if not isinstance(values, list) or not values:
         raise SchemaError(f"parameter '{name}' must be a non-empty array of numbers")
     if len(values) == 1 or len(values) > 64:
@@ -50,16 +50,11 @@ def _choice(params: dict, name: str, allowed: tuple[str, ...]) -> str:
     return value
 
 
-# Parameters every element of a kind declares besides its own (builtin_element_registry.cpp).
-GENERIC = ("type",)
-ARITHMETIC = GENERIC + ("overflow",)
-ACCUMULATING = ARITHMETIC + ("accumulator_type",)
-
-
 def _check_params(params: dict, known: tuple[str, ...]) -> None:
+    """Every parameter is declared (known: the declared names), and a type pin is F64."""
     for name in params:
         if name not in known:
-            raise SchemaError(f"unknown parameter '{name}' (known: {', '.join(known)})")
+            raise SchemaError(f"unknown parameter '{name}' " + (f"(known: {', '.join(known)})" if known else "(it has none)"))
     for name in ("type", "accumulator_type"):
         if params.get(name, "F64") != "F64":
             raise SchemaError(f"parameter '{name}': type {params[name]} is not supported (F64 only)")

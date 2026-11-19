@@ -14,7 +14,6 @@ import tempfile
 import unittest
 from fractions import Fraction
 from pathlib import Path
-from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -23,6 +22,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 from s7node import diagram as diagrams  # noqa: E402
 from s7node.graph import (ELEMENT_TYPES, Element, Graph, SchemaError, TrapezoidIntegrator,  # noqa: E402
                           rate_from_hz, rate_from_seconds, rate_from_step_ns, schema_rate)
+from s7core.registry import Registry  # noqa: E402
+from s7core.spec import GENERIC, Port  # noqa: E402
 from s7node.jcs import canonicalize, configuration_digest, loads  # noqa: E402
 
 CERTS = ROOT.parent / "s7l2" / "s7runtime" / "examples" / "certs"
@@ -89,8 +90,8 @@ def run(g, steps, *element_ids):
 class FailOnce(Element):
     """Gain that raises on its second call: a fault in the middle of the causal phase."""
 
-    params = ("type",)
-    input_count = 1
+    input_ports = (Port("in"),)
+    parameters = GENERIC
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
@@ -270,13 +271,15 @@ class GraphTest(unittest.TestCase):
 
     def test_a_failed_step_leaves_every_output_as_it_was(self):
         # NodeRuntime::step: published outputs are all or nothing, and the step is retried.
-        with mock.patch.dict(ELEMENT_TYPES, {"FailOnce": FailOnce}):
-            g = graph([{"id": "one", "type": "Constant", "params": {"value": 1}},
-                       {"id": "count", "type": "Adder", "params": {}},
-                       {"id": "z", "type": "Delay", "params": {}},
-                       {"id": "fail", "type": "FailOnce"},
-                       {"id": "after", "type": "Gain", "params": {"factor": 10}}],
-                      [("one", "count", 0), ("z", "count", 1), ("count", "z", 0), ("count", "fail", 0), ("fail", "after", 0)])
+        types = Registry(ELEMENT_TYPES)
+        types.register(FailOnce)
+        g = Graph(schema([{"id": "one", "type": "Constant", "params": {"value": 1}},
+                          {"id": "count", "type": "Adder", "params": {}},
+                          {"id": "z", "type": "Delay", "params": {}},
+                          {"id": "fail", "type": "FailOnce"},
+                          {"id": "after", "type": "Gain", "params": {"factor": 10}}],
+                         [("one", "count", 0), ("z", "count", 1), ("count", "z", 0), ("count", "fail", 0),
+                          ("fail", "after", 0)]), Fraction(1), types=types)
         ids = ("count", "z", "fail", "after")
         self.assertEqual(run(g, 1, *ids), [(1.0, 0.0, 1.0, 10.0)])
         with self.assertRaisesRegex(ArithmeticError, "injected fault"):

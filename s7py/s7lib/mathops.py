@@ -7,7 +7,9 @@ import operator
 
 from s7core.element import Element
 from s7core.errors import SchemaError
-from s7core.params import GENERIC, _choice, _integer, _number
+from s7core.spec import GENERIC, Param, T, Variadic
+
+from ._ports import IN, OUT, inp
 
 
 # ---- math and control: stateless, direct feedthrough --------------------------------
@@ -54,12 +56,17 @@ TRIG_FUNCTIONS = {
 
 
 class Trig(Element):
-    params = GENERIC + ("function",)
-    input_count = 1
+    display_name = "Trigonometric Function"
+    description = "y = f(x): sin, cos, tan, asin, acos, atan, sinh, cosh or tanh of an arbitrary input"
+    category = "filters"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (Param("function", "enum", "sin", "Which function to apply",
+                                  enum_values=tuple(TRIG_FUNCTIONS)),)
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        self.function = TRIG_FUNCTIONS[_choice(params, "function", tuple(TRIG_FUNCTIONS))]
+        self.function = TRIG_FUNCTIONS[self.read(params, "function")]
 
     def step(self, inputs):
         self.outputs[0] = self.function(inputs[0])
@@ -68,7 +75,11 @@ class Trig(Element):
 class Divider(Element):
     """numerator / denominator; a zero denominator is an execution error, not an infinity."""
 
-    input_count = 2
+    description = "Divide numerator by denominator"
+    category = "basic"
+    input_ports, output_ports = (inp("numerator"), inp("denominator")), OUT
+    type_variables = (T,)
+    parameters = GENERIC
 
     def step(self, inputs):
         numerator, denominator = inputs
@@ -96,16 +107,22 @@ def _reciprocal(x: float) -> float:
 
 
 class MathFunction(Element):
-    params = GENERIC + ("function", "exponent")
-    input_count = 1
+    display_name = "Math Function"
+    description = "Apply a scalar math function"
+    category = "basic"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (Param("function", "enum", "sqrt", "Function applied to the input",
+                                  enum_values=("sqrt", "exp", "log", "pow", "abs", "reciprocal")),
+                            Param("exponent", "value", 2.0, "Exponent used when function is pow"))
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        exponent = _number(params, "exponent", 2.0)
+        exponent = self.read(params, "exponent")
         self.function = {
             "sqrt": _sqrt, "exp": _ieee(math.exp), "log": _log,
             "pow": lambda x: _pow(x, exponent), "abs": abs, "reciprocal": _reciprocal,
-        }[_choice(params, "function", ("sqrt", "exp", "log", "pow", "abs", "reciprocal"))]
+        }[self.read(params, "function")]
 
     def step(self, inputs):
         self.outputs[0] = self.function(inputs[0])
@@ -114,7 +131,11 @@ class MathFunction(Element):
 class Power(Element):
     """base ^ exponent, both inputs."""
 
-    input_count = 2
+    description = "Raise the base input to the exponent input"
+    category = "basic"
+    input_ports, output_ports = (inp("base"), inp("exponent")), OUT
+    type_variables = (T,)
+    parameters = GENERIC
 
     def step(self, inputs):
         self.outputs[0] = _pow(inputs[0], inputs[1])
@@ -123,13 +144,18 @@ class Power(Element):
 class Saturation(Element):
     """Clamps to [lower_limit, upper_limit]; NaN passes through."""
 
-    params = GENERIC + ("lower_limit", "upper_limit")
-    input_count = 1
+    description = "Clamp an input between inclusive limits"
+    category = "basic"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (
+        Param("lower_limit", "value", 0.0, "Inclusive lower output limit in input units; must not exceed upper_limit"),
+        Param("upper_limit", "value", 1.0, "Inclusive upper output limit in input units; must be at least lower_limit"))
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        self.lower = _number(params, "lower_limit", 0.0)
-        self.upper = _number(params, "upper_limit", 1.0)
+        self.lower = self.read(params, "lower_limit")
+        self.upper = self.read(params, "upper_limit")
         if not self.lower <= self.upper:
             raise SchemaError("upper_limit must be at least lower_limit")
 
@@ -142,11 +168,17 @@ class MinMax(Element):
     """Minimum or maximum of 2 to 64 inputs. NaN is ignored while another input is a number;
     of equal values (0.0 and -0.0) the first is kept."""
 
-    params = GENERIC + ("operation", "input_count")
+    description = "Select the minimum or maximum of its inputs"
+    category = "basic"
+    input_ports, output_ports = (inp("in0"), inp("in1")), OUT
+    variadic_inputs = Variadic("input_count", 2, 64, type_rule="T")
+    type_variables = (T,)
+    parameters = GENERIC + (Param("operation", "enum", "min", "Select minimum or maximum", enum_values=("min", "max")),
+                            Param("input_count", "int", 2, "Number of input ports", 2, 64))
 
     def __init__(self, element_id, params):
-        self.maximum = _choice(params, "operation", ("min", "max")) == "max"
-        self.input_count = _integer(params, "input_count", 2, 2, 64)
+        self.maximum = self.read(params, "operation") == "max"
+        self.input_count = self.read(params, "input_count")
         super().__init__(element_id, params)
 
     def step(self, inputs):
@@ -162,7 +194,11 @@ class MinMax(Element):
 class Sign(Element):
     """-1.0, 0.0 or 1.0 (for -0.0 too); NaN passes through."""
 
-    input_count = 1
+    description = "Return -1, 0 or 1 according to the input sign"
+    category = "basic"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC
 
     def step(self, inputs):
         x = inputs[0]
@@ -176,12 +212,16 @@ COMPARATOR_OPERATIONS = {"lt": operator.lt, "le": operator.le, "gt": operator.gt
 class Comparator(Element):
     """1.0 if lhs `operation` rhs holds, else 0.0; IEEE comparison, so only "ne" holds for NaN."""
 
-    params = GENERIC + ("operation",)
-    input_count = 2
+    description = "Output 1 if lhs 'operation' rhs holds, else 0"
+    category = "basic"
+    input_ports, output_ports = (inp("lhs"), inp("rhs")), OUT
+    type_variables = (T,)
+    parameters = GENERIC + (Param("operation", "enum", "lt", "Relational operation applied to lhs and rhs",
+                                  enum_values=tuple(COMPARATOR_OPERATIONS)),)
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        self.operation = COMPARATOR_OPERATIONS[_choice(params, "operation", tuple(COMPARATOR_OPERATIONS))]
+        self.operation = COMPARATOR_OPERATIONS[self.read(params, "operation")]
 
     def step(self, inputs):
         self.outputs[0] = 1.0 if self.operation(inputs[0], inputs[1]) else 0.0
