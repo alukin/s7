@@ -1,0 +1,13 @@
+{
+  "name": "smoothing",
+  "dt": 0.01,
+  "elements": [
+    { "id": "input", "type": "StepGenerator", "params": { "sample_rate_hz": 100, "start_sample": 2 } },
+    { "id": "average", "type": "MovingAverage", "params": { "length": 4 } },
+    { "id": "smooth", "type": "ExponentialSmoother", "params": { "alpha": 0.5 } }
+  ],
+  "connections": [
+    { "from_element": "input", "from_port": 0, "to_element": "average", "to_port": 0 },
+    { "from_element": "input", "from_port": 0, "to_element": "smooth", "to_port": 0 }
+  ]
+}
