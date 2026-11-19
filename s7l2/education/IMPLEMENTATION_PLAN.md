@@ -10,6 +10,13 @@ Related: [curriculum map](COURSE_MAP.md),
 [source and attribution record](SOURCES.md) and
 [0.2.0 work-plan acceptance matrix](../docs/RELEASE_0.2.0_WORKPLAN.md).
 
+**2026-11-19 maintainer revision:** all education deliverables use new,
+purpose-built diagrams in `examples/education/`. Earlier instructions below
+to reuse or adapt existing runnable diagrams are superseded: inspect those
+examples and their tests as engineering references, then design the teaching
+graph afresh. Continue using existing primitives, loaders and test tools.
+The [core manifest](CORE_MANIFEST.md) records per-lab gaps and delivery order.
+
 ## Objective and scope decision
 
 Build an **open, original, MIT-aligned learning laboratory** for signals,
@@ -84,6 +91,15 @@ one mega-PR with 24 examples and no reviewable provenance.
 
 **Exit:** inspectable mapping and prioritized PR list, no silent
 overwriting of earlier established research conclusions.
+
+## Development progress — 2026-11-19
+
+Ten core lessons now have new graphs and student guides: FN01–FN06,
+CT01–CT03 and SP06. The [manifest](CORE_MANIFEST.md) and
+[executed evidence](EVIDENCE.md) distinguish these development checks
+from final release qualification. The next implementation batch is
+**SP01/SP03**, followed by **SP05/SP07**. Package navigation, native
+Windows and the named release-candidate checks remain open.
 
 ## Phase 1 — Classical foundations and discrete modeling (FN)
 

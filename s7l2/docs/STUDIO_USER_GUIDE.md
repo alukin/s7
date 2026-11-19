@@ -91,6 +91,22 @@ font controls. Double-click a frame (or select it and press F4) to edit its text
 with font and size controls in the same dialog. Font changes preserve the text
 selection and apply to the whole frame. Text and formatting changes support
 undo/redo. Text scales normally with diagram zoom.
+
+The text-frame editor offers **Plain text** and **Markdown** formats.
+Plain notes keep their line breaks and formulas; bare HTTP/HTTPS URLs are
+clickable. For a labeled link, choose Markdown and write
+`[MIT convolution lesson](https://sigproc.mit.edu/_static/fall26/lectures/Unit-Sample_Response_and_Convolution-handout.pdf)`.
+Clicking a web link opens your default external browser. A bundled-help link
+such as `[SP06 lab](qrc:/s7studio/help/education/labs/SP06-three-tap-fir/README.md)`
+opens the offline guide inside Studio. Click or drag the frame border to select
+or move it; links themselves activate on a click, not a drag. Frame text remains
+presentation metadata and does not change the executed schema.
+
+Inside **Help → S7 Studio Help**, web references also open externally;
+right-click a web link for **Open Link in External Browser**. Bundled help
+links stay inside the help window with Back/Forward navigation. Internet access
+is needed for MIT online readings, while the bundled S7 lab guide works offline.
+
 With the root or nested diagram focused, **Ctrl++** or **Ctrl+=** zooms in
 and **Ctrl+-** zooms out. Shifted Plus and keypad Plus are supported.
 **Ctrl+mouse wheel** also zooms. These shortcuts leave focused text fields

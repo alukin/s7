@@ -9,6 +9,27 @@
 # they follow (s7::Schema has no schema-wide dt, so each test picks one and
 # passes it explicitly to every element that needs it).
 
+s7_add_test_executable(s7tests_education_sp06 education_sp06_smoke.cpp)
+target_link_libraries(s7tests_education_sp06 PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_education_sp06 PRIVATE
+    S7_SP06_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/sp06_three_tap_fir.s7diagram")
+add_test(NAME s7tests_education_sp06 COMMAND s7tests_education_sp06)
+set_tests_properties(s7tests_education_sp06 PROPERTIES TIMEOUT 30)
+
+s7_add_test_executable(s7tests_education_foundations education_foundations_smoke.cpp)
+target_link_libraries(s7tests_education_foundations PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_education_foundations PRIVATE
+    S7_FOUNDATIONS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+add_test(NAME s7tests_education_foundations COMMAND s7tests_education_foundations)
+set_tests_properties(s7tests_education_foundations PROPERTIES TIMEOUT 30)
+
+s7_add_test_executable(s7tests_education_linear education_linear_smoke.cpp)
+target_link_libraries(s7tests_education_linear PRIVATE s7core s7observe)
+target_compile_definitions(s7tests_education_linear PRIVATE
+    S7_LINEAR_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+add_test(NAME s7tests_education_linear COMMAND s7tests_education_linear)
+set_tests_properties(s7tests_education_linear PROPERTIES TIMEOUT 30)
+
 s7_add_test_executable(s7tests_linear_examples_smoke linear_examples_smoke.cpp)
 target_link_libraries(s7tests_linear_examples_smoke PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_linear_examples_smoke PRIVATE

@@ -235,6 +235,7 @@ add_dependencies(s7studio_app s7studio_build_identity)
 target_compile_definitions(s7studio_app PRIVATE S7STUDIO_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples")
 target_include_directories(s7studio_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/generated)
 file(GLOB_RECURSE S7STUDIO_EXAMPLE_HELP CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/examples/*.md)
+file(GLOB_RECURSE S7STUDIO_EDUCATION_HELP CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/education/*.md)
 qt_add_resources(s7studio_app s7studio_help
     PREFIX /s7studio/help BASE ${PROJECT_SOURCE_DIR}
     FILES
@@ -263,6 +264,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/NUMERICAL_VALIDATION_MATRIX.md
         ${PROJECT_SOURCE_DIR}/docs/RELEASE_0.1.2_NOTES.md
         ${S7STUDIO_EXAMPLE_HELP}
+        ${S7STUDIO_EDUCATION_HELP}
 )
 qt_add_resources(s7studio_app s7studio_legal
     PREFIX /s7studio/legal BASE ${PROJECT_SOURCE_DIR}/..
@@ -483,6 +485,7 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
     s7_add_test_executable(s7studio_gui_capture tests/gui/capture.cpp)
     target_link_libraries(s7studio_gui_capture PRIVATE Qt6::Gui)
     s7_add_test_executable(s7studio_gui_workflows_test tests/gui/workflows_test.cpp)
+    target_include_directories(s7studio_gui_workflows_test PRIVATE "${PROJECT_SOURCE_DIR}/s7tests")
     target_link_libraries(s7studio_gui_workflows_test PRIVATE s7studio_app Qt6::Test)
     target_compile_definitions(s7studio_gui_workflows_test PRIVATE S7_GUI_EXAMPLES_DIR="${PROJECT_SOURCE_DIR}/examples")
     set_target_properties(s7studio_gui_workflows_test PROPERTIES AUTOMOC ON)
@@ -515,6 +518,28 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
     endforeach()
     set_property(TEST s7studio_gui_trajectory APPEND PROPERTY LABELS "rendering;quick3d")
     set_tests_properties(s7studio_gui_workflows PROPERTIES RUN_SERIAL TRUE)
+    add_test(NAME s7studio_gui_education_sp06
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-sp06"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test>
+                helpExternalBrowserLinks diagramFrameLinks educationFirEditAndRerun)
+    set_tests_properties(s7studio_gui_education_sp06 PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_foundations
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-foundations"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> educationFoundations)
+    set_tests_properties(s7studio_gui_education_foundations PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_linear
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-linear"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> educationLinear)
+    set_tests_properties(s7studio_gui_education_linear PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
     # Every bundled example: open, run as documented, inspect each observer
     # window and analysis tab. Several minutes per shard; label "examples".
     set(s7_gui_example_shards 4)

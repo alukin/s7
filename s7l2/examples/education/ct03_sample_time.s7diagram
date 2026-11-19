@@ -1,0 +1,166 @@
+{
+  "id": "ct03_sample_time",
+  "dt": 0.5,
+  "description": "Original S7 lesson CT03; see its linked student guide.",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 10,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 355,
+    "height_mm": 280
+  },
+  "schema": {
+    "name": "CT03 \u2014 Can a slow sample rate invent growth?",
+    "dt": 0.5,
+    "elements": [
+      {
+        "id": "state",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 1
+        }
+      },
+      {
+        "id": "derivative",
+        "type": "Gain",
+        "params": {
+          "factor": -1
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "state",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 0
+      },
+      {
+        "from_element": "derivative",
+        "from_port": 0,
+        "to_element": "state",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "state",
+        "position": [
+          8,
+          23
+        ],
+        "title": "Decaying state: starts at 1 V"
+      },
+      {
+        "id": "derivative",
+        "position": [
+          27,
+          35
+        ],
+        "title": "Derivative = \u2212state / 1 s"
+      },
+      {
+        "id": "scope",
+        "position": [
+          48,
+          23
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "state"
+          ],
+          "channel_units": [
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "derivative",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "state",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "state",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT03 \u2014 Can a slow sample rate invent growth?**  \n**Can the sample interval change a correct model into an unstable calculation?** Run **10 s at 2 Hz**, then open Scope.  \nAt 2 Hz: 1, 0.5, 0.25 V. Physical decay is always positive; Euler pole = 1\u2212h.  \nSet Run Configuration frequency to 0.4 Hz, keep 10 s. Predict 1, \u22121.5, 2.25, \u22123.375 V.  \n[Open CT03 student lab](qrc:/s7studio/help/education/labs/CT03-sample-time/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1241,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

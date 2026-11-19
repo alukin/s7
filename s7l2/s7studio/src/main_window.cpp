@@ -711,6 +711,7 @@ void MainWindow::buildUi()
     diagramEditor_->setDesignRateSource([this] { return document_.frequencyHz(); });
     connect(diagramEditor_, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
     connect(diagramEditor_, &diagram::DiagramEditor::elementPropertiesRequested, this, &MainWindow::showElementProperties);
+    connect(diagramEditor_, &diagram::DiagramEditor::helpLinkActivated, this, [this](const QUrl& link) { openHelpLink(this, link); });
     schemaTabs_=new SchemaTabs(widgets.diagramTabs,diagramEditor_,this);
     connect(schemaTabs_,&SchemaTabs::message,this,&MainWindow::appendLog);
     connect(schemaTabs_,&SchemaTabs::editorOpened,this,[this](diagram::DiagramEditor* editor) {
@@ -719,6 +720,7 @@ void MainWindow::buildUi()
         connect(editor, &diagram::DiagramEditor::libraryElementAdded, this, &MainWindow::onLibraryElementAdded);
         connect(editor,&diagram::DiagramEditor::elementNodeDoubleClicked,this,&MainWindow::onElementNodeDoubleClicked);
         connect(editor,&diagram::DiagramEditor::elementPropertiesRequested,this,&MainWindow::showElementProperties);
+        connect(editor, &diagram::DiagramEditor::helpLinkActivated, this, [this](const QUrl& link) { openHelpLink(this, link); });
         connect(editor->scene(),&diagram::DiagramScene::diagramChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QGraphicsScene::selectionChanged,this,&MainWindow::syncTextFrameStyleControls);
         connect(editor->scene(),&QSchematic::Scene::modeChanged,this,[this,editor](int mode) {
@@ -1092,6 +1094,12 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
             size->setSuffix(QStringLiteral(" pt"));
             formatting->addRow(QStringLiteral("Font"), family);
             formatting->addRow(QStringLiteral("Size"), size);
+            auto* format = new QComboBox(&dialog);
+            format->setObjectName(QStringLiteral("frame.textFormat"));
+            format->addItem(QStringLiteral("Plain text"), QStringLiteral("plain"));
+            format->addItem(QStringLiteral("Markdown (formatted text and links)"), QStringLiteral("markdown"));
+            format->setCurrentIndex(json_utils::stringValue(params, "text_format", "plain") == "markdown" ? 1 : 0);
+            formatting->addRow(QStringLiteral("Text format"), format);
             layout->addLayout(formatting);
             auto* text = new QPlainTextEdit(QString::fromStdString(json_utils::stringValue(params, "text", "")), &dialog);
             text->setObjectName(QStringLiteral("frame.text"));
@@ -1113,6 +1121,7 @@ void MainWindow::onElementNodeDoubleClicked(const QString& elementId,
             text->setFocus();
             if (dialog.exec() != QDialog::Accepted) return;
             params["text"] = text->toPlainText().toStdString();
+            params["text_format"] = format->currentData().toString().toStdString();
             if (family->currentFont().family() != initialFamily) params["font_family"] = family->currentFont().family().toStdString();
             if (size->value() != initialSize) params["font_size"] = size->value();
             scene->changeTextFrame(frame, std::move(params));

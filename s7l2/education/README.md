@@ -3,9 +3,35 @@
 **Status: curriculum and verification plan, not a shipped course bundle.**
 Planning baseline: 2026-11-18. The [course map](COURSE_MAP.md) contains
 **48 proposed lab exercises**, not 48 implemented or qualified diagrams.
-Some reuse the existing S7 example library; some need new diagrams,
-references or capabilities. Never advertise an exercise as complete simply
+Each delivered lab needs a new educational diagram; existing examples
+provide engineering references. Some topics also need new capabilities. Never advertise an exercise as complete simply
 because its prerequisite S7 example runs.
+
+**Maintainer decision, 2026-11-19:** create new diagrams specifically for
+the education collection, under `examples/education/`. Existing examples
+and tests are implementation references, not the diagrams delivered as labs.
+Each educational diagram remains canonical for its lab and may be linked
+from several course routes. See the [core implementation manifest](CORE_MANIFEST.md).
+
+New students can now start with [FN01 — one sample of memory](labs/FN01-unit-delay/README.md),
+then [FN02 — natural and forced response](labs/FN02-natural-forced/README.md)
+and [FN03 — initial conditions](labs/FN03-initial-conditions/README.md).
+These new diagrams save a short 20-sample run and link directly to their
+student guides and MIT readings. See the [learning route](../examples/education/README.md).
+
+Continue with [FN04 — impulse and transfer](labs/FN04-impulse-transfer/README.md),
+[FN05 — integration rules](labs/FN05-integration-rules/README.md),
+[FN06 — pole maps](labs/FN06-pole-maps/README.md), then
+[CT01 — first-order charging](labs/CT01-first-order/README.md),
+[CT02 — damped motion](labs/CT02-damped-modes/README.md) and
+[CT03 — sample interval](labs/CT03-sample-time/README.md). These six new lessons
+include independent formulas, deliberate failure cases and Studio workflows.
+
+The first signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
+predict a filter's response, run and inspect it, then remove one tap and explain
+the changed result. The diagram's description links to the offline S7 guide
+and MIT online teaching materials. [Development evidence](EVIDENCE.md) records
+exact checks and remaining qualification.
 
 S7 is an independent open-source educational/research project, **not an
 official MIT course resource or MIT-endorsed product**. This collection
@@ -20,6 +46,14 @@ explicit causal networks, comparing measured behavior with independent
 equations, and discovering when a method or model fails. The visible graph,
 initial state, delay placement, signal rate and observation path are part of
 the experiment—not implementation details to hide.
+
+The labs also serve as **executable specifications for S7**. An independent
+reference fixes the equations, units, initial state, sample convention and
+numerical method; the saved graph must reproduce the declared behavior and
+its limits. A matching plot alone is insufficient. This establishes bounded
+conformance for the tested model, not a proof of every runtime path. Claims
+of reproducing a book example additionally require its exact edition,
+page and equations to be recorded and cross-checked.
 
 A standard lab has an estimated learning time, prerequisites, a defined
 mathematical problem, a diagram (or construction steps), a headless
@@ -56,9 +90,9 @@ This order is pedagogical, not a mandate to implement lab IDs in sequence.
 
 ## One model, several curricula
 
-The canonical runnable files remain under
-[`../examples/`](../examples/README.md). The curriculum references them
-rather than copying diagrams into multiple courses. An RC response can
+The new canonical runnable files live under
+[`../examples/education/`](../examples/education/README.md). The curriculum
+references them rather than copying diagrams into multiple courses. An RC response can
 support a circuit lesson, a discrete approximation lesson and an intro
 control lesson using distinct lab questions and verification conditions.
 **Count an instructional exercise once by its lab ID**, not once per

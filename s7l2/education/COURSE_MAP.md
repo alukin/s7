@@ -14,6 +14,12 @@ official lab numbers, problem solutions or MIT endorsement. See
 
 ## Map conventions
 
+**2026-11-19 maintainer revision:** build new educational diagrams for
+every delivered lab. The R/A/N inventory below describes reference material
+and estimated conceptual overlap only; it no longer selects existing files
+for delivery. Canonical education diagrams live in `examples/education/`;
+the [core manifest](CORE_MANIFEST.md) tracks actual implementation and gaps.
+
 - **R — reuse/audit:** one or more suitable existing example diagrams;
   verify and augment rather than duplicate.
 - **A — adapt/extend:** existing behavior is a starting point but needs
@@ -172,7 +178,8 @@ Advanced extensions: CT10 → CT11 → CT12/CT13 → CT14
   Do not substitute a screenshot, untested variant, or an existing directory
   name for qualified core coverage. A maintainer may revise the target,
   with explicit justification, before tagging.
-- Use the existing diagrams wherever appropriate; do not create 48 copies.
+- Create new educational diagrams; do not copy an old graph or create
+  duplicate copies for different course routes. Existing examples are references.
 - New core work should be prioritized by the
   [implementation plan](IMPLEMENTATION_PLAN.md). Each lab advances its status
   only through [LAB_STANDARD](LAB_STANDARD.md) evidence.

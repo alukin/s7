@@ -58,6 +58,15 @@ are qualification **targets**, not completed tests. See the
 [source review](../education/SOURCES.md) and
 [lab quality standard](../education/LAB_STANDARD.md).
 
+The [core implementation manifest](../education/CORE_MANIFEST.md) records the
+2026-11-19 decision to create new educational diagrams and the remaining gaps.
+Begin with [FN01 — one sample of memory](../education/labs/FN01-unit-delay/README.md),
+then FN02–FN06 and CT01–CT03 in the [learning route](../examples/education/README.md).
+[SP06 — three-tap FIR](../education/labs/SP06-three-tap-fir/README.md) applies
+the delay concept to filtering. [Development evidence](../education/EVIDENCE.md)
+is separate from release qualification. Description frames link to offline
+guides and original MIT online teaching materials.
+
 The [0.2.0 work plan](RELEASE_0.2.0_WORKPLAN.md) remains the single
 [status and acceptance matrix](RELEASE_0.2.0_WORKPLAN.md#status-and-acceptance-matrix),
 with the delivered N0–N4 research, existing runtime baseline,

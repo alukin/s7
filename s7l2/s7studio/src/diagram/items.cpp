@@ -24,6 +24,9 @@
 #include <QPainterPath>
 #include <QPen>
 #include <QTextOption>
+#include <QAbstractTextDocumentLayout>
+#include <QRegularExpression>
+#include <QTextCursor>
 #include <QTimer>
 
 #include <algorithm>
@@ -685,6 +688,7 @@ auto TextFrameNode::defaultParams() -> boost::json::object
 {
     return boost::json::object{
         {"text", "Text frame"},
+        {"text_format", "plain"},
         {"text_color", "#202020"},
         {"line_color", "#444444"},
         {"fill_color", "#fff4cc"},
@@ -709,7 +713,40 @@ void TextFrameNode::setParams(const boost::json::object& params)
     params_["height"] = std::max(40.0, number("height", 120.0));
     params_["font_size"] = std::max(kMinimumFontPoints, json_utils::intValue(params_, "font_size", kDefaultFontPoints));
     setSize(params_.at("width").as_double(), params_.at("height").as_double());
+    QFont font(QString::fromStdString(json_utils::stringValue(params_, "font_family", "Sans Serif")));
+    font.setPointSize(json_utils::intValue(params_, "font_size", kDefaultFontPoints));
+    textDocument_.setDefaultFont(font);
+    textDocument_.setDocumentMargin(0);
+    textDocument_.setTextWidth(width() - 20);
+    const auto text = QString::fromStdString(json_utils::stringValue(params_, "text", ""));
+    if (json_utils::stringValue(params_, "text_format", "plain") == "markdown") {
+        textDocument_.setMarkdown(text);
+    } else {
+        textDocument_.setPlainText(text);
+        // Plain notes retain their line breaks and mathematical punctuation.
+        // Bare web references can still be activated without Markdown syntax.
+        static const QRegularExpression urls(QStringLiteral(R"(https?://[^\s<>"\x{2028}\x{2029}]+)"));
+        auto matches = urls.globalMatch(text);
+        while (matches.hasNext()) {
+            const auto match = matches.next();
+            auto url = match.captured();
+            while (url.endsWith('.') || url.endsWith(',') || url.endsWith(';')) url.chop(1);
+            QTextCursor cursor(&textDocument_);
+            cursor.setPosition(static_cast<int>(match.capturedStart()));
+            cursor.setPosition(static_cast<int>(match.capturedStart()+url.size()), QTextCursor::KeepAnchor);
+            QTextCharFormat format;
+            format.setAnchor(true); format.setAnchorHref(url);
+            format.setForeground(QColor("#1565c0")); format.setFontUnderline(true);
+            cursor.mergeCharFormat(format);
+        }
+    }
     update();
+}
+
+auto TextFrameNode::linkAt(const QPointF localPosition) const -> QUrl
+{
+    if (!sizeRect().adjusted(10, 8, -10, -8).contains(localPosition)) return {};
+    return QUrl(textDocument_.documentLayout()->anchorAt(localPosition-QPointF(10, 8)));
 }
 
 std::shared_ptr<QSchematic::Items::Item> TextFrameNode::deepCopy() const
@@ -728,13 +765,13 @@ void TextFrameNode::paint(QPainter* painter, const QStyleOptionGraphicsItem*, QW
     painter->setBrush(color("fill_color", "#fff4cc"));
     painter->drawRect(sizeRect());
 
-    QFont font(QString::fromStdString(json_utils::stringValue(params_, "font_family", "Sans Serif")));
-    font.setPointSize(json_utils::intValue(params_, "font_size", kDefaultFontPoints));
-    painter->setFont(font);
-    painter->setPen(color("text_color", "#202020"));
-    QTextOption option(Qt::AlignLeft | Qt::AlignTop);
-    option.setWrapMode(QTextOption::WordWrap);
-    painter->drawText(sizeRect().adjusted(10.0, 8.0, -10.0, -8.0), QString::fromStdString(json_utils::stringValue(params_, "text", "")), option);
+    painter->save();
+    painter->setClipRect(sizeRect().adjusted(10, 8, -10, -8));
+    painter->translate(10, 8);
+    QAbstractTextDocumentLayout::PaintContext context;
+    context.palette.setColor(QPalette::Text, color("text_color", "#202020"));
+    textDocument_.documentLayout()->draw(painter, context);
+    painter->restore();
 }
 
 // WireEnd

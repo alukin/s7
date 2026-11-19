@@ -18,6 +18,13 @@ and historical implementation plans in their existing documents and Git
 history. Do not duplicate them here or silently convert experiments into
 production guarantees.
 
+**Education delivery update, 2026-11-19:** the maintainer requested new
+purpose-built diagrams rather than reuse of older examples. The
+[core manifest](../education/CORE_MANIFEST.md) audits the 24 core targets and
+records SP06, FN01–FN03 and the new FN04–FN06/CT01–CT03 batch. Their
+[development evidence](../education/EVIDENCE.md)
+does not close an educational or release gate.
+
 ## Status and acceptance matrix
 
 Definitions: **Implemented** means code is present, not release-qualified;
@@ -30,7 +37,7 @@ must not be reported as final-candidate tests.
 | Item / release gate | Status at scope revision | Existing evidence | Required remaining acceptance | Lead |
 | --- | --- | --- | --- | --- |
 | **G1 — Local numerical and semantic regressions** | Implemented baseline; final gate open | [Numerical matrix](NUMERICAL_VALIDATION_MATRIX.md), [integrator review](INTEGRATOR_REVIEW_2026-11-17.md), [0.1.2 notes](RELEASE_0.1.2_NOTES.md) | Complete final-candidate numerical/causality/type/rate/rollback/reference tests, including supported coupled methods; preserve recorded envelopes | Maintainer/Codex |
-| **G1 / EDU — MIT-aligned teaching laboratories** | Curriculum proposed; per-lab qualification open | [course map](../education/COURSE_MAP.md), [existing examples](../examples/README.md), [lab standard](../education/LAB_STANDARD.md) | Audit/reuse existing canonical diagrams; qualify the agreed 24 named core labs with independent oracles, failure/limitation cases, source attribution, Studio workflows and release-package checks; list blocked cases explicitly | Maintainer/Codex |
+| **G1 / EDU — MIT-aligned teaching laboratories** | Curriculum proposed; per-lab qualification open | [course map](../education/COURSE_MAP.md), [existing examples](../examples/README.md), [lab standard](../education/LAB_STANDARD.md) | Create new educational diagrams using older examples only as references; qualify the agreed 24 named core labs with independent oracles, failure/limitation cases, source attribution, Studio workflows and release-package checks; list blocked cases explicitly | Maintainer/Codex |
 | **G2 — Practical two-host engineering workflow** | Headless transport and static scheduler implemented in bounded profiles; end-to-end demo open | [ADR-027](../../doc/S7_Architectural_Decisions.md#adr-027), [schedule contract](DISTRIBUTED_CAUSAL_SCHEDULE.md), [Phase 4](CROSS_NODE_CAUSALITY_PHASE4.md) | Two physical hosts, useful deterministic input → processing → recorded/observed output, independent reference and resource metrics; separate multiprocess feedback/invalid-cycle regressions | Maintainer/Codex, coordinated with teren_ukr |
 | **G3 / D0 — Common distributed contract and test matrix** | Partial | C++/Python existing control and F64 data streams; shared fixtures; [transport lab](../../s7py/tools/transport_lab/README.md) | Freeze supported topology, security/transport profiles, host and resource envelopes; record expected pass/fail matrix; make cross-language checks required CI | teren_ukr |
 | **G3 / D1 — Python data-profile parity** | Partial | Python F64 mTLS graph streams, ACK/RESUME and fault handling | Explicit split data listener and trusted-plaintext policy plus negative cases with C++; no implied Python cross-node static-feedback scheduling | teren_ukr |
@@ -78,9 +85,11 @@ The [education implementation plan](../education/IMPLEMENTATION_PLAN.md)
 owns the detailed Codex handoff. The education track may progress in
 parallel with the D0–D2 distributed workstream:
 
-1. Audit the actual diagrams, generators and tests; map each planned
-   core lab to reusable, adaptable or missing canonical diagrams. Do
-   not infer readiness from filenames or screenshots.
+1. Audit the actual diagrams, generators and tests as implementation
+   references. Per the maintainer's 2026-11-19 decision, create new
+   purpose-built educational diagrams in `examples/education/`; do not
+   deliver the older examples as labs. Track gaps in the
+   [core manifest](../education/CORE_MANIFEST.md).
 2. Verify primary-source topic alignment and any exact book references;
    write original S7 exercises, not copied MIT problems/answer keys.
 3. Implement the **FN01–FN06, SP01/SP03/SP05–SP11/SP14 and

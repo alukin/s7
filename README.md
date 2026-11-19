@@ -1,4 +1,4 @@
-# S7 — Signals and systems for research and engineering
+# S7 — Signals and systems for learning, research and engineering
 
 > “… everything simple is true and everything complicated is untrue.”
 >
@@ -10,8 +10,8 @@ S7 is inspired first and foremost by **MIT Professor William McC. Siebert's
 [*Circuits, Signals, and Systems*](https://mitpress.mit.edu/9780262690959/circuits-signals-and-systems/)**:
 understanding a system through its signals, interconnected blocks, state and
 feedback. S7 turns that way of thinking into an open-source tool for
-**researchers, scientists and engineers** to build models, run experiments and
-inspect their results.
+**students, researchers, scientists and engineers** to build models, run
+experiments and inspect their results.
 
 The project grows out of long practical experience with signal processing,
 software-defined radio, distributed sensing and dynamic-system modeling.
@@ -54,14 +54,43 @@ recorded Scope results and Live Oscilloscope views.
   implemented single-rate scope and its limits.
 
 The bundled [examples and experiment guides](s7l2/examples/README.md) are a
-starting point for changing a model and checking what follows. The
-[MIT-aligned teaching curriculum](s7l2/education/README.md)
-proposes original S7 laboratories aligned with topics in contemporary
-signals, systems and control education. This collection is still in
-development and is **not an official or endorsed MIT resource**.
-Numerical guides
+starting point for changing a model and checking what follows. Numerical guides
 state the equations and initialization conventions; tests use independent
 recurrences, analytic solutions or reference solvers where appropriate.
+
+## Learn with S7
+
+The current development tree includes **ten original teaching labs**, with
+new diagrams designed for students. Each guide starts with a question and
+predictions, explains the units and initial state, and gives a small experiment
+to change and explain. Description-frame links open offline student guides
+and original MIT online teaching materials; web links open in the external browser.
+
+| Labs | What you investigate |
+| --- | --- |
+| [FN01–FN03](s7l2/education/labs/FN01-unit-delay/README.md) | Unit delay, natural and forced response, and initial conditions |
+| [FN04–FN06](s7l2/education/labs/FN04-impulse-transfer/README.md) | Impulse response and transfer functions, integration rules, and stability versus accuracy |
+| [CT01–CT03](s7l2/education/labs/CT01-first-order/README.md) | First-order charging, damped motion, and numerical instability caused by a coarse sample interval |
+| [SP06](s7l2/education/labs/SP06-three-tap-fir/README.md) | A three-tap FIR filter built from explicit delays, gains and a summer |
+
+Start with the [student learning route](s7l2/examples/education/README.md).
+In a current source build of Studio, choose **File → Example Diagrams… →
+education → fn01_unit_delay.s7diagram**. Predict the first samples using its
+guide, click **Run** and keep the saved settings, then double-click
+**Compare the named signals** to open Scope. Follow the guide's parameter
+experiment and explain the changed result.
+
+These labs also serve as **executable specifications for S7**. Independent
+formulas check the saved graphs' samples, initial conditions, timing and
+expected failure cases; Studio checks cover opening, editing, saving and
+rerunning them. Agreement provides evidence for each declared model and
+tested numerical envelope. The [verification record](s7l2/education/EVIDENCE.md)
+states the checks, tolerances and remaining qualification.
+
+The [MIT-aligned curriculum](s7l2/education/README.md) plans a broader collection;
+these ten labs have passing development checks, while release/package and
+platform qualification remain open. They are original S7 exercises with
+links to supporting readings, **not an official or endorsed MIT resource**.
 
 ## How S7 works
 

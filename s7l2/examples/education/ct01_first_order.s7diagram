@@ -1,0 +1,304 @@
+{
+  "id": "ct01_first_order",
+  "dt": 0.1,
+  "description": "Original S7 lesson CT01; see its linked student guide.",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 5,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 420,
+    "height_mm": 280
+  },
+  "schema": {
+    "name": "CT01 \u2014 A capacitor takes time to charge",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "input",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "difference",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "tau",
+        "type": "Constant",
+        "params": {
+          "value": 1
+        }
+      },
+      {
+        "id": "derivative",
+        "type": "Divider",
+        "params": {}
+      },
+      {
+        "id": "voltage",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "difference",
+        "to_port": 0
+      },
+      {
+        "from_element": "voltage",
+        "from_port": 0,
+        "to_element": "difference",
+        "to_port": 1
+      },
+      {
+        "from_element": "difference",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 0
+      },
+      {
+        "from_element": "tau",
+        "from_port": 0,
+        "to_element": "derivative",
+        "to_port": 1
+      },
+      {
+        "from_element": "derivative",
+        "from_port": 0,
+        "to_element": "voltage",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "input",
+        "position": [
+          3,
+          22
+        ],
+        "title": "Supply: 1 V"
+      },
+      {
+        "id": "difference",
+        "position": [
+          17,
+          22
+        ],
+        "title": "Supply minus capacitor voltage"
+      },
+      {
+        "id": "tau",
+        "position": [
+          17,
+          35
+        ],
+        "title": "Time constant RC: 1 s"
+      },
+      {
+        "id": "derivative",
+        "position": [
+          33,
+          22
+        ],
+        "title": "Divide by RC: derivative (V/s)"
+      },
+      {
+        "id": "voltage",
+        "position": [
+          49,
+          22
+        ],
+        "title": "Capacitor voltage: starts at 0 V"
+      },
+      {
+        "id": "scope",
+        "position": [
+          65,
+          22
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "input",
+            "voltage"
+          ],
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "difference",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "difference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "tau",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "derivative",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "derivative",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "voltage",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "voltage",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT01 \u2014 A capacitor takes time to charge**  \n**What does a one-second time constant mean?** Run **5 s at 10 Hz**, then open Scope.  \nPhysical voltage at t=1 s: 0.63212 V. Forward Euler at h=0.1 s: 0.65132 V.  \nChange tau value 1 \u2192 2; rerun. Does charging get faster or slower? State time = Scope time minus h.  \n[Open CT01 student lab](qrc:/s7studio/help/education/labs/CT01-first-order/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec04/) \u00b7 [S7 integrator rules](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1487,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

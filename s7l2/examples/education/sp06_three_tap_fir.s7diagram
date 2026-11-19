@@ -1,0 +1,577 @@
+{
+  "id": "three_tap_fir",
+  "dt": 0.0033333333333333335,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 500,
+    "height_mm": 360
+  },
+  "schema": {
+    "name": "three_tap_fir",
+    "dt": 0.0033333333333333335,
+    "elements": [
+      {
+        "id": "dc",
+        "type": "Constant",
+        "params": {
+          "value": 0.25
+        }
+      },
+      {
+        "id": "tone_low",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 10,
+          "phase": 0.2
+        }
+      },
+      {
+        "id": "tone_zero",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 0.5,
+          "frequency_hz": 100,
+          "phase": 0.7
+        }
+      },
+      {
+        "id": "source",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "delay1",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "delay2",
+        "type": "Delay",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "tap0",
+        "type": "Gain",
+        "params": {
+          "factor": 0.3333333333333333
+        }
+      },
+      {
+        "id": "tap1",
+        "type": "Gain",
+        "params": {
+          "factor": 0.3333333333333333
+        }
+      },
+      {
+        "id": "tap2",
+        "type": "Gain",
+        "params": {
+          "factor": 0.3333333333333333
+        }
+      },
+      {
+        "id": "filtered",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1,
+            1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "dc",
+        "from_port": 0,
+        "to_element": "source",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone_low",
+        "from_port": 0,
+        "to_element": "source",
+        "to_port": 1
+      },
+      {
+        "from_element": "tone_zero",
+        "from_port": 0,
+        "to_element": "source",
+        "to_port": 2
+      },
+      {
+        "from_element": "source",
+        "from_port": 0,
+        "to_element": "tap0",
+        "to_port": 0
+      },
+      {
+        "from_element": "source",
+        "from_port": 0,
+        "to_element": "delay1",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay1",
+        "from_port": 0,
+        "to_element": "delay2",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay1",
+        "from_port": 0,
+        "to_element": "tap1",
+        "to_port": 0
+      },
+      {
+        "from_element": "delay2",
+        "from_port": 0,
+        "to_element": "tap2",
+        "to_port": 0
+      },
+      {
+        "from_element": "tap0",
+        "from_port": 0,
+        "to_element": "filtered",
+        "to_port": 0
+      },
+      {
+        "from_element": "tap1",
+        "from_port": 0,
+        "to_element": "filtered",
+        "to_port": 1
+      },
+      {
+        "from_element": "tap2",
+        "from_port": 0,
+        "to_element": "filtered",
+        "to_port": 2
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "input",
+      "element": "source",
+      "port": 0,
+      "unit": "V"
+    },
+    {
+      "name": "filtered",
+      "element": "filtered",
+      "port": 0,
+      "unit": "V"
+    }
+  ],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "dc",
+        "position": [
+          3,
+          17
+        ],
+        "title": "DC: 0.25 V"
+      },
+      {
+        "id": "tone_low",
+        "position": [
+          3,
+          29
+        ],
+        "title": "Retained: 10 Hz, 1 Vpk"
+      },
+      {
+        "id": "tone_zero",
+        "position": [
+          3,
+          41
+        ],
+        "title": "Rejected: 100 Hz, 0.5 Vpk"
+      },
+      {
+        "id": "source",
+        "position": [
+          16,
+          29
+        ],
+        "title": "x[n]: DC + two tones"
+      },
+      {
+        "id": "delay1",
+        "position": [
+          29,
+          41
+        ],
+        "title": "x[n-1], initially zero"
+      },
+      {
+        "id": "delay2",
+        "position": [
+          42,
+          53
+        ],
+        "title": "x[n-2], initially zero"
+      },
+      {
+        "id": "tap0",
+        "position": [
+          42,
+          17
+        ],
+        "title": "h[0] = 1/3"
+      },
+      {
+        "id": "tap1",
+        "position": [
+          55,
+          29
+        ],
+        "title": "h[1] = 1/3"
+      },
+      {
+        "id": "tap2",
+        "position": [
+          55,
+          53
+        ],
+        "title": "h[2] = 1/3"
+      },
+      {
+        "id": "filtered",
+        "position": [
+          68,
+          29
+        ],
+        "title": "y[n]: three-tap average"
+      },
+      {
+        "id": "scope",
+        "position": [
+          81,
+          29
+        ],
+        "title": "Input and filtered output",
+        "observer": true,
+        "type": "Scope",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "input",
+            "filtered"
+          ],
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "dc",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "source",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "tone_low",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "source",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "tone_zero",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "source",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tap0",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            27,
+            31
+          ],
+          [
+            27,
+            19
+          ]
+        ]
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "delay1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "delay2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "delay1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tap1",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            40,
+            43
+          ],
+          [
+            40,
+            31
+          ]
+        ]
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "delay2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "tap2",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "tap0",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "filtered",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "tap1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "filtered",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "tap2",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "filtered",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "source",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": [
+          [
+            27,
+            31
+          ],
+          [
+            27,
+            16
+          ],
+          [
+            78,
+            16
+          ],
+          [
+            78,
+            31
+          ]
+        ]
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "filtered",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP06: three-tap FIR / moving average**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Break \u2192 Explain.** Run 4 s at 300 Hz; double-click Scope.  \n`y[n]=(x[n]+x[n-1]+x[n-2])/3`, `x[n<0]=0`. Step k samples n=k\u22121 at time k/300 s.  \nPredict: DC stays 0.25 V; 10 Hz gain \u2248 0.98543, phase \u221212\u00b0; 100 Hz cancels.  \nTry: change tap1 factor to 0 and rerun. What happens to the mean and 100 Hz tone?  \n[Open student lab](qrc:/s7studio/help/education/labs/SP06-three-tap-fir/README.md) \u00b7 [MIT convolution lesson](https://sigproc.mit.edu/_static/fall26/lectures/Unit-Sample_Response_and_Convolution-handout.pdf) \u00b7 [MIT block diagrams](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/) \u00b7 Original S7 exercise, not an official MIT resource.",
+          "text_format": "markdown",
+          "width": 1770,
+          "height": 280,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

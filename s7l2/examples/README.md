@@ -17,6 +17,24 @@ For a course-oriented route through these canonical diagrams, see the
 These are **planned original S7 teaching exercises**, not a claim
 that 48 MIT examples are implemented, verified or officially endorsed.
 
+## Education laboratories
+
+New diagrams designed specifically for teaching; see the
+[education diagram guide](education/README.md) and per-lab evidence.
+
+| Lab | Diagram |
+| --- | --- |
+| FN01 — One sample of memory | [Unit-delay feedback](education/fn01_unit_delay.s7diagram) |
+| FN02 — Natural and forced response | [Three input/state experiments](education/fn02_natural_forced.s7diagram) |
+| FN03 — Initial conditions | [Separate input and stored past](education/fn03_initial_conditions.s7diagram) |
+| FN04 — From one pulse to a transfer function | [New teaching graph](education/fn04_impulse_transfer.s7diagram) |
+| FN05 — Three rules for the same decay | [New teaching graph](education/fn05_integration_rules.s7diagram) |
+| FN06 — Stable does not mean accurate | [New teaching graph](education/fn06_pole_maps.s7diagram) |
+| CT01 — A capacitor takes time to charge | [New teaching graph](education/ct01_first_order.s7diagram) |
+| CT02 — How damping changes a spring | [New teaching graph](education/ct02_damped_modes.s7diagram) |
+| CT03 — Can a slow sample rate invent growth? | [New teaching graph](education/ct03_sample_time.s7diagram) |
+| SP06 — Three-tap FIR | [Three-tap moving average](education/sp06_three_tap_fir.s7diagram) |
+
 ## Starter and standalone experiments
 
 | Diagram | Guide |
@@ -239,7 +257,7 @@ Fourier and wavelet coefficients computed by optional plugins. [Experiment guide
 | [fourier coefficient](analysis_elements/fourier_coefficient.s7diagram) |
 | [wavelet coefficient](analysis_elements/wavelet_coefficient.s7diagram) |
 
-**Total: 98 diagrams.**
+**Total: 108 diagrams.**
 
 ## Headless JSON examples
 

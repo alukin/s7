@@ -80,6 +80,32 @@ authorize exact lecture/problem mappings** to historical 6.011 content.
 
 ## Per-lab citation ledger
 
+### SP06 supporting materials — checked 2026-11-19
+
+The new S7 FIR lab links directly to the public
+[6.3000 Fall 2026 convolution handout](https://sigproc.mit.edu/_static/fall26/lectures/Unit-Sample_Response_and_Convolution-handout.pdf)
+and [frequency-response/filtering handout](https://sigproc.mit.edu/_static/fall26/lectures/Frequency_Response_and_Filtering-handout.pdf),
+plus the [6.003 Chapter 3 reading/download page](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/).
+The handout covers unit-sample response, superposition and discrete convolution;
+the OCW resource is the block-diagram/operator reading. These are supporting
+teaching links, not a claim to reproduce a named problem or its solution.
+They remain on MIT's sites; only S7-original models and explanations ship here.
+
+### FN01–FN03 supporting materials — checked 2026-11-19
+
+The public MIT 6.003 Fall 2011 readings page lists Mahajan and Freeman's
+supplementary chapters on [difference equations](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap1/),
+[modularity](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap2/)
+and [block diagrams/operators](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_chap3/).
+These original reading/download pages were rechecked and are linked from the
+new guides and diagram frames. FN01–FN03 are independently authored
+first-order recurrence experiments illustrating those topics; no particular
+MIT exercise, textbook page or answer key is claimed as reproduced. The
+formulas and prediction tables in S7 were derived independently. No MIT
+chapter is included in the source or help resources.
+
+### Required ledger fields
+
 Every lab that reaches reference-qualified status must record:
 
 1. MIT course code, term (when applicable) and **stable official URL**;
@@ -101,3 +127,20 @@ Do not use MIT names, logos, branding or statements of endorsement.
 Prefer language such as **"S7 original lab illustrating topics taught
 in MIT 6.3000"** over **"MIT lab"**. For exact adaptations,
 verify legal reuse permission and source fidelity first.
+
+### FN04–FN06 and CT01–CT03 — checked 2026-11-19
+
+The public MIT 6.003 Fall 2011 lecture-note index and its resource/download
+pages were checked for direct student links:
+
+- FN04: [lecture 9, Frequency response](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec09/).
+- FN05/FN06/CT03: [lecture 7, Discrete approximation of continuous-time systems](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec07/).
+- CT01/CT02: [lecture 4, Continuous-time systems](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec04/).
+
+These links establish topic alignment and access to original teaching
+materials. No exact slide/problem equivalence is asserted. The six graphs,
+experiments and formulas are independently authored for S7. In particular,
+FN05/FN06 explicitly derive scalar linear recurrences; they do not claim
+that S7 solves arbitrary implicit differential equations. CT02's physical
+and discrete references use analytic modes, independently of the runtime.
+No MIT PDFs or solutions are redistributed.
