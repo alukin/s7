@@ -579,6 +579,13 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
             -- $<TARGET_FILE:s7studio_gui_workflows_test> hiddenPlotReplacementClearsOldCurves educationStft)
     set_tests_properties(s7studio_gui_education_stft PROPERTIES
         LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_control
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-control"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> educationControl)
+    set_tests_properties(s7studio_gui_education_control PROPERTIES
+        ENVIRONMENT "S7_TEST_NO_WELCOME=1" TIMEOUT 150 LABELS "gui;qt-regression")
     # Every bundled example: open, run as documented, inspect each observer
     # window and analysis tab. Several minutes per shard; label "examples".
     set(s7_gui_example_shards 4)

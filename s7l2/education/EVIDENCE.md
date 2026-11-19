@@ -2,8 +2,9 @@
 
 This file records executed development checks, separately from the final
 release acceptance matrix. Earlier batches used baseline `96fe7b438ceeb9a206d404b4ae2a05943c89b21d`.
-Current SP01/SP03, SP05/SP07, SP08/SP09, SP10 and SP11 working changes are based on `education/core-labs` at
-`a27b2bb2ba08deeea97aef470c50723b6ac03a38`. Earlier sections retain their
+SP01/SP03, SP05/SP07, SP08/SP09, SP10 and SP11 were developed from
+`a27b2bb2ba08deeea97aef470c50723b6ac03a38` and committed as `e6e0b36`.
+CT04/CT05 use that committed baseline. Earlier sections retain their
 original baseline and measured results.
 No final-candidate or installed-package qualification is claimed.
 
@@ -1164,3 +1165,144 @@ surface, lifecycle and analysis regressions. Final log:
 The final Studio build embeds the updated guides/evidence. Installed or
 relocated packages, native Windows, the full bundled-example release-render
 matrix and final collection-wide viewer review remain unqualified by this run.
+
+## CT04/CT05 — controller states, load rejection and windup, 2026-11-19
+
+Baseline: `e6e0b36` on `education/core-labs`; same Linux Release environment
+as SP11. Two new original diagrams use bundled PI/PID schema definitions,
+embedded with declared gains/limits/tracking. Extra read-only exposed outputs
+publish the actual integral/filter/derivative states. No special C++ controller,
+plant, global solver or runtime/observation mutation was added.
+
+### Frozen contracts and numerical evidence
+
+- **CT04:** 16 s/100 Hz, normalized unit 1, three identical first-order
+  plants `y'=u−y−d`; P/PI/PID Kp=2, Ki=1.5/s, Kd=.15 s, τf=.1 s.
+  All states start zero. Reference 0→.5 at source time 1 s, opposing load
+  0→.2 at 8 s. Applied commands are clipped to ±1; tracking weight zero.
+  PID differentiates filtered measurement, not reference. The primary edit
+  Kd→0 makes PID and PI exactly equivalent over the full sampled run.
+  The P lane additionally matches an independent geometric closed form,
+  with equilibria 1/3 before load and 4/15 afterward. PI/PID final output
+  is within .002 of .5. A 4 Hz variant deliberately destabilizes the
+  explicit filter (`1−h/τf=−1.5`); clipping does not establish internal
+  stability. Removing P-lane plant memory is rejected as an algebraic loop.
+- **CT05:** 12 s/100 Hz, normalized unit 1, two first-order plants τ=.8 s,
+  zero state, Kp=1.5, Ki=2/s, actuator ±1. Reference 0→1.5 at 1 s→.4 at
+  4 s. Tracking is 6/s in aw and zero in free. At onset, demand 2.25 is
+  limited to 1; aw's next integral is −.045 and free's .03. This explicitly
+  checks the correction sign and old-state publication. The primary nested
+  instance edit `aw/i_rate.weights [1,6]→[1,0]` makes both lanes identical
+  in output, applied/unlimited command and integral, without editing the library.
+
+Every scalar reference uses independent long-double equations, not another
+S7 graph/controller implementation. The exact saved files pass the production
+loader, validator, compiler and read-only snapshots. All sources, intermediate
+rates, errors, states, commands and exposed controller outputs are checked at
+100 and 200 Hz for baseline/edit; fresh executions repeat within this process/
+build. The F64 budget is `1e−10×max(1,|reference|)` in signal units, time
+1e−12 s plus checked nanosecond rounding. There is no cross-platform bitwise
+or arbitrary continuous-time accuracy claim.
+
+Largest ordinary-rate recurrence residual: **6.53362e−15**, in normalized
+signal units. The deliberately growing coarse-filter variant has absolute
+residual **5.14984e−5** on very large internal values, while satisfying the
+same declared relative budget; it is an expected numerical failure example,
+not counted as a physically accurate stable controller. CT05 fixed recovery
+IAE over source indices [4Fs,8Fs) is **.273188 versus 1.97572** at 100 Hz,
+and **.271969 versus 1.97478** at 200 Hz (aw versus free, normalized-unit·s).
+The test requires aw below 60% of free for these frozen parameters.
+
+### Student workflow and viewer review
+
+The Studio test opens each guide through its actual visible description-frame
+link and keeps the saved run settings. Literal expected bindings are checked
+against all 10 CT04 / 9 CT05 recorded channels; every one of the 16,000 /
+10,800 journal values and full Scope recording values is checked against the
+independent reference. Every rendered-series point is an ordered exact member
+of the recording, with first/last timestamps and extrema retained under display
+reduction. Names, unit 1, model-time axes and full-run extents are checked.
+The primary edit is performed through F4, saved, reopened and rerun. CT05
+navigates into the actual embedded controller and back to the root tab.
+
+Visual review found that dock Time previews always used the generic label
+`Value (supplied units)`, even when their legends and full Scopes had a known
+unit. They now show the common selected unit (including dimensionless 1),
+explicitly distinguish mixed units, and preserve an unspecified-unit label.
+The correction is limited to scalar Time preview labeling. Tests exercise
+both Scope and LiveOscilloscope, same/mixed/missing units and selected subsets.
+The original diagnosis of “unsupplied units” was a reading error; the actual
+problem was a generic label rather than the available specific unit.
+
+The new worksheets were compacted after visual review while preserving node
+bodies, port rows and separate output/control/demand/state plots. Artifacts:
+`build-release/s7studio/gui-artifacts/education-control/`. Native Windows,
+installed/relocated packages, final-candidate and collection-wide viewer audit
+remain open; status remains diagram-ready with recorded development checks.
+Four core labs remain: CT06/CT07 next, then CT08 and SP14.
+
+Visual review also identified a labeling limitation in dock Time previews:
+the old axis always read **Value (supplied units)**, even when all selected
+channels declared the same unit. It now shows the actual shared unit,
+including **Value (1)** for these labs. Mixed and unspecified units remain
+explicit; changing the channel subset changes the label. Focused presentation
+checks cover Scope/Live types, 1, V, V/A, V/missing and all-missing cases.
+The full Scope axes and recorded unit metadata already agreed; no runtime
+unit conversion or numerical computation was changed. Worksheet geometry was
+compacted after visual review, with all three description links retained.
+
+All **20 education diagrams** reproduced byte-for-byte from **nine generators**.
+The static geometry/index check covered **118 diagrams, zero issues**; all
+**187 relative links** in the top-level README and twenty guides resolved.
+The closing collection-wide viewer audit, installed/relocated packages and
+native Windows remain open. Four core lessons remain: CT06–CT08 and SP14.
+
+The nested PI instance now has its own original compact eight-block drawing,
+so the correction path and i_rate fit on its page. Screenshots were reviewed
+for root graphs, guides, baseline/edited output/control/demand/state plots,
+preview labels and the actual nested edit. Artifacts:
+`build-release/s7studio/gui-artifacts/education-control/`.
+
+Executed commands:
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7tests_education_control s7studio s7studio_gui_workflows_test s7studio_observer_presentations_test --parallel 2
+ctest --test-dir build-release -R '^(s7tests_education_control|s7studio_gui_education_control|s7tests_control_examples_smoke|s7studio_scope_view|s7studio_window_lifecycle|s7studio_observer_presentations|s7studio_gui_workflows)$' --output-on-failure -V
+cmake --build build-release --target s7studio_scope_view_test s7studio_window_lifecycle_test --parallel 2
+ctest --test-dir build-release -R '^(s7tests_education_control|s7studio_gui_education_control|s7studio_scope_view|s7studio_window_lifecycle|s7studio_observer_presentations)$' --output-on-failure -V
+python3 -B examples/education/generate_control_labs.py
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+**7/7 selected CTest entries passed**, 203.42 s; ordinary GUI **117 passed,
+0 failed, 118 skipped**. Those skips are the separately sharded bundled-example
+render matrix, not successful renders. After the final nested drawing and
+relinking the Scope/lifecycle tests against the current viewer library,
+**5/5 focused entries passed**, 10.43 s. The dedicated controller GUI suite
+reports **4 passed, 0 failed, 0 skipped** (two labs plus setup/cleanup).
+Logs: `/tmp/s7-control-final-regression.log` and
+`/tmp/s7-control-final-focused.log`.
+
+All 20 diagrams reproduced byte-for-byte from nine generators, the static
+check covered **118 examples with zero issues**, and **187 relative links**
+in the top-level README and twenty student guides resolved. No vendor code
+or runtime/compiler/validator semantics changed. Native Windows, installed/
+relocated packages, the complete bundled-example release-render matrix and
+final collection-wide viewer review remain open. Four core labs remain:
+CT06–CT08 and SP14. Status remains diagram-ready with development checks.
+
+Final artifact SHA-256 values:
+
+```text
+efe7dbb6e12aade4087fbbb5b2b55fb29eb8fd94833a6cc179b8ff8e837b85aa examples/education/ct04_controller_comparison.s7diagram
+0a6e21027c98ca9dc14578071ff64cc8f4ad9611f688f48e2db8b7b069842351 examples/education/ct05_actuator_windup.s7diagram
+29717dab29b9e4801cb9113cb4be61b91ddb851fe5d3a75fe688465530fbe6de examples/education/generate_control_labs.py
+c3153618b6d885c04ab7e52e444ffc4c35e779e6b34259106ed479a17c51d084 s7tests/education_control_reference.hpp
+4a75a940c311ec66c5f692193c6ab16ec45f46c91fa4dedef977e4ac329a1ddf s7tests/education_control_smoke.cpp
+e2951961c3f00c2ba2917c2b50110d10deeaffd160e18c8ffc8274ad6338b635 s7studio/src/viewers/observer_presentation.cpp
+e2ad9a7ba280653f864daa2f4106cdf246d05f672820e9b67bed4e73e8300c5f s7studio/src/viewers/observer_presentation.hpp
+970a3a68fc9a2e58f516da37098334e05da0316c9cf0c5ea431365dd83fed0cb s7studio/tests/observer_presentations_test.cpp
+2910da3ce564222ca6fdd11576b604a5d2bb45fdd4f453c168f1f0470098a634 s7studio/tests/gui/workflows_test.cpp
+```

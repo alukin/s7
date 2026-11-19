@@ -107,11 +107,12 @@ overwriting of earlier established research conclusions.
 
 ## Development progress — 2026-11-19
 
-Eighteen core lessons now have new graphs and student guides: FN01–FN06,
-CT01–CT03, SP01, SP03 and SP05–SP11. The [manifest](CORE_MANIFEST.md) and
+Twenty core lessons now have new graphs and student guides: FN01–FN06,
+CT01–CT05, SP01, SP03 and SP05–SP11. The [manifest](CORE_MANIFEST.md) and
 [executed evidence](EVIDENCE.md) distinguish these development checks
 from final release qualification. The next implementation batch is
-**CT04/CT05**, followed by CT06–CT08 and SP14. SP11 verifies STFT
+**CT06/CT07**, followed by CT08 and SP14. CT04/CT05 compare actual discrete
+controller/plant states, load rejection, saturation and saved nested edits. SP11 verifies STFT
 coefficients, window/hop coordinates and the actual map/slice displays. SP10 uses explicit scalar word builders/FIRs and separately checks
 recorded sequences through both production frame processors; no frame-port
 contract or causal semantics were changed. The closing viewer-audit reminder
@@ -168,7 +169,8 @@ streaming partitions and complete tails. This uses existing primitives and
 does not introduce frame-valued ports, observation-side computation in the
 runtime, or new causal semantics. SP11 now adds an original gated-tone/chirp
 graph, independent complex STFT checks and actual map/slice rendering checks.
-The next implementation batch is CT04/CT05.
+CT04/CT05 now add independently checked controller/windup comparisons.
+The next implementation batch is CT06/CT07.
 
 **SP06 reference contract, proposed first engineering flagship:**
 

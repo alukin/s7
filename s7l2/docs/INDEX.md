@@ -77,6 +77,8 @@ adds explicit padding, startup interpretation and recorded-input verification
 of both production convolution processors.
 [SP11 — short-time Fourier analysis](../education/labs/SP11-short-time-fourier/README.md)
 adds independently checked burst/chirp maps, window/hop controls and edge interpretation.
+[CT04/CT05 — controller comparison and windup](../education/labs/CT04-controller-comparison/README.md)
+add checked feedback states, actuator limits and saved anti-windup edits.
 [Development evidence](../education/EVIDENCE.md)
 is separate from release qualification. Description frames link to offline
 guides and original MIT online teaching materials.

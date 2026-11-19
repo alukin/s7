@@ -49,6 +49,8 @@ constexpr Topic topics[] = {
     {"Education: CT01 first order", "qrc:/s7studio/help/education/labs/CT01-first-order/README.md"},
     {"Education: CT02 damped modes", "qrc:/s7studio/help/education/labs/CT02-damped-modes/README.md"},
     {"Education: CT03 sample time", "qrc:/s7studio/help/education/labs/CT03-sample-time/README.md"},
+    {"Education: CT04 controller comparison", "qrc:/s7studio/help/education/labs/CT04-controller-comparison/README.md"},
+    {"Education: CT05 actuator windup", "qrc:/s7studio/help/education/labs/CT05-actuator-windup/README.md"},
     {"Education: SP01 Fourier synthesis", "qrc:/s7studio/help/education/labs/SP01-fourier-synthesis/README.md"},
     {"Education: SP03 sampling and aliasing", "qrc:/s7studio/help/education/labs/SP03-aliasing/README.md"},
     {"Education: SP05 shifted impulse responses", "qrc:/s7studio/help/education/labs/SP05-convolution/README.md"},

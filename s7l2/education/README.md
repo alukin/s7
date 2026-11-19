@@ -52,6 +52,10 @@ processors against independent sums, including streaming boundaries and tails.
 uses a new burst/chirp graph to verify complex STFT coefficients, window and
 hop coordinates, power normalization and the actual map/slice displays.
 
+[CT04/CT05](labs/CT04-controller-comparison/README.md) add original controller
+and windup comparisons with independent discrete-state checks, separate
+applied/unlimited/state plots and an instance-local nested edit.
+
 The first implemented signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
 predict a filter's response, run and inspect it, then remove one tap and explain
 the changed result. The diagram's description links to the offline S7 guide
@@ -106,7 +110,7 @@ change; the curriculum is a dated snapshot, not a claim of MIT affiliation.
    SP01 (Fourier synthesis), SP03 (sampling/aliasing), CT01 (RC/thermal step).
 2. **After mastering discrete-time models:** FN05/FN06 (integrators and
    pole mappings), SP06 (FIR/convolution), SP08 (DFT leakage), CT04/CT05
-   (PID and sampling).
+   (PID, load rejection and windup).
 3. **Advanced work:** SP11 (STFT), CT10 (state space), CT12 (observer),
    IN01–IN08 (noise, estimation, inference). Advanced items have
    prerequisites and may not belong to the 0.2.0 supported subset.

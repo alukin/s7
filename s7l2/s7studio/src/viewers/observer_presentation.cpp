@@ -121,9 +121,11 @@ PreviewData preparePreview(const PreviewRequest& request)
     std::size_t invalid = 0, gaps = 0;
     std::optional<double> firstTime, lastTime;
     QStringList unavailable;
+    QStringList units;
     for (auto index : selected) if (index < 0 || index >= samples.size()) unavailable.push_back(QString::number(index));
     for (auto index : selected) if (index >= 0 && index < samples.size()) {
         const auto& input = request.descriptor.inputs[index]; const auto& data = samples[index];
+        if (!units.contains(unit(input.unit))) units.push_back(unit(input.unit));
         for (const auto& sample : data) if (std::isfinite(sample.timeSeconds)) {
             firstTime = firstTime ? std::min(*firstTime, sample.timeSeconds) : sample.timeSeconds;
             lastTime = lastTime ? std::max(*lastTime, sample.timeSeconds) : sample.timeSeconds;
@@ -153,6 +155,8 @@ PreviewData preparePreview(const PreviewRequest& request)
             result.traces.push_back(std::move(trace));
         }
     }
+    result.valueAxis = units.size() == 1 ? "Value (" + units.front() + ")" :
+        units.empty() ? "Value (unit unspecified)" : "Value (mixed units; see channels)";
     if (phase && samples.size() >= (request.descriptor.type == "PhaseTrajectory3D" ? 3 : 2)) {
         const int axes = request.descriptor.type == "PhaseTrajectory3D" ? 3 : 2;
         std::map<std::int64_t, std::array<std::optional<observation::Sample>, 3>> aligned;
@@ -250,7 +254,7 @@ void ObserverPresentation::present(const PreviewData& data) {
     }
     for (; i < line_->series().size(); ++i) LinePlotView::setPoints(line_->series()[i], {});
     for (; channel < isolated_.size(); ++channel) LinePlotView::setScatterPoints(isolated_[channel], {});
-    line_->setAxisTitles(type_ == "PhasePortrait" ? data.axes.value(0) : data.timeAxis, type_ == "PhasePortrait" || type_ == "FrequencyResponse" ? data.axes.value(1) : "Value (supplied units)");
+    line_->setAxisTitles(type_ == "PhasePortrait" ? data.axes.value(0) : data.timeAxis, type_ == "PhasePortrait" || type_ == "FrequencyResponse" ? data.axes.value(1) : data.valueAxis);
     static_cast<void>(line_->fitAll());
     if (data.timeRange) line_->setXRange(data.timeRange->first, data.timeRange->second);
 }

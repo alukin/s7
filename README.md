@@ -60,7 +60,7 @@ recurrences, analytic solutions or reference solvers where appropriate.
 
 ## Learn with S7
 
-The current development tree includes **eighteen original teaching labs**, with
+The current development tree includes **twenty original teaching labs**, with
 new diagrams designed for students. Each guide starts with a question and
 predictions, explains the units and initial state, and gives a small experiment
 to change and explain. Description-frame links open offline student guides
@@ -71,6 +71,7 @@ and original MIT online teaching materials; web links open in the external brows
 | [FN01–FN03](s7l2/education/labs/FN01-unit-delay/README.md) | Unit delay, natural and forced response, and initial conditions |
 | [FN04–FN06](s7l2/education/labs/FN04-impulse-transfer/README.md) | Impulse response and transfer functions, integration rules, and stability versus accuracy |
 | [CT01–CT03](s7l2/education/labs/CT01-first-order/README.md) | First-order charging, damped motion, and numerical instability caused by a coarse sample interval |
+| [CT04/CT05](s7l2/education/labs/CT04-controller-comparison/README.md) | P/PI/PID load rejection, actuator saturation, integral windup and instance-local anti-windup edits |
 | [SP01](s7l2/education/labs/SP01-fourier-synthesis/README.md) | Fourier synthesis, harmonic amplitudes, ringing and Parseval’s relation |
 | [SP03](s7l2/education/labs/SP03-aliasing/README.md) | Distinct tones with identical sampled values, and how sample rate exposes aliasing |
 | [SP05](s7l2/education/labs/SP05-convolution/README.md) | Convolution as a sum of shifted impulse responses, overlap and initial history |
@@ -96,7 +97,7 @@ tested numerical envelope. The [verification record](s7l2/education/EVIDENCE.md)
 states the checks, tolerances and remaining qualification.
 
 The [MIT-aligned curriculum](s7l2/education/README.md) plans a broader collection;
-these eighteen labs have passing development checks, while release/package and
+these twenty labs have passing development checks, while release/package and
 platform qualification remain open. They are original S7 exercises with
 links to supporting readings, **not an official or endorsed MIT resource**.
 

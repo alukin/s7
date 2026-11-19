@@ -226,3 +226,21 @@ figure or solution is reproduced. S7's gated 32 Hz tone, discrete chirp,
 parameters, graph and independent direct-DFT references are original work.
 The guide explicitly distinguishes raw-transform teaching conventions from
 S7's one-sided peak-amplitude, power and PSD normalization.
+
+## CT04/CT05 — original controller and windup experiments, 2026-11-19
+
+- [MIT 16.06, Fall 2012, Lecture 10: PID Control](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_10/):
+  resource/PDF inspected; PDF pages 1–3 introduce P, D and I and discuss
+  derivative feedback on measurement. CT04 uses a different original
+  first-order plant and an explicitly forward-Euler filtered derivative,
+  not its worked problem or ideal derivative realization.
+- [MIT 2.017J, Fall 2009, Feedback Control](https://ocw.mit.edu/courses/2-017j-design-of-electromechanical-robotic-systems-fall-2009/MIT2_017JF09_feedback.pdf):
+  PDF pages 13–14 (integral/derivative context) and 20 (integrator windup)
+  inspected. CT05 illustrates the topic using original bounded PI loops
+  and explicit back-calculation; it does not reproduce the lecture's
+  illustration or imply that its brief remedy prescribes this recurrence.
+
+Synthetic schedules, new diagrams and long-double scalar reference equations
+are original S7 work. No PDF, figure, assignment or solution is bundled.
+The current 6.3100 calendar timed out during this batch; no new claim about
+its current lecture numbering is made. Topic links above use dated OCW material.

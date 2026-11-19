@@ -15,6 +15,8 @@ through **File → Example Diagrams… → education** and set its stated run pr
 | CT01: a capacitor takes time to charge | [ct01_first_order.s7diagram](ct01_first_order.s7diagram) | 5 s at 10 Hz | [Student lab](../../education/labs/CT01-first-order/README.md) |
 | CT02: how damping changes a spring | [ct02_damped_modes.s7diagram](ct02_damped_modes.s7diagram) | 8 s at 100 Hz | [Student lab](../../education/labs/CT02-damped-modes/README.md) |
 | CT03: can a slow sample rate invent growth? | [ct03_sample_time.s7diagram](ct03_sample_time.s7diagram) | 10 s at 2 Hz | [Student lab](../../education/labs/CT03-sample-time/README.md) |
+| CT04: controller comparison | [ct04_controller_comparison.s7diagram](ct04_controller_comparison.s7diagram) | 16 s at 100 Hz | [Student lab](../../education/labs/CT04-controller-comparison/README.md) |
+| CT05: actuator windup | [ct05_actuator_windup.s7diagram](ct05_actuator_windup.s7diagram) | 12 s at 100 Hz | [Student lab](../../education/labs/CT05-actuator-windup/README.md) |
 | SP01: build a square wave from smooth tones | [sp01_fourier_synthesis.s7diagram](sp01_fourier_synthesis.s7diagram) | 2 s at 128 Hz | [Student lab](../../education/labs/SP01-fourier-synthesis/README.md) |
 | SP03: three tones, one sampled sequence | [sp03_aliasing.s7diagram](sp03_aliasing.s7diagram) | 2 s at 64 Hz | [Student lab](../../education/labs/SP03-aliasing/README.md) |
 | SP05: add shifted impulse responses | [sp05_convolution.s7diagram](sp05_convolution.s7diagram) | 2 s at 20 Hz | [Student lab](../../education/labs/SP05-convolution/README.md) |
@@ -39,6 +41,7 @@ through **File → Example Diagrams… → education** and set its stated run pr
 10. **SP08/SP09:** explain DFT leakage and correctly normalize periodic windows.
 11. **SP10:** predict wrap-around, pad enough zeros and account for FIR startup.
 12. **SP11:** locate a burst/chirp, vary window and hop, and explain edge overlap.
+13. **CT04/CT05:** compare controller/load errors, then inspect hidden integral windup.
 
 Each file saves the run configuration in the table. FN01–FN03 use
 **2 s / 10 Hz**. Click Run and keep the saved settings; the short-run notice is intentional. Double-click
@@ -61,6 +64,14 @@ For [SP11](../../education/labs/SP11-short-time-fourier/README.md), run
 with N=128/H=64 and N=64/H=16. Read the guide before interpreting a window
 center as an event time. Build `s7tests_education_stft`; regenerate with
 `python3 -B examples/education/generate_stft_lab.py`.
+
+For [CT04](../../education/labs/CT04-controller-comparison/README.md) and
+[CT05](../../education/labs/CT05-actuator-windup/README.md), keep the saved
+100 Hz profiles. CT04 separates tracking, applied control and error; CT05
+separates output, actual command, unlimited demand and integral state.
+CT05’s primary experiment edits only `aw/i_rate.weights` in its nested tab,
+then returns to the root before running. Build `s7tests_education_control`;
+regenerate both graphs with `python3 -B examples/education/generate_control_labs.py`.
 
 Headless check: build `s7tests_education_foundations`, then run
 `ctest --test-dir build-release -R '^s7tests_education_foundations$' -V`.

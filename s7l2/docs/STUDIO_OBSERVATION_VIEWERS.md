@@ -362,3 +362,8 @@ analysis action disabled. An imported result without saved input remains
 viewable, with reanalysis controls disabled; retired jobs cannot replace it.
 See [time-frequency examples](../examples/time_frequency/README.md) and the
 [testing guide](STUDIO_ANALYSIS_TESTING.md) for normalization and limits.
+
+Time dock previews label a shared selected unit directly (including normalized
+unit `1`). Mixed selected units are identified as mixed and refer to the channel
+legend; missing units remain explicit. Changing the channel subset updates the
+unit label as well as the plotted traces.
