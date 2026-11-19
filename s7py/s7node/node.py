@@ -11,17 +11,18 @@ import signal
 import sys
 import time
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
+from s7core.element import Element
 from s7core.errors import SchemaError
-from s7core.graph import Graph
 from s7core.rate import schema_rate
 
 from . import __version__
 from .clock import Clock
 from .control import Authorization, ControlPlane, Descriptor
 from .elements import NODE_ELEMENT_TYPES
-from .net import NET
+from .library import LibraryError, load_libraries
 from .runtime import Executor
 from .stream import CLOCK_UNSYNCHRONIZED, FileSequenceStore
 from .tls import ControlPeer, certificate_node_uuid, client_context, control_peer, load_certificate_file, server_context
@@ -119,7 +120,10 @@ def architecture() -> str:
 
 
 class Node:
-    def __init__(self, config: NodeConfig, state: StateDirectory, *, step_rate_hz: float | None = None):
+    """types: the element types this node runs and advertises (default: the library and stream ends)."""
+
+    def __init__(self, config: NodeConfig, state: StateDirectory, *, step_rate_hz: float | None = None,
+                 types: Mapping[str, type[Element]] = NODE_ELEMENT_TYPES):
         self.config = config
         certificate = load_certificate_file(config.cert_file) if config.tls else None
         node_uuid = state.node_uuid(certificate_node_uuid(certificate) if certificate else None)
@@ -133,16 +137,16 @@ class Node:
             os_family=os_family(),
             architecture=architecture(),
             runtime_version=f"s7py-{__version__}",
-            element_types=sorted(NODE_ELEMENT_TYPES),
+            element_types=sorted(types),
             certificate={"common_name": certificate.common_name, "fingerprint_sha256": certificate.fingerprint_sha256}
             if certificate else {},
         )
         if certificate and not certificate.common_name:
             del self.descriptor.certificate["common_name"]
-        self.executor = Executor(config.step_rate_hz if step_rate_hz is None else step_rate_hz, log=log)
         # Data streams: sequence reservations in <state-dir>/streams, as the C++ node keeps them.
         self.streams = StreamTable(FileSequenceStore(state.path / "streams"))
-        NET.table = self.streams
+        self.executor = Executor(config.step_rate_hz if step_rate_hz is None else step_rate_hz, log=log,
+                                 types=types, streams=self.streams)
         client_ssl = (lambda: client_context(config.ca_file, config.cert_file, config.key_file)) if config.tls else None
         self.data = DataEndpoint(self.streams, node_uuid, client_ssl=client_ssl, tls_enabled=config.tls, log=log)
         self.executor.network = self.data
@@ -195,7 +199,7 @@ class Node:
         if not self.control.restore_deployment() and self.config.startup_schema.get("elements"):
             # Seeded by its own dt, else the rate it is stepped at (s7runtime build_schema_from_definition).
             rate = schema_rate(self.config.startup_schema, self.executor.step_rate_hz)
-            self.executor.run_startup(Graph(self.config.startup_schema, rate, types=NODE_ELEMENT_TYPES))
+            self.executor.run_startup(self.executor.build(self.config.startup_schema, rate))
         server = await asyncio.start_server(self._serve_connection, self.config.bind_address, self.config.port,
                                             ssl=self.ssl, limit=MAX_CONTROL_MESSAGE_BYTES)
         d = self.descriptor
@@ -233,14 +237,20 @@ def main(argv=None) -> int:
     parser.add_argument("--serve-seconds", type=float, help="stop after this many seconds (default: serve forever)")
     parser.add_argument("--watch", action="append", default=[], metavar="ELEMENT",
                         help="print this element's output once per second")
+    parser.add_argument("--lib", action="append", default=[], metavar="LIBRARY",
+                        help="element library to load: a .py file or a module name (repeatable); "
+                             "it runs with the node's privileges")
     args = parser.parse_args(argv)
 
     try:
         config = NodeConfig.load(args.schema)
         if args.port is not None:
             config.port = args.port
-        node = Node(config, StateDirectory(Path(args.state_dir)), step_rate_hz=args.step_rate)
-    except (OSError, ValueError, RuntimeError, SchemaError) as ex:
+        types = load_libraries(args.lib, NODE_ELEMENT_TYPES)
+        for library in args.lib:
+            log(f"runtime.library.loaded={library}")
+        node = Node(config, StateDirectory(Path(args.state_dir)), step_rate_hz=args.step_rate, types=types)
+    except (OSError, ValueError, RuntimeError, SchemaError, LibraryError) as ex:
         print(f"error: {ex}", file=sys.stderr)
         return 1
     for endpoint in args.seed_peer:

@@ -11,6 +11,7 @@ import math
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from fractions import Fraction
 from pathlib import Path
@@ -735,6 +736,87 @@ class PlainWebSocketTest(unittest.TestCase):
         self.assertEqual(sorted(info["data_protocol"]["signal_types"]), sorted(
             ["I8", "U8", "I12", "U12", "I16", "U16", "I32", "U32", "I64", "U64", "I128", "U128", "F16", "F32", "F64",
              "F128", "C16", "C32", "C64", "C128", "CI8", "CU8", "CI16", "CI32", "CI64", "CI128", "CI12"]))
+
+
+OFFSET_LIBRARY = """
+from s7core import Element, Param, Port
+
+
+class Offset(Element):
+    description = "Adds a constant to its input"
+    input_ports = (Port("in"),)
+    parameters = (Param("offset", "real", 0.5),)
+
+    def __init__(self, element_id, params):
+        super().__init__(element_id, params)
+        self.offset = self.read(params, "offset")
+
+    def step(self, inputs):
+        self.outputs[0] = inputs[0] + self.offset
+
+
+class _Helper(Element):  # private: not registered
+    pass
+"""
+
+
+class LibraryTest(unittest.TestCase):
+    def test_loading(self):
+        from s7node.elements import NODE_ELEMENT_TYPES
+        from s7node.library import LibraryError, load_libraries
+
+        with tempfile.TemporaryDirectory() as tmp:
+            found = Path(tmp) / "found.py"
+            found.write_text(OFFSET_LIBRARY)
+            explicit = Path(tmp) / "explicit.py"
+            explicit.write_text(OFFSET_LIBRARY + "\n\ndef register(registry):\n    registry.register(Offset, 'Shift')\n")
+            types = load_libraries([str(found)], NODE_ELEMENT_TYPES)
+            self.assertEqual(set(types) - set(NODE_ELEMENT_TYPES), {"Offset"})
+            self.assertNotIn("Offset", NODE_ELEMENT_TYPES)  # the node's registry is a new one
+            self.assertEqual(set(load_libraries([str(explicit)], NODE_ELEMENT_TYPES)) - set(NODE_ELEMENT_TYPES),
+                             {"Shift"})
+            with self.assertRaisesRegex(LibraryError, "'Offset' is already registered"):
+                load_libraries([str(found), str(found)], NODE_ELEMENT_TYPES)
+            clash = Path(tmp) / "clash.py"
+            clash.write_text("from s7core import Element, Port\n\n\nclass Gain(Element):\n"
+                             "    input_ports = (Port('in'),)\n\n    def step(self, inputs):\n        pass\n")
+            with self.assertRaisesRegex(LibraryError, "DeclarationError: element type 'Gain' is already registered"):
+                load_libraries([str(clash)], NODE_ELEMENT_TYPES)
+            with self.assertRaisesRegex(LibraryError, "no such file"):
+                load_libraries([str(Path(tmp) / "missing.py")], NODE_ELEMENT_TYPES)
+
+    def test_a_node_runs_and_advertises_a_library_element(self):
+        from s7node.websocket import connect
+
+        async def info(port):
+            ws = await connect("127.0.0.1", port, "/control")
+            await ws.send(json.dumps({"type": "GET_NODE_INFO", "request_id": "i", "protocol_version": 1}))
+            response = json.loads(await ws.recv())
+            await ws.close()
+            return response
+
+        startup = schema([{"id": "c", "type": "Constant", "params": {"value": 1}},
+                          {"id": "o", "type": "Offset", "params": {"offset": 2}}], [("c", "o", 0)])
+        with tempfile.TemporaryDirectory() as tmp:
+            library = Path(tmp) / "mylib.py"
+            library.write_text(OFFSET_LIBRARY)
+            node = NodeProcess({**startup, "execution": {"step_rate_hz": 20}}, Path(tmp) / "node",
+                               "--lib", str(library), "--watch", "o")
+            try:
+                response = asyncio.run(info(node.port))
+                time.sleep(1.2)
+            finally:
+                output = node.stop()
+            self.assertIn(f"runtime.library.loaded={library}", output)
+            self.assertIn("Offset", [e["type_name"] for e in response["elements"]["catalog"]])
+            self.assertRegex(output, r"watch step=\d+ o=3\b")
+
+            bad = Path(tmp) / "bad.py"
+            bad.write_text("raise ImportError('broken on purpose')\n")
+            node = NodeProcess(dict(startup), Path(tmp) / "node2", "--lib", str(bad))
+            output = node.stop()
+            self.assertEqual(node.process.returncode, 1)
+            self.assertIn(f"error: library '{bad}': ImportError: broken on purpose", output)
 
 
 if __name__ == "__main__":

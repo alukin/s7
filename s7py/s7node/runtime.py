@@ -16,11 +16,16 @@ releases its streams once its running step has finished, so the new graph contin
 import asyncio
 from dataclasses import dataclass, field
 
+from collections.abc import Mapping
+from fractions import Fraction
+
+from s7core.element import Element
 from s7core.graph import Graph
 from s7core.rate import rate_from_step_ns, schema_rate
 
 from .clock import utc_now_ns
 from .elements import NODE_ELEMENT_TYPES
+from .net import attach_streams
 
 BEHIND_REPORT_NS = 50_000_000
 MAX_STEPS_PER_TURN = 1000  # then yield, so control requests are still served while catching up
@@ -34,9 +39,14 @@ class Staged:
 
 
 class Executor:
-    def __init__(self, step_rate_hz: float = 0.0, log=print):
+    """types: the element types graphs may use; streams: the node's stream table (None: no peers)."""
+
+    def __init__(self, step_rate_hz: float = 0.0, log=print, *,
+                 types: Mapping[str, type[Element]] = NODE_ELEMENT_TYPES, streams=None):
         self.step_rate_hz = step_rate_hz
         self.log = log
+        self.types = types
+        self.streams = streams
         self.graph: Graph | None = None
         self.step_ns: int | None = None
         self.origin_ns = 0
@@ -60,10 +70,16 @@ class Executor:
         that pins none and must equal the rate of every element that pins one (GraphHost::stage);
         a deployed graph never carries the node's step rate."""
         rate = rate_from_step_ns(step_ns) if step_ns else schema_rate(node_schema)
-        graph = Graph(node_schema, rate, types=NODE_ELEMENT_TYPES)
+        graph = self.build(node_schema, rate)
         if step_ns:
             graph.require_model_time_rate(rate)
         return Staged(graph, step_ns, list(data_peers))
+
+    def build(self, schema: dict, rate: Fraction | None) -> Graph:
+        """A graph of this node's element types, its stream ends on this node's stream table."""
+        graph = Graph(schema, rate, types=self.types)
+        attach_streams(graph, self.streams)
+        return graph
 
     def activate(self, staged: Staged, activate_at_ns: int | None) -> None:
         """Runs the staged graph from activate_at_ns (the previous one runs until then), or at once."""
