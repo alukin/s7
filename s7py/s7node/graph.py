@@ -14,8 +14,8 @@ from s7core.element import Element
 from s7core.errors import SchemaError
 from s7core.trapezoid import TRAPEZOID_ITERATIONS
 from s7core.wiring import _index
-from s7core.params import (ACCUMULATING, ARITHMETIC, GENERIC, _check_params, _choice, _flag, _integer, _number,
-                           _numbers)
+from s7core.params import _check_params, _choice, _flag, _integer, _number, _numbers
+from s7core.spec import GENERIC
 from s7core.rate import (_long_double, rate_from_hz, rate_from_seconds, rate_from_step_ns, rate_text,
                          schema_rate)
 from s7lib.basic import Accumulator, Adder, Constant, Delay, Gain, Multiply

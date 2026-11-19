@@ -71,16 +71,18 @@ Three packages, each depending only on the ones before it: `s7core` (no element 
 
 | File | Content |
 |---|---|
-| `s7core/element.py` | The element contract: ports, flags, `step()` |
+| `s7core/element.py` | The element contract: declarations, flags, `read()`, `step()`, `describe()` |
+| `s7core/spec.py` | Declarations: `Port`, `Param`, `TypeVariable`, `Variadic` (as s7core's `ElementMetadata`) |
+| `s7core/registry.py` | `Registry`: element types by name, declarations checked on registration, `describe()` |
 | `s7core/wiring.py` | Elements built from the given types with checked parameters; one driver per input |
 | `s7core/schedule.py` | Causal order; a cycle must pass through causal memory |
 | `s7core/rate_groups.py` | One rate per connected set of elements; the model-time rate check |
 | `s7core/trapezoid.py` | The `TrapezoidIntegration` interface and the coupled implicit-trapezoid stage |
 | `s7core/graph.py` | `Graph`: builds the above and steps them (publish, evaluate, stage, roll back on failure) |
-| `s7core/rate.py`, `params.py`, `errors.py` | Exact rates, parameter checks, `SchemaError` |
-| `s7lib/` | The built-in elements (`basic`, `integrators`, `sources`, `mathops`, `control`) and `ELEMENT_TYPES` |
+| `s7core/rate.py`, `params.py`, `errors.py` | Exact rates, parameter value checks, `SchemaError`, `DeclarationError` |
+| `s7lib/` | The built-in elements (`basic`, `integrators`, `sources`, `mathops`, `control`) and their `LIBRARY` registry |
 | `s7node/net.py` | `NetSink` / `NetSource`, the stream ends |
-| `s7node/elements.py` | The element types a node serves: the library and the stream ends |
+| `s7node/elements.py` | The registry a node serves: the library and the stream ends |
 | `s7node/graph.py` | Compatibility: the former single-file module's names |
 | `s7node/control.py` | Control protocol messages, authorization, deployments, transfers, persistence |
 | `s7node/runtime.py` | Executor: grid / rate pacing, scheduled activation |

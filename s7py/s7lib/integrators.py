@@ -6,25 +6,36 @@ import math
 
 from s7core.element import Element
 from s7core.errors import SchemaError
-from s7core.params import GENERIC, _choice, _integer, _number
 from s7core.rate import rate_from_seconds
+from s7core.spec import GENERIC, Param, T
 from s7core.trapezoid import TrapezoidIntegration
+
+from ._ports import IN, OUT
+
+# s7py still pins the rate with dt; s7core's integrators follow their domain's rate instead
+# (doc/S7_Sample_Rate_Model.md), where dt is a legacy field.
+DT = Param("dt", "value", 1.0, "Time step in seconds; pins the rate of everything connected to the integrator")
 
 
 class EulerIntegrator(Element):
     """y[n+1] = y[n] + dt * x[n]; causal memory, so it can close a loop."""
 
-    params = GENERIC + ("dt", "initial_value", "substeps")
+    display_name = "Forward Euler Integrator"
+    description = "Integrates the input with forward Euler."
+    category = "filters"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (DT, Param("initial_value", "value", 0.0, "y[0]"),
+                            Param("substeps", "int", 1, "Internal steps per outer dt; s7py supports 1 only", 1, 32))
     memory = True
     stateful = True
-    input_count = 1
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        if _integer(params, "substeps", 1, 1, 32) != 1:
+        if self.read(params, "substeps") != 1:
             raise SchemaError("EulerIntegrator substeps greater than 1 are not supported by s7py")
-        self.dt = _number(params, "dt", 1.0)
-        self.outputs[0] = _number(params, "initial_value", 0.0)
+        self.dt = self.read(params, "dt")
+        self.outputs[0] = self.read(params, "initial_value")
 
     def rate(self):
         return rate_from_seconds(self.dt)
@@ -44,16 +55,29 @@ class TrapezoidIntegrator(Element, TrapezoidIntegration):
     mode "sampled": y[n] = y[n-1] + dt/2 * (x[n] + x[n-1]) of supplied samples; direct feedthrough.
     """
 
-    params = GENERIC + ("dt", "initial_value", "mode")
+    display_name = "Trapezoid Integrator"
+    description = ("Integrates the input with the trapezoidal rule. Default implicit mode solves coupled "
+                   "endpoint states together and supplies causal memory. Its bounded fixed-point solve reports "
+                   "nonconvergence; reduce dt if it fails. Sampled mode instead integrates supplied samples "
+                   "with direct feedthrough.")
+    category = "filters"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (DT, Param("initial_value", "value", 0.0, "y[0]"), Param(
+        "mode", "enum", "implicit",
+        "implicit: y[n+1]=y[n]+dt/2*(f[n]+f[n+1]), with jointly solved feedback states; only supported "
+        "side-effect-free trial dependencies may vary with the endpoint. sampled: y[n]=y[n-1]+dt/2*(input[n-1]+"
+        "input[n]); first call records input and leaves initial_value unchanged. Sampled mode cannot alone close "
+        "a feedback loop.",
+        enum_values=("implicit", "sampled")))
     stateful = True
-    input_count = 1
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        self.implicit = _choice(params, "mode", ("implicit", "sampled")) == "implicit"
+        self.implicit = self.read(params, "mode") == "implicit"
         self.memory = self.implicit
-        self.half_dt = _number(params, "dt", 1.0) / 2
-        self.outputs[0] = _number(params, "initial_value", 0.0)
+        self.half_dt = self.read(params, "dt") / 2
+        self.outputs[0] = self.read(params, "initial_value")
         self.previous = None
         self.base_value = self.base_input = self.candidate = 0.0
 

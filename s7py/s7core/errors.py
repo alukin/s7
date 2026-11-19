@@ -6,3 +6,7 @@
 
 class SchemaError(ValueError):
     pass
+
+
+class DeclarationError(Exception):
+    """An element type whose declaration is inconsistent; raised when it is registered."""

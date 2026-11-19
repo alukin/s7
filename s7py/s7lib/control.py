@@ -6,7 +6,9 @@ import math
 
 from s7core.element import Element
 from s7core.errors import SchemaError
-from s7core.params import GENERIC, _flag, _number
+from s7core.spec import GENERIC, Param, T
+
+from ._ports import IN, OUT, inp
 
 
 def _finite(value: float) -> float:
@@ -19,7 +21,13 @@ def _finite(value: float) -> float:
 class Switch(Element):
     """Inputs off, on, control: control 0 selects off, any other finite value on."""
 
-    input_count = 3
+    description = ("Select off/on input with numeric control (zero/nonzero) All inputs are current-step signals; "
+                   "control=0 selects off, otherwise on. No state or timestep is added.")
+    category = "control"
+    input_ports = (inp("off"), inp("on"), inp("control"))
+    output_ports = OUT
+    type_variables = (T,)
+    parameters = GENERIC
 
     def step(self, inputs):
         off, on, control = inputs
@@ -30,17 +38,26 @@ class HysteresisRelay(Element):
     """On at or above upper_threshold, off at or below lower_threshold, unchanged in between;
     outputs high_value or low_value. Stateful, but the current input decides the current output."""
 
-    params = GENERIC + ("lower_threshold", "upper_threshold", "low_value", "high_value", "initial_on")
+    description = ("Relay with distinct on/off thresholds and retained state Requires finite lower_threshold < "
+                   "upper_threshold. Between thresholds the previous on/off state is retained; current input is "
+                   "evaluated in the same step.")
+    category = "control"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (Param("lower_threshold", "value", -1.0, "Turn off at/below this threshold"),
+                            Param("upper_threshold", "value", 1.0, "Turn on at/above this threshold"),
+                            Param("low_value", "value", 0.0, "Off output"),
+                            Param("high_value", "value", 1.0, "On output"),
+                            Param("initial_on", "bool", False, "Initial state for an input in the hysteresis band"))
     stateful = True
-    input_count = 1
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        self.lower = _number(params, "lower_threshold", -1.0)
-        self.upper = _number(params, "upper_threshold", 1.0)
-        self.low = _number(params, "low_value", 0.0)
-        self.high = _number(params, "high_value", 1.0)
-        self.on = _flag(params, "initial_on", False)
+        self.lower = self.read(params, "lower_threshold")
+        self.upper = self.read(params, "upper_threshold")
+        self.low = self.read(params, "low_value")
+        self.high = self.read(params, "high_value")
+        self.on = self.read(params, "initial_on")
         if not all(math.isfinite(v) for v in (self.lower, self.upper, self.low, self.high)):
             raise SchemaError("Control element requires finite values.")
         if not self.lower < self.upper:
@@ -59,13 +76,18 @@ class HysteresisRelay(Element):
 class PhaseWrap(Element):
     """Wraps a finite input into [lower, lower + period); by default radians in [-pi, pi)."""
 
-    params = GENERIC + ("period", "lower")
-    input_count = 1
+    description = ("Wrap phase into a half-open interval Output lies in [lower,lower+period). period must be finite,"
+                   " strictly positive and representable at lower; inputs must be finite. No state or time delay.")
+    category = "control"
+    input_ports, output_ports = IN, OUT
+    type_variables = (T,)
+    parameters = GENERIC + (Param("period", "value", 2 * math.pi, "Interval width"),
+                            Param("lower", "value", -math.pi, "Lower interval endpoint"))
 
     def __init__(self, element_id, params):
         super().__init__(element_id, params)
-        self.period = _number(params, "period", 2 * math.pi)
-        self.lower = _number(params, "lower", -math.pi)
+        self.period = self.read(params, "period")
+        self.lower = self.read(params, "lower")
         if not all(math.isfinite(v) for v in (self.period, self.lower, self.lower + self.period)):
             raise SchemaError("period, lower and lower + period must be finite")
         if not (self.period > 0 and self.lower + self.period > self.lower):
