@@ -79,6 +79,13 @@ target_compile_definitions(s7tests_education_loop PRIVATE S7_LOOP_LABS_DIR="${PR
 add_test(NAME s7tests_education_loop COMMAND s7tests_education_loop)
 set_tests_properties(s7tests_education_loop PROPERTIES TIMEOUT 30)
 
+s7_add_test_executable(s7tests_education_compensator education_compensator_smoke.cpp)
+target_link_libraries(s7tests_education_compensator PRIVATE s7core s7observe)
+target_include_directories(s7tests_education_compensator PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
+target_compile_definitions(s7tests_education_compensator PRIVATE S7_CT08_DIAGRAM="${PROJECT_SOURCE_DIR}/examples/education/ct08_lead_lag.s7diagram")
+add_test(NAME s7tests_education_compensator COMMAND s7tests_education_compensator)
+set_tests_properties(s7tests_education_compensator PROPERTIES TIMEOUT 30)
+
 s7_add_test_executable(s7tests_linear_examples_smoke linear_examples_smoke.cpp)
 target_link_libraries(s7tests_linear_examples_smoke PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_linear_examples_smoke PRIVATE

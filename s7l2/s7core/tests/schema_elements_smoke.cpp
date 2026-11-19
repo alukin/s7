@@ -9,6 +9,7 @@
 #include <zlib.h>
 #include <iostream>
 #include <stdexcept>
+#include <tuple>
 
 namespace {
 void require(bool ok,const char* message) {if(!ok) throw std::runtime_error(message);}
@@ -159,6 +160,33 @@ void independence_and_limits() {
         direct_cycle |= error.find("Cycle detected without causal memory.")!=std::string::npos;
     require(direct_cycle,"A direct nested path still cannot close a feedback cycle");
 }
+void lead_lag() {
+    for(const auto [scale,zero,pole]:{std::tuple{16.,.8,.2},std::tuple{16.,.2,.2},std::tuple{1.,.2,.8},std::tuple{1.,.2,1.2}}) {
+        auto json=model("LeadLagController",{0,scale,zero,pole});
+        auto& input=json.as_object().at("elements").as_array()[1].as_object();
+        input["type"]="StepGenerator";
+        input["params"]=boost::json::object{{"initial_value",1},{"final_value",-.25},{"start_sample",17}};
+        s7::configure_schema_discretization(json,.001);
+        auto schema=s7::SchemaLibraryLoader::build_schema(json);
+        require(s7::Validator::validate(schema).ok(),"Lead/lag resource validates");
+        s7::NodeRuntime runtime(s7::Compiler::compile(schema));long double previous_error=0,previous_control=0;
+        for(int n=0;n<80;++n) {
+            const long double error=n<17 ? 1.L:-.25L;
+            const long double control=pole*previous_control+scale*(error-zero*previous_error);
+            runtime.step();
+            const auto check=[&](std::size_t port,long double expected) {
+                require(std::abs(runtime.real_output_of("component",port)-expected)<1e-10L*std::max(1.L,std::abs(expected)),"Lead/lag independent transition and memory publication");
+            };
+            check(0,control);check(1,previous_error);check(2,previous_control);
+            if(zero==pole) require(std::abs(control-scale*error)<1e-10,"Exact pole/zero cancellation gives proportional control");
+            previous_error=error;previous_control=control;
+        }
+    }
+    auto direct=model("LeadLagController",{1,16,.8,.2});
+    direct.as_object().at("connections").as_array()[0].as_object()["from_element"]="component";
+    s7::configure_schema_discretization(direct,.001);
+    require(!s7::Validator::validate(s7::SchemaLibraryLoader::build_schema(direct)).ok(),"Lead/lag direct error path cannot close an algebraic loop");
+}
 }
 int main() {
     try {
@@ -166,7 +194,7 @@ int main() {
         const auto count=registry.element_count();s7::register_builtin_elements(registry);
         require(registry.element_count()==count,"Core and bundled resource registration is idempotent");
         corrupt_gzip_library();
-        references();controller_transients();independence_and_limits();
-        std::cout<<"Schema resource: PI/PID, lag, RMS, phase difference, independent instances and nested rates passed\n";
+        references();controller_transients();independence_and_limits();lead_lag();
+        std::cout<<"Schema resource: PI/PID, lead/lag, plant lag, RMS, phase difference, independent instances and nested rates passed\n";
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }

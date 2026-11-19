@@ -60,7 +60,7 @@ recurrences, analytic solutions or reference solvers where appropriate.
 
 ## Learn with S7
 
-The current development tree includes **twenty-two original teaching labs**, with
+The current development tree includes **twenty-three original teaching labs**, with
 new diagrams designed for students. Each guide starts with a question and
 predictions, explains the units and initial state, and gives a small experiment
 to change and explain. Description-frame links open offline student guides
@@ -73,6 +73,7 @@ and original MIT online teaching materials; web links open in the external brows
 | [CT01–CT03](s7l2/education/labs/CT01-first-order/README.md) | First-order charging, damped motion, and numerical instability caused by a coarse sample interval |
 | [CT04/CT05](s7l2/education/labs/CT04-controller-comparison/README.md) | P/PI/PID load rejection, actuator saturation, integral windup and instance-local anti-windup edits |
 | [CT06/CT07](s7l2/education/labs/CT06-closed-loop-poles/README.md) | Closed-loop pole motion, sampled Bode/Nyquist response and independently calculated stability margins |
+| [CT08](s7l2/education/labs/CT08-lead-lag/README.md) | Reusable lead/lag networks, pole/zero cancellation, matched DC gain and transient control effort |
 | [SP01](s7l2/education/labs/SP01-fourier-synthesis/README.md) | Fourier synthesis, harmonic amplitudes, ringing and Parseval’s relation |
 | [SP03](s7l2/education/labs/SP03-aliasing/README.md) | Distinct tones with identical sampled values, and how sample rate exposes aliasing |
 | [SP05](s7l2/education/labs/SP05-convolution/README.md) | Convolution as a sum of shifted impulse responses, overlap and initial history |
@@ -98,7 +99,7 @@ tested numerical envelope. The [verification record](s7l2/education/EVIDENCE.md)
 states the checks, tolerances and remaining qualification.
 
 The [MIT-aligned curriculum](s7l2/education/README.md) plans a broader collection;
-these twenty-two labs have passing development checks, while release/package and
+these twenty-three labs have passing development checks, while release/package and
 platform qualification remain open. They are original S7 exercises with
 links to supporting readings, **not an official or endorsed MIT resource**.
 

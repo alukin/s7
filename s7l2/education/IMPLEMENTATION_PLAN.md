@@ -107,11 +107,12 @@ overwriting of earlier established research conclusions.
 
 ## Development progress — 2026-11-19
 
-Twenty-two core lessons now have new graphs and student guides: FN01–FN06,
-CT01–CT07, SP01, SP03 and SP05–SP11. The [manifest](CORE_MANIFEST.md) and
+Twenty-three core lessons now have new graphs and student guides: FN01–FN06,
+CT01–CT08, SP01, SP03 and SP05–SP11. The [manifest](CORE_MANIFEST.md) and
 [executed evidence](EVIDENCE.md) distinguish these development checks
 from final release qualification. The next implementation batch is
-**CT08**, followed by SP14. CT06/CT07 now connect analytic closed-loop
+**SP14**. CT08 now compares a reusable schema lead/lag network and P
+control, with matched DC gain, effort and cancellation checks. CT06/CT07 now connect analytic closed-loop
 poles with measured open-loop Bode/Nyquist curves and stability margins. CT04/CT05 compare actual discrete
 controller/plant states, load rejection, saturation and saved nested edits. SP11 verifies STFT
 coefficients, window/hop coordinates and the actual map/slice displays. SP10 uses explicit scalar word builders/FIRs and separately checks
@@ -172,7 +173,8 @@ runtime, or new causal semantics. SP11 now adds an original gated-tone/chirp
 graph, independent complex STFT checks and actual map/slice rendering checks.
 CT04/CT05 now add independently checked controller/windup comparisons.
 CT06/CT07 now add sampled poles and independently checked stability margins.
-The next implementation batch is CT08, then SP14.
+CT08 now adds a reusable schema compensator with independent state/response checks.
+The remaining named core implementation is SP14.
 
 **SP06 reference contract, proposed first engineering flagship:**
 

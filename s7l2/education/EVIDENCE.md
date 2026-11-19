@@ -1393,3 +1393,87 @@ b70214385fd41eae94524752f30606e59ff860bd610325f5ceea372c0cfeee32 s7tests/educati
 de9a45dcc92dca545908296f4b3de17be6d0e69fed37629ca461bdc5d2b0da60 s7tests/education_loop_smoke.cpp
 1a169c0878044bf4f376abbaf5e17703b9aa40a1c9ba190f77e6c8e6514b30e1 s7studio/tests/gui/workflows_test.cpp
 ```
+
+## CT08 — reusable lead/lag and matched-DC control comparison, 2026-11-19
+
+Baseline: `49dc7b6`. The new `LeadLagController` definition lives in the
+canonical `s7core/resources/schema_elements.s7library`: eight ordinary
+Gain/Multiply/Adder/Delay blocks, no new C++ element or solver. F64 signal
+inputs are error, scale, zero and pole; outputs are control and the two
+previous values. Both memories start zero; there is no actuator limiter.
+C(z)=K(z−a)/(z−b); coefficients are per sample, not continuous pole frequencies.
+The resource metadata and control/element-information docs distinguish
+internal pole stability, input/output cancellation and closed-loop stability.
+Module tests check the registered factory, old-state publication, lead,
+cancellation, lag, unstable pole and rejected direct algebraic feedback.
+
+The original CT08 graph uses two independent closed loops and a third
+open-loop pulse path, each with its own reusable nested FirstOrderLag plants.
+At 10 Hz, G(z)=.01/(z−.9)^2. P4 and lead K=16,a=.8,b=.2 have DC gain 4 and
+reference .5 from n=10, so both approach .4. Initial ideal commands are 2
+and 8 respectively. The lead zero-state closed denominator factors as
+(z−.5)(z²−1.5z+.58), versus P4 pole magnitude sqrt(.85). Its error from .4
+at state time 8 s is below 1e−6 while P4 still exceeds 1e−4. The primary
+zero edit .8→.2 makes the zero-initialized controller P16; its response is
+checked against CT06's independent analytic P16 mode, not mistaken for P4.
+A DC-matched lag variant K=1,a=.2,b=.8 and deliberately wrong feedback sign
+are separate headless variants. The latter is causally executable but grows.
+
+The independent oracle combines a scalar controller/plant recurrence,
+analytic P4 mode powers and finite convolution of separately derived controller
+and plant impulses. The actual open-loop response transform is checked at all
+513 bins against K(z−a)/(z−b)×G(z). Every exposed memory and every source/state
+in the saved graph is read through production loading/validation/compilation
+and read-only snapshots. Scalar budget is 1e−10×max(1,|reference|), response
+1e−10 and time 1e−12 s. Ordinary baseline/edit/lag state residuals are at most
+4.996e−15; response residuals at most 3.66205e−15. The wrong-sign growing case
+has a 5.90296e21 absolute residual on enormous values, but its largest scaled
+residual is 2.27581e−15. It is not counted as a stable or physically accurate
+controller. Fresh baseline executions repeat within this process/build.
+
+Studio verifies nine literal probe bindings (5,760 recorded values/run), every
+Scope value and ordered displayed subset/extrema, unit 1 and model-time axes,
+every complex response and every Bode/Nyquist point, plus primary F4 edit,
+save/reopen/rerun and response round trip. The time views are zoomed to the
+first 10 s after full-record checks so settling and initial effort are readable.
+The guide distinguishes Time navigation from analysis From/To fields and
+restores the full capture through Fit full run. Original root/nested drawings,
+guides, baseline/edited Time and Bode/Nyquist views are reviewed under Xvfb/Mesa;
+this is not a physical-display student study. Native Windows, installed/
+relocated packages and the final collection-wide audit remain open.
+
+Executed commands:
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7core_schema_elements_smoke s7tests_education_compensator s7studio s7studio_gui_workflows_test --parallel 2
+ctest --test-dir build-release -R '^(s7tests_education_compensator|s7core_schema_elements_smoke|s7core_smoke|s7studio_gui_education_compensator|s7studio_gui_education_loop|s7tests_education_loop|s7tests_control_examples_smoke|s7studio_response)$' --output-on-failure -V
+python3 -B examples/education/generate_compensator_lab.py
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+The final selection passed **8/8 CTest entries**, **14.30 s**, including core
+schema/core smoke, existing controller examples, CT06/CT07 and their GUI,
+CT08 and its GUI, and the response suite. CT08's dedicated GUI reports
+**3 passed, 0 failed, 0 skipped**. Log:
+`/tmp/s7-compensator-final-tests2.log`. Artifacts:
+`build-release/s7studio/gui-artifacts/education-compensator/`.
+All **23 education diagrams** reproduced byte-for-byte from eleven generators;
+**121 examples** passed the static check with zero issues and **205 relative
+links** resolved in the top-level README and twenty-three guides. No C++
+runtime/compiler/validator semantics, global solver or vendor source changed.
+SP14 is the remaining named core implementation. The collection-wide viewer
+audit and release/package/platform qualification remain open.
+
+Final SHA-256 values:
+
+```text
+22f81781585ecee56525455150f606f7ac48b08f14f79d322e559ccd40190184 s7core/resources/schema_elements.s7library
+fabb78bfd1c89c196d9e5830791d9dd5359224f5dc7d45ddc48f498d8af69b41 s7core/tests/schema_elements_smoke.cpp
+db7a8931627c53f094be75623150fd966e322e72b29a5f60561c467d0783480e examples/education/ct08_lead_lag.s7diagram
+6fb8543bb811ac4cf9ea55619cc6a4c7493e66848fa7a7c17c2a8d038e9dce74 examples/education/generate_compensator_lab.py
+e7223e63e7354d0047297b394848c9aa973135fe6e5c83b3ccfcc2ae9b912657 s7tests/education_compensator_reference.hpp
+01a0b61969e89b89bb04645530f99e0f1d8c56e340395aba4b8ba631b189be88 s7tests/education_compensator_smoke.cpp
+829767fd33165d5de3904d23ef0b638f1612a40ce7aef87dfca23fb7748fdb19 s7studio/tests/gui/workflows_test.cpp
+```

@@ -52,6 +52,7 @@ constexpr Topic topics[] = {
     {"Education: CT04 controller comparison", "qrc:/s7studio/help/education/labs/CT04-controller-comparison/README.md"},
     {"Education: CT05 actuator windup", "qrc:/s7studio/help/education/labs/CT05-actuator-windup/README.md"},
     {"Education: CT06 closed-loop poles", "qrc:/s7studio/help/education/labs/CT06-closed-loop-poles/README.md"},
+    {"Education: CT08 lead/lag compensation", "qrc:/s7studio/help/education/labs/CT08-lead-lag/README.md"},
     {"Education: CT07 stability margins", "qrc:/s7studio/help/education/labs/CT07-stability-margins/README.md"},
     {"Education: SP01 Fourier synthesis", "qrc:/s7studio/help/education/labs/SP01-fourier-synthesis/README.md"},
     {"Education: SP03 sampling and aliasing", "qrc:/s7studio/help/education/labs/SP03-aliasing/README.md"},

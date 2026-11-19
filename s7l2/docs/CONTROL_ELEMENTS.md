@@ -112,6 +112,7 @@ is edited. Generic arithmetic primitives remain available for other signal types
 |---|---|---|---|
 | `PIController` | error, kp, ki | control, unlimited | Parallel P/I, output saturation [-1,1], back-calculation anti-windup |
 | `PIDController` | reference, measurement, kp, ki, kd, tau | control, unlimited | Parallel P/I, filtered derivative on measurement, saturation/anti-windup |
+| `LeadLagController` | error, scale, zero, pole | control, previous_error, previous_control | `u[n]=pole*u[n-1]+scale*(error[n]-zero*error[n-1])`, two zero-initialized unit delays, no limiter |
 | `FirstOrderLag` | input, tau | output | `tau*y' = input-y`, initial y=0 |
 | `RMSDetector` | input, tau | rms | `tau*q' = input^2-q`, output sqrt(q), initial q=0 |
 | `PhaseDifference` | phase_a, phase_b | difference | Adder followed by PhaseWrap, radians in [-pi,pi) |
@@ -128,7 +129,7 @@ integral' = ki*error + 10*(u-raw)
 PID filter_state' = filter_rate
 ```
 
-All state updates use ordinary forward-rectangle causal integrators. Gains are
+PI/PID, lag and RMS integral states use ordinary forward-rectangle causal integrators. Gains are
 signal inputs: connect constants for fixed tuning, or other signals for explicit
 gain scheduling. Initial integral/filter states are zero. Use positive tau;
 `tau >= dt` is a useful starting constraint for the lag/RMS filter, and numerical
@@ -136,10 +137,20 @@ validation is still required for a chosen closed loop. Controller limits and
 the 10/s tracking coefficient are editable internal block parameters. The RMS
 detector measures an exponentially filtered mean square, not a finite-window RMS.
 
+`LeadLagController` instead uses explicit one-step memory. Scale has output/error
+units; zero and pole are dimensionless per-sample coefficients, supplied as F64
+signals. For positive scale and 0<pole<zero<1 the network supplies phase lead;
+reversing zero/pole gives lag. Its zero-state transfer is
+`C(z)=scale*(z-zero)/(z-pole)`. Both stored values initially equal zero.
+A pole/zero cancellation in the transfer does not remove the stored state;
+internal stability and closed-loop stability need their own checks. There is
+no output saturation. Fixed coefficients have a different physical response
+when the model rate changes; they are not continuous pole/time-constant inputs.
+
 Validation and compilation flatten same-node nested schemas under
 [ADR-024](../../doc/S7_Architectural_Decisions.md#adr-024), so feedback through an
 internal causal-memory integrator is valid exactly when the inlined loop is.
-Causality is checked per path: PI/PID proportional paths remain direct
+Causality is checked per path: PI/PID proportional and lead/lag current-error paths remain direct
 feedthrough and still need causal plant memory on the loop, whether that memory
 is at the top level or inside a nested plant. An outer `Delay` is not required
 just to package the plant; adding one introduces one sample of latency and

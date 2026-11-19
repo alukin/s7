@@ -25,7 +25,7 @@ source inventory to 110 diagrams. SP05/SP07 add two more, for
 114 diagrams. SP10 adds one, then SP11 adds one, for **116 diagrams**,
 including 18 education labs. CT04/CT05 add two, for **118 diagrams**
 and 20 education labs. CT06/CT07 add two, for **120 diagrams** and
-**22 education labs**.
+22 education labs. CT08 adds one, for **121 diagrams** and **23 education labs**.
 Development checks are recorded in EVIDENCE.md;
 final release qualification remains open.
 
@@ -84,7 +84,7 @@ contracts, with independent formulas and public MIT topic links. Other labs rema
 
 All paths in the reference column are under `examples/` and are **references,
 not delivered lab diagrams**. Every row needs a new graph and student guide.
-FN01–FN06, CT01–CT07, SP01, SP03 and SP05–SP11 now have new saved graphs and guides. Other entries
+FN01–FN06, CT01–CT08, SP01, SP03 and SP05–SP11 now have new saved graphs and guides. Other entries
 describe planned work, not existing educational files.
 
 | ID | Engineering references inspected | New educational graph and reference work | Development status |
@@ -112,7 +112,7 @@ describe planned work, not existing educational files.
 | CT05 | `control/first_order_pi.s7diagram`, `first_order_pi_no_aw.s7diagram` | [New windup comparison](../examples/education/ct05_actuator_windup.s7diagram), [guide](labs/CT05-actuator-windup/README.md); bounded command versus demand/state, recovery IAE and nested instance edit | diagram-ready; development checks recorded separately |
 | CT06 | Frequency-response/control primitives | [New pole-motion graph](../examples/education/ct06_closed_loop_poles.s7diagram), [guide](labs/CT06-closed-loop-poles/README.md); analytic mode powers, gain sweep, marginal/growing cases | diagram-ready; development checks recorded separately |
 | CT07 | Frequency-response observers and tests | [New margin graph](../examples/education/ct07_stability_margins.s7diagram), [guide](labs/CT07-stability-margins/README.md); exact rational response, analytic crossovers and Bode/Nyquist points | diagram-ready; development checks recorded separately |
-| CT08 | Control primitives and schema-backed controller definitions | New lead/lag network; chosen discrete transfer and independently calculated response | proposed |
+| CT08 | Control primitives and schema-backed controller definitions | [New compensator graph](../examples/education/ct08_lead_lag.s7diagram), [guide](labs/CT08-lead-lag/README.md); reusable lead/lag, independent states/finite convolution/rational response, cancellation and wrong-sign checks | diagram-ready; development checks recorded separately |
 
 FN05/FN06 require particular care: supplied-sample backward integration,
 explicit algebraically reduced recurrences and coupled numerical stages are
@@ -120,7 +120,7 @@ different contracts. Do not add a general implicit solver to fill a teaching
 row. SP10 resolves its recording workflow using scalar word builders and explicit
 FIRs, then bridges recorded samples to the separate frame APIs in the test.
 Availability of frame convolution alone is not counted as graph support.
-CT08 still needs its lab-specific compensator verification.
+CT08 now checks the compensator, nested plants and actual open-/closed-loop paths.
 
 ## Delivery order
 
@@ -137,6 +137,6 @@ CT08 still needs its lab-specific compensator verification.
    own negative cases. Coordinate G2 only after local SP06 acceptance.
 
 Each batch needs focused tests, student instructions, Studio evidence and
-eventual installed-package checks. The remaining 2 core labs, source-specific
+eventual installed-package checks. The remaining core lab (SP14), source-specific
 reviews, package navigation and final-candidate qualification are open;
 no core ID was removed or replaced.

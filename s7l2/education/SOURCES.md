@@ -255,3 +255,12 @@ interpretation. These continuous-time examples are topic sources, not copied
 models: S7's new loop explicitly uses the discrete unit-circle criterion,
 exact sampled transfer and original schedules. No handout/figure/assignment
 or solution is bundled; formulas and datasets were derived independently.
+
+## CT08 — original discrete lead/lag network, 2026-11-19
+
+[MIT 16.06, Fall 2012, Lecture 25: Lead Compensation](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_25/),
+PDF pages 1–2, and [Lecture 14: Lag Compensation](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_14/),
+PDF pages 2–3, were inspected for topic alignment. The notes describe
+continuous-time pole/zero shaping; CT08 explicitly defines a different
+original sampled recurrence, a matched-DC comparison and its control effort.
+No worked problem, figure, assignment or solution is copied or bundled.

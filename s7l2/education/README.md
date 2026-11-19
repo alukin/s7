@@ -60,6 +60,9 @@ applied/unlimited/state plots and an instance-local nested edit.
 unit-circle stability with independent rational frequency responses and
 actual Bode/Nyquist displays.
 
+[CT08](labs/CT08-lead-lag/README.md) adds an original reusable lead/lag
+comparison with matched DC gain, explicit control effort and cancellation.
+
 The first implemented signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
 predict a filter's response, run and inspect it, then remove one tap and explain
 the changed result. The diagram's description links to the offline S7 guide
