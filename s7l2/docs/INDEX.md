@@ -79,6 +79,8 @@ of both production convolution processors.
 adds independently checked burst/chirp maps, window/hop controls and edge interpretation.
 [CT04/CT05 — controller comparison and windup](../education/labs/CT04-controller-comparison/README.md)
 add checked feedback states, actuator limits and saved anti-windup edits.
+[CT06/CT07 — sampled poles and margins](../education/labs/CT06-closed-loop-poles/README.md)
+connect mode powers with measured Bode/Nyquist responses.
 [Development evidence](../education/EVIDENCE.md)
 is separate from release qualification. Description frames link to offline
 guides and original MIT online teaching materials.

@@ -244,3 +244,14 @@ Synthetic schedules, new diagrams and long-double scalar reference equations
 are original S7 work. No PDF, figure, assignment or solution is bundled.
 The current 6.3100 calendar timed out during this batch; no new claim about
 its current lecture numbering is made. Topic links above use dated OCW material.
+
+## CT06/CT07 — original sampled loop, 2026-11-19
+
+[MIT 16.06, Fall 2012, Lecture 11](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_11/),
+PDF pages 1–3, was inspected for gain-dependent characteristic-root reasoning.
+[Lecture 23](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_23/),
+PDF pages 1–2, was inspected for gain/phase margin definitions and Bode/Nyquist
+interpretation. These continuous-time examples are topic sources, not copied
+models: S7's new loop explicitly uses the discrete unit-circle criterion,
+exact sampled transfer and original schedules. No handout/figure/assignment
+or solution is bundled; formulas and datasets were derived independently.

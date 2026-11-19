@@ -17,6 +17,8 @@ through **File → Example Diagrams… → education** and set its stated run pr
 | CT03: can a slow sample rate invent growth? | [ct03_sample_time.s7diagram](ct03_sample_time.s7diagram) | 10 s at 2 Hz | [Student lab](../../education/labs/CT03-sample-time/README.md) |
 | CT04: controller comparison | [ct04_controller_comparison.s7diagram](ct04_controller_comparison.s7diagram) | 16 s at 100 Hz | [Student lab](../../education/labs/CT04-controller-comparison/README.md) |
 | CT05: actuator windup | [ct05_actuator_windup.s7diagram](ct05_actuator_windup.s7diagram) | 12 s at 100 Hz | [Student lab](../../education/labs/CT05-actuator-windup/README.md) |
+| CT06: closed-loop poles | [ct06_closed_loop_poles.s7diagram](ct06_closed_loop_poles.s7diagram) | 32 s at 10 Hz | [Student lab](../../education/labs/CT06-closed-loop-poles/README.md) |
+| CT07: stability margins | [ct07_stability_margins.s7diagram](ct07_stability_margins.s7diagram) | 64 s at 10 Hz | [Student lab](../../education/labs/CT07-stability-margins/README.md) |
 | SP01: build a square wave from smooth tones | [sp01_fourier_synthesis.s7diagram](sp01_fourier_synthesis.s7diagram) | 2 s at 128 Hz | [Student lab](../../education/labs/SP01-fourier-synthesis/README.md) |
 | SP03: three tones, one sampled sequence | [sp03_aliasing.s7diagram](sp03_aliasing.s7diagram) | 2 s at 64 Hz | [Student lab](../../education/labs/SP03-aliasing/README.md) |
 | SP05: add shifted impulse responses | [sp05_convolution.s7diagram](sp05_convolution.s7diagram) | 2 s at 20 Hz | [Student lab](../../education/labs/SP05-convolution/README.md) |
@@ -42,6 +44,7 @@ through **File → Example Diagrams… → education** and set its stated run pr
 11. **SP10:** predict wrap-around, pad enough zeros and account for FIR startup.
 12. **SP11:** locate a burst/chirp, vary window and hop, and explain edge overlap.
 13. **CT04/CT05:** compare controller/load errors, then inspect hidden integral windup.
+14. **CT06/CT07:** connect sampled pole motion with measured open-loop stability margins.
 
 Each file saves the run configuration in the table. FN01–FN03 use
 **2 s / 10 Hz**. Click Run and keep the saved settings; the short-run notice is intentional. Double-click
@@ -178,3 +181,8 @@ Build `s7tests_education_spectral`, then run
 `ctest --test-dir build-release -R '^s7tests_education_spectral$' -V`.
 Regenerate both original graphs with
 `python3 -B examples/education/generate_spectral_labs.py` from `s7l2/`.
+
+CT06/CT07 use an original two-lag sampled loop. Read the distinction between
+ideal unlimited commands, actual discrete poles and the positive-frequency
+Nyquist branch before interpreting stability. Build `s7tests_education_loop`;
+regenerate with `python3 -B examples/education/generate_loop_labs.py`.

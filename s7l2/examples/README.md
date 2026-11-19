@@ -35,6 +35,8 @@ New diagrams designed specifically for teaching; see the
 | CT03 — Can a slow sample rate invent growth? | [New teaching graph](education/ct03_sample_time.s7diagram) |
 | CT04 — Does integral action remove the load error? | [New teaching graph](education/ct04_controller_comparison.s7diagram) |
 | CT05 — Why does a clipped actuator keep pushing? | [New teaching graph](education/ct05_actuator_windup.s7diagram) |
+| CT06 — Closed-loop poles | [New teaching graph](education/ct06_closed_loop_poles.s7diagram) |
+| CT07 — Stability margins | [New teaching graph](education/ct07_stability_margins.s7diagram) |
 | SP01 — Build a square wave from smooth tones | [New teaching graph](education/sp01_fourier_synthesis.s7diagram) |
 | SP03 — Three tones, one sampled sequence | [New teaching graph](education/sp03_aliasing.s7diagram) |
 | SP05 — Add shifted impulse responses | [New teaching graph](education/sp05_convolution.s7diagram) |

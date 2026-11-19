@@ -1,0 +1,885 @@
+{
+  "id": "ct07_stability_margins",
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "dt": 0.1,
+  "studio_run": {
+    "runtime_seconds": 64,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 515,
+    "height_mm": 455
+  },
+  "schema": {
+    "name": "CT07 \u2014 How much gain or phase reserve does this loop have?",
+    "dt": 0.1,
+    "elements": [
+      {
+        "id": "gain",
+        "type": "Constant",
+        "params": {
+          "value": 4
+        }
+      },
+      {
+        "id": "reference",
+        "type": "StepGenerator",
+        "params": {
+          "initial_value": 0,
+          "final_value": 0.5,
+          "start_time": 1
+        }
+      },
+      {
+        "id": "error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "command",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "closed_x",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "closed_x_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "closed_y",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "closed_y_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "pulse",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.1,
+          "start_time": 0.8
+        }
+      },
+      {
+        "id": "open_command",
+        "type": "Multiply",
+        "params": {}
+      },
+      {
+        "id": "open_x",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "open_x_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "open_y",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "open_y_rate",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "reference",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 0
+      },
+      {
+        "from_element": "closed_y",
+        "from_port": 0,
+        "to_element": "error",
+        "to_port": 1
+      },
+      {
+        "from_element": "error",
+        "from_port": 0,
+        "to_element": "command",
+        "to_port": 0
+      },
+      {
+        "from_element": "gain",
+        "from_port": 0,
+        "to_element": "command",
+        "to_port": 1
+      },
+      {
+        "from_element": "command",
+        "from_port": 0,
+        "to_element": "closed_x_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "closed_x",
+        "from_port": 0,
+        "to_element": "closed_x_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "closed_x_rate",
+        "from_port": 0,
+        "to_element": "closed_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "closed_x",
+        "from_port": 0,
+        "to_element": "closed_y_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "closed_y",
+        "from_port": 0,
+        "to_element": "closed_y_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "closed_y_rate",
+        "from_port": 0,
+        "to_element": "closed_y",
+        "to_port": 0
+      },
+      {
+        "from_element": "pulse",
+        "from_port": 0,
+        "to_element": "open_command",
+        "to_port": 0
+      },
+      {
+        "from_element": "gain",
+        "from_port": 0,
+        "to_element": "open_command",
+        "to_port": 1
+      },
+      {
+        "from_element": "open_command",
+        "from_port": 0,
+        "to_element": "open_x_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "open_x",
+        "from_port": 0,
+        "to_element": "open_x_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "open_x_rate",
+        "from_port": 0,
+        "to_element": "open_x",
+        "to_port": 0
+      },
+      {
+        "from_element": "open_x",
+        "from_port": 0,
+        "to_element": "open_y_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "open_y",
+        "from_port": 0,
+        "to_element": "open_y_rate",
+        "to_port": 1
+      },
+      {
+        "from_element": "open_y_rate",
+        "from_port": 0,
+        "to_element": "open_y",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "gain",
+        "position": [
+          2.6,
+          66.75
+        ],
+        "title": "Loop gain K: edit 4 \u2192 16"
+      },
+      {
+        "id": "reference",
+        "position": [
+          2.6,
+          51.800000000000004
+        ],
+        "title": "Step reference at source time 1 s"
+      },
+      {
+        "id": "error",
+        "position": [
+          14.3,
+          51.800000000000004
+        ],
+        "title": "Negative feedback: r \u2212 y"
+      },
+      {
+        "id": "command",
+        "position": [
+          25.35,
+          51.800000000000004
+        ],
+        "title": "Ideal command K \u00d7 error; no limiter"
+      },
+      {
+        "id": "closed_x",
+        "position": [
+          46.800000000000004,
+          51.800000000000004
+        ],
+        "title": "First lag state x"
+      },
+      {
+        "id": "closed_x_rate",
+        "position": [
+          36.4,
+          51.800000000000004
+        ],
+        "title": "Derivative = input \u2212 old state"
+      },
+      {
+        "id": "closed_y",
+        "position": [
+          68.25,
+          51.800000000000004
+        ],
+        "title": "Output y; both lags \u03c4=1 s"
+      },
+      {
+        "id": "closed_y_rate",
+        "position": [
+          57.85,
+          51.800000000000004
+        ],
+        "title": "Derivative = input \u2212 old state"
+      },
+      {
+        "id": "pulse",
+        "position": [
+          2.6,
+          28.400000000000002
+        ],
+        "title": "One unit-height pulse at n=8"
+      },
+      {
+        "id": "open_command",
+        "position": [
+          25.35,
+          28.400000000000002
+        ],
+        "title": "Same K; open-loop input"
+      },
+      {
+        "id": "open_x",
+        "position": [
+          46.800000000000004,
+          28.400000000000002
+        ],
+        "title": "First lag state x"
+      },
+      {
+        "id": "open_x_rate",
+        "position": [
+          36.4,
+          28.400000000000002
+        ],
+        "title": "Derivative = input \u2212 old state"
+      },
+      {
+        "id": "open_y",
+        "position": [
+          68.25,
+          28.400000000000002
+        ],
+        "title": "Output y; both lags \u03c4=1 s"
+      },
+      {
+        "id": "open_y_rate",
+        "position": [
+          57.85,
+          28.400000000000002
+        ],
+        "title": "Derivative = input \u2212 old state"
+      },
+      {
+        "id": "scope",
+        "position": [
+          79.3,
+          51.800000000000004
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Closed-loop step: stability cross-check",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "reference",
+            "closed_output"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "pulse_scope",
+        "position": [
+          79.3,
+          28.400000000000002
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Open-loop pulse and complete tail",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "pulse",
+            "open_output"
+          ],
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      },
+      {
+        "id": "response",
+        "position": [
+          57.85,
+          71.3
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "title": "Open-loop Bode / Nyquist; reference gain 1",
+        "params": {
+          "channel_units": [
+            "1",
+            "1"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "closed_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "error",
+            "in",
+            1
+          ]
+        },
+        "bends": [
+          [
+            77.35000000000001,
+            62.85
+          ],
+          [
+            12.35,
+            62.85
+          ],
+          [
+            12.35,
+            54.4
+          ]
+        ]
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "command",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "command",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "closed_x_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "closed_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "closed_x_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "closed_x_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "closed_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "closed_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "closed_y_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "closed_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "closed_y_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "closed_y_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "closed_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_command",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "gain",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_command",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "open_command",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_x_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "open_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_x_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "open_x_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_x",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "open_x",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_y_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "open_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_y_rate",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "open_y_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "open_y",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "reference",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w19",
+        "from": {
+          "port": [
+            "closed_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w20",
+        "from": {
+          "port": [
+            "pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pulse_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w21",
+        "from": {
+          "port": [
+            "open_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "pulse_scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w22",
+        "from": {
+          "port": [
+            "pulse",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w23",
+        "from": {
+          "port": [
+            "open_y",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**CT07 \u2014 How much gain or phase reserve does this loop have?**  \n**Predict \u2192 Run \u2192 Inspect \u2192 Change gain.** Run 64 s at 10 Hz. Open Frequency response: Bode and Nyquist. Gain reference must be 1; keep phase unwrapped.  \nL(z)=0.01K/(z\u22120.9)\u00b2. At K=4, gain margin=19/4; at K=16, 19/16. DC is excluded from the log-frequency Bode plot, but retained in Nyquist/export.  \nSelect gain, F4: value 4 \u2192 16; save/reopen/rerun. All signals use normalized unit 1.  \nSource/state sample n is observed at Scope time (n+1)/10 s. Each lag updates from the same old states; do not add a feedback delay.  \n[Open CT07 student lab](qrc:/s7studio/help/education/labs/CT07-stability-margins/README.md) \u00b7 [MIT root locus](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_11/) \u00b7 [MIT stability margins](https://ocw.mit.edu/courses/16-06-principles-of-automatic-control-fall-2012/resources/mit16_06f12_lecture_23/)",
+          "text_format": "markdown",
+          "width": 1700,
+          "height": 440,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

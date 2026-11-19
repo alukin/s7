@@ -56,6 +56,10 @@ hop coordinates, power normalization and the actual map/slice displays.
 and windup comparisons with independent discrete-state checks, separate
 applied/unlimited/state plots and an instance-local nested edit.
 
+[CT06/CT07](labs/CT06-closed-loop-poles/README.md) connect closed-loop
+unit-circle stability with independent rational frequency responses and
+actual Bode/Nyquist displays.
+
 The first implemented signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
 predict a filter's response, run and inspect it, then remove one tap and explain
 the changed result. The diagram's description links to the offline S7 guide

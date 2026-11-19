@@ -72,6 +72,13 @@ target_compile_definitions(s7tests_education_control PRIVATE S7_CONTROL_LABS_DIR
 add_test(NAME s7tests_education_control COMMAND s7tests_education_control)
 set_tests_properties(s7tests_education_control PROPERTIES TIMEOUT 30)
 
+s7_add_test_executable(s7tests_education_loop education_loop_smoke.cpp)
+target_link_libraries(s7tests_education_loop PRIVATE s7core s7observe)
+target_include_directories(s7tests_education_loop PRIVATE ${PROJECT_SOURCE_DIR}/s7spectral/include)
+target_compile_definitions(s7tests_education_loop PRIVATE S7_LOOP_LABS_DIR="${PROJECT_SOURCE_DIR}/examples/education")
+add_test(NAME s7tests_education_loop COMMAND s7tests_education_loop)
+set_tests_properties(s7tests_education_loop PROPERTIES TIMEOUT 30)
+
 s7_add_test_executable(s7tests_linear_examples_smoke linear_examples_smoke.cpp)
 target_link_libraries(s7tests_linear_examples_smoke PRIVATE s7core s7observe)
 target_compile_definitions(s7tests_linear_examples_smoke PRIVATE

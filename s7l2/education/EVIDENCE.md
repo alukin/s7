@@ -1306,3 +1306,90 @@ e2ad9a7ba280653f864daa2f4106cdf246d05f672820e9b67bed4e73e8300c5f s7studio/src/vi
 970a3a68fc9a2e58f516da37098334e05da0316c9cf0c5ea431365dd83fed0cb s7studio/tests/observer_presentations_test.cpp
 2910da3ce564222ca6fdd11576b604a5d2bb45fdd4f453c168f1f0470098a634 s7studio/tests/gui/workflows_test.cpp
 ```
+
+## CT06/CT07 — sampled poles and stability margins, 2026-11-19
+
+Baseline: `3c4a52a`; original new two-lag graphs, with ideal unlimited
+commands explicitly distinguished from CT05's bounded actuator. At h=.1 s,
+x_next=.9x+.1u and y_next=.9y+.1x use the same old states. Closed feedback
+u=K(r−y) has poles .9±.1i√K. The independent oracle evaluates complex mode
+powers, not an S7 reference graph or second invocation of the runtime.
+Every source, command, error, intermediate rate and state is checked against
+that closed form, with exact transition and rounded nanosecond conventions.
+CT06 covers K=0,1,4,16,19,25, checks the actual complex mode's per-step
+rotation/growth, and keeps marginal/growing cases explicit. The primary
+F4 edit K=4→16 is saved/reopened/rerun.
+
+CT07 contains separately observed open-loop pulse and closed-loop step paths
+with the same gain/plant. Its independent pulse formula is
+h[m]=.01K(m−1).9^(m−2), m≥2, and rational transfer L(z)=.01K/(z−.9)^2.
+The production transform of the exact captured graph's output is checked at
+every frequency, including DC/Nyquist. The 640-sample capture has its pulse
+at n=8, 632 retained response samples and a 1024-point evaluation grid.
+Analytic phase crossover is acos(.9) rad/sample, f_pc=.717831 Hz, with
+L(f_pc)=−K/19. Independently calculated values:
+
+| K | GM factor | PM degrees | f_gc Hz |
+| --- | --- | --- | --- |
+| 4 | 4.75 | 49.2486 | .290981 |
+| 16 | 1.1875 | 4.77603 | .654346 |
+| 25 | .76 | −7.64511 | .831290 |
+
+The margins agree with actual closed-loop stability for this declared stable
+open-loop plant. The 24-sample truncated capture deliberately fails the
+complete-tail DC estimate. No automatic generic margin/stability certification
+was added to the viewer. The guide distinguishes sampled and continuous
+models, Hz and log10 Hz, dB reference one, wrapped versus unwrapped phase,
+positive-frequency Nyquist branch versus full contour, and nearest-bin
+inspection versus an analytic continuous crossover.
+
+Ordinary stable-mode residuals are at most 1.15463e−14; marginal K=19 gives
+1.73639e−13, and the growing 64 s K=25 variant approximately 1.9e−5 absolute
+on very large states, all within the frozen `1e−10×max(1,|reference|)` budget.
+The largest complex transfer residual is 7.32411e−15 against 1e−10. Coordinates
+use 1e−12 s/Hz and displayed phase uses 1e−8 degrees. Fresh CT06 runs repeat
+within this process/build; no cross-platform bitwise guarantee is claimed.
+
+Studio checks literal bindings, every recorded/Scope value, all displayed
+points/extrema, units and axes. The response result and each Bode/Nyquist
+series point are compared with the independent rational function. The
+inspector is checked against its actual nearest bin and result save/reopen
+retains the complex matrix. Root graphs, guides, Bode/Nyquist and baseline/
+edited Time captures are reviewed under Xvfb/Mesa, not a physical-display
+student study. An initial round-trip fixture waited for a hidden view's
+deferred display; it was corrected to show the view before waiting, with no
+production change to its intentional visibility/cancellation policy.
+
+Executed commands:
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target s7tests_education_loop --parallel 2
+cmake --build build-release --target s7studio s7studio_gui_workflows_test --parallel 2
+ctest --test-dir build-release -R '^(s7tests_education_loop|s7studio_gui_education_loop|s7studio_response|s7tests_education_control|s7studio_observer_presentations)$' --output-on-failure -V
+python3 -B examples/education/generate_loop_labs.py
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+The final focused selection passed **5/5 CTest entries**; the dedicated GUI
+selection passed **4 Qt checks, zero failures/skips** (two labs plus setup/
+cleanup). Log: `/tmp/s7-loop-final-focused.log`. All **22 education diagrams**
+reproduced byte-for-byte from ten generators; **120 examples** passed the
+static check with zero issues. **199 relative links** in the top-level README
+and twenty-two student guides resolved. No production runtime or viewer
+algorithm changed in this batch. Native Windows, installed/relocated packages,
+the complete release-render matrix and collection-wide viewer audit remain
+open. Two core labs remain: CT08 and SP14. Status remains diagram-ready
+with development checks.
+
+Final SHA-256 values:
+
+```text
+bd2f4c7f69ed7c996ace452672dd6293fcdef3c97de34b672f5e423fd0fa7a61 examples/education/ct06_closed_loop_poles.s7diagram
+c34bf633f018bb521c22e3876e9fcebde9137bb27958510fdd9e1d92a5f5c32e examples/education/ct07_stability_margins.s7diagram
+66aaf9534eda82cdcedd795cb6f9d18bf888406052b5b0e8fbd5786041ca2ed9 examples/education/generate_loop_labs.py
+b70214385fd41eae94524752f30606e59ff860bd610325f5ceea372c0cfeee32 s7tests/education_loop_reference.hpp
+de9a45dcc92dca545908296f4b3de17be6d0e69fed37629ca461bdc5d2b0da60 s7tests/education_loop_smoke.cpp
+1a169c0878044bf4f376abbaf5e17703b9aa40a1c9ba190f77e6c8e6514b30e1 s7studio/tests/gui/workflows_test.cpp
+```
