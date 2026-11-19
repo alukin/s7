@@ -604,6 +604,13 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
             --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
             -- $<TARGET_FILE:s7studio_gui_workflows_test> educationAm)
     set_tests_properties(s7studio_gui_education_am PROPERTIES TIMEOUT 150 LABELS "gui;qt-regression")
+    add_test(NAME s7studio_gui_education_navigation
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-navigation"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 90
+            -- $<TARGET_FILE:s7studio_gui_workflows_test>
+                helpExternalBrowserLinks helpExampleLinks helpExamplePathContainment exampleReplacementSafety)
+    set_tests_properties(s7studio_gui_education_navigation PROPERTIES TIMEOUT 120 LABELS "gui;qt-regression")
     # Every bundled example: open, run as documented, inspect each observer
     # window and analysis tab. Several minutes per shard; label "examples".
     set(s7_gui_example_shards 4)

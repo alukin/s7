@@ -6,7 +6,9 @@
 #include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -108,6 +110,15 @@ bool isHelpArticle(const QUrl& url)
         QFile::exists(QStringLiteral(":") + url.path());
 }
 
+QString helpExamplePath(const QUrl& url)
+{
+    const auto prefix = QStringLiteral("/s7studio/help/examples/");
+    if (url.scheme() != QStringLiteral("qrc") || !url.authority().isEmpty() ||
+        url.hasQuery() || url.hasFragment() || !url.path().startsWith(prefix) ||
+        !url.path().endsWith(QStringLiteral(".s7diagram"))) return {};
+    return url.path().mid(prefix.size());
+}
+
 void showWindow(QDialog* dialog)
 {
     dialog->show();
@@ -123,7 +134,20 @@ void addCloseButton(QDialog* dialog, QVBoxLayout* layout)
 }
 }
 
-void showHelp(QWidget* parent)
+QString resolveHelpExample(const QString& directory, const QString& relativePath)
+{
+    const auto root = QFileInfo(directory).canonicalFilePath();
+    if (root.isEmpty() || !QDir::isRelativePath(relativePath)) return {};
+    const QFileInfo target(QDir(root).filePath(relativePath));
+    const auto canonical = target.canonicalFilePath();
+    const auto withinRoot = QDir(root).relativeFilePath(canonical);
+    if (canonical.isEmpty() || !target.isFile() || !QDir::isRelativePath(withinRoot) ||
+        withinRoot == QStringLiteral("..") || withinRoot.startsWith(QStringLiteral("../")) ||
+        !canonical.endsWith(QStringLiteral(".s7diagram"))) return {};
+    return canonical;
+}
+
+void showHelp(QWidget* parent, const OpenHelpExample& openExample)
 {
     if (auto* existing = parent->findChild<QDialog*>(QStringLiteral("dialog.help"))) {
         showWindow(existing);
@@ -197,10 +221,23 @@ void showHelp(QWidget* parent)
         linkStatus->setText(opened ? QString{} : QStringLiteral("Could not open the external browser for %1").arg(url.toDisplayString()));
         linkStatus->setVisible(!opened);
     };
-    QObject::connect(browser, &QTextBrowser::anchorClicked, browser, [browser, linkStatus, openExternal](const QUrl& link) {
+    QObject::connect(browser, &QTextBrowser::anchorClicked, browser, [dialog, browser, linkStatus, openExternal, openExample](const QUrl& link) {
         const auto resolved = browser->source().resolved(link).adjusted(QUrl::NormalizePathSegments);
         if (isWebLink(resolved)) {
             openExternal(resolved);
+            return;
+        }
+        const auto example = helpExamplePath(resolved);
+        if (!example.isEmpty() && openExample) {
+            // Let the main window's normal replacement prompt take focus.
+            dialog->hide();
+            if (openExample(example)) {
+                linkStatus->hide();
+                return;
+            }
+            linkStatus->setText(QStringLiteral("Example was not opened: %1. Opening was canceled or the example is unavailable.").arg(example));
+            linkStatus->show();
+            showWindow(dialog);
             return;
         }
         if (isHelpArticle(resolved)) {
@@ -240,19 +277,19 @@ void showHelp(QWidget* parent)
     search->setFocus();
 }
 
-void openHelpLink(QWidget* parent, const QUrl& link)
+void openHelpLink(QWidget* parent, const QUrl& link, const OpenHelpExample& openExample)
 {
     const auto normalized = link.adjusted(QUrl::NormalizePathSegments);
-    if (!isHelpArticle(normalized) && !isWebLink(normalized)) return;
+    if (!isHelpArticle(normalized) && !isWebLink(normalized) && helpExamplePath(normalized).isEmpty()) return;
     if (isWebLink(normalized)) {
         if (QDesktopServices::openUrl(normalized)) return;
-        showHelp(parent);
+        showHelp(parent, openExample);
         auto* status = parent->findChild<QLabel*>(QStringLiteral("help.linkStatus"));
         status->setText(QStringLiteral("Could not open the external browser for %1").arg(normalized.toDisplayString()));
         status->show();
         return;
     }
-    showHelp(parent);
+    showHelp(parent, openExample);
     auto* dialog = parent->findChild<QDialog*>(QStringLiteral("dialog.help"));
     auto* browser = dialog->findChild<QTextBrowser*>(QStringLiteral("help.browser"));
     // Share normal help navigation, including browser-launch failure feedback.

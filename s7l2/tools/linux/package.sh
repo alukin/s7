@@ -101,6 +101,9 @@ fi
 export NO_STRIP=1
 export PATCHELF="${PATCHELF:-$(command -v patchelf || true)}"
 [ -n "$PATCHELF" ] || { echo "error: install host patchelf before packaging" >&2; exit 1; }
+# SDK-built plugins need this build's core during dependency discovery even
+# when their installed RPATH does not point back into the build tree.
+LD_LIBRARY_PATH="$BUILD/s7core${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 QMAKE="${QMAKE:-qmake6}" APPIMAGE_EXTRACT_AND_RUN=1 "$LINUXDEPLOY" \
     --appdir "$OUT" \
     "${EXECUTABLES[@]}" \
@@ -124,11 +127,13 @@ for module in s7spectral s7wavelet s7audio-elements s7sdr-elements; do
     if [ -f "$OUT/usr/lib/lib$module.so" ]; then
         mkdir -p "$OUT/usr/lib/s7/plugins"
         cp "$OUT/usr/lib/lib$module.so" "$OUT/usr/lib/s7/plugins/"
+        "$PATCHELF" --set-rpath '$ORIGIN/../..' "$OUT/usr/lib/s7/plugins/lib$module.so"
     fi
 done
 if [ -f "$OUT/usr/lib/libs7noise.so" ]; then
     mkdir -p "$OUT/usr/lib/s7/plugins"
     cp "$OUT/usr/lib/libs7noise.so" "$OUT/usr/lib/s7/plugins/libs7noise.so"
+    "$PATCHELF" --set-rpath '$ORIGIN/../..' "$OUT/usr/lib/s7/plugins/libs7noise.so"
 fi
 
 for program in s7runtime s7ctl s7studio s7hw; do
@@ -136,7 +141,7 @@ for program in s7runtime s7ctl s7studio s7hw; do
 done
 mkdir -p "$OUT/usr/share/s7/runtime" "$OUT/usr/share/s7"
 cp -r "$SOURCE/s7runtime/examples" "$OUT/usr/share/s7/runtime/examples"
-cp -r "$SOURCE/examples" "$OUT/usr/share/s7/examples"
+python3 -B "$SOURCE/tools/teaching_assets.py" copy "$SOURCE" "$OUT/usr/share/s7"
 cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/usr/share/s7/"
 cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/usr/share/s7/"
 python3 "$SOURCE/tools/package_notices.py" "$SOURCE" "$BUILD" "$OUT"

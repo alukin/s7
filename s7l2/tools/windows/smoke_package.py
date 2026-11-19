@@ -11,13 +11,18 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from teaching_assets import check as check_teaching_assets
 
 
 def check(package, artifacts):
     package = package.resolve()
     artifacts = artifacts.resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
+    teaching = check_teaching_assets(package / 'share/s7')
     profile = json.loads((package / 'build-profile.json').read_text())['build_options']
     if profile.get('S7_BUILD_SDR:BOOL') != 'OFF' or profile.get('S7_PORTAUDIO:STRING') != 'ON':
         raise RuntimeError('Expected the sound-enabled, SDR-disabled Windows profile')
@@ -96,7 +101,7 @@ def check(package, artifacts):
             package / 'share/s7/examples/hardware/portaudio_capture.json', cwd / 'sound.s7diagram')
         for mode in ('scope-run', 'phase-portrait', 'phase-trajectory-3d', 'live-spectrum'):
             run('studio-' + mode, 'wine', package / 's7studio.exe', '--' + mode + '-check')
-    (artifacts / 'summary.json').write_text(json.dumps({'passed': True, 'checks': results,
+    (artifacts / 'summary.json').write_text(json.dumps({'passed': True, 'checks': results, 'teaching_assets': teaching,
         'sdr_excluded': True, 'sound_backend': 'portaudio', 'physical_sound_device_opened': False,
         'native_windows_qualified': False}, indent=2) + '\n')
     print(f'{len(results)} relocated Windows package checks passed')

@@ -12,12 +12,17 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from teaching_assets import check as check_teaching_assets
 
 
 def check(args):
     artifacts = args.artifacts.resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
+    teaching = check_teaching_assets('/usr/share/s7')
     env = os.environ.copy()
     for name in ('LD_LIBRARY_PATH', 'QT_PLUGIN_PATH', 'QML2_IMPORT_PATH', 'QML_IMPORT_PATH', 'S7_PLUGIN_PATH'):
         env.pop(name, None)
@@ -109,7 +114,8 @@ int main() {
             run('sdk-build', 'cmake', '--build', cwd / 'sdk-build', '--parallel', '2')
             run('sdk-run', 'ctest', '--test-dir', cwd / 'sdk-build', '--output-on-failure')
     (artifacts / 'summary.json').write_text(json.dumps({'checks': results, 'passed': True,
-        'studio_rendering_qualified': False, 'physical_hardware_opened': False}, indent=2) + '\n')
+        'studio_rendering_qualified': False, 'physical_hardware_opened': False,
+        'teaching_assets': teaching}, indent=2) + '\n')
     print(f'{len(results)} native installed-package checks passed')
 
 

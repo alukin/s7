@@ -1573,3 +1573,103 @@ not qualify installed assets. SP14 SHA-256 provenance:
 b3dd71fe8b166aee10f535d1bca8e420374a9534d1a6ee057ab6d3c14c4faccf  s7tests/education_am_reference.hpp
 8ed7f1be0be7120ebac3638157583722932757b10f36062c7c3302ff62d16829  s7tests/education_am_smoke.cpp
 ```
+
+## Core integration — Help navigation and offline packages
+
+Development base: `72bb5b7`, with the integration changes recorded in the next
+commit. Same Fedora 45/GCC 16.2.1/Qt 6.11.2 Release development environment as
+SP14. This is development evidence, not promotion of a release candidate.
+
+Help previously rejected `.s7diagram` links in the education index and guides.
+They now open installed/source examples through the normal staged working-copy
+loader. The main window owns replacement decisions; Help supplies a relative
+example path. Existing Save/Discard/Cancel behavior applies. Cancel preserves
+the dirty diagram and paused run, successful replacement retires that run,
+and Save asks for a new destination rather than overwriting bundled assets.
+Canonical-path containment rejects traversal and symlinks outside the example
+root; file URLs, remote qrc authorities, queries and fragments are not example
+commands. External HTTP(S) and internal Markdown navigation retain their
+existing behavior.
+
+The actual visible guide link is clicked, followed by all **24 actual diagram
+links** in the education navigator. Tests also cover Cancel/Discard, paused
+run preservation/retirement, original-file byte preservation, a saved copy,
+missing examples, rejected URL classes and filesystem symlink containment.
+After the final application/GUI build, this focused selection passed **4/4
+CTest entries, 23.33 s**, with no dedicated GUI skips:
+
+```bash
+cmake --build build-release --target s7studio_gui_workflows_test s7studio --parallel 2
+ctest --test-dir build-release \
+  -R '^(s7studio_gui_education_navigation|s7studio_gui_education_sp06|s7studio_gui_education_am|s7tests_teaching_assets)$' \
+  --output-on-failure -V
+```
+
+Navigation GUI: **6 passed, 0 failed, 0 skipped**. Log:
+`/tmp/s7-education-integration-verified-tests.log`. The source Help capture is
+`build-release/s7studio/gui-artifacts/education-navigation/education-open-example.png`.
+Initial test-fixture failures were corrected before this final selection;
+earlier failure captures are not evidence against the final passing run.
+
+### Package assets and relocation
+
+Linux portable, Windows portable and native Linux install rules now preserve
+`examples/`, `education/` and `docs/` as sibling trees under `share/s7/`.
+The shared asset copier/checker excludes `__pycache__`, `.pyc` and `.pyo`.
+The regression relocates a temporary teaching tree, checks byte equality,
+rejects missing guides/diagrams and broken student links, rejects leaked
+caches and prevents copying over an existing teaching destination.
+
+The native Linux CMake install was staged under
+`/tmp/s7-education-native-stage`. Its asset checker found **24 guides, 24
+diagrams and 194 resolved offline links**. **33 development source references**
+are counted separately, not claimed to be installed C++ tests. This check
+covers the education navigator and core guides, not every developer document
+linked elsewhere in the repository. No native RPM/DEB deployment is inferred
+from staging files under a temporary prefix.
+
+Real portable packaging exposed two defects: dependency discovery for installed
+SDK plugins could not locate this build's `libs7core`, and moving hardware
+plugins two directories below `usr/lib` left their dependency search paths
+pointing at the wrong directory. Packaging now supplies the build core during
+discovery and sets copied project-plugin RUNPATH to `$ORIGIN/../..`. The smoke
+check resolves all project plugins and checks the actual packaged plugin count
+instead of assuming a noise-only build. Its working directory, HOME, settings,
+caches and runtime state are temporary; build/plugin search overrides are
+cleared. No physical audio or SDR device is opened.
+
+The bundle was built with `tools/linux/package.sh`, relocated to a path with
+spaces and exercised under Xvfb/Mesa. All **66 package checks passed**,
+including dependencies for three programs/five plugins, default-schema/noise
+execution, bundled demo, save/reopen for all 24 education diagrams and existing
+Scope/2D/3D/live-spectrum checks. Artifacts:
+`/tmp/s7-education-reviewed-package-check/summary.json` and sibling logs.
+This Fedora 45 build needs GLIBC_2.44, GLIBCXX_3.4.36 and CXXABI_1.3.15;
+it does not establish support for an older distribution.
+
+An additional copy of the GUI test harness was placed beside the relocated
+programs with its RUNPATH changed to the packaged libraries. The same compiled
+Studio application code opened all 24 actual navigator links from the packaged
+example directory: **4 passed, 0 failed, 0 skipped** for link/replacement and
+containment checks. Final artifacts: `/tmp/s7-education-reviewed-navigation/`.
+This harness is a test aid, not part of the distribution. The shipped Studio
+executable separately performs all 24 normalize/save/reopen checks above.
+
+The final relocated development bundle is `/tmp/S7 education reviewed`.
+Its external `build-info.json` and `bundle-files.sha256` record 3,277 regular
+files after removing the test-only harness. SHA-256:
+
+```text
+c4ebca2ff01708d0755ede7c4efb5c7a448e4501db5f9f625c50f21e3a0102cb  bundle-files.sha256
+7c8d03954cb993787c29bdea9524c844e06d0af4dd4fc76dd15518fcd2fda5cf  usr/bin/s7studio
+29be6bd9bbc4ed8ced411005bc8735a66d8ed54fd6a933ffbf6d78e025827e02  usr/bin/s7runtime
+```
+
+The build identity is base `72bb5b7` plus modified integration sources. The
+evidence record is completed after executing the checks; this bundle is not
+claimed to be a clean build of the subsequent evidence/documentation commit.
+
+Windows packaging/smoke scripts share the asset checks, but no Windows build,
+Wine run or native Windows rendering qualification was executed for this batch.
+Final clean-candidate rebuilding/hashes, the full bundled-example render matrix
+and the collection-wide **human viewer correctness audit remain open**.

@@ -165,6 +165,8 @@ target_link_libraries(s7tests_numerical_integration_research PRIVATE s7core)
 if (NOT CMAKE_CROSSCOMPILING)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if (Python3_Interpreter_FOUND)
+        add_test(NAME s7tests_teaching_assets
+            COMMAND ${Python3_EXECUTABLE} -B ${PROJECT_SOURCE_DIR}/tools/test_teaching_assets.py)
         if (TARGET s7tests_video_stream_spike)
             add_test(NAME s7tests_video_stream_spike
                 COMMAND ${Python3_EXECUTABLE} -B ${PROJECT_SOURCE_DIR}/tools/test_video_stream_spike.py

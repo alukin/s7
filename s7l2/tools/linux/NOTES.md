@@ -98,3 +98,10 @@ xvfb-run -a python3 tools/linux/smoke_package.py '/path/S7 installed' /tmp/s7-in
 The package targets desktop Qt. KDE desktop integration and XR are not S7
 requirements. Earlier Ubuntu evidence above describes its own build and does
 not establish support for older Linux systems.
+
+Education assets are installed as sibling `usr/share/s7/examples`, `education`
+and `docs` trees. Packaging checks the 24 named core guides/diagrams and their
+student-facing offline links and excludes Python caches. The smoke check also
+resolves every packaged S7 plugin and saves/reopens all 24 education diagrams.
+It records the actual plugin count rather than assuming a noise-only build.
+Source C++ verification links remain development instructions.

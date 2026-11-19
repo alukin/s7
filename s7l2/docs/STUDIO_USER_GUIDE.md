@@ -106,6 +106,11 @@ Inside **Help → S7 Studio Help**, web references also open externally;
 right-click a web link for **Open Link in External Browser**. Bundled help
 links stay inside the help window with Back/Forward navigation. Internet access
 is needed for MIT online readings, while the bundled S7 lab guide works offline.
+Click a `.s7diagram` link in a guide or the education index to open that bundled
+example as a working copy. Studio offers Save/Discard/Cancel for unsaved edits;
+Cancel keeps the current diagram and run. Saving the example asks for your own
+file name. Offline guides also accompany the diagrams under `share/s7/education`
+in installed packages.
 
 With the root or nested diagram focused, **Ctrl++** or **Ctrl+=** zooms in
 and **Ctrl+-** zooms out. Shifted Plus and keypad Plus are supported.

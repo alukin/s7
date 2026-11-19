@@ -91,6 +91,8 @@ education → fn01_unit_delay.s7diagram**. Predict the first samples using its
 guide, click **Run** and keep the saved settings, then double-click
 **Compare the named signals** to open Scope. Follow the guide's parameter
 experiment and explain the changed result.
+Studio Help also opens diagram links as working copies. Installed packages
+include the offline lab guides beside the examples under `share/s7/`.
 
 These labs also serve as **executable specifications for S7**. Independent
 formulas check the saved graphs' samples, initial conditions, timing and

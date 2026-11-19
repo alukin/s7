@@ -3,6 +3,9 @@
 These graphs are created specifically for S7 teaching laboratories. Earlier
 examples elsewhere in `examples/` are implementation references. Open a diagram
 through **File → Example Diagrams… → education** and set its stated run profile.
+Inside Studio Help, click a diagram link below to open a working copy directly.
+Your unsaved edits use the normal Save/Discard/Cancel prompt. Offline packages
+keep these diagrams and their guides together under `share/s7/`.
 
 | Lab | New diagram | Run | Guide |
 | --- | --- | --- | --- |

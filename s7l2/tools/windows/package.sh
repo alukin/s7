@@ -89,7 +89,7 @@ if [ -f "$OUT/s7studio.exe" ]; then
 fi
 cp -r "$SOURCE/s7runtime/examples" "$OUT/examples"
 mkdir -p "$OUT/share/s7"
-cp -r "$SOURCE/examples" "$OUT/share/s7/examples"
+python3 -B "$SOURCE/tools/teaching_assets.py" copy "$SOURCE" "$OUT/share/s7"
 cp "$SOURCE/s7core/resources/schema_elements.s7library" "$OUT/share/s7/"
 cp "$SOURCE/docs/SPLIT_TRANSPORT.md" "$OUT/share/s7/"
 cp "$SOURCE/tools/windows/BUNDLE_README.md" "$OUT/README.md"

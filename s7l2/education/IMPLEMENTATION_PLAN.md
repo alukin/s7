@@ -119,8 +119,11 @@ and coherent AM phase, finite-filter states and selected spectra (SP14).
 Earlier signal-processing lessons independently check runtime sequences and
 production convolution/spectral processors without changing causal semantics.
 
-Next: integration, installed/relocated package navigation and the named
-release-candidate checks. The closing collection-wide viewer-audit reminder
+Integration now opens diagram links from Help as working copies and packages
+the offline guides beside the examples. Source and relocated Linux navigation
+checks cover all 24 core rows. Next: the named release-candidate checks,
+native Windows qualification and the collection-wide human viewer audit.
+The closing collection-wide viewer-audit reminder
 above remains open; native Windows and human review are not inferred from
 Linux development tests. The additional 24 non-core curriculum items remain
 outside the accepted 0.2.0 implementation set.

@@ -58,9 +58,11 @@ final release qualification remains open.
   paths. Its bundled-example matrix requires a documented duration for each
   new diagram. A dedicated SP06 workflow additionally edits a tap, saves,
   reopens and checks both runs against the written recurrences.
-- Existing package scripts copy `examples/`, but do not copy the education
-  directory. Curriculum/guide packaging and package-access checks remain open.
-  A source run is not evidence for an installed education bundle.
+- Package scripts now preserve `examples/`, `education/` and `docs/` as
+  sibling trees, with Python caches excluded. The Linux development bundle
+  checks all 24 lessons after relocation, including Help navigation and
+  save/reopen. Native Windows, final candidate packaging and the human viewer
+  audit remain open; see [executed evidence](EVIDENCE.md).
 
 ## Source review
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-S7-plugin-permission
 
 #include "main_window.hpp"
+#include "help_dialogs.hpp"
 #include "education_linear_reference.hpp"
 #include "education_signals_reference.hpp"
 #include "education_lti_reference.hpp"
@@ -2268,6 +2269,110 @@ private slots:
             Q_ARG(QUrl, QUrl("file:///tmp/not-a-help-article"))));
         QCOMPARE(browser->source(), internal); QCOMPARE(captureUrl.urls.size(), 3);
         QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
+    }
+    void helpExampleLinks() {
+        const auto input = QString(S7_GUI_EXAMPLES_DIR) + "/education/sp14_coherent_am.s7diagram";
+        QFile original(input); QVERIFY(original.open(QIODevice::ReadOnly));
+        const auto bytes = original.readAll(); original.close();
+        action("action.help")->trigger();
+        auto* help = window_->findChild<QDialog*>("dialog.help"); QVERIFY(help);
+        auto* browser = help->findChild<QTextBrowser*>("help.browser"); QVERIFY(browser);
+        const QUrl guide("qrc:/s7studio/help/education/labs/SP14-coherent-am/README.md");
+        browser->setSource(guide, QTextDocument::MarkdownResource);
+        const auto linkPoint = [&] {
+            auto cursor = browser->document()->find("sp14_coherent_am.s7diagram");
+            if (cursor.isNull()) return QPoint(-1, -1);
+            cursor.setPosition(cursor.selectionStart() + 3);
+            browser->setTextCursor(cursor); browser->ensureCursorVisible();
+            return browser->cursorRect(cursor).center();
+        };
+        auto point = linkPoint(); QVERIFY(browser->viewport()->rect().contains(point));
+        QVERIFY(browser->anchorAt(point).endsWith("sp14_coherent_am.s7diagram"));
+        capture(help, "education-open-example", true);
+        QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point);
+        QVERIFY(!help->isVisible()); QVERIFY(scene()->elementNode("recovered"));
+        QVERIFY(scene()->elementNode("message"));
+        // The same link must honor Cancel, including a running/paused capture.
+        QVERIFY(scene()->addElement({"unsaved_help", "Constant", {}, {}, {}, "Unsaved"}, {0, 0}));
+        const auto pending = window_->currentDocument();
+        auto* runner = window_->findChild<s7studio::LocalSchemaRunner*>(); QVERIFY(runner);
+        const boost::json::object running{{"name", "help-cancel-run"},
+            {"elements", boost::json::array{boost::json::object{{"id", "source"}, {"type", "Constant"}}}},
+            {"connections", boost::json::array{}}};
+        runner->run(running, .001, -1, {});
+        QTRY_VERIFY(runner->isRunning()); runner->pause(); QTRY_VERIFY(runner->isPaused());
+        action("action.help")->trigger(); point = linkPoint();
+        QVERIFY(modalWorkflow([&] { QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Cancel), Qt::LeftButton); return true;
+        }));
+        QCOMPARE(window_->currentDocument(), pending); QVERIFY(runner->isPaused());
+        QVERIFY(help->isVisible()); QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
+        // Local files, traversal, remote qrc authorities and parameterized paths
+        // must not trigger document replacement or the external browser.
+        BrowserUrlCapture captureUrl;
+        QDesktopServices::setUrlHandler("file", &captureUrl, "open");
+        const auto restore = qScopeGuard([] { QDesktopServices::unsetUrlHandler("file"); });
+        for (const auto& link : {"file:///tmp/other.s7diagram",
+                 "qrc:/s7studio/help/examples/../../other.s7diagram",
+                 "qrc://other/s7studio/help/examples/education/sp14_coherent_am.s7diagram",
+                 "../../../examples/education/sp14_coherent_am.s7diagram?run=1",
+                 "../../../examples/education/sp14_coherent_am.s7diagram#run",
+                 "../../../examples/education/missing.s7diagram"}) {
+            Q_EMIT browser->anchorClicked(QUrl(link));
+            QCOMPARE(window_->currentDocument(), pending); QVERIFY(runner->isPaused());
+            QVERIFY(help->isVisible()); QVERIFY(help->findChild<QLabel*>("help.linkStatus")->isVisible());
+        }
+        QVERIFY(captureUrl.urls.isEmpty());
+        point = linkPoint();
+        QVERIFY(modalWorkflow([&] { QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point); }, [](QDialog* dialog) {
+            auto* box = qobject_cast<QMessageBox*>(dialog); if (!box) return false;
+            QTest::mouseClick(box->button(QMessageBox::Discard), Qt::LeftButton); return true;
+        }));
+        QVERIFY(!help->isVisible()); QVERIFY(!scene()->elementNode("unsaved_help"));
+        QCOMPARE(runner->state(), s7studio::RunState::Idle);
+        const auto saved = temporary_.filePath("help-copy.s7diagram");
+        QVERIFY(fileAction("action.save", saved)); QVERIFY(QFileInfo::exists(saved));
+        QVERIFY(original.open(QIODevice::ReadOnly)); QCOMPARE(original.readAll(), bytes);
+        original.close();
+        // Every core row in the real navigator must open its working copy.
+        const QDir examples(QString(S7_GUI_EXAMPLES_DIR) + "/education");
+        const auto diagrams = examples.entryList({"*.s7diagram"}, QDir::Files);
+        QCOMPARE(diagrams.size(), 24);
+        for (const auto& name : diagrams) {
+            action("action.help")->trigger();
+            browser->setSource(QUrl("qrc:/s7studio/help/examples/education/README.md"), QTextDocument::MarkdownResource);
+            auto cursor = browser->document()->find(name); QVERIFY2(!cursor.isNull(), qPrintable(name));
+            cursor.setPosition(cursor.selectionStart() + 3);
+            browser->setTextCursor(cursor); browser->ensureCursorVisible();
+            point = browser->cursorRect(cursor).center();
+            QVERIFY(browser->viewport()->rect().contains(point));
+            QVERIFY(browser->anchorAt(point).endsWith(name));
+            QTest::mouseClick(browser->viewport(), Qt::LeftButton, {}, point);
+            QVERIFY2(!help->isVisible(), qPrintable(name));
+            QFile diagram(examples.filePath(name)); QVERIFY(diagram.open(QIODevice::ReadOnly));
+            const auto expected = QJsonDocument::fromJson(diagram.readAll()).object().value("schema").toObject().value("elements").toArray();
+            QVERIFY(!expected.isEmpty());
+            for (const auto element : expected)
+                QVERIFY2(scene()->elementNode(element.toObject().value("id").toString().toStdString()), qPrintable(name));
+        }
+    }
+    void helpExamplePathContainment() {
+        const auto root = temporary_.filePath("example-paths");
+        QVERIFY(QDir{}.mkpath(root + "/education"));
+        const auto outside = temporary_.filePath("outside.s7diagram");
+        QFile file(outside); QVERIFY(file.open(QIODevice::WriteOnly)); file.write("{}"); file.close();
+        const auto inside = root + "/education/local.s7diagram";
+        QVERIFY(QFile::copy(outside, inside));
+        QCOMPARE(s7studio::resolveHelpExample(root, "education/local.s7diagram"), QFileInfo(inside).canonicalFilePath());
+        for (const auto& path : {QString("../outside.s7diagram"), outside, QString("education/missing.s7diagram"), QString("education")})
+            QVERIFY(s7studio::resolveHelpExample(root, path).isEmpty());
+#if defined(Q_OS_UNIX)
+        QVERIFY(QFile::link(outside, root + "/education/escape.s7diagram"));
+        QVERIFY(s7studio::resolveHelpExample(root, "education/escape.s7diagram").isEmpty());
+        QVERIFY(QFile::link(inside, root + "/education/alias.s7diagram"));
+        QCOMPARE(s7studio::resolveHelpExample(root, "education/alias.s7diagram"), QFileInfo(inside).canonicalFilePath());
+#endif
     }
     void diagramFrameLinks() {
         BrowserUrlCapture captureUrl;
