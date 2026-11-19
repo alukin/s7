@@ -9,7 +9,8 @@ It knows no element library and no network: element types are passed to Graph
 from .element import Element
 from .errors import SchemaError
 from .graph import Graph
+from .trapezoid import TrapezoidIntegration
 from .rate import rate_from_hz, rate_from_seconds, rate_from_step_ns, rate_text, schema_rate
 
-__all__ = ["Element", "Graph", "SchemaError", "rate_from_hz", "rate_from_seconds", "rate_from_step_ns",
+__all__ = ["Element", "Graph", "SchemaError", "TrapezoidIntegration", "rate_from_hz", "rate_from_seconds", "rate_from_step_ns",
            "rate_text", "schema_rate"]

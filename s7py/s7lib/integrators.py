@@ -8,6 +8,7 @@ from s7core.element import Element
 from s7core.errors import SchemaError
 from s7core.params import GENERIC, _choice, _integer, _number
 from s7core.rate import rate_from_seconds
+from s7core.trapezoid import TrapezoidIntegration
 
 
 class EulerIntegrator(Element):
@@ -37,7 +38,7 @@ class EulerIntegrator(Element):
 TRAPEZOID_TOLERANCE = math.ldexp(1.0, 4 - 53)
 
 
-class TrapezoidIntegrator(Element):
+class TrapezoidIntegrator(Element, TrapezoidIntegration):
     """mode "implicit" (default): y[n+1] = y[n] + dt/2 * (f(y[n]) + f(y[n+1])), solved by
     Graph together with every other implicit state; causal memory.
     mode "sampled": y[n] = y[n-1] + dt/2 * (x[n] + x[n-1]) of supplied samples; direct feedthrough.
@@ -45,7 +46,6 @@ class TrapezoidIntegrator(Element):
 
     params = GENERIC + ("dt", "initial_value", "mode")
     stateful = True
-    trapezoid_stage = True  # an implicit one (memory) is solved by the graph's coupled stage
     input_count = 1
 
     def __init__(self, element_id, params):
@@ -61,12 +61,15 @@ class TrapezoidIntegrator(Element):
         return rate_from_seconds(self.half_dt * 2)
 
     def step(self, inputs):
-        if self.implicit:
+        if self.implicit:  # the graph's coupled stage steps it, as s7core's NodeRuntime does
             raise RuntimeError("an implicit TrapezoidIntegrator is stepped by the graph's coupled numerical stage")
         x = inputs[0]
         if self.previous is not None:
             self.outputs[0] = self.outputs[0] + (x + self.previous) * self.half_dt
         self.previous = x
+
+    def implicit_trapezoid_enabled(self):
+        return self.implicit
 
     def prepare_trapezoid_step(self, inputs):
         """Forward-Euler predictor from the published state and its current derivative."""

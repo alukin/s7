@@ -72,7 +72,11 @@ Three packages, each depending only on the ones before it: `s7core` (no element 
 | File | Content |
 |---|---|
 | `s7core/element.py` | The element contract: ports, flags, `step()` |
-| `s7core/graph.py` | Validation, causal ordering, rates, stepping, the coupled trapezoid stage; element types are passed in |
+| `s7core/wiring.py` | Elements built from the given types with checked parameters; one driver per input |
+| `s7core/schedule.py` | Causal order; a cycle must pass through causal memory |
+| `s7core/rate_groups.py` | One rate per connected set of elements; the model-time rate check |
+| `s7core/trapezoid.py` | The `TrapezoidIntegration` interface and the coupled implicit-trapezoid stage |
+| `s7core/graph.py` | `Graph`: builds the above and steps them (publish, evaluate, stage, roll back on failure) |
 | `s7core/rate.py`, `params.py`, `errors.py` | Exact rates, parameter checks, `SchemaError` |
 | `s7lib/` | The built-in elements (`basic`, `integrators`, `sources`, `mathops`, `control`) and `ELEMENT_TYPES` |
 | `s7node/net.py` | `NetSink` / `NetSource`, the stream ends |
