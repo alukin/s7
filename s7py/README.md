@@ -62,6 +62,57 @@ the node's privileges, so load only code you trust.
 
 Options: `python3 -m s7node --help`.
 
+## Writing an element
+
+An element type is a subclass of `s7core.Element` that declares its ports and parameters and
+computes its outputs in `step()`; [`examples/elements/smoothing.py`](examples/elements/smoothing.py)
+has two:
+
+```python
+from s7core import Element, Param, Port
+
+class Offset(Element):
+    description = "Adds a constant to its input"
+    input_ports = (Port("in", "Input"),)          # output_ports defaults to one "out"
+    parameters = (Param("offset", "real", 0.5, "Added to the input"),)
+
+    def __init__(self, element_id, params):
+        super().__init__(element_id, params)
+        self.offset = self.read(params, "offset")  # the declared default if omitted
+
+    def step(self, inputs):
+        self.outputs[0] = inputs[0] + self.offset
+```
+
+- **Causality.** By default an element has direct feedthrough: `step()` sees this step's inputs and
+  its outputs are read by later elements in the same step. Set `memory = True` for causal memory:
+  `step()` still receives this step's inputs, but what it writes to `self.outputs` is published at the
+  start of the next step, so the element can close a feedback loop; a loop without one is refused.
+  Set `stateful = True` if the element keeps anything between steps.
+- **Failures.** Raise `SchemaError` from `__init__` for bad parameters, any other exception from
+  `step()` for an execution error. A failed step leaves every published output as it was and is
+  retried; the element's own state is not rolled back, so change it only once nothing can fail.
+- **Parameters** are checked against the declaration (an unknown name, a wrong type, an `int` out of
+  `min`..`max`, an `enum` value not listed); types are `value`/`real`, `int`, `bool`, `enum`, `array`.
+  A generic element declares `type_variables = (T,)`, `GENERIC` parameters and ports with
+  `type_rule="T"`, as the built-in elements do; s7py runs it as F64.
+- **Registration** checks the declaration (`DeclarationError`): `Registry(LIBRARY).register(Offset)`,
+  or `--lib` on the command line. `Offset.describe()` is the catalog entry tools see.
+
+Run a schema locally, without a node or network; each row is the outputs after a step, bit for bit:
+
+```bash
+python3 -m s7node.trace examples/smoothing.json --lib examples/elements/smoothing.py --steps 8 --order
+python3 -m s7node.trace --describe MovingAverage --lib examples/elements/smoothing.py
+```
+
+`--order` prints the causal order and the causal memory, `--watch ID[:PORT]` picks outputs, and an
+`.s7diagram` runs at its `dt` as when deployed. Then serve the library from a node with
+`python3 -m s7node --schema … --lib examples/elements/smoothing.py`: its startup graph may use the
+library's types and `GET_NODE_INFO` lists them. Deploying a diagram that uses them with `s7ctl` or
+Studio does not work yet: both check element types against the C++ registry, and the node's catalog
+carries type names only.
+
 ## Test
 
 ```bash
@@ -89,6 +140,7 @@ Three packages, each depending only on the ones before it: `s7core` (no element 
 | `s7node/net.py` | `NetSink` / `NetSource`, the stream ends, given the node's stream table when a graph is built |
 | `s7node/elements.py` | The registry a node serves: the library and the stream ends |
 | `s7node/library.py` | Element libraries loaded with `--lib` |
+| `s7node/trace.py` | Local run of a schema, printing outputs step by step |
 | `s7node/graph.py` | Compatibility: the former single-file module's names |
 | `s7node/control.py` | Control protocol messages, authorization, deployments, transfers, persistence |
 | `s7node/runtime.py` | Executor: grid / rate pacing, scheduled activation |
