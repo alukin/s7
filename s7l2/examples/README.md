@@ -33,6 +33,14 @@ New diagrams designed specifically for teaching; see the
 | CT01 — A capacitor takes time to charge | [New teaching graph](education/ct01_first_order.s7diagram) |
 | CT02 — How damping changes a spring | [New teaching graph](education/ct02_damped_modes.s7diagram) |
 | CT03 — Can a slow sample rate invent growth? | [New teaching graph](education/ct03_sample_time.s7diagram) |
+| SP01 — Build a square wave from smooth tones | [New teaching graph](education/sp01_fourier_synthesis.s7diagram) |
+| SP03 — Three tones, one sampled sequence | [New teaching graph](education/sp03_aliasing.s7diagram) |
+| SP05 — Add shifted impulse responses | [New teaching graph](education/sp05_convolution.s7diagram) |
+| SP07 — Which filter resonates? | [New teaching graph](education/sp07_filter_transfer.s7diagram) |
+| SP08 — Where did the tone amplitude go? | [New teaching graph](education/sp08_dft_leakage.s7diagram) |
+| SP09 — Change the window, preserve the units | [New teaching graph](education/sp09_window_normalization.s7diagram) |
+| SP10 — Where does the tail go? | [New teaching graph](education/sp10_circular_convolution.s7diagram) |
+| SP11 — When did that frequency happen? | [New teaching graph](education/sp11_short_time_fourier.s7diagram) |
 | SP06 — Three-tap FIR | [Three-tap moving average](education/sp06_three_tap_fir.s7diagram) |
 
 ## Starter and standalone experiments
@@ -257,7 +265,7 @@ Fourier and wavelet coefficients computed by optional plugins. [Experiment guide
 | [fourier coefficient](analysis_elements/fourier_coefficient.s7diagram) |
 | [wavelet coefficient](analysis_elements/wavelet_coefficient.s7diagram) |
 
-**Total: 108 diagrams.**
+**Total: 116 diagrams.**
 
 ## Headless JSON examples
 

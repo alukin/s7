@@ -26,6 +26,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <atomic>
+#include <limits>
 #include <mutex>
 #include <s7spectral/analysis.hpp>
 #include <s7wavelet/analysis.hpp>
@@ -44,6 +45,12 @@ double quantityValue(const analysis::ResultFile &result, std::size_t frequency, 
         return s7spectral::spectrogramPower(w, frequency, std::size_t(result.metadata["window_size"].toInt()),
                                             result.metadata["rate_hz"].toDouble(), quantity == 4);
     return std::abs(w);
+}
+QString quantityUnit(const analysis::ResultFile &result, int quantity) {
+    const auto supplied = result.metadata["unit"].toString();
+    const auto unit = supplied.isEmpty() ? QString("U (unspecified)") : supplied;
+    return quantity == 2 ? QString("rad") : quantity == 4 ? unit + "²/Hz"
+        : quantity == 1 || quantity == 3 ? unit + "²" : unit;
 }
 QSemaphore &heavyBudget() {
     static QSemaphore budget(1);
@@ -132,6 +139,13 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     window_->setCurrentIndex(window_->findData(256));
     controls->addWidget(new QLabel("FFT size", this));
     controls->addWidget(window_);
+    hop_ = new QSpinBox(this);
+    hop_->setObjectName("timeFrequency.hopSize");
+    hop_->setRange(1, 256);
+    hop_->setValue(128);
+    hop_->setToolTip("Samples between successive full windows. Changing FFT size resets hop to half the window; then choose a custom hop.");
+    controls->addWidget(new QLabel("Hop (samples)", this));
+    controls->addWidget(hop_);
     scales_ = new QSpinBox(this);
     scales_->setRange(2, 128);
     scales_->setValue(32);
@@ -298,6 +312,7 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     });
     connect(method_, &QComboBox::currentIndexChanged, this, [this, settingsChanged](int method) {
         window_->setEnabled(method == 0);
+        hop_->setEnabled(method == 0);
         scales_->setEnabled(method == 1);
         minimum_->setEnabled(method == 1);
         maximum_->setEnabled(method == 1);
@@ -310,7 +325,13 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
         logFrequency_->setChecked(method == 1);
         settingsChanged();
     });
-    connect(window_, &QComboBox::currentIndexChanged, this, settingsChanged);
+    connect(window_, &QComboBox::currentIndexChanged, this, [this, settingsChanged] {
+        const QSignalBlocker block(hop_);
+        hop_->setMaximum(window_->currentData().toInt());
+        hop_->setValue(window_->currentData().toInt() / 2);
+        settingsChanged();
+    });
+    connect(hop_, &QSpinBox::valueChanged, this, settingsChanged);
     connect(scales_, &QSpinBox::valueChanged, this, settingsChanged);
     connect(minimum_, &QDoubleSpinBox::valueChanged, this, settingsChanged);
     connect(maximum_, &QDoubleSpinBox::valueChanged, this, settingsChanged);
@@ -450,7 +471,7 @@ void TimeFrequencyWindow::startAnalysis(bool currentCapture) {
                 error_ = "Nonuniform model-time samples";
                 return;
             }
-    const auto n = window_->currentData().toInt();
+    const auto n = window_->currentData().toInt(), hop = hop_->value();
     if (method_->currentIndex() == 0 && (n & (n - 1))) {
         error_ = "FFT size must be a power of two";
         return;
@@ -506,7 +527,7 @@ void TimeFrequencyWindow::startAnalysis(bool currentCapture) {
         identity["channel_names"] = names;
     }
 
-    analysis::analysisPool().start([state = work_, epoch, input = std::move(input), dt, n, low, high, origin,
+    analysis::analysisPool().start([state = work_, epoch, input = std::move(input), dt, n, hop, low, high, origin,
                                     first, last, method, scales, provenance, unit, identity] {
         std::shared_ptr<analysis::ResultFile> result;
         QString error;
@@ -514,7 +535,7 @@ void TimeFrequencyWindow::startAnalysis(bool currentCapture) {
             const auto cancel = [&] { return state->epoch != epoch; };
             s7spectral::TimeFrequency map;
             if (method == 0)
-                map = s7spectral::spectrogram(input, 1 / dt, std::size_t(n), std::size_t(n / 2), cancel);
+                map = s7spectral::spectrogram(input, 1 / dt, std::size_t(n), std::size_t(hop), cancel);
             else {
                 std::vector<double> frequencies;
                 for (int s = 0; s < scales; ++s)
@@ -552,8 +573,9 @@ void TimeFrequencyWindow::startAnalysis(bool currentCapture) {
                                                        : "Morlet omega0=6, discrete L2, support ±4 sigma"},
                                 {"rate_hz", 1 / dt},
                                 {"window_size", n},
-                                {"hop_size", n / 2},
-                                {"boundary", "zero extension; validity requires full support"},
+                                {"hop_size", hop},
+                                {"boundary", method == 0 ? "full windows only; incomplete final window discarded; no zero extension"
+                                                         : "zero extension; validity requires full support"},
                                 {"unit", unit},
                                 {"first_step", QString::number(first)},
                                 {"last_step", QString::number(last)},
@@ -651,6 +673,7 @@ void TimeFrequencyWindow::updateStatus() {
     const bool canRecompute = !imported_ || (result_ && !result_->input.empty());
     method_->setEnabled(canRecompute);
     window_->setEnabled(canRecompute && method_->currentIndex() == 0);
+    hop_->setEnabled(canRecompute && method_->currentIndex() == 0);
     for (auto *control : std::array<QWidget *, 3>{scales_, minimum_, maximum_})
         control->setEnabled(canRecompute && method_->currentIndex() == 1);
     analyze_->setEnabled(ready && !computing && (!waiting || trace_->isVisible()));
@@ -795,7 +818,7 @@ void TimeFrequencyWindow::applyDisplay() {
         else if (slice->value->source == result_ && slice->value->column == column_->value() &&
                  slice->value->quantity == quantity_->currentIndex()) {
             slice_->clearSeries();
-            slice_->setAxisTitles("Frequency (Hz)", quantity_->currentText());
+            slice_->setAxisTitles("Frequency (Hz)", quantity_->currentText() + " (" + quantityUnit(*result_, quantity_->currentIndex()) + ")");
             for (const auto &points : slice->value->segments) {
                 auto *line = slice_->addSeries("Selected time", {QColor("#1565c0")});
                 LinePlotView::setPoints(line, points);
@@ -820,12 +843,7 @@ void TimeFrequencyWindow::applyDisplay() {
     bandRows_ = frame.bandRows;
     plot_->setCyclicColors(frame.quantity == 2);
     plot_->setLogY(frame.logarithmic);
-    const auto unit =
-        r.metadata["unit"].toString().isEmpty() ? QString("U (unspecified)") : r.metadata["unit"].toString();
-    const auto valueUnit = quantity_->currentIndex() == 2                                     ? QString("rad")
-                           : quantity_->currentIndex() == 4                                   ? unit + "²/Hz"
-                           : quantity_->currentIndex() == 1 || quantity_->currentIndex() == 3 ? unit + "²"
-                                                                                              : unit;
+    const auto valueUnit = quantityUnit(r, quantity_->currentIndex());
     plot_->setAxes({"Model time (s)", "Frequency (Hz)", quantity_->currentText() + " (" + valueUnit + ")"});
     plot_->setGrid(frame.grid);
     row_->setMaximum(int(r.y.size() - 1));
@@ -947,9 +965,26 @@ void TimeFrequencyWindow::openResult(const QString &path) {
         (wavelet && (result.y.front() <= 0 || result.y.back() >= rate / 2)))
         throw std::invalid_argument("Invalid transform rate, frequency coordinates or method");
     const int fftSize = result.metadata["window_size"].toInt(-1);
+    const int hopSize = result.metadata["hop_size"].toInt(-1);
     if (!wavelet && (fftSize < 8 || fftSize > 65536 || (fftSize & (fftSize - 1)) ||
                      result.y.size() != std::size_t(fftSize / 2 + 1)))
         throw std::invalid_argument("Invalid STFT window/frequency dimensions");
+    if (!wavelet) {
+        if (hopSize < 1 || hopSize > fftSize)
+            throw std::invalid_argument("Invalid STFT hop size");
+        const auto near = [](double a, double b) {
+            return std::abs(a-b) <= 1e-10 + 64*std::numeric_limits<double>::epsilon()*std::max(std::abs(a),std::abs(b));
+        };
+        for (std::size_t k=0;k<result.y.size();++k)
+            if (!near(result.y[k], double(k)*rate/fftSize))
+                throw std::invalid_argument("STFT frequency coordinates do not match rate/window");
+        for (std::size_t t=0;t<result.x.size();++t)
+            if (!near(result.x[t], origin+(double(t)*hopSize+double(fftSize-1)/2)/rate))
+                throw std::invalid_argument("STFT time centers do not match origin/window/hop");
+        if (!result.input.empty() && (result.input.size()<std::size_t(fftSize) ||
+            result.x.size()!=1+(result.input.size()-std::size_t(fftSize))/std::size_t(hopSize)))
+            throw std::invalid_argument("STFT window count does not match frozen input");
+    }
     if (wavelet && (result.y.size() < 2 || result.y.size() > 128))
         throw std::invalid_argument("Invalid CWT scale count");
     if (!result.input.empty()) {
@@ -960,14 +995,17 @@ void TimeFrequencyWindow::openResult(const QString &path) {
             throw std::invalid_argument("Frozen input step interval does not match its frame");
     }
     {
-        QSignalBlocker methodBlock(method_), windowBlock(window_), scalesBlock(scales_),
+        QSignalBlocker methodBlock(method_), windowBlock(window_), hopBlock(hop_), scalesBlock(scales_),
             minimumBlock(minimum_), maximumBlock(maximum_), logBlock(logFrequency_);
         method_->setCurrentIndex(wavelet ? 1 : 0);
         if (auto *model = qobject_cast<QStandardItemModel *>(quantity_->model()))
             for (int i = 3; i < 5; ++i)
                 model->item(i)->setEnabled(!wavelet);
         window_->setCurrentIndex(window_->findData(result.metadata["window_size"].toInt(256)));
+        hop_->setMaximum(window_->currentData().toInt());
+        hop_->setValue(result.metadata["hop_size"].toInt());
         window_->setEnabled(!wavelet);
+        hop_->setEnabled(!wavelet);
         scales_->setEnabled(wavelet);
         minimum_->setEnabled(wavelet);
         maximum_->setEnabled(wavelet);

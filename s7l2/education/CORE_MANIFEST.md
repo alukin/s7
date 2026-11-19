@@ -19,7 +19,11 @@ time-frequency and seven signal-measurement examples. These have different
 readiness and observer paths; filenames alone do not establish lab coverage.
 SP06 added the first new education diagram. FN01–FN03 add three more,
 bringing that batch's inventory to 102. FN04–FN06 and CT01–CT03 add six
-more original graphs, for **108 diagrams**, including **10 education labs**.
+more original graphs, for 108 diagrams. SP01/SP03 add two more original graphs, bringing the
+source inventory to 110 diagrams. SP05/SP07 add two more, for
+112 diagrams. SP08/SP09 add two more original graphs, for
+114 diagrams. SP10 adds one, then SP11 adds one, for **116 diagrams**,
+including **18 education labs**.
 Development checks are recorded in EVIDENCE.md;
 final release qualification remains open.
 
@@ -78,7 +82,7 @@ contracts, with independent formulas and public MIT topic links. Other labs rema
 
 All paths in the reference column are under `examples/` and are **references,
 not delivered lab diagrams**. Every row needs a new graph and student guide.
-FN01–FN06, CT01–CT03 and SP06 now have new saved graphs and guides. Other entries
+FN01–FN06, CT01–CT03, SP01, SP03 and SP05–SP09 now have new saved graphs and guides. Other entries
 describe planned work, not existing educational files.
 
 | ID | Engineering references inspected | New educational graph and reference work | Development status |
@@ -89,15 +93,15 @@ describe planned work, not existing educational files.
 | FN04 | `frequency_response/gain.s7diagram`, `delay.s7diagram` | [New graph](../examples/education/fn04_impulse_transfer.s7diagram), [guide](labs/FN04-impulse-transfer/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
 | FN05 | `linear/rc_charge_euler.s7diagram`, `2int_osc.s7diagram`; integrator docs/tests | [New graph](../examples/education/fn05_integration_rules.s7diagram), [guide](labs/FN05-integration-rules/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
 | FN06 | Same integrator references | [New graph](../examples/education/fn06_pole_maps.s7diagram), [guide](labs/FN06-pole-maps/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
-| SP01 | `spectrum/three_bin_tones.s7diagram` | Harmonic synthesis graph; coefficients, partial sums, Parseval and Gibbs limits | proposed |
-| SP03 | `spectrum/off_bin_tone.s7diagram`; source tests | New alias-pair graph; analytically equal samples at declared rate | proposed |
-| SP05 | `frequency_response/rc.s7diagram`; convolution tests | New superposition/shifted-response graph; finite direct convolution and startup | proposed |
+| SP01 | `spectrum/three_bin_tones.s7diagram` | [New graph](../examples/education/sp01_fourier_synthesis.s7diagram), [guide](labs/SP01-fourier-synthesis/README.md); independent sample/DFT checks, declared limits and viewer scaling | diagram-ready; development checks recorded separately |
+| SP03 | `spectrum/off_bin_tone.s7diagram`; source tests | [New graph](../examples/education/sp03_aliasing.s7diagram), [guide](labs/SP03-aliasing/README.md); independent sample/DFT checks, declared limits and viewer scaling | diagram-ready; development checks recorded separately |
+| SP05 | `frequency_response/rc.s7diagram`; convolution tests | [New graph](../examples/education/sp05_convolution.s7diagram), [guide](labs/SP05-convolution/README.md); independent finite-sum/mode references and declared failure cases | diagram-ready; development checks recorded separately |
 | SP06 | Delay/source primitives; convolution tests | [New three-tap FIR](../examples/education/sp06_three_tap_fir.s7diagram); [guide](labs/SP06-three-tap-fir/README.md), direct convolution and complex H | diagram-ready; development checks recorded separately |
-| SP07 | `frequency_response/rc.s7diagram`, `rlc.s7diagram` | New first-/second-order filter graph; actual discrete transfer versus continuous limit | proposed |
-| SP08 | `spectrum/off_bin_tone.s7diagram`, `two_tone_sum.s7diagram` | New coherent/off-bin graph; independent short direct DFT through saved-graph capture | proposed |
-| SP09 | Spectrum references and `spectrum_test.cpp` | New window-comparison signal graph; independently calculated window/coherent gain and DFT | proposed |
-| SP10 | `s7core/tests/convolution_smoke.cpp` | New finite-sequence graph/recording path; circular sum versus zero-padded linear sum | proposed |
-| SP11 | `time_frequency/chirp.s7diagram`, `tone_bursts.s7diagram` | New burst/chirp graph; independent selected STFT coefficients, support/hop and edges | proposed |
+| SP07 | `frequency_response/rc.s7diagram`, `rlc.s7diagram` | [New graph](../examples/education/sp07_filter_transfer.s7diagram), [guide](labs/SP07-filter-transfer/README.md); independent finite-sum/mode references and declared failure cases | diagram-ready; development checks recorded separately |
+| SP08 | `spectrum/off_bin_tone.s7diagram`, `two_tone_sum.s7diagram` | [New graph](../examples/education/sp08_dft_leakage.s7diagram), [guide](labs/SP08-dft-leakage/README.md); independent complex DFT/window sums and actual viewer normalization | diagram-ready; development checks recorded separately |
+| SP09 | Spectrum references and `spectrum_test.cpp` | [New graph](../examples/education/sp09_window_normalization.s7diagram), [guide](labs/SP09-window-normalization/README.md); independent complex DFT/window sums and actual viewer normalization | diagram-ready; development checks recorded separately |
+| SP10 | `s7core/tests/convolution_smoke.cpp` | [New scalar graph](../examples/education/sp10_circular_convolution.s7diagram), [guide](labs/SP10-circular-convolution/README.md); direct/DFT sums plus recorded-input FIR/FFT and stream-tail checks | diagram-ready; development checks recorded separately |
+| SP11 | `time_frequency/chirp.s7diagram`, `tone_bursts.s7diagram` | [New burst/chirp graph](../examples/education/sp11_short_time_fourier.s7diagram), [guide](labs/SP11-short-time-fourier/README.md); independent complex STFT, window/hop coordinates, applied map/slice and import checks | diagram-ready; development checks recorded separately |
 | SP14 | `signal_measurement/am_coherent_detection.s7diagram` | New AM/detector graph; sideband formula, discrete filter reference and transient failure case | proposed |
 | CT01 | `linear/rc_charge_euler.s7diagram`, `control/first_order_open_loop.s7diagram` | [New graph](../examples/education/ct01_first_order.s7diagram), [guide](labs/CT01-first-order/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
 | CT02 | `linear/rlc_step_euler.s7diagram`, `mass_spring_damper_euler.s7diagram` | [New graph](../examples/education/ct02_damped_modes.s7diagram), [guide](labs/CT02-damped-modes/README.md); independent formulas and declared limits/edits | diagram-ready; development checks recorded separately |
@@ -111,8 +115,9 @@ describe planned work, not existing educational files.
 FN05/FN06 require particular care: supplied-sample backward integration,
 explicit algebraically reduced recurrences and coupled numerical stages are
 different contracts. Do not add a general implicit solver to fill a teaching
-row. SP10 needs a graph/recording design decision within existing primitives;
-availability of frame convolution alone does not resolve the teaching workflow.
+row. SP10 resolves its recording workflow using scalar word builders and explicit
+FIRs, then bridges recorded samples to the separate frame APIs in the test.
+Availability of frame convolution alone is not counted as graph support.
 CT06–CT08 have no ready lab-specific root/margin/controller verification.
 
 ## Delivery order
@@ -125,11 +130,11 @@ CT06–CT08 have no ready lab-specific root/margin/controller verification.
    they do not erase mathematical distinctions.
 4. **SP01/SP03, then SP05/SP07:** synthesis, sampling and LTI prerequisites.
 5. **SP08–SP11:** saved-graph capture → independently checked analysis;
-   resolve finite-vector/recording interactions before SP10 implementation.
+   SP10's scalar recording/frame-API workflow is resolved below the lab table.
 6. **CT04–CT08 and SP14:** small controller/measurement batches with their
    own negative cases. Coordinate G2 only after local SP06 acceptance.
 
 Each batch needs focused tests, student instructions, Studio evidence and
-eventual installed-package checks. The remaining 14 core graphs, source-specific
+eventual installed-package checks. The remaining 6 core graphs, source-specific
 reviews, package navigation and final-candidate qualification are open;
 no core ID was removed or replaced.

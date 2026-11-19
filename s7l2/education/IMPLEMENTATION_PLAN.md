@@ -17,6 +17,19 @@ examples and their tests as engineering references, then design the teaching
 graph afresh. Continue using existing primitives, loaders and test tools.
 The [core manifest](CORE_MANIFEST.md) records per-lab gaps and delivery order.
 
+## Closing reminder — viewer audit
+
+**Maintainer request, 2026-11-19:** before declaring the education work
+finished, remind the maintainer to audit **all delivered educational examples
+for viewer correctness**. Keep this reminder open until that review occurs.
+Check displayed samples against recorded data, channel names and units,
+model-time axes, selected analysis intervals, frequency axes, amplitude/power
+normalization, overlays and save/reopen/rerun behavior. Per-lab automated
+checks support this collection-wide review; they do not replace it.
+
+- [ ] Remind the maintainer at the final education review.
+- [ ] Record the collection-wide viewer audit and resolve its findings.
+
 ## Objective and scope decision
 
 Build an **open, original, MIT-aligned learning laboratory** for signals,
@@ -94,12 +107,16 @@ overwriting of earlier established research conclusions.
 
 ## Development progress — 2026-11-19
 
-Ten core lessons now have new graphs and student guides: FN01–FN06,
-CT01–CT03 and SP06. The [manifest](CORE_MANIFEST.md) and
+Eighteen core lessons now have new graphs and student guides: FN01–FN06,
+CT01–CT03, SP01, SP03 and SP05–SP11. The [manifest](CORE_MANIFEST.md) and
 [executed evidence](EVIDENCE.md) distinguish these development checks
 from final release qualification. The next implementation batch is
-**SP01/SP03**, followed by **SP05/SP07**. Package navigation, native
-Windows and the named release-candidate checks remain open.
+**CT04/CT05**, followed by CT06–CT08 and SP14. SP11 verifies STFT
+coefficients, window/hop coordinates and the actual map/slice displays. SP10 uses explicit scalar word builders/FIRs and separately checks
+recorded sequences through both production frame processors; no frame-port
+contract or causal semantics were changed. The closing viewer-audit reminder
+above remains open.
+Package navigation, native Windows and the named release-candidate checks remain open.
 
 ## Phase 1 — Classical foundations and discrete modeling (FN)
 
@@ -140,6 +157,18 @@ Build in short thematic PRs:
 | F | SP10 | Linear/circular convolution and explicit zero-padding |
 | G | SP11 | STFT window/hop/chirp verification, edge labeling |
 | H | SP14 | Coherent AM sidebands and demodulation with reference and transient interpretation |
+
+**SP10 workflow decision, 2026-11-19:** retain the scalar graph-port contract.
+Three explicit pulse/Delay word builders feed three FIR networks; repeating
+the word every 4 or 8 ticks demonstrates circular folding and padding after
+warm-up. The isolated word begins at n=8 so all three share the comparison
+block n=8…15. Headless checks pass the actual recorded word to the production
+FIR/FFT frame APIs and independently verify full linear output, folded output,
+streaming partitions and complete tails. This uses existing primitives and
+does not introduce frame-valued ports, observation-side computation in the
+runtime, or new causal semantics. SP11 now adds an original gated-tone/chirp
+graph, independent complex STFT checks and actual map/slice rendering checks.
+The next implementation batch is CT04/CT05.
 
 **SP06 reference contract, proposed first engineering flagship:**
 

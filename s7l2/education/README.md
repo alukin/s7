@@ -27,7 +27,32 @@ Continue with [FN04 — impulse and transfer](labs/FN04-impulse-transfer/README.
 [CT03 — sample interval](labs/CT03-sample-time/README.md). These six new lessons
 include independent formulas, deliberate failure cases and Studio workflows.
 
-The first signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
+New signal-processing lessons now include
+[SP01 — Fourier synthesis](labs/SP01-fourier-synthesis/README.md) and
+[SP03 — sampling and aliasing](labs/SP03-aliasing/README.md). They include
+explicit spectrum settings and checks of the displayed samples, axes,
+selected intervals and amplitude/power/PSD against independent references.
+
+Continue with [SP05 — shifted impulse responses](labs/SP05-convolution/README.md)
+and [SP07 — filter transfer functions](labs/SP07-filter-transfer/README.md).
+They check convolution startup, superposition, measured complex transfer,
+Bode magnitude/phase and the distinction between discrete and continuous models.
+
+[SP08 — DFT leakage](labs/SP08-dft-leakage/README.md) and
+[SP09 — periodic window normalization](labs/SP09-window-normalization/README.md)
+add independently checked interval selection, complex DFTs, coherent gain,
+ENBW and amplitude/power/PSD displays, including dB and mean-removal behavior.
+
+[SP10 — circular versus linear convolution](labs/SP10-circular-convolution/README.md)
+shows tail wrap-around and sufficient zero-padding using explicit scalar
+networks. Its recorded input also verifies the production FIR/FFT frame
+processors against independent sums, including streaming boundaries and tails.
+
+[SP11 — short-time Fourier analysis](labs/SP11-short-time-fourier/README.md)
+uses a new burst/chirp graph to verify complex STFT coefficients, window and
+hop coordinates, power normalization and the actual map/slice displays.
+
+The first implemented signal-processing lab is [SP06 — three-tap FIR](labs/SP06-three-tap-fir/README.md):
 predict a filter's response, run and inspect it, then remove one tap and explain
 the changed result. The diagram's description links to the offline S7 guide
 and MIT online teaching materials. [Development evidence](EVIDENCE.md) records

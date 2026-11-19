@@ -165,7 +165,8 @@ void PairAnalysisView::reconfigure()
 void PairAnalysisView::setFrame(std::shared_ptr<const observation::LiveFrame> frame)
 {
     if (!frame) return;
-    const bool same = frame_ && frame_->runId == frame->runId && frame_->generation == frame->generation && frame_->received == frame->received;
+    const bool same = frame_ && frame_->runId == frame->runId && frame_->generation == frame->generation &&
+        frame_->received == frame->received && frame_->finished == frame->finished;
     const bool newRun = frame_ && (frame_->runId != frame->runId || frame_->generation != frame->generation);
     QStringList names; for (const auto& channel : frame->channels) names.push_back(channel.name + " [" + unit(channel.unit) + "]");
     QStringList old; for (int i = 0; i < first_->count(); ++i) old.push_back(first_->itemText(i));

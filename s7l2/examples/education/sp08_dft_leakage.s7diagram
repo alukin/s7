@@ -1,0 +1,262 @@
+{
+  "id": "sp08_dft_leakage",
+  "dt": 0.0078125,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 370,
+    "height_mm": 335
+  },
+  "schema": {
+    "name": "SP08 \u2014 Where did the tone amplitude go?",
+    "dt": 0.0078125,
+    "elements": [
+      {
+        "id": "coherent",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 16,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "test",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 16.5,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "dc",
+        "type": "Constant",
+        "params": {
+          "value": 0.25
+        }
+      },
+      {
+        "id": "offset",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "test",
+        "from_port": 0,
+        "to_element": "offset",
+        "to_port": 0
+      },
+      {
+        "from_element": "dc",
+        "from_port": 0,
+        "to_element": "offset",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "coherent",
+        "position": [
+          5,
+          20
+        ],
+        "title": "Reference: coherent at 16 Hz"
+      },
+      {
+        "id": "test",
+        "position": [
+          5,
+          35
+        ],
+        "title": "Test tone: edit frequency_hz"
+      },
+      {
+        "id": "dc",
+        "position": [
+          5,
+          50
+        ],
+        "title": "Known offset: 0.25 V"
+      },
+      {
+        "id": "offset",
+        "position": [
+          29,
+          35
+        ],
+        "title": "Test tone plus offset"
+      },
+      {
+        "id": "scope",
+        "position": [
+          51,
+          30
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Record, then choose the analysis interval",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "coherent reference",
+            "test tone",
+            "offset mixture",
+            "DC reference"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "test",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "offset",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "dc",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "offset",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "coherent",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "test",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "offset",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "dc",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP08 \u2014 Where did the tone amplitude go?**  \n**Does the tallest FFT bin equal the amplitude of an off-bin tone?**  \nRun 2 s at 128 Hz. Analyze 0\u20131 s: N=128, \u0394f=1 Hz; a 16.5 Hz tone leaks. Analyze 0\u20132 s: N=256, \u0394f=0.5 Hz; it is coherent.  \nUse Rectangular, Peak amplitude, Linear, All inputs, Remove mean off. Edit test frequency_hz 16.5 \u2192 18; predict a single-bin peak.  \n[Open SP08 student lab](qrc:/s7studio/help/education/labs/SP08-dft-leakage/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec18/) \u00b7 [S7 spectrum guide](qrc:/s7studio/help/docs/STUDIO_SPECTRUM.md)",
+          "text_format": "markdown",
+          "width": 1298,
+          "height": 340,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

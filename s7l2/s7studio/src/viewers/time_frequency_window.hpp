@@ -77,6 +77,7 @@ class TimeFrequencyWindow final : public QWidget, public ObservationViewer {
     QComboBox *method_;
     QComboBox *quantity_;
     QComboBox *window_;
+    QSpinBox *hop_;
     QSpinBox *scales_;
     QDoubleSpinBox *minimum_;
     QDoubleSpinBox *maximum_;

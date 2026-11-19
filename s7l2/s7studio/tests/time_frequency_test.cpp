@@ -210,6 +210,8 @@ int main(int argc, char **argv) {
                         "Switching transform must retain cursor frequency rather than row number");
                 require(!window.findChild<QComboBox *>("timeFrequency.fftSize")->isEnabled(),
                         "CWT must disable irrelevant FFT control");
+                require(!window.findChild<QSpinBox *>("timeFrequency.hopSize")->isEnabled(),
+                        "CWT must disable irrelevant STFT hop control");
             }
             saved.csv(directory.filePath("map.csv"));
             require(QFile::exists(directory.filePath("map.csv")), "CSV export");
@@ -311,6 +313,8 @@ int main(int argc, char **argv) {
                     "Retired work must not overwrite an imported result after hiding/showing");
             require(!button->isEnabled() && !window.findChild<QComboBox *>("timeFrequency.method")->isEnabled(),
                     "Imported results without input must disable reanalysis controls");
+            require(!window.findChild<QSpinBox *>("timeFrequency.hopSize")->isEnabled(),
+                    "Read-only imports must disable STFT hop changes");
         }
         std::cout << "Time-frequency capture, workers, save/open and rollback passed\n";
     } catch (const std::exception &e) {

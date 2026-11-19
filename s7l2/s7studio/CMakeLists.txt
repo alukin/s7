@@ -241,6 +241,7 @@ qt_add_resources(s7studio_app s7studio_help
     FILES
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_USER_GUIDE.md
         ${PROJECT_SOURCE_DIR}/docs/DIAGRAM_SYMBOLS.md
+        ${PROJECT_SOURCE_DIR}/docs/SIGNAL_SOURCES.md
         ${PROJECT_SOURCE_DIR}/docs/INTEGRATORS.md
         ${PROJECT_SOURCE_DIR}/docs/INTEGRATOR_REFERENCES.md
         ${PROJECT_SOURCE_DIR}/docs/TRAPEZOID_INTEGRATION.md
@@ -252,6 +253,7 @@ qt_add_resources(s7studio_app s7studio_help
         ${PROJECT_SOURCE_DIR}/docs/images/basic_symbols_compact.png
         ${PROJECT_SOURCE_DIR}/docs/LIVE_OSCILLOSCOPE_PROTOTYPE.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_SPECTRUM.md
+        ${PROJECT_SOURCE_DIR}/docs/CONVOLUTION.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_PAIR_ANALYSIS.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_WINDOW_INSPECTION.md
         ${PROJECT_SOURCE_DIR}/docs/STUDIO_TRIGGERING.md
@@ -499,7 +501,8 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
         if(suite STREQUAL "workflows")
             set(gui_target s7studio_gui_workflows_test)
             # Includes the viewer open/close/quit and unchanged-run matrix.
-            set(gui_timeout 150)
+            # The education viewer checks include full and selected-interval analysis.
+            set(gui_timeout 240)
         else()
             set(gui_target s7studio_gui_quick_test)
             list(APPEND gui_args -input "${CMAKE_CURRENT_SOURCE_DIR}/tests/gui/qml/tst_${suite}.qml")
@@ -513,8 +516,9 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
                 --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/${suite}"
                 --capture $<TARGET_FILE:s7studio_gui_capture> --timeout ${gui_timeout} ${graphics_args}
                 -- $<TARGET_FILE:${gui_target}> ${gui_args})
+        math(EXPR gui_ctest_timeout "${gui_timeout} + 30")
         set_tests_properties(s7studio_gui_${suite} PROPERTIES
-            LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 180)
+            LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT ${gui_ctest_timeout})
     endforeach()
     set_property(TEST s7studio_gui_trajectory APPEND PROPERTY LABELS "rendering;quick3d")
     set_tests_properties(s7studio_gui_workflows PROPERTIES RUN_SERIAL TRUE)
@@ -539,6 +543,41 @@ if(S7_BUILD_GUI_REGRESSION_TESTS)
             --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
             -- $<TARGET_FILE:s7studio_gui_workflows_test> educationLinear)
     set_tests_properties(s7studio_gui_education_linear PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_signals
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-signals"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> educationSignals)
+    set_tests_properties(s7studio_gui_education_signals PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_lti
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-lti"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> educationLti)
+    set_tests_properties(s7studio_gui_education_lti PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_spectral
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-spectral"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> educationSpectral)
+    set_tests_properties(s7studio_gui_education_spectral PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_convolution
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-convolution"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> finishedAnalysisFramesStopWaiting educationConvolution)
+    set_tests_properties(s7studio_gui_education_convolution PROPERTIES
+        LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
+    add_test(NAME s7studio_gui_education_stft
+        COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/tools/run_gui_test.py"
+            --artifacts "${CMAKE_CURRENT_BINARY_DIR}/gui-artifacts/education-stft"
+            --capture $<TARGET_FILE:s7studio_gui_capture> --timeout 120
+            -- $<TARGET_FILE:s7studio_gui_workflows_test> hiddenPlotReplacementClearsOldCurves educationStft)
+    set_tests_properties(s7studio_gui_education_stft PROPERTIES
         LABELS "gui;qt-regression" SKIP_RETURN_CODE 77 TIMEOUT 150)
     # Every bundled example: open, run as documented, inspect each observer
     # window and analysis tab. Several minutes per shard; label "examples".
@@ -726,6 +765,7 @@ s7_add_test_executable(s7studio_time_frequency_test tests/time_frequency_test.cp
 target_link_libraries(s7studio_time_frequency_test PRIVATE s7studio_viewers)
 add_test(NAME s7studio_time_frequency COMMAND s7studio_time_frequency_test)
 set_tests_properties(s7studio_time_frequency PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60)
+
 
 s7_add_test_executable(s7studio_display_worker_test tests/display_worker_test.cpp)
 target_link_libraries(s7studio_display_worker_test PRIVATE s7studio_analysis Qt6::Test)

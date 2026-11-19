@@ -21,7 +21,7 @@ production guarantees.
 **Education delivery update, 2026-11-19:** the maintainer requested new
 purpose-built diagrams rather than reuse of older examples. The
 [core manifest](../education/CORE_MANIFEST.md) audits the 24 core targets and
-records SP06, FN01–FN03 and the new FN04–FN06/CT01–CT03 batch. Their
+records FN01–FN06, CT01–CT03, SP01/SP03 and SP05–SP11 (18 developed labs). Their
 [development evidence](../education/EVIDENCE.md)
 does not close an educational or release gate.
 

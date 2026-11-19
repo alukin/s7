@@ -328,8 +328,8 @@ void ScopeViewWindow::analyzeInterval()
         generation, static_cast<std::uint64_t>(rows.size()), metadata.value(QStringLiteral("finished")).toBool());
     if (frame->steps.empty()) { analysisStatus_->setText(QStringLiteral("No samples in the selected interval.")); return; }
     spectrum_->setFrame(frame); correlation_->setFrame(frame); trajectory_->setFrame(frame);
-    if (frame->steps.size() >= 64) { spectrum_->setAnalysisSize(static_cast<int>(frame->steps.size()));
-        correlation_->setAnalysisSize(static_cast<int>(frame->steps.size())); }
+    spectrum_->setAnalysisSize(std::max(2, static_cast<int>(frame->steps.size())));
+    if (frame->steps.size() >= 64) correlation_->setAnalysisSize(static_cast<int>(frame->steps.size()));
     analysisStatus_->setText(QStringLiteral("%1 exact positions • t=%2…%3 s • dt %4 s • %5%6")
         .arg(frame->steps.size()).arg(frame->times.front(), 0, 'g', 8)
         .arg(frame->times.back(), 0, 'g', 8).arg(dt, 0, 'g', 8)
@@ -354,8 +354,8 @@ void ScopeViewWindow::pollAnalysis()
     if (!error.isEmpty()) { analysisStatus_->setText(error); return; }
     if (!frame || frame->steps.empty()) { analysisStatus_->setText(QStringLiteral("No samples in the selected interval.")); return; }
     spectrum_->setFrame(frame); correlation_->setFrame(frame); trajectory_->setFrame(frame);
-    if (frame->steps.size() >= 64) { spectrum_->setAnalysisSize(static_cast<int>(frame->steps.size()));
-        correlation_->setAnalysisSize(static_cast<int>(frame->steps.size())); }
+    spectrum_->setAnalysisSize(std::max(2, static_cast<int>(frame->steps.size())));
+    if (frame->steps.size() >= 64) correlation_->setAnalysisSize(static_cast<int>(frame->steps.size()));
     analysisStatus_->setText(QStringLiteral("%1 exact positions • t=%2…%3 s • dt %4 s • %5%6")
         .arg(frame->steps.size()).arg(frame->times.front(), 0, 'g', 8)
         .arg(frame->times.back(), 0, 'g', 8).arg(frame->dt, 0, 'g', 8)

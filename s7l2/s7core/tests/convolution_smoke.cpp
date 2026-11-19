@@ -27,7 +27,8 @@ void require_close(std::span<const Complex> actual, std::span<const Complex> exp
     require(actual.size() == expected.size(), "Convolution output size differs from reference.");
     for (std::size_t i = 0; i < actual.size(); ++i) {
         const double tolerance = 2e-10 * std::max({1.0, std::abs(actual[i]), std::abs(expected[i])});
-        if (std::abs(actual[i] - expected[i]) > tolerance) {
+        if (!std::isfinite(actual[i].real()) || !std::isfinite(actual[i].imag()) ||
+            std::abs(actual[i] - expected[i]) > tolerance) {
             throw std::runtime_error(std::string(context) + " sample " + std::to_string(i));
         }
     }
@@ -143,6 +144,59 @@ void buffered_radar_case() {
                   "FFT buffered stream");
 }
 
+template<class Processor>
+void partition_and_tail_cases(std::string_view name) {
+    // A single finite complex signal must be independent of frame partition.
+    // Deposit products in a long-double oracle (not either processor's loop),
+    // flush enough zeros to expose the entire M-1 tail, including M > N.
+    const auto input = values(72, 0.23);
+    double worst = 0;
+    for (const std::size_t taps : {1U, 2U, 5U, 17U, 73U}) {
+        const auto impulse = values(taps, 0.17);
+        std::vector<std::complex<long double>> sum(input.size() + taps - 1);
+        for (std::size_t i = 0; i < input.size(); ++i)
+            for (std::size_t j = 0; j < taps; ++j)
+                sum[i+j] += std::complex<long double>(input[i]) * std::complex<long double>(impulse[j]);
+        std::vector<Complex> reference;
+        for (auto z : sum) reference.emplace_back(z);
+        for (const std::size_t size : {1U, 2U, 3U, 4U, 6U, 8U, 9U, 12U, 18U, 24U, 36U, 72U}) {
+            Processor processor{size, impulse, s7::ConvolutionMode::ContinuousStream};
+            require(processor.frame_size() == size && processor.impulse_size() == taps &&
+                    processor.mode() == s7::ConvolutionMode::ContinuousStream, "Processor metadata.");
+            const auto count = ((reference.size() + size - 1) / size) * size;
+            auto padded = input; padded.resize(count);
+            auto expected = reference; expected.resize(count);
+            std::vector<Complex> actual;
+            for (std::size_t start = 0; start < count; start += size) {
+                if (start == size) {
+                    bool rejected = false;
+                    try { static_cast<void>(processor.step(std::span<const Complex>{})); }
+                    catch (const std::invalid_argument&) { rejected = true; }
+                    require(rejected, "Empty frame rejected without consuming stream history.");
+                }
+                const auto frame = processor.step(std::span<const Complex>(padded).subspan(start, size));
+                actual.insert(actual.end(), frame.begin(), frame.end());
+            }
+            require_close(actual, expected, std::string(name) + " partition and complete tail");
+            for (std::size_t i=0;i<count;++i) worst=std::max(worst,std::abs(actual[i]-expected[i]));
+            processor.reset();
+            const auto first = processor.step(std::span<const Complex>(padded).first(size));
+            require_close(first, std::span<const Complex>(expected).first(size), "Reset retains kernel and clears all history.");
+        }
+    }
+    // A hard-coded non-real case detects accidental conjugation/correlation.
+    const std::vector<Complex> x{{1,1},{2,-1}}, h{{2,-1},{-1,2}};
+    const std::vector<Complex> expected{{3,1},{0,-3},{0,5}};
+    Processor independent{2,h};
+    require_close(independent.step(x),expected,"Complex convolution has no conjugation and preserves full tail.");
+    Processor other{2,{{1,0}}};
+    require_close(other.step(x),x,"Separate instance kernel.");
+    require_close(independent.step(x),expected,"Independent frames and interleaved instances retain no history.");
+    independent.reset();
+    require_close(independent.step(x),expected,"Independent reset retains impulse.");
+    std::cout << name << " partition/tail sweep: max absolute residual=" << worst << '\n';
+}
+
 void invalid_inputs() {
     const auto impulse = values(3, 0.1);
     for (const bool fft : {false, true}) {
@@ -187,6 +241,8 @@ int main() {
         stream_cases();
         matched_filter();
         buffered_radar_case();
+        partition_and_tail_cases<s7::FirConvolution>("FIR");
+        partition_and_tail_cases<s7::FftConvolution>("FFT");
         invalid_inputs();
         std::cout << "FIR and FFT convolution: independent/continuous frames, reset, matched filter and invalid inputs passed\n";
     } catch (const std::exception& error) {

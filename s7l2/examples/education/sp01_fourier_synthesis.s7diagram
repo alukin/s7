@@ -1,0 +1,678 @@
+{
+  "id": "sp01_fourier_synthesis",
+  "dt": 0.0078125,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 440,
+    "height_mm": 370
+  },
+  "schema": {
+    "name": "SP01 \u2014 Build a square wave from smooth tones",
+    "dt": 0.0078125,
+    "elements": [
+      {
+        "id": "tone1",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 2,
+          "phase": 0
+        }
+      },
+      {
+        "id": "weight1",
+        "type": "Gain",
+        "params": {
+          "factor": 1.2732395447351628
+        }
+      },
+      {
+        "id": "tone3",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 6,
+          "phase": 0
+        }
+      },
+      {
+        "id": "weight3",
+        "type": "Gain",
+        "params": {
+          "factor": 0.4244131815783876
+        }
+      },
+      {
+        "id": "tone5",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 10,
+          "phase": 0
+        }
+      },
+      {
+        "id": "weight5",
+        "type": "Gain",
+        "params": {
+          "factor": 0.25464790894703254
+        }
+      },
+      {
+        "id": "tone7",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 14,
+          "phase": 0
+        }
+      },
+      {
+        "id": "weight7",
+        "type": "Gain",
+        "params": {
+          "factor": 0.18189136353359467
+        }
+      },
+      {
+        "id": "tone9",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 1,
+          "frequency_hz": 18,
+          "phase": 0
+        }
+      },
+      {
+        "id": "weight9",
+        "type": "Gain",
+        "params": {
+          "factor": 0.1414710605261292
+        }
+      },
+      {
+        "id": "three",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "five",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1,
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      {
+        "id": "target",
+        "type": "PulseGenerator",
+        "params": {
+          "low": -1,
+          "high": 1,
+          "frequency_hz": 2,
+          "phase": 0,
+          "duty": 0.5
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "tone1",
+        "from_port": 0,
+        "to_element": "weight1",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone3",
+        "from_port": 0,
+        "to_element": "weight3",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone5",
+        "from_port": 0,
+        "to_element": "weight5",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone7",
+        "from_port": 0,
+        "to_element": "weight7",
+        "to_port": 0
+      },
+      {
+        "from_element": "tone9",
+        "from_port": 0,
+        "to_element": "weight9",
+        "to_port": 0
+      },
+      {
+        "from_element": "weight1",
+        "from_port": 0,
+        "to_element": "five",
+        "to_port": 0
+      },
+      {
+        "from_element": "weight1",
+        "from_port": 0,
+        "to_element": "three",
+        "to_port": 0
+      },
+      {
+        "from_element": "weight3",
+        "from_port": 0,
+        "to_element": "five",
+        "to_port": 1
+      },
+      {
+        "from_element": "weight3",
+        "from_port": 0,
+        "to_element": "three",
+        "to_port": 1
+      },
+      {
+        "from_element": "weight5",
+        "from_port": 0,
+        "to_element": "five",
+        "to_port": 2
+      },
+      {
+        "from_element": "weight5",
+        "from_port": 0,
+        "to_element": "three",
+        "to_port": 2
+      },
+      {
+        "from_element": "weight7",
+        "from_port": 0,
+        "to_element": "five",
+        "to_port": 3
+      },
+      {
+        "from_element": "weight9",
+        "from_port": 0,
+        "to_element": "five",
+        "to_port": 4
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "tone1",
+        "position": [
+          3,
+          18
+        ],
+        "title": "Harmonic 1: 2 Hz, unit sine"
+      },
+      {
+        "id": "weight1",
+        "position": [
+          16,
+          18
+        ],
+        "title": "Coefficient: 4 / (1\u03c0)"
+      },
+      {
+        "id": "tone3",
+        "position": [
+          3,
+          28
+        ],
+        "title": "Harmonic 3: 6 Hz, unit sine"
+      },
+      {
+        "id": "weight3",
+        "position": [
+          16,
+          28
+        ],
+        "title": "Coefficient: 4 / (3\u03c0)"
+      },
+      {
+        "id": "tone5",
+        "position": [
+          3,
+          38
+        ],
+        "title": "Harmonic 5: 10 Hz, unit sine"
+      },
+      {
+        "id": "weight5",
+        "position": [
+          16,
+          38
+        ],
+        "title": "Coefficient: 4 / (5\u03c0)"
+      },
+      {
+        "id": "tone7",
+        "position": [
+          3,
+          48
+        ],
+        "title": "Harmonic 7: 14 Hz, unit sine"
+      },
+      {
+        "id": "weight7",
+        "position": [
+          16,
+          48
+        ],
+        "title": "Coefficient: 4 / (7\u03c0)"
+      },
+      {
+        "id": "tone9",
+        "position": [
+          3,
+          58
+        ],
+        "title": "Harmonic 9: 18 Hz, unit sine"
+      },
+      {
+        "id": "weight9",
+        "position": [
+          16,
+          58
+        ],
+        "title": "Coefficient: 4 / (9\u03c0)"
+      },
+      {
+        "id": "three",
+        "position": [
+          32,
+          28
+        ],
+        "title": "First three odd harmonics"
+      },
+      {
+        "id": "five",
+        "position": [
+          48,
+          43
+        ],
+        "title": "Full sum: all five branches"
+      },
+      {
+        "id": "target",
+        "position": [
+          32,
+          60
+        ],
+        "title": "Square target: right-hand value at jumps"
+      },
+      {
+        "id": "scope",
+        "position": [
+          66,
+          28
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Compare the named signals",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "one term",
+            "three terms",
+            "full sum",
+            "square target"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "tone1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "weight1",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "tone3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "weight3",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "tone5",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "weight5",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "tone7",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "weight7",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "tone9",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "weight9",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "weight1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "five",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "weight1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "three",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "weight3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "five",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "weight3",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "three",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "weight5",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "five",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "weight5",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "three",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "weight7",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "five",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "weight9",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "five",
+            "in",
+            4
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "weight1",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "three",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "five",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "target",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP01 \u2014 Build a square wave from smooth tones**  \n**Do more harmonics remove the ringing near a jump?** Run **2 s at 128 Hz**; open Scope.  \nAt state time 0.125 s: one 1.27324 V; three 1.10347 V; five 1.06305 V. At jumps every partial sum is 0.  \nChange weight9 factor to 0. Which 18 Hz component disappears? Scope: inspect 0\u20130.5 s; see guide for Spectrum settings.  \n[Open SP01 student lab](qrc:/s7studio/help/education/labs/SP01-fourier-synthesis/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec15/) \u00b7 [S7 signal sources](qrc:/s7studio/help/docs/SIGNAL_SOURCES.md)",
+          "text_format": "markdown",
+          "width": 1562,
+          "height": 260,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

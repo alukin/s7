@@ -80,6 +80,59 @@ private slots:
             QVERIFY(std::abs(complexResult.frequencies[index]-signedBin*1024./n) < 2e-14);
         }
     }
+    void shortRecords_data() {
+        QTest::addColumn<int>("size");QTest::addColumn<bool>("iq");
+        for(int n:{2,3,4,5,6,8,16,31,63}) for(bool complex:{false,true})
+            QTest::newRow(qPrintable(QString("N%1-%2").arg(n).arg(complex ? "IQ" : "real"))) << n << complex;
+    }
+    void shortRecords() {
+        QFETCH(int,size);QFETCH(bool,iq);
+        const auto input=frame(std::size_t(size),[](auto step) {
+            const double n=double(step-1);return std::complex<double>(.5+.1*n+std::cos(.4*n),std::sin(.7*n)-.25*n);
+        });
+        // Explicit cosine-series coefficients, independent direct DFT. Tiny
+        // records exercise overlapping window lobes and odd/even endpoints;
+        // a coherent-tone amplitude shortcut is not valid for all these cases.
+        const double coefficients[5][4]{{1,0,0,0},{.5,-.5,0,0},{.54,-.46,0,0},
+                                       {.42,-.5,.08,0},{.35875,-.48829,.14128,-.01168}};
+        for(int w=0;w<5;++w) for(bool subtract:{false,true}) {
+            std::vector<std::complex<double>> samples;std::complex<long double> mean{};
+            for(int n=0;n<size;++n) {
+                samples.emplace_back(input.values[2*n],iq ? input.values[2*n+1] : 0);
+                mean+=std::complex<long double>(samples.back())/static_cast<long double>(size);
+            }
+            long double s1=0,s2=0,weightedPower=0;
+            for(int n=0;n<size;++n) {
+                long double weight=0;
+                for(int k=0;k<4;++k) weight+=coefficients[w][k]*std::cos(2*std::numbers::pi_v<long double>*k*n/size);
+                auto value=std::complex<long double>(samples[std::size_t(n)]);
+                if(subtract) value-=mean;
+                samples[std::size_t(n)]=std::complex<double>(value*weight);
+                s1+=weight;s2+=weight*weight;weightedPower+=std::norm(value*weight);
+            }
+            const auto expected=direct(samples);
+            for(int q=0;q<3;++q) {
+                SpectrumSettings settings;settings.size=std::size_t(size);settings.iq=iq;
+                settings.window=static_cast<SpectrumWindow>(w);settings.quantity=static_cast<SpectrumQuantity>(q);settings.removeMean=subtract;
+                SpectrumAnalyzer analyzer;const auto result=analyzer.analyze(input,settings);
+                QCOMPARE(result.state,SpectrumResult::State::Ready);QCOMPARE(result.firstStep,std::int64_t(1));QCOMPARE(result.lastStep,std::int64_t(size));
+                QCOMPARE(result.values.size(),std::size_t(iq ? size : size/2+1));
+                QVERIFY(std::abs(result.coherentGain-double(s1/size))<1e-12);
+                QVERIFY(std::abs(result.enbw-double(1024*s2/(s1*s1)))<1e-9);
+                double power=0;
+                for(std::size_t i=0;i<result.values.size();++i) {
+                    const auto bin=iq ? (i+(std::size_t(size)+1)/2)%std::size_t(size) : i;
+                    const double fold=!iq && bin && !(size%2==0 && bin==std::size_t(size/2)) ? 2 : 1;
+                    const double value=q==0 ? double(std::abs(expected[bin])/s1)*fold
+                        : double(std::norm(expected[bin])/(s2*(q==1 ? size : 1024)))*fold;
+                    QVERIFY(std::isfinite(result.values[i]));QVERIFY(std::abs(result.values[i]-value)<1e-10*std::max(1.,std::abs(value)));
+                    QCOMPARE(result.frequencies[i],(double(i)-(iq ? size/2 : 0))*1024/size);
+                    if(q) power+=result.values[i]*(q==2 ? 1024./size : 1);
+                }
+                if(q) QVERIFY(std::abs(power-double(weightedPower/s2))<1e-10*std::max(1.,power));
+            }
+        }
+    }
     void dcNyquistAndToneAmplitude() {
         SpectrumSettings settings; settings.size = 256; settings.window = SpectrumWindow::Rectangular;
         SpectrumAnalyzer analyzer;
@@ -174,8 +227,17 @@ private slots:
         QCOMPARE(analyzer.analyze(input, settings).state, SpectrumResult::State::Unavailable);
         input = frame(64, [](auto) { return 1.; }); input.rateNumerator = 0;
         QCOMPARE(analyzer.analyze(input, settings).state, SpectrumResult::State::Unavailable);
-        settings.size = 63;
-        QCOMPARE(analyzer.analyze(input, settings).state, SpectrumResult::State::Unavailable);
+        input=frame(8,[](auto) { return 1.; });input.finished=true;
+        const auto finished=analyzer.analyze(input,settings);
+        QCOMPARE(finished.state,SpectrumResult::State::Unavailable);QVERIFY(finished.message.contains("Run finished"));
+        settings.size=8;QCOMPARE(analyzer.analyze(input,settings).state,SpectrumResult::State::Ready);
+        settings.size=2;input=frame(1,[](auto) { return 1.; });input.finished=true;
+        QCOMPARE(analyzer.analyze(input,settings).state,SpectrumResult::State::Unavailable);
+        for(auto invalid:{0U,1U,65537U}) {
+            settings.size=invalid;
+            QCOMPARE(analyzer.analyze(input,settings).state,SpectrumResult::State::Unavailable);
+            QVERIFY_THROWS_EXCEPTION(std::invalid_argument,spectrumWindow(SpectrumWindow::Rectangular,invalid));
+        }
     }
     void averagesAreLinearAndCountEachHopOnce() {
         auto value = [](auto step) { return step <= 64 ? 1. : 3.; };

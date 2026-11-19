@@ -1,0 +1,696 @@
+{
+  "id": "sp07_filter_transfer",
+  "dt": 0.015625,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 64,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 500,
+    "height_mm": 365
+  },
+  "schema": {
+    "name": "SP07 \u2014 Which filter resonates?",
+    "dt": 0.015625,
+    "elements": [
+      {
+        "id": "input",
+        "type": "ImpulseGenerator",
+        "params": {
+          "area": 0.015625,
+          "start_time": 0.125
+        }
+      },
+      {
+        "id": "low_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "low_rate",
+        "type": "Gain",
+        "params": {
+          "factor": 2
+        }
+      },
+      {
+        "id": "low",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "position_error",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "stiffness",
+        "type": "Gain",
+        "params": {
+          "factor": 16
+        }
+      },
+      {
+        "id": "acceleration",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            -1
+          ]
+        }
+      },
+      {
+        "id": "velocity",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "resonant",
+        "type": "EulerIntegrator",
+        "params": {
+          "initial_value": 0
+        }
+      },
+      {
+        "id": "damping",
+        "type": "Gain",
+        "params": {
+          "factor": 1.6
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "low_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "low",
+        "from_port": 0,
+        "to_element": "low_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "low_error",
+        "from_port": 0,
+        "to_element": "low_rate",
+        "to_port": 0
+      },
+      {
+        "from_element": "low_rate",
+        "from_port": 0,
+        "to_element": "low",
+        "to_port": 0
+      },
+      {
+        "from_element": "input",
+        "from_port": 0,
+        "to_element": "position_error",
+        "to_port": 0
+      },
+      {
+        "from_element": "resonant",
+        "from_port": 0,
+        "to_element": "position_error",
+        "to_port": 1
+      },
+      {
+        "from_element": "position_error",
+        "from_port": 0,
+        "to_element": "stiffness",
+        "to_port": 0
+      },
+      {
+        "from_element": "stiffness",
+        "from_port": 0,
+        "to_element": "acceleration",
+        "to_port": 0
+      },
+      {
+        "from_element": "damping",
+        "from_port": 0,
+        "to_element": "acceleration",
+        "to_port": 1
+      },
+      {
+        "from_element": "acceleration",
+        "from_port": 0,
+        "to_element": "velocity",
+        "to_port": 0
+      },
+      {
+        "from_element": "velocity",
+        "from_port": 0,
+        "to_element": "resonant",
+        "to_port": 0
+      },
+      {
+        "from_element": "velocity",
+        "from_port": 0,
+        "to_element": "damping",
+        "to_port": 0
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "input",
+        "position": [
+          3,
+          19
+        ],
+        "title": "One 1 V sample: n=8 at 64 Hz"
+      },
+      {
+        "id": "low_error",
+        "position": [
+          18,
+          19
+        ],
+        "title": "Input minus low-pass state"
+      },
+      {
+        "id": "low_rate",
+        "position": [
+          33,
+          19
+        ],
+        "title": "Low-pass rate: 2 per second"
+      },
+      {
+        "id": "low",
+        "position": [
+          48,
+          19
+        ],
+        "title": "Low-pass voltage: starts at 0 V"
+      },
+      {
+        "id": "position_error",
+        "position": [
+          18,
+          40
+        ],
+        "title": "Input minus resonant state"
+      },
+      {
+        "id": "stiffness",
+        "position": [
+          33,
+          40
+        ],
+        "title": "Natural frequency squared: 16 per s\u00b2"
+      },
+      {
+        "id": "acceleration",
+        "position": [
+          49,
+          40
+        ],
+        "title": "Acceleration: drive minus damping"
+      },
+      {
+        "id": "velocity",
+        "position": [
+          64,
+          40
+        ],
+        "title": "Rate state: starts at 0 V/s"
+      },
+      {
+        "id": "resonant",
+        "position": [
+          64,
+          56
+        ],
+        "title": "Resonant voltage: starts at 0 V"
+      },
+      {
+        "id": "damping",
+        "position": [
+          49,
+          56
+        ],
+        "title": "Damping coefficient: edit factor"
+      },
+      {
+        "id": "input_scope",
+        "position": [
+          3,
+          56
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Input pulse",
+        "params": {
+          "channel_count": 1,
+          "channel_names": [
+            "input"
+          ],
+          "channel_units": [
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "scope",
+        "position": [
+          80,
+          19
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Filter outputs: inspect 0\u201310 s",
+        "params": {
+          "channel_count": 2,
+          "channel_names": [
+            "low-pass",
+            "resonant"
+          ],
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "low_response",
+        "position": [
+          80,
+          39
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "title": "Low-pass frequency response",
+        "params": {
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      },
+      {
+        "id": "resonant_response",
+        "position": [
+          80,
+          56
+        ],
+        "observer": true,
+        "type": "FrequencyResponse",
+        "title": "Resonant frequency response",
+        "params": {
+          "channel_units": [
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "low",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low_error",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "low_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low_rate",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "low_rate",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "position_error",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "resonant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "position_error",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w6",
+        "from": {
+          "port": [
+            "position_error",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "stiffness",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w7",
+        "from": {
+          "port": [
+            "stiffness",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w8",
+        "from": {
+          "port": [
+            "damping",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "acceleration",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w9",
+        "from": {
+          "port": [
+            "acceleration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "velocity",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w10",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "resonant",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w11",
+        "from": {
+          "port": [
+            "velocity",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "damping",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w12",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "input_scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w13",
+        "from": {
+          "port": [
+            "low",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w14",
+        "from": {
+          "port": [
+            "resonant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w15",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low_response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w16",
+        "from": {
+          "port": [
+            "low",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "low_response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w17",
+        "from": {
+          "port": [
+            "input",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "resonant_response",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w18",
+        "from": {
+          "port": [
+            "resonant",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "resonant_response",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP07 \u2014 Which filter resonates?**  \n**Does the measured response match the actual discrete filter?** Run **64 s at 64 Hz**.  \nBoth DC gains are 1. The resonant peak is about 2.99 near 0.625 Hz. Low-pass starts one sample after the pulse; resonant starts two later.  \nChange damping factor 1.6 \u2192 3.2; predict a lower resonance. Capture 64 s for the decaying tail; Scope: inspect 0\u201310 s.  \n[Open SP07 student lab](qrc:/s7studio/help/education/labs/SP07-filter-transfer/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/6-003-signals-and-systems-fall-2011/resources/mit6_003f11_lec11/) \u00b7 [S7 timing and integrators](qrc:/s7studio/help/docs/INTEGRATORS.md)",
+          "text_format": "markdown",
+          "width": 1789,
+          "height": 300,
+          "font_size": 20
+        }
+      }
+    ]
+  }
+}

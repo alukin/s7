@@ -347,6 +347,14 @@ CWT. Larger jobs stay manual; an empty-state message explains how to create the
 map. Automatic work runs on the shared pool, obeys visibility/cancellation, and
 does not recreate a display after Clear. A one-frame STFT remains visible as a
 heatmap band.
+STFT exposes a hop in samples (1…N), reset to N/2 when FFT size changes and
+restored from saved results. Its boundary metadata states that only full
+windows are returned, without zero extension. Map and slice units agree;
+imports validate hop, coordinates and frozen-input frame count before staging.
+Heatmap preparation and cursor selection use numeric coordinate centers,
+including nonuniform axes; area filtering preserves narrow features on
+reduction. The renderer's applied grid can be inspected read-only, separately
+from a pending preparation request.
 Reanalysis preserves the last valid plot until a replacement succeeds. Analyze /
 freeze selects the latest capture, while transform-setting changes reuse the
 frozen input. Switching to Input trace cancels derived work without leaving the

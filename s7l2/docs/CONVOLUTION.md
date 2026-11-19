@@ -53,3 +53,17 @@ ctest --test-dir build -R s7core_convolution_smoke --output-on-failure
 The smoke test compares both processors with direct complex convolution for
 independent and consecutive frames, including impulses longer than frames,
 reset behavior, a delayed matched-filter peak, and invalid sizes.
+It also sweeps twelve frame partitions of one finite complex signal, five
+kernel lengths (including kernels longer than a frame), and enough zero
+frames to drain the complete output tail. A separate long-double pair-product
+reference checks sample alignment and normalization; explicit non-real values
+distinguish convolution from conjugating correlation. Empty-frame rejection
+is exercised between valid stream frames, followed by normal continuation.
+
+The original [SP10 student lab](../education/labs/SP10-circular-convolution/README.md)
+connects this API verification to a saved scalar graph. Its exact recorded word
+is processed through FIR and FFT independent/continuous modes and compared with
+direct sums, the graph's linear output and its periodic/padded paths. A separate
+short direct DFT verifies circular wrap-around at N=4/5 and sufficient padding
+at N=6/8. Neither API exposes an under-padded/circular mode: folding a full
+linear output is a test operation, not a new processor contract.

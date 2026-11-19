@@ -163,3 +163,6 @@ The physical two-host version, installed education-guide navigation, release
 artifacts and native Windows usability are pending. This local lab is the
 candidate for G2; it does not claim that gate has passed or provide a new
 remote-live-observation workflow.
+
+Continue with [SP07 — filter transfer functions](../SP07-filter-transfer/README.md)
+for independently checked low-pass and resonant frequency responses.

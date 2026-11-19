@@ -244,7 +244,7 @@ private:
     DensityProvider* densityProvider_ = nullptr; // Owned by the QML engine.
     std::uint64_t densityRevision_ = 0;
     QList<QLineSeries*> overlays_;
-    // Removed series, emptied: GraphsView cleans removed series up on its
+    // Removed series, hidden and emptied before detaching: GraphsView cleans them up on its
     // next polish, so they must outlive the scene (deleted after it).
     QList<QXYSeries*> retired_;
     int frameIntervalMs_ = 0;

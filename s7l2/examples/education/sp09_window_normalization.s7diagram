@@ -1,0 +1,264 @@
+{
+  "id": "sp09_window_normalization",
+  "dt": 0.0078125,
+  "document_kind": "s7.diagram",
+  "diagram_version": 2,
+  "studio_run": {
+    "runtime_seconds": 2,
+    "clear_scope_traces": true
+  },
+  "sheet": {
+    "orientation": "landscape",
+    "width_mm": 370,
+    "height_mm": 335
+  },
+  "schema": {
+    "name": "SP09 \u2014 Change the window, preserve the units",
+    "dt": 0.0078125,
+    "elements": [
+      {
+        "id": "calibration",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 2,
+          "frequency_hz": 20,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "strong",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 2,
+          "frequency_hz": 20.5,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "weak",
+        "type": "AnalogOscillator",
+        "params": {
+          "amplitude": 0.05,
+          "frequency_hz": 24,
+          "phase": 1.5707963267948966
+        }
+      },
+      {
+        "id": "mixture",
+        "type": "Adder",
+        "params": {
+          "weights": [
+            1,
+            1
+          ]
+        }
+      }
+    ],
+    "connections": [
+      {
+        "from_element": "strong",
+        "from_port": 0,
+        "to_element": "mixture",
+        "to_port": 0
+      },
+      {
+        "from_element": "weak",
+        "from_port": 0,
+        "to_element": "mixture",
+        "to_port": 1
+      }
+    ]
+  },
+  "probes": [],
+  "diagram": {
+    "grid": {
+      "step": 20,
+      "mm_per_step": 5.291666666666667
+    },
+    "nodes": [
+      {
+        "id": "calibration",
+        "position": [
+          5,
+          20
+        ],
+        "title": "Coherent calibration: 2 V peak, 20 Hz"
+      },
+      {
+        "id": "strong",
+        "position": [
+          5,
+          35
+        ],
+        "title": "Strong test tone: 20.5 Hz"
+      },
+      {
+        "id": "weak",
+        "position": [
+          5,
+          50
+        ],
+        "title": "Weak reference: edit amplitude"
+      },
+      {
+        "id": "mixture",
+        "position": [
+          29,
+          35
+        ],
+        "title": "Strong plus weak"
+      },
+      {
+        "id": "scope",
+        "position": [
+          51,
+          30
+        ],
+        "observer": true,
+        "type": "Scope",
+        "title": "Record, then choose the analysis interval",
+        "params": {
+          "channel_count": 4,
+          "channel_names": [
+            "calibration",
+            "strong tone",
+            "weak reference",
+            "mixture"
+          ],
+          "channel_units": [
+            "V",
+            "V",
+            "V",
+            "V"
+          ]
+        }
+      }
+    ],
+    "wires": [
+      {
+        "id": "w0",
+        "from": {
+          "port": [
+            "strong",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixture",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w1",
+        "from": {
+          "port": [
+            "weak",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "mixture",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w2",
+        "from": {
+          "port": [
+            "calibration",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            0
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w3",
+        "from": {
+          "port": [
+            "strong",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            1
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w4",
+        "from": {
+          "port": [
+            "weak",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            2
+          ]
+        },
+        "bends": []
+      },
+      {
+        "id": "w5",
+        "from": {
+          "port": [
+            "mixture",
+            "out",
+            0
+          ]
+        },
+        "to": {
+          "port": [
+            "scope",
+            "in",
+            3
+          ]
+        },
+        "bends": []
+      }
+    ],
+    "text_frames": [
+      {
+        "id": "notes",
+        "position": [
+          2,
+          1
+        ],
+        "params": {
+          "text": "**SP09 \u2014 Change the window, preserve the units**  \n**Which normalization preserves amplitude, and which preserves power?**  \nRun 2 s at 128 Hz; analyze 0\u20131 s, N=128. Compare Rectangular, Periodic Hann and Periodic Hamming. The calibration peak stays 2 V.  \nCG: 1, 0.5, 0.54; ENBW: 1, 1.5, 1.362826 Hz. Use All inputs. Edit weak amplitude 0.05 \u2192 0.1; inspect the mixture near 24 Hz.  \n[Open SP09 student lab](qrc:/s7studio/help/education/labs/SP09-window-normalization/README.md) \u00b7 [MIT teaching materials](https://ocw.mit.edu/courses/2-161-signal-processing-continuous-and-discrete-fall-2008/resources/lecture_12/) \u00b7 [S7 spectrum guide](qrc:/s7studio/help/docs/STUDIO_SPECTRUM.md)",
+          "text_format": "markdown",
+          "width": 1298,
+          "height": 340,
+          "font_size": 18
+        }
+      }
+    ]
+  }
+}

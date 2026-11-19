@@ -2,8 +2,9 @@
 
 This file records executed development checks, separately from the final
 release acceptance matrix. Earlier batches used baseline `96fe7b438ceeb9a206d404b4ae2a05943c89b21d`.
-Current working changes are on `education/core-labs` at
-`440eb388b5250c127fa3196f2887294affba142a` (README acknowledgment update).
+Current SP01/SP03, SP05/SP07, SP08/SP09, SP10 and SP11 working changes are based on `education/core-labs` at
+`a27b2bb2ba08deeea97aef470c50723b6ac03a38`. Earlier sections retain their
+original baseline and measured results.
 No final-candidate or installed-package qualification is claimed.
 
 ## SP06 — initial local check, 2026-11-19
@@ -364,3 +365,802 @@ No installed-bundle, relocation, native Windows, Wine, sanitizer, two-host
 or final-candidate qualification is claimed. Next development batch:
 **SP01/SP03**, followed by **SP05/SP07**. Maintainer review and the existing
 release gates remain open; none of the 24 core IDs was dropped.
+
+## SP01/SP03 — synthesis, sampling and viewer checks, 2026-11-19
+
+Working base: `a27b2bb2ba08deeea97aef470c50723b6ac03a38` plus this batch.
+Platform: Fedora 45 x86-64, GCC 16.2.1, CMake 4.3.0, Qt 6.11.2;
+Studio-enabled `build-release`, native Linux Xvfb with software rendering.
+The two original graphs bring the source inventory to **12 developed core
+labs and 110 example diagrams**. Twelve core labs remain proposed.
+Status: **diagram-ready with passing development checks**; release review,
+installed-package and platform qualification remain open.
+
+### Frozen numerical contracts
+
+Both use production schema loading, validation, compilation and execution,
+with read-only observation of every sample. Sources emit signal time n/F_s;
+Scope records that sample at model time (n+1)/F_s. The finite F64 sample and
+normalized complex coefficient budget is **1e−10 V**; power budget
+**1e−11 V²**; time budget **1e−12 s**, plus integer-nanosecond rounding.
+The test oracle evaluates independent long-double formulas and a direct
+complex DFT, sharing no FFT or S7 element implementation.
+
+| Lab | Saved experiment | Independent reference and variations |
+| --- | --- | --- |
+| SP01 | 2 s at 128 Hz; 256 samples/channel | Odd sine harmonics 1,3,5,7,9 of 2 Hz, coefficients 4/(mπ), one-/three-/five-term sums; ±1 V square target with right-hand values at jumps |
+| SP03 | 2 s at 64 Hz; 128 samples/channel | 10 and 74 Hz sines at phase 0.375 rad; 54 Hz sine at phase π−0.375; exact sample equality and shifted-minus-reference residual |
+
+SP01 tests signed complex coefficients (including DC and empty bins),
+finite mean square and Parseval. Measured values were **0.810569**, **0.933056**
+and **0.959605 V²**. The five-term sampled peak was **1.178202 V**, and all
+partial sums had the predicted jump midpoint. Setting the ninth coefficient
+to zero removes its bin. At 32 Hz, the ninth harmonic aliases negatively
+onto the seventh: the 14 Hz amplitude becomes **8/(63π) V**. This deliberate
+failure is distinct from finite-series ringing at a sufficient sample rate.
+
+SP03 tests the equality of all three sampled source sequences and the near-zero
+residual. Editing shifted from 74 to 70 Hz yields a 6 Hz alias and a nonzero
+difference. Restoring 74 Hz and running at 256 Hz yields separate 10, 74 and
+54 Hz peaks. Fresh runs matched exactly in this process/build. Maximum
+sample residual across the named cases was **3.91631e−14 V**; baseline SP01
+was **3.06977e−14 V**, baseline SP03 **2.64233e−14 V**.
+
+The source-registration omission in the first headless harness was corrected
+with the existing built-in registry hook. No runtime, compiler, validator,
+solver or vendor implementation changes were needed.
+
+### Viewer correctness evidence
+
+The `educationSignals` workflow follows each actual visible guide link,
+accepts the saved rate/duration, opens Scope and checks the journal against
+the independent formulas. It then checks **every plotted time-series point**
+against both the recording and independent oracle, with exact channel
+mapping, names, V units, model-time axes, first/final timestamps and counts.
+The primary edit is performed through F4, saved, reopened and rerun. SP03
+also restores the source and changes the actual Run Configuration to 256 Hz.
+
+For each baseline, edited and higher-rate profile, the actual Spectrum UI is
+configured for a rectangular window, all real inputs, no mean removal and
+linear display. The full 2 s interval is analyzed with N=256 (SP01), N=128
+(SP03) or N=512 (SP03 at 256 Hz). Every returned **and plotted** one-sided
+bin is checked against a direct DFT with proper DC/Nyquist treatment:
+
+- Peak amplitude: 2|X[k]|/N for interior bins, no doubling at the endpoints.
+- Power/bin: 2|X[k]/N|² for interior bins, with endpoint treatment.
+- PSD: power/bin divided by Δf; integration is checked against time mean square.
+- Spectrum budget: **1e−9** in the displayed quantity's units; integrated
+  power budget **1e−10 V²**.
+- Frequency spacing, Nyquist bound, axis titles, units, legend-to-channel
+  mapping and the current run identity are verified.
+- Selecting **0–1 s** then analyzing must produce half as many samples and
+  **1 Hz** bin spacing instead of 0.5 Hz. Frame steps, values and bounds
+  are checked, detecting stale full-interval results after selection changes.
+
+The first GUI pass exposed clipped links in SP03's instruction frame; the
+frame was enlarged, and the actual link-click check then passed. Visual
+inspection also prompted role-based labels **reference**, **shifted**,
+**reflected**, **difference**, and **full sum**. These remain truthful after
+frequency/coefficient edits. An edited 70 Hz source is no longer misleadingly
+named “74 Hz” in a viewer legend.
+
+Retained images under `build-release/s7studio/gui-artifacts/education-signals/`
+include both diagrams/guides and baseline/edited time, spectrum and selected-
+interval captures; SP03 also has `SP03-256Hz-*.png`. These images were visually
+inspected. Initial failure captures may remain alongside the final passing
+`results.xml`. This is software-rendered inspection, not a physical-display
+student usability study. The checks cover the Time/Spectrum paths used by
+these lessons, not a completed audit of every viewer or every education lab.
+The maintainer's **final collection-wide viewer-audit reminder** remains open
+in [IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit).
+
+### Executed verification
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target \
+  s7studio s7studio_gui_workflows_test s7studio_gui_capture \
+  s7studio_scope_view_test s7studio_spectrum_test \
+  s7tests_education_signals s7tests_education_linear \
+  s7tests_education_foundations s7tests_education_sp06 \
+  s7core_integrators_smoke s7core_model_time_smoke \
+  s7tests_linear_examples_smoke s7studio_diagram_test \
+  s7studio_model_time_test --parallel 2
+ctest --test-dir build-release \
+  -R '^(s7tests_education_(sp06|foundations|linear|signals)|s7core_(integrators|model_time)_smoke|s7tests_linear_examples_smoke|s7studio_(diagram|model_time|scope_view|spectrum|gui_workflows|gui_education_(sp06|foundations|linear|signals)))$' \
+  --output-on-failure -V
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+**16/16 selected CTest entries passed**, 179.01 s. Ordinary Studio workflows:
+**107 passed, 0 failed, 110 skipped**; the 110 skips are the separately sharded
+bundled-example release-render matrix. Dedicated signals GUI: **4 passed,
+0 failed, 0 skipped** (two lab rows plus setup/cleanup). After the role-label
+refinement and resource rebuild, final numerical and signals GUI selections
+passed **2/2**, 8.73 s. No blanket full-release test claim is made.
+
+All **12 education diagrams** reproduced byte-for-byte from their four
+generators. The static index/geometry check covered **110 diagrams with zero
+issues**. All relative links in the top-level README and twelve student guides
+resolved in the source tree. Final SHA-256 values:
+
+```text
+b3022dcfdca68bce7f0604dcb5a7a81fb874e63234232bf493cd14fbbb7d786f examples/education/sp01_fourier_synthesis.s7diagram
+d10de16ea84ce486891a98304904c0a1cb4a2aa701539fc79ed4ac5a54f6a20a examples/education/sp03_aliasing.s7diagram
+64548655494038ceae140d76fd7c5ef0b8dbe5e731a2a090dd11465b56fc5729 examples/education/generate_signals.py
+4b0d130ee4ad5e36b3b1cb14f06160252a5210441d8a315252394191518515cb s7tests/education_signals_reference.hpp
+2da4ac42d867b4a982d8fc5657e53dc92282607fc13015b2af2dc939ab83e811 s7tests/education_signals_smoke.cpp
+cdc84cdd698b1424b502f2383a4e368fb1fee628c6990392b23dd62c6eb305a4 s7studio/tests/gui/workflows_test.cpp
+```
+
+MIT lecture resource pages and their relevant public notes were checked;
+the source ledger distinguishes topic alignment from exact exercise
+reproduction. No external handout or solution key is bundled. Next batch:
+**SP05/SP07**. Installed/relocated packages, native Windows, two-host use,
+sanitisers, final-candidate qualification and maintainer review remain open.
+
+## SP05/SP07 — convolution and filter transfer, 2026-11-19
+
+Working base: `a27b2bb2ba08deeea97aef470c50723b6ac03a38` plus the accumulated
+SP01/SP03 and SP05/SP07 working changes. Platform/build: Fedora 45 x86-64,
+GCC 16.2.1, CMake 4.3.0, Qt 6.11.2, Studio-enabled `build-release`, native
+Linux Xvfb and software rendering. Source inventory: **14 developed core labs,
+112 example diagrams**; **10 core labs remain proposed**. Status remains
+**diagram-ready with passing development checks**, pending maintainer review
+and the named release-candidate/package/platform checks.
+
+### Frozen models and numerical results
+
+Both new saved graphs are loaded by `SchemaLibraryLoader`, validated,
+compiled and executed normally. `ObservationService` reads every named output
+without changing the model. Sample n appears at Scope time (n+1)/F_s.
+The F64 budget is `1e−10 × max(1, |reference|)` in each channel's units;
+timestamp budget 1e−12 s plus absolute integer-nanosecond rounding.
+
+**SP05:** h=[1,0.5,−0.25], input δ[n−4]+bδ[n−6], b=−0.5, 20 Hz, 2 s,
+40 samples/channel. Three drawn Delay/Adder networks compare filtering the
+combined input with summing separately shifted responses. All six Delay
+initial values are zero. The independent oracle uses finite convolution and
+separately expanded shifted kernels, not another executed S7 graph.
+
+- Baseline output at n=4…8: **1, 0.5, −0.75, −0.25, 0.125 V**; residual zero.
+- Edit b=0.75: the overlap/tail becomes **0.5, 0.375, −0.1875 V** at n=6…8.
+- Negative case: set only `output_d2.initial_value=1`; output and residual
+  become **−0.25 V at n=0**. This is remembered prehistory, invalidating the
+  zero-state convolution comparison without invalidating runtime execution.
+- All tested samples matched exactly in this build; a fresh run repeated
+  identically. This is not a cross-platform bitwise claim.
+
+**SP07:** low-pass x′=2(u−x); resonant q′=v, v′=16(u−q)−b v; b=1.6, all
+initial states zero. Explicit forward Euler at 64 Hz, 64 s, 4096 samples.
+The source area is 1/64 V·s at 0.125 s: one unit-height discrete sample at n=8.
+Independent geometric and complex-mode powers check all states, including
+unplotted velocity. The discrete rational references are
+
+```text
+H_low(z) = 2h / [z−(1−2h)]
+H_res(z) = 16h² / [(z−1)(z−1+b h)+16h²]
+```
+
+These include one and two causal state stages respectively. The first
+nonzero low-pass value is **0.03125 V at n=9**; resonant voltage first reaches
+**0.00390625 V at n=10**. At the saved rate, resonant peak gain is about
+**2.99043 at 0.625 Hz** on the measured grid; b=3.2 lowers it to about
+**1.44494 at 0.546875 Hz**. Both DC gains remain 1.
+
+Direct complex finite sums Y/X at eight frequencies per filter are compared
+with H, budget **1e−9 V/V**. Fresh runs repeat identically. The 128 Hz refinement
+keeps pulse area fixed, so pulse height becomes 2 V at n=16; transfer
+normalization still holds. Complex error against the continuous transfer at
+0.5 Hz decreases as follows:
+
+| Filter | Error at 64 Hz | Error at 128 Hz |
+| --- | ---: | ---: |
+| Low-pass, 2/(s+2) | 0.0112445 | 0.00559054 |
+| Resonant, 16/(s²+1.6s+16) | 0.133383 | 0.0651638 |
+
+These are finite frequency-reference errors, not a universal accuracy score.
+Maximum discrete sample residual in the stable profiles was **2.77556e−16**.
+At 8 Hz, the physical resonant filter remains stable but Euler's pole modulus
+is sqrt(1.05)>1. The deliberately growing discrete trace still matches its
+own independent reference within the scaled budget (maximum absolute
+residual **1.66983e−9**). A separate 2 s truncation of the stable capture gives
+a resonant DC estimate **0.818323**, demonstrating missing-tail bias.
+
+### Runtime-to-viewer checks
+
+`educationLti` opens each saved diagram, follows its actual visible offline
+guide link, accepts the saved run without repairing its settings, performs
+the named F4 edit, saves, reopens and reruns. Every journal sample and full
+Scope recording is checked against the independent formulas. Time-series
+names, V units, timestamps and axes are verified.
+
+SP07's dense Scope display intentionally retains a pixel envelope. The test
+waits for the completed drawing, verifies every retained point is the correct
+recorded sample, and checks endpoints and global extrema against the full
+recording. SP05's small traces retain all 40 points. The initial harness
+assumptions that all 4096 points must be drawn and that the final drawing is
+synchronous with recording completion were corrected; no viewer algorithm
+change was needed for these cases. The independent phase oracle also bounds
+the inverse-log frequency at Nyquist to avoid a rounding-induced branch jump.
+Its endpoint behavior is checked headlessly.
+
+For **both SP07 response viewers**, baseline and damping edit:
+
+- Saved analysis results contain **2049 complex bins**, 0…32 Hz at 1/64 Hz
+  spacing. Every bin is compared with the independent H, budget 1e−9 V/V.
+  Pulse height/index, response length, run identity and V/V units are checked.
+- Every plotted Bode magnitude point is checked against **20 log10(|H|/r)**,
+  budget **1e−7 dB**, at the frequency recovered from the log10 axis.
+- Unwrapped phase uses an independent pole-factor reference, budget
+  **1e−6 degrees**. Wrapped phase is checked modulo 360 and constrained to
+  the principal interval. The endpoints are −180° (low-pass) and −360°
+  (resonant) in the unwrapped representation.
+- Changing gain reference **r=1→2** must give the proper dB shift. This
+  changes presentation, not the measured complex transfer.
+- The optional resonant **continuous reference** is enabled before its fields
+  are edited: ω0=4 rad/s, ζ=0.2 (0.4 after editing), DC gain=1. Every orange
+  magnitude/phase point is checked independently against G_res(s), budget
+  1e−7 in the plotted quantity. Blue H(z) is rechecked with the overlay active.
+  This reference is explicitly unsuitable for the first-order viewer.
+
+Images under `build-release/s7studio/gui-artifacts/education-lti/` include
+both diagrams/guides, baseline/edited Scopes, Bode captures, wrapped phase and
+continuous-reference overlays. The images were visually inspected. Scopes
+use manual zoom with **Fit full run** disabled for those captures; input and
+output Scopes remain separate to avoid hiding the small filter outputs.
+Some earlier failure artifacts may remain beside the final passing results.
+This is software-rendered inspection, not a physical-display usability study
+or a completed audit of every viewer. The final collection-wide audit reminder
+remains open in [IMPLEMENTATION_PLAN](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit).
+
+### Executed verification
+
+```bash
+cmake -S . -B build-release
+cmake --build build-release --target \
+  s7studio s7studio_gui_workflows_test s7studio_gui_capture \
+  s7studio_scope_view_test s7studio_spectrum_test s7studio_response_test \
+  s7tests_education_lti s7tests_education_signals s7tests_education_linear \
+  s7tests_education_foundations s7tests_education_sp06 \
+  s7core_integrators_smoke s7core_model_time_smoke \
+  s7tests_linear_examples_smoke s7studio_diagram_test \
+  s7studio_model_time_test --parallel 2
+ctest --test-dir build-release \
+  -R '^(s7tests_education_(sp06|foundations|linear|signals|lti)|s7core_(integrators|model_time)_smoke|s7tests_linear_examples_smoke|s7studio_(diagram|model_time|scope_view|spectrum|response|gui_workflows|gui_education_(sp06|foundations|linear|signals|lti)))$' \
+  --output-on-failure -V
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+**19/19 selected CTest entries passed**, 199.68 s. Ordinary Studio workflows:
+**109 passed, 0 failed, 112 skipped**. The 112 skips are the separately sharded
+bundled-example release-render matrix, not successful renders. The dedicated
+LTI GUI selection reported **4 passed, 0 failed, 0 skipped** (two lab rows
+plus setup/cleanup). The subsequent continuous-overlay checks also passed;
+final focused results are recorded below.
+
+Final focused checks after the continuous-reference workflow and manual-zoom
+capture refinement passed **3/3**, 9.48 s: headless LTI, dedicated LTI Studio
+and the existing response suite. The complete ordinary workflow run above
+preceded the additional continuous-overlay assertions; the final dedicated
+selection includes them.
+
+All **14 education diagrams** reproduced byte-for-byte from five generators.
+The static index/geometry check covered **112 diagrams with zero issues**.
+All relative links in the top-level README and fourteen guides resolved.
+Final SHA-256 values:
+
+```text
+92db646b5f173e9589f15364cb659a333c7af1c3dfb3464185e3e3950785637b examples/education/sp05_convolution.s7diagram
+90f717d41068cca2cdb4ba9773d6cb0f9ee5e58236ef9ba91059860f384bdcc3 examples/education/sp07_filter_transfer.s7diagram
+dfeb5b96e0b6583c10a234e0decc895c409f008376b4d5a8d8e53b642e305d44 examples/education/generate_lti.py
+32a422145c13a3564e773edeeb461b184e20da3b60292d180be81e078ddb4396 s7tests/education_lti_reference.hpp
+3f6c8416c5023d9b4a670c1f9959c1e650752dadccb2b800dfbd939c499170e5 s7tests/education_lti_smoke.cpp
+939e18d429df82f3995c21e87fdb750b74a3fe6f40143013c1fb16604be7cedc s7studio/tests/gui/workflows_test.cpp
+```
+
+MIT resource pages and relevant public teaching notes were inspected for
+source alignment; no named textbook exercise, copied handout or solution key
+is claimed. Runtime/compiler/validator semantics and vendor sources are
+unchanged. The next batch is **SP08/SP09**, then SP10/SP11. Installed/relocated
+packages, native Windows, full release rendering, two-host use, sanitizers,
+maintainer review and final-candidate qualification remain open.
+
+## SP08/SP09 — finite records, leakage and window normalization, 2026-11-19
+
+The two original diagrams and linked student guides extend the collection to
+**16 developed core labs**. Both saved profiles run for 2 s at 128 Hz:
+256 samples per channel, four channels, 1024 recorded values. Source sample
+n=0 is observed after step 1 at 1/128 s. Baselines, fresh repeated runs and
+the prescribed edits are checked through the production loader, validator,
+compiler, runtime and read-only observation service. The edits change SP08's
+test frequency from 16.5 to 18 Hz and SP09's weak amplitude from 0.05 to 0.1 V.
+Platform/build are the Linux Release configuration described above.
+
+### Independent numerical references
+
+Test references use closed-form cosines and a direct long-double DFT rather
+than production FFT or window routines. A second finite geometric-sum
+formula checks SP08's complex coefficients, including the negative-frequency
+term. It covers the first 128 samples, all 256, the last 128 and the
+boundary-inclusive 129-sample selection. Source and complex-coefficient
+budgets are 1e−10; maximum observed source residuals were:
+
+- SP08 baseline **1.51545e−14 V**, edited **2.13718e−14 V**.
+- SP09 baseline and edited **4.26298e−14 V**.
+
+SP08's 16.5 Hz, 1 V tone produces nearest-bin amplitudes
+**0.629158798 V** and **0.644034823 V** in the first 128 samples. The full
+256-sample record recovers a coherent 1 V peak at 16.5 Hz. Changing the
+frequency to 18 Hz makes the first record coherent. Its offset mixture's
+first-record mean is **0.2578125 V**, demonstrating that finite-record mean
+is not necessarily the constant source's 0.25 V. Explicit mean removal is
+checked separately.
+
+SP09 independently constructs equivalent periodic weights using sine-squared
+formulas. Rectangular/Hann/Hamming coherent gains are **1 / 0.5 / 0.54**;
+mean-square weights are **1 / 0.375 / 0.3974**. At N=128 the equivalent noise
+bandwidths are **1 / 1.5 / 1.362825789 Hz**. Moment and bandwidth budgets are
+1e−12. The coherent calibration peak remains **2 V** and integrated power
+**2 V²** for all three windows, within 1e−10. Omitting Hann coherent-gain
+correction intentionally gives 1 V, exposing the normalization error.
+Window-weighted Parseval is checked for all channels, both edits and mean
+removal settings. The mixture's 24 Hz bin is **0.206230374 / 0.052550994 /
+0.056471107 V**, illustrating leakage around a 0.05 V weak source.
+
+### Viewer defect found and corrected
+
+The initial real Studio test failed because Spectrum legend labels retained
+the input unit `[V]` when displaying power or PSD. Their axis labels already
+used V² or V²/Hz. `spectrum_view.cpp` now uses the displayed quantity's unit
+for both single-input and multiple-input trace names, including hold names;
+the input selector continues to identify the raw source unit. The regression
+checks would fail against the previous labels. This is a presentation fix;
+FFT, window algorithms and runtime semantics are unchanged.
+
+### Runtime-to-viewer checks
+
+The dedicated GUI workflow clicks each diagram's visible offline guide link,
+accepts the saved run configuration, checks every journal/time-plot sample,
+performs the named F4 edit, saves, reopens and reruns. It verifies literal
+channel-to-element bindings, names, V units, model-time axes and current run
+identity. Time plots retain all 256 samples per channel.
+
+For baseline and edit, the actual Scope Spectrum controls exercise:
+
+- SP08: first/full/late records and the boundary-inclusive N=129 record.
+  Selecting From=1 s to To=2 s includes n=127…255: Δf=128/129 Hz and the
+  last one-sided bin is 8192/129 Hz, below the 64 Hz Nyquist limit. Odd N
+  therefore checks a distinct endpoint-doubling case.
+- SP09: all three windows on N=128, Hann on N=256, explicit mean removal,
+  and a separate single-input calibration PSD path.
+- Every returned bin and plotted point in amplitude, power/bin and PSD,
+  linear and dB displays with reference 1 and 2 and floor −120 dB.
+  Numerical/display budgets are **1e−9** in linear quantity units and
+  **1e−4 dB**; integrated power is checked against the independent
+  window-weighted mean square. Frequency spacing/bounds, sample count,
+  frame steps, window/mean settings, coherent gain and ENBW are checked.
+- Quantity-specific axis/legend units, correct selected source, and unchanged
+  functional schema after analysis. Viewer presentation state may change.
+
+Retained artifacts are under
+`build-release/s7studio/gui-artifacts/education-spectral/`. Both diagram
+captures and the first/full SP08 amplitude and SP09 Hann power/PSD captures
+were visually inspected. Their instruction links are visible and labels
+match their quantities. This is Xvfb/software-rendered inspection, not a
+physical-display usability study or a completed collection-wide viewer audit.
+The [closing audit reminder](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit)
+remains open.
+
+### Executed verification
+
+```bash
+ctest --test-dir build-release \
+  -R '^(s7tests_education_(sp06|foundations|linear|signals|lti|spectral)|s7core_(integrators|model_time)_smoke|s7tests_linear_examples_smoke|s7studio_(diagram|model_time|scope_view|spectrum|response|live_spectrum|gui_workflows|gui_education_(sp06|foundations|linear|signals|lti|spectral)))$' \
+  --output-on-failure -V
+ctest --test-dir build-release \
+  -R '^(s7tests_education_spectral|s7studio_gui_education_spectral|s7studio_gui_education_signals|s7studio_spectrum|s7studio_live_spectrum)$' \
+  --output-on-failure -V
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+**22/22 selected CTest entries passed**, 224.17 s. Ordinary GUI workflows:
+**111 passed, 0 failed, 114 skipped**. Those skips are the separate bundled-
+example release-render matrix, not successful renders. Dedicated spectral
+GUI: **4 passed, 0 failed, 0 skipped** (two rows plus setup/cleanup).
+After strengthening the single-input PSD assertions, the final focused
+selection passed **5/5**, 22.10 s; the existing Spectrum suite reported
+**33 passed, 0 failed, 0 skipped**. Full-run and focused logs are retained
+locally as `/tmp/s7-spectral-regression.log` and
+`/tmp/s7-spectral-final-check.log`.
+
+All **16 education diagrams** reproduced byte-for-byte using the six
+generators with `python3 -B`. The static check covered **114 diagrams,
+zero issues**. All **162 relative links** in the top-level README and sixteen
+student guides resolved. Final SHA-256 values for this batch:
+
+```text
+9566ffd2eddcf45f4b2a2d5a553ff5f620b35386a83909cff90a434294842bbc examples/education/sp08_dft_leakage.s7diagram
+9474f85cb21e0100407a6ba09655e2471d6684ef912e2aee6599eeabcc4ea498 examples/education/sp09_window_normalization.s7diagram
+a927094c2b74dea7b0d08e6343e18c79668859dd1774351852faf2b9e40a1e47 examples/education/generate_spectral_labs.py
+66824bd3764c2480fe8b403fd8f0b77efe69364eface51cd246a71852634b56c s7tests/education_spectral_reference.hpp
+04ee51e14d9b00bfc887341483465d7bd4c79900d15a7b39418b32f37f162179 s7tests/education_spectral_smoke.cpp
+f141b76fac946af8af7fa6891f99799315cefcb8dfa2ef50b5ed21babebed1ce s7studio/tests/gui/workflows_test.cpp
+cf1708d21ea46292bb6ab614d7d40789806a85c970bcf2a5c8f376d8f70ff105 s7studio/src/viewers/spectrum_view.cpp
+```
+
+MIT 6.003 lecture 18 and MIT 2.161 lecture 12 resource pages/notes were
+checked for source alignment; graphs, exercises and references are original.
+Eight of the 24 core labs remain. Next is SP10 after its finite-vector and
+recording workflow is settled, then SP11. Installed packages, native Windows,
+full release rendering, two-host use, sanitizers, maintainer review and
+final-candidate qualification remain open. Lab status remains
+**diagram-ready with passing development checks**.
+
+## SP10 — convolution implementation verification, 2026-11-19
+
+The new [scalar graph](../examples/education/sp10_circular_convolution.s7diagram)
+and [student guide](labs/SP10-circular-convolution/README.md) bring the
+collection to **17 developed core labs**. The saved profile is **2 s / 8 Hz**,
+16 ticks, seven Scope channels and 112 journal values. All Delay states start
+at zero. The word x=[1,2,−1,1] V is built from explicit pulse/Delay/summer
+networks; h=[1,0.5,c] has one shared coefficient c=−0.25, edited to 0.5.
+The isolated word starts at n=8; the periodic words repeat every 4 or 8 ticks.
+The comparison block n=8…15 is observed at Scope times **1.125…2 s**, after
+startup. This resolves the finite-sequence workflow without changing scalar
+ports or execution/observation semantics. The graph does not pretend that
+the separate frame processors are registered graph elements.
+
+### Independent references and production convolution
+
+The saved file is loaded through `SchemaLibraryLoader`, validated, compiled
+and stepped with `NodeRuntime`; read-only snapshots check every input/output
+and model timestamp. Both baseline and the prescribed edit repeat identically
+in fresh runtimes in this process/build. Maximum graph residual was **0 V**
+against the frozen 1e−12 V budget; these short dyadic-value cases are exactly
+representable. No cross-platform bitwise claim is made.
+
+Independent references deposit each product x[i]h[j] into a long-double
+accumulator at i+j (linear) or (i+j) mod N (circular). A separately written
+short direct DFT/product/inverse checks N=4/5/6/8 with raw forward transforms
+and inverse division by N. Neither reference calls a production FIR/FFT.
+
+| Profile | Linear, then zero extension to 8 (V) | Circular period 4 (V) |
+| --- | --- | --- |
+| c=−0.25 | [1,2.5,−0.25,0,0.75,−0.25,0,0] | [1.75,2.25,−0.25,0] |
+| c=0.5 | [1,2.5,0.5,1.5,0,0.5,0,0] | [1,3,0.5,1.5] |
+
+Period 8 recovers the complete linear result. Minimum sufficient padding
+N=6 is tested independently of power-of-two convenience; N=5 still aliases
+the final tail sample. The initial zero-history block is explicitly checked
+as a failure of the periodic steady-state assumption. After the edit the
+first circular sample happens to equal the first linear sample, so the
+negative check uses the entire four-entry block rather than one coordinate.
+
+The actual recorded word is passed to **both `FirConvolution` and
+`FftConvolution`** in independent-frame mode; all six output entries, including
+the tail, are checked. Folding their full outputs matches the circular graph.
+In continuous-stream mode, all three recorded input rows are processed with
+frame sizes 4 and 8 and compared with their graph outputs, including startup
+and boundaries. Separate zero-frame flushing checks the full isolated-word
+tail, then reset clears history while preserving the kernel. Processor/DFT
+budgets are **1e−10 max(1,|reference|)**. The production APIs remain linear;
+their FFT already pads internally. No circular/under-padded API was added.
+
+The expanded **module** smoke test also checks one 72-sample complex signal
+with frame sizes **1,2,3,4,6,8,9,12,18,24,36,72** and kernel lengths
+**1,2,5,17,73**. Each partition is checked against a long-double pair-product
+sum through the entire flushed tail. This covers kernels longer than frames,
+empty-frame rejection between valid blocks, continuation, reset, independent
+frames and interleaved instances. A hard-coded complex example detects
+accidental conjugation/correlation. Existing matched-filter, buffered-frame
+and invalid-input tests remain. Maximum absolute residuals were
+**4.58286e−13** (FIR) and **5.68434e−13** (FFT), within the module's existing
+2e−10 scaled budget. Its numerical comparator now rejects nonfinite outputs
+explicitly; previously a NaN could evade the `error > tolerance` condition.
+These checks found no arithmetic defect in either convolution processor.
+
+### Viewer findings and fixes
+
+The first real Studio workflow exposed a short-record limitation and a
+misleading waiting state: the eight-sample selection was not adopted because
+Scope/Spectrum had a 64-sample minimum, leaving N=4096 and reporting
+`Filling: 8/4096` after the run had already finished.
+
+- Spectrum now supports **N=2…65536**. Scope adopts the exact selected length,
+  including odd lengths, in both current-journal and loaded-recording paths.
+  One-sample selections request N=2 and get an explicit insufficient-data
+  result. Correlation keeps its separate 64-sample minimum.
+- Finished recordings shorter than N report **Unavailable** with instructions
+  to select a smaller N or a longer interval/run. Active captures still report
+  **Filling**. `SpectrumView::setFrame` also recognizes a change in finished
+  status when the sample count is unchanged, so the message can update.
+- A GUI regression submits eight active samples with N=16, marks that same
+  frame finished without adding data, checks the unavailable state and clear
+  plot, then selects N=8 and checks recovery and provenance.
+- The same finished-record defect was present in Correlation. Its analyzer
+  and view now distinguish active filling from a finished insufficient record
+  and recognize completion without a sample-count change. The 64-sample
+  minimum and correlation mathematics are unchanged. Headless and GUI cases
+  check the finished transition and recovery from N=128 to N=64.
+- Spectrum's new numerical cases cover N=**2,3,4,5,6,8,16,31,63**, real/IQ,
+  all five periodic windows, mean removal on/off and amplitude/power/PSD.
+  Independent direct DFTs and explicit window-series coefficients check every
+  bin, odd/even folding, frequency coordinates, coherent gain, ENBW and
+  integrated weighted power. Invalid N=0/1/65537 and insufficient finished
+  records are checked explicitly. The Spectrum suite reports **51 passed**.
+
+The newly linked convolution implementation article is now included in the
+Help resources and topic list. The GUI workflow clicks both its actual visible
+diagram link and the student-guide link and checks article contents. The MIT
+reading remains an external web link. These are resource/navigation checks,
+not an installed-package or live desktop-browser qualification.
+
+### Studio coverage and limits
+
+For baseline and edit, the dedicated workflow verifies all journal samples,
+every plotted Time point, literal channel-to-element bindings, names, V units,
+model-time axes and current run identity. The exact N=8 analysis frame has
+steps 9…16; every selected raw value, returned amplitude bin and plotted point
+is checked against independent formulas, including DC/Nyquist and Δf=1 Hz.
+The coefficient is edited with F4, saved, reopened and rerun; analysis leaves
+the functional schema unchanged. Time values are exact in this dyadic case;
+the displayed Spectrum budget is 1e−10 V.
+
+Artifacts are under
+`build-release/s7studio/gui-artifacts/education-convolution/`. Diagram, guide,
+baseline/edited Time plots and the selected short Spectrum were visually
+inspected; the guide's prediction table uses compact headings to fit the Help
+pane. Inspection uses private Xvfb/Mesa software rendering on the Linux
+Release platform described above. It is not a physical-display usability
+study or a completed collection-wide viewer audit. The
+[closing audit reminder](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit)
+remains open.
+
+### SP10 verification commands and reproducibility
+
+```bash
+cmake --build build-release --target s7tests_education_convolution s7core_convolution_smoke --parallel 2
+cmake --build build-release --target s7studio s7studio_gui_workflows_test s7studio_pair_analysis_test s7studio_scope_view_test s7studio_response_test --parallel 2
+ctest --test-dir build-release \
+  -R '^(s7tests_education_(sp06|foundations|linear|signals|lti|spectral|convolution)|s7core_(convolution|integrators|model_time)_smoke|s7tests_linear_examples_smoke|s7studio_(diagram|model_time|scope_view|spectrum|pair_analysis|response|live_spectrum|gui_workflows|gui_education_(sp06|foundations|linear|signals|lti|spectral|convolution)))$' \
+  --output-on-failure -V
+python3 -B examples/education/generate_convolution_lab.py
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+The initial broader run reported **24/25 passed**; the one failure was an
+older cursor/export GUI test selecting FFT size by menu index 0, which changed
+from N=64 to N=2 after adding short sizes. The test now selects **N=64 by item
+data**, retaining its original 16 Hz-bin and 1000 Hz-axis-offset expectations.
+This was a test-fixture assumption, not a cursor arithmetic defect. The final
+selection additionally includes the Correlation suite after its lifecycle fix.
+
+The **final 26/26 selected CTest entries passed**, **236.18 s**. Ordinary
+GUI workflows reported **113 passed, 0 failed, 115 skipped**. Those 115 skips
+are the separately sharded bundled-example release-render matrix, not
+successful renders. The dedicated SP10 GUI selection reported **4 passed,
+0 failed, 0 skipped** (lab, completion-state regression and setup/cleanup).
+Spectrum reported **51 passed** and Correlation/XY **18 passed**, with no
+failures or skips. Final log: `/tmp/s7-sp10-final-regression.log`.
+
+All **17 education diagrams** reproduced byte-for-byte from seven generators
+using `python3 -B`. The static index/geometry check covered **115 diagrams,
+zero issues**. All **168 relative links** in the top-level README and seventeen
+student guides resolved. These source checks do not imply installed-package
+qualification. No vendor files, core convolution algorithms or runtime causal
+semantics were modified.
+
+Final SHA-256 values for this batch:
+
+```text
+c6eec248f4a00aa41955921a21907ba9552edfc81fe7cee4191ea7c2e4c27da9 examples/education/sp10_circular_convolution.s7diagram
+8caf1b393ebffdf60f1b4b152c51d013c9c2b042ee408139c0f6a3ea881b4a95 examples/education/generate_convolution_lab.py
+3d59f26acfdba7000ebf820e5c795d579b09a357bf856d1b26cbfee72e948298 s7tests/education_convolution_reference.hpp
+02b26f7d5519e93c60dcd57734b0fad48bf6d873cffbd4ba8247a61aea31030b s7tests/education_convolution_smoke.cpp
+8f665df2924c80869ce6f8957cf31b6b7f1c9a5dc7a04d51d0c4ec79c4bed801 s7core/tests/convolution_smoke.cpp
+58c02b78b4b03280da31034b424208bb179104002e4111505d1dad3c4ea72aee s7studio/src/analysis/spectrum.cpp
+1d7cf6c53cf52956b20894e887985e254cd0d8630be9ac7470dd5c0e85f41788 s7studio/src/viewers/spectrum_view.cpp
+845a7bbaeff540d4593a568a6a1f9bf51afec0d5b312355cd2f47ad81cbd0ccf s7studio/src/scope_view_window.cpp
+45cfcc1ece4e5824636803d114fc62b796c41a45caf9c81f58c42e17fdca0f0e s7studio/tests/spectrum_test.cpp
+4722d2dbe91bd2aa1ad0819e733b853f58f8b22cb86a6876743e6ba2e3c9dd02 s7studio/src/analysis/pair_analysis.cpp
+6245f38a43419077e6e40c5fe43379e637d875a27d280b811e5e6ea1cbddbe30 s7studio/src/viewers/pair_analysis_view.cpp
+64b4f4c2743442a6cb47550dcbabe5feaf2d35c41420b08237ff785bc4713d0d s7studio/tests/pair_analysis_test.cpp
+35b4f681b9a784a3580fd0d6a2d299d6e369318546914c025f842c37ec3d91c5 s7studio/tests/gui/workflows_test.cpp
+```
+
+The official MIT RES.6-008 lecture 10 resource page was inspected for topic
+alignment; the dataset, graph and exercises are original. Seven core labs
+remain, with **SP11 (STFT)** next. Installed/relocated packages, native
+Windows, the full bundled-example release-render matrix, two-host use,
+sanitizers, maintainer review and final-candidate qualification remain open.
+Status remains **diagram-ready with passing development checks**.
+
+## SP11 — STFT implementation and viewer checks, 2026-11-19
+
+The original [burst/chirp graph](../examples/education/sp11_short_time_fourier.s7diagram)
+and [student guide](labs/SP11-short-time-fourier/README.md) bring the
+collection to **18 developed core labs**. The saved profile is **4 s at
+128 Hz**, 512 ticks, three Scope channels and two single-input TimeFrequency
+observers. The actual Studio journal has five bindings and **2560 values**.
+The headless test also observes the dimensionless gate. All simulation uses
+existing scalar sources/arithmetic; the STFT is read-only analysis, not a
+runtime solver or an added frame-port contract.
+
+### Frozen signal and independent transform contract
+
+The 1 V peak 32 Hz cosine is gated for n=128…255. A 0.5 V discrete linear
+chirp rises from 8 toward 40 Hz over the 512 samples. Its reference phase
+sums the source's left-endpoint frequency increments analytically using
+n(n−1), distinct from the continuous chirp integral's n² term. The primary
+edit changes `stop.start_time` from 2 to 1.5 s, shortening the gate to
+n=128…191 without changing the chirp. Source index n is observed after step
+n+1 at model time (n+1)/128 s.
+
+The exact saved file goes through the production loader, validation,
+compiler, runtime and read-only observation. Every source sample and rounded
+nanosecond timestamp is checked; a fresh baseline execution repeats
+identically within this process/build. No cross-platform bitwise claim.
+The independent STFT uses long-double direct complex sums and sine-squared
+Hann weights, sharing no production FFT/window implementation. Its matrix
+is frequency-major, separately checking the production time-major output and
+Studio's transposition.
+
+| Window N / hop H | Full columns | Δf | Center spacing | First observed center |
+| --- | --- | --- | --- | --- |
+| 64 / 32 | 15 | 2 Hz | 0.25 s | 0.25390625 s |
+| 128 / 64 | 7 | 1 Hz | 0.5 s | 0.50390625 s |
+| 64 / 16 | 29 | 2 Hz | 0.125 s | 0.25390625 s |
+
+Both baseline and edit, all three signals, and an additional nonoverlapping
+N=64/H=64 case are checked through the actual `s7spectral::spectrogram`
+processor. Every complex coefficient, frequency, center time, full-support
+flag, power/bin and PSD value is compared with independent formulas. Weighted
+Parseval is checked per column. Source/coefficient/power budgets are 1e−10
+in the respective units; timing budget is 1e−12 s. The measured source and
+coefficient residuals are recorded with the final executed results below.
+
+Other checks cover a 501-sample interval with a discarded incomplete end
+window, one complete 64-sample window, and a shifted input interval/origin.
+Hop zero, hop>N and insufficient input are rejected. Fully supported burst
+windows recover a 1 V peak coefficient; a window crossing the onset is around
+half that value. The duration edit removes later plateau windows. Every
+other N=64/H=16 column matches N=64/H=32, showing that a smaller hop densifies
+the same windows. The chirp ridge follows its independent discrete frequency
+law within half the 2 Hz bin spacing (1.1 Hz allowance).
+
+### Student controls and confirmed viewer fixes
+
+- **Hop control:** Studio exposes H=1…N. Changing FFT size resets H=N/2,
+  after which a custom value can be entered. The actual processor receives
+  that hop; saved metadata and imports preserve it. CWT and read-only imports
+  disable this irrelevant/unavailable control.
+- **Boundary metadata:** STFT previously claimed zero extension, while the
+  implementation returns full windows only and discards an incomplete final
+  window. Metadata now states the actual behavior. CWT retains its distinct
+  zero-extension/support-mask description. No STFT algorithm change was needed.
+- **Slice units:** frequency slices previously omitted the quantity unit.
+  Map/slice labels now agree for V, V², rad and V²/Hz.
+- **Import consistency:** hop, rate/window-derived frequency coordinates,
+  window-center coordinates and frozen-input window count are validated
+  before replacing the displayed result. Five deliberately inconsistent
+  files (hop 0, hop>N, shifted time, shifted frequency, truncated input) are
+  rejected while the prior result and controls remain intact.
+- **Retired plot geometry:** visual inspection found old magnitude/phase
+  curves still drawn after changing the slice to PSD, although the numeric
+  series already contained only PSD. Series are now hidden/emptied while
+  attached, then detached on the GUI thread after scene synchronization;
+  their existing scene-lifetime ownership protection is retained. The
+  regression checks actual rendered strokes against an independent PSD
+  polyline, with a 3-pixel geometric budget, as well as replacement of a
+  hidden plot's old colored curve. This is separate from numeric-series checks.
+- **Description usability:** the original instruction frame clipped its
+  reading-link line. Its height was increased; all three links are visible.
+
+An initial heatmap diagnosis was corrected after tracing its preparation:
+the existing renderer already rasterizes numeric coordinates. The redundant
+experimental resampler was removed. Final production heatmap rendering is
+unchanged; only an accessor for the **last applied immutable grid** was added.
+New checks verify numeric cells, actual colored pixels and cursor agreement,
+including nonuniform coordinates on both axes. This is verified existing
+behavior, not a claimed heatmap algorithm fix.
+
+### Actual Studio path and review limits
+
+The workflow opens the new saved graph, clicks its visible guide link, accepts
+the saved 4 s/128 Hz profile, and checks every journal value and plotted Time
+point, literal channel bindings, V units and model-time axes. Both maps are
+checked at all three profiles above, in magnitude, squared magnitude, phase,
+power/bin and PSD. It checks every returned coefficient and applied display
+cell, coordinates, phase-threshold mask, map/slice units, every plotted slice
+point, the raw input trace and current run provenance. Phase comparisons use
+a 1e−6 rad modulo-2π budget; other displayed values use 1e−9 in quantity units.
+
+The named F4 edit is saved, reopened and rerun. The map result is saved,
+reopened after changing hop, and checked for exact coefficient retention and
+restored H=16. Analysis does not change the functional graph schema.
+Guide, graph, baseline/edited maps, phase masking, Time plots and the PSD
+slice were visually reviewed under private Xvfb/Mesa software rendering on
+the Linux Release platform described above. Artifacts are under
+`build-release/s7studio/gui-artifacts/education-stft/`.
+
+These development checks are not a physical-display student usability study,
+installed-package/native-Windows qualification or the final collection-wide
+viewer audit. The [closing audit reminder](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit)
+remains open. Six core labs remain; **CT04/CT05** are next, followed by
+CT06–CT08 and SP14. Lab status remains **diagram-ready with development checks**.
+
+### SP11 regression sensitivity and reproducibility
+
+The rendered PSD check was exercised against a temporary restoration of the
+original `LinePlotView::retire` implementation. The original implementation
+failed `pixelsMatch()` in `educationStft`: stale strokes lay outside the
+independent PSD polyline's 3-pixel budget. Log/artifacts:
+`/tmp/s7-sp11-negative-render-final.log` and
+`build-release/s7studio/gui-artifacts/sp11-retirement-negative-final/`.
+The corrected implementation was restored and rebuilt immediately afterward.
+The separate hidden-plot replacement check passed with both implementations;
+it is additional coverage, not the defect's reproducer. Its pixel scan excludes
+axis labels, whose font subpixel antialiasing can otherwise resemble colored
+data pixels.
+
+All **18 education diagrams** reproduced byte-for-byte from eight generators
+using `python3 -B`. The static index/geometry check covered **116 diagrams,
+zero issues**. All **173 relative links** in the top-level README and eighteen
+student guides resolved. No vendor code, production STFT algorithm or runtime
+causal semantics were modified.
+
+The largest executed source residual was **4.71845e−16 V** (baseline) and
+**3.33067e−16 V** (edited). Across the baseline/edit, complete/incomplete,
+single-window and shifted-interval cases, the largest complex coefficient
+residual was **2.96723e−16 V**, below the declared 1e−10 V budget.
+
+Executed regression commands (from `s7l2/`):
+
+```bash
+cmake --build build-release --target s7tests_education_stft s7studio s7studio_gui_workflows_test s7studio_time_frequency_test s7studio_surface_test s7studio_viewers_test --parallel 2
+ctest --test-dir build-release \
+  -R '^(s7tests_education_(sp06|foundations|linear|signals|lti|spectral|convolution|stft)|s7core_(convolution|integrators|model_time)_smoke|s7tests_linear_examples_smoke|s7studio_(diagram|model_time|scope_view|spectrum|pair_analysis|response|live_spectrum|time_frequency|surface|viewers|window_lifecycle|live_oscilloscope|display_worker|gui_workflows|gui_education_(sp06|foundations|linear|signals|lti|spectral|convolution|stft)))$' \
+  --output-on-failure -V
+python3 -B tools/check_example_diagrams.py
+git diff --check
+```
+
+Earlier regression executables were also relinked for the shared plot change:
+`s7studio_response_test`, `s7studio_scope_view_test`, `s7studio_diagram_test`,
+`s7studio_model_time_test`, `s7studio_window_lifecycle_test`,
+`s7studio_live_oscilloscope_test` and `s7studio_display_worker_test`.
+
+Final SHA-256 values for the SP11 artifacts and viewer checks:
+
+```text
+76332314df6a8a3e8fd93237713eefffd518e1fadc4e6a636e34179721baae87 examples/education/sp11_short_time_fourier.s7diagram
+efee3d8be72159ab7ad7a297b93f06a97be9552c397eb6ca1c85bb9222719001 examples/education/generate_stft_lab.py
+bbbc8e40c7505da27646f081cbb6cba32f292ee4497793eedf8f247fe24b24f9 s7tests/education_stft_reference.hpp
+a6e9343dd9391420261bf217fa475a2ba8f0caf0a9f30b136f9cdee0f82ee875 s7tests/education_stft_smoke.cpp
+0dd54d5b6435374e8127fce0977742eb75f43c6ca3814a4bf3a06f86767201fa s7studio/src/viewers/time_frequency_window.cpp
+e76467ff8a1db2c1419a526f48558671997e7291e197f274b9146431e6fd8dde s7studio/src/viewers/line_plot_view.cpp
+a518c422565a172595d0f28a8cbbbc609a4f49654f2ca61a966a69f09184a527 s7studio/src/viewers/line_plot_view.hpp
+9dc7da28ac301af7ea0381e6320ec882f232a7add842bf992c130bac7724d364 s7studio/src/viewers/surface_plot.cpp
+e2b61271a1798c7842265441cfb3709e9b45bcd18688529bc62b961d1982e490 s7studio/tests/gui/workflows_test.cpp
+6478b70d7668d67b470d32329b33a8c6721738e924a92056f6a38b9c7f08ab2f s7studio/tests/surface_test.cpp
+023efc55031a14c92e773e881fa2a9f42eba83eb68f03b6ead4d340699520e8e s7studio/tests/time_frequency_test.cpp
+```
+
+The **final 34/34 selected CTest entries passed**, **273.69 s** on the Linux
+Release platform above. The ordinary GUI suite reported **115 passed,
+0 failed, 116 skipped**; those skips are the separately sharded bundled-example
+release-render matrix, not successful renders. The dedicated SP11 selection
+reported **4 passed, 0 failed, 0 skipped** (lab, hidden-plot replacement and
+setup/cleanup). The selection includes all eight education headless suites,
+all eight dedicated educational GUI suites, and the affected plot, map,
+surface, lifecycle and analysis regressions. Final log:
+`/tmp/s7-sp11-final-regression.log`.
+
+The final Studio build embeds the updated guides/evidence. Installed or
+relocated packages, native Windows, the full bundled-example release-render
+matrix and final collection-wide viewer review remain unqualified by this run.

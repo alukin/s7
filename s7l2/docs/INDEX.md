@@ -62,8 +62,22 @@ The [core implementation manifest](../education/CORE_MANIFEST.md) records the
 2026-11-19 decision to create new educational diagrams and the remaining gaps.
 Begin with [FN01 — one sample of memory](../education/labs/FN01-unit-delay/README.md),
 then FN02–FN06 and CT01–CT03 in the [learning route](../examples/education/README.md).
+[SP01 — Fourier synthesis](../education/labs/SP01-fourier-synthesis/README.md)
+and [SP03 — aliasing](../education/labs/SP03-aliasing/README.md) add harmonic
+and sampling experiments, with explicit viewer verification.
 [SP06 — three-tap FIR](../education/labs/SP06-three-tap-fir/README.md) applies
-the delay concept to filtering. [Development evidence](../education/EVIDENCE.md)
+the delay concept to filtering. [SP05 — convolution](../education/labs/SP05-convolution/README.md) and
+[SP07 — filter transfer](../education/labs/SP07-filter-transfer/README.md) add
+shifted responses and independently checked Bode magnitude/phase.
+[SP08 — leakage](../education/labs/SP08-dft-leakage/README.md) and
+[SP09 — periodic windows](../education/labs/SP09-window-normalization/README.md)
+add checked interval selection and amplitude/power/PSD normalization.
+[SP10 — circular convolution](../education/labs/SP10-circular-convolution/README.md)
+adds explicit padding, startup interpretation and recorded-input verification
+of both production convolution processors.
+[SP11 — short-time Fourier analysis](../education/labs/SP11-short-time-fourier/README.md)
+adds independently checked burst/chirp maps, window/hop controls and edge interpretation.
+[Development evidence](../education/EVIDENCE.md)
 is separate from release qualification. Description frames link to offline
 guides and original MIT online teaching materials.
 
