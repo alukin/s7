@@ -11,14 +11,6 @@ from s7core.params import _integer
 from s7core.spec import GENERIC, Param, Port, T
 
 
-class NetContext:
-    """The node's stream table (transport.StreamTable); None: a local run without peers, where
-    NetSink drops its input and NetSource outputs nothing new."""
-
-    table = None
-
-
-NET = NetContext()
 _INT64_MAX = 2**63 - 1
 # The stream of a stream end, read by _net_config; an omitted count takes the stream contract's
 # default (stream.StreamConfig).
@@ -108,14 +100,15 @@ class NetStreamElement(Element):
         super().__init__(element_id, params)
         self.config = _net_config(params, type(self).__name__)
         self.handle = None
+        # The node's stream table (transport.StreamTable), given by attach_streams(); None: a local
+        # run without peers, where a NetSink drops its input and a NetSource outputs nothing new.
         self.table = None
 
     def ensure_stream(self) -> bool:
         if self.handle is not None:
             return True
-        if NET.table is None:
+        if self.table is None:
             return False
-        self.table = NET.table
         self.handle = self.table.open(self.config, self.role)
         return True
 
@@ -127,6 +120,13 @@ class NetStreamElement(Element):
     def raise_fault(self, code: str):
         from . import wire
         raise RuntimeError(f"{type(self).__name__} stream {wire.stream_id_text(self.config.stream_id)} faulted: {code}.")
+
+
+def attach_streams(graph, table) -> None:
+    """Gives every stream end of graph the node's stream table (None: run without peers)."""
+    for element in graph.elements.values():
+        if isinstance(element, NetStreamElement):
+            element.table = table
 
 
 class NetSink(NetStreamElement):

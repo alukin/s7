@@ -26,7 +26,7 @@ from s7lib.mathops import (COMPARATOR_OPERATIONS, TRIG_FUNCTIONS, Comparator, Di
 from s7lib.sources import PWM, AnalogOscillator, StepGenerator
 
 from .elements import NODE_ELEMENT_TYPES as ELEMENT_TYPES
-from .net import NET, NET_PARAMS, NetContext, NetSink, NetSource, NetStreamElement, _net_config
+from .net import NET_PARAMS, NetSink, NetSource, NetStreamElement, _net_config, attach_streams
 
 
 class Graph(_core.Graph):

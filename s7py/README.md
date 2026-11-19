@@ -30,7 +30,7 @@ the existing node remain usable without those providers.
 ## Not implemented
 
 - A separate data listener and the `trusted_plaintext` data profile.
-- Signal types other than F64, nested schemas, plugins and schema libraries.
+- Signal types other than F64, nested schemas, C++ plugins and schema libraries.
 - Outbound peer probing: seed peers and announcements are only listed.
 
 ## Run
@@ -54,6 +54,11 @@ TLS="--cert s7runtime/examples/certs/s7_studio.cert.pem --key s7runtime/examples
 ```
 
 The node schema file uses the `s7runtime` format: `websocket.server` (`port`, `bind_address`, `tls` with `cert_file` / `key_file` / `ca_file`), `control` (`studio_key_purpose_oid`, `studio_certificate_sha256`, `max_configuration_bytes`), `clock`, `execution.step_rate_hz`, an optional `node_name`, and an optional startup graph (`dt`, `elements`, `connections`). `examples/node_tls.json` pins the fingerprint of the current test Studio certificate. Regenerating the s7l2 test certificates changes that fingerprint, so update it with `openssl x509 -in s7_studio.cert.pem -noout -fingerprint -sha256`.
+
+`--lib mylib.py` (repeatable; a `.py` file or a module name) loads an element library: its
+`register(registry)` is called, or else every public `s7core.Element` subclass it defines is
+registered. The node runs and advertises those types with the built-in ones. A library runs with
+the node's privileges, so load only code you trust.
 
 Options: `python3 -m s7node --help`.
 
@@ -81,8 +86,9 @@ Three packages, each depending only on the ones before it: `s7core` (no element 
 | `s7core/graph.py` | `Graph`: builds the above and steps them (publish, evaluate, stage, roll back on failure) |
 | `s7core/rate.py`, `params.py`, `errors.py` | Exact rates, parameter value checks, `SchemaError`, `DeclarationError` |
 | `s7lib/` | The built-in elements (`basic`, `integrators`, `sources`, `mathops`, `control`) and their `LIBRARY` registry |
-| `s7node/net.py` | `NetSink` / `NetSource`, the stream ends |
+| `s7node/net.py` | `NetSink` / `NetSource`, the stream ends, given the node's stream table when a graph is built |
 | `s7node/elements.py` | The registry a node serves: the library and the stream ends |
+| `s7node/library.py` | Element libraries loaded with `--lib` |
 | `s7node/graph.py` | Compatibility: the former single-file module's names |
 | `s7node/control.py` | Control protocol messages, authorization, deployments, transfers, persistence |
 | `s7node/runtime.py` | Executor: grid / rate pacing, scheduled activation |
