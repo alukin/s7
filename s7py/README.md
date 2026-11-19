@@ -67,10 +67,18 @@ python3 -m unittest discover -s tests
 
 ## Layout
 
+Three packages, each depending only on the ones before it: `s7core` (no element library, no network) ← `s7lib` ← `s7node`.
+
 | File | Content |
 |---|---|
+| `s7core/element.py` | The element contract: ports, flags, `step()` |
+| `s7core/graph.py` | Validation, causal ordering, rates, stepping, the coupled trapezoid stage; element types are passed in |
+| `s7core/rate.py`, `params.py`, `errors.py` | Exact rates, parameter checks, `SchemaError` |
+| `s7lib/` | The built-in elements (`basic`, `integrators`, `sources`, `mathops`, `control`) and `ELEMENT_TYPES` |
+| `s7node/net.py` | `NetSink` / `NetSource`, the stream ends |
+| `s7node/elements.py` | The element types a node serves: the library and the stream ends |
+| `s7node/graph.py` | Compatibility: the former single-file module's names |
 | `s7node/control.py` | Control protocol messages, authorization, deployments, transfers, persistence |
-| `s7node/graph.py` | Elements, validation, causal ordering, stepping |
 | `s7node/runtime.py` | Executor: grid / rate pacing, scheduled activation |
 | `s7node/diagram.py` | A node's part of a deployed diagram, with its stream ends |
 | `s7node/wire.py` | Data stream wire format v1 |

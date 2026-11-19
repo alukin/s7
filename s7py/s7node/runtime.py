@@ -16,8 +16,11 @@ releases its streams once its running step has finished, so the new graph contin
 import asyncio
 from dataclasses import dataclass, field
 
+from s7core.graph import Graph
+from s7core.rate import rate_from_step_ns, schema_rate
+
 from .clock import utc_now_ns
-from .graph import Graph, rate_from_step_ns, schema_rate
+from .elements import NODE_ELEMENT_TYPES
 
 BEHIND_REPORT_NS = 50_000_000
 MAX_STEPS_PER_TURN = 1000  # then yield, so control requests are still served while catching up
@@ -57,7 +60,7 @@ class Executor:
         that pins none and must equal the rate of every element that pins one (GraphHost::stage);
         a deployed graph never carries the node's step rate."""
         rate = rate_from_step_ns(step_ns) if step_ns else schema_rate(node_schema)
-        graph = Graph(node_schema, rate)
+        graph = Graph(node_schema, rate, types=NODE_ELEMENT_TYPES)
         if step_ns:
             graph.require_model_time_rate(rate)
         return Staged(graph, step_ns, list(data_peers))

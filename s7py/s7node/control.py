@@ -17,10 +17,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from s7core.errors import SchemaError
+
 from . import diagram as diagrams
 from . import wire
 from .clock import Clock, utc_now_ns
-from .graph import SchemaError
 from .jcs import MAX_SAFE_INTEGER, configuration_digest, dumps, loads
 from .tls import ControlPeer
 
