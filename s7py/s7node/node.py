@@ -13,10 +13,15 @@ import time
 import uuid
 from pathlib import Path
 
+from s7core.errors import SchemaError
+from s7core.graph import Graph
+from s7core.rate import schema_rate
+
 from . import __version__
 from .clock import Clock
 from .control import Authorization, ControlPlane, Descriptor
-from .graph import ELEMENT_TYPES, NET, Graph, SchemaError, schema_rate
+from .elements import NODE_ELEMENT_TYPES
+from .net import NET
 from .runtime import Executor
 from .stream import CLOCK_UNSYNCHRONIZED, FileSequenceStore
 from .tls import ControlPeer, certificate_node_uuid, client_context, control_peer, load_certificate_file, server_context
@@ -128,7 +133,7 @@ class Node:
             os_family=os_family(),
             architecture=architecture(),
             runtime_version=f"s7py-{__version__}",
-            element_types=sorted(ELEMENT_TYPES),
+            element_types=sorted(NODE_ELEMENT_TYPES),
             certificate={"common_name": certificate.common_name, "fingerprint_sha256": certificate.fingerprint_sha256}
             if certificate else {},
         )
@@ -190,7 +195,7 @@ class Node:
         if not self.control.restore_deployment() and self.config.startup_schema.get("elements"):
             # Seeded by its own dt, else the rate it is stepped at (s7runtime build_schema_from_definition).
             rate = schema_rate(self.config.startup_schema, self.executor.step_rate_hz)
-            self.executor.run_startup(Graph(self.config.startup_schema, rate))
+            self.executor.run_startup(Graph(self.config.startup_schema, rate, types=NODE_ELEMENT_TYPES))
         server = await asyncio.start_server(self._serve_connection, self.config.bind_address, self.config.port,
                                             ssl=self.ssl, limit=MAX_CONTROL_MESSAGE_BYTES)
         d = self.descriptor

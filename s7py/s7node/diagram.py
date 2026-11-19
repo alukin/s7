@@ -11,8 +11,9 @@ section 12.1 item 6). A connection between nodes without a stream is refused.
 """
 from dataclasses import dataclass
 
+from s7core.errors import SchemaError
+
 from . import wire
-from .graph import SchemaError
 from .stream import StreamDescriptor
 
 
