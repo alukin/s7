@@ -37,10 +37,10 @@ online readings and independent numerical checks. Predict the result, run the
 model, inspect the named signals, then change a parameter and explain what
 happens. Start with [FN01: one sample of memory](s7l2/education/labs/FN01-unit-delay/README.md).
 
-[![The Lorenz system in S7 Studio: its causal block diagram, a three-dimensional butterfly attractor and a Scope showing the x, y and z state signals.](screenshots/07-lorenz-overview.png)](screenshots/07-lorenz-overview.png)
+[![The Lorenz system in S7 Studio: causal block diagrams, recorded signal previews on the right and a floating 3D butterfly attractor viewer.](screenshots/07-lorenz-overview.png)](screenshots/07-lorenz-overview.png)
 
-*Exploring the Lorenz system in S7: an explicit causal model, its
-three-dimensional attractor and recorded state signals.*
+*Exploring the Lorenz system in S7: explicit causal models, recorded signal
+previews on the right and a floating three-dimensional attractor viewer.*
 
 See [the screenshot tour](screenshots/README.md) for actual runs of a Lorenz
 attractor, a controlled buck converter and an AM detector, with their diagrams,
