@@ -16,6 +16,19 @@ Native PortAudio/PipeWire and the FFmpeg research path remain useful
 independent comparators; they are not replaced by declaring GStreamer a
 universal source/sink.
 
+## Backend-neutral hardware-to-model boundary (H8)
+
+GStreamer is a production **media adapter**, not the definition of the
+S7 causal algorithm. The adapter owns caps/buffers/timestamps and media
+lifecycle; a separate execution host owns pacing, bounded transfer and
+physical effects; the same processing model runs against recorded/synthetic
+and opt-in live media inputs without changing the DSP algorithm. Preserve
+actual frame/sample positions, gaps and source-clock provenance. Offline
+replay must not activate devices. H6 GStreamer tests remain mandatory;
+the independent H8 audio/video profiles are
+[BR-A/BR-V](RELEASE_0.3.0_WORKPLAN.md#h8-bridge-qualification).
+Do not import the 0.4.0 native compiler into 0.3.0.
+
 ## First supported profile and conceptual data paths
 
 Support a documented **Linux GStreamer 1.x** profile on named tested

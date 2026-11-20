@@ -8,6 +8,12 @@ of four named cases, not a full video education curriculum. Add
 as a separate mandatory release gate, not just a video helper. The release is
 about qualifying S7's hardware-facing causal runtime, not accumulating demos.
 
+**Additional decision, 2026-11-20:** mandatory H8 covers separation of
+device adapters, causal processing models and execution hosts, with
+deterministic capture/replay for audio, IQ and whole-frame video. This
+prepares the native compiler without requiring it in 0.3.0.
+H0–H7 remain unchanged.
+
 This plan owns the 0.3.0 **qualification matrix**, subject to the formal
 [release contract](RELEASE_0.3.0.md). Preserve the
 [0.2.0 release gates](RELEASE_0.2.0_WORKPLAN.md) and don't retrospectively
@@ -41,6 +47,7 @@ LIVE. Do not require live RF/physical audio hardware in normal CI.
 | **H4** | Physical SDR verification | Maintainer's Pluto Rev. B and two LibreSDR; RX and safe attenuated coax TX/RX, optional legal OTA | Device-discovery/readback, accepted/actual frame/rate data, independent signal/constellation/error measurements, cancellation, continuity, per-device limits |
 | **H5** | Preliminary whole-frame video | **VID01–VID04** below; bounded whole-frame pipeline and media adapter bridge | Exact synthetic frame oracles, real camera opt-in smoke, metadata/drop/EOS failures, package/Studio view where advertised |
 | **H6** | **Production GStreamer audio AND video** | Bounded, opt-in actual S7 audio and whole-frame video processing through GStreamer; [contract](RELEASE_0.3.0_GSTREAMER.md) | GS-A1/GS-A2, GS-V1/GS-V2 and GS-X; independent math, real audio latency/camera tests, caps, timestamps, lifecycle, error paths |
+| **H8** | **Backend-neutral model and capture/replay** | Separate provider/model/host boundaries and same-diagram replay/live audio, IQ/SDR and video | BR-A/BR-S/BR-V independent numerical checks, type/rate/sequence/timing provenance and explicit no-device/fault tests; no generated C++ required |
 | **H7** | Release candidate and interoperability | All above on pinned candidate SHA, Linux baseline, independent platform profiles as implemented | Installed/relocated package, no accidental device opening, full C++ numeric regressions, negative/interrupt tests, exact commands and evidence ledger |
 
 **Release decision:** a blocked named lab or unqualified mandatory gate blocks
@@ -71,6 +78,38 @@ small/medium frame path. Full HD performance and remote display may be
 additional experiments, **not** prerequisites unless selected as the
 named accepted video profile.
 
+## H8 bridge qualification
+
+Three profiles must be independently accepted against the **same saved
+causal processing diagram** for recorded and opt-in live sources:
+
+| Profile | Replayed input and live adapter | Evidence |
+| --- | --- | --- |
+| **BR-A** | Synthetic or captured F32 audio, plus one microphone/Hi-Z/line backend | Independent output samples, channel layout, initial state, nominal rate, gap/segment and optional device timing evidence |
+| **BR-S** | Recorded complex-IQ fixtures plus a qualified SDR RX backend | Sample scaling, order, selected settings/readback, position/continuity, known vs. unknown timestamp quality |
+| **BR-V** | Raw/lossless frame fixture plus selected GStreamer webcam profile | Exact pixel/stride/color/sequence math, EOS/drop/backpressure, physical FPS and latency separately measured |
+
+Contract and exit criteria:
+
+1. Publish an explicit **device adapter / processing model / execution
+   host** responsibility table and small stable typed interface. The model
+   must not embed PortAudio, PipeWire, SoapySDR or GStreamer driver logic.
+2. Preserve source-sample/frame positions, format/rate, stream/segment ID,
+   actual clock domain and acquisition-versus-arrival timestamp meaning
+   where available. **Never manufacture timing, perfect continuity or loss
+   counts** for absent backend evidence.
+3. Compare deterministic replay outputs with an independent oracle and
+   verify the saved graph and state initialization are the same when connected
+   to physical I/O. Treat live jitter and deadlines as separate measurements.
+4. Validate stop/drain, mismatch, partial blocks, overflow, device loss and
+   failure paths. Replay, metadata inspection and schema validation must
+   never automatically activate physical I/O, especially output/TX.
+5. Record platform, commands, tested source SHA, fixtures, expected/actual
+   outputs, limits and opt-in physical results in the evidence ledger.
+   The release remains blocked until BR-A, BR-S and BR-V are qualified.
+   **A 0.4.0 C++ compiler is explicitly out of scope.**
+
+
 ## Work order and dependent engineering changes
 
 ### Phase A — device and graph contracts, recorded fixtures, fake backends
@@ -89,6 +128,12 @@ named accepted video profile.
 - Implement synthetic providers and acceptance tests for partial blocks,
   zero-frames, stop/drain, queue overflow, device loss, wrong type/rate
   and cancellation.
+- Freeze a backend-neutral typed processing boundary so the same saved
+  diagram can accept replay and physical input; keep device callback and
+  execution host responsibilities independent of the graph's DSP logic.
+- Add representative immutable audio/IQ/video fixtures early and verify
+  their source metadata and numerical replay before live qualification.
+
 - Design the GStreamer audio and video adapters as real S7 processing
   boundaries, not command-line media pipelines. Agree on appsrc/appsink
   ownership, caps, timebase mapping and clock policy before writing code;
@@ -144,6 +189,10 @@ named accepted video profile.
 
 ### Phase E — integrated release candidate
 
+- Close **H8 BR-A/BR-S/BR-V** on the same pinned candidate, with recorded
+  input oracles, live-device comparisons, no-device-activation negatives,
+  bounded failure handling and explicit known/unknown clock evidence.
+
 - A single reproducible source revision and build package must provide
   36 qualified lab guides/diagrams, four video verification tests and
   **production GStreamer sound and video integration** (GS-A1/A2,
@@ -195,8 +244,15 @@ named accepted video profile.
 | AU01–AU12 | Curriculum documented; **12 release targets, not qualified** | Common-clock fake duplex, then physical identity loopback |
 | VID01–VID04 | Newly specified; **not implemented/qualified** | Small synthetic frame + layout/EOS fault test |
 | GStreamer audio and video | **Mandatory H6; not implemented/qualified** | Production appsrc/appsink S7 paths with GS-A1/A2, GS-V1/V2 and GS-X evidence |
+| H8 hardware/model boundary and replay | **New gate; not qualified** | BR-A/BR-S/BR-V same-model replay/live profiles and no-device negatives |
+
 | Hardware-oriented runtime | Existing single-boundary provider baseline; **new contracts open** | ADR + fake two-boundary / duplex conformance and deadline reporting |
 | Candidate release artifacts | Not prepared | Gate-specific evidence pinned to the same source and package revision |
+
+The [native compiler (0.4.0)](RELEASE_0.4.0.md),
+[distributed coherence (0.5.0)](RELEASE_0.5.0.md) and
+[ARM Linux deployment beta (0.6.0)](RELEASE_0.6.0.md) are future releases;
+H8 is the limited interface and replay groundwork, not their implementation.
 
 ## Not selected as 0.3.0 blockers
 

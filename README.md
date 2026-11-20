@@ -148,6 +148,10 @@ Linux with the [Fedora and Ubuntu dependency installers](s7l2/docs/BUILD_DEPENDE
 [Windows cross-build](s7l2/docs/WINDOWS_BUILD.md) have separate guides.
 
 S7 is in **pre-MVP development**. APIs, file formats and protocols may change.
+The [preliminary release roadmap](s7l2/docs/RELEASE_ROADMAP.md) proceeds from
+0.3.0 hardware/replay to 0.4.0 native compilation, 0.5.0 coherence and
+0.6.0 ARM Linux compiled-model deployment beta, before a separately qualified
+1.0.0 General Availability.
 The [0.2.0 work plan](s7l2/docs/RELEASE_0.2.0_WORKPLAN.md) distinguishes delivered
 work, experiments and remaining qualification. For example, the
 [Full HD video experiment](s7l2/docs/VIDEO_IO_FULL_HD.md) is research evidence;

@@ -4,6 +4,13 @@
 candidate-only introduction while preserving the historical feature research
 below. The 0.2.0 contract remains the independently qualified baseline.
 
+**Additional 2026-11-20 scope decision:** 0.3.0 establishes a
+backend-neutral boundary between physical device adapters, causal processing
+models and execution hosts. Deterministic recorded-input replay qualifies
+this boundary in advance of [0.4.0 native code generation](RELEASE_0.4.0.md).
+The 0.4.0 compiler is **not** an implementation requirement for 0.3.0.
+See the [roadmap](RELEASE_ROADMAP.md).
+
 The maintainer has explicitly selected **all 24 original MIT-SDR labs**
 (SDR01–SDR24) and **all 12 original MIT-Audio labs** (AU01–AU12) as
 **mandatory 0.3.0 deliverables**. Their purpose is to improve and verify
@@ -49,6 +56,9 @@ in [MIT-SDR](../education/mit-sdr/COURSE_MAP.md) and
 7. **H7 — Final integrated candidate:** same source revision, real saved
    diagrams, independent references, Studio workflow, installed package,
    Linux and named platform checks, real-device logs and explicit faults.
+8. **H8 — Backend-neutral hardware boundary and deterministic replay:**
+   three representative audio/IQ/video same-model replay/live profiles,
+   preserved data/time provenance and explicit no-automatic-device checks.
 
 A mandatory lab that has not met its corresponding numerical or stated
 hardware acceptance criteria is **not complete**. Do not silently lower
@@ -63,6 +73,35 @@ threads must not run unconstrained S7 graph code. Video frame processing
 uses bounded whole frames, not a graph step per pixel. No FPGA programming
 is in this release. The approved serial causal schedule remains the
 reference unless an independently reviewed runtime improvement is proven.
+
+## H8 — Compiler-ready hardware boundary and capture/replay
+
+**H8 is a mandatory 0.3.0 qualification gate**, in addition to H0–H7:
+
+- Separate **device adapter** (devices, driver callbacks, negotiated streams,
+  buffers, clocks, physical faults), **causal processing model** (state and
+  computation defined by the S7 graph), and **execution host** (pacing,
+  bounded handoff, lifecycle, stop/drain and effects).
+- For one representative **audio**, **IQ/SDR**, and **whole-frame video**
+  chain, process deterministic recorded/synthetic input using the same saved
+  S7 processing diagram as the corresponding opt-in physical source.
+  Compare numerical output to independent expectations; do not change DSP
+  algorithms just to switch source providers.
+- Capture/replay fixtures retain sample/frame type, format/channel order,
+  declared or negotiated rate, stream segment/position/sequence, known gaps,
+  real timestamp meaning and clock-domain/uncertainty provenance when
+  available. Unknown timing/loss evidence remains unknown; replay does
+  not claim identical wall-clock timing.
+- Offline replay/validation must not open microphones, cameras, speakers,
+  actuators or SDR transmitters. Already committed physical outputs are not
+  subject to model-step rollback.
+- The resulting processing interface must be usable by a future native
+  execution backend, but **do not implement code generation in 0.3.0**.
+  The compiler is a [0.4.0](RELEASE_0.4.0.md) goal and deployment to ARM
+  Linux is a [0.6.0](RELEASE_0.6.0.md) beta goal.
+
+Acceptance evidence and individual profiles are in the
+[0.3.0 work plan](RELEASE_0.3.0_WORKPLAN.md#h8-bridge-qualification).
 
 ## Additional research and candidate backlog (not automatic release gates)
 

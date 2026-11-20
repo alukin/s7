@@ -423,6 +423,24 @@ queue telemetry, hardware performance and backend/device qualification remain
 unimplemented or unqualified as detailed in the implementation guide. They are
 not advertised as guarantees by the first implementation.
 
+## 14. Backend-neutral processing and deterministic replay (0.3.0 H8)
+
+In addition to these provider contracts, 0.3.0 requires explicit
+separation of **physical provider**, **causal processing model**, and
+**execution host**. Device callbacks and stream ownership belong to the
+provider; pacing, bounded queues, cancellation and committed physical
+outputs belong to the host; the model expresses causal computation and state.
+
+Representative audio, SDR IQ and whole-frame video paths must support
+recorded-input replay without editing the processing algorithm. Fixtures
+retain available samples/frames, channel/layout/rate, position/segment,
+continuity, source time/clock/uncertainty and honest unknown status.
+Reference-output equality is assessed separately from physical latency and
+jitter. Offline inspection/replay cannot implicitly activate devices or TX.
+This supports future compiled models, but **no native compiler is claimed
+in 0.3.0**. See [H8 work plan](../s7l2/docs/RELEASE_0.3.0_WORKPLAN.md#h8-bridge-qualification).
+
+
 ## Public references reviewed
 
 - [PortAudio API overview](https://portaudio.com/docs/v19-doxydocs/api_overview.html)

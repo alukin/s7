@@ -98,8 +98,17 @@ moved to the [0.3.0 candidate backlog](RELEASE_0.3.0.md).
 Those historical assignments remain in Git history.
 Within-node parallel scheduling and its unresolved design choices are recorded
 for [0.3.0 planning](RELEASE_0.3.0_RUNTIME_PARALLELISM.md).
-The [0.3.0 release goals](RELEASE_0.3.0.md) include the maintainer-assigned
-GStreamer adapters alongside the FFmpeg-oriented video path.
+The [0.3.0 contract](RELEASE_0.3.0.md) and
+[work plan](RELEASE_0.3.0_WORKPLAN.md) mandate 24 SDR and 12 audio
+teaching labs, four video checks, **production audio and video**
+[GStreamer integration](RELEASE_0.3.0_GSTREAMER.md), plus H8
+backend-neutral capture/replay qualification.
+
+The [version roadmap](RELEASE_ROADMAP.md) assigns
+[0.4.0 native C++ generation](RELEASE_0.4.0.md),
+[0.5.0 distributed coherence](RELEASE_0.5.0.md), and
+[0.6.0 pre-GA ARM Linux deployment beta](RELEASE_0.6.0.md).
+1.0.0 is a separately qualified GA target, not a scheduled guarantee.
 
 1. `../README.md` — what this implementation contains, how to build and run it.
 2. [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) — the 0.1.x local-simulation development record, acceptance criteria and deferred backlog.
@@ -143,7 +152,12 @@ Phase-view example: [two-integrator oscillator with Phase Portrait](../examples/
 |---|---|
 | [RUNTIME_PERFORMANCE_ARCHITECTURE.md](RUNTIME_PERFORMANCE_ARCHITECTURE.md) | Indexed serial runtime design and measured results; corrected FFT/FIR experiments and deferred scheduler ideas |
 | [RELEASE_0.3.0_RUNTIME_PARALLELISM.md](RELEASE_0.3.0_RUNTIME_PARALLELISM.md) | Established facts, candidate approaches and open decisions for within-node parallel execution |
-| [RELEASE_0.3.0.md](RELEASE_0.3.0.md) | Release goals, including optional production GStreamer video adapters |
+| [RELEASE_ROADMAP.md](RELEASE_ROADMAP.md) | Hardware, native compilation, coherence, ARM deployment beta, GA |
+| [RELEASE_0.3.0.md](RELEASE_0.3.0.md) | Mandatory hardware, SDR/audio/video labs, GStreamer and H8 capture/replay |
+| [RELEASE_0.3.0_WORKPLAN.md](RELEASE_0.3.0_WORKPLAN.md) | H0–H8 qualification and work phases |
+| [RELEASE_0.4.0.md](RELEASE_0.4.0.md) | Preliminary diagram-to-native-C++ compiler plan |
+| [RELEASE_0.5.0.md](RELEASE_0.5.0.md) | Preliminary coherence and distributed sensing plan |
+| [RELEASE_0.6.0.md](RELEASE_0.6.0.md) | Preliminary pre-GA ARM Linux deployment beta plan |
 | `S7_Transport_Architecture.md` | `s7transport` / `s7runtime` / `s7net` boundaries, security and data-plane baseline |
 | [SDR_TRANSPORT_IMPROVEMENT_PLAN.md](SDR_TRANSPORT_IMPROVEMENT_PLAN.md) | Proposed staged high-rate sample transport work: validation, benchmarks, frame/metadata contract, bounded buffers and block execution |
 | [SAMPLE_TRANSPORT_BENCHMARK.md](SAMPLE_TRANSPORT_BENCHMARK.md) | Opt-in verified codec, bulk/scalar graph, duplex and paced sample measurements; scope and reproduction commands |
