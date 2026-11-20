@@ -124,11 +124,13 @@ Qualify additional live profiles only after the numerical tests pass.
 
 ## Release and coordination
 
-The MIT Audio workstream is independent of the existing MIT-EE v0.2.0
-core gate and the planned MIT-SDR curriculum. Prioritize a working
-and measured **AU02 vertical slice** before attempting all twelve labs.
-The next **0.3.0** planning session may allocate SDR and audio work,
-but nothing here automatically makes all proposed labs 0.3.0 blockers.
+The maintainer's **2026-11-20 0.3.0 scope decision** makes all
+**AU01–AU12 mandatory release targets**, coordinated with the 24 SDR
+labs and four preliminary video tests in the
+[0.3.0 work plan](../../docs/RELEASE_0.3.0_WORKPLAN.md). This does not
+retroactively enlarge the separate 0.2.0 MIT-EE gate. Deliver a
+working, independently measured **AU02 vertical slice** first, then
+qualify the remaining eleven labs in reviewable increments.
 
 All accepted changes must include independent regression tests, exact
 execution commands, a source/commit, Studio interaction evidence where
