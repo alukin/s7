@@ -97,5 +97,8 @@ requires it. Source and test evidence must be pinned to a commit.
 
 This track is **separate from the already agreed 0.2.0 core educational
 release gate**. No automatic addition to 0.2.0 or implementation count.
-The first coherent teaching module can be released independently, after its
-specific numerical, GUI and (where advertised) RF gates pass.
+The **2026-11-20 maintainer decision** makes all 24 SDR labs mandatory
+0.3.0 targets (see the [release work plan](../../docs/RELEASE_0.3.0_WORKPLAN.md)).
+They remain independent of the already agreed 0.2.0 MIT-EE core; every
+numerical, Studio and advertised RF mode still needs evidence before
+counting a lab as release-qualified.
