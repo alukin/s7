@@ -34,8 +34,8 @@ its working copy. Opening the index leaves your current diagram intact.
 
 ## Element library
 
-Use **View: By Category** to browse elements by function, or **By Library** to
-browse the module or loaded schema library that provides them. Studio remembers
+Use the compact **Cat.** and **Lib.** radio buttons in the **Element Library**
+title bar to browse by function or by the library that provides each element. Studio remembers
 this choice. Switching views keeps your search and selected element.
 
 Categories include Sources, Math & Functions, Memory & Integration, Signal

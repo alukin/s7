@@ -27,7 +27,10 @@
 #include <QMenu>
 #include <QPointer>
 #include <QSizePolicy>
-#include <QComboBox>
+#include <QRadioButton>
+#include <QDockWidget>
+#include <QToolButton>
+#include <QStyle>
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QRegularExpression>
@@ -136,18 +139,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
-    auto* viewLayout = new QHBoxLayout();
-    auto* viewLabel = new QLabel("View:", this);
-    viewSelector_ = new QComboBox(this);
-    viewSelector_->setObjectName(QStringLiteral("elements.view"));
-    viewSelector_->setAccessibleName(QStringLiteral("Group elements by"));
-    viewSelector_->addItem(QStringLiteral("By Category"), QStringLiteral("category"));
-    viewSelector_->addItem(QStringLiteral("By Library"), QStringLiteral("library"));
-    viewSelector_->setCurrentIndex(QSettings{}.value(viewSetting).toString() == "library" ? 1 : 0);
-    viewLabel->setBuddy(viewSelector_);
-    viewLayout->addWidget(viewLabel);
-    viewLayout->addWidget(viewSelector_, 1);
-    layout->addLayout(viewLayout);
+    byLibrary_ = QSettings{}.value(viewSetting).toString() == "library";
 
     // Both views share the same search and insertion identifiers.
     auto* searchLayout = new QHBoxLayout();
@@ -207,10 +199,6 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 
     // Connect signals
     connect(searchEdit_, &QLineEdit::textChanged, this, &ElementPickerPanel::applyFilter);
-    connect(viewSelector_, &QComboBox::currentIndexChanged, this, [this] {
-        QSettings{}.setValue(viewSetting, viewSelector_->currentData());
-        rebuildTree();
-    });
     connect(elementTree_, &QTreeWidget::itemDoubleClicked, this, &ElementPickerPanel::onItemDoubleClicked);
     connect(elementTree_, &QTreeWidget::itemSelectionChanged, this, &ElementPickerPanel::onItemSelectionChanged);
 
@@ -218,6 +206,46 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 }
 
 ElementPickerPanel::~ElementPickerPanel() = default;
+
+QWidget* ElementPickerPanel::createTitleBar(QDockWidget* dock)
+{
+    auto* titleBar = new QWidget(dock);
+    titleBar->setObjectName(QStringLiteral("elements.titleBar"));
+    auto* layout = new QHBoxLayout(titleBar);
+    layout->setContentsMargins(4, 1, 2, 1);
+    layout->setSpacing(4);
+    auto* title = new QLabel(dock->windowTitle(), titleBar);
+    title->setObjectName(QStringLiteral("elements.title"));
+    title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    title->setAttribute(Qt::WA_TransparentForMouseEvents);
+    layout->addWidget(title, 1);
+    auto* category = new QRadioButton(QStringLiteral("Cat."), titleBar);
+    category->setObjectName(QStringLiteral("elements.byCategory"));
+    category->setAccessibleName(QStringLiteral("Browse elements by category"));
+    category->setToolTip(QStringLiteral("Group elements by category"));
+    auto* library = new QRadioButton(QStringLiteral("Lib."), titleBar);
+    library->setObjectName(QStringLiteral("elements.byLibrary"));
+    library->setAccessibleName(QStringLiteral("Browse elements by library"));
+    library->setToolTip(QStringLiteral("Group elements by providing library"));
+    category->setChecked(!byLibrary_);
+    library->setChecked(byLibrary_);
+    layout->addWidget(category);
+    layout->addWidget(library);
+    connect(library, &QRadioButton::toggled, this, [this](bool checked) {
+        byLibrary_ = checked;
+        QSettings{}.setValue(viewSetting, checked ? "library" : "category");
+        rebuildTree();
+    });
+    auto* close = new QToolButton(titleBar);
+    close->setObjectName(QStringLiteral("elements.close"));
+    close->setAutoRaise(true);
+    close->setIcon(dock->style()->standardIcon(QStyle::SP_TitleBarCloseButton));
+    close->setAccessibleName(QStringLiteral("Close Element Library"));
+    close->setToolTip(QStringLiteral("Close Element Library"));
+    layout->addWidget(close);
+    connect(close, &QToolButton::clicked, dock, &QDockWidget::close);
+    return titleBar;
+}
 
 void ElementPickerPanel::refreshCatalog()
 {
@@ -249,7 +277,7 @@ void ElementPickerPanel::rebuildTree()
             m ? QString::fromStdString(m->library) : QString{}, QStringLiteral("Observer"), {}});
         if (m) for (const auto& tag : m->tags) entries.back().tags << QString::fromStdString(tag);
     }
-    const bool byLibrary = viewSelector_->currentData() == "library";
+    const bool byLibrary = byLibrary_;
     const auto groupKey = [byLibrary](const PickerEntry& e) {
         // Library identity is independent of its display label and category.
         return byLibrary ? e.library : categoryName(e.category);

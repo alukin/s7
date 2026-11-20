@@ -6,7 +6,9 @@
 #include <s7/builtin_element_registry.hpp>
 #include <s7/schema_library.hpp>
 #include <QApplication>
-#include <QComboBox>
+#include <QRadioButton>
+#include <QDockWidget>
+#include <QToolButton>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMimeData>
@@ -62,16 +64,21 @@ int main(int argc, char** argv) {
         registerFixture(registry, "s7corePretender", "");
         s7::SchemaLibraryLoader::register_library({"my_control_library", {{"MyPhaseDifference", "My phase difference",
             "A reusable user graph", "control", "1.0.0", *registry.find("PhaseDifference")->metadata().schema_definition}}}, registry);
+        QDockWidget dock("Element Library");
         s7studio::ui::ElementPickerPanel panel(registry);
+        dock.setWidget(&panel);
+        dock.setTitleBarWidget(panel.createTitleBar(&dock));
         auto* tree = panel.findChild<QTreeWidget*>("elements.tree");
-        auto* view = panel.findChild<QComboBox*>("elements.view");
+        auto* category = dock.findChild<QRadioButton*>("elements.byCategory");
+        auto* library = dock.findChild<QRadioButton*>("elements.byLibrary");
         auto* search = panel.findChild<QLineEdit*>("elements.search");
         auto* count = panel.findChild<QLabel*>("elements.count");
-        require(tree && view && search && count, "Picker controls");
-        require(view->currentData() == "category", "Category view is the initial default");
-        panel.resize(280, 660); panel.show(); QApplication::processEvents();
+        require(tree && category && library && search && count, "Picker controls");
+        require(category->isChecked() && !library->isChecked(), "Category view is the initial default");
+        dock.resize(280, 660); dock.show(); QApplication::processEvents();
         require(tree->columnViewportPosition(1) + tree->columnWidth(1) <= tree->viewport()->width(), "Element list fits the default dock width");
         require(tree->topLevelItem(0)->text(0) == "Sources", "Functional browsing starts with sources");
+        require(category->parentWidget() == dock.titleBarWidget() && library->parentWidget() == dock.titleBarWidget(), "Grouping controls share the dock title bar");
         const auto original = identifiers(tree);
         require(original.size() == registry.element_count() + s7studio::viewers::ViewerRegistry::instance().types().size(), "All elements and observers appear once");
         require(entry(tree, "PIDController")->parent()->text(0) == "Control & Plants", "PID is classified by function");
@@ -93,7 +100,7 @@ int main(int argc, char** argv) {
         require(panel.findChild<QLabel*>("elements.description")->text().contains("PIDController · Schema"), "Selection details identify the element and implementation");
         search->setText("  pid   schema  ");
         require(!pid->isHidden() && count->text().startsWith("Elements: 1 /"), "Search supports multiple terms and implementation kind");
-        view->setCurrentIndex(1);
+        library->click();
         require(identifiers(tree) == original, "Both views contain the same insertion identities");
         require(search->text() == "  pid   schema  ", "Switching view preserves the search");
         pid = entry(tree, "PIDController");
@@ -110,7 +117,7 @@ int main(int argc, char** argv) {
         require(QMetaObject::invokeMethod(tree, "itemDoubleClicked", Qt::DirectConnection,
                 Q_ARG(QTreeWidgetItem*, pid), Q_ARG(int, 0)), "Double-click dispatch");
         require(requests == QStringList{"PIDController"}, "Library view inserts the same element type");
-        view->setCurrentIndex(0);
+        category->click();
         pid = entry(tree, "PIDController");
         require(tree->currentItem() == pid && pid->parent()->text(0) == "Control & Plants", "Return to category keeps selection");
         require(QMetaObject::invokeMethod(tree, "itemDoubleClicked", Qt::DirectConnection,
@@ -124,7 +131,7 @@ int main(int argc, char** argv) {
         search->setText("missing-picker-element");
         require(count->text().startsWith("Elements: 0 /"), "Empty search results have an accurate count");
         for (int i = 0; i < tree->topLevelItemCount(); ++i) require(tree->topLevelItem(i)->isHidden(), "Groups with no matches are hidden");
-        search->clear(); view->setCurrentIndex(1);
+        search->clear(); library->click();
         tree->setCurrentItem(entry(tree, "ExternalFixture"));
         search->setText("fixture");
         registerFixture(registry, "AddedLater", "another_library");
@@ -134,11 +141,19 @@ int main(int argc, char** argv) {
         registry.unregister({"ExternalFixture"}); panel.refreshCatalog();
         require(!identifiers(tree).contains("ExternalFixture"), "Removed registrations disappear");
         require(panel.findChild<QLabel*>("elements.description")->text().isEmpty(), "Removed selections leave no stale details");
+        QDockWidget reopenedDock("Element Library");
         s7studio::ui::ElementPickerPanel reopened(registry);
-        require(reopened.findChild<QComboBox*>("elements.view")->currentData() == "library", "View preference survives reopening");
+        reopenedDock.setWidget(&reopened);
+        reopenedDock.setTitleBarWidget(reopened.createTitleBar(&reopenedDock));
+        require(reopenedDock.findChild<QRadioButton*>("elements.byLibrary")->isChecked(), "View preference survives reopening");
         QSettings{}.setValue("elements/view", "unknown");
+        QDockWidget fallbackDock("Element Library");
         s7studio::ui::ElementPickerPanel fallback(registry);
-        require(fallback.findChild<QComboBox*>("elements.view")->currentData() == "category", "Unknown preferences fall back to category");
+        fallbackDock.setWidget(&fallback);
+        fallbackDock.setTitleBarWidget(fallback.createTitleBar(&fallbackDock));
+        require(fallbackDock.findChild<QRadioButton*>("elements.byCategory")->isChecked(), "Unknown preferences fall back to category");
+        dock.findChild<QToolButton*>("elements.close")->click();
+        require(dock.isHidden(), "The compact title bar retains the close control");
         std::cout << "Element picker: category/library identity, functional grouping, search, selection, insertion, refresh and settings passed\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

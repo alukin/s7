@@ -4,7 +4,7 @@
 
 #include <QWidget>
 
-class QComboBox;
+class QDockWidget;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QLineEdit;
@@ -21,6 +21,7 @@ public:
     explicit ElementPickerPanel(const s7::ElementRegistry& registry, QWidget* parent = nullptr);
     ~ElementPickerPanel() override;
     void refreshCatalog();
+    QWidget* createTitleBar(QDockWidget* dock);
 
 signals:
     void elementRequested(const QString& elementType, const QString& displayName);
@@ -34,7 +35,7 @@ private:
     void applyFilter(const QString& text);
 
     const s7::ElementRegistry& registry_;
-    QComboBox* viewSelector_ = nullptr;
+    bool byLibrary_ = false;
     QLineEdit* searchEdit_ = nullptr;
     QTreeWidget* elementTree_ = nullptr;
     QLabel* elementCountLabel_ = nullptr;

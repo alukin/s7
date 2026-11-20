@@ -869,6 +869,7 @@ void MainWindow::buildToolWindows()
     toolWindows_ = new ui::ToolWindows(this);
     elementPickerDock_ = toolWindows_->add(QStringLiteral("elementLibrary"), QStringLiteral("Element Library"), QStringLiteral("books"),
                                            elementPickerPanel_, Qt::RightDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_1));
+    elementPickerDock_->setTitleBarWidget(elementPickerPanel_->createTitleBar(elementPickerDock_));
     headlessNodesDock_ = toolWindows_->add(QStringLiteral("headlessNodes"), QStringLiteral("Headless Nodes"), QStringLiteral("server-2"),
                                            headlessNodesPanel_, Qt::RightDockWidgetArea, QKeySequence(Qt::ALT | Qt::Key_2));
 

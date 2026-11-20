@@ -77,6 +77,7 @@
 #include <QTabWidget>
 #include <QLabel>
 #include <QComboBox>
+#include <QRadioButton>
 #include <QCheckBox>
 #include "parameter_editor.hpp"
 #include "schema_tabs.hpp"
@@ -604,8 +605,8 @@ private slots:
         }
         auto* tree = window_->findChild<QTreeWidget*>("elements.tree"); QVERIFY(tree);
         auto* search = window_->findChild<QLineEdit*>("elements.search"); QVERIFY(search);
-        auto* grouping = window_->findChild<QComboBox*>("elements.view"); QVERIFY(grouping);
-        grouping->setCurrentIndex(byLibrary ? 1 : 0);
+        auto* grouping = window_->findChild<QRadioButton*>(byLibrary ? "elements.byLibrary" : "elements.byCategory"); QVERIFY(grouping);
+        QTest::mouseClick(grouping, Qt::LeftButton);
         search->setText(filtered ? type.section(':', -1) : QString());
         auto* item = libraryItem(tree, type); QVERIFY(item && !item->isHidden());
         QCoreApplication::processEvents();
@@ -614,7 +615,7 @@ private slots:
         tree->setCurrentItem(item); tree->scrollToItem(item);
         QCoreApplication::processEvents();
         QCOMPARE(view->viewport()->width(), canvasWidth);
-        if (type == "Gain" && !filtered) capture(tree->parentWidget(), byLibrary ? "picker-by-library" : "picker-by-category", true);
+        if (type == "Gain" && !filtered) capture(window_->findChild<QDockWidget*>("toolWindow.elementLibrary"), byLibrary ? "picker-by-library" : "picker-by-category", true);
         target->resetZoom();
         for (int i = 0; i < std::abs(zoomSteps); ++i) { if (zoomSteps > 0) target->zoomIn(); else target->zoomOut(); }
         view->centerOn(QPointF(460,350));
