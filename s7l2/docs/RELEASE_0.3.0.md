@@ -1,16 +1,73 @@
-# S7 0.3.0 — candidate goals beyond the 0.2.0 qualification release
+# S7 0.3.0 — hardware-oriented signal-processing qualification
 
-Planning revision **2026-11-18**. The
-[0.2.0 release contract](RELEASE_0.2.0.md) now focuses on reproducible
-local/distributed causal execution. The work below is **deferred from 0.2.0**
-or was already independently planned for 0.3.0. This document preserves
-design intent and ownership while avoiding a new unbounded release promise.
+**Scope revision: 2026-11-20.** This supersedes the 2026-11-18
+candidate-only introduction while preserving the historical feature research
+below. The 0.2.0 contract remains the independently qualified baseline.
 
-**Candidate backlog is not an acceptance checklist:** a feature moves into an
-actual 0.3.0 release gate only after its owner, use case, minimum viable
-contract, tests and resource budget are explicitly approved. Not every item
-below must ship together. Previously implemented capabilities do not need to
-be reimplemented merely because they are mentioned here.
+The maintainer has explicitly selected **all 24 original MIT-SDR labs**
+(SDR01–SDR24) and **all 12 original MIT-Audio labs** (AU01–AU12) as
+**mandatory 0.3.0 deliverables**. Their purpose is to improve and verify
+S7's causal numerical execution, hardware-facing I/O, buffering, sample
+rates, clock provenance and real-time-like behavior. Include four named
+preliminary whole-frame video tests **VID01–VID04**, rather than a complete
+video education track. A bounded GStreamer appsrc/appsink integration,
+already assigned to 0.3.0, is part of that video verification.
+
+The [0.3.0 qualification work plan](RELEASE_0.3.0_WORKPLAN.md) is the
+authoritative **live gate matrix**, engineering phases, tests, required
+evidence and exclusions. No gate is declared passed merely by this planning
+revision. The laboratories' own course maps and numerical oracles remain
+in [MIT-SDR](../education/mit-sdr/COURSE_MAP.md) and
+[MIT-Audio](../education/mit-audio/COURSE_MAP.md); all share the
+[educational verification standard](../education/LAB_STANDARD.md).
+
+## Mandatory release objectives
+
+1. **H0 — Hardware-oriented causal execution:** reviewed support for
+   coordinated source/sink ownership and one-clock full-duplex audio,
+   properly bounded buffering and failure semantics, explicit rate/clock
+   and device metadata; no hidden model-time changes.
+2. **H1 — SDR teaching conformance:** all 24 SDR diagrams, guides and
+   independent test oracles, with recorded I/Q and the specified opt-in
+   RX and calibrated coax TX/RX qualification on available devices.
+3. **H2 — Audio teaching conformance:** all 12 audio diagrams, guides,
+   numerical oracles, file replay and live audio demonstrations.
+4. **H3/H4 — Physical hardware evidence:** genuinely measured local
+   microphone/guitar-to-headphone latency, processing deadlines and
+   dropouts; real SDR RX/TX readback, continuity and physical measurements.
+   The under-10-ms local audio goal is a **measurement target** on a
+   named qualified profile, not a claim of existing capability.
+5. **H5 — Preliminary video:** VID01 frame fidelity/stride/colors,
+   VID02 frame lifecycle/backpressure, VID03 opt-in webcam whole-frame
+   capture/output, VID04 selected GStreamer/FFmpeg media-adapter checks.
+6. **H6 — Final integrated candidate:** same source revision, real saved
+   diagrams, independent references, Studio workflow, installed package,
+   Linux and named platform checks, real-device logs and explicit faults.
+
+A mandatory lab that has not met its corresponding numerical or stated
+hardware acceptance criteria is **not complete**. Do not silently lower
+the target or substitute plots and tool-only experiments for actual
+S7 execution. An explicit later maintainer scope change is required to
+revise a gate.
+
+**Safety/architecture:** OTA transmission is optional and always subject
+to local radio regulations and measured emission constraints; safe,
+attenuated coax experiments are the baseline for TX/RX. Audio callback
+threads must not run unconstrained S7 graph code. Video frame processing
+uses bounded whole frames, not a graph step per pixel. No FPGA programming
+is in this release. The approved serial causal schedule remains the
+reference unless an independently reviewed runtime improvement is proven.
+
+## Additional research and candidate backlog (not automatic release gates)
+
+The remaining historic sections record research and candidates that
+were deferred from 0.2.0 or independently discussed for future versions.
+Only requirements specifically promoted into H0–H6 above are mandatory.
+For example, the larger two-host Full HD video showcase, node
+administration, PKI UX, printing and general parallel scheduler are
+**not** silently required by this narrower hardware-education contract.
+The previously assigned GStreamer goal is satisfied only by a qualified
+bounded production adapter, not by an external test-tool invocation.
 
 ## Candidate priorities and sequencing
 
