@@ -3,7 +3,9 @@
 **Scope decision, 2026-11-20 (planning; implementation not claimed):**
 The maintainer selected **all 24 MIT-SDR and all 12 MIT-Audio labs** as
 mandatory 0.3.0 release targets. Add a **small, preliminary video smoke suite**
-of four named cases, not a full video education curriculum. The release is
+of four named cases, not a full video education curriculum. Add
+**production GStreamer appsrc/appsink integration for both audio and video**
+as a separate mandatory release gate, not just a video helper. The release is
 about qualifying S7's hardware-facing causal runtime, not accumulating demos.
 
 This plan owns the 0.3.0 **qualification matrix**, subject to the formal
@@ -19,6 +21,8 @@ The ongoing 0.3.0 feature/backlog research remains in RELEASE_0.3.0.md.
 > buffer/frame and DSP capabilities in S7. Demonstrate a real microphone
 > or guitar through an effects graph and qualified RX/TX radio paths.
 > Introduce a bounded, original four-test whole-frame video smoke suite.
+> Deliver production S7 GStreamer audio AND video processing chains with
+> independently verified outputs, explicit buffers/clocks and opt-in hardware.
 
 A new lab is accepted only when its **actual saved S7 diagram** runs using
 the production execution path; an independent reference oracle, negative
@@ -35,8 +39,9 @@ LIVE. Do not require live RF/physical audio hardware in normal CI.
 | **H2** | MIT-Audio complete lab collection | **AU01–AU12** exactly; follow [course map](../education/mit-audio/COURSE_MAP.md) | 12 canonical diagrams/guides, independent audio DSP math, synthetic/WAV samples, headless/Studio checks, live duplex and effect measurements |
 | **H3** | Physical low-latency audio | A named same-clock 48 kHz interface, microphone/Hi-Z instrument -> S7 -> headphones; bypass and selected effects | Analog loopback latency distribution, graph service time, FIFO state, dropout/underrun/overrun count, CPU and latency under load; **10 ms initial target is to be measured, not presumed** |
 | **H4** | Physical SDR verification | Maintainer's Pluto Rev. B and two LibreSDR; RX and safe attenuated coax TX/RX, optional legal OTA | Device-discovery/readback, accepted/actual frame/rate data, independent signal/constellation/error measurements, cancellation, continuity, per-device limits |
-| **H5** | Preliminary whole-frame video | **VID01–VID04** below; bounded FFmpeg-oriented pipeline + selected GStreamer adapter profile | Exact synthetic frame oracles, real camera opt-in smoke, metadata/drop/EOS failures, package/Studio view where advertised |
-| **H6** | Release candidate and interoperability | All above on pinned candidate SHA, Linux baseline, independent platform profiles as implemented | Installed/relocated package, no accidental device opening, full C++ numeric regressions, negative/interrupt tests, exact commands and evidence ledger |
+| **H5** | Preliminary whole-frame video | **VID01–VID04** below; bounded whole-frame pipeline and media adapter bridge | Exact synthetic frame oracles, real camera opt-in smoke, metadata/drop/EOS failures, package/Studio view where advertised |
+| **H6** | **Production GStreamer audio AND video** | Bounded, opt-in actual S7 audio and whole-frame video processing through GStreamer; [contract](RELEASE_0.3.0_GSTREAMER.md) | GS-A1/GS-A2, GS-V1/GS-V2 and GS-X; independent math, real audio latency/camera tests, caps, timestamps, lifecycle, error paths |
+| **H7** | Release candidate and interoperability | All above on pinned candidate SHA, Linux baseline, independent platform profiles as implemented | Installed/relocated package, no accidental device opening, full C++ numeric regressions, negative/interrupt tests, exact commands and evidence ledger |
 
 **Release decision:** a blocked named lab or unqualified mandatory gate blocks
 0.3.0 until fixed. A later explicit maintainer decision may revise the
@@ -83,7 +88,11 @@ named accepted video profile.
   explicit in the run report.
 - Implement synthetic providers and acceptance tests for partial blocks,
   zero-frames, stop/drain, queue overflow, device loss, wrong type/rate
-  and cancellation. No device activation from graph loading, discovery
+  and cancellation.
+- Design the GStreamer audio and video adapters as real S7 processing
+  boundaries, not command-line media pipelines. Agree on appsrc/appsink
+  ownership, caps, timebase mapping and clock policy before writing code;
+  follow [the mandatory GStreamer contract](RELEASE_0.3.0_GSTREAMER.md). No device activation from graph loading, discovery
   in CI or clicking a student link.
 
 ### Phase B — independent DSP substrate and early labs
@@ -92,6 +101,8 @@ named accepted video profile.
   downconversion, filters/decimation, AGC. Provide reproducible I/Q
   source or capture/replay. Test exact early/late samples and aliases.
 - **AU01–AU04**: WAV/file input-output, identity full-duplex, EQ, echo.
+  Implement the first production GStreamer audio synthetic path (GS-A1)
+  through the actual S7 graph, then compare its PCM to the native provider.
   Inspect block and feedback delay contracts; don't change graph
   semantics to obtain a better-sounding result.
 - Implement only required DSP operators, sample-rate conversions,
@@ -105,7 +116,8 @@ named accepted video profile.
 - **SDR08–SDR15**: original modulation, symbol decisions and BER labs;
   **AU05–AU09**: reverb, waveshaping, dynamics, time-varying delays.
 - Qualify a real-time same-clock duplex audio session; test startup,
-  late callbacks and end-of-stream. Implement coordinated, operator-
+  late callbacks and end-of-stream. Qualify opt-in GStreamer live audio
+  input -> S7 processing -> output (GS-A2) with physical latency evidence. Implement coordinated, operator-
   enabled RX/TX only with safe coax fixtures and bounded output.
 - Check codec/format/sample conversions, clock drift and short transfer
   under real driver callbacks rather than equating mock success with RF.
@@ -123,8 +135,9 @@ named accepted video profile.
   guitar-effects graph. Quantify additional effect latency and dropout
   under common tested devices and host loads.
 - **VID01–VID04**: whole-frame validation and minimal shipping media
-  adapter path; evaluate GStreamer and FFmpeg as appropriately separate
-  implementations/tools. Do not fall back to per-pixel S7 steps for
+  adapter path; qualify GStreamer synthetic (GS-V1) and opt-in camera
+  (GS-V2) chains through real S7 frame processing. Use FFmpeg as an
+  independent comparison or explicitly selected alternative. Do not fall back to per-pixel S7 steps for
   production image processing.
 - Repeat full saved-graph, reference and Studio tests after any
   scheduler, buffer, clock or frame design change.
@@ -132,7 +145,9 @@ named accepted video profile.
 ### Phase E — integrated release candidate
 
 - A single reproducible source revision and build package must provide
-  36 qualified lab guides/diagrams and four video verification tests.
+  36 qualified lab guides/diagrams, four video verification tests and
+  **production GStreamer sound and video integration** (GS-A1/A2,
+  GS-V1/V2, GS-X).
 - Independent regression tests prove actual math. For RF/audio, retain
   time-aligned captured samples, consent/rights-checked fixture metadata,
   physical settings, errors, measured distributions and operator logs.
@@ -141,7 +156,9 @@ named accepted video profile.
   capability assumptions.
 - Show one complete low-latency guitar/mic effects pipeline, one verified
   SDR capture and a bounded permitted physical TX/RX experiment, and a
-  small real-camera frame pipeline. This is an **integrated hardware
+  small real-camera frame pipeline. Demonstrate both native audio and
+  GStreamer audio through an actual S7 graph, plus GStreamer camera
+  capture -> S7 whole-frame transform -> output. This is an **integrated hardware
   release test**, not a claim of universal hardware compatibility.
 
 ## Performance and reproducibility conventions
@@ -177,7 +194,7 @@ named accepted video profile.
 | SDR01–SDR24 | Curriculum documented; **24 release targets, not qualified** | Implement first deterministic IQ lab group with real diagram oracles |
 | AU01–AU12 | Curriculum documented; **12 release targets, not qualified** | Common-clock fake duplex, then physical identity loopback |
 | VID01–VID04 | Newly specified; **not implemented/qualified** | Small synthetic frame + layout/EOS fault test |
-| GStreamer adapters | Previously assigned 0.3.0 goal; **implementation/qualification open** | Bounded appsrc/appsink fixture and invalid plugin/format tests |
+| GStreamer audio and video | **Mandatory H6; not implemented/qualified** | Production appsrc/appsink S7 paths with GS-A1/A2, GS-V1/V2 and GS-X evidence |
 | Hardware-oriented runtime | Existing single-boundary provider baseline; **new contracts open** | ADR + fake two-boundary / duplex conformance and deadline reporting |
 | Candidate release artifacts | Not prepared | Gate-specific evidence pinned to the same source and package revision |
 
@@ -196,7 +213,8 @@ is explicitly outside this course release**.
 Inspect source **before** changing APIs. Create a capability matrix
 mapping each SDR/AU/VID requirement to actual code locations and existing
 tests. Propose one causal timing/hardware-run ADR and start in parallel
-with independently verifiable **SDR01–SDR03**, **AU01/AU02** and **VID01**.
+with independently verifiable **SDR01–SDR03**, **AU01/AU02**,
+**VID01** and GStreamer synthetic bridges **GS-A1/GS-V1**.
 Use small reviewable feature or lab PRs and retain a live evidence
 manifest. A planned lab name or simulation diagram is not a passing
 hardware verification result.
