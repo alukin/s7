@@ -1,6 +1,6 @@
 # S7 teaching laboratories — MIT-aligned curriculum
 
-> **Course organization (2026-11-20):** [MIT-EE: Signals, DSP and Control](mit-ee/README.md) and [MIT-SDR: SDR and Digital Communications](mit-sdr/README.md) are distinct teaching tracks sharing [one verification standard](LAB_STANDARD.md). The existing MIT-EE labs currently keep their historical file paths until a separate compatibility-tested directory migration; the SDR course is a new 24-lab proposal, not 24 implemented examples.
+> **Course organization (2026-11-20):** [MIT-EE: Signals, DSP and Control](mit-ee/README.md) and [MIT-SDR: SDR and Digital Communications](mit-sdr/README.md), and [MIT-Audio: Audio DSP and Low-Latency Effects](mit-audio/README.md) are distinct teaching tracks sharing [one verification standard](LAB_STANDARD.md). The existing MIT-EE labs currently keep their historical file paths until a separate compatibility-tested directory migration; the SDR course is a new 24-lab proposal, not 24 implemented examples.
 
 **Status: curriculum and verification plan, not a shipped course bundle.**
 Planning baseline: 2026-11-18. The [course map](COURSE_MAP.md) contains
