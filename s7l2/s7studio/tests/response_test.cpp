@@ -57,6 +57,17 @@ int main(int argc, char **argv) {
                                                                   : viewer.error().toStdString());
             waitForDisplay(viewer);
             if (name == "delay") {
+                auto *magnitude = viewer.findChild<s7studio::viewers::LinePlotView *>("response.magnitude");
+                if (!magnitude || magnitude->series().size() != 1)
+                    throw std::runtime_error("Delay magnitude curve missing");
+                for (const auto &point : magnitude->series().front()->points())
+                    if (std::abs(point.y()) > 1e-10)
+                        throw std::runtime_error("Ideal delay magnitude must be zero dB");
+                // Numerical FFT roundoff must not look like a physical ripple.
+                // Keep the actual values for export and cursor inspection.
+                if (magnitude->yMax() - magnitude->yMin() < 0.99 ||
+                    magnitude->yMin() >= 0 || magnitude->yMax() <= 0)
+                    throw std::runtime_error("Flat delay gain magnifies numerical roundoff");
                 auto *phase = viewer.findChild<s7studio::viewers::LinePlotView *>("response.phase");
                 auto *unwrap = viewer.findChild<QCheckBox *>("response.unwrap");
                 if (!phase || !unwrap || !unwrap->isChecked() || phase->series().size() != 1)

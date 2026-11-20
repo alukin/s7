@@ -4292,7 +4292,10 @@ private slots:
         const double span = plot->yMax() - plot->yMin();
         if (low < plot->yMin() - span * 1e-9 || high > plot->yMax() + span * 1e-9)
             return QString("data y[%1,%2] outside axis y[%3,%4]").arg(low).arg(high).arg(plot->yMin()).arg(plot->yMax());
-        if (high > low && (high - low) < span * 0.25)
+        // Flat dB responses intentionally retain a readable context range;
+        // tiny FFT roundoff must not be enlarged into an apparent ripple.
+        const bool flatGain = plot->yTitle().startsWith("Gain (dB") && high - low < 1e-10;
+        if (!flatGain && high > low && (high - low) < span * 0.25)
             return QString("data y[%1,%2] fills %3% of axis y[%4,%5]").arg(low).arg(high)
                 .arg((high - low) / span * 100, 0, 'f', 1).arg(plot->yMin()).arg(plot->yMax());
         return {};

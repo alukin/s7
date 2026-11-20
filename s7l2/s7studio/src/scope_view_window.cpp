@@ -601,7 +601,12 @@ ScopeViewWindow::ScopeViewWindow(QString probeName,
     connect(plot_, &viewers::LinePlotView::xRangeChanged, this, &ScopeViewWindow::onXRangeChanged);
     connect(plot_, &viewers::LinePlotView::hoveredPoint, this, &ScopeViewWindow::updateHover);
     connect(plot_->bridge(), &viewers::LinePlotBridge::plotAreaChanged, this, [this] {
-        if (hasTimeRange_ && plotPixelColumns(plot_) != lastPlotPixelColumns_) setVisibleData();
+        if (hasTimeRange_ && plotPixelColumns(plot_) != lastPlotPixelColumns_) {
+            // Capture may have advanced since the repaint timer last fitted
+            // the axes. Redraw points and full-run ranges from the same span.
+            if (dirty_) refreshPlot();
+            else setVisibleData();
+        }
     });
 }
 

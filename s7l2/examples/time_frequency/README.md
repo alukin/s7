@@ -8,6 +8,11 @@ actual STFT magnitude map; opening its full window adds transform controls and
 numeric inspection.
 CWT defaults to 32 logarithmically spaced frequencies over 2–100 Hz. The PLL
 example retains its original rate and **6-second** experiment; open `wavelet_map`.
+At lower sample rates, untouched CWT defaults adapt below Nyquist: the upper
+frequency is at most 45% of the sample rate and the lower frequency is at most
+one eighth of that upper bound. Explicit frequency edits and imported CWT bands
+are preserved; an invalid band produces a visible error. The frequency controls
+accept small values without rounding them to whole millihertz.
 
 | Diagram | Expected features |
 |---|---|

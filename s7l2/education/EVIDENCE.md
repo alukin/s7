@@ -8,6 +8,12 @@ CT04/CT05 use that committed baseline. Earlier sections retain their
 original baseline and measured results.
 No final-candidate or installed-package qualification is claimed.
 
+**2026-11-20 follow-up:** the requested collection-wide Linux viewer audit is
+complete; see the [current checklist](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit).
+Its local report, captures and per-example data checks are under
+`/var/tmp/s7-viewer-audit-2026-11-20/`, outside Git per the GUI-testing policy.
+Earlier sections below retain their original dates and qualification limits.
+
 ## SP06 — initial local check, 2026-11-19
 
 Environment: Fedora 45 x86-64, Linux 7.3.3, GCC 16.2.1, CMake 4.3.0,

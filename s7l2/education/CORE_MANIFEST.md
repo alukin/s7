@@ -61,8 +61,10 @@ final release qualification remains open.
 - Package scripts now preserve `examples/`, `education/` and `docs/` as
   sibling trees, with Python caches excluded. The Linux development bundle
   checks all 24 lessons after relocation, including Help navigation and
-  save/reopen. Native Windows, final candidate packaging and the human viewer
-  audit remain open; see [executed evidence](EVIDENCE.md).
+  save/reopen. The requested Linux viewer audit is complete (2026-11-20);
+  native Windows, final candidate packaging and maintainer acceptance remain
+  open. See the [current audit status](IMPLEMENTATION_PLAN.md#closing-reminder--viewer-audit)
+  and [executed evidence](EVIDENCE.md).
 
 ## Source review
 

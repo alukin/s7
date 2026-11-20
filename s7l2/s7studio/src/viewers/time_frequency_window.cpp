@@ -5,6 +5,7 @@
 #include "analysis/display_worker.hpp"
 #include "analysis/worker_pool.hpp"
 #include "analysis_action.hpp"
+#include "instrument_controls.hpp"
 #include "line_plot_view.hpp"
 #include "surface_plot.hpp"
 #include <QCheckBox>
@@ -152,13 +153,13 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     scales_->setEnabled(false);
     controls->addWidget(new QLabel("CWT scales", this));
     controls->addWidget(scales_);
-    minimum_ = new QDoubleSpinBox(this);
-    minimum_->setDecimals(3);
-    minimum_->setRange(.001, 1e9);
+    minimum_ = ui::compactNumber(this);
+    minimum_->setObjectName("timeFrequency.cwtMinimum");
+    minimum_->setRange(1e-12, 1e9);
     minimum_->setValue(2);
-    maximum_ = new QDoubleSpinBox(this);
-    maximum_->setDecimals(3);
-    maximum_->setRange(.001, 1e9);
+    maximum_ = ui::compactNumber(this);
+    maximum_->setObjectName("timeFrequency.cwtMaximum");
+    maximum_->setRange(1e-12, 1e9);
     maximum_->setValue(100);
     minimum_->setEnabled(false);
     maximum_->setEnabled(false);
@@ -333,8 +334,12 @@ TimeFrequencyWindow::TimeFrequencyWindow(const QString &name, QWidget *parent)
     });
     connect(hop_, &QSpinBox::valueChanged, this, settingsChanged);
     connect(scales_, &QSpinBox::valueChanged, this, settingsChanged);
-    connect(minimum_, &QDoubleSpinBox::valueChanged, this, settingsChanged);
-    connect(maximum_, &QDoubleSpinBox::valueChanged, this, settingsChanged);
+    const auto waveletRangeChanged = [this, settingsChanged] {
+        waveletRangeEdited_ = true;
+        settingsChanged();
+    };
+    connect(minimum_, &QDoubleSpinBox::valueChanged, this, waveletRangeChanged);
+    connect(maximum_, &QDoubleSpinBox::valueChanged, this, waveletRangeChanged);
     auto *timer = new QTimer(this);
     timer->setInterval(100);
     connect(timer, &QTimer::timeout, this, &TimeFrequencyWindow::poll);
@@ -475,6 +480,13 @@ void TimeFrequencyWindow::startAnalysis(bool currentCapture) {
     if (method_->currentIndex() == 0 && (n & (n - 1))) {
         error_ = "FFT size must be a power of two";
         return;
+    }
+    if (method_->currentIndex() == 1 && !waveletRangeEdited_) {
+        // Factory defaults follow the captured rate. Explicit edits and
+        // imported CWT bands keep their meaning and remain validated below.
+        const double high = std::min(100., .45 / dt);
+        ui::setCompactNumberValueSilently(maximum_, high);
+        ui::setCompactNumberValueSilently(minimum_, std::min(2., high / 8));
     }
     const double low = minimum_->value(), high = maximum_->value();
     if (method_->currentIndex() == 1 && (!(low < high) || high >= .5 / dt)) {
@@ -1010,9 +1022,10 @@ void TimeFrequencyWindow::openResult(const QString &path) {
         minimum_->setEnabled(wavelet);
         maximum_->setEnabled(wavelet);
         if (wavelet) {
+            waveletRangeEdited_ = true;
             scales_->setValue(int(result.y.size()));
-            minimum_->setValue(result.y.front());
-            maximum_->setValue(result.y.back());
+            ui::setCompactNumberValueSilently(minimum_, result.y.front());
+            ui::setCompactNumberValueSilently(maximum_, result.y.back());
         }
         logFrequency_->setEnabled(wavelet);
         logFrequency_->setChecked(wavelet);

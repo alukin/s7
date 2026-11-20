@@ -21,6 +21,20 @@
 int main(int argc, char** argv)
 {
     QApplication app(argc, argv);
+    // A resize may arrive between capture updates and the repaint timer.
+    // Fit-full-run must update axes and points from the same recording span.
+    {
+        s7studio::ui::ScopeViewWindow scope(QStringLiteral("resize-during-capture"));
+        scope.appendSample(0., 0.);
+        scope.appendSample(1., 1.);
+        QMetaObject::invokeMethod(&scope, "refreshPlot", Qt::DirectConnection);
+        auto* plot = scope.plotView();
+        scope.appendSample(2., 2.);
+        plot->bridge()->plotAreaSize = QSizeF(600, 300);
+        emit plot->bridge()->plotAreaChanged();
+        if (plot->series().front()->points().back().x() != 2. || plot->xMax() != 2.)
+            throw std::runtime_error("Scope resize mixed new points with a stale full-run time axis");
+    }
     // Export must preserve doubles regardless of UI locale and escape labels.
     {
         QLocale::setDefault(QLocale(QLocale::German));

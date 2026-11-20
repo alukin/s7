@@ -27,8 +27,17 @@ model-time axes, selected analysis intervals, frequency axes, amplitude/power
 normalization, overlays and save/reopen/rerun behavior. Per-lab automated
 checks support this collection-wide review; they do not replace it.
 
-- [ ] Remind the maintainer at the final education review.
-- [ ] Record the collection-wide viewer audit and resolve its findings.
+- [x] Remind the maintainer at the final education review (2026-11-19).
+- [x] Perform the requested collection-wide Linux viewer audit and resolve its findings (2026-11-20).
+
+The maintainer delegated the audit on 2026-11-20. It covered all 24 education
+labs and the other 98 bundled diagrams, including optional analysis plugins,
+with recording/data checks and rendered-view review under Xvfb/Mesa. Three
+viewer defects were reproduced and fixed. The local report and per-example
+evidence are under `/var/tmp/s7-viewer-audit-2026-11-20/`, outside Git per the
+GUI-testing policy. This closes the requested Linux collection audit; native
+Windows, physical GPU/display and final release-candidate acceptance remain
+separate gates.
 
 ## Objective and scope decision
 
@@ -121,11 +130,11 @@ production convolution/spectral processors without changing causal semantics.
 
 Integration now opens diagram links from Help as working copies and packages
 the offline guides beside the examples. Source and relocated Linux navigation
-checks cover all 24 core rows. Next: the named release-candidate checks,
-native Windows qualification and the collection-wide human viewer audit.
-The closing collection-wide viewer-audit reminder
-above remains open; native Windows and human review are not inferred from
-Linux development tests. The additional 24 non-core curriculum items remain
+checks cover all 24 core rows. The requested collection-wide Linux viewer audit
+is complete (2026-11-20); see the closing checklist above. Next: the named
+release-candidate checks, native Windows qualification and final maintainer
+acceptance. Those platform/release decisions are not inferred from Linux
+development tests. The additional 24 non-core curriculum items remain
 outside the accepted 0.2.0 implementation set.
 
 ## Phase 1 — Classical foundations and discrete modeling (FN)
