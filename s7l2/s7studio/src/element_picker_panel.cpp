@@ -27,11 +27,55 @@
 #include <QMenu>
 #include <QPointer>
 #include <QSizePolicy>
+#include <QComboBox>
+#include <QSettings>
+#include <QSignalBlocker>
+#include <QRegularExpression>
+#include <QStringList>
 #include <algorithm>
 #include <map>
+#include <vector>
 
 namespace s7studio::ui {
 namespace {
+constexpr int descriptionRole = Qt::UserRole + 1;
+constexpr int searchRole = Qt::UserRole + 2;
+const auto viewSetting = QStringLiteral("elements/view");
+
+QString categoryName(const QString& id)
+{
+    static const std::map<QString, QString> names{
+        {"sources", "Sources"}, {"math", "Math & Functions"},
+        {"memory_integration", "Memory & Integration"},
+        {"signal_processing", "Signal Processing"}, {"control", "Control & Plants"},
+        {"types_complex", "Types & Complex Signals"},
+        {"io", "Files & Network"}, {"network", "Files & Network"}, {"observers", "Observers"}};
+    const auto it = names.find(id);
+    return it != names.end() ? it->second : id.isEmpty() ? QStringLiteral("Uncategorized") : id;
+}
+
+QString libraryName(const QString& id)
+{
+    static const std::map<QString, QString> names{
+        {"s7core", "S7 Core"}, {"s7_standard_schema_elements", "S7 Schema Library"},
+        {"s7io", "S7 File I/O"}, {"s7net", "S7 Network"}, {"s7noise", "S7 Noise"},
+        {"s7spectral", "S7 Spectral"}, {"s7wavelet", "S7 Wavelet"},
+        {"s7audio", "S7 Audio"}, {"s7sdr", "S7 SDR"}, {"s7studio", "S7 Studio"}};
+    const auto it = names.find(id);
+    return it != names.end() ? it->second : id.isEmpty() ? QStringLiteral("Unspecified library") : id;
+}
+
+struct PickerEntry {
+    QString identifier;
+    QString name;
+    QString description;
+    QString ports;
+    QString category;
+    QString library;
+    QString kind;
+    QStringList tags;
+};
+
 class LibraryTree final : public QTreeWidget {
 public:
     LibraryTree(const s7::ElementRegistry& registry, QWidget* parent)
@@ -92,14 +136,28 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     layout->setContentsMargins(8, 8, 8, 8);
     layout->setSpacing(8);
 
-    // Search box
+    auto* viewLayout = new QHBoxLayout();
+    auto* viewLabel = new QLabel("View:", this);
+    viewSelector_ = new QComboBox(this);
+    viewSelector_->setObjectName(QStringLiteral("elements.view"));
+    viewSelector_->setAccessibleName(QStringLiteral("Group elements by"));
+    viewSelector_->addItem(QStringLiteral("By Category"), QStringLiteral("category"));
+    viewSelector_->addItem(QStringLiteral("By Library"), QStringLiteral("library"));
+    viewSelector_->setCurrentIndex(QSettings{}.value(viewSetting).toString() == "library" ? 1 : 0);
+    viewLabel->setBuddy(viewSelector_);
+    viewLayout->addWidget(viewLabel);
+    viewLayout->addWidget(viewSelector_, 1);
+    layout->addLayout(viewLayout);
+
+    // Both views share the same search and insertion identifiers.
     auto* searchLayout = new QHBoxLayout();
     auto* searchLabel = new QLabel("&Search:", this);
     searchEdit_ = new QLineEdit(this);
     searchEdit_->setObjectName(QStringLiteral("elements.search"));
     searchLabel->setBuddy(searchEdit_);
     searchEdit_->setAccessibleName(QStringLiteral("Filter element library"));
-    searchEdit_->setPlaceholderText("Filter elements...");
+    searchEdit_->setPlaceholderText("Search elements, categories, libraries…");
+    searchEdit_->setClearButtonEnabled(true);
     searchLayout->addWidget(searchLabel);
     searchLayout->addWidget(searchEdit_);
     layout->addLayout(searchLayout);
@@ -110,8 +168,9 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     elementTree_->setAccessibleName(QStringLiteral("Element library"));
     elementTree_->setColumnCount(2);
     elementTree_->setHeaderLabels({"Element", "I/O"});
-    elementTree_->setColumnWidth(0, 180);
-    elementTree_->setColumnWidth(1, 50);
+    elementTree_->header()->setStretchLastSection(false);
+    elementTree_->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    elementTree_->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     elementTree_->setUniformRowHeights(true);
     elementTree_->setSelectionMode(QAbstractItemView::SingleSelection);
     elementTree_->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -122,8 +181,10 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 
     // Element info
     descriptionLabel_ = new QLabel(this);
+    descriptionLabel_->setObjectName(QStringLiteral("elements.description"));
     descriptionLabel_->setWordWrap(true);
-    descriptionLabel_->setMaximumHeight(80);
+    // Reserve the details area so changing selection cannot move the tree rows.
+    descriptionLabel_->setFixedHeight(104);
     // A long description must wrap in the existing dock width rather than
     // move the library/canvas boundary underneath the pointer during a drag.
     descriptionLabel_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
@@ -134,6 +195,7 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
 
     // Count label
     elementCountLabel_ = new QLabel(this);
+    elementCountLabel_->setObjectName(QStringLiteral("elements.count"));
 
     layout->addWidget(elementCountLabel_);
 
@@ -141,10 +203,14 @@ ElementPickerPanel::ElementPickerPanel(const s7::ElementRegistry& registry, QWid
     layout->setStretchFactor(elementTree_, 1);
 
     // Build the element tree
-    buildCategoryTree();
+    rebuildTree();
 
     // Connect signals
-    connect(searchEdit_, &QLineEdit::textChanged, this, &ElementPickerPanel::onSearchTextChanged);
+    connect(searchEdit_, &QLineEdit::textChanged, this, &ElementPickerPanel::applyFilter);
+    connect(viewSelector_, &QComboBox::currentIndexChanged, this, [this] {
+        QSettings{}.setValue(viewSetting, viewSelector_->currentData());
+        rebuildTree();
+    });
     connect(elementTree_, &QTreeWidget::itemDoubleClicked, this, &ElementPickerPanel::onItemDoubleClicked);
     connect(elementTree_, &QTreeWidget::itemSelectionChanged, this, &ElementPickerPanel::onItemSelectionChanged);
 
@@ -155,114 +221,118 @@ ElementPickerPanel::~ElementPickerPanel() = default;
 
 void ElementPickerPanel::refreshCatalog()
 {
-    buildCategoryTree();
+    rebuildTree();
 }
 
-void ElementPickerPanel::buildCategoryTree() {
-    s7::ElementCatalogService catalog(registry_);
-
-    elementTree_->clear();
-    categoryNodes_.clear();
-
-    // Schema is an element: keep all reusable graph elements together,
-    // including user-loaded libraries with their own metadata categories.
-    std::map<std::string,std::vector<s7::ElementCatalogEntry>> groups;
-    for (const auto& entry : catalog.all_elements()) {
-        const auto* descriptor=registry_.find(entry.type_name);
-        const bool schema=descriptor && descriptor->metadata().schema_definition.has_value();
-        groups[schema ? "Schema elements" : entry.category].push_back(entry);
+void ElementPickerPanel::rebuildTree()
+{
+    const auto selected = elementTree_->currentItem()
+        ? elementTree_->currentItem()->data(0, Qt::UserRole).toString() : QString{};
+    // Never instantiate runtime elements while browsing metadata.
+    std::vector<PickerEntry> entries;
+    for (const auto& descriptor : registry_.all_descriptors()) {
+        const auto& m = descriptor.metadata();
+        entries.push_back({QString::fromStdString(m.type_name), QString::fromStdString(m.display_name),
+            QString::fromStdString(m.description), {}, QString::fromStdString(m.category),
+            QString::fromStdString(m.library), m.schema_definition ? "Schema" : "Primitive", {}});
+        for (const auto& tag : m.tags) entries.back().tags << QString::fromStdString(tag);
     }
-    for (const auto& [category,elements] : groups) {
-        if (elements.empty()) {
-            continue;
+    const s7::ElementCatalogService catalog(registry_);
+    for (auto& entry : entries) {
+        const auto* summary = catalog.find_element(entry.identifier.toStdString());
+        entry.ports = QString("%1→%2").arg(summary->input_count).arg(summary->output_count);
+    }
+    for (const auto& viewer : viewers::ViewerRegistry::instance().types()) {
+        const auto& m = viewer.documentation;
+        entries.push_back({QStringLiteral("StudioObserver:") + viewer.typeId, viewer.displayName,
+            viewer.description, viewer.portSummary, QStringLiteral("observers"),
+            m ? QString::fromStdString(m->library) : QString{}, QStringLiteral("Observer"), {}});
+        if (m) for (const auto& tag : m->tags) entries.back().tags << QString::fromStdString(tag);
+    }
+    const bool byLibrary = viewSelector_->currentData() == "library";
+    const auto groupKey = [byLibrary](const PickerEntry& e) {
+        // Library identity is independent of its display label and category.
+        return byLibrary ? e.library : categoryName(e.category);
+    };
+    const auto groupName = [byLibrary](const QString& key) { return byLibrary ? libraryName(key) : key; };
+    std::sort(entries.begin(), entries.end(), [&](const auto& a, const auto& b) {
+        const auto aKey = groupKey(a), bKey = groupKey(b);
+        const auto aName = groupName(aKey), bName = groupName(bKey);
+        if (!byLibrary && aName != bName) {
+            static const QStringList order{"Sources", "Math & Functions", "Memory & Integration",
+                "Signal Processing", "Control & Plants", "Types & Complex Signals", "Files & Network", "Observers"};
+            const auto rank = [&](const QString& name) { const auto i = order.indexOf(name); return i < 0 ? order.size() : i; };
+            if (rank(aName) != rank(bName)) return rank(aName) < rank(bName);
         }
-
-        // Create category item
-        auto* categoryItem = new QTreeWidgetItem();
-        categoryItem->setFlags(categoryItem->flags() & ~Qt::ItemIsDragEnabled);
-        categoryItem->setText(0, QString::fromStdString(category));
-        categoryItem->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-
-        // Set category font (bold)
-        QFont categoryFont = categoryItem->font(0);
-        categoryFont.setBold(true);
-        categoryItem->setFont(0, categoryFont);
-
-        // Add elements
-        for (const auto& element : elements) {
-            auto* elementItem = new QTreeWidgetItem(categoryItem);
-            elementItem->setFlags(elementItem->flags() | Qt::ItemIsDragEnabled);
-            elementItem->setText(0, QString::fromStdString(element.display_name));
-            elementItem->setText(1, QString("%1→%2")
-                .arg(element.input_count)
-                .arg(element.output_count));
-
-            // Store type name as data for later retrieval
-            elementItem->setData(0, Qt::UserRole, QString::fromStdString(element.type_name));
-            elementItem->setData(0, Qt::UserRole + 1, QString::fromStdString(element.description));
-        }
-
-        elementTree_->addTopLevelItem(categoryItem);
-
-        // Store category node
-        CategoryNode node{
-            QString::fromStdString(category),
-            elements
-        };
-        categoryNodes_.push_back(node);
-    }
-
-    // Observers are Studio diagram items, not runtime element registry entries.
-    auto* observerCategory = new QTreeWidgetItem();
-    observerCategory->setFlags(observerCategory->flags() & ~Qt::ItemIsDragEnabled);
-    observerCategory->setText(0, QStringLiteral("Observers"));
-    observerCategory->setChildIndicatorPolicy(QTreeWidgetItem::ShowIndicator);
-    QFont observerFont = observerCategory->font(0);
-    observerFont.setBold(true);
-    observerCategory->setFont(0, observerFont);
-    const auto& viewerTypes = viewers::ViewerRegistry::instance().types();
-    for (const auto& type : viewerTypes) {
-        auto* item = new QTreeWidgetItem(observerCategory);
-        item->setFlags(item->flags() | Qt::ItemIsDragEnabled);
-        item->setText(0, type.displayName);
-        item->setText(1, type.portSummary);
-        item->setData(0, Qt::UserRole, QStringLiteral("StudioObserver:") + type.typeId);
-        item->setData(0, Qt::UserRole + 1, type.description);
-    }
-    elementTree_->addTopLevelItem(observerCategory);
-
-    elementTree_->expandAll();
-    applyFilter(searchEdit_->text());
-    elementCountLabel_->setText(QString("Elements: %1").arg(registry_.element_count() + viewerTypes.size()));
-}
-
-void ElementPickerPanel::onSearchTextChanged(const QString& text) {
-    applyFilter(text);
-}
-
-void ElementPickerPanel::applyFilter(const QString& filterText) {
-
-    for (int i = 0; i < elementTree_->topLevelItemCount(); ++i) {
-        auto* categoryItem = elementTree_->topLevelItem(i);
-        bool categoryVisible = false;
-
-        for (int j = 0; j < categoryItem->childCount(); ++j) {
-            auto* elementItem = categoryItem->child(j);
-            QString elementName = elementItem->text(0);
-            QString elementType = elementItem->data(0, Qt::UserRole).toString();
-
-            bool visible = elementName.contains(filterText, Qt::CaseInsensitive) ||
-                          elementType.contains(filterText, Qt::CaseInsensitive);
-
-            elementItem->setHidden(!visible);
-
-            if (visible) {
-                categoryVisible = true;
+        if (aName != bName) return aName < bName;
+        if (aKey != bKey) return aKey < bKey;
+        if (a.name != b.name) return a.name < b.name;
+        return a.identifier < b.identifier;
+    });
+    {
+        const QSignalBlocker block(elementTree_);
+        elementTree_->clear();
+        QTreeWidgetItem* group = nullptr;
+        QString previousKey;
+        QTreeWidgetItem* selection = nullptr;
+        for (const auto& e : entries) {
+            const auto key = groupKey(e);
+            if (!group || key != previousKey) {
+                group = new QTreeWidgetItem(elementTree_);
+                group->setFlags(group->flags() & ~Qt::ItemIsDragEnabled);
+                group->setText(0, groupName(key));
+                group->setFirstColumnSpanned(true);
+                group->setToolTip(0, key);
+                auto font = group->font(0); font.setBold(true); group->setFont(0, font);
+                previousKey = key;
             }
+            auto* item = new QTreeWidgetItem(group);
+            item->setFlags(item->flags() | Qt::ItemIsDragEnabled);
+            item->setText(0, e.name);
+            item->setText(1, e.ports);
+            item->setData(0, Qt::UserRole, e.identifier);
+            const auto details = QString("%1 · %2\n%3 · %4\n%5")
+                .arg(e.name, e.kind, libraryName(e.library), categoryName(e.category), e.description);
+            item->setData(0, descriptionRole, details);
+            for (int column = 0; column < 2; ++column) item->setToolTip(column, details);
+            QStringList search{e.name, e.identifier, e.description, e.category, categoryName(e.category),
+                               e.library, libraryName(e.library), e.kind};
+            search.append(e.tags);
+            item->setData(0, searchRole, search.join(' '));
+            if (e.identifier == selected) selection = item;
         }
-
-        categoryItem->setHidden(!categoryVisible);
+        elementTree_->expandAll();
+        applyFilter(searchEdit_->text());
+        if (selection) {
+            elementTree_->setCurrentItem(selection);
+            if (!selection->isHidden()) elementTree_->scrollToItem(selection);
+        }
     }
+    onItemSelectionChanged();
+}
+
+void ElementPickerPanel::applyFilter(const QString& text)
+{
+    const auto words = text.trimmed().split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+    int total = 0, matches = 0;
+    for (int i = 0; i < elementTree_->topLevelItemCount(); ++i) {
+        auto* group = elementTree_->topLevelItem(i);
+        bool visibleGroup = false;
+        for (int j = 0; j < group->childCount(); ++j) {
+            auto* item = group->child(j);
+            const auto searchable = item->data(0, searchRole).toString();
+            const bool visible = std::all_of(words.begin(), words.end(), [&](const auto& word) {
+                return searchable.contains(word, Qt::CaseInsensitive);
+            });
+            item->setHidden(!visible);
+            visibleGroup |= visible;
+            ++total;
+            if (visible) ++matches;
+        }
+        group->setHidden(!visibleGroup);
+    }
+    elementCountLabel_->setText(words.isEmpty() ? QString("Elements: %1").arg(total)
+                                              : QString("Elements: %1 / %2").arg(matches).arg(total));
 }
 
 void ElementPickerPanel::onItemDoubleClicked(QTreeWidgetItem* item, int column) {
@@ -286,7 +356,7 @@ void ElementPickerPanel::onItemSelectionChanged() {
     }
 
     QTreeWidgetItem* item = selected.first();
-    QString description = item->data(0, Qt::UserRole + 1).toString();
+    QString description = item->data(0, descriptionRole).toString();
 
     if (!description.isEmpty()) {
         descriptionLabel_->setText(description);

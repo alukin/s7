@@ -105,7 +105,9 @@ int main(int argc,char** argv) {
                 const auto type=category->child(j)->data(0,Qt::UserRole).toString().toStdString();
                 const auto* descriptor=registry.find(type);
                 if(descriptor && descriptor->metadata().schema_definition) {
-                    require(category->text(0)=="Schema elements","Schema entries have a separate category");++schema_count;
+                    require(category->child(j)->toolTip(0).contains("· Schema\n"),"Schema implementation is identified independently of category");++schema_count;
+                    if(type=="PIDController") require(category->text(0)=="Control & Plants","Schema controllers have a functional category");
+                    if(type=="UserPhaseDifference") require(category->text(0)=="custom_category","User schema categories are retained");
                 }
                 if(type=="ControlledIntegrator") ++primitive_count;
             }

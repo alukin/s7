@@ -7,7 +7,7 @@
       "type_name": "WaveletCoefficient",
       "display_name": "Morlet Wavelet Coefficient",
       "description": "Rate-following DC-corrected complex Morlet FIR, discrete L2-normalized, support \u00b14 sigma, omega0=cycles. Coefficient at current sample represents center delay_samples earlier. Valid becomes one only with full support. Direct feedthrough, causal computation; private history does not break feedback cycles.",
-      "category": "wavelet",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [
         "wavelet",

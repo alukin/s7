@@ -102,6 +102,17 @@ library registration supplies its library name automatically. Categories remain
 browsing groups and are not library identities. Loaded plugin information also
 identifies plugin ownership.
 
+Studio's **By Category** and **By Library** views use these independent fields.
+Use `sources`, `math`, `memory_integration`, `signal_processing`, `control`,
+`types_complex`, `io`, or `network` for the standard functional categories.
+`io` and `network` share the Files & Network browsing group. Custom category
+names remain available. Schema elements declare their function just like
+primitives; an omitted or empty schema category appears as Uncategorized.
+Do not put implementation kind or library ownership in the category field.
+Studio derives Primitive/Schema from the descriptor and identifies its own
+viewers as Observer. A library without ownership metadata appears as
+Unspecified library; ownership is never inferred from its category or type name.
+
 A complete fixed-type entry looks like this (one entry inside a versioned document):
 
 ```json
@@ -113,7 +124,7 @@ A complete fixed-type entry looks like this (one entry inside a versioned docume
     "type_name": "LinearTransform",
     "display_name": "Linear Transform",
     "description": "Multiplies the current input by scale and adds offset. No state or delay.",
-    "category": "basic", "version": "1.0.0", "tags": [],
+    "category": "math", "version": "1.0.0", "tags": [],
     "stateless": true,
     "input_ports": [{"name":"in", "description":"Input signal", "type":"F64", "optional":false, "type_rule":""}],
     "output_ports": [{"name":"out", "description":"Transformed signal", "type":"F64", "optional":false, "type_rule":""}],

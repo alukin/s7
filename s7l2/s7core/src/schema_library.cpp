@@ -266,7 +266,7 @@ auto library_element_metadata(const SchemaLibraryDefinition& library,
     metadata.type_name = element.type_name;
     metadata.display_name = element.display_name.empty() ? element.type_name : element.display_name;
     metadata.description = element.description;
-    metadata.category = element.category.empty() ? library.name : element.category;
+    metadata.category = element.category;
     metadata.version = element.version.empty() ? "1.0.0" : element.version;
     metadata.visual = {"box", "#7E57C2", 120, 60, ""};
     metadata.schema_definition = element.schema;
@@ -467,7 +467,7 @@ auto SchemaLibraryLoader::load_from_json(const boost::json::value& json_value) -
         }
         definition.display_name = string_value(element, "display_name", definition.type_name);
         definition.description = string_value(element, "description");
-        definition.category = string_value(element, "category", library.name);
+        definition.category = string_value(element, "category");
         definition.version = string_value(element, "version", "1.0.0");
 
         const auto* schema = optional_object(element, "schema");

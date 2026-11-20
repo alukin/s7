@@ -571,20 +571,25 @@ private slots:
     void libraryDragPlacement_data() {
         QTest::addColumn<QString>("type"); QTest::addColumn<bool>("filtered");
         QTest::addColumn<bool>("nested"); QTest::addColumn<int>("zoomSteps");
-        QTest::newRow("builtin-unfiltered") << QString("Gain") << false << false << 0;
-        QTest::newRow("builtin-filtered-zoom-pan") << QString("Gain") << true << false << 3;
-        QTest::newRow("schema-root") << QString("PIController") << true << false << -2;
-        QTest::newRow("plugin-nested") << QString("WhiteNoiseGenerator") << true << true << 2;
-        QTest::newRow("schema-nested") << QString("FirstOrderLag") << false << true << -1;
-        QTest::newRow("scope-root") << QString("StudioObserver:Scope") << true << false << 1;
-        QTest::newRow("live-nested") << QString("StudioObserver:LiveOscilloscope") << true << true << 0;
-        QTest::newRow("phase-root") << QString("StudioObserver:PhasePortrait") << true << false << -1;
-        QTest::newRow("trajectory-nested") << QString("StudioObserver:PhaseTrajectory3D") << true << true << 1;
+        QTest::addColumn<bool>("byLibrary");
+        QTest::newRow("builtin-unfiltered") << QString("Gain") << false << false << 0 << false;
+        QTest::newRow("builtin-filtered-zoom-pan") << QString("Gain") << true << false << 3 << false;
+        QTest::newRow("schema-root") << QString("PIController") << true << false << -2 << false;
+        QTest::newRow("plugin-nested") << QString("WhiteNoiseGenerator") << true << true << 2 << false;
+        QTest::newRow("schema-nested") << QString("FirstOrderLag") << false << true << -1 << false;
+        QTest::newRow("scope-root") << QString("StudioObserver:Scope") << true << false << 1 << false;
+        QTest::newRow("live-nested") << QString("StudioObserver:LiveOscilloscope") << true << true << 0 << false;
+        QTest::newRow("phase-root") << QString("StudioObserver:PhasePortrait") << true << false << -1 << false;
+        QTest::newRow("trajectory-nested") << QString("StudioObserver:PhaseTrajectory3D") << true << true << 1 << false;
+        QTest::newRow("library-builtin") << QString("Gain") << false << false << 0 << true;
+        QTest::newRow("library-schema") << QString("PIDController") << true << true << 0 << true;
+        QTest::newRow("library-plugin") << QString("WhiteNoiseGenerator") << true << false << 0 << true;
+        QTest::newRow("library-observer") << QString("StudioObserver:Scope") << true << false << 0 << true;
     }
     void libraryDragPlacement() {
         using namespace s7studio;
         if (QStandardPaths::findExecutable("xdotool").isEmpty()) QSKIP("xdotool is required for native X11 drag/drop checks");
-        QFETCH(QString, type); QFETCH(bool, filtered); QFETCH(bool, nested); QFETCH(int, zoomSteps);
+        QFETCH(QString, type); QFETCH(bool, filtered); QFETCH(bool, nested); QFETCH(int, zoomSteps); QFETCH(bool, byLibrary);
         window_->raise(); window_->activateWindow(); QVERIFY(QTest::qWaitForWindowActive(window_.get()));
         auto* target = editor();
         if (nested) {
@@ -599,6 +604,8 @@ private slots:
         }
         auto* tree = window_->findChild<QTreeWidget*>("elements.tree"); QVERIFY(tree);
         auto* search = window_->findChild<QLineEdit*>("elements.search"); QVERIFY(search);
+        auto* grouping = window_->findChild<QComboBox*>("elements.view"); QVERIFY(grouping);
+        grouping->setCurrentIndex(byLibrary ? 1 : 0);
         search->setText(filtered ? type.section(':', -1) : QString());
         auto* item = libraryItem(tree, type); QVERIFY(item && !item->isHidden());
         QCoreApplication::processEvents();
@@ -607,6 +614,7 @@ private slots:
         tree->setCurrentItem(item); tree->scrollToItem(item);
         QCoreApplication::processEvents();
         QCOMPARE(view->viewport()->width(), canvasWidth);
+        if (type == "Gain" && !filtered) capture(tree->parentWidget(), byLibrary ? "picker-by-library" : "picker-by-category", true);
         target->resetZoom();
         for (int i = 0; i < std::abs(zoomSteps); ++i) { if (zoomSteps > 0) target->zoomIn(); else target->zoomOut(); }
         view->centerOn(QPointF(460,350));

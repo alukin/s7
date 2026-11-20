@@ -32,6 +32,25 @@ its working copy. Opening the index leaves your current diagram intact.
 5. Save the diagram with **File → Save As**. Save a recording separately with
    **Save Run…** in its Scope window.
 
+## Element library
+
+Use **View: By Category** to browse elements by function, or **By Library** to
+browse the module or loaded schema library that provides them. Studio remembers
+this choice. Switching views keeps your search and selected element.
+
+Categories include Sources, Math & Functions, Memory & Integration, Signal
+Processing, Control & Plants, Types & Complex Signals, Files & Network, and
+Observers. Schema controllers and plants appear with their function; the
+selection details and tooltips distinguish Primitive, Schema, and Observer. Observers remain
+Studio presentation items and do not become runtime graph elements.
+
+The shared search matches names, type identifiers, descriptions, categories,
+libraries, tags, and kinds. Multiple words must all match. The count shows the
+number of matching entries. Select an element for its description and provider;
+right-click for **Element Information…**. Double-click or drag an entry onto
+the diagram in either view. User library names are preserved; missing provider
+metadata is shown as **Unspecified library**.
+
 ## Editing a diagram
 
 The [bundled examples catalogue](STUDIO_EXAMPLES.md) describes each family,

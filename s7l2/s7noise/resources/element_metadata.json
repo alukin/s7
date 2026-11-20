@@ -7,7 +7,7 @@
       "type_name": "WhiteNoiseGenerator",
       "display_name": "White Noise",
       "description": "Generates one independent Gaussian sample per causal step. Output has zero expected mean and the configured standard deviation; no inputs. A nonzero seed permits repeatable runs with the same implementation, not a cross-platform bitwise guarantee.",
-      "category": "simulation",
+      "category": "sources",
       "version": "1.0.0",
       "tags": [
         "noise",
@@ -69,7 +69,7 @@
       "type_name": "PinkNoiseGenerator",
       "display_name": "Pink Noise",
       "description": "Generates pink noise using 16 Voss-McCartney rows plus white noise (approximately 1/f power). Updates once per causal step; amplitude specifies expected standard deviation, not a peak bound. A nonzero seed permits repeatable runs with the same implementation.",
-      "category": "simulation",
+      "category": "sources",
       "version": "1.0.0",
       "tags": [
         "noise",

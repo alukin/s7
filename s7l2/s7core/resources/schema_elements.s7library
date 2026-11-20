@@ -6,7 +6,7 @@
       "type_name": "PhaseDifference",
       "display_name": "PhaseDifference",
       "description": "Subtracts phase_b from phase_a and wraps the result into [-pi,pi) radians. Both exposed inputs and the difference output are F64 phase signals. Combinational network; no state or instance JSON parameters. Tune the internal PhaseWrap for a different interval.",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "PhaseDifference",
@@ -64,7 +64,7 @@
       "type_name": "FirstOrderLag",
       "display_name": "FirstOrderLag",
       "description": "Smooths input with a first-order lag: tau*y'=input-y. Exposed F64 signals: input (signal units), tau (strictly positive seconds), output (same units as input). tau is a signal input, not a JSON parameter. Internal forward-Euler state starts at 0; choose dt small relative to tau (dt/tau < 2 for constant-tau stability). Default dt=0.001 s (1 kHz). No instance JSON parameters; tune internal state.initial_value in the nested editor.",
-      "category": "schema_elements",
+      "category": "control",
       "version": "1.0.0",
       "schema": {
         "name": "FirstOrderLag",
@@ -141,7 +141,7 @@
       "type_name": "RMSDetector",
       "display_name": "RMSDetector",
       "description": "Estimates an exponential root-mean-square level: tau*q'=input^2-q; rms=sqrt(q). F64 input and rms use the same signal units; tau is an exposed positive time-constant signal in seconds, not a JSON parameter. Internal q starts at 0 and is limited to nonnegative values; tau >= dt is recommended. Default dt=0.001 s (1 kHz). No instance JSON parameters; the nested editor exposes the state and limiter settings.",
-      "category": "schema_elements",
+      "category": "signal_processing",
       "version": "1.0.0",
       "schema": {
         "name": "RMSDetector",
@@ -294,7 +294,7 @@
       "type_name": "PIController",
       "display_name": "PIController",
       "description": "Controls from an error signal using proportional and integral paths. Exposed F64 inputs: error, kp (output/error units), ki (output/error/second). Gains are signals, not JSON parameters. control is limited to [-1,1]; unlimited exposes the pre-limit sum. Integral state starts at 0 with forward Euler; back-calculation gain is 10/s. Default dt=0.001 s (1 kHz). No instance JSON parameters; tune internal limits, initial state and tracking weight in the nested editor.",
-      "category": "schema_elements",
+      "category": "control",
       "version": "1.0.0",
       "schema": {
         "name": "PIController",
@@ -465,7 +465,7 @@
       "type_name": "PIDController",
       "display_name": "PIDController",
       "description": "Controls reference minus measurement using proportional, integral and filtered derivative-on-measurement paths. Exposed F64 inputs: reference and measurement (same units), kp (output/input units), ki (output/input/second), kd (output*second/input), tau (positive derivative-filter seconds). Gains and tau are signals, not JSON parameters. control is limited to [-1,1]; unlimited exposes the pre-limit sum. Integral/filter states start at 0 with forward Euler; back-calculation gain is 10/s. Default dt=0.001 s (1 kHz); choose dt small relative to tau. No instance JSON parameters; tune internal limits, tracking and initial states in the nested editor.",
-      "category": "schema_elements",
+      "category": "control",
       "version": "1.0.0",
       "schema": {
         "name": "PIDController",
@@ -734,7 +734,7 @@
       "type_name": "SurfacePlane",
       "display_name": "Surface: Plane",
       "description": "x + 2y; editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfacePlane",
@@ -806,7 +806,7 @@
       "type_name": "SurfaceBowl",
       "display_name": "Surface: Bowl",
       "description": "x\u00b2 + y\u00b2; editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceBowl",
@@ -907,7 +907,7 @@
       "type_name": "SurfaceSaddle",
       "display_name": "Surface: Saddle",
       "description": "x\u00b2 \u2212 y\u00b2; editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceSaddle",
@@ -1013,7 +1013,7 @@
       "type_name": "SurfaceGaussian",
       "display_name": "Surface: Gaussian",
       "description": "exp(\u2212x\u00b2\u2212y\u00b2); editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceGaussian",
@@ -1140,7 +1140,7 @@
       "type_name": "SurfaceWave",
       "display_name": "Surface: Wave",
       "description": "sin(x) cos(y); editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceWave",
@@ -1233,7 +1233,7 @@
       "type_name": "SurfaceSinc",
       "display_name": "Surface: Sinc",
       "description": "sin(r)/r; analytic extension f(0,0)=1; editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceSinc",
@@ -1430,7 +1430,7 @@
       "type_name": "SurfaceIdentity",
       "display_name": "Surface: Identity",
       "description": "f(z)=z; editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceIdentity",
@@ -1485,7 +1485,7 @@
       "type_name": "SurfaceSquare",
       "display_name": "Surface: Square",
       "description": "f(z)=z\u00b2; editable stateless F64 schema, inputs x/y. ",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceSquare",
@@ -1627,7 +1627,7 @@
       "type_name": "SurfaceInverse",
       "display_name": "Surface: Inverse",
       "description": "f(z)=1/z; grid excludes pole; editable stateless F64 schema, inputs x/y. Requires nonzero denominator; use a pole-avoiding domain.",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceInverse",
@@ -1781,7 +1781,7 @@
       "type_name": "SurfaceRational",
       "display_name": "Surface: Rational",
       "description": "f(z)=(z\u22121)/(z+1); grid excludes pole; editable stateless F64 schema, inputs x/y. Requires nonzero denominator; use a pole-avoiding domain.",
-      "category": "schema_elements",
+      "category": "math",
       "version": "1.0.0",
       "schema": {
         "name": "SurfaceRational",
@@ -2006,7 +2006,7 @@
       "type_name": "SecondOrderLowPass",
       "display_name": "Second-order Low-pass Plant",
       "description": "Editable zero-state analog-computer graph: x double-prime = omega0\u00b2(input-x)-2*zeta*omega0*x prime. F64 input, omega0 (rad/s), damping ratio, output. Two explicit Euler integrators; resolve fastest dynamics at the run rate.",
-      "category": "schema_elements",
+      "category": "control",
       "version": "1.0.0",
       "schema": {
         "name": "SecondOrderLowPass",
@@ -2194,7 +2194,7 @@
       "type_name": "LeadLagController",
       "display_name": "LeadLagController",
       "description": "Discrete lead/lag controller: u[n]=pole*u[n-1]+scale*(error[n]-zero*error[n-1]). F64 signal inputs error, scale (control/error units), zero and pole (dimensionless per-sample coefficients); outputs control, previous_error and previous_control. Both memories start at zero. No actuator limiter or instance JSON parameters. For positive scale and 0<pole<zero<1 this is lead; swapping zero/pole gives lag. Internal pole stability requires |pole|<1; exact input/output cancellation does not remove the stored state. Closed-loop stability requires separate verification. Changing rate changes the physical response of fixed coefficients.",
-      "category": "schema_elements",
+      "category": "control",
       "version": "1.0.0",
       "schema": {
         "name": "LeadLagController",

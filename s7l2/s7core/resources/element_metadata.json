@@ -8,7 +8,7 @@
       "stateless": true,
       "display_name": "Constant",
       "description": "Outputs a fixed value on every causal step; has no inputs.",
-      "category": "basic",
+      "category": "sources",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [],
@@ -97,7 +97,7 @@
       "stateless": true,
       "display_name": "Gain",
       "description": "Multiplies the current input signal by a configurable factor. The output is available in the same step.",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -204,7 +204,7 @@
       "stateless": true,
       "display_name": "Divider",
       "description": "Divide numerator by denominator",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -277,7 +277,7 @@
       "stateless": true,
       "display_name": "Math Function",
       "description": "Apply a scalar math function",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -366,7 +366,7 @@
       "stateless": true,
       "display_name": "Power",
       "description": "Raise the base input to the exponent input",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -439,7 +439,7 @@
       "stateless": true,
       "display_name": "Saturation",
       "description": "Clamp an input between inclusive limits",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -533,7 +533,7 @@
       "stateless": true,
       "display_name": "MinMax",
       "description": "Select the minimum or maximum of its inputs",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -639,7 +639,7 @@
       "stateless": true,
       "display_name": "Sign",
       "description": "Return -1, 0 or 1 according to the input sign",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -717,7 +717,7 @@
       "stateless": true,
       "display_name": "Comparator",
       "description": "Output 1 if lhs 'operation' rhs holds, else 0",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -817,7 +817,7 @@
       "stateless": true,
       "display_name": "Adder",
       "description": "Weighted sum of N inputs",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -975,7 +975,7 @@
       "stateless": true,
       "display_name": "Multiply",
       "description": "Product of N inputs",
-      "category": "basic",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1132,7 +1132,7 @@
       "type_name": "Delay",
       "display_name": "Delay",
       "description": "Outputs the input from the previous causal step. Publishes initial_value first; supplies causal memory to close feedback loops.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1228,7 +1228,7 @@
       "type_name": "PreviousValue",
       "display_name": "PreviousValue",
       "description": "Outputs the input from the previous causal step. Publishes initial_value first; supplies causal memory to close feedback loops.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1324,7 +1324,7 @@
       "type_name": "Accumulator",
       "display_name": "Accumulator (running sum)",
       "description": "Adds the current input to its running total: y[n] = y[n-1] + x[n]. No timestep factor. Stateful direct feedthrough: its new total is visible in the same step, so it cannot alone close a feedback loop.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1471,7 +1471,7 @@
       "type_name": "EulerIntegrator",
       "display_name": "Forward Euler Integrator",
       "description": "Integrates the input with forward Euler. Optional F64 substeps advance all connected selected integrators together at dt/substeps while publishing only outer-step states. The default one-substep behavior is unchanged.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1567,7 +1567,7 @@
       "type_name": "BackwardEulerIntegrator",
       "display_name": "Backward Euler Integrator",
       "description": "Local right-endpoint integration: y[n]=y[n-1]+dt*input[n]. The first call publishes initial_value as y[0] without integrating. Direct feedthrough; use explicit Delay/Gain/Adder feedback realizations, not an algebraic loop. No coupled solver is invoked.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [
         "integration",
@@ -1649,7 +1649,7 @@
       "type_name": "GaussLegendreIntegrator",
       "display_name": "Gauss-Legendre Integrator",
       "description": "Fourth-order two-stage implicit integration of connected F64 states. NodeRuntime solves both stages jointly; temporary stages are not published. Constant external inputs are held over each outer step. A-stable, not L-stable.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1711,7 +1711,7 @@
       "type_name": "TrapezoidIntegrator",
       "display_name": "Trapezoid Integrator",
       "description": "Integrates the input with the trapezoidal rule. Default implicit mode solves coupled endpoint states together and supplies causal memory. Its bounded fixed-point solve reports nonconvergence; reduce dt if it fails. Sampled mode instead integrates supplied samples with direct feedthrough.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1808,7 +1808,7 @@
       "type_name": "SymplecticIntegrator",
       "display_name": "Symplectic Integrator (semi-implicit Euler)",
       "description": "Semi-implicit Euler for x'' = acceleration: v[n+1] = v[n] + dt*a[n], x[n+1] = x[n] + dt*v[n+1]; causal memory publishes position/velocity together on the following step. First-order accurate; for a position-dependent conservative harmonic oscillator, energy error is bounded within the method's stable timestep range, not exactly conserved. Velocity-dependent acceleration loses the symplectic property.",
-      "category": "filters",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -1910,7 +1910,7 @@
       "stateless": true,
       "display_name": "Trigonometric Function",
       "description": "y = f(x): sin, cos, tan, asin, acos, atan, sinh, cosh or tanh of an arbitrary input",
-      "category": "filters",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -2973,7 +2973,7 @@
       "type_name": "ControlledIntegrator",
       "display_name": "ControlledIntegrator",
       "description": "Local causal integrator with enable, reset and state limits y[next]=clamp(y+dt*derivative) when enable is nonzero; otherwise holds state. Reset takes priority over enable and clamps reset_value. Publishes the initial state first and stages transitions for the following step. Requires finite positive dt and lower_limit <= initial_value <= upper_limit.",
-      "category": "control",
+      "category": "memory_integration",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3105,7 +3105,7 @@
       "stateless": true,
       "display_name": "PhaseWrap",
       "description": "Wrap phase into a half-open interval Output lies in [lower,lower+period). period must be finite, strictly positive and representable at lower; inputs must be finite. No state or time delay.",
-      "category": "control",
+      "category": "math",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3186,7 +3186,7 @@
       "type_name": "FrequencyMeter",
       "display_name": "FrequencyMeter",
       "description": "Measure frequency from successive rising zero crossings Linearly interpolates rising zero crossings; output is 0 and valid=0 until two crossings, then holds the most recent frequency (valid=1). sample_rate_hz must be finite and positive; noisy/missing crossings affect the estimate.",
-      "category": "measurement",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3453,7 +3453,7 @@
       "type_name": "FirFilter",
       "display_name": "FIR Filter",
       "description": "Finite impulse response filter",
-      "category": "filters",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3611,7 +3611,7 @@
       "type_name": "IirFilter",
       "display_name": "IIR Filter",
       "description": "First-order recursive filter: y[n]=b0*x[n]+b1*x[n-1]-a1*y[n-1]. Previous input/output start at zero. Current input feeds through; internal history does not break an external feedback cycle.",
-      "category": "filters",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3714,7 +3714,7 @@
       "stateless": true,
       "display_name": "Re/Im to Complex",
       "description": "Combine real and imaginary channels",
-      "category": "conversion",
+      "category": "types_complex",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3794,7 +3794,7 @@
       "stateless": true,
       "display_name": "Complex to Re/Im",
       "description": "Split complex input into real and imaginary channels",
-      "category": "conversion",
+      "category": "types_complex",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3874,7 +3874,7 @@
       "stateless": true,
       "display_name": "Complex to Magnitude/Phase",
       "description": "Magnitude and phase of a complex input, in its component type",
-      "category": "conversion",
+      "category": "types_complex",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -3947,7 +3947,7 @@
       "stateless": true,
       "display_name": "Convert",
       "description": "Explicit type conversion (value or normalized), with stated rounding and overflow",
-      "category": "conversion",
+      "category": "types_complex",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [
@@ -4110,7 +4110,7 @@
       "type_name": "Resampler",
       "display_name": "Resampler",
       "description": "Converts a signal between two rate domains: the only element whose input and output rates may differ, and S7 never inserts one. At equal rates it passes values through unchanged. Otherwise each output sample interpolates the input samples received at or before its time: order 0 holds the latest sample, orders 1 (linear) and 2 (quadratic) interpolate one input period late instead of extrapolating. When lowering the rate it first applies a linear-phase anti-aliasing low-pass (passband 0.4, stopband 0.5 of the output rate), whose group delay adds latency.",
-      "category": "conversion",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [

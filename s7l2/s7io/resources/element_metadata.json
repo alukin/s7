@@ -7,7 +7,7 @@
       "type_name": "RecordedSource",
       "display_name": "Recorded Source",
       "description": "Replay a uniformly sampled recording using its header rate. Emits one recorded sample per step without resampling. The file's signal type must match the selected type; file errors are reported.",
-      "category": "sources",
+      "category": "io",
       "version": "1.0.0",
       "tags": [],
       "input_ports": [],

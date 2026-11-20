@@ -750,6 +750,20 @@ int main() try
             throw std::runtime_error("Schema library catalog entry was not indexed correctly.");
         }
 
+        // Missing functional categories must not be replaced by library ownership.
+        auto noCategoryJson = make_schema_library_json();
+        auto& noCategoryElement = noCategoryJson.as_object().at("elements").as_array().front().as_object();
+        noCategoryElement["type_name"] = "UncategorizedGain";
+        noCategoryElement.erase("category");
+        const auto noCategoryLibrary = s7::SchemaLibraryLoader::load_from_json(noCategoryJson);
+        s7::SchemaLibraryLoader::register_library(noCategoryLibrary, registry);
+        const auto* uncategorized = registry.find("UncategorizedGain");
+        if (!uncategorized || !uncategorized->metadata().category.empty() ||
+            uncategorized->metadata().library != noCategoryLibrary.name) {
+            throw std::runtime_error("Schema library category and ownership were conflated.");
+        }
+        registry.unregister({"UncategorizedGain"});
+
         // A catalog follows registrations made after it was built.
         registry.unregister({"DoubleGain"});
         if (catalog.find_element("DoubleGain") || catalog.all_elements().size() != registry.element_count()) {

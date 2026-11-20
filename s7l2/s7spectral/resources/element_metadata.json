@@ -7,7 +7,7 @@
       "type_name": "WindowedFFT",
       "display_name": "Windowed FFT",
       "description": "Estimates the strongest non-DC frequency and amplitude from a sliding FFT window. Outputs start at zero, update after a full window and then every hop_size samples, and hold between transforms. F64 input is converted to single precision for FFTW; frequency interpolation and window scalloping limit accuracy.",
-      "category": "spectral",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [
         "fft",
@@ -109,7 +109,7 @@
       "type_name": "FourierCoefficient",
       "display_name": "Fourier Coefficient",
       "description": "Rate-following rectangular-window coherent-tone coefficient, phase relative to the first window sample. Updates after window_time and every hop_time, holds between updates. C64 output uses peak amplitude normalization (2/N, DC/Nyquist 1/N). Updated is one only on transform steps. Direct feedthrough with instance-owned history; not cycle-breaking memory.",
-      "category": "spectral",
+      "category": "signal_processing",
       "version": "1.0.0",
       "tags": [
         "spectral",

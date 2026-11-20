@@ -447,6 +447,12 @@ s7_enable_project_warnings(s7studio_viewers_test)
 add_test(NAME s7studio_viewers COMMAND s7studio_viewers_test)
 set_tests_properties(s7studio_viewers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 120)
 
+s7_add_test_executable(s7studio_element_picker_test tests/element_picker_test.cpp)
+target_link_libraries(s7studio_element_picker_test PRIVATE s7studio_app)
+s7_enable_project_warnings(s7studio_element_picker_test)
+add_test(NAME s7studio_element_picker COMMAND s7studio_element_picker_test)
+set_tests_properties(s7studio_element_picker PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 30)
+
 s7_add_test_executable(s7studio_schema_elements_test tests/schema_elements_test.cpp)
 target_link_libraries(s7studio_schema_elements_test PRIVATE s7studio_app)
 add_test(NAME s7studio_schema_elements COMMAND s7studio_schema_elements_test)
